@@ -24,25 +24,25 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
+#    include <sys/stat.h>
 #endif
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+#    include <sys/param.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+#    include <netdb.h>
 #endif
 #include <errno.h>
 
@@ -54,8 +54,7 @@
 
 #include "src/util/context_fns.h"
 
-int prte_util_check_context_cwd(prte_app_context_t *context,
-                                bool want_chdir)
+int prte_util_check_context_cwd(prte_app_context_t *context, bool want_chdir)
 {
     bool good = true;
     const char *tmp;
@@ -72,8 +71,7 @@ int prte_util_check_context_cwd(prte_app_context_t *context,
         /* See if the directory was a user-specified directory.  If it
         was, barf because they specifically asked for something we
         can't provide. */
-        if (prte_get_attribute(&context->attributes, PRTE_APP_USER_CWD,
-                               NULL, PMIX_BOOL)) {
+        if (prte_get_attribute(&context->attributes, PRTE_APP_USER_CWD, NULL, PMIX_BOOL)) {
             return PRTE_ERR_WDIR_NOT_FOUND;
         }
 
@@ -94,7 +92,8 @@ int prte_util_check_context_cwd(prte_app_context_t *context,
 
             /* Reset the pwd in this local copy of the
                 context */
-            if (NULL != context->cwd) free(context->cwd);
+            if (NULL != context->cwd)
+                free(context->cwd);
             context->cwd = strdup(tmp);
         }
 

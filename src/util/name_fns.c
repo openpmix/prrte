@@ -22,66 +22,64 @@
  * $HEADER$
  */
 #include "prte_config.h"
-#include "types.h"
 #include "constants.h"
+#include "types.h"
 
 #include <stdio.h>
 #include <string.h>
 
+#include "src/threads/tsd.h"
 #include "src/util/printf.h"
 #include "src/util/string_copy.h"
-#include "src/threads/tsd.h"
 
 #include "src/mca/errmgr/errmgr.h"
 
 #include "src/util/name_fns.h"
 
-#define PRTE_PRINT_NAME_ARGS_MAX_SIZE   127
-#define PRTE_PRINT_NAME_ARG_NUM_BUFS    16
+#define PRTE_PRINT_NAME_ARGS_MAX_SIZE 127
+#define PRTE_PRINT_NAME_ARG_NUM_BUFS  16
 
 /* constructor - used to initialize namelist instance */
-static void prte_namelist_construct(prte_namelist_t* list)
+static void prte_namelist_construct(prte_namelist_t *list)
 {
     PMIX_LOAD_PROCID(&list->name, NULL, PMIX_RANK_INVALID);
 }
 
 /* destructor - used to free any resources held by instance */
-static void prte_namelist_destructor(prte_namelist_t* list)
+static void prte_namelist_destructor(prte_namelist_t *list)
 {
 }
 
 /* define instance of prte_class_t */
-PRTE_CLASS_INSTANCE(prte_namelist_t,              /* type name */
-                    prte_list_item_t,             /* parent "class" name */
-                    prte_namelist_construct,      /* constructor */
-                    prte_namelist_destructor);    /* destructor */
+PRTE_CLASS_INSTANCE(prte_namelist_t,           /* type name */
+                    prte_list_item_t,          /* parent "class" name */
+                    prte_namelist_construct,   /* constructor */
+                    prte_namelist_destructor); /* destructor */
 
-static bool fns_init=false;
+static bool fns_init = false;
 
 static prte_tsd_key_t print_args_tsd_key;
-char* prte_print_args_null = "NULL";
+char *prte_print_args_null = "NULL";
 typedef struct {
     char *buffers[PRTE_PRINT_NAME_ARG_NUM_BUFS];
     int cntr;
 } prte_print_args_buffers_t;
 
-static void
-buffer_cleanup(void *value)
+static void buffer_cleanup(void *value)
 {
     int i;
     prte_print_args_buffers_t *ptr;
 
     if (NULL != value) {
-        ptr = (prte_print_args_buffers_t*)value;
-        for (i=0; i < PRTE_PRINT_NAME_ARG_NUM_BUFS; i++) {
+        ptr = (prte_print_args_buffers_t *) value;
+        for (i = 0; i < PRTE_PRINT_NAME_ARG_NUM_BUFS; i++) {
             free(ptr->buffers[i]);
         }
-        free (ptr);
+        free(ptr);
     }
 }
 
-static prte_print_args_buffers_t*
-get_print_name_buffer(void)
+static prte_print_args_buffers_t *get_print_name_buffer(void)
 {
     prte_print_args_buffers_t *ptr;
     int ret, i;
@@ -95,22 +93,23 @@ get_print_name_buffer(void)
         fns_init = true;
     }
 
-    ret = prte_tsd_getspecific(print_args_tsd_key, (void**)&ptr);
-    if (PRTE_SUCCESS != ret) return NULL;
+    ret = prte_tsd_getspecific(print_args_tsd_key, (void **) &ptr);
+    if (PRTE_SUCCESS != ret)
+        return NULL;
 
     if (NULL == ptr) {
-        ptr = (prte_print_args_buffers_t*)malloc(sizeof(prte_print_args_buffers_t));
-        for (i=0; i < PRTE_PRINT_NAME_ARG_NUM_BUFS; i++) {
-            ptr->buffers[i] = (char *) malloc((PRTE_PRINT_NAME_ARGS_MAX_SIZE+1) * sizeof(char));
+        ptr = (prte_print_args_buffers_t *) malloc(sizeof(prte_print_args_buffers_t));
+        for (i = 0; i < PRTE_PRINT_NAME_ARG_NUM_BUFS; i++) {
+            ptr->buffers[i] = (char *) malloc((PRTE_PRINT_NAME_ARGS_MAX_SIZE + 1) * sizeof(char));
         }
         ptr->cntr = 0;
-        ret = prte_tsd_setspecific(print_args_tsd_key, (void*)ptr);
+        ret = prte_tsd_setspecific(print_args_tsd_key, (void *) ptr);
     }
 
-    return (prte_print_args_buffers_t*) ptr;
+    return (prte_print_args_buffers_t *) ptr;
 }
 
-char* prte_util_print_name_args(const pmix_proc_t *name)
+char *prte_util_print_name_args(const pmix_proc_t *name)
 {
     prte_print_args_buffers_t *ptr;
     char *job, *vpid;
@@ -128,7 +127,7 @@ char* prte_util_print_name_args(const pmix_proc_t *name)
             ptr->cntr = 0;
         }
         snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[NO-NAME]");
-        return ptr->buffers[ptr->cntr-1];
+        return ptr->buffers[ptr->cntr - 1];
     }
 
     /* get the jobid, vpid strings first - this will protect us from
@@ -152,14 +151,12 @@ char* prte_util_print_name_args(const pmix_proc_t *name)
         ptr->cntr = 0;
     }
 
-    snprintf(ptr->buffers[ptr->cntr++],
-             PRTE_PRINT_NAME_ARGS_MAX_SIZE,
-             "[%s,%s]", job, vpid);
+    snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "[%s,%s]", job, vpid);
 
-    return ptr->buffers[ptr->cntr-1];
+    return ptr->buffers[ptr->cntr - 1];
 }
 
-char* prte_util_print_jobids(const pmix_nspace_t job)
+char *prte_util_print_jobids(const pmix_nspace_t job)
 {
     prte_print_args_buffers_t *ptr;
 
@@ -178,14 +175,12 @@ char* prte_util_print_jobids(const pmix_nspace_t job)
     if (0 == strlen(job)) {
         snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "[INVALID]");
     } else {
-        snprintf(ptr->buffers[ptr->cntr++],
-                 PRTE_PRINT_NAME_ARGS_MAX_SIZE,
-                 "%s", job);
+        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
     }
-    return ptr->buffers[ptr->cntr-1];
+    return ptr->buffers[ptr->cntr - 1];
 }
 
-char* prte_util_print_job_family(const pmix_nspace_t job)
+char *prte_util_print_job_family(const pmix_nspace_t job)
 {
     prte_print_args_buffers_t *ptr;
     char *cptr;
@@ -213,16 +208,14 @@ char* prte_util_print_job_family(const pmix_nspace_t job)
             snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
         } else {
             *cptr = '\0';
-            snprintf(ptr->buffers[ptr->cntr++],
-                     PRTE_PRINT_NAME_ARGS_MAX_SIZE,
-                     "%s", job);
+            snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
             *cptr = '@';
         }
     }
-    return ptr->buffers[ptr->cntr-1];
+    return ptr->buffers[ptr->cntr - 1];
 }
 
-char* prte_util_print_local_jobid(const pmix_nspace_t job)
+char *prte_util_print_local_jobid(const pmix_nspace_t job)
 {
     prte_print_args_buffers_t *ptr;
     char *cptr;
@@ -250,15 +243,13 @@ char* prte_util_print_local_jobid(const pmix_nspace_t job)
             snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", job);
         } else {
             ++cptr;
-            snprintf(ptr->buffers[ptr->cntr++],
-                     PRTE_PRINT_NAME_ARGS_MAX_SIZE,
-                     "%s", cptr);
+            snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", cptr);
         }
     }
-    return ptr->buffers[ptr->cntr-1];
+    return ptr->buffers[ptr->cntr - 1];
 }
 
-char* prte_util_print_vpids(const pmix_rank_t vpid)
+char *prte_util_print_vpids(const pmix_rank_t vpid)
 {
     prte_print_args_buffers_t *ptr;
 
@@ -279,11 +270,9 @@ char* prte_util_print_vpids(const pmix_rank_t vpid)
     } else if (PMIX_RANK_WILDCARD == vpid) {
         snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "WILDCARD");
     } else {
-        snprintf(ptr->buffers[ptr->cntr++],
-                 PRTE_PRINT_NAME_ARGS_MAX_SIZE,
-                 "%u", vpid);
+        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%u", vpid);
     }
-    return ptr->buffers[ptr->cntr-1];
+    return ptr->buffers[ptr->cntr - 1];
 }
 
 /***   STRING FUNCTIONS   ***/
@@ -309,8 +298,7 @@ int prte_util_convert_vpid_to_string(char **vpid_string, const pmix_rank_t vpid)
     return PRTE_SUCCESS;
 }
 
-int prte_util_convert_string_to_process_name(pmix_proc_t *name,
-                                             const char* name_string)
+int prte_util_convert_string_to_process_name(pmix_proc_t *name, const char *name_string)
 {
     char *p;
 
@@ -336,8 +324,7 @@ int prte_util_convert_string_to_process_name(pmix_proc_t *name,
     return PRTE_SUCCESS;
 }
 
-int prte_util_convert_process_name_to_string(char **name_string,
-                                             const pmix_proc_t* name)
+int prte_util_convert_process_name_to_string(char **name_string, const pmix_proc_t *name)
 {
     char *job, *rank;
 
@@ -348,16 +335,14 @@ int prte_util_convert_process_name_to_string(char **name_string,
 
     job = prte_util_print_jobids(name->nspace);
     rank = prte_util_print_vpids(name->rank);
-    prte_asprintf(name_string, "%s.%s",job, rank);
+    prte_asprintf(name_string, "%s.%s", job, rank);
 
     return PRTE_SUCCESS;
 }
 
-
 /****    COMPARE NAME FIELDS     ****/
-int prte_util_compare_name_fields(prte_ns_cmp_bitmask_t fields,
-                                  const pmix_proc_t* name1,
-                                  const pmix_proc_t* name2)
+int prte_util_compare_name_fields(prte_ns_cmp_bitmask_t fields, const pmix_proc_t *name1,
+                                  const pmix_proc_t *name2)
 {
     /* handle the NULL pointer case */
     if (NULL == name1 && NULL == name2) {
@@ -378,9 +363,8 @@ int prte_util_compare_name_fields(prte_ns_cmp_bitmask_t fields,
 
     /* check job id */
     if (PRTE_NS_CMP_JOBID & fields) {
-        if (PRTE_NS_CMP_WILD & fields &&
-            (0 == strlen(name1->nspace) ||
-             0 == strlen(name2->nspace))) {
+        if (PRTE_NS_CMP_WILD & fields
+            && (0 == strlen(name1->nspace) || 0 == strlen(name2->nspace))) {
             goto check_vpid;
         }
         if (strlen(name1->nspace) < strlen(name2->nspace)) {
@@ -393,11 +377,10 @@ int prte_util_compare_name_fields(prte_ns_cmp_bitmask_t fields,
     /* get here if jobid's are equal, or not being checked
      * now check vpid
      */
- check_vpid:
+check_vpid:
     if (PRTE_NS_CMP_VPID & fields) {
-        if (PRTE_NS_CMP_WILD & fields &&
-            (PMIX_RANK_WILDCARD == name1->rank ||
-             PMIX_RANK_WILDCARD == name2->rank)) {
+        if (PRTE_NS_CMP_WILD & fields
+            && (PMIX_RANK_WILDCARD == name1->rank || PMIX_RANK_WILDCARD == name2->rank)) {
             return PRTE_EQUAL;
         }
         if (name1->rank < name2->rank) {
@@ -408,10 +391,10 @@ int prte_util_compare_name_fields(prte_ns_cmp_bitmask_t fields,
     }
 
     /* only way to get here is if all fields are being checked and are equal,
-    * or jobid not checked, but vpid equal,
-    * only vpid being checked, and equal
-    * return that fact
-    */
+     * or jobid not checked, but vpid equal,
+     * only vpid being checked, and equal
+     * return that fact
+     */
     return PRTE_EQUAL;
 }
 
@@ -425,7 +408,7 @@ char *prte_pretty_print_timing(int64_t secs, int64_t usecs)
     minutes = seconds / 60l;
     seconds = seconds % 60l;
     if (0 == minutes && 0 == seconds) {
-        fsecs = ((float)(secs)*1000000.0 + (float)usecs) / 1000.0;
+        fsecs = ((float) (secs) *1000000.0 + (float) usecs) / 1000.0;
         prte_asprintf(&timestring, "%8.2f millisecs", fsecs);
     } else {
         prte_asprintf(&timestring, "%3lu:%02lu min:sec", minutes, seconds);

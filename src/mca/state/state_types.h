@@ -54,7 +54,7 @@
 
 BEGIN_C_DECLS
 
-typedef void (*prte_state_cbfunc_t)(int fd, short args, void* cb);
+typedef void (*prte_state_cbfunc_t)(int fd, short args, void *cb);
 
 typedef struct {
     prte_list_item_t super;

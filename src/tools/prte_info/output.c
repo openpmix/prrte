@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,14 +24,14 @@
 #include <stdio.h>
 #include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <signal.h>
 #ifdef HAVE_TERMIOS_H
-#include <termios.h>
+#    include <termios.h>
 #endif
 #ifdef HAVE_SYS_IOCTL_H
-#include <sys/ioctl.h>
+#    include <sys/ioctl.h>
 #endif
 #include <ctype.h>
 
@@ -38,8 +39,7 @@
 
 #include "src/util/show_help.h"
 
-#define PRTE_max(a,b) (((a) > (b)) ? (a) : (b))
-
+#define PRTE_max(a, b) (((a) > (b)) ? (a) : (b))
 
 /*
  * Private variables - set some reasonable screen size defaults
@@ -70,7 +70,7 @@ void prte_info_out(const char *pretty_message, const char *plain_message, const 
 #ifdef TIOCGWINSZ
     if (screen_width < INT_MAX) {
         struct winsize size;
-        if (ioctl(STDOUT_FILENO, TIOCGWINSZ, (char*) &size) >= 0) {
+        if (ioctl(STDOUT_FILENO, TIOCGWINSZ, (char *) &size) >= 0) {
             screen_width = size.ws_col;
         }
     }
@@ -104,15 +104,13 @@ void prte_info_out(const char *pretty_message, const char *plain_message, const 
     }
 
     if (prte_info_pretty && NULL != pretty_message) {
-        if (centerpoint > (int)strlen(pretty_message)) {
-            prte_asprintf(&spaces, "%*s", centerpoint -
-                     (int)strlen(pretty_message), " ");
+        if (centerpoint > (int) strlen(pretty_message)) {
+            prte_asprintf(&spaces, "%*s", centerpoint - (int) strlen(pretty_message), " ");
         } else {
             spaces = strdup("");
 #if PRTE_ENABLE_DEBUG
-            if (centerpoint < (int)strlen(pretty_message)) {
-                prte_show_help("help-pinfo.txt",
-                               "developer warning: field too long", false,
+            if (centerpoint < (int) strlen(pretty_message)) {
+                prte_show_help("help-pinfo.txt", "developer warning: field too long", false,
                                pretty_message, centerpoint);
             }
 #endif
@@ -138,7 +136,7 @@ void prte_info_out(const char *pretty_message, const char *plain_message, const 
                  */
                 savev = v[max_value_width];
                 v[max_value_width] = '\0';
-                pos = (char*)strrchr(v, (int)' ');
+                pos = (char *) strrchr(v, (int) ' ');
                 v[max_value_width] = savev;
                 if (NULL == pos) {
                     /* No space found < max_value_width.  Look for the first
@@ -188,13 +186,11 @@ void prte_info_out(const char *pretty_message, const char *plain_message, const 
     }
 }
 
-void prte_info_out_int(const char *pretty_message,
-                       const char *plain_message,
-                       int value)
+void prte_info_out_int(const char *pretty_message, const char *plain_message, int value)
 {
     char *valstr;
 
-    prte_asprintf(&valstr, "%d", (int)value);
+    prte_asprintf(&valstr, "%d", (int) value);
     prte_info_out(pretty_message, plain_message, valstr);
     free(valstr);
 }

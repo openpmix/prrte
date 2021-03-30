@@ -42,21 +42,21 @@ typedef uint8_t prte_oob_tcp_msg_type_t;
 #define MCA_OOB_TCP_PING  3
 #define MCA_OOB_TCP_USER  4
 
-#define PRTE_MAX_RTD_SIZE  31
+#define PRTE_MAX_RTD_SIZE 31
 
 /* header for tcp msgs */
 typedef struct {
     /* the originator of the message - if we are routing,
      * it could be someone other than me
      */
-    pmix_proc_t     origin;
+    pmix_proc_t origin;
     /* the intended final recipient - if we don't have
      * a path directly to that process, then we will
      * attempt to route. If we have no route to that
      * process, then we should have rejected the message
      * and let some other module try to send it
      */
-    pmix_proc_t     dst;
+    pmix_proc_t dst;
     /* the rml tag where this message is headed */
     prte_rml_tag_t tag;
     /* the seq number of this message */
@@ -66,7 +66,7 @@ typedef struct {
     /* type of message */
     prte_oob_tcp_msg_type_t type;
     /* routed module to be used */
-    char routed[PRTE_MAX_RTD_SIZE+1];
+    char routed[PRTE_MAX_RTD_SIZE + 1];
 } prte_oob_tcp_hdr_t;
 /**
  * Convert the message header to host byte order
@@ -80,7 +80,7 @@ typedef struct {
 /**
  * Convert the message header to network byte order
  */
-#define MCA_OOB_TCP_HDR_HTON(h)                \
+#define MCA_OOB_TCP_HDR_HTON(h)                 \
     (h)->origin.rank = htonl((h)->origin.rank); \
     (h)->dst.rank = htonl((h)->dst.rank);       \
     (h)->tag = PRTE_RML_TAG_HTON((h)->tag);     \

@@ -17,6 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,11 +43,11 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_object.h"
-#include "src/class/prte_list.h"
-#include "src/class/prte_value_array.h"
-#include "src/class/prte_pointer_array.h"
 #include "src/class/prte_hash_table.h"
+#include "src/class/prte_list.h"
+#include "src/class/prte_object.h"
+#include "src/class/prte_pointer_array.h"
+#include "src/class/prte_value_array.h"
 #include "src/mca/base/prte_mca_base_var.h"
 
 BEGIN_C_DECLS
@@ -56,7 +57,7 @@ BEGIN_C_DECLS
 
 typedef enum {
     /** Variable is valid */
-    PRTE_MCA_BASE_VAR_FLAG_VALID   = 0x00010000,
+    PRTE_MCA_BASE_VAR_FLAG_VALID = 0x00010000,
     /** Variable is a synonym */
     PRTE_MCA_BASE_VAR_FLAG_SYNONYM = 0x00020000,
     /** mbv_source_file needs to be freed */
@@ -65,12 +66,12 @@ typedef enum {
 
 #define PRTE_VAR_FLAG_ISSET(var, flag) (!!((var).mbp_flags & (flag)))
 
-#define PRTE_VAR_IS_VALID(var) (!!((var).mbv_flags & PRTE_MCA_BASE_VAR_FLAG_VALID))
-#define PRTE_VAR_IS_SYNONYM(var) (!!((var).mbv_flags & PRTE_MCA_BASE_VAR_FLAG_SYNONYM))
-#define PRTE_VAR_IS_INTERNAL(var) (!!((var).mbv_flags & PRTE_MCA_BASE_VAR_FLAG_INTERNAL))
+#define PRTE_VAR_IS_VALID(var)        (!!((var).mbv_flags & PRTE_MCA_BASE_VAR_FLAG_VALID))
+#define PRTE_VAR_IS_SYNONYM(var)      (!!((var).mbv_flags & PRTE_MCA_BASE_VAR_FLAG_SYNONYM))
+#define PRTE_VAR_IS_INTERNAL(var)     (!!((var).mbv_flags & PRTE_MCA_BASE_VAR_FLAG_INTERNAL))
 #define PRTE_VAR_IS_DEFAULT_ONLY(var) (!!((var).mbv_flags & PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY))
-#define PRTE_VAR_IS_SETTABLE(var) (!!((var).mbv_flags & PRTE_MCA_BASE_VAR_FLAG_SETTABLE))
-#define PRTE_VAR_IS_DEPRECATED(var) (!!((var).mbv_flags & PRTE_MCA_BASE_VAR_FLAG_DEPRECATED))
+#define PRTE_VAR_IS_SETTABLE(var)     (!!((var).mbv_flags & PRTE_MCA_BASE_VAR_FLAG_SETTABLE))
+#define PRTE_VAR_IS_DEPRECATED(var)   (!!((var).mbv_flags & PRTE_MCA_BASE_VAR_FLAG_DEPRECATED))
 
 PRTE_EXPORT extern const char *prte_var_type_names[];
 PRTE_EXPORT extern const size_t prte_var_type_sizes[];
@@ -116,38 +117,40 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_var_file_value_t);
  * @param[out] group       Returned group if it exists
  * @param[in]  invalidok   Return group even if it has been deregistered
  */
-PRTE_EXPORT int prte_mca_base_var_group_get_internal (const int group_index, prte_mca_base_var_group_t **group, bool invalidok);
+PRTE_EXPORT int prte_mca_base_var_group_get_internal(const int group_index,
+                                                     prte_mca_base_var_group_t **group,
+                                                     bool invalidok);
 
 /**
  * \internal
  *
  * Add a variable to a group
  */
-PRTE_EXPORT int prte_mca_base_var_group_add_var (const int group_index, const int param_index);
+PRTE_EXPORT int prte_mca_base_var_group_add_var(const int group_index, const int param_index);
 
 /**
  * \internal
  *
  * Add an enum to a group
  */
-PRTE_EXPORT int prte_mca_base_var_group_add_enum (const int group_index, const void *storage);
+PRTE_EXPORT int prte_mca_base_var_group_add_enum(const int group_index, const void *storage);
 
 /**
  * \internal
  *
  * Generate a full name with _ between all of the non-NULL arguments
  */
-PRTE_EXPORT int prte_mca_base_var_generate_full_name4 (const char *project, const char *framework,
-                                                    const char *component, const char *variable,
-                                                    char **full_name);
+PRTE_EXPORT int prte_mca_base_var_generate_full_name4(const char *project, const char *framework,
+                                                      const char *component, const char *variable,
+                                                      char **full_name);
 
 /**
  * \internal
  *
  * Initialize/finalize MCA variable groups
  */
-PRTE_EXPORT int prte_mca_base_var_group_init (void);
-PRTE_EXPORT int prte_mca_base_var_group_finalize (void);
+PRTE_EXPORT int prte_mca_base_var_group_init(void);
+PRTE_EXPORT int prte_mca_base_var_group_finalize(void);
 
 END_C_DECLS
 

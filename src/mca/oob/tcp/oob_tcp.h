@@ -30,18 +30,17 @@
 
 #include "types.h"
 
-#include "src/mca/base/base.h"
 #include "src/event/event-internal.h"
+#include "src/mca/base/base.h"
 
-#include "src/mca/oob/oob.h"
 #include "src/mca/oob/base/base.h"
-
+#include "src/mca/oob/oob.h"
 
 BEGIN_C_DECLS
 
 /* define some debug levels */
-#define OOB_TCP_DEBUG_FAIL      2
-#define OOB_TCP_DEBUG_CONNECT   7
+#define OOB_TCP_DEBUG_FAIL    2
+#define OOB_TCP_DEBUG_CONNECT 7
 
 /* forward declare a couple of structures */
 struct prte_oob_tcp_module_t;
@@ -57,14 +56,14 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_nicaddr_t);
 
 /* Module definition */
 typedef void (*prte_oob_tcp_module_accept_connection_fn_t)(const int accepted_fd,
-                                                          const struct sockaddr *addr);
+                                                           const struct sockaddr *addr);
 typedef void (*prte_oob_tcp_module_ping_fn_t)(const pmix_proc_t *proc);
 typedef void (*prte_oob_tcp_module_send_nb_fn_t)(prte_rml_send_t *msg);
 
 typedef struct {
-    prte_oob_tcp_module_accept_connection_fn_t  accept_connection;
-    prte_oob_tcp_module_ping_fn_t               ping;
-    prte_oob_tcp_module_send_nb_fn_t            send_nb;
+    prte_oob_tcp_module_accept_connection_fn_t accept_connection;
+    prte_oob_tcp_module_ping_fn_t ping;
+    prte_oob_tcp_module_send_nb_fn_t send_nb;
 } prte_oob_tcp_module_t;
 PRTE_MODULE_EXPORT extern prte_oob_tcp_module_t prte_oob_tcp_module;
 
@@ -86,7 +85,6 @@ typedef enum {
 PRTE_MODULE_EXPORT void prte_oob_tcp_send_handler(int fd, short args, void *cbdata);
 PRTE_MODULE_EXPORT void prte_oob_tcp_recv_handler(int fd, short args, void *cbdata);
 PRTE_MODULE_EXPORT void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata);
-
 
 END_C_DECLS
 

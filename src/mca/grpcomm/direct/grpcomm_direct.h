@@ -4,6 +4,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -15,7 +16,6 @@
 #define GRPCOMM_DIRECT_H
 
 #include "prte_config.h"
-
 
 #include "src/mca/grpcomm/grpcomm.h"
 

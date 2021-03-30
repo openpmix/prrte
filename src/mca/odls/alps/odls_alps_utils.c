@@ -15,6 +15,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,19 +34,19 @@
 
 #include <stdlib.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <ctype.h>
 #include <sys/syscall.h>
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 #include "src/util/prte_environ.h"
 
-#include "src/mca/odls/odls.h"
+#include "src/mca/odls/alps/odls_alps.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/base/odls_private.h"
-#include "src/mca/odls/alps/odls_alps.h"
+#include "src/mca/odls/odls.h"
 
 int prte_odls_alps_get_rdma_creds(void)
 {
@@ -53,7 +54,7 @@ int prte_odls_alps_get_rdma_creds(void)
     uint64_t apid;
     size_t alps_count;
     int ret = PRTE_SUCCESS;
-    alpsAppLLIGni_t *rdmacred_rsp=NULL;
+    alpsAppLLIGni_t *rdmacred_rsp = NULL;
     alpsAppGni_t *rdmacred_buf;
     char *ptr;
     char env_buffer[1024];
@@ -85,13 +86,13 @@ int prte_odls_alps_get_rdma_creds(void)
     ret = alps_app_lli_put_request(ALPS_APP_LLI_ALPS_REQ_APID, NULL, 0);
     if (ALPS_APP_LLI_ALPS_STAT_OK != ret) {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
-                              "%s odls:alps: alps_app_lli_put_request returned %d",
-                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
-         ret = PRTE_ERR_FILE_WRITE_FAILURE;
-         goto fn_exit;
+                             "%s odls:alps: alps_app_lli_put_request returned %d",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
+        ret = PRTE_ERR_FILE_WRITE_FAILURE;
+        goto fn_exit;
     }
 
-    ret = alps_app_lli_get_response (&alps_status, &alps_count);
+    ret = alps_app_lli_get_response(&alps_status, &alps_count);
     if (ALPS_APP_LLI_ALPS_STAT_OK != alps_status) {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
                              "%s odls:alps: alps_app_lli_get_response returned %d",
@@ -100,7 +101,7 @@ int prte_odls_alps_get_rdma_creds(void)
         goto fn_exit;
     }
 
-    ret = alps_app_lli_get_response_bytes (&apid, sizeof(apid));
+    ret = alps_app_lli_get_response_bytes(&apid, sizeof(apid));
     if (ALPS_APP_LLI_ALPS_STAT_OK != ret) {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
                              "%s odls:alps: alps_app_lli_get_response_bytes returned %d",
@@ -131,13 +132,13 @@ int prte_odls_alps_get_rdma_creds(void)
         goto fn_exit;
     }
 
-    rdmacred_rsp = (alpsAppLLIGni_t *)malloc(alps_count);
+    rdmacred_rsp = (alpsAppLLIGni_t *) malloc(alps_count);
     if (NULL == rdmacred_rsp) {
         ret = PRTE_ERR_OUT_OF_RESOURCE;
         goto fn_exit;
     }
 
-    memset(rdmacred_rsp,0,alps_count);
+    memset(rdmacred_rsp, 0, alps_count);
 
     ret = alps_app_lli_get_response_bytes(rdmacred_rsp, alps_count);
     if (ALPS_APP_LLI_ALPS_STAT_OK != ret) {
@@ -151,7 +152,7 @@ int prte_odls_alps_get_rdma_creds(void)
 
     ret = alps_app_lli_unlock();
 
-    rdmacred_buf = (alpsAppGni_t *)(rdmacred_rsp->u.buf);
+    rdmacred_buf = (alpsAppGni_t *) (rdmacred_rsp->u.buf);
 
     /*
      * now set up the env. variables -
@@ -172,13 +173,13 @@ int prte_odls_alps_get_rdma_creds(void)
      * first build ptag env
      */
 
-    memset(env_buffer,0,sizeof(env_buffer));
+    memset(env_buffer, 0, sizeof(env_buffer));
     ptr = env_buffer;
-    for (i=0; i<num_creds-1; i++) {
-        len = sprintf(ptr,"%d:",rdmacred_buf[i].ptag);
+    for (i = 0; i < num_creds - 1; i++) {
+        len = sprintf(ptr, "%d:", rdmacred_buf[i].ptag);
         ptr += len;
     }
-    sprintf(ptr,"%d",rdmacred_buf[num_creds-1].ptag);
+    sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].ptag);
     ret = prte_setenv("PMI_GNI_PTAG", env_buffer, false, &prte_launch_environ);
     if (ret != PRTE_SUCCESS) {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
@@ -188,21 +189,21 @@ int prte_odls_alps_get_rdma_creds(void)
 
     } else {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
-                             "%s odls:alps: PMI_GNI_TAG = %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), env_buffer));
+                             "%s odls:alps: PMI_GNI_TAG = %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             env_buffer));
     }
 
     /*
      * the cookie env
      */
 
-    memset(env_buffer,0,sizeof(env_buffer));
+    memset(env_buffer, 0, sizeof(env_buffer));
     ptr = env_buffer;
-    for (i=0; i<num_creds-1; i++) {
-        len = sprintf(ptr,"%d:",rdmacred_buf[i].cookie);
+    for (i = 0; i < num_creds - 1; i++) {
+        len = sprintf(ptr, "%d:", rdmacred_buf[i].cookie);
         ptr += len;
     }
-    sprintf(ptr,"%d",rdmacred_buf[num_creds-1].cookie);
+    sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].cookie);
     ret = prte_setenv("PMI_GNI_COOKIE", env_buffer, false, &prte_launch_environ);
     if (ret != PRTE_SUCCESS) {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
@@ -220,13 +221,13 @@ int prte_odls_alps_get_rdma_creds(void)
      * nic loc addrs
      */
 
-    memset(env_buffer,0,sizeof(env_buffer));
+    memset(env_buffer, 0, sizeof(env_buffer));
     ptr = env_buffer;
-    for (i=0; i<num_creds-1; i++) {
-        len = sprintf(ptr,"%d:",rdmacred_buf[i].local_addr);
+    for (i = 0; i < num_creds - 1; i++) {
+        len = sprintf(ptr, "%d:", rdmacred_buf[i].local_addr);
         ptr += len;
     }
-    sprintf(ptr,"%d",rdmacred_buf[num_creds-1].local_addr);
+    sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].local_addr);
     ret = prte_setenv("PMI_GNI_LOC_ADDR", env_buffer, false, &prte_launch_environ);
     if (ret != PRTE_SUCCESS) {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
@@ -244,13 +245,13 @@ int prte_odls_alps_get_rdma_creds(void)
      * finally device ids
      */
 
-    memset(env_buffer,0,sizeof(env_buffer));
+    memset(env_buffer, 0, sizeof(env_buffer));
     ptr = env_buffer;
-    for (i=0; i<num_creds-1; i++) {
-        len = sprintf(ptr,"%d:",rdmacred_buf[i].device_id);
+    for (i = 0; i < num_creds - 1; i++) {
+        len = sprintf(ptr, "%d:", rdmacred_buf[i].device_id);
         ptr += len;
     }
-    sprintf(ptr,"%d",rdmacred_buf[num_creds-1].device_id);
+    sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].device_id);
     ret = prte_setenv("PMI_GNI_DEV_ID", env_buffer, false, &prte_launch_environ);
     if (ret != PRTE_SUCCESS) {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
@@ -264,9 +265,8 @@ int prte_odls_alps_get_rdma_creds(void)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), env_buffer));
     }
 
-   fn_exit:
-    if (PRTE_SUCCESS == ret) already_got_creds = 1;
+fn_exit:
+    if (PRTE_SUCCESS == ret)
+        already_got_creds = 1;
     return ret;
 }
-
-

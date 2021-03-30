@@ -15,7 +15,6 @@
 
 #include "src/util/string_copy.h"
 
-
 void prte_string_copy(char *dest, const char *src, size_t dest_len)
 {
     size_t i;

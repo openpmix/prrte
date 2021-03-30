@@ -30,17 +30,17 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/oob/base/base.h"
-#include "src/util/name_fns.h"
-#include "src/threads/threads.h"
 #include "src/runtime/prte_globals.h"
+#include "src/threads/threads.h"
+#include "src/util/name_fns.h"
 
+#include "rml_oob.h"
 #include "src/mca/rml/base/base.h"
 #include "src/mca/rml/rml_types.h"
-#include "rml_oob.h"
 
-static void send_self_exe(int fd, short args, void* data)
+static void send_self_exe(int fd, short args, void *data)
 {
-    prte_self_send_xfer_t *xfer = (prte_self_send_xfer_t*)data;
+    prte_self_send_xfer_t *xfer = (prte_self_send_xfer_t *) data;
 
     PRTE_ACQUIRE_OBJECT(xfer);
 
@@ -53,29 +53,24 @@ static void send_self_exe(int fd, short args, void* data)
      */
     if (NULL != xfer->cbfunc) {
         /* non-blocking buffer send */
-        xfer->cbfunc(PRTE_SUCCESS, PRTE_PROC_MY_NAME, &xfer->dbuf,
-                     xfer->tag, xfer->cbdata);
+        xfer->cbfunc(PRTE_SUCCESS, PRTE_PROC_MY_NAME, &xfer->dbuf, xfer->tag, xfer->cbdata);
     }
 
     /* cleanup the memory */
     PRTE_RELEASE(xfer);
 }
 
-int prte_rml_oob_send_buffer_nb(pmix_proc_t* peer,
-                                pmix_data_buffer_t* buffer,
-                                prte_rml_tag_t tag,
-                                prte_rml_buffer_callback_fn_t cbfunc,
-                                void* cbdata)
+int prte_rml_oob_send_buffer_nb(pmix_proc_t *peer, pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
+                                prte_rml_buffer_callback_fn_t cbfunc, void *cbdata)
 {
     prte_rml_recv_t *rcv;
     prte_rml_send_t *snd;
     prte_self_send_xfer_t *xfer;
     pmix_status_t rc;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_rml_base_framework.framework_output,
-                         "%s rml_send_buffer to peer %s at tag %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (NULL == peer) ? "NULL" : PRTE_NAME_PRINT(peer), tag));
+    PRTE_OUTPUT_VERBOSE(
+        (1, prte_rml_base_framework.framework_output, "%s rml_send_buffer to peer %s at tag %d",
+         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == peer) ? "NULL" : PRTE_NAME_PRINT(peer), tag));
 
     if (PRTE_RML_TAG_INVALID == tag) {
         /* cannot send to an invalid tag */
@@ -91,7 +86,7 @@ int prte_rml_oob_send_buffer_nb(pmix_proc_t* peer,
     /* if this is a message to myself, then just post the message
      * for receipt - no need to dive into the oob
      */
-    if (PMIX_CHECK_PROCID(peer, PRTE_PROC_MY_NAME)) {  /* local delivery */
+    if (PMIX_CHECK_PROCID(peer, PRTE_PROC_MY_NAME)) { /* local delivery */
         PRTE_OUTPUT_VERBOSE((1, prte_rml_base_framework.framework_output,
                              "%s rml_send_buffer_to_self at tag %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tag));

@@ -16,20 +16,19 @@
 #include "constants.h"
 #include "types.h"
 
-#include <unistd.h>
-#include <string.h>
 #include <ctype.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "src/class/prte_list.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/util/show_help.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/show_help.h"
 
 #include "ras_sim.h"
-
 
 /*
  * Local functions
@@ -37,16 +36,10 @@
 static int allocate(prte_job_t *jdata, prte_list_t *nodes);
 static int finalize(void);
 
-
 /*
  * Global variable
  */
-prte_ras_base_module_t prte_ras_sim_module = {
-    NULL,
-    allocate,
-    NULL,
-    finalize
-};
+prte_ras_base_module_t prte_ras_sim_module = {NULL, allocate, NULL, finalize};
 
 static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 {
@@ -57,13 +50,13 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
     hwloc_obj_t obj;
     unsigned j, k;
     struct hwloc_topology_support *support;
-    char **files=NULL;
+    char **files = NULL;
     char **topos = NULL;
     bool use_local_topology = false;
-    char **node_cnt=NULL;
-    char **slot_cnt=NULL;
-    char **max_slot_cnt=NULL;
-    char *tmp, *job_cpuset=NULL;
+    char **node_cnt = NULL;
+    char **slot_cnt = NULL;
+    char **max_slot_cnt = NULL;
+    char *tmp, *job_cpuset = NULL;
     char prefix[6];
     bool use_hwthread_cpus = false;
     hwloc_obj_t root;
@@ -74,16 +67,16 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
     if (NULL != prte_ras_simulator_component.slots) {
         slot_cnt = prte_argv_split(prte_ras_simulator_component.slots, ',');
         /* backfile the slot_cnt so every topology has a cnt */
-        tmp = slot_cnt[prte_argv_count(slot_cnt)-1];
-        for (n=prte_argv_count(slot_cnt); n < prte_argv_count(node_cnt); n++) {
+        tmp = slot_cnt[prte_argv_count(slot_cnt) - 1];
+        for (n = prte_argv_count(slot_cnt); n < prte_argv_count(node_cnt); n++) {
             prte_argv_append_nosize(&slot_cnt, tmp);
         }
     }
     if (NULL != prte_ras_simulator_component.slots_max) {
         max_slot_cnt = prte_argv_split(prte_ras_simulator_component.slots_max, ',');
         /* backfill the max_slot_cnt as reqd */
-        tmp = max_slot_cnt[prte_argv_count(slot_cnt)-1];
-        for (n=prte_argv_count(max_slot_cnt); n < prte_argv_count(max_slot_cnt); n++) {
+        tmp = max_slot_cnt[prte_argv_count(slot_cnt) - 1];
+        for (n = prte_argv_count(max_slot_cnt); n < prte_argv_count(max_slot_cnt); n++) {
             prte_argv_append_nosize(&max_slot_cnt, tmp);
         }
     }
@@ -110,7 +103,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PMIX_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void **) &job_cpuset, PMIX_STRING);
 
     /* see if they want are using hwthreads as cpus */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
@@ -120,12 +113,12 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
     }
 
     /* process the request */
-    for (n=0; NULL != node_cnt[n]; n++) {
+    for (n = 0; NULL != node_cnt[n]; n++) {
         num_nodes = strtol(node_cnt[n], NULL, 10);
 
         /* get number of digits */
         val = num_nodes;
-        for (dig=0; 0 != val; dig++) {
+        for (dig = 0; 0 != val; dig++) {
             val /= 10;
         }
 
@@ -135,34 +128,33 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         /* check for topology */
         if (use_local_topology) {
             /* use our topology */
-            t = (prte_topology_t*)prte_pointer_array_get_item(prte_node_topologies, 0);
+            t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, 0);
         } else if (NULL != files) {
             if (0 != hwloc_topology_init(&topo)) {
-                prte_show_help("help-ras-simulator.txt",
-                               "hwloc API fail", true,
-                               __FILE__, __LINE__, "hwloc_topology_init");
+                prte_show_help("help-ras-simulator.txt", "hwloc API fail", true, __FILE__, __LINE__,
+                               "hwloc_topology_init");
                 goto error_silent;
             }
             if (0 != hwloc_topology_set_xml(topo, files[n])) {
-                prte_show_help("help-ras-simulator.txt",
-                               "hwloc failed to load xml", true, files[n]);
+                prte_show_help("help-ras-simulator.txt", "hwloc failed to load xml", true,
+                               files[n]);
                 hwloc_topology_destroy(topo);
                 goto error_silent;
             }
             /* since we are loading this from an external source, we have to
              * explicitly set a flag so hwloc sets things up correctly
              */
-            if (0 != prte_hwloc_base_topology_set_flags(topo, HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM, false)) {
-                prte_show_help("help-ras-simulator.txt",
-                               "hwloc API fail", true,
-                               __FILE__, __LINE__, "hwloc_topology_set_flags");
+            if (0
+                != prte_hwloc_base_topology_set_flags(topo, HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM,
+                                                      false)) {
+                prte_show_help("help-ras-simulator.txt", "hwloc API fail", true, __FILE__, __LINE__,
+                               "hwloc_topology_set_flags");
                 hwloc_topology_destroy(topo);
                 goto error_silent;
             }
             if (0 != hwloc_topology_load(topo)) {
-                prte_show_help("help-ras-simulator.txt",
-                               "hwloc API fail", true,
-                               __FILE__, __LINE__, "hwloc_topology_load");
+                prte_show_help("help-ras-simulator.txt", "hwloc API fail", true, __FILE__, __LINE__,
+                               "hwloc_topology_load");
                 hwloc_topology_destroy(topo);
                 goto error_silent;
             }
@@ -172,20 +164,19 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
              * we remove that information here.
              */
             obj = hwloc_get_root_obj(topo);
-            for (k=0; k < obj->infos_count; k++) {
-                if (NULL == obj->infos[k].name ||
-                    NULL == obj->infos[k].value) {
+            for (k = 0; k < obj->infos_count; k++) {
+                if (NULL == obj->infos[k].name || NULL == obj->infos[k].value) {
                     continue;
                 }
                 if (0 == strncmp(obj->infos[k].name, "HostName", strlen("HostName"))) {
                     free(obj->infos[k].name);
                     free(obj->infos[k].value);
                     /* left justify the array */
-                    for (j=k; j < obj->infos_count-1; j++) {
-                        obj->infos[j] = obj->infos[j+1];
+                    for (j = k; j < obj->infos_count - 1; j++) {
+                        obj->infos[j] = obj->infos[j + 1];
                     }
-                    obj->infos[obj->infos_count-1].name = NULL;
-                    obj->infos[obj->infos_count-1].value = NULL;
+                    obj->infos[obj->infos_count - 1].name = NULL;
+                    obj->infos[obj->infos_count - 1].value = NULL;
                     obj->infos_count--;
                     break;
                 }
@@ -193,7 +184,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
             /* unfortunately, hwloc does not include support info in its
              * xml output :-(( To aid in debugging, we set it here
              */
-            support = (struct hwloc_topology_support*)hwloc_topology_get_support(topo);
+            support = (struct hwloc_topology_support *) hwloc_topology_get_support(topo);
             support->cpubind->set_thisproc_cpubind = prte_ras_simulator_component.have_cpubind;
             support->membind->set_thisproc_membind = prte_ras_simulator_component.have_membind;
             /* pass it thru the filter so we create the summaries required by the mappers */
@@ -207,22 +198,19 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
             prte_pointer_array_add(prte_node_topologies, t);
         } else {
             if (0 != hwloc_topology_init(&topo)) {
-                prte_show_help("help-ras-simulator.txt",
-                               "hwloc API fail", true,
-                               __FILE__, __LINE__, "hwloc_topology_init");
+                prte_show_help("help-ras-simulator.txt", "hwloc API fail", true, __FILE__, __LINE__,
+                               "hwloc_topology_init");
                 goto error_silent;
             }
             if (0 != hwloc_topology_set_synthetic(topo, topos[n])) {
-                prte_show_help("help-ras-simulator.txt",
-                               "hwloc API fail", true,
-                               __FILE__, __LINE__, "hwloc_topology_set_synthetic");
+                prte_show_help("help-ras-simulator.txt", "hwloc API fail", true, __FILE__, __LINE__,
+                               "hwloc_topology_set_synthetic");
                 hwloc_topology_destroy(topo);
                 goto error_silent;
             }
             if (0 != hwloc_topology_load(topo)) {
-                prte_show_help("help-ras-simulator.txt",
-                               "hwloc API fail", true,
-                               __FILE__, __LINE__, "hwloc_topology_load");
+                prte_show_help("help-ras-simulator.txt", "hwloc API fail", true, __FILE__, __LINE__,
+                               "hwloc_topology_load");
                 hwloc_topology_destroy(topo);
                 goto error_silent;
             }
@@ -232,20 +220,19 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
              * we remove that information here.
              */
             obj = hwloc_get_root_obj(topo);
-            for (k=0; k < obj->infos_count; k++) {
-                if (NULL == obj->infos[k].name ||
-                    NULL == obj->infos[k].value) {
+            for (k = 0; k < obj->infos_count; k++) {
+                if (NULL == obj->infos[k].name || NULL == obj->infos[k].value) {
                     continue;
                 }
                 if (0 == strncmp(obj->infos[k].name, "HostName", strlen("HostName"))) {
                     free(obj->infos[k].name);
                     free(obj->infos[k].value);
                     /* left justify the array */
-                    for (j=k; j < obj->infos_count-1; j++) {
-                        obj->infos[j] = obj->infos[j+1];
+                    for (j = k; j < obj->infos_count - 1; j++) {
+                        obj->infos[j] = obj->infos[j + 1];
                     }
-                    obj->infos[obj->infos_count-1].name = NULL;
-                    obj->infos[obj->infos_count-1].value = NULL;
+                    obj->infos[obj->infos_count - 1].name = NULL;
+                    obj->infos[obj->infos_count - 1].value = NULL;
                     obj->infos_count--;
                     break;
                 }
@@ -253,7 +240,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
             /* unfortunately, hwloc does not include support info in its
              * xml output :-(( To aid in debugging, we set it here
              */
-            support = (struct hwloc_topology_support*)hwloc_topology_get_support(topo);
+            support = (struct hwloc_topology_support *) hwloc_topology_get_support(topo);
             support->cpubind->set_thisproc_cpubind = prte_ras_simulator_component.have_cpubind;
             support->membind->set_thisproc_membind = prte_ras_simulator_component.have_membind;
             /* add it to our array */
@@ -270,7 +257,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
             return PRTE_ERR_BAD_PARAM;
         }
-        rdata = (prte_hwloc_topo_data_t*)root->userdata;
+        rdata = (prte_hwloc_topo_data_t *) root->userdata;
         available = hwloc_bitmap_dup(rdata->available);
 
         if (NULL != job_cpuset) {
@@ -279,7 +266,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
             hwloc_bitmap_free(mycpus);
         }
 
-        for (i=0; i < num_nodes; i++) {
+        for (i = 0; i < num_nodes; i++) {
             node = PRTE_NEW(prte_node_t);
             prte_asprintf(&node->name, "%s%0*d", prefix, dig, i);
             node->state = PRTE_NODE_STATE_UP;
@@ -288,7 +275,8 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
                 node->slots_max = 0;
             } else {
                 obj = hwloc_get_root_obj(t->topo);
-                node->slots_max = prte_hwloc_base_get_npus(t->topo, use_hwthread_cpus, available, obj);
+                node->slots_max = prte_hwloc_base_get_npus(t->topo, use_hwthread_cpus, available,
+                                                           obj);
             }
             if (NULL == slot_cnt || NULL == slot_cnt[n]) {
                 node->slots = 0;
@@ -299,8 +287,8 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
             PRTE_RETAIN(t);
             node->topology = t;
             prte_output_verbose(1, prte_ras_base_framework.framework_output,
-                                "Created Node <%10s> [%3d : %3d]",
-                                node->name, node->slots, node->slots_max);
+                                "Created Node <%10s> [%3d : %3d]", node->name, node->slots,
+                                node->slots_max);
             prte_list_append(nodes, &node->super);
         }
         hwloc_bitmap_free(available);
@@ -340,7 +328,6 @@ error_silent:
         free(job_cpuset);
     }
     return PRTE_ERR_SILENT;
-
 }
 
 /*

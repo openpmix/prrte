@@ -21,21 +21,20 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rml/rml.h"
-#include "src/util/name_fns.h"
-#include "src/util/proc_info.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
+#include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
 
 #include "src/mca/rml/base/rml_contact.h"
 
-#include "src/mca/routed/base/base.h"
 #include "routed_direct.h"
+#include "src/mca/routed/base/base.h"
 
 static int init(void);
 static int finalize(void);
 static int delete_route(pmix_proc_t *proc);
-static int update_route(pmix_proc_t *target,
-                        pmix_proc_t *route);
+static int update_route(pmix_proc_t *target, pmix_proc_t *route);
 static pmix_proc_t get_route(pmix_proc_t *target);
 static int route_lost(const pmix_proc_t *route);
 static bool route_is_defined(const pmix_proc_t *target);
@@ -93,8 +92,7 @@ static int finalize(void)
 static int delete_route(pmix_proc_t *proc)
 {
     PRTE_OUTPUT_VERBOSE((1, prte_routed_base_framework.framework_output,
-                         "%s routed_direct_delete_route for %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         "%s routed_direct_delete_route for %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(proc)));
 
     /*There is nothing to do here */
@@ -102,20 +100,16 @@ static int delete_route(pmix_proc_t *proc)
     return PRTE_SUCCESS;
 }
 
-static int update_route(pmix_proc_t *target,
-                        pmix_proc_t *route)
+static int update_route(pmix_proc_t *target, pmix_proc_t *route)
 {
     PRTE_OUTPUT_VERBOSE((1, prte_routed_base_framework.framework_output,
-                         "%s routed_direct_update: %s --> %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(target),
-                         PRTE_NAME_PRINT(route)));
+                         "%s routed_direct_update: %s --> %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(target), PRTE_NAME_PRINT(route)));
 
     /*There is nothing to do here */
 
     return PRTE_SUCCESS;
 }
-
 
 static pmix_proc_t get_route(pmix_proc_t *target)
 {
@@ -128,8 +122,7 @@ static pmix_proc_t get_route(pmix_proc_t *target)
 
     if (PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL, PRTE_PROC_MY_HNP, target)) {
         PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
-                    "%s routing direct to the HNP",
-                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                             "%s routing direct to the HNP", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         ret = PRTE_PROC_MY_HNP;
         goto found;
     }
@@ -150,12 +143,10 @@ static pmix_proc_t get_route(pmix_proc_t *target)
     /* else route to this daemon directly */
     ret = &daemon;
 
- found:
+found:
     PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
-                         "%s routed_direct_get(%s) --> %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(target),
-                         PRTE_NAME_PRINT(ret)));
+                         "%s routed_direct_get(%s) --> %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(target), PRTE_NAME_PRINT(ret)));
 
     return *ret;
 }
@@ -165,23 +156,19 @@ static int route_lost(const pmix_proc_t *route)
     prte_list_item_t *item;
     prte_routed_tree_t *child;
 
-    PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
-                         "%s route to %s lost",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(route)));
+    PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output, "%s route to %s lost",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(route)));
 
     /* if we lose the connection to the lifeline and we are NOT already,
      * in finalize, tell the OOB to abort.
      * NOTE: we cannot call abort from here as the OOB needs to first
      * release a thread-lock - otherwise, we will hang!!
      */
-    if (!prte_finalizing &&
-        NULL != lifeline &&
-        PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL, route, lifeline)) {
+    if (!prte_finalizing && NULL != lifeline
+        && PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL, route, lifeline)) {
         PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
                              "%s routed:direct: Connection to lifeline %s lost",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(lifeline)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(lifeline)));
         return PRTE_ERR_FATAL;
     }
 
@@ -189,10 +176,9 @@ static int route_lost(const pmix_proc_t *route)
      * see if it is one of our children - if so, remove it
      */
     if (PRTE_PROC_IS_MASTER && PMIX_CHECK_NSPACE(route->nspace, PRTE_PROC_MY_NAME->nspace)) {
-        for (item = prte_list_get_first(&my_children);
-             item != prte_list_get_end(&my_children);
+        for (item = prte_list_get_first(&my_children); item != prte_list_get_end(&my_children);
              item = prte_list_get_next(item)) {
-            child = (prte_routed_tree_t*)item;
+            child = (prte_routed_tree_t *) item;
             if (child->rank == route->rank) {
                 prte_list_remove_item(&my_children, item);
                 PRTE_RELEASE(item);
@@ -205,7 +191,6 @@ static int route_lost(const pmix_proc_t *route)
     return PRTE_SUCCESS;
 }
 
-
 static bool route_is_defined(const pmix_proc_t *target)
 {
     /* all routes are defined */
@@ -215,8 +200,7 @@ static bool route_is_defined(const pmix_proc_t *target)
 static int set_lifeline(pmix_proc_t *proc)
 {
     PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
-                         "%s routed:direct: set lifeline to %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         "%s routed:direct: set lifeline to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(proc)));
     mylifeline = *proc;
     lifeline = &mylifeline;
@@ -248,8 +232,8 @@ static void update_routing_plan(void)
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return;
     }
-    for (i=1; i < jdata->procs->size; i++) {
-        if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, i))) {
+    for (i = 1; i < jdata->procs->size; i++) {
+        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, i))) {
             continue;
         }
         child = PRTE_NEW(prte_routed_tree_t);
@@ -264,8 +248,7 @@ static void get_routing_list(prte_list_t *coll)
 {
 
     PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
-                         "%s routed:direct: get routing list",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s routed:direct: get routing list", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     prte_routed_base_xcast_routing(coll, &my_children);
 }

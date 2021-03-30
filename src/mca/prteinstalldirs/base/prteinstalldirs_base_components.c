@@ -6,6 +6,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,106 +19,76 @@
 
 #include "constants.h"
 #include "src/mca/mca.h"
-#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/prteinstalldirs/base/base.h"
 #include "src/mca/prteinstalldirs/base/static-components.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 
 prte_install_dirs_t prte_install_dirs = {0};
 
-#define CONDITIONAL_COPY(target, origin, field)                 \
-    do {                                                        \
-        if (origin.field != NULL && target.field == NULL) {     \
-            target.field = origin.field;                        \
-        }                                                       \
+#define CONDITIONAL_COPY(target, origin, field)             \
+    do {                                                    \
+        if (origin.field != NULL && target.field == NULL) { \
+            target.field = origin.field;                    \
+        }                                                   \
     } while (0)
 
-static int
-prte_prteinstalldirs_base_open(prte_mca_base_open_flag_t flags)
+static int prte_prteinstalldirs_base_open(prte_mca_base_open_flag_t flags)
 {
     prte_mca_base_component_list_item_t *component_item;
     int ret;
 
-    ret = prte_mca_base_framework_components_open (&prte_prteinstalldirs_base_framework, flags);
+    ret = prte_mca_base_framework_components_open(&prte_prteinstalldirs_base_framework, flags);
     if (PRTE_SUCCESS != ret) {
         return ret;
     }
 
-    PRTE_LIST_FOREACH(component_item, &prte_prteinstalldirs_base_framework.framework_components, prte_mca_base_component_list_item_t) {
-        const prte_prteinstalldirs_base_component_t *component =
-            (const prte_prteinstalldirs_base_component_t *) component_item->cli_component;
+    PRTE_LIST_FOREACH(component_item, &prte_prteinstalldirs_base_framework.framework_components,
+                      prte_mca_base_component_list_item_t)
+    {
+        const prte_prteinstalldirs_base_component_t *component
+            = (const prte_prteinstalldirs_base_component_t *) component_item->cli_component;
 
         /* copy over the data, if something isn't already there */
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         prefix);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         exec_prefix);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         bindir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         sbindir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         libexecdir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         datarootdir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         datadir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         sysconfdir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         sharedstatedir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         localstatedir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         libdir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         includedir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         infodir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         mandir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         prtedatadir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         prtelibdir);
-        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data,
-                         prteincludedir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, prefix);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, exec_prefix);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, bindir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, sbindir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, libexecdir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, datarootdir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, datadir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, sysconfdir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, sharedstatedir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, localstatedir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, libdir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, includedir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, infodir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, mandir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, prtedatadir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, prtelibdir);
+        CONDITIONAL_COPY(prte_install_dirs, component->install_dirs_data, prteincludedir);
     }
 
     /* expand out all the fields */
-    prte_install_dirs.prefix =
-        prte_install_dirs_expand_setup(prte_install_dirs.prefix);
-    prte_install_dirs.exec_prefix =
-        prte_install_dirs_expand_setup(prte_install_dirs.exec_prefix);
-    prte_install_dirs.bindir =
-        prte_install_dirs_expand_setup(prte_install_dirs.bindir);
-    prte_install_dirs.sbindir =
-        prte_install_dirs_expand_setup(prte_install_dirs.sbindir);
-    prte_install_dirs.libexecdir =
-        prte_install_dirs_expand_setup(prte_install_dirs.libexecdir);
-    prte_install_dirs.datarootdir =
-        prte_install_dirs_expand_setup(prte_install_dirs.datarootdir);
-    prte_install_dirs.datadir =
-        prte_install_dirs_expand_setup(prte_install_dirs.datadir);
-    prte_install_dirs.sysconfdir =
-        prte_install_dirs_expand_setup(prte_install_dirs.sysconfdir);
-    prte_install_dirs.sharedstatedir =
-        prte_install_dirs_expand_setup(prte_install_dirs.sharedstatedir);
-    prte_install_dirs.localstatedir =
-        prte_install_dirs_expand_setup(prte_install_dirs.localstatedir);
-    prte_install_dirs.libdir =
-        prte_install_dirs_expand_setup(prte_install_dirs.libdir);
-    prte_install_dirs.includedir =
-        prte_install_dirs_expand_setup(prte_install_dirs.includedir);
-    prte_install_dirs.infodir =
-        prte_install_dirs_expand_setup(prte_install_dirs.infodir);
-    prte_install_dirs.mandir =
-        prte_install_dirs_expand_setup(prte_install_dirs.mandir);
-    prte_install_dirs.prtedatadir =
-        prte_install_dirs_expand_setup(prte_install_dirs.prtedatadir);
-    prte_install_dirs.prtelibdir =
-        prte_install_dirs_expand_setup(prte_install_dirs.prtelibdir);
-    prte_install_dirs.prteincludedir =
-        prte_install_dirs_expand_setup(prte_install_dirs.prteincludedir);
+    prte_install_dirs.prefix = prte_install_dirs_expand_setup(prte_install_dirs.prefix);
+    prte_install_dirs.exec_prefix = prte_install_dirs_expand_setup(prte_install_dirs.exec_prefix);
+    prte_install_dirs.bindir = prte_install_dirs_expand_setup(prte_install_dirs.bindir);
+    prte_install_dirs.sbindir = prte_install_dirs_expand_setup(prte_install_dirs.sbindir);
+    prte_install_dirs.libexecdir = prte_install_dirs_expand_setup(prte_install_dirs.libexecdir);
+    prte_install_dirs.datarootdir = prte_install_dirs_expand_setup(prte_install_dirs.datarootdir);
+    prte_install_dirs.datadir = prte_install_dirs_expand_setup(prte_install_dirs.datadir);
+    prte_install_dirs.sysconfdir = prte_install_dirs_expand_setup(prte_install_dirs.sysconfdir);
+    prte_install_dirs.sharedstatedir = prte_install_dirs_expand_setup(
+        prte_install_dirs.sharedstatedir);
+    prte_install_dirs.localstatedir = prte_install_dirs_expand_setup(
+        prte_install_dirs.localstatedir);
+    prte_install_dirs.libdir = prte_install_dirs_expand_setup(prte_install_dirs.libdir);
+    prte_install_dirs.includedir = prte_install_dirs_expand_setup(prte_install_dirs.includedir);
+    prte_install_dirs.infodir = prte_install_dirs_expand_setup(prte_install_dirs.infodir);
+    prte_install_dirs.mandir = prte_install_dirs_expand_setup(prte_install_dirs.mandir);
+    prte_install_dirs.prtedatadir = prte_install_dirs_expand_setup(prte_install_dirs.prtedatadir);
+    prte_install_dirs.prtelibdir = prte_install_dirs_expand_setup(prte_install_dirs.prtelibdir);
+    prte_install_dirs.prteincludedir = prte_install_dirs_expand_setup(
+        prte_install_dirs.prteincludedir);
 
 #if 0
     fprintf(stderr, "prefix:           %s\n", prte_install_dirs.prefix);
@@ -145,9 +116,7 @@ prte_prteinstalldirs_base_open(prte_mca_base_open_flag_t flags)
     return PRTE_SUCCESS;
 }
 
-
-static int
-prte_prteinstalldirs_base_close(void)
+static int prte_prteinstalldirs_base_close(void)
 {
     free(prte_install_dirs.prefix);
     free(prte_install_dirs.exec_prefix);
@@ -166,12 +135,14 @@ prte_prteinstalldirs_base_close(void)
     free(prte_install_dirs.prtedatadir);
     free(prte_install_dirs.prtelibdir);
     free(prte_install_dirs.prteincludedir);
-    memset (&prte_install_dirs, 0, sizeof (prte_install_dirs));
+    memset(&prte_install_dirs, 0, sizeof(prte_install_dirs));
 
-    return prte_mca_base_framework_components_close (&prte_prteinstalldirs_base_framework, NULL);
+    return prte_mca_base_framework_components_close(&prte_prteinstalldirs_base_framework, NULL);
 }
 
 /* Declare the prteinstalldirs framework */
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prteinstalldirs, NULL, NULL, prte_prteinstalldirs_base_open,
-                                 prte_prteinstalldirs_base_close, prte_prteinstalldirs_base_static_components,
-                                 PRTE_MCA_BASE_FRAMEWORK_FLAG_NOREGISTER | PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);
+                                prte_prteinstalldirs_base_close,
+                                prte_prteinstalldirs_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_NOREGISTER
+                                    | PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);

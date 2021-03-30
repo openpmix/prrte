@@ -16,6 +16,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,8 +24,8 @@
  * $HEADER$
  */
 
-#ifndef  PRTE_MUTEX_UNIX_H
-#define  PRTE_MUTEX_UNIX_H 1
+#ifndef PRTE_MUTEX_UNIX_H
+#define PRTE_MUTEX_UNIX_H 1
 
 /**
  * @file:
@@ -39,8 +40,8 @@
 
 #include "prte_config.h"
 
-#include <pthread.h>
 #include <errno.h>
+#include <pthread.h>
 #include <stdio.h>
 
 #include "src/class/prte_object.h"
@@ -65,50 +66,43 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mutex_t);
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_recursive_mutex_t);
 
 #if defined(PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP)
-#define PRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
+#    define PRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
 #elif defined(PTHREAD_RECURSIVE_MUTEX_INITIALIZER)
-#define PRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER PTHREAD_RECURSIVE_MUTEX_INITIALIZER
+#    define PRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER PTHREAD_RECURSIVE_MUTEX_INITIALIZER
 #endif
 
 #if PRTE_ENABLE_DEBUG
-#define PRTE_MUTEX_STATIC_INIT                                         \
-    {                                                                   \
-        .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                  \
-        .m_lock_pthread = PTHREAD_MUTEX_INITIALIZER,                    \
-        .m_lock_debug = 0,                                              \
-        .m_lock_file = NULL,                                            \
-        .m_lock_line = 0,                                               \
-        .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT,                        \
-    }
+#    define PRTE_MUTEX_STATIC_INIT                                                               \
+        {                                                                                        \
+            .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                                         \
+            .m_lock_pthread = PTHREAD_MUTEX_INITIALIZER, .m_lock_debug = 0, .m_lock_file = NULL, \
+            .m_lock_line = 0, .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT,                            \
+        }
 #else
-#define PRTE_MUTEX_STATIC_INIT                                         \
-    {                                                                   \
-        .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                  \
-        .m_lock_pthread = PTHREAD_MUTEX_INITIALIZER,                    \
-        .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT,                        \
-    }
+#    define PRTE_MUTEX_STATIC_INIT                                                               \
+        {                                                                                        \
+            .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                                         \
+            .m_lock_pthread = PTHREAD_MUTEX_INITIALIZER, .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT, \
+        }
 #endif
 
 #if defined(PRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER)
 
-#if PRTE_ENABLE_DEBUG
-#define PRTE_RECURSIVE_MUTEX_STATIC_INIT                               \
-    {                                                                   \
-        .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                  \
-        .m_lock_pthread = PRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER,    \
-        .m_lock_debug = 0,                                              \
-        .m_lock_file = NULL,                                            \
-        .m_lock_line = 0,                                               \
-        .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT,                        \
-    }
-#else
-#define PRTE_RECURSIVE_MUTEX_STATIC_INIT                               \
-    {                                                                   \
-        .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                  \
-        .m_lock_pthread = PRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER,    \
-        .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT,                        \
-    }
-#endif
+#    if PRTE_ENABLE_DEBUG
+#        define PRTE_RECURSIVE_MUTEX_STATIC_INIT                                               \
+            {                                                                                  \
+                .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                                   \
+                .m_lock_pthread = PRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER, .m_lock_debug = 0, \
+                .m_lock_file = NULL, .m_lock_line = 0, .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT, \
+            }
+#    else
+#        define PRTE_RECURSIVE_MUTEX_STATIC_INIT                            \
+            {                                                               \
+                .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                \
+                .m_lock_pthread = PRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER, \
+                .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT,                     \
+            }
+#    endif
 
 #endif
 
@@ -213,4 +207,4 @@ static inline void prte_mutex_atomic_unlock(prte_mutex_t *m)
 
 END_C_DECLS
 
-#endif                          /* PRTE_MUTEX_UNIX_H */
+#endif /* PRTE_MUTEX_UNIX_H */

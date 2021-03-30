@@ -4,6 +4,7 @@
  *                         Corporation.  All rights reserved.
  * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,10 +28,8 @@ BEGIN_C_DECLS
  * Globals
  */
 PRTE_EXPORT extern prte_mca_base_framework_t prte_prtedl_base_framework;
-PRTE_EXPORT extern prte_prtedl_base_component_t
-*prte_prtedl_base_selected_component;
+PRTE_EXPORT extern prte_prtedl_base_component_t *prte_prtedl_base_selected_component;
 PRTE_EXPORT extern prte_prtedl_base_module_t *prte_prtedl;
-
 
 /**
  * Initialize the DL MCA framework
@@ -68,9 +67,8 @@ PRTE_EXPORT int prte_dl_base_close(void);
  * (see prte_prtedl_base_module_open_ft_t in src/mca/prtedl/prtedl.h for
  * documentation of this function)
  */
-PRTE_EXPORT int prte_dl_open(const char *fname,
-                               bool use_ext, bool private_namespace,
-                               prte_dl_handle_t **handle, char **err_msg);
+PRTE_EXPORT int prte_dl_open(const char *fname, bool use_ext, bool private_namespace,
+                             prte_dl_handle_t **handle, char **err_msg);
 
 /**
  * Lookup a symbol in a DSO
@@ -78,9 +76,8 @@ PRTE_EXPORT int prte_dl_open(const char *fname,
  * (see prte_prtedl_base_module_lookup_ft_t in src/mca/prtedl/prtedl.h for
  * documentation of this function)
  */
-PRTE_EXPORT int prte_dl_lookup(prte_dl_handle_t *handle,
-                                 const char *symbol,
-                                 void **ptr, char **err_msg);
+PRTE_EXPORT int prte_dl_lookup(prte_dl_handle_t *handle, const char *symbol, void **ptr,
+                               char **err_msg);
 
 /**
  * Close a DSO
@@ -97,9 +94,8 @@ PRTE_EXPORT int prte_dl_close(prte_dl_handle_t *handle);
  * documentation of this function)
  */
 PRTE_EXPORT int prte_dl_foreachfile(const char *search_path,
-                                      int (*cb_func)(const char *filename,
-                                                     void *context),
-                                      void *context);
+                                    int (*cb_func)(const char *filename, void *context),
+                                    void *context);
 
 END_C_DECLS
 

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,7 +18,7 @@
  */
 
 #ifndef PRTE_CONFIG_H
-#error "prte_config_top.h should only be included from prte_config.h"
+#    error "prte_config_top.h should only be included from prte_config.h"
 #endif
 
 /* The only purpose of this file is to undef the PACKAGE_<foo> macros

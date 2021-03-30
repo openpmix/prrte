@@ -29,59 +29,58 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include <stdio.h>
-#include <stddef.h>
 #include <ctype.h>
+#include <stddef.h>
+#include <stdio.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+#    include <netdb.h>
 #endif
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+#    include <sys/param.h>
 #endif
-#include <fcntl.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <time.h>
 
-
 #include "src/event/event-internal.h"
 #include "src/mca/base/base.h"
-#include "src/util/output.h"
-#include "src/util/os_dirpath.h"
-#include "src/util/prte_environ.h"
-#include "src/util/path.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
+#include "src/util/os_dirpath.h"
+#include "src/util/output.h"
+#include "src/util/path.h"
+#include "src/util/prte_environ.h"
 
-#include "src/util/proc_info.h"
-#include "src/util/session_dir.h"
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"
+#include "src/util/proc_info.h"
+#include "src/util/session_dir.h"
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/ess/ess.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/iof/base/base.h"
+#include "src/mca/odls/base/base.h"
+#include "src/mca/odls/odls.h"
+#include "src/mca/oob/base/base.h"
+#include "src/mca/plm/base/plm_private.h"
+#include "src/mca/plm/plm.h"
+#include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/rml_types.h"
-#include "src/mca/odls/odls.h"
-#include "src/mca/odls/base/base.h"
-#include "src/mca/oob/base/base.h"
-#include "src/mca/plm/plm.h"
-#include "src/mca/plm/base/plm_private.h"
-#include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/routed/routed.h"
-#include "src/mca/ess/ess.h"
 #include "src/mca/state/state.h"
 
 #include "src/mca/odls/base/odls_private.h"
 
-#include "src/runtime/runtime.h"
 #include "src/runtime/prte_globals.h"
-#include "src/runtime/prte_wait.h"
 #include "src/runtime/prte_quit.h"
+#include "src/runtime/prte_wait.h"
+#include "src/runtime/runtime.h"
 
 #include "src/prted/prted.h"
 
@@ -92,16 +91,15 @@ static char *get_prted_comm_cmd_str(int command);
 
 static void _notify_release(pmix_status_t status, void *cbdata)
 {
-    prte_pmix_lock_t *lk = (prte_pmix_lock_t*)cbdata;
+    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
 
     PRTE_PMIX_WAKEUP_THREAD(lk);
 }
 
 static prte_pointer_array_t *procs_prev_ordered_to_terminate = NULL;
 
-void prte_daemon_recv(int status, pmix_proc_t* sender,
-                      pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
-                      void* cbdata)
+void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                      prte_rml_tag_t tag, void *cbdata)
 {
     prte_daemon_cmd_flag_t command;
     pmix_data_buffer_t *relay_msg;
@@ -149,7 +147,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
     cmd_str = NULL;
 
     /* now process the command locally */
-    switch(command) {
+    switch (command) {
 
         /****    NULL    ****/
     case PRTE_DAEMON_NULL_CMD:
@@ -192,8 +190,8 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
 
         /* cleanup */
     KILL_PROC_CLEANUP:
-        for (i=0; i < procarray.size; i++) {
-            if (NULL != (proct = (prte_proc_t*)prte_pointer_array_get_item(&procarray, i))) {
+        for (i = 0; i < procarray.size; i++) {
+            if (NULL != (proct = (prte_proc_t *) prte_pointer_array_get_item(&procarray, i))) {
                 free(proct);
             }
         }
@@ -237,8 +235,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
 
         if (prte_debug_daemons_flag) {
             prte_output(0, "%s prted_cmd: received signal_local_procs, delivering signal %d",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        signal);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signal);
         }
 
         /* signal them */
@@ -284,13 +281,13 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         /* Keep track of previously terminated, so we don't keep ordering the
          * same processes to die.
          */
-        if( NULL == procs_prev_ordered_to_terminate ) {
+        if (NULL == procs_prev_ordered_to_terminate) {
             procs_prev_ordered_to_terminate = PRTE_NEW(prte_pointer_array_t);
-            prte_pointer_array_init(procs_prev_ordered_to_terminate, num_procs+1, INT32_MAX, 8);
+            prte_pointer_array_init(procs_prev_ordered_to_terminate, num_procs + 1, INT32_MAX, 8);
         }
 
         num_new_procs = 0;
-        for( i = 0; i < num_procs; ++i) {
+        for (i = 0; i < num_procs; ++i) {
             cur_proc = PRTE_NEW(prte_proc_t);
 
             n = 1;
@@ -302,28 +299,29 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
 
             /* See if duplicate */
             found = false;
-            for( p = 0; p < procs_prev_ordered_to_terminate->size; ++p) {
-                if( NULL == (prev_proc = (prte_proc_t*)prte_pointer_array_get_item(procs_prev_ordered_to_terminate, p))) {
+            for (p = 0; p < procs_prev_ordered_to_terminate->size; ++p) {
+                if (NULL
+                    == (prev_proc = (prte_proc_t *)
+                            prte_pointer_array_get_item(procs_prev_ordered_to_terminate, p))) {
                     continue;
                 }
-                if (PMIX_CHECK_PROCID(&cur_proc->name, &prev_proc->name) ) {
+                if (PMIX_CHECK_PROCID(&cur_proc->name, &prev_proc->name)) {
                     found = true;
                     break;
                 }
             }
 
-            PRTE_OUTPUT_VERBOSE((2, prte_debug_output,
-                                 "%s prted:comm:abort_procs Application %s requests term. of %s (%2d of %2d) %3s.",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 PRTE_NAME_PRINT(sender),
-                                 PRTE_NAME_PRINT(&(cur_proc->name)), i, num_procs,
-                                 (found ? "Dup" : "New") ));
+            PRTE_OUTPUT_VERBOSE(
+                (2, prte_debug_output,
+                 "%s prted:comm:abort_procs Application %s requests term. of %s (%2d of %2d) %3s.",
+                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender),
+                 PRTE_NAME_PRINT(&(cur_proc->name)), i, num_procs, (found ? "Dup" : "New")));
 
             /* If not a duplicate, then add to the to_kill list */
-            if( !found ) {
-                prte_pointer_array_add(procs_to_kill, (void*)cur_proc);
+            if (!found) {
+                prte_pointer_array_add(procs_to_kill, (void *) cur_proc);
                 PRTE_RETAIN(cur_proc);
-                prte_pointer_array_add(procs_prev_ordered_to_terminate, (void*)cur_proc);
+                prte_pointer_array_add(procs_prev_ordered_to_terminate, (void *) cur_proc);
                 num_new_procs++;
             }
         }
@@ -331,17 +329,17 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         /*
          * Send the request to terminate
          */
-        if( num_new_procs > 0 ) {
+        if (num_new_procs > 0) {
             PRTE_OUTPUT_VERBOSE((2, prte_debug_output,
-                                 "%s prted:comm:abort_procs Terminating application requested processes (%2d / %2d).",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 num_new_procs, num_procs));
+                                 "%s prted:comm:abort_procs Terminating application requested "
+                                 "processes (%2d / %2d).",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_new_procs, num_procs));
             prte_plm.terminate_procs(procs_to_kill);
         } else {
             PRTE_OUTPUT_VERBOSE((2, prte_debug_output,
-                                 "%s prted:comm:abort_procs No new application processes to terminating from request (%2d / %2d).",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 num_new_procs, num_procs));
+                                 "%s prted:comm:abort_procs No new application processes to "
+                                 "terminating from request (%2d / %2d).",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_new_procs, num_procs));
         }
 
         break;
@@ -349,8 +347,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         /****    EXIT COMMAND    ****/
     case PRTE_DAEMON_EXIT_CMD:
         if (prte_debug_daemons_flag) {
-            prte_output(0, "%s prted_cmd: received exit cmd",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+            prte_output(0, "%s prted_cmd: received exit cmd", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         }
         jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
@@ -363,9 +360,11 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         prte_prteds_term_ordered = true;
         /* if all my routes and local children are gone, then terminate ourselves */
         if (0 == (ret = prte_routed.num_routes())) {
-            for (i=0; i < prte_local_children->size; i++) {
-                if (NULL != (proct = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i)) &&
-                    PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
+            for (i = 0; i < prte_local_children->size; i++) {
+                if (NULL
+                        != (proct = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
+                                                                                i))
+                    && PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
                     /* at least one is still alive */
                     if (prte_debug_daemons_flag) {
                         prte_output(0, "%s prted_cmd: exit cmd, but proc %s is alive",
@@ -406,20 +405,20 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         /* cycle thru our known jobs to find any that are tools - these
          * may not have been killed if, for example, we didn't start
          * them */
-        for (i=0; i < prte_job_data->size; i++) {
-            jdata = (prte_job_t*)prte_pointer_array_get_item(prte_job_data, i);
+        for (i = 0; i < prte_job_data->size; i++) {
+            jdata = (prte_job_t *) prte_pointer_array_get_item(prte_job_data, i);
             if (NULL == jdata) {
                 continue;
             }
-            if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) &&
-                0 < prte_list_get_size(&jdata->children)) {
+            if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)
+                && 0 < prte_list_get_size(&jdata->children)) {
                 pmix_info_t info[3];
                 bool flag;
                 prte_job_t *jd;
                 pmix_status_t xrc = PMIX_ERR_JOB_TERMINATED;
                 /* we need to notify this job that its CHILD job terminated
                  * as that is the job it is looking for */
-                jd = (prte_job_t*)prte_list_get_first(&jdata->children);
+                jd = (prte_job_t *) prte_list_get_first(&jdata->children);
                 /* must notify this tool of termination so it can
                  * cleanly exit - otherwise, it may hang waiting for
                  * some kind of notification */
@@ -432,8 +431,8 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
                 PMIX_LOAD_PROCID(&pname, jd->nspace, PMIX_RANK_WILDCARD);
                 PMIX_INFO_LOAD(&info[2], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
                 PRTE_PMIX_CONSTRUCT_LOCK(&lk);
-                PMIx_Notify_event(PMIX_ERR_JOB_TERMINATED, &pname, PMIX_RANGE_SESSION,
-                                  info, 3, _notify_release, &lk);
+                PMIx_Notify_event(PMIX_ERR_JOB_TERMINATED, &pname, PMIX_RANGE_SESSION, info, 3,
+                                  _notify_release, &lk);
                 PRTE_PMIX_WAIT_THREAD(&lk);
                 PRTE_PMIX_DESTRUCT_LOCK(&lk);
             }
@@ -443,9 +442,11 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         if (PRTE_PROC_IS_MASTER) {
             /* if all my routes and local children are gone, then terminate ourselves */
             if (0 == prte_routed.num_routes()) {
-                for (i=0; i < prte_local_children->size; i++) {
-                    if (NULL != (proct = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i)) &&
-                        PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
+                for (i = 0; i < prte_local_children->size; i++) {
+                    if (NULL
+                            != (proct = (prte_proc_t *)
+                                    prte_pointer_array_get_item(prte_local_children, i))
+                        && PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
                         /* at least one is still alive */
                         return;
                     }
@@ -482,13 +483,14 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         /* release all resources (even those on other nodes) that we
          * assigned to this job */
         if (NULL != jdata->map) {
-            map = (prte_job_map_t*)jdata->map;
+            map = (prte_job_map_t *) jdata->map;
             for (n = 0; n < map->nodes->size; n++) {
-                if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(map->nodes, n))) {
+                if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, n))) {
                     continue;
                 }
                 for (i = 0; i < node->procs->size; i++) {
-                    if (NULL == (proct = (prte_proc_t*)prte_pointer_array_get_item(node->procs, i))) {
+                    if (NULL
+                        == (proct = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i))) {
                         continue;
                     }
                     if (!PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
@@ -528,7 +530,8 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         PMIX_LOAD_PROCID(&pname, job, PMIX_RANK_WILDCARD);
         prte_pmix_server_clear(&pname);
         /* remove the session directory tree */
-        if (0 > prte_asprintf(&cmd_str, "%s/%d", prte_process_info.jobfam_session_dir, PRTE_LOCAL_JOBID(jdata->nspace))) {
+        if (0 > prte_asprintf(&cmd_str, "%s/%d", prte_process_info.jobfam_session_dir,
+                              PRTE_LOCAL_JOBID(jdata->nspace))) {
             ret = PRTE_ERR_OUT_OF_RESOURCE;
             goto CLEANUP;
         }
@@ -537,7 +540,6 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         cmd_str = NULL;
         PRTE_RELEASE(jdata);
         break;
-
 
         /****     REPORT TOPOLOGY COMMAND    ****/
     case PRTE_DAEMON_REPORT_TOPOLOGY_CMD:
@@ -552,7 +554,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         /* pack the topology */
         ptopo.source = "hwloc";
         ptopo.topology = prte_hwloc_topology;
-        ret = PMIx_Data_pack(NULL, &data, &ptopo, 1,PMIX_TOPO);
+        ret = PMIx_Data_pack(NULL, &data, &ptopo, 1, PMIX_TOPO);
         if (PMIX_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_DESTRUCT(&data);
@@ -574,12 +576,12 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
         }
-        if (NULL!= coprocessors) {
+        if (NULL != coprocessors) {
             free(coprocessors);
         }
         PMIX_DATA_BUFFER_CREATE(answer);
-        if (PMIx_Data_compress((uint8_t*)data.base_ptr, data.bytes_used,
-                               (uint8_t**)&pbo.bytes, &pbo.size)) {
+        if (PMIx_Data_compress((uint8_t *) data.base_ptr, data.bytes_used, (uint8_t **) &pbo.bytes,
+                               &pbo.size)) {
             /* the data was compressed - mark that we compressed it */
             compressed = true;
         } else {
@@ -638,21 +640,23 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         /* we have to at least include the nspace of this job
          * in the reply to ensure the DVM master knows which
          * job we are talking about */
-        tmp = (char*)job;
+        tmp = (char *) job;
         if (PMIX_SUCCESS != PMIx_Data_pack(NULL, answer, &tmp, 1, PMIX_STRING)) {
             PMIX_DATA_BUFFER_DESTRUCT(&data);
             break;
         }
 
         /* hit each local process with a gstack command */
-        for (i=0; i < prte_local_children->size; i++) {
-            if (NULL != (proct = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i)) &&
-                PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE) &&
-                PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
+        for (i = 0; i < prte_local_children->size; i++) {
+            if (NULL
+                    != (proct = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))
+                && PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)
+                && PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
                 PMIX_DATA_BUFFER_CONSTRUCT(&data);
-                if (PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->name, 1, PMIX_PROC) ||
-                    PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->node->name, 1, PMIX_STRING) ||
-                    PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->pid, 1, PMIX_PID)) {
+                if (PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->name, 1, PMIX_PROC)
+                    || PMIX_SUCCESS
+                           != PMIx_Data_pack(NULL, &data, &proct->node->name, 1, PMIX_STRING)
+                    || PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->pid, 1, PMIX_PID)) {
                     PMIX_DATA_BUFFER_DESTRUCT(&data);
                     break;
                 }
@@ -661,8 +665,8 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
                 // above, then run the command here.
                 fp = NULL;
                 if (NULL != gstack_exec) {
-                    (void) snprintf(gscmd, sizeof(gscmd), "%s %lu",
-                                    gstack_exec, (unsigned long) proct->pid);
+                    (void) snprintf(gscmd, sizeof(gscmd), "%s %lu", gstack_exec,
+                                    (unsigned long) proct->pid);
                     fp = popen(gscmd, "r");
                 }
 
@@ -674,8 +678,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
                                     (NULL == gstack_exec) ? "find" : "run",
                                     (NULL == gstack_exec) ? "gstack" : gstack_exec,
                                     proct->node->name);
-                    if (PMIX_SUCCESS ==
-                        PMIx_Data_pack(NULL, &data, &string_ptr, 1, PMIX_STRING)) {
+                    if (PMIX_SUCCESS == PMIx_Data_pack(NULL, &data, &string_ptr, 1, PMIX_STRING)) {
                         ret = PMIx_Data_unload(&data, &pbo);
                         if (PMIX_SUCCESS != ret) {
                             PMIX_ERROR_LOG(ret);
@@ -689,7 +692,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
                 }
                 /* Read the output a line at a time and pack it for transmission */
                 memset(path, 0, sizeof(path));
-                while (fgets(path, sizeof(path)-1, fp) != NULL) {
+                while (fgets(path, sizeof(path) - 1, fp) != NULL) {
                     if (PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &pathptr, 1, PMIX_STRING)) {
                         PMIX_DATA_BUFFER_RELEASE(relay_msg);
                         break;
@@ -716,8 +719,7 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
             free(gstack_exec);
         }
         /* always send our response */
-        if (0 > (ret = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, answer,
-                                               PRTE_RML_TAG_STACK_TRACE,
+        if (0 > (ret = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, answer, PRTE_RML_TAG_STACK_TRACE,
                                                prte_rml_send_callback, NULL))) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(answer);
@@ -728,13 +730,13 @@ void prte_daemon_recv(int status, pmix_proc_t* sender,
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
     }
 
- CLEANUP:
+CLEANUP:
     return;
 }
 
 static char *get_prted_comm_cmd_str(int command)
 {
-    switch(command) {
+    switch (command) {
     case PRTE_DAEMON_KILL_LOCAL_PROCS:
         return strdup("PRTE_DAEMON_KILL_LOCAL_PROCS");
     case PRTE_DAEMON_SIGNAL_LOCAL_PROCS:

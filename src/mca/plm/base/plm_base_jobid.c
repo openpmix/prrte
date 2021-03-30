@@ -28,12 +28,12 @@
 #include "src/include/hash_string.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/util/proc_info.h"
-#include "src/util/printf.h"
-#include "src/util/name_fns.h"
-#include "src/runtime/prte_globals.h"
-#include "src/pmix/pmix-internal.h"
 #include "src/mca/plm/base/plm_private.h"
+#include "src/pmix/pmix-internal.h"
+#include "src/runtime/prte_globals.h"
+#include "src/util/name_fns.h"
+#include "src/util/printf.h"
+#include "src/util/proc_info.h"
 
 /*
  * attempt to create a globally unique name
@@ -57,9 +57,8 @@ int prte_plm_base_set_hnp_name(void)
 
     if (NULL == prte_plm_globals.base_nspace) {
         /* use basename-hostname-pid as our base nspace */
-        prte_asprintf(&prte_plm_globals.base_nspace, "%s-%s-%u",
-                      prte_tool_basename, prte_process_info.nodename,
-                      (uint32_t)prte_process_info.pid);
+        prte_asprintf(&prte_plm_globals.base_nspace, "%s-%s-%u", prte_tool_basename,
+                      prte_process_info.nodename, (uint32_t) prte_process_info.pid);
     }
 
     /* create the DVM nspace */
@@ -97,9 +96,9 @@ int prte_plm_base_create_jobid(prte_job_t *jdata)
     if (reuse) {
         /* find the first unused jobid */
         found = false;
-        for (i=1; i < UINT32_MAX; i++) {
+        for (i = 1; i < UINT32_MAX; i++) {
             ptr = NULL;
-            (void)snprintf(pjid, PMIX_MAX_NSLEN-1, "%s@%u", prte_plm_globals.base_nspace, i);
+            (void) snprintf(pjid, PMIX_MAX_NSLEN - 1, "%s@%u", prte_plm_globals.base_nspace, i);
             ptr = prte_get_job_data_object(pjid);
             if (NULL == ptr) {
                 found = true;
@@ -109,14 +108,14 @@ int prte_plm_base_create_jobid(prte_job_t *jdata)
         }
         if (!found) {
             /* we have run out of jobids! */
-            prte_output(0, "Whoa! What are you doing starting that many jobs concurrently? We are out of jobids!");
+            prte_output(0, "Whoa! What are you doing starting that many jobs concurrently? We are "
+                           "out of jobids!");
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
 
     /* the new nspace is our base nspace with an "@N" extension */
-    prte_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace,
-                  prte_plm_globals.next_jobid);
+    prte_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
     PMIX_LOAD_NSPACE(jdata->nspace, tmp);
     free(tmp);
 

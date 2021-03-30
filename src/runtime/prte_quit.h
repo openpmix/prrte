@@ -4,6 +4,7 @@
  *                         reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  *
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,7 +28,7 @@ BEGIN_C_DECLS
 
 PRTE_EXPORT void prte_quit(int fd, short args, void *cbdata);
 
-PRTE_EXPORT char* prte_dump_aborted_procs(prte_job_t *jdata);
+PRTE_EXPORT char *prte_dump_aborted_procs(prte_job_t *jdata);
 
 END_C_DECLS
 

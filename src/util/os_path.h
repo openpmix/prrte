@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,8 +46,8 @@
 
 #include "prte_config.h"
 
-#include <stdio.h>
 #include <stdarg.h>
+#include <stdio.h>
 
 BEGIN_C_DECLS
 
@@ -70,13 +71,14 @@ BEGIN_C_DECLS
  * va_start() has undefined behavior (according to clang warnings on
  * MacOS High Sierra).
  */
-PRTE_EXPORT char *prte_os_path(int relative, ...) __prte_attribute_malloc__ __prte_attribute_sentinel__ __prte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_os_path(int relative, ...)
+    __prte_attribute_malloc__ __prte_attribute_sentinel__ __prte_attribute_warn_unused_result__;
 
 /**
  * Convert the path to be OS friendly. On UNIX this function will
  * be empty.
  */
-#define prte_make_filename_os_friendly(PATH)   (PATH)
+#define prte_make_filename_os_friendly(PATH) (PATH)
 
 END_C_DECLS
 

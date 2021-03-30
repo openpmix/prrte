@@ -39,32 +39,31 @@
 
 #include <stdlib.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <ctype.h>
 
-#include "src/util/prte_environ.h"
-#include "src/util/output.h"
 #include "src/util/argv.h"
 #include "src/util/basename.h"
+#include "src/util/output.h"
 #include "src/util/path.h"
+#include "src/util/prte_environ.h"
 #include "src/util/string_copy.h"
 
 #include "src/mca/state/state.h"
-#include "src/util/name_fns.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/name_fns.h"
 #include "src/util/show_help.h"
 
-#include "src/mca/plm/plm.h"
 #include "src/mca/plm/base/plm_private.h"
+#include "src/mca/plm/plm.h"
 #include "src/mca/plm/ssh/plm_ssh.h"
 
 /*
  * Public string showing the plm ompi_ssh component version number
  */
-const char *prte_plm_ssh_component_version_string =
-  "PRTE ssh plm MCA component version " PRTE_VERSION;
-
+const char *prte_plm_ssh_component_version_string
+    = "PRTE ssh plm MCA component version " PRTE_VERSION;
 
 static int ssh_component_register(void);
 static int ssh_component_open(void);
@@ -113,142 +112,113 @@ static int ssh_component_register(void)
     int var_id;
 
     prte_plm_ssh_component.num_concurrent = 128;
-    (void) prte_mca_base_component_var_register (c, "num_concurrent",
-                                            "How many plm_ssh_agent instances to invoke concurrently (must be > 0)",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_5,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_component.num_concurrent);
+    (void) prte_mca_base_component_var_register(
+        c, "num_concurrent",
+        "How many plm_ssh_agent instances to invoke concurrently (must be > 0)",
+        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_component.num_concurrent);
 
     prte_plm_ssh_component.force_ssh = false;
-    (void) prte_mca_base_component_var_register (c, "force_ssh", "Force the launcher to always use ssh",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_2,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_component.force_ssh);
+    (void) prte_mca_base_component_var_register(c, "force_ssh",
+                                                "Force the launcher to always use ssh",
+                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_plm_ssh_component.force_ssh);
 
     prte_plm_ssh_component.disable_qrsh = false;
-    (void) prte_mca_base_component_var_register (c, "disable_qrsh",
-                                            "Disable the use of qrsh when under the Grid Engine parallel environment",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_2,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_component.disable_qrsh);
+    (void) prte_mca_base_component_var_register(
+        c, "disable_qrsh",
+        "Disable the use of qrsh when under the Grid Engine parallel environment",
+        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_component.disable_qrsh);
 
     prte_plm_ssh_component.daemonize_qrsh = false;
-    (void) prte_mca_base_component_var_register (c, "daemonize_qrsh",
-                                            "Daemonize the orted under the Grid Engine parallel environment",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_2,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_component.daemonize_qrsh);
+    (void) prte_mca_base_component_var_register(
+        c, "daemonize_qrsh", "Daemonize the orted under the Grid Engine parallel environment",
+        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_component.daemonize_qrsh);
 
     prte_plm_ssh_component.disable_llspawn = false;
-    (void) prte_mca_base_component_var_register (c, "disable_llspawn",
-                                            "Disable the use of llspawn when under the LoadLeveler environment",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_2,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_component.disable_llspawn);
+    (void) prte_mca_base_component_var_register(
+        c, "disable_llspawn", "Disable the use of llspawn when under the LoadLeveler environment",
+        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_component.disable_llspawn);
 
     prte_plm_ssh_component.daemonize_llspawn = false;
-    (void) prte_mca_base_component_var_register (c, "daemonize_llspawn",
-                                            "Daemonize the orted when under the LoadLeveler environment",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_2,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_component.daemonize_llspawn);
+    (void) prte_mca_base_component_var_register(
+        c, "daemonize_llspawn", "Daemonize the orted when under the LoadLeveler environment",
+        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_component.daemonize_llspawn);
 
     prte_plm_ssh_component.priority = 10;
-    (void) prte_mca_base_component_var_register (c, "priority", "Priority of the ssh plm component",
-                                            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_9,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_component.priority);
+    (void) prte_mca_base_component_var_register(c, "priority", "Priority of the ssh plm component",
+                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_plm_ssh_component.priority);
 
     prte_plm_ssh_delay_string = NULL;
-    (void) prte_mca_base_component_var_register (c, "delay",
-                                            "Delay between invocations of the remote agent (sec[:usec])",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_4,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_delay_string);
+    (void) prte_mca_base_component_var_register(
+        c, "delay", "Delay between invocations of the remote agent (sec[:usec])",
+        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_delay_string);
 
     prte_plm_ssh_component.no_tree_spawn = false;
-    (void) prte_mca_base_component_var_register (c, "no_tree_spawn",
-                                            "If set to true, do not launch via a tree-based topology",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_5,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_component.no_tree_spawn);
+    (void) prte_mca_base_component_var_register(
+        c, "no_tree_spawn", "If set to true, do not launch via a tree-based topology",
+        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_component.no_tree_spawn);
 
     /* local ssh/ssh launch agent */
     prte_plm_ssh_component.agent = "ssh : rsh";
-    var_id = prte_mca_base_component_var_register (c, "agent",
-                                              "The command used to launch executables on remote nodes (typically \"ssh\")",
-                                              PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                              PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                              PRTE_INFO_LVL_2,
-                                              PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                              &prte_plm_ssh_component.agent);
-    (void) prte_mca_base_var_register_synonym (var_id, "prte", "pls", NULL, "ssh_agent", PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-    (void) prte_mca_base_var_register_synonym (var_id, "prte", "prte", NULL, "ssh_agent", PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+    var_id = prte_mca_base_component_var_register(
+        c, "agent", "The command used to launch executables on remote nodes (typically \"ssh\")",
+        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_component.agent);
+    (void) prte_mca_base_var_register_synonym(var_id, "prte", "pls", NULL, "ssh_agent",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+    (void) prte_mca_base_var_register_synonym(var_id, "prte", "prte", NULL, "ssh_agent",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
     agent_var_id = var_id;
 
     prte_plm_ssh_component.assume_same_shell = true;
-    var_id = prte_mca_base_component_var_register (c, "assume_same_shell",
-                                              "If set to true, assume that the shell on the remote node is the same as the shell on the local node.  Otherwise, probe for what the remote shell [default: 1]",
-                                              PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                              PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                              PRTE_INFO_LVL_2,
-                                              PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                              &prte_plm_ssh_component.assume_same_shell);
-    /* XXX -- var_conversion -- Why does this component register prte_assume_same_shell? Components should ONLY register THEIR OWN variables. */
-    (void) prte_mca_base_var_register_synonym (var_id, "prte", "prte", NULL, "assume_same_shell", PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
+    var_id = prte_mca_base_component_var_register(
+        c, "assume_same_shell",
+        "If set to true, assume that the shell on the remote node is the same as the shell on the "
+        "local node.  Otherwise, probe for what the remote shell [default: 1]",
+        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_component.assume_same_shell);
+    /* XXX -- var_conversion -- Why does this component register prte_assume_same_shell? Components
+     * should ONLY register THEIR OWN variables. */
+    (void) prte_mca_base_var_register_synonym(var_id, "prte", "prte", NULL, "assume_same_shell",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
 
     prte_plm_ssh_component.pass_environ_mca_params = true;
-    (void) prte_mca_base_component_var_register (c, "pass_environ_mca_params",
-                                            "If set to false, do not include mca params from the environment on the orted cmd line",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_2,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_component.pass_environ_mca_params);
+    (void) prte_mca_base_component_var_register(
+        c, "pass_environ_mca_params",
+        "If set to false, do not include mca params from the environment on the orted cmd line",
+        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_component.pass_environ_mca_params);
     prte_plm_ssh_component.ssh_args = NULL;
-    (void) prte_mca_base_component_var_register (c, "args",
-                                            "Arguments to add to ssh",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_2,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_component.ssh_args);
+    (void) prte_mca_base_component_var_register(c, "args", "Arguments to add to ssh",
+                                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_plm_ssh_component.ssh_args);
 
     prte_plm_ssh_component.pass_libpath = NULL;
-    (void) prte_mca_base_component_var_register (c, "pass_libpath",
-                                            "Prepend the specified library path to the remote shell's LD_LIBRARY_PATH",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                            PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_2,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_ssh_component.pass_libpath);
+    (void) prte_mca_base_component_var_register(
+        c, "pass_libpath",
+        "Prepend the specified library path to the remote shell's LD_LIBRARY_PATH",
+        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_component.pass_libpath);
 
     prte_plm_ssh_component.chdir = NULL;
-    (void) prte_mca_base_component_var_register (c, "chdir",
-                                                  "Change working directory after ssh, but before exec of prted",
-                                                  PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                                  PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                                  PRTE_INFO_LVL_2,
-                                                  PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                                  &prte_plm_ssh_component.chdir);
+    (void) prte_mca_base_component_var_register(
+        c, "chdir", "Change working directory after ssh, but before exec of prted",
+        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_ssh_component.chdir);
     return PRTE_SUCCESS;
 }
 
@@ -263,8 +233,8 @@ static int ssh_component_open(void)
 
     /* lookup parameters */
     if (prte_plm_ssh_component.num_concurrent <= 0) {
-        prte_show_help("help-plm-ssh.txt", "concurrency-less-than-zero",
-                       true, prte_plm_ssh_component.num_concurrent);
+        prte_show_help("help-plm-ssh.txt", "concurrency-less-than-zero", true,
+                       prte_plm_ssh_component.num_concurrent);
         prte_plm_ssh_component.num_concurrent = 1;
     }
 
@@ -274,13 +244,12 @@ static int ssh_component_open(void)
             prte_plm_ssh_component.delay.tv_sec = 0;
         }
         if (':' == ctmp[0]) {
-            prte_plm_ssh_component.delay.tv_nsec = 1000 * strtol (ctmp + 1, NULL, 10);
+            prte_plm_ssh_component.delay.tv_nsec = 1000 * strtol(ctmp + 1, NULL, 10);
         }
     }
 
     return PRTE_SUCCESS;
 }
-
 
 static int ssh_component_query(prte_mca_base_module_t **module, int *priority)
 {
@@ -303,21 +272,20 @@ static int ssh_component_query(prte_mca_base_module_t **module, int *priority)
     }
 
     /* check for SGE */
-    if (!prte_plm_ssh_component.disable_qrsh &&
-        NULL != getenv("SGE_ROOT") && NULL != getenv("ARC") &&
-        NULL != getenv("PE_HOSTFILE") && NULL != getenv("JOB_ID")) {
+    if (!prte_plm_ssh_component.disable_qrsh && NULL != getenv("SGE_ROOT") && NULL != getenv("ARC")
+        && NULL != getenv("PE_HOSTFILE") && NULL != getenv("JOB_ID")) {
         /* setup the search path for qrsh */
         prte_asprintf(&tmp, "%s/bin/%s", getenv("SGE_ROOT"), getenv("ARC"));
         /* see if the agent is available */
         if (PRTE_SUCCESS != ssh_launch_agent_lookup("qrsh", tmp)) {
             /* can't be SGE */
-             prte_output_verbose(1, prte_plm_base_framework.framework_output,
+            prte_output_verbose(1, prte_plm_base_framework.framework_output,
                                 "%s plm:ssh: unable to be used: SGE indicated but cannot find path "
                                 "or execution permissions not set for launching agent qrsh",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-             free(tmp);
-             *module = NULL;
-             return PRTE_ERROR;
+            free(tmp);
+            *module = NULL;
+            return PRTE_ERROR;
         }
         prte_plm_ssh_component.agent = tmp;
         prte_plm_ssh_component.using_qrsh = true;
@@ -325,11 +293,10 @@ static int ssh_component_query(prte_mca_base_module_t **module, int *priority)
     }
 
     /* otherwise, check for LoadLeveler */
-    if (!prte_plm_ssh_component.disable_llspawn &&
-        NULL != getenv("LOADL_STEP_ID")) {
+    if (!prte_plm_ssh_component.disable_llspawn && NULL != getenv("LOADL_STEP_ID")) {
         /* Search for llspawn in the users PATH */
         if (PRTE_SUCCESS != ssh_launch_agent_lookup("llspawn", NULL)) {
-             prte_output_verbose(1, prte_plm_base_framework.framework_output,
+            prte_output_verbose(1, prte_plm_base_framework.framework_output,
                                 "%s plm:ssh: unable to be used: LoadLeveler "
                                 "indicated but cannot find path or execution "
                                 "permissions not set for launching agent llspawn",
@@ -344,7 +311,7 @@ static int ssh_component_query(prte_mca_base_module_t **module, int *priority)
 
     /* if this isn't an Grid Engine or LoadLeveler environment, or
      * if the user specified a launch agent, look for it */
-  lookup:
+lookup:
     if (PRTE_SUCCESS != ssh_launch_agent_lookup(NULL, NULL)) {
         /* if the user specified an agent and we couldn't find it,
          * then we want to error out and not continue */
@@ -358,19 +325,17 @@ static int ssh_component_query(prte_mca_base_module_t **module, int *priority)
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: unable to be used: cannot find path "
                              "for launching agent \"%s\"\n",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             prte_plm_ssh_component.agent));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_plm_ssh_component.agent));
         *module = NULL;
         return PRTE_ERROR;
     }
 
-  success:
+success:
     /* we are good - make ourselves available */
     *priority = prte_plm_ssh_component.priority;
     *module = (prte_mca_base_module_t *) &prte_plm_ssh_module;
     return PRTE_SUCCESS;
 }
-
 
 static int ssh_component_close(void)
 {
@@ -382,7 +347,7 @@ static int ssh_component_close(void)
  * we are able to find in the PATH.  Split that one into argv and
  * return it.  If nothing found, then return NULL.
  */
-char **prte_plm_ssh_search(const char* agent_list, const char *path)
+char **prte_plm_ssh_search(const char *agent_list, const char *path)
 {
     int i, j;
     char *line, **lines;
@@ -446,8 +411,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
     if (NULL == agent_list && NULL == prte_plm_ssh_component.agent) {
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:ssh_lookup on agent (null) path %s - No agent specified.",
-                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             (NULL == path) ? "NULL" : path));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == path) ? "NULL" : path));
         return PRTE_ERR_NOT_FOUND;
     }
 

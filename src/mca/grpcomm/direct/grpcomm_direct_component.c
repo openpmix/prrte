@@ -6,6 +6,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,15 +17,15 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#include "src/mca/base/prte_mca_base_var.h"
 #include "src/mca/mca.h"
 #include "src/runtime/prte_globals.h"
-#include "src/mca/base/prte_mca_base_var.h"
 
 #include "src/util/proc_info.h"
 
 #include "grpcomm_direct.h"
 
-static int my_priority=5;  /* must be below "bad" module */
+static int my_priority = 5; /* must be below "bad" module */
 static int direct_open(void);
 static int direct_close(void);
 static int direct_query(prte_mca_base_module_t **module, int *priority);
@@ -60,12 +61,10 @@ static int direct_register(void)
      */
     my_priority = 85;
     (void) prte_mca_base_component_var_register(c, "priority",
-                                           "Priority of the grpcomm direct component",
-                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                           PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                           PRTE_INFO_LVL_9,
-                                           PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                           &my_priority);
+                                                "Priority of the grpcomm direct component",
+                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
     return PRTE_SUCCESS;
 }
 
@@ -84,6 +83,6 @@ static int direct_query(prte_mca_base_module_t **module, int *priority)
 {
     /* we are always available */
     *priority = my_priority;
-    *module = (prte_mca_base_module_t *)&prte_grpcomm_direct_module;
+    *module = (prte_mca_base_module_t *) &prte_grpcomm_direct_module;
     return PRTE_SUCCESS;
 }

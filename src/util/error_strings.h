@@ -13,6 +13,7 @@
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012      Los Alamos National Security, LLC. All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,8 +30,8 @@
 
 #include "prte_config.h"
 
-#include "src/runtime/prte_globals.h"
 #include "src/mca/plm/plm_types.h"
+#include "src/runtime/prte_globals.h"
 
 BEGIN_C_DECLS
 

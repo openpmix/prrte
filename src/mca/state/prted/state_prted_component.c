@@ -6,6 +6,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,15 +17,15 @@
 #include "prte_config.h"
 #include "src/util/output.h"
 
-#include "src/mca/state/state.h"
 #include "src/mca/state/base/base.h"
+#include "src/mca/state/state.h"
 #include "state_prted.h"
 
 /*
  * Public string for version number
  */
-const char *prte_state_prted_component_version_string =
-    "PRTE STATE prted MCA component version " PRTE_VERSION;
+const char *prte_state_prted_component_version_string
+    = "PRTE STATE prted MCA component version " PRTE_VERSION;
 
 /*
  * Local functionality
@@ -60,7 +61,7 @@ prte_state_base_component_t prte_state_prted_component =
     },
 };
 
-static int my_priority=100;
+static int my_priority = 100;
 
 static int state_prted_open(void)
 {
@@ -77,7 +78,7 @@ static int state_prted_component_query(prte_mca_base_module_t **module, int *pri
     if (PRTE_PROC_IS_DAEMON) {
         /* set our priority high as we are the default for prteds */
         *priority = my_priority;
-        *module = (prte_mca_base_module_t *)&prte_state_prted_module;
+        *module = (prte_mca_base_module_t *) &prte_state_prted_module;
         return PRTE_SUCCESS;
     }
 

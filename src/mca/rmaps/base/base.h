@@ -34,8 +34,8 @@
 #include "types.h"
 
 #include "src/class/prte_list.h"
-#include "src/util/printf.h"
 #include "src/mca/mca.h"
+#include "src/util/printf.h"
 
 #include "src/mca/base/prte_mca_base_framework.h"
 #include "src/runtime/prte_globals.h"
@@ -49,7 +49,7 @@ BEGIN_C_DECLS
  */
 PRTE_EXPORT extern prte_mca_base_framework_t prte_rmaps_base_framework;
 /* select a component */
-PRTE_EXPORT    int prte_rmaps_base_select(void);
+PRTE_EXPORT int prte_rmaps_base_select(void);
 
 /*
  * Global functions for MCA overall collective open and close
@@ -66,7 +66,8 @@ typedef struct {
     prte_ranking_policy_t ranking;
     /* default device for dist mapping */
     char *device;
-    /* whether or not child jobs should inherit mapping/ranking/binding directives from their parent by default */
+    /* whether or not child jobs should inherit mapping/ranking/binding directives from their parent
+     * by default */
     bool inherit;
     /* whether or not we are using hwthreads as independent cpus by default */
     bool hwthread_cpus;
@@ -101,22 +102,19 @@ PRTE_EXPORT int prte_rmaps_base_assign_locations(prte_job_t *jdata);
  * Utility routines to get/set vpid mapping for the job
  */
 
-PRTE_EXPORT int prte_rmaps_base_get_vpid_range(pmix_nspace_t jobid,
-                                                 pmix_rank_t *start,
-                                                 pmix_rank_t *range);
-PRTE_EXPORT int prte_rmaps_base_set_vpid_range(pmix_nspace_t jobid,
-                                                 pmix_rank_t start,
-                                                 pmix_rank_t range);
+PRTE_EXPORT int prte_rmaps_base_get_vpid_range(pmix_nspace_t jobid, pmix_rank_t *start,
+                                               pmix_rank_t *range);
+PRTE_EXPORT int prte_rmaps_base_set_vpid_range(pmix_nspace_t jobid, pmix_rank_t start,
+                                               pmix_rank_t range);
 
 /* pretty-print functions */
-PRTE_EXPORT char* prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping);
-PRTE_EXPORT char* prte_rmaps_base_print_ranking(prte_ranking_policy_t ranking);
+PRTE_EXPORT char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping);
+PRTE_EXPORT char *prte_rmaps_base_print_ranking(prte_ranking_policy_t ranking);
 
 PRTE_EXPORT int prte_rmaps_base_prep_topology(hwloc_topology_t topo);
 
-PRTE_EXPORT int prte_rmaps_base_filter_nodes(prte_app_context_t *app,
-                                               prte_list_t *nodes,
-                                               bool remove);
+PRTE_EXPORT int prte_rmaps_base_filter_nodes(prte_app_context_t *app, prte_list_t *nodes,
+                                             bool remove);
 
 PRTE_EXPORT int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *spec);
 PRTE_EXPORT int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec);

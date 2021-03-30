@@ -6,6 +6,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -13,20 +14,19 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 #include "constants.h"
 
 #include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
 #include "src/class/prte_list.h"
 #include "src/util/output.h"
@@ -51,12 +51,10 @@ static int prte_state_base_register(prte_mca_base_register_flag_t flags)
 {
     prte_state_base_run_fdcheck = false;
     prte_mca_base_var_register("prte", "state", "base", "check_fds",
-                                "Daemons should check fds for leaks after each job completes",
-                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                PRTE_INFO_LVL_9,
-                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                &prte_state_base_run_fdcheck);
+                               "Daemons should check fds for leaks after each job completes",
+                               PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
+                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                               &prte_state_base_run_fdcheck);
 
     return PRTE_SUCCESS;
 }
@@ -81,11 +79,10 @@ static int prte_state_base_open(prte_mca_base_open_flag_t flags)
     return prte_mca_base_framework_components_open(&prte_state_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, state, "PRTE State Machine",
-                                 prte_state_base_register,
-                                 prte_state_base_open, prte_state_base_close,
-                                 prte_state_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
-
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, state, "PRTE State Machine", prte_state_base_register,
+                                prte_state_base_open, prte_state_base_close,
+                                prte_state_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 static void prte_state_construct(prte_state_t *state)
 {
@@ -94,10 +91,7 @@ static void prte_state_construct(prte_state_t *state)
     state->cbfunc = NULL;
     state->priority = PRTE_INFO_PRI;
 }
-PRTE_CLASS_INSTANCE(prte_state_t,
-                   prte_list_item_t,
-                   prte_state_construct,
-                   NULL);
+PRTE_CLASS_INSTANCE(prte_state_t, prte_list_item_t, prte_state_construct, NULL);
 
 static void prte_state_caddy_construct(prte_state_caddy_t *caddy)
 {
@@ -111,7 +105,5 @@ static void prte_state_caddy_destruct(prte_state_caddy_t *caddy)
         PRTE_RELEASE(caddy->jdata);
     }
 }
-PRTE_CLASS_INSTANCE(prte_state_caddy_t,
-                   prte_object_t,
-                   prte_state_caddy_construct,
-                   prte_state_caddy_destruct);
+PRTE_CLASS_INSTANCE(prte_state_caddy_t, prte_object_t, prte_state_caddy_construct,
+                    prte_state_caddy_destruct);

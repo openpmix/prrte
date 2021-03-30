@@ -12,26 +12,25 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/util/output.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/argv.h"
+#include "src/util/output.h"
 #include "src/util/printf.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/state/state.h"
-#include "src/mca/rml/rml.h"
-#include "src/threads/threads.h"
 #include "src/mca/oob/base/base.h"
+#include "src/mca/rml/rml.h"
+#include "src/mca/state/state.h"
+#include "src/threads/threads.h"
 
 static void process_uri(char *uri);
 
 void prte_oob_base_send_nb(int fd, short args, void *cbdata)
 {
-    prte_oob_send_t *cd = (prte_oob_send_t*)cbdata;
+    prte_oob_send_t *cd = (prte_oob_send_t *) cbdata;
     prte_rml_send_t *msg;
     prte_mca_base_component_list_item_t *cli;
     prte_oob_base_peer_t *pr;
@@ -49,8 +48,8 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
 
     prte_output_verbose(5, prte_oob_base_framework.framework_output,
                         "%s oob:base:send to target %s - attempt %u",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(&msg->dst), msg->retries);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->dst),
+                        msg->retries);
 
     /* don't try forever - if we have exceeded the number of retries,
      * then report this message as undeliverable even if someone continues
@@ -65,17 +64,15 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
     pr = prte_oob_base_get_peer(&msg->dst);
     if (NULL == pr) {
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
-                            "%s oob:base:send unknown peer %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            "%s oob:base:send unknown peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(&msg->dst));
         /* for direct launched procs, the URI might be in the database,
          * so check there next - if it is, the peer object will be added
          * to our hash table. However, we don't want to chase up to the
          * server after it, so indicate it is optional
          */
-        PRTE_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_PROC_URI, &msg->dst,
-                                      (char**)&uri, PMIX_STRING);
-        if (PRTE_SUCCESS == rc ) {
+        PRTE_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_PROC_URI, &msg->dst, (char **) &uri, PMIX_STRING);
+        if (PRTE_SUCCESS == rc) {
             if (NULL != uri) {
                 process_uri(uri);
                 pr = prte_oob_base_get_peer(&msg->dst);
@@ -103,8 +100,9 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
              */
             reachable = false;
             pr = NULL;
-            PRTE_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t) {
-                component = (prte_oob_base_component_t*)cli->cli_component;
+            PRTE_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+            {
+                component = (prte_oob_base_component_t *) cli->cli_component;
                 if (NULL != component->is_reachable) {
                     if (component->is_reachable(&msg->dst)) {
                         /* there is a way to reach this peer - record it
@@ -140,7 +138,6 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
         }
     }
 
-
     /* if we already have a connection to this peer, use it */
     if (NULL != pr->component) {
         /* post this msg for send by this transport - the component
@@ -148,8 +145,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
          */
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s oob:base:send known transport for peer %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            PRTE_NAME_PRINT(&msg->dst));
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->dst));
         if (PRTE_SUCCESS == (rc = pr->component->send_nb(msg))) {
             return;
         }
@@ -161,8 +157,9 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
      * Let it try to make the connection
      */
     msg_sent = false;
-    PRTE_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t) {
-        component = (prte_oob_base_component_t*)cli->cli_component;
+    PRTE_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+    {
+        component = (prte_oob_base_component_t *) cli->cli_component;
         /* is this peer reachable via this component? */
         if (!component->is_reachable(&msg->dst)) {
             continue;
@@ -191,8 +188,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
     if (!msg_sent) {
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s oob:base:send no path to target %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            PRTE_NAME_PRINT(&msg->dst));
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->dst));
         msg->status = PRTE_ERR_NO_PATH_TO_TARGET;
         PRTE_RML_SEND_COMPLETE(msg);
     }
@@ -216,7 +212,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
  */
 void prte_oob_base_get_addr(char **uri)
 {
-    char *turi, *final=NULL, *tmp;
+    char *turi, *final = NULL, *tmp;
     size_t len = 0;
     bool one_added = false;
     prte_mca_base_component_list_item_t *cli;
@@ -225,7 +221,8 @@ void prte_oob_base_get_addr(char **uri)
     pmix_status_t rc;
 
     /* start with our process name */
-    if (PRTE_SUCCESS != (rc = prte_util_convert_process_name_to_string(&final, PRTE_PROC_MY_NAME))) {
+    if (PRTE_SUCCESS
+        != (rc = prte_util_convert_process_name_to_string(&final, PRTE_PROC_MY_NAME))) {
         PRTE_ERROR_LOG(rc);
         *uri = NULL;
         return;
@@ -235,8 +232,9 @@ void prte_oob_base_get_addr(char **uri)
     /* loop across all available modules to get their input
      * up to the max length
      */
-    PRTE_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t) {
-        component = (prte_oob_base_component_t*)cli->cli_component;
+    PRTE_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+    {
+        component = (prte_oob_base_component_t *) cli->cli_component;
         /* ask the component for its input, obtained when it
          * opened its modules
          */
@@ -250,10 +248,10 @@ void prte_oob_base_get_addr(char **uri)
          * do NOT free it!
          */
         turi = component->get_addr();
-       if (NULL != turi) {
+        if (NULL != turi) {
             /* check overall length for limits */
-            if (0 < prte_oob_base.max_uri_length &&
-                prte_oob_base.max_uri_length < (int)(len + strlen(turi))) {
+            if (0 < prte_oob_base.max_uri_length
+                && prte_oob_base.max_uri_length < (int) (len + strlen(turi))) {
                 /* cannot accept the payload */
                 continue;
             }
@@ -279,7 +277,8 @@ void prte_oob_base_get_addr(char **uri)
     *uri = final;
     /* push this into our modex storage */
     PMIX_VALUE_LOAD(&val, final, PMIX_STRING);
-    if (PMIX_SUCCESS != (rc = PMIx_Store_internal(&prte_process_info.myproc, PMIX_PROC_URI, &val))) {
+    if (PMIX_SUCCESS
+        != (rc = PMIx_Store_internal(&prte_process_info.myproc, PMIX_PROC_URI, &val))) {
         PMIX_ERROR_LOG(rc);
     }
     PMIX_VALUE_DESTRUCT(&val);
@@ -291,12 +290,11 @@ static void process_uri(char *uri)
     char *cptr;
     prte_mca_base_component_list_item_t *cli;
     prte_oob_base_component_t *component;
-    char **uris=NULL;
+    char **uris = NULL;
     prte_oob_base_peer_t *pr;
 
     prte_output_verbose(5, prte_oob_base_framework.framework_output,
-                        "%s:set_addr processing uri %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), uri);
+                        "%s:set_addr processing uri %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), uri);
 
     /* find the first semi-colon in the string */
     cptr = strchr(uri, ';');
@@ -319,8 +317,7 @@ static void process_uri(char *uri)
      */
     if (PMIX_CHECK_PROCID(&peer, PRTE_PROC_MY_NAME)) {
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
-                            "%s:set_addr peer %s is me",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            "%s:set_addr peer %s is me", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(&peer));
         return;
     }
@@ -341,12 +338,13 @@ static void process_uri(char *uri)
      * are all operating on our event base, so we can just
      * directly call their functions
      */
-    PRTE_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t) {
-        component = (prte_oob_base_component_t*)cli->cli_component;
+    PRTE_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+    {
+        component = (prte_oob_base_component_t *) cli->cli_component;
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s:set_addr checking if peer %s is reachable via component %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            PRTE_NAME_PRINT(&peer), component->oob_base.mca_component_name);
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer),
+                            component->oob_base.mca_component_name);
         if (NULL != component->set_addr) {
             if (PRTE_SUCCESS == component->set_addr(&peer, uris)) {
                 /* this component found reachable addresses
@@ -354,25 +352,26 @@ static void process_uri(char *uri)
                  */
                 prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                     "%s: peer %s is reachable via component %s",
-                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                    PRTE_NAME_PRINT(&peer), component->oob_base.mca_component_name);
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer),
+                                    component->oob_base.mca_component_name);
                 prte_bitmap_set_bit(&pr->addressable, component->idx);
             } else {
                 prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                     "%s: peer %s is NOT reachable via component %s",
-                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                    PRTE_NAME_PRINT(&peer), component->oob_base.mca_component_name);
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer),
+                                    component->oob_base.mca_component_name);
             }
         }
     }
     prte_argv_free(uris);
 }
 
-prte_oob_base_peer_t* prte_oob_base_get_peer(const pmix_proc_t *pr)
+prte_oob_base_peer_t *prte_oob_base_get_peer(const pmix_proc_t *pr)
 {
     prte_oob_base_peer_t *peer;
 
-    PRTE_LIST_FOREACH(peer, &prte_oob_base.peers, prte_oob_base_peer_t) {
+    PRTE_LIST_FOREACH(peer, &prte_oob_base.peers, prte_oob_base_peer_t)
+    {
         if (PMIX_CHECK_PROCID(pr, &peer->name)) {
             return peer;
         }

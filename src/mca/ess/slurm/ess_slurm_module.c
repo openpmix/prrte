@@ -26,27 +26,26 @@
 #include "constants.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
-#include <string.h>
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #include <ctype.h>
+#include <string.h>
 
-
-#include "src/util/prte_environ.h"
-#include "src/util/output.h"
-#include "src/util/argv.h"
 #include "src/class/prte_pointer_array.h"
+#include "src/util/argv.h"
+#include "src/util/output.h"
+#include "src/util/prte_environ.h"
 
-#include "src/util/proc_info.h"
-#include "src/util/show_help.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rml/rml.h"
-#include "src/util/name_fns.h"
-#include "src/runtime/prte_globals.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/runtime/prte_globals.h"
+#include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
+#include "src/util/show_help.h"
 
-#include "src/mca/ess/ess.h"
 #include "src/mca/ess/base/base.h"
+#include "src/mca/ess/ess.h"
 #include "src/mca/ess/slurm/ess_slurm.h"
 
 static int slurm_set_name(void);
@@ -54,11 +53,9 @@ static int slurm_set_name(void);
 static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
-prte_ess_base_module_t prte_ess_slurm_module = {
-    .init = rte_init,
-    .finalize = rte_finalize,
-    .abort = NULL
-};
+prte_ess_base_module_t prte_ess_slurm_module = {.init = rte_init,
+                                                .finalize = rte_finalize,
+                                                .abort = NULL};
 
 static int rte_init(int argc, char **argv)
 {
@@ -83,9 +80,8 @@ static int rte_init(int argc, char **argv)
 
 error:
     if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
-        prte_show_help("help-prte-runtime.txt",
-                       "prte_init:startup:internal-failure",
-                       true, error, PRTE_ERROR_NAME(ret), ret);
+        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+                       PRTE_ERROR_NAME(ret), ret);
     }
 
     return ret;
@@ -108,8 +104,7 @@ static int slurm_set_name(void)
     pmix_rank_t vpid;
     char *tmp;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
-                         "ess:slurm setting name"));
+    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:slurm setting name"));
 
     if (NULL == prte_ess_base_nspace) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -128,8 +123,8 @@ static int slurm_set_name(void)
     slurm_nodeid = atoi(getenv("SLURM_NODEID"));
     PRTE_PROC_MY_NAME->rank = vpid + slurm_nodeid;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
-                         "ess:slurm set name to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:slurm set name to %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* fix up the system info nodename to match exactly what slurm returned */
     if (NULL != prte_process_info.nodename) {
@@ -141,10 +136,9 @@ static int slurm_set_name(void)
     }
     prte_process_info.nodename = strdup(tmp);
 
-
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
-                         "ess:slurm set nodename to %s",
-                         (NULL == prte_process_info.nodename) ? "NULL" : prte_process_info.nodename));
+    PRTE_OUTPUT_VERBOSE(
+        (1, prte_ess_base_framework.framework_output, "ess:slurm set nodename to %s",
+         (NULL == prte_process_info.nodename) ? "NULL" : prte_process_info.nodename));
 
     /* get the num procs as provided in the cmd line param */
     prte_process_info.num_daemons = prte_ess_base_num_procs;

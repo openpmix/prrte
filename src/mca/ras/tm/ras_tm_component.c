@@ -16,6 +16,7 @@
  *                         reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,15 +31,13 @@
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/util/basename.h"
 
-#include "src/mca/ras/base/ras_private.h"
 #include "ras_tm.h"
-
+#include "src/mca/ras/base/ras_private.h"
 
 /*
  * Local variables
  */
 static int param_priority;
-
 
 /*
  * Local functions
@@ -46,7 +45,6 @@ static int param_priority;
 static int ras_tm_register(void);
 static int ras_tm_open(void);
 static int prte_ras_tm_component_query(prte_mca_base_module_t **module, int *priority);
-
 
 prte_ras_tm_component_t prte_ras_tm_component = {
     {
@@ -75,15 +73,14 @@ prte_ras_tm_component_t prte_ras_tm_component = {
 
 static int ras_tm_register(void)
 {
-    prte_mca_base_component_t *c        = &prte_ras_tm_component.super.base_version;
-    char *pbs_nodefile_env         = NULL;
+    prte_mca_base_component_t *c = &prte_ras_tm_component.super.base_version;
+    char *pbs_nodefile_env = NULL;
 
     param_priority = 100;
     (void) prte_mca_base_component_var_register(c, "priority", "Priority of the tm ras component",
-                                           PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                           PRTE_INFO_LVL_9,
-                                           PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                           &param_priority);
+                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &param_priority);
 
     prte_ras_tm_component.nodefile_dir = NULL;
 
@@ -94,15 +91,15 @@ static int ras_tm_register(void)
     }
 
     if (NULL == prte_ras_tm_component.nodefile_dir) {
-        prte_ras_tm_component.nodefile_dir = strdup ("/var/torque/aux");
+        prte_ras_tm_component.nodefile_dir = strdup("/var/torque/aux");
     }
 
-    (void) prte_mca_base_component_var_register (c, "nodefile_dir",
-                                            "The directory where the PBS nodefile can be found",
-                                            PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_9,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_ras_tm_component.nodefile_dir);
+    (void) prte_mca_base_component_var_register(c, "nodefile_dir",
+                                                "The directory where the PBS nodefile can be found",
+                                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_ras_tm_component.nodefile_dir);
 
     /* for big SMP machines (e.g., those from SGI), listing the nodes
      * once/slot in the nodefile is extreme. In those cases, they may
@@ -111,13 +108,12 @@ static int ras_tm_register(void)
      * inform us that we are in such an environment
      */
     prte_ras_tm_component.smp_mode = false;
-    (void) prte_mca_base_component_var_register (c, "smp",
-                                            "The Torque system is configured in SMP mode "
-                                            "with the number of cpus/node given in the environment",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_9,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_ras_tm_component.smp_mode);
+    (void) prte_mca_base_component_var_register(
+        c, "smp",
+        "The Torque system is configured in SMP mode "
+        "with the number of cpus/node given in the environment",
+        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ras_tm_component.smp_mode);
 
     return PRTE_SUCCESS;
 }
@@ -127,12 +123,10 @@ static int ras_tm_open(void)
     return PRTE_SUCCESS;
 }
 
-
 static int prte_ras_tm_component_query(prte_mca_base_module_t **module, int *priority)
 {
     /* Are we running under a TM job? */
-    if (NULL != getenv("PBS_ENVIRONMENT") &&
-        NULL != getenv("PBS_JOBID")) {
+    if (NULL != getenv("PBS_ENVIRONMENT") && NULL != getenv("PBS_JOBID")) {
         *priority = param_priority;
         *module = (prte_mca_base_module_t *) &prte_ras_tm_module;
         return PRTE_SUCCESS;

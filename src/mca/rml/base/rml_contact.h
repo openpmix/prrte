@@ -21,7 +21,6 @@
  * and prte_finalize.
  */
 
-
 #include "prte_config.h"
 #include "types.h"
 
@@ -48,8 +47,6 @@ BEGIN_C_DECLS
  * @retval PRTE_ERR_BAD_PARAM The contact_info was not a valid string
  * @retval PRTE_ERROR       An unspecified error occurred
  */
-PRTE_EXPORT int prte_rml_base_parse_uris(const char* contact_inf,
-                                           pmix_proc_t* peer,
-                                           char*** uris);
+PRTE_EXPORT int prte_rml_base_parse_uris(const char *contact_inf, pmix_proc_t *peer, char ***uris);
 
 END_C_DECLS

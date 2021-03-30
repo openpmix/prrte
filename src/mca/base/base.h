@@ -19,6 +19,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,15 +32,15 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_object.h"
 #include "src/class/prte_list.h"
+#include "src/class/prte_object.h"
 
 /*
  * These units are large enough to warrant their own .h files
  */
-#include "src/mca/mca.h"
-#include "src/mca/base/prte_mca_base_var.h"
 #include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/mca.h"
 #include "src/util/cmd_line.h"
 #include "src/util/output.h"
 
@@ -82,23 +83,23 @@ PRTE_EXPORT extern char *prte_mca_base_user_default_path;
  */
 enum {
     /** total silence */
-    PRTE_MCA_BASE_VERBOSE_NONE  = -1,
+    PRTE_MCA_BASE_VERBOSE_NONE = -1,
     /** only errors are printed */
     PRTE_MCA_BASE_VERBOSE_ERROR = 0,
     /** emit messages about component selection, open, and unloading */
     PRTE_MCA_BASE_VERBOSE_COMPONENT = 10,
     /** also emit warnings */
-    PRTE_MCA_BASE_VERBOSE_WARN  = 20,
+    PRTE_MCA_BASE_VERBOSE_WARN = 20,
     /** also emit general, user-relevant information, such as rationale as to why certain choices
      * or code paths were taken, information gleaned from probing the local system, etc. */
-    PRTE_MCA_BASE_VERBOSE_INFO  = 40,
+    PRTE_MCA_BASE_VERBOSE_INFO = 40,
     /** also emit relevant tracing information (e.g., which functions were invoked /
      * call stack entry/exit info) */
     PRTE_MCA_BASE_VERBOSE_TRACE = 60,
     /** also emit PRTE-developer-level (i.e,. highly detailed) information */
     PRTE_MCA_BASE_VERBOSE_DEBUG = 80,
     /** also output anything else that might be useful */
-    PRTE_MCA_BASE_VERBOSE_MAX   = 100,
+    PRTE_MCA_BASE_VERBOSE_MAX = 100,
 };
 
 /*
@@ -140,10 +141,9 @@ PRTE_EXPORT void prte_mca_base_close(void);
  *
  */
 PRTE_EXPORT int prte_mca_base_select(const char *type_name, int output_id,
-                                  prte_list_t *components_available,
-                                  prte_mca_base_module_t **best_module,
-                                  prte_mca_base_component_t **best_component,
-                                  int *priority_out);
+                                     prte_list_t *components_available,
+                                     prte_mca_base_module_t **best_module,
+                                     prte_mca_base_component_t **best_component, int *priority_out);
 
 /**
  * A function for component query functions to discover if they have
@@ -154,31 +154,32 @@ PRTE_EXPORT int prte_mca_base_select(const char *type_name, int output_id,
  *
  */
 PRTE_EXPORT int prte_mca_base_is_component_required(prte_list_t *components_available,
-                                                 prte_mca_base_component_t *component,
-                                                 bool exclusive,
-                                                 bool *is_required);
+                                                    prte_mca_base_component_t *component,
+                                                    bool exclusive, bool *is_required);
 
 /* prte_mca_base_component_compare.c */
 
-PRTE_EXPORT int prte_mca_base_component_compare_priority(prte_mca_base_component_priority_list_item_t *a,
-                                                      prte_mca_base_component_priority_list_item_t *b);
+PRTE_EXPORT int
+prte_mca_base_component_compare_priority(prte_mca_base_component_priority_list_item_t *a,
+                                         prte_mca_base_component_priority_list_item_t *b);
 PRTE_EXPORT int prte_mca_base_component_compare(const prte_mca_base_component_t *a,
-                                             const prte_mca_base_component_t *b);
-PRTE_EXPORT int prte_mca_base_component_compatible(const prte_mca_base_component_t *a,
                                                 const prte_mca_base_component_t *b);
-PRTE_EXPORT char * prte_mca_base_component_to_string(const prte_mca_base_component_t *a);
+PRTE_EXPORT int prte_mca_base_component_compatible(const prte_mca_base_component_t *a,
+                                                   const prte_mca_base_component_t *b);
+PRTE_EXPORT char *prte_mca_base_component_to_string(const prte_mca_base_component_t *a);
 
 /* prte_mca_base_component_find.c */
 
-PRTE_EXPORT int prte_mca_base_component_find (const char *directory, prte_mca_base_framework_t *framework,
-                                           bool ignore_requested, bool open_dso_components);
+PRTE_EXPORT int prte_mca_base_component_find(const char *directory,
+                                             prte_mca_base_framework_t *framework,
+                                             bool ignore_requested, bool open_dso_components);
 
 /**
  * Parse the requested component string and return an prte_argv of the requested
  * (or not requested) components.
  */
-int prte_mca_base_component_parse_requested (const char *requested, bool *include_mode,
-                                        char ***requested_component_names);
+int prte_mca_base_component_parse_requested(const char *requested, bool *include_mode,
+                                            char ***requested_component_names);
 
 /**
  * Filter a list of components based on a comma-delimted list of names and/or
@@ -198,9 +199,8 @@ int prte_mca_base_component_parse_requested (const char *requested, bool *includ
  * This function closes and releases any components that do not match the filter_name and
  * filter flags.
  */
-PRTE_EXPORT int prte_mca_base_components_filter (prte_mca_base_framework_t *framework, uint32_t filter_flags);
-
-
+PRTE_EXPORT int prte_mca_base_components_filter(prte_mca_base_framework_t *framework,
+                                                uint32_t filter_flags);
 
 /* Safely release some memory allocated by prte_mca_base_component_find()
    (i.e., is safe to call even if you never called
@@ -208,17 +208,18 @@ PRTE_EXPORT int prte_mca_base_components_filter (prte_mca_base_framework_t *fram
 PRTE_EXPORT int prte_mca_base_component_find_finalize(void);
 
 /* prte_mca_base_components_register.c */
-PRTE_EXPORT int prte_mca_base_framework_components_register (struct prte_mca_base_framework_t *framework,
-                                                          prte_mca_base_register_flag_t flags);
+PRTE_EXPORT int
+prte_mca_base_framework_components_register(struct prte_mca_base_framework_t *framework,
+                                            prte_mca_base_register_flag_t flags);
 
 /* prte_mca_base_components_open.c */
-PRTE_EXPORT int prte_mca_base_framework_components_open (struct prte_mca_base_framework_t *framework,
-                                                      prte_mca_base_open_flag_t flags);
+PRTE_EXPORT int prte_mca_base_framework_components_open(struct prte_mca_base_framework_t *framework,
+                                                        prte_mca_base_open_flag_t flags);
 
 PRTE_EXPORT int prte_mca_base_components_open(const char *type_name, int output_id,
-                                           const prte_mca_base_component_t **static_components,
-                                           prte_list_t *components_available,
-                                           bool open_dso_components);
+                                              const prte_mca_base_component_t **static_components,
+                                              prte_list_t *components_available,
+                                              bool open_dso_components);
 
 /* prte_mca_base_components_close.c */
 /**
@@ -229,7 +230,8 @@ PRTE_EXPORT int prte_mca_base_components_open(const char *type_name, int output_
  *
  * After calling this function the component may no longer be used.
  */
-PRTE_EXPORT void prte_mca_base_component_close (const prte_mca_base_component_t *component, int output_id);
+PRTE_EXPORT void prte_mca_base_component_close(const prte_mca_base_component_t *component,
+                                               int output_id);
 
 /**
  * Release a component without closing it.
@@ -238,13 +240,14 @@ PRTE_EXPORT void prte_mca_base_component_close (const prte_mca_base_component_t 
  *
  * After calling this function the component may no longer be used.
  */
-void prte_mca_base_component_unload (const prte_mca_base_component_t *component, int output_id);
+void prte_mca_base_component_unload(const prte_mca_base_component_t *component, int output_id);
 
 PRTE_EXPORT int prte_mca_base_components_close(int output_id, prte_list_t *components_available,
-                                            const prte_mca_base_component_t *skip);
+                                               const prte_mca_base_component_t *skip);
 
-PRTE_EXPORT int prte_mca_base_framework_components_close (struct prte_mca_base_framework_t *framework,
-						       const prte_mca_base_component_t *skip);
+PRTE_EXPORT int
+prte_mca_base_framework_components_close(struct prte_mca_base_framework_t *framework,
+                                         const prte_mca_base_component_t *skip);
 
 END_C_DECLS
 

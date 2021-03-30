@@ -15,18 +15,18 @@
 #include "prte_config.h"
 
 #include "constants.h"
-#include "src/util/output.h"
 #include "src/mca/mca.h"
-#include "src/mca/prteif/prteif.h"
 #include "src/mca/prteif/base/base.h"
 #include "src/mca/prteif/base/static-components.h"
+#include "src/mca/prteif/prteif.h"
+#include "src/util/output.h"
 
 /* instantiate the global list of interfaces */
 prte_list_t prte_if_list = {{0}};
 bool prte_if_retain_loopback = false;
 
-static int prte_if_base_register (prte_mca_base_register_flag_t flags);
-static int prte_if_base_open (prte_mca_base_open_flag_t flags);
+static int prte_if_base_register(prte_mca_base_register_flag_t flags);
+static int prte_if_base_open(prte_mca_base_open_flag_t flags);
 static int prte_if_base_close(void);
 static void prte_if_construct(prte_if_t *obj);
 
@@ -35,24 +35,24 @@ static bool frameopen = false;
 /* instance the prte_if_t object */
 PRTE_CLASS_INSTANCE(prte_if_t, prte_list_item_t, prte_if_construct, NULL);
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prteif, NULL, prte_if_base_register,
-                                 prte_if_base_open, prte_if_base_close,
-                                 prte_prteif_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prteif, NULL, prte_if_base_register, prte_if_base_open,
+                                prte_if_base_close, prte_prteif_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
-static int prte_if_base_register (prte_mca_base_register_flag_t flags)
+static int prte_if_base_register(prte_mca_base_register_flag_t flags)
 {
     prte_if_retain_loopback = false;
-    (void) prte_mca_base_framework_var_register (&prte_prteif_base_framework, "retain_loopback",
-                                                  "If nonzero, retain loopback interfaces",
-                                                  PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE,
-                                                  PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ,
-                                                  &prte_if_retain_loopback);
+    (void) prte_mca_base_framework_var_register(&prte_prteif_base_framework, "retain_loopback",
+                                                "If nonzero, retain loopback interfaces",
+                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ,
+                                                &prte_if_retain_loopback);
 
     return PRTE_SUCCESS;
 }
 
-
-static int prte_if_base_open (prte_mca_base_open_flag_t flags)
+static int prte_if_base_open(prte_mca_base_open_flag_t flags)
 {
     if (frameopen) {
         return PRTE_SUCCESS;
@@ -64,7 +64,6 @@ static int prte_if_base_open (prte_mca_base_open_flag_t flags)
 
     return prte_mca_base_framework_components_open(&prte_prteif_base_framework, flags);
 }
-
 
 static int prte_if_base_close(void)
 {

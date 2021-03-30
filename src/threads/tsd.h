@@ -5,13 +5,13 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
  *
  * $HEADER$
  */
-
 
 #ifndef PRTE_THREADS_TSD_H
 #define PRTE_THREADS_TSD_H
@@ -32,29 +32,24 @@ BEGIN_C_DECLS
  * Functions for providing thread-specific datastore capabilities.
  */
 
-
 /**
  * Prototype for callback when tsd data is being destroyed
  */
 typedef void (*prte_tsd_destructor_t)(void *value);
 
-
 typedef pthread_key_t prte_tsd_key_t;
 
-static inline int
-prte_tsd_key_delete(prte_tsd_key_t key)
+static inline int prte_tsd_key_delete(prte_tsd_key_t key)
 {
     return pthread_key_delete(key);
 }
 
-static inline int
-prte_tsd_setspecific(prte_tsd_key_t key, void *value)
+static inline int prte_tsd_setspecific(prte_tsd_key_t key, void *value)
 {
     return pthread_setspecific(key, value);
 }
 
-static inline int
-prte_tsd_getspecific(prte_tsd_key_t key, void **valuep)
+static inline int prte_tsd_getspecific(prte_tsd_key_t key, void **valuep)
 {
     *valuep = pthread_getspecific(key);
     return PRTE_SUCCESS;
@@ -86,9 +81,7 @@ prte_tsd_getspecific(prte_tsd_key_t key, void **valuep)
  *                       create another thread specific data key
  * @retval ENOMEM        Insufficient memory exists to create the key
  */
-PRTE_EXPORT int prte_tsd_key_create(prte_tsd_key_t *key,
-                                      prte_tsd_destructor_t destructor);
-
+PRTE_EXPORT int prte_tsd_key_create(prte_tsd_key_t *key, prte_tsd_destructor_t destructor);
 
 /**
  * Destruct all thread-specific data keys

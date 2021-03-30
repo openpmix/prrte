@@ -13,6 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,17 +25,17 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/util/show_help.h"
 #include "src/util/argv.h"
+#include "src/util/show_help.h"
 
-#include "src/util/proc_info.h"
 #include "src/mca/errmgr/base/base.h"
-#include "src/util/name_fns.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
 
-#include "src/mca/ess/ess.h"
-#include "src/mca/ess/base/base.h"
 #include "src/mca/ess/alps/ess_alps.h"
+#include "src/mca/ess/base/base.h"
+#include "src/mca/ess/ess.h"
 
 /*
  * use the Alps placement file to obtain
@@ -42,8 +43,7 @@
  * on the node.
  */
 
-int
-prte_ess_alps_get_first_rank_on_node(int *first_rank)
+int prte_ess_alps_get_first_rank_on_node(int *first_rank)
 {
     int alps_status = 0;
     uint64_t apid;
@@ -79,7 +79,7 @@ prte_ess_alps_get_first_rank_on_node(int *first_rank)
         goto fn_exit_w_lock;
     }
 
-    lli_ret = alps_app_lli_get_response (&alps_status, &alps_count);
+    lli_ret = alps_app_lli_get_response(&alps_status, &alps_count);
     if (ALPS_APP_LLI_ALPS_STAT_OK != alps_status) {
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_get_response returned %d",
@@ -88,7 +88,7 @@ prte_ess_alps_get_first_rank_on_node(int *first_rank)
         goto fn_exit_w_lock;
     }
 
-    lli_ret = alps_app_lli_get_response_bytes (&apid, sizeof(apid));
+    lli_ret = alps_app_lli_get_response_bytes(&apid, sizeof(apid));
     if (ALPS_APP_LLI_ALPS_STAT_OK != lli_ret) {
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_get_response_bytes returned %d",
@@ -97,17 +97,8 @@ prte_ess_alps_get_first_rank_on_node(int *first_rank)
         goto fn_exit_w_lock;
     }
 
-    place_ret = alps_get_placement_info(apid,
-                                        &orted_layout,
-                                        NULL,
-                                        NULL,
-                                        NULL,
-                                        NULL,
-                                        NULL,
-                                        NULL,
-                                        NULL,
-                                        NULL,
-                                        NULL);
+    place_ret = alps_get_placement_info(apid, &orted_layout, NULL, NULL, NULL, NULL, NULL, NULL,
+                                        NULL, NULL, NULL);
     if (1 != place_ret) {
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_get_placement_info returned %d (%s)",
@@ -117,11 +108,11 @@ prte_ess_alps_get_first_rank_on_node(int *first_rank)
     }
 
     PRTE_OUTPUT_VERBOSE((2, prte_ess_base_framework.framework_output,
-                           "%s ess:alps: alps_get_placement_info returned %d first pe on node is %d",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), place_ret, orted_layout.firstPe));
+                         "%s ess:alps: alps_get_placement_info returned %d first pe on node is %d",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), place_ret, orted_layout.firstPe));
     *first_rank = orted_layout.firstPe;
 
-   fn_exit_w_lock:
+fn_exit_w_lock:
     lli_ret = alps_app_lli_unlock();
     if (ALPS_APP_LLI_ALPS_STAT_OK != lli_ret) {
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
@@ -130,15 +121,14 @@ prte_ess_alps_get_first_rank_on_node(int *first_rank)
         ret = PRTE_ERR_FILE_WRITE_FAILURE;
     }
 
-   fn_exit:
+fn_exit:
     return ret;
 }
 
 /*
  * Function to check in with apshepherd to say we are a parallel application
  */
-int
-prte_ess_alps_sync_start(void)
+int prte_ess_alps_sync_start(void)
 {
     int ret = PRTE_SUCCESS;
     int lli_ret = 0;
@@ -163,7 +153,7 @@ prte_ess_alps_sync_start(void)
         goto fn_exit_w_lock;
     }
 
-    lli_ret = alps_app_lli_get_response (&alps_status, &alps_count);
+    lli_ret = alps_app_lli_get_response(&alps_status, &alps_count);
     if (ALPS_APP_LLI_ALPS_STAT_OK != alps_status) {
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_get_response returned %d",
@@ -172,7 +162,7 @@ prte_ess_alps_sync_start(void)
         goto fn_exit_w_lock;
     }
 
-   fn_exit_w_lock:
+fn_exit_w_lock:
     lli_ret = alps_app_lli_unlock();
     if (ALPS_APP_LLI_ALPS_STAT_OK != lli_ret) {
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
@@ -181,7 +171,7 @@ prte_ess_alps_sync_start(void)
         ret = PRTE_ERR_FILE_WRITE_FAILURE;
     }
 
-   fn_exit:
+fn_exit:
     return ret;
 }
 
@@ -189,8 +179,7 @@ prte_ess_alps_sync_start(void)
  * Function to check in with apshepherd to say we are a parallel application
  */
 
-int
-prte_ess_alps_sync_complete(void)
+int prte_ess_alps_sync_complete(void)
 {
     int ret = PRTE_SUCCESS;
     int lli_ret = 0;
@@ -215,7 +204,7 @@ prte_ess_alps_sync_complete(void)
         goto fn_exit_w_lock;
     }
 
-    lli_ret = alps_app_lli_get_response (&alps_status, &alps_count);
+    lli_ret = alps_app_lli_get_response(&alps_status, &alps_count);
     if (ALPS_APP_LLI_ALPS_STAT_OK != alps_status) {
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
                              "%s ess:alps: alps_app_lli_get_response returned %d",
@@ -224,7 +213,7 @@ prte_ess_alps_sync_complete(void)
         goto fn_exit_w_lock;
     }
 
-   fn_exit_w_lock:
+fn_exit_w_lock:
     lli_ret = alps_app_lli_unlock();
     if (ALPS_APP_LLI_ALPS_STAT_OK != lli_ret) {
         PRTE_OUTPUT_VERBOSE((20, prte_ess_base_framework.framework_output,
@@ -233,8 +222,6 @@ prte_ess_alps_sync_complete(void)
         ret = PRTE_ERR_FILE_WRITE_FAILURE;
     }
 
-   fn_exit:
+fn_exit:
     return ret;
 }
-
-

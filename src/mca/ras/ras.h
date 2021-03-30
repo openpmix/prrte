@@ -16,6 +16,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -58,9 +59,9 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/mca/mca.h"
-#include "src/event/event-internal.h"
 #include "src/class/prte_list.h"
+#include "src/event/event-internal.h"
+#include "src/mca/mca.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -82,12 +83,10 @@ typedef int (*prte_ras_base_module_init_fn_t)(void);
 /**
  * Allocate resources to a job.
  */
-typedef int (*prte_ras_base_module_allocate_fn_t)(prte_job_t *jdata,
-                                                  prte_list_t *nodes);
+typedef int (*prte_ras_base_module_allocate_fn_t)(prte_job_t *jdata, prte_list_t *nodes);
 
 /* deallocate resources */
-typedef void (*prte_ras_base_module_dealloc_fn_t)(prte_job_t *jdata,
-                                                  prte_app_context_t *app);
+typedef void (*prte_ras_base_module_dealloc_fn_t)(prte_job_t *jdata, prte_app_context_t *app);
 
 /**
  * Cleanup module resources.
@@ -99,12 +98,12 @@ typedef int (*prte_ras_base_module_finalize_fn_t)(void);
  */
 struct prte_ras_base_module_2_0_0_t {
     /** init */
-    prte_ras_base_module_init_fn_t          init;
+    prte_ras_base_module_init_fn_t init;
     /** Allocation function pointer */
-    prte_ras_base_module_allocate_fn_t      allocate;
-    prte_ras_base_module_dealloc_fn_t       deallocate;
+    prte_ras_base_module_allocate_fn_t allocate;
+    prte_ras_base_module_dealloc_fn_t deallocate;
     /** Finalization function pointer */
-    prte_ras_base_module_finalize_fn_t      finalize;
+    prte_ras_base_module_finalize_fn_t finalize;
 };
 /** Convenience typedef */
 typedef struct prte_ras_base_module_2_0_0_t prte_ras_base_module_2_0_0_t;
@@ -130,13 +129,10 @@ typedef struct prte_ras_base_component_2_0_0_t prte_ras_base_component_2_0_0_t;
 /** Convenience typedef */
 typedef prte_ras_base_component_2_0_0_t prte_ras_base_component_t;
 
-
 /**
  * Macro for use in components that are of type ras
  */
-#define PRTE_RAS_BASE_VERSION_2_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("ras", 2, 0, 0)
-
+#define PRTE_RAS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("ras", 2, 0, 0)
 
 END_C_DECLS
 

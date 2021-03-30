@@ -29,25 +29,22 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/routed/routed.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/runtime/prte_globals.h"
 
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/base/rml_contact.h"
 #include "src/mca/rml/base/base.h"
+#include "src/mca/rml/base/rml_contact.h"
+#include "src/mca/rml/rml.h"
 
-
-int prte_rml_base_parse_uris(const char* uri,
-                             pmix_proc_t* peer,
-                             char*** uris)
+int prte_rml_base_parse_uris(const char *uri, pmix_proc_t *peer, char ***uris)
 {
     int rc;
 
     /* parse the process name */
-    char* cinfo = strdup(uri);
-    char* ptr = strchr(cinfo, ';');
-    if(NULL == ptr) {
+    char *cinfo = strdup(uri);
+    char *ptr = strchr(cinfo, ';');
+    if (NULL == ptr) {
         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
         free(cinfo);
         return PRTE_ERR_BAD_PARAM;

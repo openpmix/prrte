@@ -15,6 +15,7 @@
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,23 +37,23 @@
 #include "src/sys/architecture.h"
 
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 
 /* do some quick #define cleanup in cases where we are doing
    testing... */
 #ifdef PRTE_DISABLE_INLINE_ASM
-#undef PRTE_C_GCC_INLINE_ASSEMBLY
-#define PRTE_C_GCC_INLINE_ASSEMBLY 0
+#    undef PRTE_C_GCC_INLINE_ASSEMBLY
+#    define PRTE_C_GCC_INLINE_ASSEMBLY 0
 #endif
 
 /* define PRTE_{GCC,DEC,XLC}_INLINE_ASSEMBLY based on the
    PRTE_{C,CXX}_{GCC,DEC,XLC}_INLINE_ASSEMBLY defines and whether we
    are in C or C++ */
 #if defined(c_plusplus) || defined(__cplusplus)
-#define PRTE_GCC_INLINE_ASSEMBLY PRTE_CXX_GCC_INLINE_ASSEMBLY
+#    define PRTE_GCC_INLINE_ASSEMBLY PRTE_CXX_GCC_INLINE_ASSEMBLY
 #else
-#define PRTE_GCC_INLINE_ASSEMBLY PRTE_C_GCC_INLINE_ASSEMBLY
+#    define PRTE_GCC_INLINE_ASSEMBLY PRTE_C_GCC_INLINE_ASSEMBLY
 #endif
 
 /**********************************************************************
@@ -73,36 +74,36 @@ BEGIN_C_DECLS
 #if defined(DOXYGEN)
 /* don't include system-level gorp when generating doxygen files */
 #elif PRTE_ASSEMBLY_ARCH == PRTE_X86_64
-#include "src/sys/x86_64/timer.h"
+#    include "src/sys/x86_64/timer.h"
 #elif PRTE_ASSEMBLY_ARCH == PRTE_ARM
-#include "src/sys/arm/timer.h"
+#    include "src/sys/arm/timer.h"
 #elif PRTE_ASSEMBLY_ARCH == PRTE_ARM64
-#include "src/sys/arm64/timer.h"
+#    include "src/sys/arm64/timer.h"
 #elif PRTE_ASSEMBLY_ARCH == PRTE_IA32
-#include "src/sys/ia32/timer.h"
+#    include "src/sys/ia32/timer.h"
 #elif PRTE_ASSEMBLY_ARCH == PRTE_POWERPC32
-#include "src/sys/powerpc/timer.h"
+#    include "src/sys/powerpc/timer.h"
 #elif PRTE_ASSEMBLY_ARCH == PRTE_POWERPC64
-#include "src/sys/powerpc/timer.h"
+#    include "src/sys/powerpc/timer.h"
 #endif
 
 #ifndef DOXYGEN
-#ifndef PRTE_HAVE_SYS_TIMER_GET_CYCLES
-#define PRTE_HAVE_SYS_TIMER_GET_CYCLES 0
+#    ifndef PRTE_HAVE_SYS_TIMER_GET_CYCLES
+#        define PRTE_HAVE_SYS_TIMER_GET_CYCLES 0
 
 typedef long prte_timer_t;
-#endif
+#    endif
 
-#ifndef PRTE_HAVE_SYS_TIMER_GET_FREQ
-#define PRTE_HAVE_SYS_TIMER_GET_FREQ 0
-#endif
+#    ifndef PRTE_HAVE_SYS_TIMER_GET_FREQ
+#        define PRTE_HAVE_SYS_TIMER_GET_FREQ 0
+#    endif
 #endif
 
 #ifndef PRTE_HAVE_SYS_TIMER_IS_MONOTONIC
 
-#define PRTE_HAVE_SYS_TIMER_IS_MONOTONIC 1
+#    define PRTE_HAVE_SYS_TIMER_IS_MONOTONIC 1
 
-static inline bool prte_sys_timer_is_monotonic (void)
+static inline bool prte_sys_timer_is_monotonic(void)
 {
     return PRTE_TIMER_MONOTONIC;
 }

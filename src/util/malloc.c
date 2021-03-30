@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,26 +26,25 @@
 
 #include <stdlib.h>
 
+#include "src/runtime/runtime.h"
 #include "src/util/malloc.h"
 #include "src/util/output.h"
-#include "src/runtime/runtime.h"
-
 
 /*
  * Undefine "malloc" and "free"
  */
 
 #if defined(malloc)
-#undef malloc
+#    undef malloc
 #endif
 #if defined(calloc)
-#undef calloc
+#    undef calloc
 #endif
 #if defined(free)
-#undef free
+#    undef free
 #endif
 #if defined(realloc)
-#undef realloc
+#    undef realloc
 #endif
 
 /*
@@ -52,7 +52,6 @@
  */
 int prte_malloc_debug_level = PRTE_MALLOC_DEBUG_LEVEL;
 int prte_malloc_output = -1;
-
 
 /*
  * Private variables
@@ -87,13 +86,13 @@ void prte_malloc_init(void)
     prte_malloc_output = prte_output_open(&malloc_stream);
 }
 #else
-void prte_malloc_init (void)
+void prte_malloc_init(void)
 {
 }
 void prte_malloc_finalize(void)
 {
 }
-#endif  /* PRTE_ENABLE_DEBUG */
+#endif /* PRTE_ENABLE_DEBUG */
 
 /*
  * Debug version of malloc
@@ -104,8 +103,8 @@ void *prte_malloc(size_t size, const char *file, int line)
 #if PRTE_ENABLE_DEBUG
     if (prte_malloc_debug_level > 1) {
         if (size <= 0) {
-            prte_output(prte_malloc_output, "Request for %ld bytes (%s, %d)",
-                        (long) size, file, line);
+            prte_output(prte_malloc_output, "Request for %ld bytes (%s, %d)", (long) size, file,
+                        line);
         }
     }
 #endif /* PRTE_ENABLE_DEBUG */
@@ -115,15 +114,13 @@ void *prte_malloc(size_t size, const char *file, int line)
 #if PRTE_ENABLE_DEBUG
     if (prte_malloc_debug_level > 0) {
         if (NULL == addr) {
-            prte_output(prte_malloc_output,
-                        "Request for %ld bytes failed (%s, %d)",
-                        (long) size, file, line);
+            prte_output(prte_malloc_output, "Request for %ld bytes failed (%s, %d)", (long) size,
+                        file, line);
         }
     }
-#endif  /* PRTE_ENABLE_DEBUG */
+#endif /* PRTE_ENABLE_DEBUG */
     return addr;
 }
-
 
 /*
  * Debug version of calloc
@@ -134,12 +131,11 @@ void *prte_calloc(size_t nmembers, size_t size, const char *file, int line)
 #if PRTE_ENABLE_DEBUG
     if (prte_malloc_debug_level > 1) {
         if (size <= 0) {
-            prte_output(prte_malloc_output,
-                        "Request for %ld zeroed elements of size %ld (%s, %d)",
+            prte_output(prte_malloc_output, "Request for %ld zeroed elements of size %ld (%s, %d)",
                         (long) nmembers, (long) size, file, line);
         }
     }
-#endif  /* PRTE_ENABLE_DEBUG */
+#endif /* PRTE_ENABLE_DEBUG */
     addr = calloc(nmembers, size);
 #if PRTE_ENABLE_DEBUG
     if (prte_malloc_debug_level > 0) {
@@ -149,10 +145,9 @@ void *prte_calloc(size_t nmembers, size_t size, const char *file, int line)
                         (long) nmembers, (long) size, file, line);
         }
     }
-#endif  /* PRTE_ENABLE_DEBUG */
+#endif /* PRTE_ENABLE_DEBUG */
     return addr;
 }
-
 
 /*
  * Debug version of realloc
@@ -164,29 +159,26 @@ void *prte_realloc(void *ptr, size_t size, const char *file, int line)
     if (prte_malloc_debug_level > 1) {
         if (size <= 0) {
             if (NULL == ptr) {
-                prte_output(prte_malloc_output,
-                            "Realloc NULL for %ld bytes (%s, %d)",
-                            (long) size, file, line);
+                prte_output(prte_malloc_output, "Realloc NULL for %ld bytes (%s, %d)", (long) size,
+                            file, line);
             } else {
-                prte_output(prte_malloc_output, "Realloc %p for %ld bytes (%s, %d)",
-                            ptr, (long) size, file, line);
+                prte_output(prte_malloc_output, "Realloc %p for %ld bytes (%s, %d)", ptr,
+                            (long) size, file, line);
             }
         }
     }
-#endif  /* PRTE_ENABLE_DEBUG */
+#endif /* PRTE_ENABLE_DEBUG */
     addr = realloc(ptr, size);
 #if PRTE_ENABLE_DEBUG
     if (prte_malloc_debug_level > 0) {
         if (NULL == addr) {
-            prte_output(prte_malloc_output,
-                        "Realloc %p for %ld bytes failed (%s, %d)",
-                        ptr, (long) size, file, line);
+            prte_output(prte_malloc_output, "Realloc %p for %ld bytes failed (%s, %d)", ptr,
+                        (long) size, file, line);
         }
     }
-#endif  /* PRTE_ENABLE_DEBUG */
+#endif /* PRTE_ENABLE_DEBUG */
     return addr;
 }
-
 
 /*
  * Debug version of free
@@ -200,5 +192,5 @@ void prte_malloc_debug(int level)
 {
 #if PRTE_ENABLE_DEBUG
     prte_malloc_debug_level = level;
-#endif  /* PRTE_ENABLE_DEBUG */
+#endif /* PRTE_ENABLE_DEBUG */
 }

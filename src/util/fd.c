@@ -4,6 +4,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  *
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,42 +15,41 @@
 #include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
+#    include <sys/stat.h>
 #endif
 #ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
+#    include <sys/socket.h>
 #endif
 #ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
+#    include <arpa/inet.h>
 #endif
 #ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
+#    include <netinet/in.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef HAVE_PWD_H
-#include <pwd.h>
+#    include <pwd.h>
 #endif
 #ifdef HAVE_DIRENT_H
-#include <dirent.h>
+#    include <dirent.h>
 #endif
 #ifdef HAVE_STRINGS_H
-#include <strings.h>
+#    include <strings.h>
 #endif
 #include <ctype.h>
 
+#include "constants.h"
 #include "src/util/fd.h"
 #include "src/util/string_copy.h"
-#include "constants.h"
-
 
 /*
  * Simple loop over reading from a fd
@@ -75,7 +75,6 @@ int prte_fd_read(int fd, int len, void *buffer)
     return PRTE_SUCCESS;
 }
 
-
 /*
  * Simple loop over writing to an fd
  */
@@ -98,7 +97,6 @@ int prte_fd_write(int fd, int len, const void *buffer)
 
     return PRTE_SUCCESS;
 }
-
 
 int prte_fd_set_cloexec(int fd)
 {
@@ -148,9 +146,9 @@ bool prte_fd_is_blkdev(int fd)
 }
 
 #if PRTE_ENABLE_IPV6
-    static char str[INET6_ADDRSTRLEN];
+static char str[INET6_ADDRSTRLEN];
 #else
-    static char str[INET_ADDRSTRLEN];
+static char str[INET_ADDRSTRLEN];
 #endif
 
 const char *prte_fd_get_peer_name(int fd)
@@ -167,20 +165,20 @@ const char *prte_fd_get_peer_name(int fd)
 
     if (sa.sa_family == AF_INET) {
         struct sockaddr_in *si;
-        si = (struct sockaddr_in*) &sa;
+        si = (struct sockaddr_in *) &sa;
         ret = inet_ntop(AF_INET, &(si->sin_addr), str, INET_ADDRSTRLEN);
     }
 #if PRTE_ENABLE_IPV6
     else if (sa.sa_family == AF_INET6) {
         struct sockaddr_in6 *si6;
-        si6 = (struct sockaddr_in6*) &sa;
+        si6 = (struct sockaddr_in6 *) &sa;
         ret = inet_ntop(AF_INET6, &(si6->sin6_addr), str, INET6_ADDRSTRLEN);
     }
 #endif
     else {
         // This string is guaranteed to be <= INET_ADDRSTRLEN
         memset(str, 0, sizeof(str));
-        prte_string_copy(str, "Unknown", sizeof(str)-1);
+        prte_string_copy(str, "Unknown", sizeof(str) - 1);
         ret = str;
     }
 
@@ -204,7 +202,7 @@ void prte_close_open_file_descriptors(int protected_fd)
     /* grab the fd of the opendir above so we don't close in the
      * middle of the scan. */
     dir_scan_fd = dirfd(dir);
-    if(dir_scan_fd < 0 ) {
+    if (dir_scan_fd < 0) {
         goto slow;
     }
 
@@ -217,25 +215,21 @@ void prte_close_open_file_descriptors(int protected_fd)
             closedir(dir);
             goto slow;
         }
-        if (fd >=3 &&
-            (-1 == protected_fd || fd != protected_fd) &&
-            fd != dir_scan_fd) {
+        if (fd >= 3 && (-1 == protected_fd || fd != protected_fd) && fd != dir_scan_fd) {
             close(fd);
         }
     }
     closedir(dir);
     return;
 
-  slow:
+slow:
     // close *all* file descriptors -- slow
     if (0 > fdmax) {
         fdmax = sysconf(_SC_OPEN_MAX);
     }
-    for(int fd=3; fd<fdmax; fd++) {
+    for (int fd = 3; fd < fdmax; fd++) {
         if (fd != protected_fd) {
             close(fd);
         }
     }
 }
-
-

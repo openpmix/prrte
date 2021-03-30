@@ -16,6 +16,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,21 +24,19 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <stdlib.h>
 
-#include "src/util/daemon_init.h"
 #include "constants.h"
-
+#include "src/util/daemon_init.h"
 
 int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
 {
@@ -57,14 +56,14 @@ int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
     }
 
     /* child continues */
-#if defined(HAVE_SETSID) && !(PRTE_HAVE_CRAY_ALPS)
-    setsid();  /* become session leader - doing this confuses Cray aprun in some cases */
-#endif
+#    if defined(HAVE_SETSID) && !(PRTE_HAVE_CRAY_ALPS)
+    setsid(); /* become session leader - doing this confuses Cray aprun in some cases */
+#    endif
 
     if (NULL != working_dir) {
-        if (-1 == chdir(working_dir)) {  /* change working directory */
+        if (-1 == chdir(working_dir)) { /* change working directory */
             return PRTE_ERR_FATAL;
-	}
+        }
     }
 
     /* connect input to /dev/null */
@@ -73,12 +72,12 @@ int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
         return PRTE_ERR_FATAL;
     }
     dup2(fd, STDIN_FILENO);
-    if(fd != STDIN_FILENO) {
+    if (fd != STDIN_FILENO) {
         close(fd);
     }
 
     /* connect outputs to /dev/null */
-    fd = open("/dev/null", O_RDWR|O_CREAT|O_TRUNC, 0666);
+    fd = open("/dev/null", O_RDWR | O_CREAT | O_TRUNC, 0666);
     if (fd >= 0) {
         dup2(fd, STDOUT_FILENO);
         dup2(fd, STDERR_FILENO);
@@ -88,8 +87,8 @@ int prte_daemon_init_callback(char *working_dir, int (*parent_fn)(pid_t))
          * since one of the two would still be open and
          * someone could attempt to use it.
          */
-        if(fd != STDOUT_FILENO && fd != STDERR_FILENO) {
-           close(fd);
+        if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+            close(fd);
         }
     } else {
         return PRTE_ERR_FATAL;

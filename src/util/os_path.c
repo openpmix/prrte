@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,13 +23,13 @@
 
 #include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
-#endif  /* HAVE_SYS_PARAM_H */
-#include <stdlib.h>
+#    include <sys/param.h>
+#endif /* HAVE_SYS_PARAM_H */
 #include <stdarg.h>
+#include <stdlib.h>
 
 #include "src/util/os_path.h"
 
@@ -47,37 +48,38 @@ char *prte_os_path(int relative, ...)
 
     num_elements = 0;
     total_length = 0;
-    while (NULL != (element = va_arg(ap, char*))) {
+    while (NULL != (element = va_arg(ap, char *))) {
         num_elements++;
         total_length = total_length + strlen(element);
-        if( path_sep[0] != element[0] ) total_length++;
+        if (path_sep[0] != element[0])
+            total_length++;
     }
     va_end(ap);
 
     if (0 == num_elements) { /* must be looking for a simple answer */
         size_t len = 3;
-        path = (char *)calloc(len, sizeof(char));
-    	if (relative) {
+        path = (char *) calloc(len, sizeof(char));
+        if (relative) {
             path[0] = '.';
         }
         strncat(path, path_sep, len - 1);
-    	return(path);
+        return (path);
     }
 
     /* setup path with enough room for the string terminator, the elements, and
        the separator between each of the elements */
     total_length = total_length + num_elements * strlen(path_sep) + 1;
-    if(relative) {
+    if (relative) {
         total_length++;
     }
 
-    if (total_length > PRTE_PATH_MAX) {  /* path length is too long - reject it */
-    	return(NULL);
+    if (total_length > PRTE_PATH_MAX) { /* path length is too long - reject it */
+        return (NULL);
     }
 
-    path = (char *)calloc(total_length, sizeof(char));
+    path = (char *) calloc(total_length, sizeof(char));
     if (NULL == path) {
-        return(NULL);
+        return (NULL);
     }
 
     if (relative) {
@@ -85,14 +87,14 @@ char *prte_os_path(int relative, ...)
     }
 
     va_start(ap, relative);
-    if( NULL != (element = va_arg(ap, char*)) ) {
-    	if (path_sep[0] != element[0]) {
+    if (NULL != (element = va_arg(ap, char *))) {
+        if (path_sep[0] != element[0]) {
             strncat(path, path_sep, total_length);
         }
         strcat(path, element);
     }
-    while (NULL != (element=va_arg(ap, char*))) {
-    	if (path_sep[0] != element[0]) {
+    while (NULL != (element = va_arg(ap, char *))) {
+        if (path_sep[0] != element[0]) {
             strncat(path, path_sep, total_length);
         }
         strncat(path, element, total_length);

@@ -4,6 +4,7 @@
  *                         reserved.
  *
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,15 +15,15 @@
 #include "prte_config.h"
 #include "src/util/output.h"
 
-#include "src/mca/propagate/propagate.h"
-#include "src/mca/propagate/base/base.h"
 #include "propagate_prperror.h"
+#include "src/mca/propagate/base/base.h"
+#include "src/mca/propagate/propagate.h"
 
 /*
  * Public string for version number
  */
-const char *prte_propagate_prperror_component_version_string =
-"PRTE PROPAGATE prperror MCA component version " PRTE_VERSION;
+const char *prte_propagate_prperror_component_version_string
+    = "PRTE PROPAGATE prperror MCA component version " PRTE_VERSION;
 
 /*
  * Local functionality
@@ -67,11 +68,10 @@ static int propagate_prperror_register(void)
 
     my_priority = 1000;
     (void) prte_mca_base_component_var_register(c, "priority",
-            "Priority of the prperror propagate component",
-            PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-            PRTE_MCA_BASE_VAR_FLAG_NONE,
-            PRTE_INFO_LVL_9,
-            PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
+                                                "Priority of the prperror propagate component",
+                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
 
     return PRTE_SUCCESS;
 }
@@ -91,7 +91,7 @@ static int propagate_prperror_component_query(prte_mca_base_module_t **module, i
     /* only daemon propagate */
     if (prte_enable_ft && (PRTE_PROC_IS_DAEMON || PRTE_PROC_IS_MASTER)) {
         *priority = my_priority;
-        *module = (prte_mca_base_module_t *)&prte_propagate_prperror_module;
+        *module = (prte_mca_base_module_t *) &prte_propagate_prperror_module;
         return PRTE_SUCCESS;
     }
 

@@ -18,9 +18,9 @@
 
 #include "prte_config.h"
 
-#include "src/mca/mca.h"
 #include "src/class/prte_object.h"
 #include "src/event/event-internal.h"
+#include "src/mca/mca.h"
 
 #include "src/mca/filem/filem.h"
 

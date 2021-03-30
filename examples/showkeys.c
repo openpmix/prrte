@@ -15,6 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,8 +30,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <pmix.h>
 #include "examples.h"
+#include <pmix.h>
 
 static pmix_proc_t myproc;
 
@@ -47,39 +48,40 @@ int main(int argc, char **argv)
      * is included, then the process will be stopped in this call until
      * the "debugger release" notification arrives */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %s\n",
-                myproc.nspace, myproc.rank, PMIx_Error_string(rc));
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %s\n", myproc.nspace, myproc.rank,
+                PMIx_Error_string(rc));
         exit(0);
     }
     /* get all keys provided to us */
     if (PMIX_SUCCESS != (rc = PMIx_Get(&myproc, NULL, NULL, 0, &val))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Get local rank failed: %s\n",
-                myproc.nspace, myproc.rank, PMIx_Error_string(rc));
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get local rank failed: %s\n", myproc.nspace,
+                myproc.rank, PMIx_Error_string(rc));
         exit(0);
     }
     fprintf(stderr, "Returned type %s\n", PMIx_Data_type_string(val->type));
-    info = (pmix_info_t*)val->data.darray->array;
+    info = (pmix_info_t *) val->data.darray->array;
     ninfo = val->data.darray->size;
 
-    for (n=0; n < ninfo; n++) {
+    for (n = 0; n < ninfo; n++) {
         fprintf(stderr, "KEY: %s\n", info[n].key);
     }
 
     if (PMIX_SUCCESS != (rc = PMIx_Get(&myproc, PMIX_PACKAGE_RANK, NULL, 0, &val))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Get numa rank failed: %s\n",
-                myproc.nspace, myproc.rank, PMIx_Error_string(rc));
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get numa rank failed: %s\n", myproc.nspace,
+                myproc.rank, PMIx_Error_string(rc));
         exit(0);
     }
-    fprintf(stderr, "NUMA rank: %d\n", (int)val->data.uint16);
+    fprintf(stderr, "NUMA rank: %d\n", (int) val->data.uint16);
 
     /* finalize us */
     fprintf(stderr, "Client ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {
-        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize failed: %s\n",
-                myproc.nspace, myproc.rank, PMIx_Error_string(rc));
+        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize failed: %s\n", myproc.nspace,
+                myproc.rank, PMIx_Error_string(rc));
     } else {
-        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize successfully completed\n", myproc.nspace, myproc.rank);
+        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize successfully completed\n",
+                myproc.nspace, myproc.rank);
     }
     fflush(stderr);
-    return(0);
+    return (0);
 }

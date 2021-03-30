@@ -26,26 +26,25 @@
 #include "constants.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
-#include <string.h>
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #include <ctype.h>
+#include <string.h>
 
-
-#include "src/util/prte_environ.h"
-#include "src/util/output.h"
-#include "src/util/argv.h"
 #include "src/class/prte_pointer_array.h"
+#include "src/util/argv.h"
+#include "src/util/output.h"
+#include "src/util/prte_environ.h"
 
+#include "src/mca/errmgr/errmgr.h"
+#include "src/pmix/pmix-internal.h"
+#include "src/runtime/prte_globals.h"
+#include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
-#include "src/mca/errmgr/errmgr.h"
-#include "src/util/name_fns.h"
-#include "src/runtime/prte_globals.h"
-#include "src/pmix/pmix-internal.h"
 
-#include "src/mca/ess/ess.h"
 #include "src/mca/ess/base/base.h"
+#include "src/mca/ess/ess.h"
 #include "src/mca/ess/tm/ess_tm.h"
 
 static int tm_set_name(void);
@@ -53,16 +52,13 @@ static int tm_set_name(void);
 static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
-prte_ess_base_module_t prte_ess_tm_module = {
-    .init = rte_init,
-    .finalize = rte_finalize,
-    .abort = NULL
-};
+prte_ess_base_module_t prte_ess_tm_module = {.init = rte_init,
+                                             .finalize = rte_finalize,
+                                             .abort = NULL};
 
 /*
  * Local variables
  */
-
 
 static int rte_init(int argc, char **argv)
 {
@@ -85,11 +81,10 @@ static int rte_init(int argc, char **argv)
     }
     return PRTE_SUCCESS;
 
-  error:
+error:
     if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
-        prte_show_help("help-prte-runtime.txt",
-                       "prte_init:startup:internal-failure",
-                       true, error, PRTE_ERROR_NAME(ret), ret);
+        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+                       PRTE_ERROR_NAME(ret), ret);
     }
 
     return ret;
@@ -110,15 +105,14 @@ static int tm_set_name(void)
 {
     pmix_rank_t vpid;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
-                         "ess:tm setting name"));
+    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:tm setting name"));
 
     if (NULL == prte_ess_base_nspace) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
 
-     PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, prte_ess_base_nspace);
+    PMIX_LOAD_NSPACE(PRTE_PROC_MY_NAME->nspace, prte_ess_base_nspace);
 
     if (NULL == prte_ess_base_vpid) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -127,8 +121,8 @@ static int tm_set_name(void)
     vpid = strtoul(prte_ess_base_vpid, NULL, 10);
     PRTE_PROC_MY_NAME->rank = vpid;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
-                         "ess:tm set name to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:tm set name to %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* get the num procs as provided in the cmd line param */
     prte_process_info.num_daemons = prte_ess_base_num_procs;

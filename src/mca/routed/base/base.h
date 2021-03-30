@@ -19,9 +19,9 @@
 #include "src/mca/mca.h"
 
 #include "src/class/prte_pointer_array.h"
-#include "src/pmix/pmix-internal.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/routed/routed.h"
+#include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
 
@@ -30,20 +30,17 @@ BEGIN_C_DECLS
  */
 PRTE_EXPORT extern prte_mca_base_framework_t prte_routed_base_framework;
 /* select a component */
-PRTE_EXPORT    int prte_routed_base_select(void);
+PRTE_EXPORT int prte_routed_base_select(void);
 
 typedef struct {
     bool routing_enabled;
 } prte_routed_base_t;
 PRTE_EXPORT extern prte_routed_base_t prte_routed_base;
 
-
 /* specialized support functions */
-PRTE_EXPORT void prte_routed_base_xcast_routing(prte_list_t *coll,
-                                                prte_list_t *my_children);
+PRTE_EXPORT void prte_routed_base_xcast_routing(prte_list_t *coll, prte_list_t *my_children);
 
-PRTE_EXPORT int prte_routed_base_process_callback(pmix_nspace_t job,
-                                                  pmix_data_buffer_t *buffer);
+PRTE_EXPORT int prte_routed_base_process_callback(pmix_nspace_t job, pmix_data_buffer_t *buffer);
 PRTE_EXPORT void prte_routed_base_update_hnps(pmix_data_buffer_t *buf);
 
 END_C_DECLS

@@ -14,6 +14,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,8 +24,8 @@
 
 #include "prte_config.h"
 
-#include <stdio.h>
 #include <limits.h>
+#include <stdio.h>
 
 #include "constants.h"
 #include "src/class/prte_bitmap.h"
@@ -32,26 +33,21 @@
 /* The number of bits in the underlying type of the bitmap field
  * in the prte_bitmap_t struct
  */
-#define SIZE_OF_BASE_TYPE  64
+#define SIZE_OF_BASE_TYPE 64
 
 static void prte_bitmap_construct(prte_bitmap_t *bm);
 static void prte_bitmap_destruct(prte_bitmap_t *bm);
 
-PRTE_CLASS_INSTANCE(prte_bitmap_t, prte_object_t,
-                   prte_bitmap_construct, prte_bitmap_destruct);
+PRTE_CLASS_INSTANCE(prte_bitmap_t, prte_object_t, prte_bitmap_construct, prte_bitmap_destruct);
 
-
-static void
-prte_bitmap_construct(prte_bitmap_t *bm)
+static void prte_bitmap_construct(prte_bitmap_t *bm)
 {
     bm->bitmap = NULL;
     bm->array_size = 0;
     bm->max_size = INT_MAX;
 }
 
-
-static void
-prte_bitmap_destruct(prte_bitmap_t *bm)
+static void prte_bitmap_destruct(prte_bitmap_t *bm)
 {
     if (NULL != bm->bitmap) {
         free(bm->bitmap);
@@ -59,8 +55,7 @@ prte_bitmap_destruct(prte_bitmap_t *bm)
     }
 }
 
-
-int prte_bitmap_set_max_size (prte_bitmap_t *bm, int max_size)
+int prte_bitmap_set_max_size(prte_bitmap_t *bm, int max_size)
 {
     if (NULL == bm) {
         return PRTE_ERR_BAD_PARAM;
@@ -71,14 +66,12 @@ int prte_bitmap_set_max_size (prte_bitmap_t *bm, int max_size)
      * we set it (in numbers of bits!), otherwise it is
      * set to INT_MAX in the constructor.
      */
-    bm->max_size = (int)(((size_t)max_size + SIZE_OF_BASE_TYPE - 1) / SIZE_OF_BASE_TYPE);
+    bm->max_size = (int) (((size_t) max_size + SIZE_OF_BASE_TYPE - 1) / SIZE_OF_BASE_TYPE);
 
     return PRTE_SUCCESS;
 }
 
-
-int
-prte_bitmap_init(prte_bitmap_t *bm, int size)
+int prte_bitmap_init(prte_bitmap_t *bm, int size)
 {
     /*
      * Only if the caller set the maximum size before initializing,
@@ -89,13 +82,13 @@ prte_bitmap_init(prte_bitmap_t *bm, int size)
         return PRTE_ERR_BAD_PARAM;
     }
 
-    bm->array_size = (int)(((size_t)size + SIZE_OF_BASE_TYPE - 1) / SIZE_OF_BASE_TYPE);
-    if( NULL != bm->bitmap ) {
+    bm->array_size = (int) (((size_t) size + SIZE_OF_BASE_TYPE - 1) / SIZE_OF_BASE_TYPE);
+    if (NULL != bm->bitmap) {
         free(bm->bitmap);
-        if(bm->max_size < bm->array_size)
+        if (bm->max_size < bm->array_size)
             bm->max_size = bm->array_size;
     }
-    bm->bitmap = (uint64_t*) malloc(bm->array_size * sizeof(uint64_t));
+    bm->bitmap = (uint64_t *) malloc(bm->array_size * sizeof(uint64_t));
     if (NULL == bm->bitmap) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
@@ -104,9 +97,7 @@ prte_bitmap_init(prte_bitmap_t *bm, int size)
     return PRTE_SUCCESS;
 }
 
-
-int
-prte_bitmap_set_bit(prte_bitmap_t *bm, int bit)
+int prte_bitmap_set_bit(prte_bitmap_t *bm, int bit)
 {
     int index, offset, new_size;
 
@@ -124,12 +115,12 @@ prte_bitmap_set_bit(prte_bitmap_t *bm, int bit)
          valid and we simply expand the bitmap */
 
         new_size = index + 1;
-        if( new_size > bm->max_size )
+        if (new_size > bm->max_size)
             new_size = bm->max_size;
 
         /* New size is just a multiple of the original size to fit in
          the index. */
-        bm->bitmap = (uint64_t*)realloc(bm->bitmap, new_size*sizeof(uint64_t));
+        bm->bitmap = (uint64_t *) realloc(bm->bitmap, new_size * sizeof(uint64_t));
         if (NULL == bm->bitmap) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
@@ -147,9 +138,7 @@ prte_bitmap_set_bit(prte_bitmap_t *bm, int bit)
     return PRTE_SUCCESS;
 }
 
-
-int
-prte_bitmap_clear_bit(prte_bitmap_t *bm, int bit)
+int prte_bitmap_clear_bit(prte_bitmap_t *bm, int bit)
 {
     int index, offset;
 
@@ -164,9 +153,7 @@ prte_bitmap_clear_bit(prte_bitmap_t *bm, int bit)
     return PRTE_SUCCESS;
 }
 
-
-bool
-prte_bitmap_is_set_bit(prte_bitmap_t *bm, int bit)
+bool prte_bitmap_is_set_bit(prte_bitmap_t *bm, int bit)
 {
     int index, offset;
 
@@ -184,9 +171,7 @@ prte_bitmap_is_set_bit(prte_bitmap_t *bm, int bit)
     return false;
 }
 
-
-int
-prte_bitmap_clear_all_bits(prte_bitmap_t *bm)
+int prte_bitmap_clear_all_bits(prte_bitmap_t *bm)
 {
     if (NULL == bm) {
         return PRTE_ERR_BAD_PARAM;
@@ -196,9 +181,7 @@ prte_bitmap_clear_all_bits(prte_bitmap_t *bm)
     return PRTE_SUCCESS;
 }
 
-
-int
-prte_bitmap_set_all_bits(prte_bitmap_t *bm)
+int prte_bitmap_set_all_bits(prte_bitmap_t *bm)
 {
     if (NULL == bm) {
         return PRTE_ERR_BAD_PARAM;
@@ -209,9 +192,7 @@ prte_bitmap_set_all_bits(prte_bitmap_t *bm)
     return PRTE_SUCCESS;
 }
 
-
-int
-prte_bitmap_find_and_set_first_unset_bit(prte_bitmap_t *bm, int *position)
+int prte_bitmap_find_and_set_first_unset_bit(prte_bitmap_t *bm, int *position)
 {
     int i = 0;
     uint64_t temp, all_ones = 0xffffffffffffffffUL;
@@ -222,7 +203,7 @@ prte_bitmap_find_and_set_first_unset_bit(prte_bitmap_t *bm, int *position)
 
     /* Neglect all which don't have an unset bit */
     *position = 0;
-    while((i < bm->array_size) && (bm->bitmap[i] == all_ones)) {
+    while ((i < bm->array_size) && (bm->bitmap[i] == all_ones)) {
         ++i;
     }
 
@@ -236,8 +217,8 @@ prte_bitmap_find_and_set_first_unset_bit(prte_bitmap_t *bm, int *position)
 
     temp = bm->bitmap[i];
     bm->bitmap[i] |= (bm->bitmap[i] + 1); /* Set the first zero bit */
-    temp ^= bm->bitmap[i];  /* Compute the change: the first unset bit in the original number */
-    while( !(temp & 0x1) ) {
+    temp ^= bm->bitmap[i]; /* Compute the change: the first unset bit in the original number */
+    while (!(temp & 0x1)) {
         ++(*position);
         temp >>= 1;
     }
@@ -253,17 +234,17 @@ int prte_bitmap_bitwise_and_inplace(prte_bitmap_t *dest, prte_bitmap_t *right)
     /*
      * Sanity check
      */
-    if( NULL == dest || NULL == right ) {
+    if (NULL == dest || NULL == right) {
         return PRTE_ERR_BAD_PARAM;
     }
-    if( dest->array_size != right->array_size ) {
+    if (dest->array_size != right->array_size) {
         return PRTE_ERR_BAD_PARAM;
     }
 
     /*
      * Bitwise AND
      */
-    for(i = 0; i < dest->array_size; ++i) {
+    for (i = 0; i < dest->array_size; ++i) {
         dest->bitmap[i] &= right->bitmap[i];
     }
 
@@ -277,17 +258,17 @@ int prte_bitmap_bitwise_or_inplace(prte_bitmap_t *dest, prte_bitmap_t *right)
     /*
      * Sanity check
      */
-    if( NULL == dest || NULL == right ) {
+    if (NULL == dest || NULL == right) {
         return PRTE_ERR_BAD_PARAM;
     }
-    if( dest->array_size != right->array_size ) {
+    if (dest->array_size != right->array_size) {
         return PRTE_ERR_BAD_PARAM;
     }
 
     /*
      * Bitwise OR
      */
-    for(i = 0; i < dest->array_size; ++i) {
+    for (i = 0; i < dest->array_size; ++i) {
         dest->bitmap[i] |= right->bitmap[i];
     }
 
@@ -301,17 +282,17 @@ int prte_bitmap_bitwise_xor_inplace(prte_bitmap_t *dest, prte_bitmap_t *right)
     /*
      * Sanity check
      */
-    if( NULL == dest || NULL == right ) {
+    if (NULL == dest || NULL == right) {
         return PRTE_ERR_BAD_PARAM;
     }
-    if( dest->array_size != right->array_size ) {
+    if (dest->array_size != right->array_size) {
         return PRTE_ERR_BAD_PARAM;
     }
 
     /*
      * Bitwise XOR
      */
-    for(i = 0; i < dest->array_size; ++i) {
+    for (i = 0; i < dest->array_size; ++i) {
         dest->bitmap[i] ^= right->bitmap[i];
     }
 
@@ -325,19 +306,19 @@ bool prte_bitmap_are_different(prte_bitmap_t *left, prte_bitmap_t *right)
     /*
      * Sanity check
      */
-    if( NULL == left || NULL == right ) {
+    if (NULL == left || NULL == right) {
         return PRTE_ERR_BAD_PARAM;
     }
 
-    if( prte_bitmap_size(left) != prte_bitmap_size(right) ) {
+    if (prte_bitmap_size(left) != prte_bitmap_size(right)) {
         return true;
     }
 
     /*
      * Direct comparison
      */
-    for(i = 0; i < left->array_size; ++i) {
-        if( left->bitmap[i] != right->bitmap[i] ) {
+    for (i = 0; i < left->array_size; ++i) {
+        if (left->bitmap[i] != right->bitmap[i]) {
             return true;
         }
     }
@@ -345,12 +326,12 @@ bool prte_bitmap_are_different(prte_bitmap_t *left, prte_bitmap_t *right)
     return false;
 }
 
-char * prte_bitmap_get_string(prte_bitmap_t *bitmap)
+char *prte_bitmap_get_string(prte_bitmap_t *bitmap)
 {
     int i;
     char *bitmap_str = NULL;
 
-    if( NULL == bitmap) {
+    if (NULL == bitmap) {
         return NULL;
     }
 
@@ -360,8 +341,8 @@ char * prte_bitmap_get_string(prte_bitmap_t *bitmap)
     }
     bitmap_str[bitmap->array_size * SIZE_OF_BASE_TYPE] = '\0';
 
-    for( i = 0; i < (bitmap->array_size * SIZE_OF_BASE_TYPE); ++i) {
-        if( prte_bitmap_is_set_bit(bitmap, i) ) {
+    for (i = 0; i < (bitmap->array_size * SIZE_OF_BASE_TYPE); ++i) {
+        if (prte_bitmap_is_set_bit(bitmap, i)) {
             bitmap_str[i] = 'X';
         } else {
             bitmap_str[i] = '_';
@@ -387,12 +368,13 @@ int prte_bitmap_num_set_bits(prte_bitmap_t *bm, int len)
     }
 #endif
 
-    for(i = 0; i < len; ++i) {
-        if( 0 == (val = bm->bitmap[i]) ) continue;
+    for (i = 0; i < len; ++i) {
+        if (0 == (val = bm->bitmap[i]))
+            continue;
         /*  Peter Wegner in CACM 3 (1960), 322. This method goes through as many
          *  iterations as there are set bits. */
-        for( ; val; cnt++ ) {
-            val &= val - 1;  /* clear the least significant bit set */
+        for (; val; cnt++) {
+            val &= val - 1; /* clear the least significant bit set */
         }
     }
 

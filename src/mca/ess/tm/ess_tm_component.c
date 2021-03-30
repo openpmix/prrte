@@ -16,6 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -63,13 +64,10 @@ prte_ess_base_component_t prte_ess_tm_component = {
     },
 };
 
-
-int
-prte_ess_tm_component_open(void)
+int prte_ess_tm_component_open(void)
 {
     return PRTE_SUCCESS;
 }
-
 
 int prte_ess_tm_component_query(prte_mca_base_module_t **module, int *priority)
 {
@@ -79,11 +77,10 @@ int prte_ess_tm_component_query(prte_mca_base_module_t **module, int *priority)
      * by mpirun in a tm world
      */
 
-    if (PRTE_PROC_IS_DAEMON &&
-        NULL != getenv("PBS_JOBID") &&
-        NULL != prte_process_info.my_hnp_uri) {
+    if (PRTE_PROC_IS_DAEMON && NULL != getenv("PBS_JOBID")
+        && NULL != prte_process_info.my_hnp_uri) {
         *priority = 30;
-        *module = (prte_mca_base_module_t *)&prte_ess_tm_module;
+        *module = (prte_mca_base_module_t *) &prte_ess_tm_module;
         return PRTE_SUCCESS;
     }
 
@@ -93,10 +90,7 @@ int prte_ess_tm_component_query(prte_mca_base_module_t **module, int *priority)
     return PRTE_ERROR;
 }
 
-
-int
-prte_ess_tm_component_close(void)
+int prte_ess_tm_component_close(void)
 {
     return PRTE_SUCCESS;
 }
-

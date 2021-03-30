@@ -7,6 +7,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,4 +31,3 @@ PRTE_EXPORT int prte_common_alps_proc_in_pagg(bool *flag);
 END_C_DECLS
 
 #endif
-

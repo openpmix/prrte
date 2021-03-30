@@ -12,6 +12,7 @@
  * Copyright (c) 2007      Voltaire All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,39 +31,39 @@
 #define PRTE_GRAPH_H
 
 #include "prte_config.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include "src/class/prte_object.h"
 #include "src/class/prte_list.h"
+#include "src/class/prte_object.h"
 #include "src/class/prte_pointer_array.h"
 #include "src/class/prte_value_array.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 BEGIN_C_DECLS
 
-    /* When two vertices are not connected, the distance between them is infinite. */
+/* When two vertices are not connected, the distance between them is infinite. */
 #define DISTANCE_INFINITY 0x7fffffff
 
-    /* A class for vertex */
+/* A class for vertex */
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_graph_vertex_t);
 
-    /* A class for an edge (a connection between two verices) */
+/* A class for an edge (a connection between two verices) */
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_graph_edge_t);
 
-    /* A class for an adjacency list  */
+/* A class for an adjacency list  */
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_adjacency_list_t);
 
-    /* A class for graph */
+/* A class for graph */
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_graph_t);
 
-  /**
-   * Function pointer for coping a vertex data from one vertex to
-   * another
-   *
-   * @param dst The destination pointer of vertex_data
-   * @param src The source pointer of the vertex_data
-   *
-   *
-   */
+/**
+ * Function pointer for coping a vertex data from one vertex to
+ * another
+ *
+ * @param dst The destination pointer of vertex_data
+ * @param src The source pointer of the vertex_data
+ *
+ *
+ */
 typedef void (*prte_graph_copy_vertex_data)(void **dst, void *src);
 
 /**
@@ -90,7 +91,7 @@ typedef void *(*prte_graph_alloc_vertex_data)(void);
  *        vertex_data2 and -1- vertex_data1 is smaller the
  *        vertex_data2.
  */
-typedef int  (*prte_graph_compare_vertex_data)(void *vertex_data1, void *vertex_data2);
+typedef int (*prte_graph_compare_vertex_data)(void *vertex_data1, void *vertex_data2);
 
 /**
  * print a vertex data.
@@ -99,24 +100,24 @@ typedef int  (*prte_graph_compare_vertex_data)(void *vertex_data1, void *vertex_
  */
 typedef char *(*prte_graph_print_vertex)(void *vertex_data);
 
-
 /**
  * A vertex class.
  */
 struct prte_graph_vertex_t {
-    prte_list_item_t             super; /* A pointer to a vertex parent */
-    void                         *in_graph; /* A pointer to the graph that this vertex belongs to */
-    void                         *in_adj_list; /* A pointer to the adjacency that this vertex belongs to */
-    void                         *vertex_data;/* A pointer to some data. this pointer can point to the struct the this*/
-                                              /* vertex belongs to*/
-    struct prte_graph_vertex_t   *sibling;/* A pointer to a sibling vertex. */
-                                          /* if this vertex was copied this pointer will point to the source vertex */
-                                          /* This pointer is for internal uses. */
-    prte_graph_copy_vertex_data  copy_vertex_data; /* A function to copy vertex data */
-    prte_graph_free_vertex_data  free_vertex_data; /* A function to print vertex data */
-    prte_graph_alloc_vertex_data alloc_vertex_data;/* A function to allocate vertex data */
-    prte_graph_compare_vertex_data compare_vertex; /* A function to compare between two vertices data */
-    prte_graph_print_vertex        print_vertex;   /* A function to print vertex data */
+    prte_list_item_t super; /* A pointer to a vertex parent */
+    void *in_graph;         /* A pointer to the graph that this vertex belongs to */
+    void *in_adj_list;      /* A pointer to the adjacency that this vertex belongs to */
+    void *vertex_data; /* A pointer to some data. this pointer can point to the struct the this*/
+                       /* vertex belongs to*/
+    struct prte_graph_vertex_t *sibling; /* A pointer to a sibling vertex. */
+    /* if this vertex was copied this pointer will point to the source vertex */
+    /* This pointer is for internal uses. */
+    prte_graph_copy_vertex_data copy_vertex_data;   /* A function to copy vertex data */
+    prte_graph_free_vertex_data free_vertex_data;   /* A function to print vertex data */
+    prte_graph_alloc_vertex_data alloc_vertex_data; /* A function to allocate vertex data */
+    prte_graph_compare_vertex_data
+        compare_vertex;                   /* A function to compare between two vertices data */
+    prte_graph_print_vertex print_vertex; /* A function to print vertex data */
 };
 
 /**
@@ -128,9 +129,9 @@ typedef struct prte_graph_vertex_t prte_graph_vertex_t;
  * An prte_adjacency_list_t class
  */
 struct prte_adjacency_list_t {
-    prte_list_item_t     super;   /* A pointer to vertex parent */
-    prte_graph_vertex_t *vertex;  /* The adjacency_list is for adjacent of this vertex */
-    prte_list_t         *edges;   /* An edge list for all the adjacent and their weights */
+    prte_list_item_t super;      /* A pointer to vertex parent */
+    prte_graph_vertex_t *vertex; /* The adjacency_list is for adjacent of this vertex */
+    prte_list_t *edges;          /* An edge list for all the adjacent and their weights */
 };
 
 /**
@@ -146,13 +147,13 @@ typedef struct prte_adjacency_list_t prte_adjacency_list_t;
  * contains a weight field.
  */
 struct prte_graph_edge_t {
-    prte_list_item_t         super;  /* A pointer to the edge parent */
-    prte_graph_vertex_t      *start; /* The start vertex. */
-    prte_graph_vertex_t      *end;   /* The end vertex */
-    uint32_t                 weight; /* The weight of this edge */
-    prte_adjacency_list_t    *in_adj_list; /* The adjacency list in witch this edge in.*/
-                                           /* This adjacency list contains the start vertex of this edge*/
-                                           /* and its for internal uses */
+    prte_list_item_t super;             /* A pointer to the edge parent */
+    prte_graph_vertex_t *start;         /* The start vertex. */
+    prte_graph_vertex_t *end;           /* The end vertex */
+    uint32_t weight;                    /* The weight of this edge */
+    prte_adjacency_list_t *in_adj_list; /* The adjacency list in witch this edge in.*/
+    /* This adjacency list contains the start vertex of this edge*/
+    /* and its for internal uses */
 };
 
 /**
@@ -160,15 +161,14 @@ struct prte_graph_edge_t {
  */
 typedef struct prte_graph_edge_t prte_graph_edge_t;
 
-
 /**
  * A graph class.
  */
 struct prte_graph_t {
-    prte_object_t       super;
-    prte_list_t         *adjacency_list;
-    int                 number_of_edges;
-    int                 number_of_vertices;
+    prte_object_t super;
+    prte_list_t *adjacency_list;
+    int number_of_edges;
+    int number_of_vertices;
 };
 
 /**
@@ -182,7 +182,7 @@ typedef struct prte_graph_t prte_graph_t;
  */
 struct vertex_distance_from_t {
     prte_graph_vertex_t *vertex;
-    uint32_t            weight;
+    uint32_t weight;
 };
 
 /**
@@ -233,7 +233,7 @@ PRTE_EXPORT int prte_graph_add_edge(prte_graph_t *graph, prte_graph_edge_t *edge
  * @param graph The graph that this edge will be remove from.
  * @param edge the edge that we want to remove.
  */
-PRTE_EXPORT void prte_graph_remove_edge (prte_graph_t *graph, prte_graph_edge_t *edge);
+PRTE_EXPORT void prte_graph_remove_edge(prte_graph_t *graph, prte_graph_edge_t *edge);
 
 /**
  * This graph API tell us if two vertices are adjacent
@@ -246,7 +246,8 @@ PRTE_EXPORT void prte_graph_remove_edge (prte_graph_t *graph, prte_graph_edge_t 
  *         vertices or infinity if the vertices are not
  *         connected.
  */
-PRTE_EXPORT uint32_t prte_graph_adjacent(prte_graph_t *graph, prte_graph_vertex_t *vertex1, prte_graph_vertex_t *vertex2);
+PRTE_EXPORT uint32_t prte_graph_adjacent(prte_graph_t *graph, prte_graph_vertex_t *vertex1,
+                                         prte_graph_vertex_t *vertex2);
 
 /**
  * This Graph API returns the order of the graph (number of
@@ -279,7 +280,6 @@ PRTE_EXPORT int prte_graph_get_size(prte_graph_t *graph);
  */
 PRTE_EXPORT prte_graph_vertex_t *prte_graph_find_vertex(prte_graph_t *graph, void *vertex_data);
 
-
 /**
  * This graph API returns an array of pointers of all the
  * vertices in the graph.
@@ -292,7 +292,8 @@ PRTE_EXPORT prte_graph_vertex_t *prte_graph_find_vertex(prte_graph_t *graph, voi
  * @return int returning the graph order (the
  *                    number of vertices in the returned array)
  */
-PRTE_EXPORT int prte_graph_get_graph_vertices(prte_graph_t *graph, prte_pointer_array_t *vertices_list);
+PRTE_EXPORT int prte_graph_get_graph_vertices(prte_graph_t *graph,
+                                              prte_pointer_array_t *vertices_list);
 
 /**
  * This graph API returns all the adjacent of a vertex and the
@@ -307,7 +308,8 @@ PRTE_EXPORT int prte_graph_get_graph_vertices(prte_graph_t *graph, prte_pointer_
  *
  * @return int the number of adjacent in the list.
  */
-PRTE_EXPORT int prte_graph_get_adjacent_vertices(prte_graph_t *graph, prte_graph_vertex_t *vertex, prte_value_array_t *adjacent);
+PRTE_EXPORT int prte_graph_get_adjacent_vertices(prte_graph_t *graph, prte_graph_vertex_t *vertex,
+                                                 prte_value_array_t *adjacent);
 
 /**
  * This graph API duplicates a graph. Note that this API does
@@ -328,7 +330,8 @@ PRTE_EXPORT void prte_graph_duplicate(prte_graph_t **dest, prte_graph_t *src);
  *
  * @return uint32_t the distance between the two vertices.
  */
-PRTE_EXPORT uint32_t prte_graph_spf(prte_graph_t *graph, prte_graph_vertex_t *vertex1, prte_graph_vertex_t *vertex2);
+PRTE_EXPORT uint32_t prte_graph_spf(prte_graph_t *graph, prte_graph_vertex_t *vertex1,
+                                    prte_graph_vertex_t *vertex2);
 
 /**
  * This graph API returns the distance (weight) from a reference
@@ -342,7 +345,8 @@ PRTE_EXPORT uint32_t prte_graph_spf(prte_graph_t *graph, prte_graph_vertex_t *ve
  *
  * @return uint32_t the size of the distance array
  */
-PRTE_EXPORT uint32_t prte_graph_dijkstra(prte_graph_t *graph, prte_graph_vertex_t *vertex, prte_value_array_t *distance_array);
+PRTE_EXPORT uint32_t prte_graph_dijkstra(prte_graph_t *graph, prte_graph_vertex_t *vertex,
+                                         prte_value_array_t *distance_array);
 
 /**
  * This graph API prints a graph - mostly for debug uses.
@@ -351,6 +355,5 @@ PRTE_EXPORT uint32_t prte_graph_dijkstra(prte_graph_t *graph, prte_graph_vertex_
 PRTE_EXPORT void prte_graph_print(prte_graph_t *graph);
 
 END_C_DECLS
-
 
 #endif /* PRTE_GRAPH_H */

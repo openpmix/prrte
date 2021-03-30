@@ -23,19 +23,18 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/util/output.h"
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_alias.h"
+#include "src/mca/mca.h"
+#include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/plm/plm.h"
-#include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/base/base.h"
+#include "src/mca/plm/base/plm_private.h"
+#include "src/mca/plm/plm.h"
 
 /*
  * The following file was created by configure.  It contains extern
@@ -55,17 +54,14 @@ prte_plm_globals_t prte_plm_globals = {0};
  */
 prte_plm_base_module_t prte_plm = {0};
 
-
 static int mca_plm_base_register(prte_mca_base_register_flag_t flags)
 {
     prte_plm_globals.node_regex_threshold = 1024;
-    (void) prte_mca_base_framework_var_register (&prte_plm_base_framework, "node_regex_threshold",
-                                                  "Only pass the node regex on the orted command line if smaller than this threshold",
-                                                  PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0,
-                                                  PRTE_MCA_BASE_VAR_FLAG_INTERNAL,
-                                                  PRTE_INFO_LVL_9,
-                                                  PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                                  &prte_plm_globals.node_regex_threshold);
+    (void) prte_mca_base_framework_var_register(
+        &prte_plm_base_framework, "node_regex_threshold",
+        "Only pass the node regex on the orted command line if smaller than this threshold",
+        PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_globals.node_regex_threshold);
 
     /* Note that we break abstraction rules here by listing a
      specific PLM here in the base.  This is necessary, however,
@@ -87,7 +83,7 @@ static int mca_plm_base_register(prte_mca_base_register_flag_t flags)
 
      This is why we tolerate this abstraction break up here in the
      PLM component base. */
-    (void) prte_mca_base_alias_register ("prte", "plm", "ssh", "rsh", PRTE_MCA_BASE_ALIAS_FLAG_NONE);
+    (void) prte_mca_base_alias_register("prte", "plm", "ssh", "rsh", PRTE_MCA_BASE_ALIAS_FLAG_NONE);
     return PRTE_SUCCESS;
 }
 
@@ -96,11 +92,11 @@ static int prte_plm_base_close(void)
     int rc;
 
     /* Close the selected component */
-    if( NULL != prte_plm.finalize ) {
+    if (NULL != prte_plm.finalize) {
         prte_plm.finalize();
     }
 
-   /* if we are the HNP, then stop our receive */
+    /* if we are the HNP, then stop our receive */
     if (PRTE_PROC_IS_MASTER) {
         if (PRTE_SUCCESS != (rc = prte_plm_base_comm_stop())) {
             PRTE_ERROR_LOG(rc);
@@ -111,7 +107,7 @@ static int prte_plm_base_close(void)
     if (NULL != prte_plm_globals.base_nspace) {
         free(prte_plm_globals.base_nspace);
     }
-    
+
     return prte_mca_base_framework_components_close(&prte_plm_base_framework, NULL);
 }
 
@@ -127,10 +123,10 @@ static int prte_plm_base_open(prte_mca_base_open_flag_t flags)
     /* default to assigning daemons to nodes at launch */
     prte_plm_globals.daemon_nodes_assigned_at_launch = true;
 
-     /* Open up all available components */
+    /* Open up all available components */
     return prte_mca_base_framework_components_open(&prte_plm_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, plm, NULL, mca_plm_base_register,
-                                 prte_plm_base_open, prte_plm_base_close,
-                                 prte_plm_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, plm, NULL, mca_plm_base_register, prte_plm_base_open,
+                                prte_plm_base_close, prte_plm_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

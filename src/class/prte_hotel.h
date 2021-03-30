@@ -2,6 +2,7 @@
  * Copyright (c) 2012-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2012      Los Alamos National Security, LLC. All rights reserved
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -62,8 +63,7 @@ BEGIN_C_DECLS
 struct prte_hotel_t;
 
 /* User-supplied function to be invoked when an occupant is evicted. */
-typedef void (*prte_hotel_eviction_callback_fn_t)(struct prte_hotel_t *hotel,
-                                                  int room_num,
+typedef void (*prte_hotel_eviction_callback_fn_t)(struct prte_hotel_t *hotel, int room_num,
                                                   void *occupant);
 
 /* Note that this is an internal data structure; it is not part of the
@@ -154,11 +154,9 @@ PRTE_CLASS_DECLARATION(prte_hotel_t);
  * @return PRTE_SUCCESS if all initializations were succesful. Otherwise,
  *  the error indicate what went wrong in the function.
  */
-PRTE_EXPORT int prte_hotel_init(prte_hotel_t *hotel, int num_rooms,
-                                  prte_event_base_t *evbase,
-                                  uint32_t eviction_timeout,
-                                  int eviction_event_priority,
-                                  prte_hotel_eviction_callback_fn_t evict_callback_fn);
+PRTE_EXPORT int prte_hotel_init(prte_hotel_t *hotel, int num_rooms, prte_event_base_t *evbase,
+                                uint32_t eviction_timeout, int eviction_event_priority,
+                                prte_hotel_eviction_callback_fn_t evict_callback_fn);
 
 /**
  * Check in an occupant to the hotel.
@@ -180,9 +178,7 @@ PRTE_EXPORT int prte_hotel_init(prte_hotel_t *hotel, int num_rooms,
  * @return PRTE_ERR_TEMP_OUT_OF_RESOURCE is the hotel is full.  Try
  * again later.
  */
-static inline int prte_hotel_checkin(prte_hotel_t *hotel,
-                                     void *occupant,
-                                     int *room_num)
+static inline int prte_hotel_checkin(prte_hotel_t *hotel, void *occupant, int *room_num)
 {
     prte_hotel_room_t *room;
 
@@ -198,8 +194,7 @@ static inline int prte_hotel_checkin(prte_hotel_t *hotel,
 
     /* Assign the event and make it pending */
     if (NULL != hotel->evbase) {
-        prte_event_add(&(room->eviction_timer_event),
-                       &(hotel->eviction_timeout));
+        prte_event_add(&(room->eviction_timer_event), &(hotel->eviction_timeout));
     }
 
     return PRTE_SUCCESS;
@@ -209,9 +204,7 @@ static inline int prte_hotel_checkin(prte_hotel_t *hotel,
  * Same as prte_hotel_checkin(), but slightly optimized for when the
  * caller *knows* that there is a room available.
  */
-static inline void prte_hotel_checkin_with_res(prte_hotel_t *hotel,
-                                     void *occupant,
-                                     int *room_num)
+static inline void prte_hotel_checkin_with_res(prte_hotel_t *hotel, void *occupant, int *room_num)
 {
     prte_hotel_room_t *room;
 
@@ -223,8 +216,7 @@ static inline void prte_hotel_checkin_with_res(prte_hotel_t *hotel,
 
     /* Assign the event and make it pending */
     if (NULL != hotel->evbase) {
-        prte_event_add(&(room->eviction_timer_event),
-                       &(hotel->eviction_timeout));
+        prte_event_add(&(room->eviction_timer_event), &(hotel->eviction_timeout));
     }
 }
 
@@ -277,7 +269,8 @@ static inline void prte_hotel_checkout(prte_hotel_t *hotel, int room_num)
  *
  * Use this checkout and when caller needs the occupant
  */
-static inline void prte_hotel_checkout_and_return_occupant(prte_hotel_t *hotel, int room_num, void **occupant)
+static inline void prte_hotel_checkout_and_return_occupant(prte_hotel_t *hotel, int room_num,
+                                                           void **occupant)
 {
     prte_hotel_room_t *room;
 
@@ -298,8 +291,7 @@ static inline void prte_hotel_checkout_and_return_occupant(prte_hotel_t *hotel, 
         hotel->last_unoccupied_room++;
         assert(hotel->last_unoccupied_room < hotel->num_rooms);
         hotel->unoccupied_rooms[hotel->last_unoccupied_room] = room_num;
-    }
-    else {
+    } else {
         *occupant = NULL;
     }
 }
@@ -310,7 +302,7 @@ static inline void prte_hotel_checkout_and_return_occupant(prte_hotel_t *hotel, 
  * @return bool true if empty false if there is a occupant(s)
  *
  */
-static inline bool prte_hotel_is_empty (prte_hotel_t *hotel)
+static inline bool prte_hotel_is_empty(prte_hotel_t *hotel)
 {
     if (hotel->last_unoccupied_room == hotel->num_rooms - 1)
         return true;
@@ -340,7 +332,7 @@ static inline void prte_hotel_knock(prte_hotel_t *hotel, int room_num, void **oc
     /* If there's an occupant in the room, have them come to the door */
     room = &(hotel->rooms[room_num]);
     if (PRTE_LIKELY(NULL != room->occupant)) {
-        prte_output (10, "occupant %p in room num %d responded to knock", room->occupant, room_num);
+        prte_output(10, "occupant %p in room num %d responded to knock", room->occupant, room_num);
         *occupant = room->occupant;
     }
 }

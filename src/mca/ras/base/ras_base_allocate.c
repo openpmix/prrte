@@ -30,28 +30,28 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/mca/mca.h"
-#include "src/mca/base/base.h"
 #include "src/class/prte_list.h"
-#include "src/util/output.h"
-#include "src/util/printf.h"
-#include "src/util/argv.h"
+#include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/util/argv.h"
+#include "src/util/output.h"
+#include "src/util/printf.h"
 
-#include "src/util/show_help.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/util/name_fns.h"
-#include "src/runtime/prte_globals.h"
-#include "src/runtime/prte_wait.h"
-#include "src/util/hostfile/hostfile.h"
-#include "src/util/dash_host/dash_host.h"
-#include "src/util/proc_info.h"
-#include "src/util/error_strings.h"
-#include "src/threads/threads.h"
 #include "src/mca/state/state.h"
+#include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
+#include "src/runtime/prte_wait.h"
+#include "src/threads/threads.h"
+#include "src/util/dash_host/dash_host.h"
+#include "src/util/error_strings.h"
+#include "src/util/hostfile/hostfile.h"
+#include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
+#include "src/util/show_help.h"
 
 #include "src/mca/ras/base/ras_private.h"
 
@@ -95,8 +95,8 @@ char *prte_ras_base_flag_string(prte_node_t *node)
         free(tmp);
         tmp = t2;
     }
-    if (':' == tmp[strlen(tmp)-1]) {
-        tmp[strlen(tmp)-1] = '\0';
+    if (':' == tmp[strlen(tmp) - 1]) {
+        tmp[strlen(tmp) - 1] = '\0';
     } else {
         free(tmp);
         tmp = strdup("flags: NONE");
@@ -107,7 +107,7 @@ char *prte_ras_base_flag_string(prte_node_t *node)
 /* function to display allocation */
 void prte_ras_base_display_alloc(prte_job_t *jdata)
 {
-    char *tmp=NULL, *tmp2, *tmp3;
+    char *tmp = NULL, *tmp2, *tmp3;
     int i, istart;
     prte_node_t *alloc;
     char *flgs;
@@ -115,29 +115,31 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
         prte_asprintf(&tmp, "<allocation>\n");
     } else {
-        prte_asprintf(&tmp, "\n======================   ALLOCATED NODES   ======================\n");
+        prte_asprintf(&tmp,
+                      "\n======================   ALLOCATED NODES   ======================\n");
     }
     if (prte_hnp_is_allocated) {
-            istart = 0;
+        istart = 0;
     } else {
         istart = 1;
     }
-    for (i=istart; i < prte_node_pool->size; i++) {
-        if (NULL == (alloc = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, i))) {
+    for (i = istart; i < prte_node_pool->size; i++) {
+        if (NULL == (alloc = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i))) {
             continue;
         }
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
             /* need to create the output in XML format */
-            prte_asprintf(&tmp2, "\t<host name=\"%s\" slots=\"%d\" max_slots=\"%d\" slots_inuse=\"%d\">\n",
-                     (NULL == alloc->name) ? "UNKNOWN" : alloc->name,
-                     (int)alloc->slots, (int)alloc->slots_max, (int)alloc->slots_inuse);
+            prte_asprintf(&tmp2,
+                          "\t<host name=\"%s\" slots=\"%d\" max_slots=\"%d\" slots_inuse=\"%d\">\n",
+                          (NULL == alloc->name) ? "UNKNOWN" : alloc->name, (int) alloc->slots,
+                          (int) alloc->slots_max, (int) alloc->slots_inuse);
         } else {
             /* build the flags string */
             flgs = prte_ras_base_flag_string(alloc);
             prte_asprintf(&tmp2, "\t%s: slots=%d max_slots=%d slots_inuse=%d state=%s\n\t%s\n",
-                     (NULL == alloc->name) ? "UNKNOWN" : alloc->name,
-                     (int)alloc->slots, (int)alloc->slots_max, (int)alloc->slots_inuse,
-                     prte_node_state_to_str(alloc->state), flgs);
+                          (NULL == alloc->name) ? "UNKNOWN" : alloc->name, (int) alloc->slots,
+                          (int) alloc->slots_max, (int) alloc->slots_inuse,
+                          prte_node_state_to_str(alloc->state), flgs);
             free(flgs);
         }
         if (NULL == tmp) {
@@ -152,7 +154,8 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
         prte_output(prte_clean_output, "%s</allocation>\n", tmp);
     } else {
-        prte_output(prte_clean_output, "%s=================================================================\n", tmp);
+        prte_output(prte_clean_output,
+                    "%s=================================================================\n", tmp);
     }
     free(tmp);
 }
@@ -169,14 +172,13 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     prte_node_t *node;
     int32_t i;
     prte_app_context_t *app;
-    prte_state_caddy_t *caddy = (prte_state_caddy_t*)cbdata;
-    char *hosts=NULL;
+    prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    char *hosts = NULL;
     pmix_status_t ret;
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
-    PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
-                         "%s ras:base:allocate",
+    PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output, "%s ras:base:allocate",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* convenience */
@@ -209,7 +211,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     /* if a component was selected, then we know we are in a managed
      * environment.  - the active module will return a list of what it found
      */
-    if (NULL != prte_ras_base.active_module)  {
+    if (NULL != prte_ras_base.active_module) {
         /* read the allocation */
         if (PRTE_SUCCESS != (rc = prte_ras_base.active_module->allocate(jdata, &nodes))) {
             if (PRTE_ERR_ALLOCATION_PENDING == rc) {
@@ -286,11 +288,10 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     /* nothing was found, or no active module was alive. We first see
      * if we were given a rank/seqfile - if so, use it as the hosts will be
      * taken from the mapping */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void**)&hosts, PMIX_STRING)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING)) {
         PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                              "%s ras:base:allocate parsing rank/seqfile %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             hosts));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
 
         /* a rank/seqfile was provided - parse it */
         if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, hosts))) {
@@ -331,11 +332,12 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     /* if a dash-host has been provided, aggregate across all the
      * app_contexts. Any hosts the user wants to add via comm_spawn
      * can be done so using the add_host option */
-    for (i=0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
+    for (i = 0; i < jdata->apps->size; i++) {
+        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void**)&hosts, PMIX_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts,
+                               PMIX_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding dash_hosts",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -383,11 +385,12 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
      * generate an error in this scenario, so only non-relative syntax
      * can be present
      */
-    for (i=0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
+    for (i = 0; i < jdata->apps->size; i++) {
+        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void**)&hosts, PMIX_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts,
+                               PMIX_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding hostfile %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
@@ -427,12 +430,10 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     if (NULL != prte_default_hostfile) {
         PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                              "%s ras:base:allocate parsing default hostfile %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             prte_default_hostfile));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_default_hostfile));
 
         /* a default hostfile was provided - parse it */
-        if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes,
-                                                               prte_default_hostfile))) {
+        if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, prte_default_hostfile))) {
             PRTE_DESTRUCT(&nodes);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
@@ -462,7 +463,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                          "%s ras:base:allocate nothing found in hostfiles - inserting current node",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-  addlocal:
+addlocal:
     /* if nothing was found by any of the above methods, then we have no
      * earthly idea what to do - so just add the local host
      */
@@ -498,18 +499,18 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     }
     PRTE_DESTRUCT(&nodes);
 
-  DISPLAY:
+DISPLAY:
     /* shall we display the results? */
     if (4 < prte_output_get_verbosity(prte_ras_base_framework.framework_output)) {
         prte_ras_base_display_alloc(jdata);
     }
 
-  next_state:
+next_state:
     /* are we to report this event? */
     if (prte_report_events) {
-        if (PMIX_SUCCESS != (ret = PMIx_Notify_event(PMIX_NOTIFY_ALLOC_COMPLETE,
-                                                     NULL, PMIX_GLOBAL, NULL, 0,
-                                                     NULL, NULL))) {
+        if (PMIX_SUCCESS
+            != (ret = PMIx_Notify_event(PMIX_NOTIFY_ALLOC_COMPLETE, NULL, PMIX_GLOBAL, NULL, 0,
+                                        NULL, NULL))) {
             PMIX_ERROR_LOG(ret);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
@@ -551,11 +552,12 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
      * can be present
      */
 
-    for (i=0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
+    for (i = 0; i < jdata->apps->size; i++) {
+        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, (void**)&hosts, PMIX_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, (void **) &hosts,
+                               PMIX_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:add_hosts checking add-hostfile %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
@@ -568,7 +570,8 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
                 return rc;
             }
             /* now indicate that this app is to run across it */
-            prte_set_attribute(&app->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_LOCAL, (void**)hosts, PMIX_STRING);
+            prte_set_attribute(&app->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_LOCAL,
+                               (void **) hosts, PMIX_STRING);
             prte_remove_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE);
             free(hosts);
         }
@@ -583,11 +586,12 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
      * generate an error in this scenario, so only non-relative syntax
      * can be present
      */
-    for (i=0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
+    for (i = 0; i < jdata->apps->size; i++) {
+        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, (void**)&hosts, PMIX_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, (void **) &hosts,
+                               PMIX_STRING)) {
             prte_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "%s ras:base:add_hosts checking add-host %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts);
@@ -598,7 +602,8 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
                 return rc;
             }
             /* now indicate that this app is to run across them */
-            prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_LOCAL, hosts, PMIX_STRING);
+            prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_LOCAL, hosts,
+                               PMIX_STRING);
             prte_remove_attribute(&app->attributes, PRTE_APP_ADD_HOST);
             free(hosts);
         }
@@ -609,10 +614,12 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
         /* the node insert code doesn't check for uniqueness, so we will
          * do so here - yes, this is an ugly, non-scalable loop, but this
          * is the exception case and so we can do it here */
-        PRTE_LIST_FOREACH_SAFE(node, next, &nodes, prte_node_t) {
+        PRTE_LIST_FOREACH_SAFE(node, next, &nodes, prte_node_t)
+        {
             node->state = PRTE_NODE_STATE_ADDED;
-            for (n=0; n < prte_node_pool->size; n++) {
-                if (NULL == (nptr = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, n))) {
+            for (n = 0; n < prte_node_pool->size; n++) {
+                if (NULL
+                    == (nptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, n))) {
                     continue;
                 }
                 if (0 == strcmp(node->name, nptr->name)) {

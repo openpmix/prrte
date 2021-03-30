@@ -11,7 +11,6 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 
 #include "src/include/constants.h"
@@ -21,7 +20,7 @@
 /*
  * Globals
  */
-prte_event_base_t *prte_sync_event_base=NULL;
+prte_event_base_t *prte_sync_event_base = NULL;
 static bool initialized = false;
 
 int prte_event_base_open(void)
@@ -59,19 +58,18 @@ int prte_event_base_close(void)
 
     initialized = false;
     return PRTE_SUCCESS;
-
 }
 
-prte_event_t* prte_event_alloc(void)
+prte_event_t *prte_event_alloc(void)
 {
     prte_event_t *ev;
 
-    ev = (prte_event_t*)malloc(sizeof(prte_event_t));
+    ev = (prte_event_t *) malloc(sizeof(prte_event_t));
     return ev;
 }
 
-int prte_event_assign(struct event *ev, prte_event_base_t *evbase,
-                      int fd, short arg, event_callback_fn cbfn, void *cbd)
+int prte_event_assign(struct event *ev, prte_event_base_t *evbase, int fd, short arg,
+                      event_callback_fn cbfn, void *cbd)
 {
 #if PRTE_HAVE_LIBEV
     event_set(ev, fd, arg, cbfn, cbd);
@@ -82,6 +80,4 @@ int prte_event_assign(struct event *ev, prte_event_base_t *evbase,
     return 0;
 }
 
-PRTE_CLASS_INSTANCE(prte_event_list_item_t,
-                     prte_list_item_t,
-                     NULL, NULL);
+PRTE_CLASS_INSTANCE(prte_event_list_item_t, prte_list_item_t, NULL, NULL);

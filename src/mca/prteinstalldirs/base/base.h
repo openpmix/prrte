@@ -4,6 +4,7 @@
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      Sandia National Laboratories. All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,7 +34,7 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_prteinstalldirs_base_framework
    also insert the value of the environment variable $PRTE_DESTDIR, if
    it exists/is set.  This function should *only* be used during the
    setup routines of prteinstalldirs. */
-char * prte_install_dirs_expand_setup(const char* input);
+char *prte_install_dirs_expand_setup(const char *input);
 
 END_C_DECLS
 

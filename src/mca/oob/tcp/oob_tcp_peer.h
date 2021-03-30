@@ -32,15 +32,15 @@
 
 #include "src/event/event-internal.h"
 
-#include "src/threads/threads.h"
 #include "oob_tcp.h"
 #include "oob_tcp_sendrecv.h"
+#include "src/threads/threads.h"
 
 typedef struct {
     prte_list_item_t super;
     struct sockaddr_storage addr; // an address where a peer can be found
     int retries;                  // number of times we have tried to connect to this address
-    prte_oob_tcp_state_t state;  // state of this address
+    prte_oob_tcp_state_t state;   // state of this address
     int if_mask;                  // if mask of this address
 } prte_oob_tcp_addr_t;
 PRTE_CLASS_DECLARATION(prte_oob_tcp_addr_t);
@@ -52,19 +52,19 @@ typedef struct {
      * value that retaining the name makes sense
      */
     pmix_proc_t name;
-    char *auth_method;  // method they used to authenticate
+    char *auth_method; // method they used to authenticate
     int sd;
     prte_list_t addrs;
     prte_oob_tcp_addr_t *active_addr;
     prte_oob_tcp_state_t state;
     int num_retries;
-    prte_event_t send_event;    /**< registration with event thread for send events */
+    prte_event_t send_event; /**< registration with event thread for send events */
     bool send_ev_active;
-    prte_event_t recv_event;    /**< registration with event thread for recv events */
+    prte_event_t recv_event; /**< registration with event thread for recv events */
     bool recv_ev_active;
-    prte_event_t timer_event;   /**< timer for retrying connection failures */
+    prte_event_t timer_event; /**< timer for retrying connection failures */
     bool timer_ev_active;
-    prte_list_t send_queue;      /**< list of messages to send */
+    prte_list_t send_queue;        /**< list of messages to send */
     prte_oob_tcp_send_t *send_msg; /**< current send in progress */
     prte_oob_tcp_recv_t *recv_msg; /**< current recv in progress */
 } prte_oob_tcp_peer_t;
@@ -81,13 +81,12 @@ typedef struct {
 } prte_oob_tcp_peer_op_t;
 PRTE_CLASS_DECLARATION(prte_oob_tcp_peer_op_t);
 
-#define PRTE_ACTIVATE_TCP_CMP_OP(p, cbfunc)                          \
+#define PRTE_ACTIVATE_TCP_CMP_OP(p, cbfunc)                             \
     do {                                                                \
-        prte_oob_tcp_peer_op_t *pop;                                     \
-        pop = PRTE_NEW(prte_oob_tcp_peer_op_t);                           \
-        PMIX_XFER_PROCID(&pop->peer, &(p)->name);                   \
-        PRTE_THREADSHIFT(pop, prte_event_base,                    \
-                         (cbfunc), PRTE_MSG_PRI);                       \
-    } while(0);
+        prte_oob_tcp_peer_op_t *pop;                                    \
+        pop = PRTE_NEW(prte_oob_tcp_peer_op_t);                         \
+        PMIX_XFER_PROCID(&pop->peer, &(p)->name);                       \
+        PRTE_THREADSHIFT(pop, prte_event_base, (cbfunc), PRTE_MSG_PRI); \
+    } while (0);
 
 #endif /* _MCA_OOB_TCP_PEER_H_ */

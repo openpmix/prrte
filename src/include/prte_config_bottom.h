@@ -16,6 +16,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +33,7 @@
  */
 
 #ifndef PRTE_CONFIG_H
-#error "prte_config_bottom.h should only be included from prte_config.h"
+#    error "prte_config_bottom.h should only be included from prte_config.h"
 #endif
 
 /*
@@ -51,7 +52,7 @@
  * default to 0.
  */
 #ifndef OMPI_BUILDING
-#define OMPI_BUILDING 1
+#    define OMPI_BUILDING 1
 #endif
 
 /*
@@ -61,7 +62,7 @@
  * know this file is not available, we can prevent flex from including it.
  */
 #ifndef HAVE_UNISTD_H
-#define YY_NO_UNISTD_H
+#    define YY_NO_UNISTD_H
 #endif
 
 /***********************************************************************
@@ -79,11 +80,11 @@
 #undef BEGIN_C_DECLS
 #undef END_C_DECLS
 #if defined(c_plusplus) || defined(__cplusplus)
-# define BEGIN_C_DECLS extern "C" {
-# define END_C_DECLS }
+#    define BEGIN_C_DECLS extern "C" {
+#    define END_C_DECLS   }
 #else
-#define BEGIN_C_DECLS          /* empty */
-#define END_C_DECLS            /* empty */
+#    define BEGIN_C_DECLS /* empty */
+#    define END_C_DECLS   /* empty */
 #endif
 
 /**
@@ -91,8 +92,8 @@
  * usage.
  */
 #if PRTE_HAVE_ATTRIBUTE_ALIGNED
-#    define __prte_attribute_aligned__(a)    __attribute__((__aligned__(a)))
-#    define __prte_attribute_aligned_max__   __attribute__((__aligned__))
+#    define __prte_attribute_aligned__(a)  __attribute__((__aligned__(a)))
+#    define __prte_attribute_aligned_max__ __attribute__((__aligned__))
 #else
 #    define __prte_attribute_aligned__(a)
 #    define __prte_attribute_aligned_max__
@@ -105,107 +106,107 @@
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_COLD
-#    define __prte_attribute_cold__          __attribute__((__cold__))
+#    define __prte_attribute_cold__ __attribute__((__cold__))
 #else
 #    define __prte_attribute_cold__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_CONST
-#    define __prte_attribute_const__         __attribute__((__const__))
+#    define __prte_attribute_const__ __attribute__((__const__))
 #else
 #    define __prte_attribute_const__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_DEPRECATED
-#    define __prte_attribute_deprecated__    __attribute__((__deprecated__))
+#    define __prte_attribute_deprecated__ __attribute__((__deprecated__))
 #else
 #    define __prte_attribute_deprecated__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_FORMAT
-#    define __prte_attribute_format__(a,b,c) __attribute__((__format__(a, b, c)))
+#    define __prte_attribute_format__(a, b, c) __attribute__((__format__(a, b, c)))
 #else
-#    define __prte_attribute_format__(a,b,c)
+#    define __prte_attribute_format__(a, b, c)
 #endif
 
 /* Use this __atribute__ on function-ptr declarations, only */
 #if PRTE_HAVE_ATTRIBUTE_FORMAT_FUNCPTR
-#    define __prte_attribute_format_funcptr__(a,b,c) __attribute__((__format__(a, b, c)))
+#    define __prte_attribute_format_funcptr__(a, b, c) __attribute__((__format__(a, b, c)))
 #else
-#    define __prte_attribute_format_funcptr__(a,b,c)
+#    define __prte_attribute_format_funcptr__(a, b, c)
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_HOT
-#    define __prte_attribute_hot__           __attribute__((__hot__))
+#    define __prte_attribute_hot__ __attribute__((__hot__))
 #else
 #    define __prte_attribute_hot__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_MALLOC
-#    define __prte_attribute_malloc__        __attribute__((__malloc__))
+#    define __prte_attribute_malloc__ __attribute__((__malloc__))
 #else
 #    define __prte_attribute_malloc__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_MAY_ALIAS
-#    define __prte_attribute_may_alias__     __attribute__((__may_alias__))
+#    define __prte_attribute_may_alias__ __attribute__((__may_alias__))
 #else
 #    define __prte_attribute_may_alias__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_NO_INSTRUMENT_FUNCTION
-#    define __prte_attribute_no_instrument_function__  __attribute__((__no_instrument_function__))
+#    define __prte_attribute_no_instrument_function__ __attribute__((__no_instrument_function__))
 #else
 #    define __prte_attribute_no_instrument_function__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_NOINLINE
-#    define __prte_attribute_noinline__  __attribute__((__noinline__))
+#    define __prte_attribute_noinline__ __attribute__((__noinline__))
 #else
 #    define __prte_attribute_noinline__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_NONNULL
-#    define __prte_attribute_nonnull__(a)    __attribute__((__nonnull__(a)))
-#    define __prte_attribute_nonnull_all__   __attribute__((__nonnull__))
+#    define __prte_attribute_nonnull__(a)  __attribute__((__nonnull__(a)))
+#    define __prte_attribute_nonnull_all__ __attribute__((__nonnull__))
 #else
 #    define __prte_attribute_nonnull__(a)
 #    define __prte_attribute_nonnull_all__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_NORETURN
-#    define __prte_attribute_noreturn__      __attribute__((__noreturn__))
+#    define __prte_attribute_noreturn__ __attribute__((__noreturn__))
 #else
 #    define __prte_attribute_noreturn__
 #endif
 
 /* Use this __atribute__ on function-ptr declarations, only */
 #if PRTE_HAVE_ATTRIBUTE_NORETURN_FUNCPTR
-#    define __prte_attribute_noreturn_funcptr__  __attribute__((__noreturn__))
+#    define __prte_attribute_noreturn_funcptr__ __attribute__((__noreturn__))
 #else
 #    define __prte_attribute_noreturn_funcptr__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_PACKED
-#    define __prte_attribute_packed__        __attribute__((__packed__))
+#    define __prte_attribute_packed__ __attribute__((__packed__))
 #else
 #    define __prte_attribute_packed__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_PURE
-#    define __prte_attribute_pure__          __attribute__((__pure__))
+#    define __prte_attribute_pure__ __attribute__((__pure__))
 #else
 #    define __prte_attribute_pure__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_SENTINEL
-#    define __prte_attribute_sentinel__      __attribute__((__sentinel__))
+#    define __prte_attribute_sentinel__ __attribute__((__sentinel__))
 #else
 #    define __prte_attribute_sentinel__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_UNUSED
-#    define __prte_attribute_unused__        __attribute__((__unused__))
+#    define __prte_attribute_unused__ __attribute__((__unused__))
 #else
 #    define __prte_attribute_unused__
 #endif
@@ -229,36 +230,36 @@
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_DESTRUCTOR
-#    define __prte_attribute_destructor__    __attribute__((__destructor__))
+#    define __prte_attribute_destructor__ __attribute__((__destructor__))
 #else
 #    define __prte_attribute_destructor__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_OPTNONE
-#    define __prte_attribute_optnone__    __attribute__((__optnone__))
+#    define __prte_attribute_optnone__ __attribute__((__optnone__))
 #else
 #    define __prte_attribute_optnone__
 #endif
 
 #if PRTE_HAVE_ATTRIBUTE_EXTENSION
-#    define __prte_attribute_extension__    __extension__
+#    define __prte_attribute_extension__ __extension__
 #else
 #    define __prte_attribute_extension__
 #endif
 
-#  if PRTE_C_HAVE_VISIBILITY
-#    define PRTE_EXPORT           __prte_attribute_visibility__("default")
-#    define PRTE_MODULE_EXPORT    __prte_attribute_visibility__("default")
-#  else
+#if PRTE_C_HAVE_VISIBILITY
+#    define PRTE_EXPORT        __prte_attribute_visibility__("default")
+#    define PRTE_MODULE_EXPORT __prte_attribute_visibility__("default")
+#else
 #    define PRTE_EXPORT
 #    define PRTE_MODULE_EXPORT
-#  endif
+#endif
 
-#if !defined(__STDC_LIMIT_MACROS) && (defined(c_plusplus) || defined (__cplusplus))
+#if !defined(__STDC_LIMIT_MACROS) && (defined(c_plusplus) || defined(__cplusplus))
 /* When using a C++ compiler, the max / min value #defines for std
    types are only included if __STDC_LIMIT_MACROS is set before
    including stdint.h */
-#define __STDC_LIMIT_MACROS
+#    define __STDC_LIMIT_MACROS
 #endif
 #include "prte_config.h"
 #include "prte_stdint.h"
@@ -275,75 +276,76 @@
 /*
  * Maximum size of a filename path.
  */
-#include <limits.h>
-#ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
-#endif
-#if defined(PATH_MAX)
-#define PRTE_PATH_MAX   (PATH_MAX + 1)
-#elif defined(_POSIX_PATH_MAX)
-#define PRTE_PATH_MAX   (_POSIX_PATH_MAX + 1)
-#else
-#define PRTE_PATH_MAX   256
-#endif
+#    include <limits.h>
+#    ifdef HAVE_SYS_PARAM_H
+#        include <sys/param.h>
+#    endif
+#    if defined(PATH_MAX)
+#        define PRTE_PATH_MAX (PATH_MAX + 1)
+#    elif defined(_POSIX_PATH_MAX)
+#        define PRTE_PATH_MAX (_POSIX_PATH_MAX + 1)
+#    else
+#        define PRTE_PATH_MAX 256
+#    endif
 
 /*
  * Set the compile-time path-separator on this system and variable separator
  */
-#define PRTE_PATH_SEP "/"
-#define PRTE_ENV_SEP  ':'
+#    define PRTE_PATH_SEP "/"
+#    define PRTE_ENV_SEP  ':'
 
-#if defined(MAXHOSTNAMELEN)
-#define PRTE_MAXHOSTNAMELEN (MAXHOSTNAMELEN + 1)
-#elif defined(HOST_NAME_MAX)
-#define PRTE_MAXHOSTNAMELEN (HOST_NAME_MAX + 1)
-#else
+#    if defined(MAXHOSTNAMELEN)
+#        define PRTE_MAXHOSTNAMELEN (MAXHOSTNAMELEN + 1)
+#    elif defined(HOST_NAME_MAX)
+#        define PRTE_MAXHOSTNAMELEN (HOST_NAME_MAX + 1)
+#    else
 /* SUSv2 guarantees that "Host names are limited to 255 bytes". */
-#define PRTE_MAXHOSTNAMELEN (255 + 1)
-#endif
+#        define PRTE_MAXHOSTNAMELEN (255 + 1)
+#    endif
 
-#define PRTE_DEBUG_ZERO(obj)
+#    define PRTE_DEBUG_ZERO(obj)
 
 /*
  * printf functions for portability (only when building PRTE)
  */
-#if !defined(HAVE_VASPRINTF) || !defined(HAVE_VSNPRINTF)
-#include <stdarg.h>
-#include <stdlib.h>
-#endif
+#    if !defined(HAVE_VASPRINTF) || !defined(HAVE_VSNPRINTF)
+#        include <stdarg.h>
+#        include <stdlib.h>
+#    endif
 
-#if !defined(HAVE_ASPRINTF) || !defined(HAVE_SNPRINTF) || !defined(HAVE_VASPRINTF) || !defined(HAVE_VSNPRINTF)
-#include "src/util/printf.h"
-#endif
+#    if !defined(HAVE_ASPRINTF) || !defined(HAVE_SNPRINTF) || !defined(HAVE_VASPRINTF) \
+        || !defined(HAVE_VSNPRINTF)
+#        include "src/util/printf.h"
+#    endif
 
-#ifndef HAVE_ASPRINTF
-# define asprintf prte_asprintf
-#endif
+#    ifndef HAVE_ASPRINTF
+#        define asprintf prte_asprintf
+#    endif
 
-#ifndef HAVE_SNPRINTF
-# define snprintf prte_snprintf
-#endif
+#    ifndef HAVE_SNPRINTF
+#        define snprintf prte_snprintf
+#    endif
 
-#ifndef HAVE_VASPRINTF
-# define vasprintf prte_vasprintf
-#endif
+#    ifndef HAVE_VASPRINTF
+#        define vasprintf prte_vasprintf
+#    endif
 
-#ifndef HAVE_VSNPRINTF
-# define vsnprintf prte_vsnprintf
-#endif
+#    ifndef HAVE_VSNPRINTF
+#        define vsnprintf prte_vsnprintf
+#    endif
 
 /*
  * Some platforms (Solaris) have a broken qsort implementation.  Work
  * around by using our own.
  */
-#if PRTE_HAVE_BROKEN_QSORT
-#ifdef qsort
-#undef qsort
-#endif
+#    if PRTE_HAVE_BROKEN_QSORT
+#        ifdef qsort
+#            undef qsort
+#        endif
 
-#include "src/util/qsort.h"
-#define qsort prte_qsort
-#endif
+#        include "src/util/qsort.h"
+#        define qsort prte_qsort
+#    endif
 
 /*
  * On some homogenous big-iron machines (Sandia's Red Storm), there
@@ -352,12 +354,24 @@
  * and would want to talk to the outside world... On other platforms
  * we fail to detect them correctly.
  */
-#if !defined(HAVE_UNIX_BYTESWAP)
-static inline uint32_t htonl(uint32_t hostvar) { return hostvar; }
-static inline uint32_t ntohl(uint32_t netvar) { return netvar; }
-static inline uint16_t htons(uint16_t hostvar) { return hostvar; }
-static inline uint16_t ntohs(uint16_t netvar) { return netvar; }
-#endif
+#    if !defined(HAVE_UNIX_BYTESWAP)
+static inline uint32_t htonl(uint32_t hostvar)
+{
+    return hostvar;
+}
+static inline uint32_t ntohl(uint32_t netvar)
+{
+    return netvar;
+}
+static inline uint16_t htons(uint16_t hostvar)
+{
+    return hostvar;
+}
+static inline uint16_t ntohs(uint16_t netvar)
+{
+    return netvar;
+}
+#    endif
 
 /*
  * Define __func__-preprocessor directive if the compiler does not
@@ -366,61 +380,61 @@ static inline uint16_t ntohs(uint16_t netvar) { return netvar; }
  * coming from (assuming that __func__ is typically used for
  * printf-style debugging).
  */
-#if defined(HAVE_DECL___FUNC__) && !HAVE_DECL___FUNC__
-#define __func__ __FILE__
-#endif
+#    if defined(HAVE_DECL___FUNC__) && !HAVE_DECL___FUNC__
+#        define __func__ __FILE__
+#    endif
 
-#define IOVBASE_TYPE  void
+#    define IOVBASE_TYPE void
 
 /* ensure the bool type is defined as it is used everywhere */
-#include <stdbool.h>
+#    include <stdbool.h>
 
 /**
  * If we generate our own bool type, we need a special way to cast the result
  * in such a way to keep the compilers silent.
  */
-#  define PRTE_INT_TO_BOOL(VALUE)  (bool)(VALUE)
+#    define PRTE_INT_TO_BOOL(VALUE) (bool) (VALUE)
 
 /**
  * Top level define to check 2 things: a) if we want ipv6 support, and
  * b) the underlying system supports ipv6.  Having one #define for
  * this makes it simpler to check throughout the code base.
  */
-#if PRTE_ENABLE_IPV6 && defined(HAVE_STRUCT_SOCKADDR_IN6)
-#define PRTE_ENABLE_IPV6 1
-#else
-#define PRTE_ENABLE_IPV6 0
-#endif
+#    if PRTE_ENABLE_IPV6 && defined(HAVE_STRUCT_SOCKADDR_IN6)
+#        define PRTE_ENABLE_IPV6 1
+#    else
+#        define PRTE_ENABLE_IPV6 0
+#    endif
 
-#if !defined(HAVE_STRUCT_SOCKADDR_STORAGE) && defined(HAVE_STRUCT_SOCKADDR_IN)
-#define sockaddr_storage sockaddr
-#define ss_family sa_family
-#endif
+#    if !defined(HAVE_STRUCT_SOCKADDR_STORAGE) && defined(HAVE_STRUCT_SOCKADDR_IN)
+#        define sockaddr_storage sockaddr
+#        define ss_family        sa_family
+#    endif
 
 /* Compatibility structure so that we don't have to have as many
    #if checks in the code base */
-#if !defined(HAVE_STRUCT_SOCKADDR_IN6) && defined(HAVE_STRUCT_SOCKADDR_IN)
-#define sockaddr_in6 sockaddr_in
-#define sin6_len sin_len
-#define sin6_family sin_family
-#define sin6_port sin_port
-#define sin6_addr sin_addr
-#endif
+#    if !defined(HAVE_STRUCT_SOCKADDR_IN6) && defined(HAVE_STRUCT_SOCKADDR_IN)
+#        define sockaddr_in6 sockaddr_in
+#        define sin6_len     sin_len
+#        define sin6_family  sin_family
+#        define sin6_port    sin_port
+#        define sin6_addr    sin_addr
+#    endif
 
-#if !HAVE_DECL_AF_UNSPEC
-#define AF_UNSPEC 0
-#endif
-#if !HAVE_DECL_PF_UNSPEC
-#define PF_UNSPEC 0
-#endif
-#if !HAVE_DECL_AF_INET6
-#define AF_INET6 AF_UNSPEC
-#endif
-#if !HAVE_DECL_PF_INET6
-#define PF_INET6 PF_UNSPEC
-#endif
+#    if !HAVE_DECL_AF_UNSPEC
+#        define AF_UNSPEC 0
+#    endif
+#    if !HAVE_DECL_PF_UNSPEC
+#        define PF_UNSPEC 0
+#    endif
+#    if !HAVE_DECL_AF_INET6
+#        define AF_INET6 AF_UNSPEC
+#    endif
+#    if !HAVE_DECL_PF_INET6
+#        define PF_INET6 PF_UNSPEC
+#    endif
 
-#if defined(__APPLE__) && defined(HAVE_INTTYPES_H)
+#    if defined(__APPLE__) && defined(HAVE_INTTYPES_H)
 /* Prior to Mac OS X 10.3, the length modifier "ll" wasn't
    supported, but "q" was for long long.  This isn't ANSI
    C and causes a warning when using PRI?64 macros.  We
@@ -428,43 +442,43 @@ static inline uint16_t ntohs(uint16_t netvar) { return netvar; }
    need such backward compatibility.  Instead, redefine
    the macros to be "ll", which is ANSI C and doesn't
    cause a compiler warning. */
-#include <inttypes.h>
-#if defined(__PRI_64_LENGTH_MODIFIER__)
-#undef __PRI_64_LENGTH_MODIFIER__
-#define __PRI_64_LENGTH_MODIFIER__ "ll"
-#endif
-#if defined(__SCN_64_LENGTH_MODIFIER__)
-#undef __SCN_64_LENGTH_MODIFIER__
-#define __SCN_64_LENGTH_MODIFIER__ "ll"
-#endif
-#endif
+#        include <inttypes.h>
+#        if defined(__PRI_64_LENGTH_MODIFIER__)
+#            undef __PRI_64_LENGTH_MODIFIER__
+#            define __PRI_64_LENGTH_MODIFIER__ "ll"
+#        endif
+#        if defined(__SCN_64_LENGTH_MODIFIER__)
+#            undef __SCN_64_LENGTH_MODIFIER__
+#            define __SCN_64_LENGTH_MODIFIER__ "ll"
+#        endif
+#    endif
 
-#ifdef MCS_VXWORKS
+#    ifdef MCS_VXWORKS
 /* VXWorks puts some common functions in oddly named headers.  Rather
    than update all the places the functions are used, which would be a
    maintenance disatster, just update here... */
-#ifdef HAVE_IOLIB_H
+#        ifdef HAVE_IOLIB_H
 /* pipe(), ioctl() */
-#include <ioLib.h>
-#endif
-#ifdef HAVE_SOCKLIB_H
+#            include <ioLib.h>
+#        endif
+#        ifdef HAVE_SOCKLIB_H
 /* socket() */
-#include <sockLib.h>
-#endif
-#ifdef HAVE_HOSTLIB_H
+#            include <sockLib.h>
+#        endif
+#        ifdef HAVE_HOSTLIB_H
 /* gethostname() */
-#include <hostLib.h>
-#endif
-#endif
+#            include <hostLib.h>
+#        endif
+#    endif
 
 /* If we're in C++, then just undefine restrict and then define it to
    nothing.  "restrict" is not part of the C++ language, and we don't
    have a corresponding AC_CXX_RESTRICT to figure out what the C++
    compiler supports. */
-#if defined(c_plusplus) || defined(__cplusplus)
-#undef restrict
-#define restrict
-#endif
+#    if defined(c_plusplus) || defined(__cplusplus)
+#        undef restrict
+#        define restrict
+#    endif
 
 #else
 
@@ -477,12 +491,12 @@ static inline uint16_t ntohs(uint16_t netvar) { return netvar; }
    So put them here in case any only else includes OMPI/PRTE's
    config.h files. */
 
-#undef PACKAGE_BUGREPORT
-#undef PACKAGE_NAME
-#undef PACKAGE_STRING
-#undef PACKAGE_TARNAME
-#undef PACKAGE_VERSION
-#undef PACKAGE_URL
-#undef HAVE_CONFIG_H
+#    undef PACKAGE_BUGREPORT
+#    undef PACKAGE_NAME
+#    undef PACKAGE_STRING
+#    undef PACKAGE_TARNAME
+#    undef PACKAGE_VERSION
+#    undef PACKAGE_URL
+#    undef HAVE_CONFIG_H
 
 #endif /* OMPI_BUILDING */

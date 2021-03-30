@@ -6,6 +6,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,19 +17,17 @@
 #include "prte_config.h"
 
 #include "constants.h"
-#include "src/mca/prtedl/prtedl.h"
 #include "src/mca/base/mca_base_var.h"
+#include "src/mca/prtedl/prtedl.h"
 #include "src/util/argv.h"
 
 #include "prtedl_libltdl.h"
 
-
 /*
  * Public string showing the sysinfo ompi_linux component version number
  */
-const char *prte_prtedl_libltdl_component_version_string =
-    "PRTE prtedl libltdl MCA component version " PRTE_VERSION;
-
+const char *prte_prtedl_libltdl_component_version_string
+    = "PRTE prtedl libltdl MCA component version " PRTE_VERSION;
 
 /*
  * Local functions
@@ -77,22 +76,18 @@ prte_prtedl_libltdl_component_t prte_prtedl_libltdl_component = {
     /* Now fill in the libltdl component-specific members */
 };
 
-
 static int libltdl_component_register(void)
 {
     /* Register an info param indicating whether we have lt_dladvise
        support or not */
     bool supported = PRTE_INT_TO_BOOL(PRTE_DL_LIBLTDL_HAVE_LT_DLADVISE);
     prte_mca_base_component_var_register(&prte_prtedl_libltdl_component.base.base_version,
-                                    "have_lt_dladvise",
-                                    "Whether the version of libltdl that this component is built against supports lt_dladvise functionality or not",
-                                    PRTE_MCA_BASE_VAR_TYPE_BOOL,
-                                    NULL,
-                                    0,
-                                    PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY,
-                                    PRTE_INFO_LVL_7,
-                                    PRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
-                                    &supported);
+                                         "have_lt_dladvise",
+                                         "Whether the version of libltdl that this component is "
+                                         "built against supports lt_dladvise functionality or not",
+                                         PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                         PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY, PRTE_INFO_LVL_7,
+                                         PRTE_MCA_BASE_VAR_SCOPE_CONSTANT, &supported);
 
     return PRTE_SUCCESS;
 }
@@ -110,26 +105,22 @@ static int libltdl_component_open(void)
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    if (lt_dladvise_init(&c->advise_private_ext) ||
-        lt_dladvise_ext(&c->advise_private_ext)) {
+    if (lt_dladvise_init(&c->advise_private_ext) || lt_dladvise_ext(&c->advise_private_ext)) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    if (lt_dladvise_init(&c->advise_public_noext) ||
-        lt_dladvise_global(&c->advise_public_noext)) {
+    if (lt_dladvise_init(&c->advise_public_noext) || lt_dladvise_global(&c->advise_public_noext)) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    if (lt_dladvise_init(&c->advise_public_ext) ||
-        lt_dladvise_global(&c->advise_public_ext) ||
-        lt_dladvise_ext(&c->advise_public_ext)) {
+    if (lt_dladvise_init(&c->advise_public_ext) || lt_dladvise_global(&c->advise_public_ext)
+        || lt_dladvise_ext(&c->advise_public_ext)) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 #endif
 
     return PRTE_SUCCESS;
 }
-
 
 static int libltdl_component_close(void)
 {
@@ -146,7 +137,6 @@ static int libltdl_component_close(void)
 
     return PRTE_SUCCESS;
 }
-
 
 static int libltdl_component_query(prte_mca_base_module_t **module, int *priority)
 {

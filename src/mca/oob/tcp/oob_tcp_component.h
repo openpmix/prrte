@@ -31,7 +31,7 @@
 #include "prte_config.h"
 
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#    include <sys/time.h>
 #endif
 
 #include "src/class/prte_bitmap.h"
@@ -39,56 +39,57 @@
 #include "src/class/prte_pointer_array.h"
 #include "src/event/event-internal.h"
 
-#include "src/mca/oob/oob.h"
 #include "oob_tcp.h"
+#include "src/mca/oob/oob.h"
 
 /**
  *  OOB TCP Component
  */
 typedef struct {
-    prte_oob_base_component_t super;          /**< base OOB component */
-    uint32_t addr_count;                     /**< total number of addresses */
-    int num_links;                           /**< number of logical links per physical device */
-    int                  max_retries;        /**< max number of retries before declaring peer gone */
-    prte_list_t          events;             /**< events for monitoring connections */
-    int                  peer_limit;         /**< max size of tcp peer cache */
-    prte_list_t          peers;              // connection addresses for peers
+    prte_oob_base_component_t super; /**< base OOB component */
+    uint32_t addr_count;             /**< total number of addresses */
+    int num_links;                   /**< number of logical links per physical device */
+    int max_retries;                 /**< max number of retries before declaring peer gone */
+    prte_list_t events;              /**< events for monitoring connections */
+    int peer_limit;                  /**< max size of tcp peer cache */
+    prte_list_t peers;               // connection addresses for peers
 
     /* Port specifications */
-    char*              if_include;           /**< list of ip interfaces to include */
-    char*              if_exclude;           /**< list of ip interfaces to exclude */
-    int                tcp_sndbuf;           /**< socket send buffer size */
-    int                tcp_rcvbuf;           /**< socket recv buffer size */
+    char *if_include; /**< list of ip interfaces to include */
+    char *if_exclude; /**< list of ip interfaces to exclude */
+    int tcp_sndbuf;   /**< socket send buffer size */
+    int tcp_rcvbuf;   /**< socket recv buffer size */
 
     /* IPv4 support */
-    bool               disable_ipv4_family;  /**< disable this AF */
-    char**             tcp_static_ports;    /**< Static ports - IPV4 */
-    char**             tcp_dyn_ports;       /**< Dynamic ports - IPV4 */
-    char**             ipv4conns;
-    char**             ipv4ports;
+    bool disable_ipv4_family; /**< disable this AF */
+    char **tcp_static_ports;  /**< Static ports - IPV4 */
+    char **tcp_dyn_ports;     /**< Dynamic ports - IPV4 */
+    char **ipv4conns;
+    char **ipv4ports;
 
     /* IPv6 support */
-    bool               disable_ipv6_family;  /**< disable this AF */
-    char**             tcp6_static_ports;    /**< Static ports - IPV6 */
-    char**             tcp6_dyn_ports;       /**< Dynamic ports - IPV6 */
-    char**             ipv6conns;
-    char**             ipv6ports;
+    bool disable_ipv6_family; /**< disable this AF */
+    char **tcp6_static_ports; /**< Static ports - IPV6 */
+    char **tcp6_dyn_ports;    /**< Dynamic ports - IPV6 */
+    char **ipv6conns;
+    char **ipv6ports;
 
     /* connection support */
-    prte_list_t       local_ifs;              /**< prte list of local prte_if_t interfaces */
-    char**             if_masks;
-    char*              my_uri;                 /**< uri for connecting to the TCP module */
-    int                num_hnp_ports;          /**< number of ports the HNP should listen on */
-    prte_list_t        listeners;              /**< List of sockets being monitored by event or thread */
-    prte_thread_t      listen_thread;          /**< handle to the listening thread */
-    bool               listen_thread_active;
-    struct timeval     listen_thread_tv;       /**< Timeout when using listen thread */
-    int                stop_thread[2];         /**< pipe used to exit the listen thread */
-    int                keepalive_probes;       /**< number of keepalives that can be missed before declaring error */
-    int                keepalive_time;         /**< idle time in seconds before starting to send keepalives */
-    int                keepalive_intvl;        /**< time between keepalives, in seconds */
-    int                retry_delay;            /**< time to wait before retrying connection */
-    int                max_recon_attempts;     /**< maximum number of times to attempt connect before giving up (-1 for never) */
+    prte_list_t local_ifs; /**< prte list of local prte_if_t interfaces */
+    char **if_masks;
+    char *my_uri;                /**< uri for connecting to the TCP module */
+    int num_hnp_ports;           /**< number of ports the HNP should listen on */
+    prte_list_t listeners;       /**< List of sockets being monitored by event or thread */
+    prte_thread_t listen_thread; /**< handle to the listening thread */
+    bool listen_thread_active;
+    struct timeval listen_thread_tv; /**< Timeout when using listen thread */
+    int stop_thread[2];              /**< pipe used to exit the listen thread */
+    int keepalive_probes;   /**< number of keepalives that can be missed before declaring error */
+    int keepalive_time;     /**< idle time in seconds before starting to send keepalives */
+    int keepalive_intvl;    /**< time between keepalives, in seconds */
+    int retry_delay;        /**< time to wait before retrying connection */
+    int max_recon_attempts; /**< maximum number of times to attempt connect before giving up (-1 for
+                               never) */
 } prte_oob_tcp_component_t;
 
 PRTE_MODULE_EXPORT extern prte_oob_tcp_component_t prte_oob_tcp_component;

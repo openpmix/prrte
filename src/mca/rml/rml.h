@@ -35,7 +35,6 @@
  * most architectures, with some exceptions (the Cray XT3/XT4, for example).
  */
 
-
 #ifndef PRTE_MCA_RML_RML_H_
 #define PRTE_MCA_RML_RML_H_
 
@@ -43,16 +42,15 @@
 #include "types.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 #include "src/mca/mca.h"
+#include "src/mca/rml/rml_types.h"
 #include "src/mca/routed/routed.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/rml/rml_types.h"
 
 BEGIN_C_DECLS
-
 
 /* ******************************************************************** */
 
@@ -68,12 +66,10 @@ PRTE_CLASS_DECLARATION(prte_rml_recv_cb_t);
  * following a non-blocking send as this happens all over
  * the code base
  */
-PRTE_EXPORT void prte_rml_send_callback(int status, pmix_proc_t* sender,
-                                        pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                                        void* cbdata);
+PRTE_EXPORT void prte_rml_send_callback(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                                        prte_rml_tag_t tag, void *cbdata);
 
-PRTE_EXPORT void prte_rml_recv_callback(int status, pmix_proc_t* sender,
-                                        pmix_data_buffer_t *buffer,
+PRTE_EXPORT void prte_rml_recv_callback(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                                         prte_rml_tag_t tag, void *cbdata);
 
 /* ******************************************************************** */
@@ -96,11 +92,9 @@ PRTE_EXPORT void prte_rml_recv_callback(int status, pmix_proc_t* sender,
  * @param[in] tag     User defined tag for matching send/recv
  * @param[in] cbdata  User data passed to send_buffer_nb() or recv_buffer_nb()
  */
-typedef void (*prte_rml_buffer_callback_fn_t)(int status,
-                                              pmix_proc_t* peer,
-                                              pmix_data_buffer_t* buffer,
-                                              prte_rml_tag_t tag,
-                                              void* cbdata);
+typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
+                                              pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
+                                              void *cbdata);
 
 /**
  * Function prototype for exception callback
@@ -113,13 +107,10 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status,
  * @param[in] peer      Name of peer process
  * @param[in] exception Description of the error causing the exception
  */
-typedef void (*prte_rml_exception_callback_t)(pmix_proc_t* peer,
-                                              prte_rml_exception_t exception);
-
+typedef void (*prte_rml_exception_callback_t)(pmix_proc_t *peer, prte_rml_exception_t exception);
 
 /* ******************************************************************** */
 /*                 RML INTERNAL MODULE API DEFINITION                   */
-
 
 /**
  * "Ping" another process to determine availability
@@ -137,8 +128,7 @@ typedef void (*prte_rml_exception_callback_t)(pmix_proc_t* peer,
  *                     from the local process
  * @retval PRTE_ERROR  An unspecified error occurred during the update
  */
-typedef int (*prte_rml_module_ping_fn_t)(const char* contact_info,
-                                         const struct timeval* tv);
+typedef int (*prte_rml_module_ping_fn_t)(const char *contact_info, const struct timeval *tv);
 
 /**
  * Send a buffer non-blocking message
@@ -162,11 +152,10 @@ typedef int (*prte_rml_module_ping_fn_t)(const char* contact_info,
  *                    receiving process is not available
  * @retval PRTE_ERROR  An unspecified error occurred
  */
-typedef int (*prte_rml_module_send_buffer_nb_fn_t)(pmix_proc_t* peer,
-                                                   pmix_data_buffer_t* buffer,
+typedef int (*prte_rml_module_send_buffer_nb_fn_t)(pmix_proc_t *peer, pmix_data_buffer_t *buffer,
                                                    prte_rml_tag_t tag,
                                                    prte_rml_buffer_callback_fn_t cbfunc,
-                                                   void* cbdata);
+                                                   void *cbdata);
 
 /**
  * Purge the RML/OOB of contact info and pending messages
@@ -184,11 +173,10 @@ typedef void (*prte_rml_module_purge_fn_t)(pmix_proc_t *peer);
  * @param[in] cbfunc   Callback function on message comlpetion
  * @param[in] cbdata   User data to provide during completion callback
  */
-typedef void (*prte_rml_module_recv_buffer_nb_fn_t)(pmix_proc_t* peer,
-                                                 prte_rml_tag_t tag,
-                                                 bool persistent,
-                                                 prte_rml_buffer_callback_fn_t cbfunc,
-                                                 void* cbdata);
+typedef void (*prte_rml_module_recv_buffer_nb_fn_t)(pmix_proc_t *peer, prte_rml_tag_t tag,
+                                                    bool persistent,
+                                                    prte_rml_buffer_callback_fn_t cbfunc,
+                                                    void *cbdata);
 
 /**
  * Cancel a posted non-blocking receive
@@ -199,31 +187,28 @@ typedef void (*prte_rml_module_recv_buffer_nb_fn_t)(pmix_proc_t* peer,
  *                    to the non-blocking receive call
  * @param[in] tag     Posted receive tag
  */
-typedef void (*prte_rml_module_recv_cancel_fn_t)(pmix_proc_t* peer,
-                                              prte_rml_tag_t tag);
-
+typedef void (*prte_rml_module_recv_cancel_fn_t)(pmix_proc_t *peer, prte_rml_tag_t tag);
 
 /**
  * RML internal module interface - these will be implemented by all RML components
  */
 typedef struct prte_rml_base_module_t {
     /* pointer to the parent component for this module */
-    struct prte_rml_component_t                 *component;
+    struct prte_rml_component_t *component;
     /* the routed module to be used */
-    char                                        *routed;
+    char *routed;
     /** Ping process for connectivity check */
-    prte_rml_module_ping_fn_t                    ping;
+    prte_rml_module_ping_fn_t ping;
 
     /** Send non-blocking buffer message */
-    prte_rml_module_send_buffer_nb_fn_t          send_buffer_nb;
+    prte_rml_module_send_buffer_nb_fn_t send_buffer_nb;
 
-    prte_rml_module_recv_buffer_nb_fn_t          recv_buffer_nb;
-    prte_rml_module_recv_cancel_fn_t             recv_cancel;
+    prte_rml_module_recv_buffer_nb_fn_t recv_buffer_nb;
+    prte_rml_module_recv_cancel_fn_t recv_cancel;
 
     /** Purge information */
-    prte_rml_module_purge_fn_t                   purge;
+    prte_rml_module_purge_fn_t purge;
 } prte_rml_base_module_t;
-
 
 /** Interface for RML communication */
 PRTE_EXPORT extern prte_rml_base_module_t prte_rml;
@@ -240,25 +225,19 @@ PRTE_EXPORT extern prte_rml_base_module_t prte_rml;
  */
 typedef struct prte_rml_component_t {
     /* Base component description */
-    prte_mca_base_component_t                        base;
+    prte_mca_base_component_t base;
     /* Base component data block */
-    prte_mca_base_component_data_t                   data;
+    prte_mca_base_component_data_t data;
     /* Component priority */
-    int                                         priority;
+    int priority;
 } prte_rml_component_t;
 
-
-
 /* ******************************************************************** */
-
 
 /** Macro for use in components that are of type rml */
-#define PRTE_RML_BASE_VERSION_3_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("rml", 3, 0, 0)
-
+#define PRTE_RML_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_2_1_0("rml", 3, 0, 0)
 
 /* ******************************************************************** */
-
 
 END_C_DECLS
 

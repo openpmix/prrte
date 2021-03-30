@@ -8,6 +8,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,16 +24,16 @@
 
 #include "prte_config.h"
 
-#include "src/include/constants.h"
-#include "src/util/proc_info.h"
-#include "src/mca/prtereachable/prtereachable.h"
 #include "reachable_weighted.h"
+#include "src/include/constants.h"
+#include "src/mca/prtereachable/prtereachable.h"
+#include "src/util/proc_info.h"
 
 /*
  * Public string showing the reachable weighted component version number
  */
-const char *prte_prteeachable_weighted_component_version_string =
-    "PRTE weighted reachable MCA component version " PRTE_VERSION;
+const char *prte_prteeachable_weighted_component_version_string
+    = "PRTE weighted reachable MCA component version " PRTE_VERSION;
 
 /*
  * Local function
@@ -41,7 +42,6 @@ static int reachable_weighted_open(void);
 static int reachable_weighted_close(void);
 static int reachable_weighted_component_query(prte_mca_base_module_t **module, int *priority);
 static int component_register(void);
-
 
 /*
  * Instantiate the public struct with all of our public information
@@ -101,6 +101,6 @@ static int component_register(void)
 static int reachable_weighted_component_query(prte_mca_base_module_t **module, int *priority)
 {
     *priority = 1;
-    *module = (prte_mca_base_module_t *)&prte_prtereachable_weighted_module;
+    *module = (prte_mca_base_module_t *) &prte_prtereachable_weighted_module;
     return PRTE_SUCCESS;
 }

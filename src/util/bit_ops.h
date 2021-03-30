@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,11 +50,11 @@ static inline int prte_hibit(int value, int start)
     /* Only look at the part that the caller wanted looking at */
     mask = value & ((1 << start) - 1);
 
-    if (PRTE_UNLIKELY (0 == mask)) {
+    if (PRTE_UNLIKELY(0 == mask)) {
         return -1;
     }
 
-    start = (8*sizeof(int)-1) - __builtin_clz(mask);
+    start = (8 * sizeof(int) - 1) - __builtin_clz(mask);
 #else
     --start;
     mask = 1 << start;
@@ -67,7 +68,6 @@ static inline int prte_hibit(int value, int start)
 
     return start;
 }
-
 
 /**
  * Returns the cube dimension of a given value.
@@ -89,18 +89,18 @@ static inline int prte_cube_dim(int value)
     int dim, size;
 
 #if PRTE_C_HAVE_BUILTIN_CLZ
-    if (PRTE_UNLIKELY (1 >= value)) {
+    if (PRTE_UNLIKELY(1 >= value)) {
         return 0;
     }
     size = 8 * sizeof(int);
-    dim = size - __builtin_clz(value-1);
+    dim = size - __builtin_clz(value - 1);
 #else
-    for (dim = 0, size = 1; size < value; ++dim, size <<= 1) /* empty */;
+    for (dim = 0, size = 1; size < value; ++dim, size <<= 1) /* empty */
+        ;
 #endif
 
     return dim;
 }
-
 
 /**
  * @brief Returns next power-of-two of the given value.
@@ -119,20 +119,21 @@ static inline int prte_next_poweroftwo(int value)
     int power2;
 
 #if PRTE_C_HAVE_BUILTIN_CLZ
-    if (PRTE_UNLIKELY (0 == value)) {
+    if (PRTE_UNLIKELY(0 == value)) {
         return 1;
     }
-    power2 = 1 << (8 * sizeof (int) - __builtin_clz(value));
+    power2 = 1 << (8 * sizeof(int) - __builtin_clz(value));
 #else
-    for (power2 = 1; value > 0; value >>= 1, power2 <<= 1) /* empty */;
+    for (power2 = 1; value > 0; value >>= 1, power2 <<= 1) /* empty */
+        ;
 #endif
 
     return power2;
 }
 
-
 /**
- * @brief Returns next power-of-two of the given value (and the value itselve if already power-of-two).
+ * @brief Returns next power-of-two of the given value (and the value itselve if already
+ * power-of-two).
  *
  * @param value The integer value to return power of 2
  *
@@ -148,17 +149,16 @@ static inline int prte_next_poweroftwo_inclusive(int value)
     int power2;
 
 #if PRTE_C_HAVE_BUILTIN_CLZ
-    if (PRTE_UNLIKELY (1 >= value)) {
+    if (PRTE_UNLIKELY(1 >= value)) {
         return 1;
     }
-    power2 = 1 << (8 * sizeof (int) - __builtin_clz(value - 1));
+    power2 = 1 << (8 * sizeof(int) - __builtin_clz(value - 1));
 #else
-    for (power2 = 1 ; power2 < value; power2 <<= 1) /* empty */;
+    for (power2 = 1; power2 < value; power2 <<= 1) /* empty */
+        ;
 #endif
 
     return power2;
 }
 
-
 #endif /* PRTE_BIT_OPS_H */
-

@@ -16,6 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,12 +25,12 @@
  */
 
 #if !defined(PRTE_MCA_BASE_VAR_ENUM_H)
-#define PRTE_MCA_BASE_VAR_ENUM_H
+#    define PRTE_MCA_BASE_VAR_ENUM_H
 
-#include "prte_config.h"
+#    include "prte_config.h"
 
-#include "src/class/prte_object.h"
-#include "constants.h"
+#    include "constants.h"
+#    include "src/class/prte_object.h"
 
 typedef struct prte_mca_base_var_enum_t prte_mca_base_var_enum_t;
 
@@ -50,7 +51,7 @@ typedef int (*prte_mca_base_var_enum_get_count_fn_t)(prte_mca_base_var_enum_t *s
  * @param[out] string_value string value
  */
 typedef int (*prte_mca_base_var_enum_get_value_fn_t)(prte_mca_base_var_enum_t *self, int index,
-                                                      int *value, const char **string_value);
+                                                     int *value, const char **string_value);
 
 /**
  * Look up the integer value of a string
@@ -62,8 +63,8 @@ typedef int (*prte_mca_base_var_enum_get_value_fn_t)(prte_mca_base_var_enum_t *s
  * @retval PRTE_SUCCESS if found
  * @retval PRTE_ERR_VALUE_OUT_OF_BOUNDS if not
  */
-typedef int (*prte_mca_base_var_enum_vfs_fn_t)(prte_mca_base_var_enum_t *self, const char *string_value,
-                                                int *value);
+typedef int (*prte_mca_base_var_enum_vfs_fn_t)(prte_mca_base_var_enum_t *self,
+                                               const char *string_value, int *value);
 
 /**
  * Dump a textual representation of all the values in an enumerator
@@ -92,7 +93,7 @@ typedef int (*prte_mca_base_var_enum_dump_fn_t)(prte_mca_base_var_enum_t *self, 
  * must free the string with free().
  */
 typedef int (*prte_mca_base_var_enum_sfv_fn_t)(prte_mca_base_var_enum_t *self, const int value,
-                                          char **string_value);
+                                               char **string_value);
 
 /**
  * The default enumerator class takes in a list of integer-string pairs. If a
@@ -140,7 +141,6 @@ struct prte_mca_base_var_enum_t {
         and the strings it contains are freed by the destructor if not NULL. */
     prte_mca_base_var_enum_value_t *enum_values;
 };
-
 
 /**
  * The default flag enumerator class takes in a list of integer-string pairs. If a
@@ -200,8 +200,9 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_var_enum_t);
  * strings passed in values[] after mca_base_var_enum_create()
  * returns.
  */
-PRTE_EXPORT int prte_mca_base_var_enum_create (const char *name, const prte_mca_base_var_enum_value_t values[],
-                                            prte_mca_base_var_enum_t **enumerator);
+PRTE_EXPORT int prte_mca_base_var_enum_create(const char *name,
+                                              const prte_mca_base_var_enum_value_t values[],
+                                              prte_mca_base_var_enum_t **enumerator);
 
 /**
  * Create a new default flag enumerator
@@ -227,12 +228,15 @@ PRTE_EXPORT int prte_mca_base_var_enum_create (const char *name, const prte_mca_
  * strings passed in values[] after mca_base_var_enum_create()
  * returns.
  */
-PRTE_EXPORT int prte_mca_base_var_enum_create_flag (const char *name, const prte_mca_base_var_enum_value_flag_t flags[],
-                                                 prte_mca_base_var_enum_flag_t **enumerator);
+PRTE_EXPORT int
+prte_mca_base_var_enum_create_flag(const char *name,
+                                   const prte_mca_base_var_enum_value_flag_t flags[],
+                                   prte_mca_base_var_enum_flag_t **enumerator);
 
-PRTE_EXPORT int prte_mca_base_var_enum_register(const char *project_name, const char *framework_name,
-                                             const char *component_name, const char *enum_name,
-                                             void *storage);
+PRTE_EXPORT int prte_mca_base_var_enum_register(const char *project_name,
+                                                const char *framework_name,
+                                                const char *component_name, const char *enum_name,
+                                                void *storage);
 /* standard enumerators. it is invalid to call PRTE_RELEASE on any of these enumerators */
 /**
  * Boolean enumerator

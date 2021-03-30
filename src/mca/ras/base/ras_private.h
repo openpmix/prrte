@@ -16,6 +16,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,16 +38,15 @@
 
 #include "src/class/prte_list.h"
 
-#include "src/mca/ras/ras.h"
 #include "src/mca/ras/base/base.h"
-
+#include "src/mca/ras/ras.h"
 
 BEGIN_C_DECLS
 
 /**
-* Add the specified node definitions to the registry
+ * Add the specified node definitions to the registry
  */
-PRTE_EXPORT int prte_ras_base_node_insert(prte_list_t*, prte_job_t*);
+PRTE_EXPORT int prte_ras_base_node_insert(prte_list_t *, prte_job_t *);
 
 END_C_DECLS
 

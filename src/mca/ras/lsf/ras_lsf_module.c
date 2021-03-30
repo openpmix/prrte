@@ -23,28 +23,27 @@
 #include "constants.h"
 
 #include <errno.h>
-#include <unistd.h>
 #include <string.h>
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #define SR1_PJOBS
 #include <lsf/lsbatch.h>
 
+#include "src/hwloc/hwloc-internal.h"
 #include "src/util/argv.h"
 #include "src/util/net.h"
-#include "src/hwloc/hwloc-internal.h"
 
+#include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/show_help.h"
 
-#include "src/mca/ras/base/ras_private.h"
-#include "src/mca/ras/base/base.h"
 #include "ras_lsf.h"
-
+#include "src/mca/ras/base/base.h"
+#include "src/mca/ras/base/ras_private.h"
 
 /*
  * Local functions
@@ -52,17 +51,10 @@
 static int allocate(prte_job_t *jdata, prte_list_t *nodes);
 static int finalize(void);
 
-
 /*
  * Global variable
  */
-prte_ras_base_module_t prte_ras_lsf_module = {
-    NULL,
-    allocate,
-    NULL,
-    finalize
-};
-
+prte_ras_base_module_t prte_ras_lsf_module = {NULL, allocate, NULL, finalize};
 
 static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 {
@@ -84,7 +76,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 
     /* step through the list */
     for (i = 0; i < num_nodes; i++) {
-        if( !prte_keep_fqdn_hostnames && !prte_net_isaddr(nodelist[i]) ) {
+        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(nodelist[i])) {
             if (NULL != (ptr = strchr(nodelist[i], '.'))) {
                 *ptr = '\0';
             }
@@ -117,19 +109,18 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 
     /* check to see if any mapping or binding directives were given */
     if (NULL != jdata && NULL != jdata->map) {
-        if ((PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) ||
-            PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+        if ((PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))
+            || PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
             directives_given = true;
         }
-    } else if ((PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping)) ||
-               PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy)) {
-            directives_given = true;
+    } else if ((PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping))
+               || PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy)) {
+        directives_given = true;
     }
 
     /* check for an affinity file */
-    if (!prte_ras_lsf_skip_affinity_file &&
-        !directives_given &&
-        NULL != (affinity_file = getenv("LSB_AFFINITY_HOSTFILE"))) {
+    if (!prte_ras_lsf_skip_affinity_file && !directives_given
+        && NULL != (affinity_file = getenv("LSB_AFFINITY_HOSTFILE"))) {
         /* check to see if the file is empty - if it is,
          * then affinity wasn't actually set for this job */
         if (0 != stat(affinity_file, &buf)) {
@@ -145,9 +136,9 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         //   https://github.com/openpmix/prrte/issues/791
         // Until that is resolved throw an error if we detect that the user is
         // trying to use LSF level affinity options.
-        if( NULL != affinity_file ) { // Always true
-            prte_show_help("help-ras-lsf.txt", "affinity-file-found-not-used", true,
-                           affinity_file, "Physical CPU ID mapping is not supported");
+        if (NULL != affinity_file) { // Always true
+            prte_show_help("help-ras-lsf.txt", "affinity-file-found-not-used", true, affinity_file,
+                           "Physical CPU ID mapping is not supported");
             return PRTE_ERR_SILENT;
         }
 #else
@@ -162,7 +153,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         /* tell the sequential mapper that all cpusets are to be treated as "physical" */
         // TODO - Physical CPUs are no longer supported by PRRTE. Need a fix the following
         //        attribute is no longer valid.
-        //prte_set_attribute(&jdata->attributes, PRTE_JOB_PHYSICAL_CPUIDS, true, NULL, PMIX_BOOL);
+        // prte_set_attribute(&jdata->attributes, PRTE_JOB_PHYSICAL_CPUIDS, true, NULL, PMIX_BOOL);
         /* LSF provides its info as hwthreads, so set the hwthread-as-cpus flag */
         prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, true, NULL, PMIX_BOOL);
         /* don't override something provided by the user, but default to bind-to hwthread */
@@ -176,13 +167,13 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
          * Instead just overwrite the prte_default_hostfile so it will be
          * general for all of the app_contexts.
          */
-        if( NULL != prte_default_hostfile ) {
+        if (NULL != prte_default_hostfile) {
             free(prte_default_hostfile);
             prte_default_hostfile = NULL;
         }
         prte_default_hostfile = strdup(affinity_file);
         prte_output_verbose(10, prte_ras_base_framework.framework_output,
-                            "ras/lsf: Set default_hostfile to %s",prte_default_hostfile);
+                            "ras/lsf: Set default_hostfile to %s", prte_default_hostfile);
 #endif
         return PRTE_SUCCESS;
     }

@@ -3,6 +3,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,15 +17,15 @@
 #include "prte_config.h"
 
 #ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
+#    include <sys/socket.h>
 #endif
 #ifdef HAVE_SYS_UN_H
-#include <sys/un.h>
+#    include <sys/un.h>
 #endif
 
-#include "src/mca/prtereachable/prtereachable.h"
-#include "src/mca/mca.h"
 #include "src/event/event-internal.h"
+#include "src/mca/mca.h"
+#include "src/mca/prtereachable/prtereachable.h"
 #include "src/util/proc_info.h"
 
 BEGIN_C_DECLS
@@ -36,7 +37,6 @@ typedef struct {
 PRTE_EXPORT extern prte_prtereachable_weighted_component_t prte_prtereachable_weighted_component;
 
 PRTE_EXPORT extern const prte_reachable_base_module_t prte_prtereachable_weighted_module;
-
 
 END_C_DECLS
 

@@ -24,18 +24,16 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/mca.h"
-#include "src/util/output.h"
 #include "src/mca/base/base.h"
+#include "src/mca/grpcomm/base/base.h"
+#include "src/mca/mca.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/grpcomm/base/base.h"
-
+#include "src/util/output.h"
 
 /*
  * The following file was created by configure.  It contains extern
@@ -50,24 +48,20 @@
  */
 prte_grpcomm_base_t prte_grpcomm_base = {{{0}}};
 
-prte_grpcomm_API_module_t prte_grpcomm = {
-    .xcast = prte_grpcomm_API_xcast,
-    .allgather = prte_grpcomm_API_allgather,
-    .rbcast = prte_grpcomm_API_rbcast,
-    .register_cb = prte_grpcomm_API_register_cb,
-    .unregister_cb = NULL
-};
+prte_grpcomm_API_module_t prte_grpcomm = {.xcast = prte_grpcomm_API_xcast,
+                                          .allgather = prte_grpcomm_API_allgather,
+                                          .rbcast = prte_grpcomm_API_rbcast,
+                                          .register_cb = prte_grpcomm_API_register_cb,
+                                          .unregister_cb = NULL};
 
 static int base_register(prte_mca_base_register_flag_t flags)
 {
     prte_grpcomm_base.context_id = 1;
     prte_mca_base_var_register("prte", "grpcomm", "base", "starting_context_id",
-                                "Starting value for assigning context id\'s",
-                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                PRTE_INFO_LVL_9,
-                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                &prte_grpcomm_base.context_id);
+                               "Starting value for assigning context id\'s",
+                               PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
+                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                               &prte_grpcomm_base.context_id);
 
     return PRTE_SUCCESS;
 }
@@ -82,15 +76,18 @@ static int prte_grpcomm_base_close(void)
     prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
 
     /* Close the active modules */
-    PRTE_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t) {
+    PRTE_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t)
+    {
         if (NULL != active->module->finalize) {
             active->module->finalize();
         }
     }
     PRTE_LIST_DESTRUCT(&prte_grpcomm_base.actives);
     PRTE_LIST_DESTRUCT(&prte_grpcomm_base.ongoing);
-    for (void *_nptr=NULL;                                   \
-         PRTE_SUCCESS == prte_hash_table_get_next_key_ptr(&prte_grpcomm_base.sig_table, &key, &size, (void **)&seq_number, _nptr, &_nptr);) {
+    for (void *_nptr = NULL;
+         PRTE_SUCCESS
+         == prte_hash_table_get_next_key_ptr(&prte_grpcomm_base.sig_table, &key, &size,
+                                             (void **) &seq_number, _nptr, &_nptr);) {
         free(seq_number);
     }
     PRTE_DESTRUCT(&prte_grpcomm_base.sig_table);
@@ -112,14 +109,11 @@ static int prte_grpcomm_base_open(prte_mca_base_open_flag_t flags)
     return prte_mca_base_framework_components_open(&prte_grpcomm_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, grpcomm, "GRPCOMM", base_register,
-                                 prte_grpcomm_base_open,
-                                 prte_grpcomm_base_close,
-                                 prte_grpcomm_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, grpcomm, "GRPCOMM", base_register, prte_grpcomm_base_open,
+                                prte_grpcomm_base_close, prte_grpcomm_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
-PRTE_CLASS_INSTANCE(prte_grpcomm_base_active_t,
-                   prte_list_item_t,
-                   NULL, NULL);
+PRTE_CLASS_INSTANCE(prte_grpcomm_base_active_t, prte_list_item_t, NULL, NULL);
 
 static void scon(prte_grpcomm_signature_t *p)
 {
@@ -132,9 +126,7 @@ static void sdes(prte_grpcomm_signature_t *p)
         free(p->signature);
     }
 }
-PRTE_CLASS_INSTANCE(prte_grpcomm_signature_t,
-                   prte_object_t,
-                   scon, sdes);
+PRTE_CLASS_INSTANCE(prte_grpcomm_signature_t, prte_object_t, scon, sdes);
 
 static void ccon(prte_grpcomm_coll_t *p)
 {
@@ -159,6 +151,4 @@ static void cdes(prte_grpcomm_coll_t *p)
     free(p->dmns);
     free(p->buffers);
 }
-PRTE_CLASS_INSTANCE(prte_grpcomm_coll_t,
-                   prte_list_item_t,
-                   ccon, cdes);
+PRTE_CLASS_INSTANCE(prte_grpcomm_coll_t, prte_list_item_t, ccon, cdes);

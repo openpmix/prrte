@@ -35,15 +35,15 @@
 #include "prte_config.h"
 #include "types.h"
 
+#include "src/class/prte_bitmap.h"
 #include "src/class/prte_list.h"
 #include "src/class/prte_pointer_array.h"
-#include "src/class/prte_bitmap.h"
 #include "src/mca/iof/base/iof_base_setup.h"
+#include "src/mca/odls/odls_types.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/threads.h"
-#include "src/mca/odls/odls_types.h"
 
 BEGIN_C_DECLS
 
@@ -64,9 +64,9 @@ typedef struct {
     int max_threads;
     int num_threads;
     int cutoff;
-    prte_event_base_t **ev_bases;   // event base array for progress threads
-    char** ev_threads;              // event progress thread names
-    int next_base;                  // counter to load-level thread use
+    prte_event_base_t **ev_bases; // event base array for progress threads
+    char **ev_threads;            // event progress thread names
+    int next_base;                // counter to load-level thread use
     bool signal_direct_children_only;
     prte_lock_t lock;
 } prte_odls_globals_t;
@@ -78,13 +78,11 @@ PRTE_EXPORT extern prte_odls_globals_t prte_odls_globals;
  * be overridden by specific environments if they need something
  * different (e.g., bproc)
  */
-PRTE_EXPORT int
-prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *data,
-                                          pmix_nspace_t job);
+PRTE_EXPORT int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *data,
+                                                          pmix_nspace_t job);
 
-PRTE_EXPORT int
-prte_odls_base_default_construct_child_list(pmix_data_buffer_t *data,
-                                            pmix_nspace_t *job);
+PRTE_EXPORT int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *data,
+                                                            pmix_nspace_t *job);
 
 PRTE_EXPORT void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata);
 
@@ -118,17 +116,17 @@ typedef struct {
 } prte_odls_launch_local_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_odls_launch_local_t);
 
-#define PRTE_ACTIVATE_LOCAL_LAUNCH(j, f)                                \
-    do {                                                                \
-        prte_odls_launch_local_t *ll;                                   \
-        ll = PRTE_NEW(prte_odls_launch_local_t);                        \
-        PMIX_LOAD_NSPACE(ll->job, (j));                                 \
-        ll->fork_local = (f);                                           \
-        prte_event_set(prte_event_base, ll->ev, -1, PRTE_EV_WRITE,      \
-                       prte_odls_base_default_launch_local, ll);        \
-        prte_event_set_priority(ll->ev, PRTE_SYS_PRI);                  \
-        prte_event_active(ll->ev, PRTE_EV_WRITE, 1);                    \
-    } while(0);
+#define PRTE_ACTIVATE_LOCAL_LAUNCH(j, f)                           \
+    do {                                                           \
+        prte_odls_launch_local_t *ll;                              \
+        ll = PRTE_NEW(prte_odls_launch_local_t);                   \
+        PMIX_LOAD_NSPACE(ll->job, (j));                            \
+        ll->fork_local = (f);                                      \
+        prte_event_set(prte_event_base, ll->ev, -1, PRTE_EV_WRITE, \
+                       prte_odls_base_default_launch_local, ll);   \
+        prte_event_set_priority(ll->ev, PRTE_SYS_PRI);             \
+        prte_event_active(ll->ev, PRTE_EV_WRITE, 1);               \
+    } while (0);
 
 PRTE_EXPORT void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata);
 
@@ -147,17 +145,16 @@ typedef int (*prte_odls_base_kill_local_fn_t)(pid_t pid, int signum);
 /* define a function type to detect that a child died */
 typedef bool (*prte_odls_base_child_died_fn_t)(prte_proc_t *child);
 
-PRTE_EXPORT int
-prte_odls_base_default_kill_local_procs(prte_pointer_array_t *procs,
-                                        prte_odls_base_kill_local_fn_t kill_local);
+PRTE_EXPORT int prte_odls_base_default_kill_local_procs(prte_pointer_array_t *procs,
+                                                        prte_odls_base_kill_local_fn_t kill_local);
 
 PRTE_EXPORT int prte_odls_base_default_restart_proc(prte_proc_t *child,
-                                                      prte_odls_base_fork_local_proc_fn_t fork_local);
+                                                    prte_odls_base_fork_local_proc_fn_t fork_local);
 
 /*
  * Preload binary/files functions
  */
-PRTE_EXPORT int prte_odls_base_preload_files_app_context(prte_app_context_t* context);
+PRTE_EXPORT int prte_odls_base_preload_files_app_context(prte_app_context_t *context);
 
 END_C_DECLS
 

@@ -18,9 +18,9 @@
 BEGIN_C_DECLS
 
 enum prte_mca_base_alias_flags_t {
-      PRTE_MCA_BASE_ALIAS_FLAG_NONE       = 0,
-      /** The aliased name has been deprecated. */
-      PRTE_MCA_BASE_ALIAS_FLAG_DEPRECATED = 1,
+    PRTE_MCA_BASE_ALIAS_FLAG_NONE = 0,
+    /** The aliased name has been deprecated. */
+    PRTE_MCA_BASE_ALIAS_FLAG_DEPRECATED = 1,
 };
 
 typedef enum prte_mca_base_alias_flags_t prte_mca_base_alias_flags_t;
@@ -68,10 +68,9 @@ PRTE_CLASS_DECLARATION(prte_mca_base_alias_t);
  * component if the synonym is registered in the btl framework
  * registration function.
  */
-PRTE_EXPORT int prte_mca_base_alias_register (const char *project, const char *framework,
-                                              const char *component_name,
-                                              const char *component_alias,
-                                              uint32_t alias_flags);
+PRTE_EXPORT int prte_mca_base_alias_register(const char *project, const char *framework,
+                                             const char *component_name,
+                                             const char *component_alias, uint32_t alias_flags);
 
 /**
  * @brief Check for aliases for a component.
@@ -80,10 +79,9 @@ PRTE_EXPORT int prte_mca_base_alias_register (const char *project, const char *f
  * @param[in] frameworek     Framework name (may be NULL)
  * @param[in] component_name Component name (may not be NULL)
  */
-PRTE_EXPORT const prte_mca_base_alias_t *prte_mca_base_alias_lookup(const char *project,
-                                                                    const char *framework,
-                                                                    const char *component_name);
+PRTE_EXPORT const prte_mca_base_alias_t *
+prte_mca_base_alias_lookup(const char *project, const char *framework, const char *component_name);
 
-PRTE_EXPORT void prte_mca_base_alias_cleanup (void);
+PRTE_EXPORT void prte_mca_base_alias_cleanup(void);
 
 #endif /* PRTE_MCA_BASE_ALIAS_H */

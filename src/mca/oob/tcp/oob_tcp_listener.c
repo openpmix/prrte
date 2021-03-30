@@ -31,59 +31,58 @@
 
 #include "prte_config.h"
 #include "types.h"
-#include "types.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #include <fcntl.h>
 #ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
+#    include <netinet/in.h>
 #endif
 #ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
+#    include <arpa/inet.h>
 #endif
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+#    include <netdb.h>
 #endif
 #include <ctype.h>
 
-#include "src/util/show_help.h"
-#include "src/util/error.h"
-#include "src/util/output.h"
+#include "src/class/prte_list.h"
 #include "src/include/prte_socket_errno.h"
+#include "src/util/argv.h"
+#include "src/util/error.h"
+#include "src/util/fd.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
-#include "src/util/argv.h"
-#include "src/util/fd.h"
-#include "src/class/prte_list.h"
+#include "src/util/output.h"
+#include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
+#include "src/runtime/prte_globals.h"
+#include "src/threads/threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/parse_options.h"
 #include "src/util/show_help.h"
-#include "src/threads/threads.h"
-#include "src/runtime/prte_globals.h"
 
 #include "src/mca/oob/tcp/oob_tcp.h"
+#include "src/mca/oob/tcp/oob_tcp_common.h"
 #include "src/mca/oob/tcp/oob_tcp_component.h"
-#include "src/mca/oob/tcp/oob_tcp_peer.h"
 #include "src/mca/oob/tcp/oob_tcp_connection.h"
 #include "src/mca/oob/tcp/oob_tcp_listener.h"
-#include "src/mca/oob/tcp/oob_tcp_common.h"
+#include "src/mca/oob/tcp/oob_tcp_peer.h"
 
-static void connection_event_handler(int incoming_sd, short flags, void* cbdata);
-static void* listen_thread(prte_object_t *obj);
+static void connection_event_handler(int incoming_sd, short flags, void *cbdata);
+static void *listen_thread(prte_object_t *obj);
 static int create_listen(void);
 #if PRTE_ENABLE_IPV6
 static int create_listen6(void);
 #endif
-static void connection_handler(int sd, short flags, void* cbdata);
-static void connection_event_handler(int sd, short flags, void* cbdata);
+static void connection_handler(int sd, short flags, void *cbdata);
+static void connection_event_handler(int sd, short flags, void *cbdata);
 
 /*
  * Component initialization - create a module for each available
@@ -106,7 +105,7 @@ int prte_oob_tcp_start_listening(void)
 #if PRTE_ENABLE_IPV6
         && NULL == prte_oob_tcp_component.ipv6conns
 #endif
-        ) {
+    ) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -136,8 +135,8 @@ int prte_oob_tcp_start_listening(void)
 
         /* Make sure the pipe FDs are set to close-on-exec so that
            they don't leak into children */
-        if (prte_fd_set_cloexec(prte_oob_tcp_component.stop_thread[0]) != PRTE_SUCCESS ||
-            prte_fd_set_cloexec(prte_oob_tcp_component.stop_thread[1]) != PRTE_SUCCESS) {
+        if (prte_fd_set_cloexec(prte_oob_tcp_component.stop_thread[0]) != PRTE_SUCCESS
+            || prte_fd_set_cloexec(prte_oob_tcp_component.stop_thread[1]) != PRTE_SUCCESS) {
             close(prte_oob_tcp_component.stop_thread[0]);
             close(prte_oob_tcp_component.stop_thread[1]);
             PRTE_ERROR_LOG(PRTE_ERR_IN_ERRNO);
@@ -156,13 +155,11 @@ int prte_oob_tcp_start_listening(void)
 
     /* otherwise, setup to listen via the event lib */
 
-    PRTE_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t) {
+    PRTE_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
+    {
         listener->ev_active = true;
-        prte_event_set(prte_event_base, &listener->event,
-                       listener->sd,
-                       PRTE_EV_READ|PRTE_EV_PERSIST,
-                       connection_event_handler,
-                       0);
+        prte_event_set(prte_event_base, &listener->event, listener->sd,
+                       PRTE_EV_READ | PRTE_EV_PERSIST, connection_event_handler, 0);
         prte_event_set_priority(&listener->event, PRTE_MSG_PRI);
         PRTE_POST_OBJECT(listener);
         prte_event_add(&listener->event, 0);
@@ -183,10 +180,10 @@ int prte_oob_tcp_start_listening(void)
 static int create_listen(void)
 {
     int flags, i;
-    uint16_t port=0;
+    uint16_t port = 0;
     struct sockaddr_storage inaddr;
     prte_socklen_t addrlen;
-    char **ports=NULL;
+    char **ports = NULL;
     int sd = -1;
     char *tconn;
     prte_oob_tcp_listener_t *conn;
@@ -238,8 +235,8 @@ static int create_listen(void)
 
     /* get the address info for this interface */
     memset(&inaddr, 0, sizeof(inaddr));
-    ((struct sockaddr_in*) &inaddr)->sin_family = AF_INET;
-    ((struct sockaddr_in*) &inaddr)->sin_addr.s_addr = INADDR_ANY;
+    ((struct sockaddr_in *) &inaddr)->sin_family = AF_INET;
+    ((struct sockaddr_in *) &inaddr)->sin_addr.s_addr = INADDR_ANY;
     addrlen = sizeof(struct sockaddr_in);
 
     /* loop across all the specified ports, establishing a socket
@@ -247,23 +244,22 @@ static int create_listen(void)
      * one socket, but that prun and daemons will have multiple
      * sockets to support more flexible wireup protocols
      */
-    for (i=0; i < prte_argv_count(ports); i++) {
+    for (i = 0; i < prte_argv_count(ports); i++) {
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s attempting to bind to IPv4 port %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            ports[i]);
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ports[i]);
         /* get the port number */
         port = strtol(ports[i], NULL, 10);
         /* convert it to network-byte-order */
         port = htons(port);
 
-        ((struct sockaddr_in*) &inaddr)->sin_port = port;
+        ((struct sockaddr_in *) &inaddr)->sin_port = port;
 
         /* create a listen socket for incoming connections on this port */
         sd = socket(AF_INET, SOCK_STREAM, 0);
         if (sd < 0) {
             if (EAFNOSUPPORT != prte_socket_errno) {
-                prte_output(0,"prte_oob_tcp_component_init: socket() failed: %s (%d)",
+                prte_output(0, "prte_oob_tcp_component_init: socket() failed: %s (%d)",
                             strerror(prte_socket_errno), prte_socket_errno);
             }
             prte_argv_free(ports);
@@ -276,8 +272,9 @@ static int create_listen(void)
         } else {
             flags = 0;
         }
-        if (setsockopt (sd, SOL_SOCKET, SO_REUSEADDR, (const char *)&flags, sizeof(flags)) < 0) {
-            prte_output(0, "prte_oob_tcp_create_listen: unable to set the "
+        if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, (const char *) &flags, sizeof(flags)) < 0) {
+            prte_output(0,
+                        "prte_oob_tcp_create_listen: unable to set the "
                         "SO_REUSEADDR option (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -288,7 +285,8 @@ static int create_listen(void)
         /* Set the socket to close-on-exec so that no children inherit
            this FD */
         if (prte_fd_set_cloexec(sd) != PRTE_SUCCESS) {
-            prte_output(0, "prte_oob_tcp_create_listen: unable to set the "
+            prte_output(0,
+                        "prte_oob_tcp_create_listen: unable to set the "
                         "listening socket to CLOEXEC (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -296,21 +294,19 @@ static int create_listen(void)
             return PRTE_ERROR;
         }
 
-        if (bind(sd, (struct sockaddr*)&inaddr, addrlen) < 0) {
-            if( (EADDRINUSE == prte_socket_errno) || (EADDRNOTAVAIL == prte_socket_errno) ) {
+        if (bind(sd, (struct sockaddr *) &inaddr, addrlen) < 0) {
+            if ((EADDRINUSE == prte_socket_errno) || (EADDRNOTAVAIL == prte_socket_errno)) {
                 continue;
             }
             prte_output(0, "%s bind() failed for port %d: %s (%d)",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        (int)ntohs(port),
-                        strerror(prte_socket_errno),
-                        prte_socket_errno );
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) ntohs(port),
+                        strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
             prte_argv_free(ports);
             return PRTE_ERROR;
         }
         /* resolve assigned port */
-        if (getsockname(sd, (struct sockaddr*)&inaddr, &addrlen) < 0) {
+        if (getsockname(sd, (struct sockaddr *) &inaddr, &addrlen) < 0) {
             prte_output(0, "prte_oob_tcp_create_listen: getsockname(): %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -347,20 +343,20 @@ static int create_listen(void)
         /* add this port to our connections */
         conn = PRTE_NEW(prte_oob_tcp_listener_t);
         conn->sd = sd;
-        conn->port = ntohs(((struct sockaddr_in*) &inaddr)->sin_port);
+        conn->port = ntohs(((struct sockaddr_in *) &inaddr)->sin_port);
         if (0 == prte_process_info.my_port) {
             /* save the first one */
             prte_process_info.my_port = conn->port;
         }
         prte_list_append(&prte_oob_tcp_component.listeners, &conn->item);
         /* and to our ports */
-        prte_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in*) &inaddr)->sin_port));
+        prte_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in *) &inaddr)->sin_port));
         prte_argv_append_nosize(&prte_oob_tcp_component.ipv4ports, tconn);
         free(tconn);
-        if (OOB_TCP_DEBUG_CONNECT <= prte_output_get_verbosity(prte_oob_base_framework.framework_output)) {
-            port = ntohs(((struct sockaddr_in*) &inaddr)->sin_port);
-            prte_output(0, "%s assigned IPv4 port %d",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), port);
+        if (OOB_TCP_DEBUG_CONNECT
+            <= prte_output_get_verbosity(prte_oob_base_framework.framework_output)) {
+            port = ntohs(((struct sockaddr_in *) &inaddr)->sin_port);
+            prte_output(0, "%s assigned IPv4 port %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), port);
         }
 
         if (!PRTE_PROC_IS_MASTER) {
@@ -395,10 +391,10 @@ static int create_listen(void)
 static int create_listen6(void)
 {
     int flags, i;
-    uint16_t port=0;
+    uint16_t port = 0;
     struct sockaddr_storage inaddr;
     prte_socklen_t addrlen;
-    char **ports=NULL;
+    char **ports = NULL;
     int sd;
     char *tconn;
     prte_oob_tcp_listener_t *conn;
@@ -450,8 +446,8 @@ static int create_listen6(void)
 
     /* get the address info for this interface */
     memset(&inaddr, 0, sizeof(inaddr));
-    ((struct sockaddr_in6*) &inaddr)->sin6_family = AF_INET6;
-    ((struct sockaddr_in6*) &inaddr)->sin6_addr = in6addr_any;
+    ((struct sockaddr_in6 *) &inaddr)->sin6_family = AF_INET6;
+    ((struct sockaddr_in6 *) &inaddr)->sin6_addr = in6addr_any;
     addrlen = sizeof(struct sockaddr_in6);
 
     /* loop across all the specified ports, establishing a socket
@@ -459,23 +455,22 @@ static int create_listen6(void)
      * one socket, but that prun and daemons will have multiple
      * sockets to support more flexible wireup protocols
      */
-    for (i=0; i < prte_argv_count(ports); i++) {
+    for (i = 0; i < prte_argv_count(ports); i++) {
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s attempting to bind to IPv6 port %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            ports[i]);
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ports[i]);
         /* get the port number */
         port = strtol(ports[i], NULL, 10);
         /* convert it to network-byte-order */
         port = htons(port);
 
-        ((struct sockaddr_in6*) &inaddr)->sin6_port = port;
+        ((struct sockaddr_in6 *) &inaddr)->sin6_port = port;
 
         /* create a listen socket for incoming connections on this port */
         sd = socket(AF_INET6, SOCK_STREAM, 0);
         if (sd < 0) {
             if (EAFNOSUPPORT != prte_socket_errno) {
-                prte_output(0,"prte_oob_tcp_component_init: socket() failed: %s (%d)",
+                prte_output(0, "prte_oob_tcp_component_init: socket() failed: %s (%d)",
                             strerror(prte_socket_errno), prte_socket_errno);
             }
             return PRTE_ERR_IN_ERRNO;
@@ -483,7 +478,8 @@ static int create_listen6(void)
         /* Set the socket to close-on-exec so that no children inherit
            this FD */
         if (prte_fd_set_cloexec(sd) != PRTE_SUCCESS) {
-            prte_output(0, "prte_oob_tcp_create_listen6: unable to set the "
+            prte_output(0,
+                        "prte_oob_tcp_create_listen6: unable to set the "
                         "listening socket to CLOEXEC (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -497,8 +493,9 @@ static int create_listen6(void)
         } else {
             flags = 0;
         }
-        if (setsockopt (sd, SOL_SOCKET, SO_REUSEADDR, (const char *)&flags, sizeof(flags)) < 0) {
-            prte_output(0, "prte_oob_tcp_create_listen: unable to set the "
+        if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, (const char *) &flags, sizeof(flags)) < 0) {
+            prte_output(0,
+                        "prte_oob_tcp_create_listen: unable to set the "
                         "SO_REUSEADDR option (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -506,21 +503,19 @@ static int create_listen6(void)
             return PRTE_ERROR;
         }
 
-        if (bind(sd, (struct sockaddr*)&inaddr, addrlen) < 0) {
-            if( (EADDRINUSE == prte_socket_errno) || (EADDRNOTAVAIL == prte_socket_errno) ) {
+        if (bind(sd, (struct sockaddr *) &inaddr, addrlen) < 0) {
+            if ((EADDRINUSE == prte_socket_errno) || (EADDRNOTAVAIL == prte_socket_errno)) {
                 continue;
             }
             prte_output(0, "%s bind() failed for port %d: %s (%d)",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        (int)ntohs(port),
-                        strerror(prte_socket_errno),
-                        prte_socket_errno );
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) ntohs(port),
+                        strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
             prte_argv_free(ports);
             return PRTE_ERROR;
         }
         /* resolve assigned port */
-        if (getsockname(sd, (struct sockaddr*)&inaddr, &addrlen) < 0) {
+        if (getsockname(sd, (struct sockaddr *) &inaddr, &addrlen) < 0) {
             prte_output(0, "prte_oob_tcp_create_listen: getsockname(): %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -551,16 +546,16 @@ static int create_listen6(void)
         conn = PRTE_NEW(prte_oob_tcp_listener_t);
         conn->tcp6 = true;
         conn->sd = sd;
-        conn->port = ntohs(((struct sockaddr_in6*) &inaddr)->sin6_port);
+        conn->port = ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port);
         prte_list_append(&prte_oob_tcp_component.listeners, &conn->item);
         /* and to our ports */
-        prte_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in6*) &inaddr)->sin6_port));
+        prte_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port));
         prte_argv_append_nosize(&prte_oob_tcp_component.ipv6ports, tconn);
         free(tconn);
-        if (OOB_TCP_DEBUG_CONNECT <= prte_output_get_verbosity(prte_oob_base_framework.framework_output)) {
-            prte_output(0, "%s assigned IPv6 port %d",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        (int)ntohs(((struct sockaddr_in6*) &inaddr)->sin6_port));
+        if (OOB_TCP_DEBUG_CONNECT
+            <= prte_output_get_verbosity(prte_oob_base_framework.framework_output)) {
+            prte_output(0, "%s assigned IPv6 port %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        (int) ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port));
         }
 
         if (!PRTE_PROC_IS_MASTER) {
@@ -589,7 +584,7 @@ static int create_listen6(void)
  *
  * Runs until prte_oob_tcp_compnent.shutdown is set to true.
  */
-static void* listen_thread(prte_object_t *obj)
+static void *listen_thread(prte_object_t *obj)
 {
     int rc, max, accepted_connections, sd;
     prte_socklen_t addrlen = sizeof(struct sockaddr_storage);
@@ -606,13 +601,15 @@ static void* listen_thread(prte_object_t *obj)
     while (prte_oob_tcp_component.listen_thread_active) {
         FD_ZERO(&readfds);
         max = -1;
-        PRTE_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t) {
+        PRTE_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
+        {
             FD_SET(listener->sd, &readfds);
             max = (listener->sd > max) ? listener->sd : max;
         }
         /* add the stop_thread fd */
         FD_SET(prte_oob_tcp_component.stop_thread[0], &readfds);
-        max = (prte_oob_tcp_component.stop_thread[0] > max) ? prte_oob_tcp_component.stop_thread[0] : max;
+        max = (prte_oob_tcp_component.stop_thread[0] > max) ? prte_oob_tcp_component.stop_thread[0]
+                                                            : max;
 
         /* set timeout interval */
         timeout.tv_sec = prte_oob_tcp_component.listen_thread_tv.tv_sec;
@@ -639,7 +636,8 @@ static void* listen_thread(prte_object_t *obj)
          */
         do {
             accepted_connections = 0;
-            PRTE_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t) {
+            PRTE_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
+            {
                 sd = listener->sd;
 
                 /* according to the man pages, select replaces the given descriptor
@@ -661,11 +659,10 @@ static void* listen_thread(prte_object_t *obj)
                  * OS might start rejecting connections due to timeout.
                  */
                 pending_connection = PRTE_NEW(prte_oob_tcp_pending_connection_t);
-                prte_event_set(prte_event_base, &pending_connection->ev, -1,
-                               PRTE_EV_WRITE, connection_handler, pending_connection);
+                prte_event_set(prte_event_base, &pending_connection->ev, -1, PRTE_EV_WRITE,
+                               connection_handler, pending_connection);
                 prte_event_set_priority(&pending_connection->ev, PRTE_MSG_PRI);
-                pending_connection->fd = accept(sd,
-                                                (struct sockaddr*)&(pending_connection->addr),
+                pending_connection->fd = accept(sd, (struct sockaddr *) &(pending_connection->addr),
                                                 &addrlen);
 
                 /* check for < 0 as indicating an error upon accept */
@@ -673,8 +670,7 @@ static void* listen_thread(prte_object_t *obj)
                     PRTE_RELEASE(pending_connection);
 
                     /* Non-fatal errors */
-                    if (EAGAIN == prte_socket_errno ||
-                        EWOULDBLOCK == prte_socket_errno) {
+                    if (EAGAIN == prte_socket_errno || EWOULDBLOCK == prte_socket_errno) {
                         continue;
                     }
 
@@ -684,24 +680,17 @@ static void* listen_thread(prte_object_t *obj)
                     else if (EMFILE == prte_socket_errno) {
                         CLOSE_THE_SOCKET(sd);
                         PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_SOCKETS);
-                        prte_show_help("help-oob-tcp.txt",
-                                       "accept failed",
-                                       true,
-                                       prte_process_info.nodename,
-                                       prte_socket_errno,
-                                       strerror(prte_socket_errno),
-                                       "Out of file descriptors");
+                        prte_show_help("help-oob-tcp.txt", "accept failed", true,
+                                       prte_process_info.nodename, prte_socket_errno,
+                                       strerror(prte_socket_errno), "Out of file descriptors");
                         goto done;
                     }
 
                     /* For all other cases, print a
                        warning but try to continue */
                     else {
-                        prte_show_help("help-oob-tcp.txt",
-                                       "accept failed",
-                                       true,
-                                       prte_process_info.nodename,
-                                       prte_socket_errno,
+                        prte_show_help("help-oob-tcp.txt", "accept failed", true,
+                                       prte_process_info.nodename, prte_socket_errno,
                                        strerror(prte_socket_errno),
                                        "Unknown cause; job will try to continue");
                         continue;
@@ -711,24 +700,26 @@ static void* listen_thread(prte_object_t *obj)
                 prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                     "%s prte_oob_tcp_listen_thread: incoming connection: "
                                     "(%d, %d) %s:%d\n",
-                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                    pending_connection->fd, prte_socket_errno,
-                                    prte_net_get_hostname((struct sockaddr*) &pending_connection->addr),
-                                    prte_net_get_port((struct sockaddr*) &pending_connection->addr));
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), pending_connection->fd,
+                                    prte_socket_errno,
+                                    prte_net_get_hostname(
+                                        (struct sockaddr *) &pending_connection->addr),
+                                    prte_net_get_port(
+                                        (struct sockaddr *) &pending_connection->addr));
 
                 /* if we are on a privileged port, we only accept connections
                  * from other privileged sockets. A privileged port is one
                  * whose port is less than 1024 on Linux, so we'll check for that. */
                 if (1024 >= listener->port) {
                     uint16_t inport;
-                    inport = prte_net_get_port((struct sockaddr*) &pending_connection->addr);
+                    inport = prte_net_get_port((struct sockaddr *) &pending_connection->addr);
                     if (1024 < inport) {
                         /* someone tried to cross-connect privileges,
                          * say something */
-                        prte_show_help("help-oob-tcp.txt",
-                                       "privilege failure", true,
+                        prte_show_help("help-oob-tcp.txt", "privilege failure", true,
                                        prte_process_info.nodename, listener->port,
-                                       prte_net_get_hostname((struct sockaddr*) &pending_connection->addr),
+                                       prte_net_get_hostname(
+                                           (struct sockaddr *) &pending_connection->addr),
                                        inport);
                         CLOSE_THE_SOCKET(pending_connection->fd);
                         PRTE_RELEASE(pending_connection);
@@ -744,7 +735,7 @@ static void* listen_thread(prte_object_t *obj)
         } while (accepted_connections > 0);
     }
 
- done:
+done:
 #if 0
     /* once we complete the initial launch, the "flood" of connections
      * will end - only connection requests from local procs, connect/accept
@@ -774,25 +765,24 @@ static void* listen_thread(prte_object_t *obj)
 /*
  * Handler for accepting connections from the listen thread
  */
-static void connection_handler(int sd, short flags, void* cbdata)
+static void connection_handler(int sd, short flags, void *cbdata)
 {
     prte_oob_tcp_pending_connection_t *new_connection;
 
-    new_connection = (prte_oob_tcp_pending_connection_t*)cbdata;
+    new_connection = (prte_oob_tcp_pending_connection_t *) cbdata;
 
     PRTE_ACQUIRE_OBJECT(new_connection);
 
     prte_output_verbose(4, prte_oob_base_framework.framework_output,
                         "%s connection_handler: working connection "
                         "(%d, %d) %s:%d\n",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        new_connection->fd, prte_socket_errno,
-                        prte_net_get_hostname((struct sockaddr*) &new_connection->addr),
-                        prte_net_get_port((struct sockaddr*) &new_connection->addr));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), new_connection->fd, prte_socket_errno,
+                        prte_net_get_hostname((struct sockaddr *) &new_connection->addr),
+                        prte_net_get_port((struct sockaddr *) &new_connection->addr));
 
     /* process the connection */
     prte_oob_tcp_module.accept_connection(new_connection->fd,
-                                         (struct sockaddr*) &(new_connection->addr));
+                                          (struct sockaddr *) &(new_connection->addr));
     /* cleanup */
     PRTE_RELEASE(new_connection);
 }
@@ -800,25 +790,23 @@ static void connection_handler(int sd, short flags, void* cbdata)
 /*
  * Handler for accepting connections from the event library
  */
-static void connection_event_handler(int incoming_sd, short flags, void* cbdata)
+static void connection_event_handler(int incoming_sd, short flags, void *cbdata)
 {
     struct sockaddr addr;
     prte_socklen_t addrlen = sizeof(struct sockaddr);
     int sd;
 
-    sd = accept(incoming_sd, (struct sockaddr*)&addr, &addrlen);
+    sd = accept(incoming_sd, (struct sockaddr *) &addr, &addrlen);
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s connection_event_handler: working connection "
                         "(%d, %d) %s:%d\n",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        sd, prte_socket_errno,
-                        prte_net_get_hostname((struct sockaddr*) &addr),
-                        prte_net_get_port((struct sockaddr*) &addr));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sd, prte_socket_errno,
+                        prte_net_get_hostname((struct sockaddr *) &addr),
+                        prte_net_get_port((struct sockaddr *) &addr));
     if (sd < 0) {
         /* Non-fatal errors */
-        if (EINTR == prte_socket_errno ||
-            EAGAIN == prte_socket_errno ||
-            EWOULDBLOCK == prte_socket_errno) {
+        if (EINTR == prte_socket_errno || EAGAIN == prte_socket_errno
+            || EWOULDBLOCK == prte_socket_errno) {
             return;
         }
 
@@ -828,12 +816,8 @@ static void connection_event_handler(int incoming_sd, short flags, void* cbdata)
         else if (EMFILE == prte_socket_errno) {
             CLOSE_THE_SOCKET(incoming_sd);
             PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_SOCKETS);
-            prte_show_help("help-oob-tcp.txt",
-                           "accept failed",
-                           true,
-                           prte_process_info.nodename,
-                           prte_socket_errno,
-                           strerror(prte_socket_errno),
+            prte_show_help("help-oob-tcp.txt", "accept failed", true, prte_process_info.nodename,
+                           prte_socket_errno, strerror(prte_socket_errno),
                            "Out of file descriptors");
             prte_errmgr.abort(PRTE_ERROR_DEFAULT_EXIT_CODE, NULL);
             return;
@@ -843,12 +827,8 @@ static void connection_event_handler(int incoming_sd, short flags, void* cbdata)
            try to continue */
         else {
             CLOSE_THE_SOCKET(incoming_sd);
-            prte_show_help("help-oob-tcp.txt",
-                           "accept failed",
-                           true,
-                           prte_process_info.nodename,
-                           prte_socket_errno,
-                           strerror(prte_socket_errno),
+            prte_show_help("help-oob-tcp.txt", "accept failed", true, prte_process_info.nodename,
+                           prte_socket_errno, strerror(prte_socket_errno),
                            "Unknown cause; job will try to continue");
             return;
         }
@@ -858,15 +838,14 @@ static void connection_event_handler(int incoming_sd, short flags, void* cbdata)
     prte_oob_tcp_module.accept_connection(sd, &addr);
 }
 
-
-static void tcp_ev_cons(prte_oob_tcp_listener_t* event)
+static void tcp_ev_cons(prte_oob_tcp_listener_t *event)
 {
     event->ev_active = false;
     event->tcp6 = false;
     event->sd = -1;
     event->port = 0;
 }
-static void tcp_ev_des(prte_oob_tcp_listener_t* event)
+static void tcp_ev_des(prte_oob_tcp_listener_t *event)
 {
     if (event->ev_active) {
         prte_event_del(&event->event);
@@ -878,11 +857,6 @@ static void tcp_ev_des(prte_oob_tcp_listener_t* event)
     }
 }
 
-PRTE_CLASS_INSTANCE(prte_oob_tcp_listener_t,
-                   prte_list_item_t,
-                   tcp_ev_cons, tcp_ev_des);
+PRTE_CLASS_INSTANCE(prte_oob_tcp_listener_t, prte_list_item_t, tcp_ev_cons, tcp_ev_des);
 
-PRTE_CLASS_INSTANCE(prte_oob_tcp_pending_connection_t,
-                   prte_object_t,
-                   NULL,
-                   NULL);
+PRTE_CLASS_INSTANCE(prte_oob_tcp_pending_connection_t, prte_object_t, NULL, NULL);

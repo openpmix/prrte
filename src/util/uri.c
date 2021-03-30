@@ -6,6 +6,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,17 +20,17 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 #include "src/util/output.h"
 #include "src/util/path.h"
-#include "src/util/show_help.h"
 #include "src/util/printf.h"
+#include "src/util/show_help.h"
 
 #include "src/util/uri.h"
 
-const static char *uri_reserved_path_chars="!$&'()*+,;=:@ ";
+const static char *uri_reserved_path_chars = "!$&'()*+,;=:@ ";
 
 char *prte_uri_get_scheme(const char *uri)
 {
@@ -37,8 +38,7 @@ char *prte_uri_get_scheme(const char *uri)
     char *ptr;
 
     if (NULL == (ptr = strchr(turi, ':'))) {
-        prte_show_help("help-prte-util.txt", "malformed-uri",
-                       true, uri);
+        prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
         free(turi);
         return NULL;
     }
@@ -46,16 +46,14 @@ char *prte_uri_get_scheme(const char *uri)
     return turi;
 }
 
-char *prte_filename_to_uri(const char *filename,
-                           const char *hostname)
+char *prte_filename_to_uri(const char *filename, const char *hostname)
 {
     char *uri, *fn;
     size_t i, j, k, n;
 
     /* filename must be an absolute path */
     if (!prte_path_is_absolute(filename)) {
-        prte_show_help("help-prte-util.txt", "relative-path",
-                       true, filename);
+        prte_show_help("help-prte-util.txt", "relative-path", true, filename);
         return NULL;
     }
 
@@ -70,18 +68,18 @@ char *prte_filename_to_uri(const char *filename,
     /* count the number of characters that require escaping
      * in the filename
      */
-    n=0;
-    for (j=0; j < strlen(uri_reserved_path_chars)-1; j++) {
+    n = 0;
+    for (j = 0; j < strlen(uri_reserved_path_chars) - 1; j++) {
         if (NULL != strchr(filename, uri_reserved_path_chars[j])) {
             n++;
         }
     }
     /* escape them if necessary */
     if (0 < n) {
-        fn = (char*)malloc(strlen(filename) + n + 1);
-        i=0;
-        for (k=0; k < strlen(filename)-1; k++) {
-            for (j=0; j < strlen(uri_reserved_path_chars)-1; j++) {
+        fn = (char *) malloc(strlen(filename) + n + 1);
+        i = 0;
+        for (k = 0; k < strlen(filename) - 1; k++) {
+            for (j = 0; j < strlen(uri_reserved_path_chars) - 1; j++) {
                 if (filename[k] == uri_reserved_path_chars[j]) {
                     fn[i] = '\\';
                     i++;
@@ -105,8 +103,7 @@ char *prte_filename_to_uri(const char *filename,
     return uri;
 }
 
-char *prte_filename_from_uri(const char *uri,
-                             char **hostname)
+char *prte_filename_from_uri(const char *uri, char **hostname)
 {
     char *turi;
     char *ptr, *fn, *sp;
@@ -122,13 +119,12 @@ char *prte_filename_from_uri(const char *uri,
 
     /* extract the scheme */
     if (NULL == (ptr = strchr(turi, ':'))) {
-        prte_show_help("help-prte-util.txt", "malformed-uri",
-                       true, uri);
+        prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
         free(turi);
         return NULL;
     }
     *ptr = '\0';
-    ptr++;  /* step over the new NULL */
+    ptr++; /* step over the new NULL */
 
     /* if there are three '/', then there is no
      * hostname and the file is local
@@ -142,14 +138,12 @@ char *prte_filename_from_uri(const char *uri,
         fn = strdup(ptr);
     } else if (0 != strncmp(ptr, "//", 2)) {
         /* error */
-        prte_show_help("help-prte-util.txt", "malformed-uri",
-                       true, uri);
+        prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
     } else {
-        ptr += 2;  /* step to the hostname */
+        ptr += 2; /* step to the hostname */
         /* find the separator to the filename */
         if (NULL == (sp = strchr(ptr, '/'))) {
-            prte_show_help("help-prte-util.txt", "malformed-uri",
-                           true, uri);
+            prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
         } else {
             *sp = '\0';
             if (NULL != hostname) {

@@ -13,6 +13,7 @@
  *                         reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,9 +32,9 @@
 #include "prte_config.h"
 #include "src/mca/base/prte_mca_base_framework.h"
 
-#include "src/util/printf.h"
-#include "src/runtime/prte_globals.h"
 #include "src/mca/ras/ras.h"
+#include "src/runtime/prte_globals.h"
+#include "src/util/printf.h"
 /*
  * Global functions for MCA overall collective open and close
  */
@@ -45,7 +46,7 @@ BEGIN_C_DECLS
  */
 PRTE_EXPORT extern prte_mca_base_framework_t prte_ras_base_framework;
 /* select a component */
-PRTE_EXPORT    int prte_ras_base_select(void);
+PRTE_EXPORT int prte_ras_base_select(void);
 
 /*
  * globals that might be needed

@@ -35,8 +35,8 @@
 #include "types.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 
 #include "src/mca/plm/plm_types.h"
 #include "src/runtime/prte_globals.h"
@@ -65,9 +65,7 @@ PRTE_EXPORT void prte_errmgr_base_log(int error_code, char *filename, int line);
 
 PRTE_EXPORT void prte_errmgr_base_abort(int error_code, char *fmt, ...)
     __prte_attribute_format__(__printf__, 2, 3);
-PRTE_EXPORT int prte_errmgr_base_abort_peers(pmix_proc_t *procs,
-                                               int32_t num_procs,
-                                               int error_code);
+PRTE_EXPORT int prte_errmgr_base_abort_peers(pmix_proc_t *procs, int32_t num_procs, int error_code);
 
 END_C_DECLS
 #endif

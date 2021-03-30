@@ -37,60 +37,58 @@ BEGIN_C_DECLS
 
 /* define the orted command flag type */
 typedef uint8_t prte_daemon_cmd_flag_t;
-#define PRTE_DAEMON_CMD   PMIX_UINT8
-
+#define PRTE_DAEMON_CMD PMIX_UINT8
 
 /*
  * Definitions needed for communication
  */
-#define PRTE_DAEMON_CONTACT_QUERY_CMD       (prte_daemon_cmd_flag_t) 1
-#define PRTE_DAEMON_KILL_LOCAL_PROCS        (prte_daemon_cmd_flag_t) 2
-#define PRTE_DAEMON_SIGNAL_LOCAL_PROCS      (prte_daemon_cmd_flag_t) 3
-#define PRTE_DAEMON_ADD_LOCAL_PROCS         (prte_daemon_cmd_flag_t) 4
-#define PRTE_DAEMON_HEARTBEAT_CMD           (prte_daemon_cmd_flag_t) 6
-#define PRTE_DAEMON_EXIT_CMD                (prte_daemon_cmd_flag_t) 7
-#define PRTE_DAEMON_PROCESS_AND_RELAY_CMD   (prte_daemon_cmd_flag_t) 9
-#define PRTE_DAEMON_NULL_CMD                (prte_daemon_cmd_flag_t) 11
+#define PRTE_DAEMON_CONTACT_QUERY_CMD     (prte_daemon_cmd_flag_t) 1
+#define PRTE_DAEMON_KILL_LOCAL_PROCS      (prte_daemon_cmd_flag_t) 2
+#define PRTE_DAEMON_SIGNAL_LOCAL_PROCS    (prte_daemon_cmd_flag_t) 3
+#define PRTE_DAEMON_ADD_LOCAL_PROCS       (prte_daemon_cmd_flag_t) 4
+#define PRTE_DAEMON_HEARTBEAT_CMD         (prte_daemon_cmd_flag_t) 6
+#define PRTE_DAEMON_EXIT_CMD              (prte_daemon_cmd_flag_t) 7
+#define PRTE_DAEMON_PROCESS_AND_RELAY_CMD (prte_daemon_cmd_flag_t) 9
+#define PRTE_DAEMON_NULL_CMD              (prte_daemon_cmd_flag_t) 11
 
 /* commands for use by tools */
-#define PRTE_DAEMON_REPORT_JOB_INFO_CMD     (prte_daemon_cmd_flag_t) 14
-#define PRTE_DAEMON_REPORT_NODE_INFO_CMD    (prte_daemon_cmd_flag_t) 15
-#define PRTE_DAEMON_REPORT_PROC_INFO_CMD    (prte_daemon_cmd_flag_t) 16
-#define PRTE_DAEMON_SPAWN_JOB_CMD           (prte_daemon_cmd_flag_t) 17
-#define PRTE_DAEMON_TERMINATE_JOB_CMD       (prte_daemon_cmd_flag_t) 18
-#define PRTE_DAEMON_HALT_VM_CMD             (prte_daemon_cmd_flag_t) 19
-#define PRTE_DAEMON_HALT_DVM_CMD            (prte_daemon_cmd_flag_t) 20
-#define PRTE_DAEMON_REPORT_JOB_COMPLETE     (prte_daemon_cmd_flag_t) 21
-
+#define PRTE_DAEMON_REPORT_JOB_INFO_CMD  (prte_daemon_cmd_flag_t) 14
+#define PRTE_DAEMON_REPORT_NODE_INFO_CMD (prte_daemon_cmd_flag_t) 15
+#define PRTE_DAEMON_REPORT_PROC_INFO_CMD (prte_daemon_cmd_flag_t) 16
+#define PRTE_DAEMON_SPAWN_JOB_CMD        (prte_daemon_cmd_flag_t) 17
+#define PRTE_DAEMON_TERMINATE_JOB_CMD    (prte_daemon_cmd_flag_t) 18
+#define PRTE_DAEMON_HALT_VM_CMD          (prte_daemon_cmd_flag_t) 19
+#define PRTE_DAEMON_HALT_DVM_CMD         (prte_daemon_cmd_flag_t) 20
+#define PRTE_DAEMON_REPORT_JOB_COMPLETE  (prte_daemon_cmd_flag_t) 21
 
 /* request proc resource usage */
-#define PRTE_DAEMON_TOP_CMD                 (prte_daemon_cmd_flag_t) 22
+#define PRTE_DAEMON_TOP_CMD (prte_daemon_cmd_flag_t) 22
 
 /* bootstrap */
-#define PRTE_DAEMON_NAME_REQ_CMD            (prte_daemon_cmd_flag_t) 23
-#define PRTE_DAEMON_CHECKIN_CMD             (prte_daemon_cmd_flag_t) 24
-#define PRTE_TOOL_CHECKIN_CMD               (prte_daemon_cmd_flag_t) 25
+#define PRTE_DAEMON_NAME_REQ_CMD (prte_daemon_cmd_flag_t) 23
+#define PRTE_DAEMON_CHECKIN_CMD  (prte_daemon_cmd_flag_t) 24
+#define PRTE_TOOL_CHECKIN_CMD    (prte_daemon_cmd_flag_t) 25
 
 /* process msg command */
-#define PRTE_DAEMON_PROCESS_CMD             (prte_daemon_cmd_flag_t) 26
+#define PRTE_DAEMON_PROCESS_CMD (prte_daemon_cmd_flag_t) 26
 
 /* process called "errmgr.abort_procs" */
-#define PRTE_DAEMON_ABORT_PROCS_CALLED      (prte_daemon_cmd_flag_t) 28
+#define PRTE_DAEMON_ABORT_PROCS_CALLED (prte_daemon_cmd_flag_t) 28
 
 /* add procs for the DVM */
-#define PRTE_DAEMON_DVM_ADD_PROCS           (prte_daemon_cmd_flag_t) 30
+#define PRTE_DAEMON_DVM_ADD_PROCS (prte_daemon_cmd_flag_t) 30
 
 /* for debug purposes, get stack traces from all application procs */
-#define PRTE_DAEMON_GET_STACK_TRACES        (prte_daemon_cmd_flag_t) 31
+#define PRTE_DAEMON_GET_STACK_TRACES (prte_daemon_cmd_flag_t) 31
 
 /* for memory profiling */
-#define PRTE_DAEMON_GET_MEMPROFILE          (prte_daemon_cmd_flag_t) 32
+#define PRTE_DAEMON_GET_MEMPROFILE (prte_daemon_cmd_flag_t) 32
 
 /* request full topology string */
-#define PRTE_DAEMON_REPORT_TOPOLOGY_CMD     (prte_daemon_cmd_flag_t) 33
+#define PRTE_DAEMON_REPORT_TOPOLOGY_CMD (prte_daemon_cmd_flag_t) 33
 
 /* tell DVM daemons to cleanup resources from job */
-#define PRTE_DAEMON_DVM_CLEANUP_JOB_CMD     (prte_daemon_cmd_flag_t) 34
+#define PRTE_DAEMON_DVM_CLEANUP_JOB_CMD (prte_daemon_cmd_flag_t) 34
 
 /*
  * Struct written up the pipe from the child to the parent.
@@ -112,9 +110,8 @@ typedef struct {
 /*
  * Max length of strings from the prte_odls_pipe_err_msg_t
  */
-#define PRTE_ODLS_MAX_FILE_LEN 511
+#define PRTE_ODLS_MAX_FILE_LEN  511
 #define PRTE_ODLS_MAX_TOPIC_LEN PRTE_ODLS_MAX_FILE_LEN
-
 
 END_C_DECLS
 

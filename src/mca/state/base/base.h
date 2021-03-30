@@ -5,6 +5,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,11 +30,10 @@
 #include "src/mca/mca.h"
 #include "src/mca/state/state.h"
 
-
 BEGIN_C_DECLS
 
 /* select a component */
-PRTE_EXPORT    int prte_state_base_select(void);
+PRTE_EXPORT int prte_state_base_select(void);
 
 /* debug tools */
 PRTE_EXPORT void prte_state_base_print_job_state_machine(void);

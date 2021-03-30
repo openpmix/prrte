@@ -29,26 +29,25 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include <stdio.h>
-#include <stddef.h>
 #include <ctype.h>
+#include <stddef.h>
+#include <stdio.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
-
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/util/argv.h"
 #include "src/util/basename.h"
-#include "src/util/output.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
-#include "src/util/prte_environ.h"
+#include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/proc_info.h"
+#include "src/util/prte_environ.h"
 #include "src/util/prte_getcwd.h"
 #include "src/util/show_help.h"
-#include "src/pmix/pmix-internal.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -77,12 +76,9 @@ static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfil
  * with a NULL value for app_env, meaning that there is no "base"
  * environment that the app needs to be created from.
  */
-static int create_app(prte_cmd_line_t *prte_cmd_line,
-                      int argc, char* argv[],
-                      prte_list_t *jdata,
-                      prte_pmix_app_t **app_ptr,
-                      bool *made_app, char ***app_env,
-                      char ***hostfiles, char ***hosts)
+static int create_app(prte_cmd_line_t *prte_cmd_line, int argc, char *argv[], prte_list_t *jdata,
+                      prte_pmix_app_t **app_ptr, bool *made_app, char ***app_env, char ***hostfiles,
+                      char ***hosts)
 {
     char cwd[PRTE_PATH_MAX];
     int i, j, count, rc;
@@ -96,11 +92,9 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
 
     /* parse the cmd line - do this every time thru so we can
      * repopulate the globals */
-    if (PRTE_SUCCESS != (rc = prte_cmd_line_parse(prte_cmd_line, true, false,
-                                                  argc, argv)) ) {
+    if (PRTE_SUCCESS != (rc = prte_cmd_line_parse(prte_cmd_line, true, false, argc, argv))) {
         if (PRTE_ERR_SILENT != rc) {
-            fprintf(stderr, "%s: command line error (%s)\n", argv[0],
-                    prte_strerror(rc));
+            fprintf(stderr, "%s: command line error (%s)\n", argv[0], prte_strerror(rc));
         }
         return rc;
     }
@@ -118,8 +112,7 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
 
     /* get the cwd - we may need it in several places */
     if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
-        prte_show_help("help-prun.txt", "prun:init-failure",
-                       true, "get the cwd", rc);
+        prte_show_help("help-prun.txt", "prun:init-failure", true, "get the cwd", rc);
         goto cleanup;
     }
 
@@ -168,12 +161,12 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
     found = false;
     if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "hostfile"))) {
         if (1 < j) {
-            prte_show_help("help-prun.txt", "prun:multiple-hostfiles",
-                           true, "prun", NULL);
+            prte_show_help("help-prun.txt", "prun:multiple-hostfiles", true, "prun", NULL);
             return PRTE_ERR_FATAL;
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "hostfile", 0, 0);
-            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->value.data.string, PMIX_STRING);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->value.data.string,
+                               PMIX_STRING);
             if (NULL != hostfiles) {
                 prte_argv_append_nosize(hostfiles, pvalue->value.data.string);
             }
@@ -182,12 +175,12 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
     }
     if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "machinefile"))) {
         if (1 < j || found) {
-            prte_show_help("help-prun.txt", "prun:multiple-hostfiles",
-                           true, "prun", NULL);
+            prte_show_help("help-prun.txt", "prun:multiple-hostfiles", true, "prun", NULL);
             return PRTE_ERR_FATAL;
         } else {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "machinefile", 0, 0);
-            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->value.data.string, PMIX_STRING);
+            PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE, pvalue->value.data.string,
+                               PMIX_STRING);
             if (NULL != hostfiles) {
                 prte_argv_append_nosize(hostfiles, pvalue->value.data.string);
             }
@@ -196,7 +189,7 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
 
     /* Did the user specify any hosts? */
     if (0 < (j = prte_cmd_line_get_ninsts(prte_cmd_line, "host"))) {
-        char **targ=NULL, *tval;
+        char **targ = NULL, *tval;
         for (i = 0; i < j; ++i) {
             pvalue = prte_cmd_line_get_param(prte_cmd_line, "host", i, 0);
             prte_argv_append_nosize(&targ, pvalue->value.data.string);
@@ -210,11 +203,10 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
     }
 
     /* check for bozo error */
-    if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "np", 0, 0)) ||
-        NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "n", 0, 0))) {
+    if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "np", 0, 0))
+        || NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "n", 0, 0))) {
         if (0 > pvalue->value.data.integer) {
-            prte_show_help("help-prun.txt", "prun:negative-nprocs",
-                           true, "prun", app->app.argv[0],
+            prte_show_help("help-prun.txt", "prun:negative-nprocs", true, "prun", app->app.argv[0],
                            pvalue->value.data.integer, NULL);
             return PRTE_ERR_FATAL;
         }
@@ -248,8 +240,8 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
 
     app->app.cmd = strdup(app->app.argv[0]);
     if (NULL == app->app.cmd) {
-        prte_show_help("help-prun.txt", "prun:call-failed",
-                       true, "prun", "library", "strdup returned NULL", errno);
+        prte_show_help("help-prun.txt", "prun:call-failed", true, "prun", "library",
+                       "strdup returned NULL", errno);
         rc = PRTE_ERR_NOT_FOUND;
         goto cleanup;
     }
@@ -263,7 +255,7 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
     if (0 == strcmp(appname, "java")) {
         /* see if we were given a library path */
         found = false;
-        for (i=1; NULL != app->app.argv[i]; i++) {
+        for (i = 1; NULL != app->app.argv[i]; i++) {
             if (NULL != strstr(app->app.argv[i], "java.library.path")) {
                 char *dptr;
                 /* find the '=' that delineates the option from the path */
@@ -278,10 +270,12 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
                 found = true;
                 if (NULL == strstr(app->app.argv[i], prte_install_dirs.libdir)) {
                     /* doesn't appear to - add it to be safe */
-                    if (':' == app->app.argv[i][strlen(app->app.argv[i]-1)]) {
-                        prte_asprintf(&value, "-Djava.library.path=%s%s", dptr, prte_install_dirs.libdir);
+                    if (':' == app->app.argv[i][strlen(app->app.argv[i] - 1)]) {
+                        prte_asprintf(&value, "-Djava.library.path=%s%s", dptr,
+                                      prte_install_dirs.libdir);
                     } else {
-                        prte_asprintf(&value, "-Djava.library.path=%s:%s", dptr, prte_install_dirs.libdir);
+                        prte_asprintf(&value, "-Djava.library.path=%s:%s", dptr,
+                                      prte_install_dirs.libdir);
                     }
                     free(app->app.argv[i]);
                     app->app.argv[i] = value;
@@ -298,47 +292,47 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
 
         /* see if we were given a class path */
         found = false;
-        for (i=1; NULL != app->app.argv[i]; i++) {
-            if (NULL != strstr(app->app.argv[i], "cp") ||
-                NULL != strstr(app->app.argv[i], "classpath")) {
+        for (i = 1; NULL != app->app.argv[i]; i++) {
+            if (NULL != strstr(app->app.argv[i], "cp")
+                || NULL != strstr(app->app.argv[i], "classpath")) {
                 /* yep - but does it include the path to the mpi libs? */
                 found = true;
                 /* check if mpi.jar exists - if so, add it */
                 value = prte_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
-                if (access(value, F_OK ) != -1) {
-                    set_classpath_jar_file(app, i+1, "mpi.jar");
+                if (access(value, F_OK) != -1) {
+                    set_classpath_jar_file(app, i + 1, "mpi.jar");
                 }
                 free(value);
                 /* check for oshmem support */
                 value = prte_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
-                if (access(value, F_OK ) != -1) {
-                    set_classpath_jar_file(app, i+1, "shmem.jar");
+                if (access(value, F_OK) != -1) {
+                    set_classpath_jar_file(app, i + 1, "shmem.jar");
                 }
                 free(value);
                 /* always add the local directory */
-                prte_asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[i+1]);
-                free(app->app.argv[i+1]);
-                app->app.argv[i+1] = value;
+                prte_asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[i + 1]);
+                free(app->app.argv[i + 1]);
+                app->app.argv[i + 1] = value;
                 break;
             }
         }
         if (!found) {
             /* check to see if CLASSPATH is in the environment */
-            found = false;  // just to be pedantic
-            for (i=0; NULL != environ[i]; i++) {
+            found = false; // just to be pedantic
+            for (i = 0; NULL != environ[i]; i++) {
                 if (0 == strncmp(environ[i], "CLASSPATH", strlen("CLASSPATH"))) {
                     value = strchr(environ[i], '=');
                     ++value; /* step over the = */
                     prte_argv_insert_element(&app->app.argv, 1, value);
                     /* check for mpi.jar */
                     value = prte_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
-                    if (access(value, F_OK ) != -1) {
+                    if (access(value, F_OK) != -1) {
                         set_classpath_jar_file(app, 1, "mpi.jar");
                     }
                     free(value);
                     /* check for shmem.jar */
                     value = prte_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
-                    if (access(value, F_OK ) != -1) {
+                    if (access(value, F_OK) != -1) {
                         set_classpath_jar_file(app, 1, "shmem.jar");
                     }
                     free(value);
@@ -361,7 +355,7 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
                 str = strdup(app->app.cwd);
                 /* check for mpi.jar */
                 value = prte_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
-                if (access(value, F_OK ) != -1) {
+                if (access(value, F_OK) != -1) {
                     prte_asprintf(&str2, "%s:%s", str, value);
                     free(str);
                     str = str2;
@@ -369,7 +363,7 @@ static int create_app(prte_cmd_line_t *prte_cmd_line,
                 free(value);
                 /* check for shmem.jar */
                 value = prte_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
-                if (access(value, F_OK ) != -1) {
+                if (access(value, F_OK) != -1) {
                     prte_asprintf(&str2, "%s:%s", str, value);
                     free(str);
                     str = str2;
@@ -503,9 +497,7 @@ cleanup:
     return rc;
 }
 
-int prte_parse_locals(prte_cmd_line_t *prte_cmd_line,
-                      prte_list_t *jdata,
-                      int argc, char* argv[],
+int prte_parse_locals(prte_cmd_line_t *prte_cmd_line, prte_list_t *jdata, int argc, char *argv[],
                       char ***hostfiles, char ***hosts)
 {
     int i, rc;
@@ -533,9 +525,7 @@ int prte_parse_locals(prte_cmd_line_t *prte_cmd_line,
                     env = NULL;
                 }
                 app = NULL;
-                rc = create_app(prte_cmd_line,
-                                temp_argc, temp_argv, jdata,
-                                &app, &made_app, &env,
+                rc = create_app(prte_cmd_line, temp_argc, temp_argv, jdata, &app, &made_app, &env,
                                 hostfiles, hosts);
                 if (PRTE_SUCCESS != rc) {
                     /* Assume that the error message has already been
@@ -559,9 +549,7 @@ int prte_parse_locals(prte_cmd_line_t *prte_cmd_line,
 
     if (prte_argv_count(temp_argv) > 1) {
         app = NULL;
-        rc = create_app(prte_cmd_line,
-                        temp_argc, temp_argv, jdata,
-                        &app, &made_app, &env,
+        rc = create_app(prte_cmd_line, temp_argc, temp_argv, jdata, &app, &made_app, &env,
                         hostfiles, hosts);
         if (PRTE_SUCCESS != rc) {
             return rc;
@@ -584,12 +572,11 @@ static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfil
 {
     if (NULL == strstr(app->app.argv[index], jarfile)) {
         /* nope - need to add it */
-        char *fmt = ':' == app->app.argv[index][strlen(app->app.argv[index]-1)]
-        ? "%s%s/%s" : "%s:%s/%s";
+        char *fmt = ':' == app->app.argv[index][strlen(app->app.argv[index] - 1)] ? "%s%s/%s"
+                                                                                  : "%s:%s/%s";
         char *str;
         prte_asprintf(&str, fmt, app->app.argv[index], prte_install_dirs.libdir, jarfile);
         free(app->app.argv[index]);
         app->app.argv[index] = str;
     }
 }
-

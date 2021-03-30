@@ -3,6 +3,7 @@
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -14,16 +15,16 @@
 #define PRTE_RAS_SIM_H
 
 #include "prte_config.h"
-#include "src/mca/ras/ras.h"
 #include "src/mca/ras/base/base.h"
+#include "src/mca/ras/ras.h"
 
 BEGIN_C_DECLS
 
 struct prte_ras_sim_component_t {
     prte_ras_base_component_t super;
     char *num_nodes;
-    char * slots;
-    char * slots_max;
+    char *slots;
+    char *slots_max;
     char *topofiles;
     char *topologies;
     bool have_cpubind;

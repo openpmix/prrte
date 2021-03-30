@@ -28,30 +28,26 @@
  * service.  Only deals with pmix_proc_ts.
  */
 
-
 #ifndef PRTE_MCA_ROUTED_ROUTED_H_
 #define PRTE_MCA_ROUTED_ROUTED_H_
 
 #include "prte_config.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
-#include "types.h"
 #include "src/mca/mca.h"
+#include "types.h"
 
 #include "src/mca/routed/routed_types.h"
 
 BEGIN_C_DECLS
 
-
 /* ******************************************************************** */
-
 
 struct pmix_data_buffer_t;
 struct prte_rml_module_t;
-
 
 /* ******************************************************************** */
 /**
@@ -80,7 +76,6 @@ typedef int (*prte_routed_module_init_fn_t)(void);
  */
 typedef int (*prte_routed_module_finalize_fn_t)(void);
 
-
 /*
  * Delete route
  *
@@ -107,8 +102,7 @@ typedef int (*prte_routed_module_delete_route_fn_t)(pmix_proc_t *proc);
  *                      such functionality
  * @retval PRTE_ERROR   An unspecified error occurred
  */
-typedef int (*prte_routed_module_update_route_fn_t)(pmix_proc_t *target,
-                                                    pmix_proc_t *route);
+typedef int (*prte_routed_module_update_route_fn_t)(pmix_proc_t *target, pmix_proc_t *route);
 
 /**
  * Get the next hop towards the target
@@ -183,7 +177,6 @@ typedef size_t (*prte_routed_module_num_routes_fn_t)(void);
 
 /* ******************************************************************** */
 
-
 /**
  * routed module interface
  *
@@ -193,19 +186,19 @@ typedef size_t (*prte_routed_module_num_routes_fn_t)(void);
  */
 typedef struct {
     /** Startup/shutdown the communication system and clean up resources */
-    prte_routed_module_init_fn_t                    initialize;
-    prte_routed_module_finalize_fn_t                finalize;
+    prte_routed_module_init_fn_t initialize;
+    prte_routed_module_finalize_fn_t finalize;
     /* API functions */
-    prte_routed_module_delete_route_fn_t            delete_route;
-    prte_routed_module_update_route_fn_t            update_route;
-    prte_routed_module_get_route_fn_t               get_route;
-    prte_routed_module_route_lost_fn_t              route_lost;
-    prte_routed_module_route_is_defined_fn_t        route_is_defined;
-    prte_routed_module_set_lifeline_fn_t            set_lifeline;
+    prte_routed_module_delete_route_fn_t delete_route;
+    prte_routed_module_update_route_fn_t update_route;
+    prte_routed_module_get_route_fn_t get_route;
+    prte_routed_module_route_lost_fn_t route_lost;
+    prte_routed_module_route_is_defined_fn_t route_is_defined;
+    prte_routed_module_set_lifeline_fn_t set_lifeline;
     /* fns for daemons */
-    prte_routed_module_update_routing_plan_fn_t     update_routing_plan;
-    prte_routed_module_get_routing_list_fn_t        get_routing_list;
-    prte_routed_module_num_routes_fn_t              num_routes;
+    prte_routed_module_update_routing_plan_fn_t update_routing_plan;
+    prte_routed_module_get_routing_list_fn_t get_routing_list;
+    prte_routed_module_num_routes_fn_t num_routes;
 } prte_routed_module_t;
 
 /* provide an interface to the routed framework stub functions */
@@ -232,17 +225,12 @@ struct prte_routed_component_3_0_0_t {
 /** Convienence typedef */
 typedef struct prte_routed_component_3_0_0_t prte_routed_component_t;
 
-
 /* ******************************************************************** */
-
 
 /** Macro for use in components that are of type routed  */
-#define PRTE_ROUTED_BASE_VERSION_3_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("routed", 3, 0, 0)
-
+#define PRTE_ROUTED_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_2_1_0("routed", 3, 0, 0)
 
 /* ******************************************************************** */
-
 
 END_C_DECLS
 

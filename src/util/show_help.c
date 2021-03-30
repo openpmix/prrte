@@ -28,22 +28,22 @@
 #include "prte_config.h"
 #include "constants.h"
 
+#include <errno.h>
+#include <locale.h>
 #include <stdio.h>
 #include <string.h>
-#include <locale.h>
-#include <errno.h>
 
-#include "src/runtime/prte_globals.h"
-#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/iof/iof.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/rml/rml.h"
-#include "src/util/show_help.h"
-#include "src/util/show_help_lex.h"
-#include "src/util/printf.h"
+#include "src/pmix/pmix-internal.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/argv.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
-#include "src/pmix/pmix-internal.h"
+#include "src/util/printf.h"
+#include "src/util/show_help.h"
+#include "src/util/show_help_lex.h"
 
 bool prte_help_want_aggregate = false;
 
@@ -51,7 +51,8 @@ bool prte_help_want_aggregate = false;
  * Private variables
  */
 static const char *default_filename = "help-messages";
-static const char *dash_line = "--------------------------------------------------------------------------\n";
+static const char *dash_line
+    = "--------------------------------------------------------------------------\n";
 static int output_stream = -1;
 static char **search_dirs = NULL;
 static bool show_help_initialized = false;
@@ -93,15 +94,14 @@ static void tuple_list_item_destructor(tuple_list_item_t *obj)
     }
     PRTE_LIST_DESTRUCT(&(obj->tli_processes));
 }
-static PRTE_CLASS_INSTANCE(tuple_list_item_t, prte_list_item_t,
-                          tuple_list_item_constructor,
-                          tuple_list_item_destructor);
+static PRTE_CLASS_INSTANCE(tuple_list_item_t, prte_list_item_t, tuple_list_item_constructor,
+                           tuple_list_item_destructor);
 
 /* List of (filename, topic) tuples that have already been displayed */
 static prte_list_t abd_tuples;
 
 /* How long to wait between displaying duplicate show_help notices */
-static struct timeval show_help_interval = { 5, 0 };
+static struct timeval show_help_interval = {5, 0};
 
 /* Timer for displaying duplicate help message notices */
 static time_t show_help_time_last_displayed = 0;
@@ -112,8 +112,8 @@ static prte_event_t show_help_timer_event;
  * Local functions
  */
 static void show_accumulated_duplicates(int fd, short event, void *context);
-static int show_help(const char *filename, const char *topic,
-                     const char *output, pmix_proc_t *sender);
+static int show_help(const char *filename, const char *topic, const char *output,
+                     pmix_proc_t *sender);
 
 int prte_show_help_init(void)
 {
@@ -135,7 +135,7 @@ int prte_show_help_init(void)
     return PRTE_SUCCESS;
 }
 
-void prte_show_help_finalize (void)
+void prte_show_help_finalize(void)
 {
     if (!show_help_initialized) {
         return;
@@ -169,8 +169,7 @@ void prte_show_help_finalize (void)
  * efficient method in the world, but we're going for clarity here --
  * not optimization.  :-)
  */
-static int array2string(char **outstring,
-                        int want_error_header, char **lines)
+static int array2string(char **outstring, int want_error_header, char **lines)
 {
     int i, count;
     size_t len;
@@ -188,7 +187,7 @@ static int array2string(char **outstring,
 
     /* Malloc it out */
 
-    (*outstring) = (char*) malloc(len + 1);
+    (*outstring) = (char *) malloc(len + 1);
     if (NULL == *outstring) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
@@ -213,7 +212,6 @@ static int array2string(char **outstring,
     return PRTE_SUCCESS;
 }
 
-
 /*
  * Find the right file to open
  */
@@ -237,8 +235,8 @@ static int open_file(const char *base, const char *topic)
         /* Try to open the file.  If we can't find it, try it with a .txt
          * extension.
          */
-        for (i=0; NULL != search_dirs[i]; i++) {
-            filename = prte_os_path( false, search_dirs[i], base, NULL );
+        for (i = 0; NULL != search_dirs[i]; i++) {
+            filename = prte_os_path(false, search_dirs[i], base, NULL);
             prte_show_help_yyin = fopen(filename, "r");
             if (NULL == prte_show_help_yyin) {
                 prte_asprintf(&err_msg, "%s: %s", filename, strerror(errno));
@@ -258,7 +256,10 @@ static int open_file(const char *base, const char *topic)
 
     /* If we still couldn't open it, then something is wrong */
     if (NULL == prte_show_help_yyin) {
-        prte_output(output_stream, "%sSorry!  You were supposed to get help about:\n    %s\nBut I couldn't open the help file:\n    %s.  Sorry!\n%s", dash_line, topic, err_msg, dash_line);
+        prte_output(output_stream,
+                    "%sSorry!  You were supposed to get help about:\n    %s\nBut I couldn't open "
+                    "the help file:\n    %s.  Sorry!\n%s",
+                    dash_line, topic, err_msg, dash_line);
         free(err_msg);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -275,7 +276,6 @@ static int open_file(const char *base, const char *topic)
 
     return PRTE_SUCCESS;
 }
-
 
 /*
  * In the file that has already been opened, find the topic that we're
@@ -308,7 +308,10 @@ static int find_topic(const char *base, const char *topic)
             break;
 
         case PRTE_SHOW_HELP_PARSE_DONE:
-            prte_output(output_stream, "%sSorry!  You were supposed to get help about:\n    %s\nfrom the file:\n    %s\nBut I couldn't find that topic in the file.  Sorry!\n%s", dash_line, topic, base, dash_line);
+            prte_output(output_stream,
+                        "%sSorry!  You were supposed to get help about:\n    %s\nfrom the file:\n  "
+                        "  %s\nBut I couldn't find that topic in the file.  Sorry!\n%s",
+                        dash_line, topic, base, dash_line);
             return PRTE_ERR_NOT_FOUND;
 
         default:
@@ -318,7 +321,6 @@ static int find_topic(const char *base, const char *topic)
 
     /* Never get here */
 }
-
 
 /*
  * We have an open file, and we're pointed at the right topic.  So
@@ -347,7 +349,6 @@ static int read_topic(char ***array)
     /* Never get here */
 }
 
-
 static int load_array(char ***array, const char *filename, const char *topic)
 {
     int ret;
@@ -362,7 +363,7 @@ static int load_array(char ***array, const char *filename, const char *topic)
     }
 
     fclose(prte_show_help_yyin);
-    prte_show_help_yylex_destroy ();
+    prte_show_help_yylex_destroy();
 
     if (PRTE_SUCCESS != ret) {
         prte_argv_free(*array);
@@ -371,8 +372,8 @@ static int load_array(char ***array, const char *filename, const char *topic)
     return ret;
 }
 
-char *prte_show_help_vstring(const char *filename, const char *topic,
-                             int want_error_header, va_list arglist)
+char *prte_show_help_vstring(const char *filename, const char *topic, int want_error_header,
+                             va_list arglist)
 {
     int rc;
     char *single_string, *output, **array = NULL;
@@ -395,28 +396,24 @@ char *prte_show_help_vstring(const char *filename, const char *topic,
     return (PRTE_SUCCESS == rc) ? output : NULL;
 }
 
-char *prte_show_help_string(const char *filename, const char *topic,
-                            int want_error_handler, ...)
+char *prte_show_help_string(const char *filename, const char *topic, int want_error_handler, ...)
 {
     char *output;
     va_list arglist;
 
     va_start(arglist, want_error_handler);
-    output = prte_show_help_vstring(filename, topic, want_error_handler,
-                                    arglist);
+    output = prte_show_help_vstring(filename, topic, want_error_handler, arglist);
     va_end(arglist);
 
     return output;
 }
 
-int prte_show_vhelp(const char *filename, const char *topic,
-                     int want_error_header, va_list arglist)
+int prte_show_vhelp(const char *filename, const char *topic, int want_error_header, va_list arglist)
 {
     char *output;
 
     /* Convert it to a single string */
-    output = prte_show_help_vstring(filename, topic, want_error_header,
-                                    arglist);
+    output = prte_show_help_vstring(filename, topic, want_error_header, arglist);
 
     /* If we got a single string, output it with formatting */
     if (NULL != output) {
@@ -427,16 +424,14 @@ int prte_show_vhelp(const char *filename, const char *topic,
     return (NULL == output) ? PRTE_ERROR : PRTE_SUCCESS;
 }
 
-int prte_show_help(const char *filename, const char *topic,
-                    int want_error_header, ...)
+int prte_show_help(const char *filename, const char *topic, int want_error_header, ...)
 {
     va_list arglist;
     int rc;
     char *output;
 
     va_start(arglist, want_error_header);
-    output = prte_show_help_vstring(filename, topic, want_error_header,
-                                    arglist);
+    output = prte_show_help_vstring(filename, topic, want_error_header, arglist);
     va_end(arglist);
 
     /* If nothing came back, there's nothing to do */
@@ -455,8 +450,8 @@ int prte_show_help_add_dir(const char *directory)
     return PRTE_SUCCESS;
 }
 
-int prte_show_help_norender(const char *filename, const char *topic,
-                            int want_error_header, const char *output)
+int prte_show_help_norender(const char *filename, const char *topic, int want_error_header,
+                            const char *output)
 {
     int rc = PRTE_SUCCESS;
     int8_t have_output = 1;
@@ -467,10 +462,8 @@ int prte_show_help_norender(const char *filename, const char *topic,
      * or ROUTED has not been setup,
      * or we weren't given an HNP, then all we can do is process this locally
      */
-    if (PRTE_PROC_IS_MASTER ||
-        NULL == prte_rml.send_buffer_nb ||
-        NULL == prte_routed.get_route ||
-        NULL == prte_process_info.my_hnp_uri) {
+    if (PRTE_PROC_IS_MASTER || NULL == prte_rml.send_buffer_nb || NULL == prte_routed.get_route
+        || NULL == prte_process_info.my_hnp_uri) {
         rc = show_help(filename, topic, output, PRTE_PROC_MY_NAME);
         goto CLEANUP;
     }
@@ -521,9 +514,9 @@ int prte_show_help_norender(const char *filename, const char *topic,
 
         /* send it via RML to the HNP */
 
-        if (PRTE_SUCCESS != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
-                                                          PRTE_RML_TAG_SHOW_HELP,
-                                                          prte_rml_send_callback, NULL))) {
+        if (PRTE_SUCCESS
+            != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_SHOW_HELP,
+                                             prte_rml_send_callback, NULL))) {
             PMIX_DATA_BUFFER_RELEASE(buf);
             /* okay, that didn't work, output locally  */
             prte_output(output_stream, "%s", output);
@@ -533,7 +526,7 @@ int prte_show_help_norender(const char *filename, const char *topic,
         am_inside = false;
     }
 
-  CLEANUP:
+CLEANUP:
     return rc;
 }
 
@@ -551,10 +544,8 @@ int prte_show_help_suppress(const char *filename, const char *topic)
     /* If we are the HNP, or the RML has not yet been setup, or ROUTED
        has not been setup, or we weren't given an HNP, then all we can
        do is process this locally. */
-    if (PRTE_PROC_IS_MASTER ||
-        NULL == prte_rml.send_buffer_nb ||
-        NULL == prte_routed.get_route ||
-        NULL == prte_process_info.my_hnp_uri) {
+    if (PRTE_PROC_IS_MASTER || NULL == prte_rml.send_buffer_nb || NULL == prte_routed.get_route
+        || NULL == prte_process_info.my_hnp_uri) {
         rc = show_help(filename, topic, NULL, PRTE_PROC_MY_NAME);
         return rc;
     }
@@ -595,9 +586,9 @@ int prte_show_help_suppress(const char *filename, const char *topic)
             return PRTE_SUCCESS;
         }
         /* send it to the HNP */
-        if (PRTE_SUCCESS != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
-                                                          PRTE_RML_TAG_SHOW_HELP,
-                                                          prte_rml_send_callback, NULL))) {
+        if (PRTE_SUCCESS
+            != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_SHOW_HELP,
+                                             prte_rml_send_callback, NULL))) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(buf);
             /* okay, that didn't work, just process locally error, just ignore return  */
@@ -619,7 +610,8 @@ static int match(const char *a, const char *b)
     size_t min;
 
     /* Check straight string match first */
-    if (0 == strcmp(a, b)) return PRTE_SUCCESS;
+    if (0 == strcmp(a, b))
+        return PRTE_SUCCESS;
 
     if (NULL != strchr(a, '*') || NULL != strchr(b, '*')) {
         tmp1 = strdup(a);
@@ -670,13 +662,13 @@ static int match(const char *a, const char *b)
  * of (filename, topic) tuples displayed so the storage required will
  * be fairly small, and linear searches will be fast enough.
  */
-static int get_tli(const char *filename, const char *topic,
-                   tuple_list_item_t **tli)
+static int get_tli(const char *filename, const char *topic, tuple_list_item_t **tli)
 {
     /* Search the list for a duplicate. */
-    PRTE_LIST_FOREACH(*tli, &abd_tuples, tuple_list_item_t) {
-        if (PRTE_SUCCESS == match((*tli)->tli_filename, filename) &&
-            PRTE_SUCCESS == match((*tli)->tli_topic, topic)) {
+    PRTE_LIST_FOREACH(*tli, &abd_tuples, tuple_list_item_t)
+    {
+        if (PRTE_SUCCESS == match((*tli)->tli_filename, filename)
+            && PRTE_SUCCESS == match((*tli)->tli_topic, topic)) {
             return PRTE_SUCCESS;
         }
     }
@@ -700,9 +692,9 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
     /* Loop through all the messages we've displayed and see if any
        processes have sent duplicates that have not yet been displayed
        yet */
-    PRTE_LIST_FOREACH(tli, &abd_tuples, tuple_list_item_t) {
-        if (tli->tli_display &&
-            tli->tli_count_since_last_display > 0) {
+    PRTE_LIST_FOREACH(tli, &abd_tuples, tuple_list_item_t)
+    {
+        if (tli->tli_display && tli->tli_count_since_last_display > 0) {
             static bool first = true;
             prte_output(0, "%d more process%s sent help message %s / %s",
                         tli->tli_count_since_last_display,
@@ -711,7 +703,8 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
             tli->tli_count_since_last_display = 0;
 
             if (first) {
-                prte_output(0, "Set MCA parameter \"prte_base_help_aggregate\" to 0 to see all help / error messages");
+                prte_output(0, "Set MCA parameter \"prte_base_help_aggregate\" to 0 to see all "
+                               "help / error messages");
                 first = false;
             }
         }
@@ -721,8 +714,8 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
     show_help_timer_set = false;
 }
 
-static int show_help(const char *filename, const char *topic,
-                     const char *output, pmix_proc_t *sender)
+static int show_help(const char *filename, const char *topic, const char *output,
+                     pmix_proc_t *sender)
 {
     int rc;
     tuple_list_item_t *tli = NULL;
@@ -798,7 +791,7 @@ static int show_help(const char *filename, const char *topic,
         return rc;
     }
 
- after_output:
+after_output:
     /* If we're aggregating, add this process name to the list */
     if (prte_help_want_aggregate) {
         pnli = PRTE_NEW(prte_namelist_t);
@@ -815,20 +808,17 @@ static int show_help(const char *filename, const char *topic,
 
 /* Note that this function is called from ess/hnp, so don't make it
    static */
-void prte_show_help_recv(int status, pmix_proc_t* sender,
-                         pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
-                         void* cbdata)
+void prte_show_help_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                         prte_rml_tag_t tag, void *cbdata)
 {
-    char *output=NULL;
-    char *filename=NULL, *topic=NULL;
+    char *output = NULL;
+    char *filename = NULL, *topic = NULL;
     int32_t n;
     int8_t have_output;
     int rc;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_debug_output,
-                         "%s got show_help from %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(sender)));
+    PRTE_OUTPUT_VERBOSE((5, prte_debug_output, "%s got show_help from %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender)));
 
     /* unpack the filename of the show_help text file */
     n = 1;
@@ -875,4 +865,4 @@ cleanup:
     if (NULL != topic) {
         free(topic);
     }
- }
+}

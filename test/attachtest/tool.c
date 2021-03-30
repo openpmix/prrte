@@ -1,8 +1,8 @@
+#include <pmix_tool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pmix_tool.h>
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     pmix_proc_t proc;
     pmix_status_t rc = PMIX_ERROR;

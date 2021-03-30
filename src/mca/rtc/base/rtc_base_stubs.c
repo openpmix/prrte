@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
  *
  * $HEADER$
  */
-
 
 #include "prte_config.h"
 
@@ -23,7 +23,8 @@ void prte_rtc_base_assign(prte_job_t *jdata)
 {
     prte_rtc_base_selected_module_t *active;
 
-    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t) {
+    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
+    {
         if (NULL != active->module->assign) {
             /* give this module a chance to operate on it */
             active->module->assign(jdata);
@@ -31,12 +32,12 @@ void prte_rtc_base_assign(prte_job_t *jdata)
     }
 }
 
-void prte_rtc_base_set(prte_job_t *jdata, prte_proc_t *proc,
-                       char ***environ_copy, int error_fd)
+void prte_rtc_base_set(prte_job_t *jdata, prte_proc_t *proc, char ***environ_copy, int error_fd)
 {
     prte_rtc_base_selected_module_t *active;
 
-    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t) {
+    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
+    {
         if (NULL != active->module->set) {
             /* give this module a chance to operate on it */
             active->module->set(jdata, proc, environ_copy, error_fd);
@@ -48,14 +49,14 @@ void prte_rtc_base_get_avail_vals(prte_list_t *vals)
 {
     prte_rtc_base_selected_module_t *active;
 
-    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t) {
+    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
+    {
         if (NULL != active->module->get_available_values) {
             /* give this module a chance to operate on it */
             active->module->get_available_values(vals);
         }
     }
 }
-
 
 static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *file,
                           const char *topic, va_list ap)
@@ -85,26 +86,24 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
     if (PRTE_SUCCESS != (ret = prte_fd_write(fd, sizeof(*msg), msg))) {
         goto out;
     }
-    if (msg->file_str_len > 0 &&
-        PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->file_str_len, file))) {
+    if (msg->file_str_len > 0
+        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->file_str_len, file))) {
         goto out;
     }
-    if (msg->topic_str_len > 0 &&
-        PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->topic_str_len, topic))) {
+    if (msg->topic_str_len > 0
+        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->topic_str_len, topic))) {
         goto out;
     }
-    if (msg->msg_str_len > 0 &&
-        PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->msg_str_len, str))) {
+    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->msg_str_len, str))) {
         goto out;
     }
 
- out:
+out:
     free(str);
     return ret;
 }
 
-int prte_rtc_base_send_warn_show_help(int fd, const char *file,
-                                      const char *topic, ...)
+int prte_rtc_base_send_warn_show_help(int fd, const char *file, const char *topic, ...)
 {
     int ret;
     va_list ap;
@@ -121,8 +120,8 @@ int prte_rtc_base_send_warn_show_help(int fd, const char *file,
     return ret;
 }
 
-void prte_rtc_base_send_error_show_help(int fd, int exit_status,
-                                        const char *file, const char *topic, ...)
+void prte_rtc_base_send_error_show_help(int fd, int exit_status, const char *file,
+                                        const char *topic, ...)
 {
     va_list ap;
     prte_odls_pipe_err_msg_t msg;
@@ -137,4 +136,3 @@ void prte_rtc_base_send_error_show_help(int fd, int exit_status,
 
     exit(exit_status);
 }
-

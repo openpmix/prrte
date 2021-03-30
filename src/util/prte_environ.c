@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,10 +28,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "src/util/printf.h"
-#include "src/util/argv.h"
-#include "src/util/prte_environ.h"
 #include "constants.h"
+#include "src/util/argv.h"
+#include "src/util/printf.h"
+#include "src/util/prte_environ.h"
 
 #define PRTE_DEFAULT_TMPDIR "/tmp"
 
@@ -92,8 +93,7 @@ char **prte_environ_merge(char **minor, char **major)
  * Portable version of setenv(), allowing editing of any environ-like
  * array
  */
-int prte_setenv(const char *name, const char *value, bool overwrite,
-                char ***env)
+int prte_setenv(const char *name, const char *value, bool overwrite, char ***env)
 {
     int i;
     char *newvalue, *compare;
@@ -113,7 +113,7 @@ int prte_setenv(const char *name, const char *value, bool overwrite,
 
     /* Check the bozo case */
 
-    if( NULL == env ) {
+    if (NULL == env) {
         return PRTE_ERR_BAD_PARAM;
     } else if (NULL == *env) {
         i = 0;
@@ -123,13 +123,13 @@ int prte_setenv(const char *name, const char *value, bool overwrite,
     }
 
     /* If this is the "environ" array, use putenv */
-    if( *env == environ ) {
+    if (*env == environ) {
         /* THIS IS POTENTIALLY A MEMORY LEAK!  But I am doing it
            so that we don't violate the law of least
            astonishment for PRTE developers (i.e., those that don't
            check the return code of prte_setenv() and notice that we
            returned an error if you passed in the real environ) */
-#if defined (HAVE_SETENV)
+#if defined(HAVE_SETENV)
         setenv(name, value, overwrite);
         /* setenv copies the value, so we can free it here */
         free(newvalue);
@@ -199,7 +199,6 @@ int prte_setenv(const char *name, const char *value, bool overwrite,
     return PRTE_SUCCESS;
 }
 
-
 /*
  * Portable version of unsetenv(), allowing editing of any
  * environ-like array
@@ -248,20 +247,20 @@ int prte_unsetenv(const char *name, char ***env)
     return (found) ? PRTE_SUCCESS : PRTE_ERR_NOT_FOUND;
 }
 
-const char* prte_tmp_directory( void )
+const char *prte_tmp_directory(void)
 {
-    const char* str;
+    const char *str;
 
-    if( NULL == (str = getenv("TMPDIR")) )
-        if( NULL == (str = getenv("TEMP")) )
-            if( NULL == (str = getenv("TMP")) )
+    if (NULL == (str = getenv("TMPDIR")))
+        if (NULL == (str = getenv("TEMP")))
+            if (NULL == (str = getenv("TMP")))
                 str = PRTE_DEFAULT_TMPDIR;
     return str;
 }
 
-const char* prte_home_directory( void )
+const char *prte_home_directory(void)
 {
-    char* home = getenv("HOME");
+    char *home = getenv("HOME");
 
     return home;
 }

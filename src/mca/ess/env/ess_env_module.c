@@ -25,62 +25,60 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include <sys/types.h>
 #include <stdio.h>
+#include <sys/types.h>
 #ifdef HAVE_FCNTL_H
-#include <fcntl.h>
+#    include <fcntl.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <stdlib.h>
 
 #include "src/event/event-internal.h"
 #include "src/pmix/pmix-internal.h"
 
-#include "src/util/show_help.h"
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
-#include "src/util/output.h"
-#include "src/util/malloc.h"
+#include "src/mca/mca.h"
 #include "src/util/argv.h"
+#include "src/util/malloc.h"
+#include "src/util/output.h"
+#include "src/util/show_help.h"
 
+#include "src/mca/errmgr/base/base.h"
+#include "src/mca/ess/base/base.h"
+#include "src/mca/ess/ess.h"
+#include "src/mca/grpcomm/base/base.h"
+#include "src/mca/iof/base/base.h"
+#include "src/mca/plm/base/base.h"
+#include "src/mca/ras/base/base.h"
 #include "src/mca/rml/base/base.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/routed/base/base.h"
 #include "src/mca/routed/routed.h"
-#include "src/mca/errmgr/base/base.h"
-#include "src/mca/grpcomm/base/base.h"
-#include "src/mca/iof/base/base.h"
-#include "src/mca/ess/base/base.h"
-#include "src/mca/ess/ess.h"
-#include "src/mca/ras/base/base.h"
-#include "src/mca/plm/base/base.h"
 
-#include "src/mca/rmaps/base/base.h"
 #include "src/mca/filem/base/base.h"
+#include "src/mca/rmaps/base/base.h"
+#include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
-#include "src/util/name_fns.h"
 
-#include "src/runtime/runtime.h"
-#include "src/runtime/prte_wait.h"
 #include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_wait.h"
+#include "src/runtime/runtime.h"
 
-#include "src/mca/ess/ess.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/env/ess_env.h"
+#include "src/mca/ess/ess.h"
 
 static int env_set_name(void);
 
 static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
-prte_ess_base_module_t prte_ess_env_module = {
-    .init = rte_init,
-    .finalize = rte_finalize,
-    .abort = NULL
-};
+prte_ess_base_module_t prte_ess_env_module = {.init = rte_init,
+                                              .finalize = rte_finalize,
+                                              .abort = NULL};
 
 static int rte_init(int argc, char **argv)
 {
@@ -106,11 +104,10 @@ static int rte_init(int argc, char **argv)
     }
     return PRTE_SUCCESS;
 
- error:
+error:
     if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
-        prte_show_help("help-prte-runtime.txt",
-                       "prte_init:startup:internal-failure",
-                       true, error, PRTE_ERROR_NAME(ret), ret);
+        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+                       PRTE_ERROR_NAME(ret), ret);
     }
 
     return ret;
@@ -144,8 +141,8 @@ static int env_set_name(void)
     vpid = strtoul(prte_ess_base_vpid, NULL, 10);
     PRTE_PROC_MY_NAME->rank = vpid;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output,
-                         "ess:env set name to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:env set name to %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     prte_process_info.num_daemons = prte_ess_base_num_procs;
 

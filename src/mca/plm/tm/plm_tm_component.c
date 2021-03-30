@@ -16,6 +16,7 @@
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,22 +33,19 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/util/argv.h"
 #include "src/mca/base/prte_mca_base_var.h"
+#include "src/util/argv.h"
 
-#include "src/mca/plm/plm.h"
+#include "plm_tm.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
-#include "plm_tm.h"
-
+#include "src/mca/plm/plm.h"
 
 /*
  * Public string showing the plm ompi_tm component version number
  */
-const char *prte_plm_tm_component_version_string =
-  "PRTE tm plm MCA component version " PRTE_VERSION;
-
-
+const char *prte_plm_tm_component_version_string
+    = "PRTE tm plm MCA component version " PRTE_VERSION;
 
 /*
  * Local function
@@ -56,7 +54,6 @@ static int plm_tm_register(void);
 static int plm_tm_open(void);
 static int plm_tm_close(void);
 static int prte_plm_tm_component_query(prte_mca_base_module_t **module, int *priority);
-
 
 /*
  * Instantiate the public struct with all of our public information
@@ -94,12 +91,13 @@ static int plm_tm_register(void)
     prte_mca_base_component_t *comp = &prte_plm_tm_component.super.base_version;
 
     prte_plm_tm_component.want_path_check = true;
-    (void) prte_mca_base_component_var_register (comp, "want_path_check",
-                                            "Whether the launching process should check for the plm_tm_orted executable in the PATH before launching (the TM API does not give an indication of failure; this is a somewhat-lame workaround; non-zero values enable this check)",
-                                            PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                            PRTE_INFO_LVL_9,
-                                            PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                            &prte_plm_tm_component.want_path_check);
+    (void) prte_mca_base_component_var_register(
+        comp, "want_path_check",
+        "Whether the launching process should check for the plm_tm_orted executable in the PATH "
+        "before launching (the TM API does not give an indication of failure; this is a "
+        "somewhat-lame workaround; non-zero values enable this check)",
+        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_tm_component.want_path_check);
 
     return PRTE_SUCCESS;
 }
@@ -111,7 +109,6 @@ static int plm_tm_open(void)
     return PRTE_SUCCESS;
 }
 
-
 static int plm_tm_close(void)
 {
     if (NULL != prte_plm_tm_component.checked_paths) {
@@ -121,13 +118,11 @@ static int plm_tm_close(void)
     return PRTE_SUCCESS;
 }
 
-
 static int prte_plm_tm_component_query(prte_mca_base_module_t **module, int *priority)
 {
     /* Are we running under a TM job? */
 
-    if (NULL != getenv("PBS_ENVIRONMENT") &&
-        NULL != getenv("PBS_JOBID")) {
+    if (NULL != getenv("PBS_ENVIRONMENT") && NULL != getenv("PBS_JOBID")) {
 
         *priority = 75;
         *module = (prte_mca_base_module_t *) &prte_plm_tm_module;

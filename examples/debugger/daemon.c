@@ -25,16 +25,16 @@
  */
 
 #define _GNU_SOURCE
+#include <libgen.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <time.h>
-#include <pthread.h>
-#include <libgen.h>
+#include <unistd.h>
 
-#include <pmix_tool.h>
 #include "debugger.h"
+#include <pmix_tool.h>
 /*
  * This module is an example of a PMIx debugger daemon. The debugger daemon
  * handles interactions with application processes on a node in behalf of the
@@ -56,13 +56,10 @@ static char *target_namespace = NULL;
  * Once we have dealt with the returned data, we must
  * call the release_fn so that the PMIx library can
  * cleanup */
-static void cbfunc(pmix_status_t status,
-                   pmix_info_t *info, size_t ninfo,
-                   void *cbdata,
-                   pmix_release_cbfunc_t release_fn,
-                   void *release_cbdata)
+static void cbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *cbdata,
+                   pmix_release_cbfunc_t release_fn, void *release_cbdata)
 {
-    myquery_data_t *mq = (myquery_data_t*)cbdata;
+    myquery_data_t *mq = (myquery_data_t *) cbdata;
     size_t n;
 
     mq->status = status;
@@ -72,7 +69,7 @@ static void cbfunc(pmix_status_t status,
     if (0 < ninfo) {
         PMIX_INFO_CREATE(mq->info, ninfo);
         mq->ninfo = ninfo;
-        for (n=0; n < ninfo; n++) {
+        for (n = 0; n < ninfo; n++) {
             printf("Transferring %s\n", info[n].key);
             PMIX_INFO_XFER(&mq->info[n], &info[n]);
         }
@@ -91,13 +88,10 @@ static void cbfunc(pmix_status_t status,
  * when registering for general events - i.e.,, the default
   handler. We don't technically need to register one, but it
  * is usually good practice to catch any events that occur */
-static void notification_fn(size_t evhdlr_registration_id,
-                            pmix_status_t status,
-                            const pmix_proc_t *source,
-                            pmix_info_t info[], size_t ninfo,
+static void notification_fn(size_t evhdlr_registration_id, pmix_status_t status,
+                            const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                             pmix_info_t results[], size_t nresults,
-                            pmix_event_notification_cbfunc_fn_t cbfunc,
-                            void *cbdata)
+                            pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     printf("%s called as daemon default event handler for event=%s\n", __FUNCTION__,
            PMIx_Error_string(status));
@@ -113,13 +107,10 @@ static void notification_fn(size_t evhdlr_registration_id,
  * to declare a use-specific notification callback point. In this case,
  * we are asking to know whenever a job terminates, and we will then
  * know we can exit */
-static void release_fn(size_t evhdlr_registration_id,
-                       pmix_status_t status,
-                       const pmix_proc_t *source,
-                       pmix_info_t info[], size_t ninfo,
+static void release_fn(size_t evhdlr_registration_id, pmix_status_t status,
+                       const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                        pmix_info_t results[], size_t nresults,
-                       pmix_event_notification_cbfunc_fn_t cbfunc,
-                       void *cbdata)
+                       pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     myrel_t *lock;
     pmix_status_t rc;
@@ -128,8 +119,7 @@ static void release_fn(size_t evhdlr_registration_id,
     size_t n;
     pmix_proc_t *affected = NULL;
 
-    printf("%s called as daemon callback for event=%s\n", __FUNCTION__,
-           PMIx_Error_string(status));
+    printf("%s called as daemon callback for event=%s\n", __FUNCTION__, PMIx_Error_string(status));
 
     /* Be sure notification is for our application process namespace */
     if (0 != strcmp(target_namespace, source->nspace)) {
@@ -143,18 +133,16 @@ static void release_fn(size_t evhdlr_registration_id,
     /* Find our return object */
     lock = NULL;
     found = false;
-    for (n=0; n < ninfo; n++) {
+    for (n = 0; n < ninfo; n++) {
         /* Retrieve the lock that needs to be released by this callback. */
-        if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT,
-                         PMIX_MAX_KEYLEN)) {
-            lock = (myrel_t*)info[n].value.data.ptr;
+        if (0 == strncmp(info[n].key, PMIX_EVENT_RETURN_OBJECT, PMIX_MAX_KEYLEN)) {
+            lock = (myrel_t *) info[n].value.data.ptr;
             /* Not every RM will provide an exit code, but check if one was
              * given */
         } else if (0 == strncmp(info[n].key, PMIX_EXIT_CODE, PMIX_MAX_KEYLEN)) {
             exit_code = info[n].value.data.integer;
             found = true;
-        } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC,
-                                PMIX_MAX_KEYLEN)) {
+        } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
             affected = info[n].value.data.proc;
         }
     }
@@ -194,17 +182,14 @@ static void release_fn(size_t evhdlr_registration_id,
  * to the registered event. The index is used later on to deregister
  * an event handler - if we don't explicitly deregister it, then the
  * PMIx server will do so when it see us exit */
-static void evhandler_reg_callbk(pmix_status_t status,
-                                 size_t evhandler_ref,
-                                 void *cbdata)
+static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbdata)
 {
-    mylock_t *lock = (mylock_t*)cbdata;
+    mylock_t *lock = (mylock_t *) cbdata;
 
     printf("%s called by daemon as registration callback\n", __FUNCTION__);
     if (PMIX_SUCCESS != status) {
         fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
-                   myproc.nspace, myproc.rank, status,
-                   (unsigned long)evhandler_ref);
+                myproc.nspace, myproc.rank, status, (unsigned long) evhandler_ref);
     }
     lock->status = status;
     DEBUG_WAKEUP_THREAD(lock);
@@ -235,18 +220,16 @@ int main(int argc, char **argv)
     /* Initialize this daemon - since we were launched by the RM, our
      * connection info * will have been provided at startup. */
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, NULL, 0))) {
-        fprintf(stderr, "Debugger daemon: PMIx_tool_init failed: %s\n",
-                PMIx_Error_string(rc));
+        fprintf(stderr, "Debugger daemon: PMIx_tool_init failed: %s\n", PMIx_Error_string(rc));
         exit(0);
     }
-    printf("Debugger daemon ns %s rank %d pid %lu: Running\n", myproc.nspace,
-           myproc.rank, (unsigned long)pid);
+    printf("Debugger daemon ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank,
+           (unsigned long) pid);
 
     /* Register our default event handler */
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(NULL, 0, NULL, 0,
-                                notification_fn, evhandler_reg_callbk,
-                                (void*)&mylock);
+    PMIx_Register_event_handler(NULL, 0, NULL, 0, notification_fn, evhandler_reg_callbk,
+                                (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     if (PMIX_SUCCESS != mylock.status) {
         rc = mylock.status;
@@ -281,60 +264,52 @@ int main(int argc, char **argv)
         target_namespace = strdup(myproc.nspace);
         cospawned_namespace = 1;
     } else if (rc != PMIX_SUCCESS) {
-        fprintf(stderr,
-                "[%s:%d:%lu] Failed to get job being debugged - error %s\n",
-                myproc.nspace, myproc.rank, (unsigned long) pid,
-                PMIx_Error_string(rc));
+        fprintf(stderr, "[%s:%d:%lu] Failed to get job being debugged - error %s\n", myproc.nspace,
+                myproc.rank, (unsigned long) pid, PMIx_Error_string(rc));
         goto done;
-    }
-    else {
+    } else {
         /* Verify that the expected data structures were returned */
         if (NULL == val || PMIX_PROC != val->type) {
             fprintf(stderr, "[%s:%d:%lu] Failed to get job being debugged - NULL data returned\n",
-                    myproc.nspace, myproc.rank, (unsigned long)pid);
+                    myproc.nspace, myproc.rank, (unsigned long) pid);
             goto done;
         }
-        printf("[%s:%d:%lu] PMIX_DEBUG_JOB is '%s'\n", proc.nspace, proc.rank,
-               (unsigned long) pid, val->data.proc->nspace);
+        printf("[%s:%d:%lu] PMIX_DEBUG_JOB is '%s'\n", proc.nspace, proc.rank, (unsigned long) pid,
+               val->data.proc->nspace);
         /* Save the application namespace for later */
         target_namespace = strdup(val->data.proc->nspace);
         PMIX_VALUE_RELEASE(val);
     }
 
-    printf("[%s:%d:%lu] Debugging '%s'\n", myproc.nspace, myproc.rank,
-            (unsigned long)pid, target_namespace);
+    printf("[%s:%d:%lu] Debugging '%s'\n", myproc.nspace, myproc.rank, (unsigned long) pid,
+           target_namespace);
 
     /* Get my local rank so I can determine which local proc is "mine" to
      * debug */
     val = NULL;
-    if (PMIX_SUCCESS != (rc = PMIx_Get(&myproc, PMIX_LOCAL_RANK, NULL, 0,
-                                       &val))) {
-        fprintf(stderr, "[%s:%d:%lu] Failed to get my local rank - error %s\n",
-                myproc.nspace, myproc.rank, (unsigned long)pid,
-                PMIx_Error_string(rc));
+    if (PMIX_SUCCESS != (rc = PMIx_Get(&myproc, PMIX_LOCAL_RANK, NULL, 0, &val))) {
+        fprintf(stderr, "[%s:%d:%lu] Failed to get my local rank - error %s\n", myproc.nspace,
+                myproc.rank, (unsigned long) pid, PMIx_Error_string(rc));
         goto done;
     }
 
     /* Verify the expected data object was returned */
     if (NULL == val) {
-        fprintf(stderr,
-               "[%s:%d:%lu] Failed to get my local rank - NULL data returned\n",
-               myproc.nspace, myproc.rank, (unsigned long)pid);
+        fprintf(stderr, "[%s:%d:%lu] Failed to get my local rank - NULL data returned\n",
+                myproc.nspace, myproc.rank, (unsigned long) pid);
         goto done;
     }
     if (PMIX_UINT16 != val->type) {
-        fprintf(stderr,
-           "[%s:%d:%lu] Failed to get my local rank - returned wrong type %s\n",
-           myproc.nspace, myproc.rank, (unsigned long)pid,
-           PMIx_Data_type_string(val->type));
+        fprintf(stderr, "[%s:%d:%lu] Failed to get my local rank - returned wrong type %s\n",
+                myproc.nspace, myproc.rank, (unsigned long) pid, PMIx_Data_type_string(val->type));
         goto done;
     }
 
     /* Save the rank */
     localrank = val->data.uint16;
     PMIX_VALUE_RELEASE(val);
-    printf("[%s:%d:%lu] my local rank %d\n", myproc.nspace, myproc.rank,
-            (unsigned long)pid, (int)localrank);
+    printf("[%s:%d:%lu] my local rank %d\n", myproc.nspace, myproc.rank, (unsigned long) pid,
+           (int) localrank);
 
     /* Register an event handler specifically for when the target job
      * completes */
@@ -353,20 +328,18 @@ int main(int argc, char **argv)
     /* Only call me back when this specific job terminates */
     PMIX_INFO_LOAD(&info[n], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
 
-    printf("[%s:%d:%lu] registering for termination of '%s'\n",
-           myproc.nspace, myproc.rank, (unsigned long)pid, proc.nspace);
+    printf("[%s:%d:%lu] registering for termination of '%s'\n", myproc.nspace, myproc.rank,
+           (unsigned long) pid, proc.nspace);
 
     /* Create a lock to wait for completion of the event registration
      * callback */
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(&code, 1, info, ninfo,
-                                release_fn, evhandler_reg_callbk,
-                                (void*) &mylock);
+    PMIx_Register_event_handler(&code, 1, info, ninfo, release_fn, evhandler_reg_callbk,
+                                (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     PMIX_INFO_FREE(info, ninfo);
     if (PMIX_SUCCESS != mylock.status) {
-        fprintf(stderr,
-                "Failed to register handler for PMIX_ERR_JOB_TERMINATED: %s\n",
+        fprintf(stderr, "Failed to register handler for PMIX_ERR_JOB_TERMINATED: %s\n",
                 PMIx_Error_string(mylock.status));
         rc = mylock.status;
         DEBUG_DESTRUCT_LOCK(&mylock);
@@ -387,8 +360,7 @@ int main(int argc, char **argv)
     query[0].nqual = ninfo;
     PMIX_INFO_CREATE(query[0].qualifiers, ninfo);
     /* Set the namespace to query */
-    PMIX_INFO_LOAD(&query[0].qualifiers[n], PMIX_NSPACE, target_namespace,
-                   PMIX_STRING);
+    PMIX_INFO_LOAD(&query[0].qualifiers[n], PMIX_NSPACE, target_namespace, PMIX_STRING);
 
     /* Create the lock used to wait for query completion */
     DEBUG_CONSTRUCT_LOCK(&myquery_data.lock);
@@ -396,8 +368,7 @@ int main(int argc, char **argv)
     myquery_data.ninfo = 0;
 
     /* Execute the query */
-    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc,
-                                                 (void*)&myquery_data))) {
+    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(query, nq, cbfunc, (void *) &myquery_data))) {
         fprintf(stderr, "PMIx_Query_info failed: %d\n", rc);
         goto done;
     }
@@ -408,21 +379,20 @@ int main(int argc, char **argv)
     PMIX_QUERY_FREE(query, nq);
     if (PMIX_SUCCESS != myquery_data.status) {
         rc = myquery_data.status;
-        fprintf(stderr, "Error querying proc table for '%s': %s\n",
-                target_namespace, PMIx_Error_string(myquery_data.status));
+        fprintf(stderr, "Error querying proc table for '%s': %s\n", target_namespace,
+                PMIx_Error_string(myquery_data.status));
         goto done;
     }
 
     /* Display the process table */
-    printf("[%s:%d:%lu] Local proctable received for nspace '%s' has %d entries\n",
-            myproc.nspace, myproc.rank, (unsigned long)pid, target_namespace,
-            (int)myquery_data.info[0].value.data.darray->size);
+    printf("[%s:%d:%lu] Local proctable received for nspace '%s' has %d entries\n", myproc.nspace,
+           myproc.rank, (unsigned long) pid, target_namespace,
+           (int) myquery_data.info[0].value.data.darray->size);
 
     proctable = myquery_data.info[0].value.data.darray->array;
     for (i = 0; i < myquery_data.info[0].value.data.darray->size; i++) {
-        printf("Proctable[%d], namespace %s rank %d exec %s\n", i,
-               proctable[i].proc.nspace, proctable[i].proc.rank,
-               basename(proctable[i].executable_name));
+        printf("Proctable[%d], namespace %s rank %d exec %s\n", i, proctable[i].proc.nspace,
+               proctable[i].proc.rank, basename(proctable[i].executable_name));
     }
 
     /* Now that we have the proctable for our local processes, this daemon can
@@ -434,7 +404,7 @@ int main(int argc, char **argv)
      * Once initial setup is complete, the daemon sends a release event to the
      * application processes and those processes resume execution.
      */
-    (void)strncpy(proc.nspace, target_namespace, PMIX_MAX_NSLEN);
+    (void) strncpy(proc.nspace, target_namespace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
     // Since we are using the 'wildcard' only one daemon should send
     // the release message.
@@ -456,16 +426,12 @@ int main(int argc, char **argv)
         // https://github.com/openpmix/prrte/pull/857#discussion_r600849033
         sleep(1);
 
-        printf("[%s:%u:%lu] Sending release\n", myproc.nspace, myproc.rank,
-               (unsigned long)pid);
-        rc = PMIx_Notify_event(PMIX_DEBUGGER_RELEASE,
-                               NULL, PMIX_RANGE_CUSTOM,
-                               info, ninfo, NULL, NULL);
+        printf("[%s:%u:%lu] Sending release\n", myproc.nspace, myproc.rank, (unsigned long) pid);
+        rc = PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, NULL, PMIX_RANGE_CUSTOM, info, ninfo, NULL,
+                               NULL);
         if (PMIX_SUCCESS != rc) {
-            fprintf(stderr,
-                    "[%s:%u:%lu] Sending release failed with error %s(%d)\n",
-                    myproc.nspace, myproc.rank, (unsigned long)pid,
-                    PMIx_Error_string(rc), rc);
+            fprintf(stderr, "[%s:%u:%lu] Sending release failed with error %s(%d)\n", myproc.nspace,
+                    myproc.rank, (unsigned long) pid, PMIx_Error_string(rc), rc);
             goto done;
         }
     }
@@ -480,29 +446,27 @@ int main(int argc, char **argv)
      * and are still running.
      */
     if (0 == cospawned_namespace) {
-        printf("Waiting for application namespace %s to terminate\n",
-               proc.nspace);
+        printf("Waiting for application namespace %s to terminate\n", proc.nspace);
         DEBUG_WAIT_THREAD(&myrel.lock);
         printf("Application namespace %s terminated\n", proc.nspace);
     }
 
-  done:
+done:
     if (NULL != target_namespace) {
         free(target_namespace);
     }
     /* Call PMIx_tool_finalize to shut down the PMIx runtime */
-    printf("Debugger daemon ns %s rank %d pid %lu: Finalizing\n",
-           myproc.nspace, myproc.rank, (unsigned long)pid);
+    printf("Debugger daemon ns %s rank %d pid %lu: Finalizing\n", myproc.nspace, myproc.rank,
+           (unsigned long) pid);
     if (PMIX_SUCCESS != (rc = PMIx_tool_finalize())) {
-        fprintf(stderr,
-               "Debugger daemon ns %s rank %d:PMIx_Finalize failed: %s\n",
-               myproc.nspace, myproc.rank, PMIx_Error_string(rc));
+        fprintf(stderr, "Debugger daemon ns %s rank %d:PMIx_Finalize failed: %s\n", myproc.nspace,
+                myproc.rank, PMIx_Error_string(rc));
     } else {
         printf("Debugger daemon ns %s rank %d pid %lu:PMIx_Finalize successfully completed\n",
-               myproc.nspace, myproc.rank, (unsigned long)pid);
+               myproc.nspace, myproc.rank, (unsigned long) pid);
     }
     fclose(stdout);
     fclose(stderr);
     sleep(1);
-    return(0);
+    return (0);
 }

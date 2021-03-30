@@ -27,10 +27,10 @@
 
 #include "prte_config.h"
 
-#include "src/util/printf.h"
+#include "src/mca/filem/filem.h"
 #include "src/mca/rml/rml.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/filem/filem.h"
+#include "src/util/printf.h"
 
 BEGIN_C_DECLS
 
@@ -47,9 +47,9 @@ PRTE_EXPORT int prte_filem_base_select(void);
  * cmds for base receive
  */
 typedef uint8_t prte_filem_cmd_flag_t;
-#define PRTE_FILEM_CMD  PMIX_UINT8
-#define PRTE_FILEM_GET_PROC_NODE_NAME_CMD  1
-#define PRTE_FILEM_GET_REMOTE_PATH_CMD     2
+#define PRTE_FILEM_CMD                    PMIX_UINT8
+#define PRTE_FILEM_GET_PROC_NODE_NAME_CMD 1
+#define PRTE_FILEM_GET_REMOTE_PATH_CMD    2
 
 /**
  * Globals
@@ -69,15 +69,13 @@ PRTE_EXPORT int prte_filem_base_none_put(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_put_nb(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_get(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_get_nb(prte_filem_base_request_t *request);
-PRTE_EXPORT int prte_filem_base_none_rm( prte_filem_base_request_t *request);
-PRTE_EXPORT int prte_filem_base_none_rm_nb( prte_filem_base_request_t *request);
-PRTE_EXPORT int prte_filem_base_none_wait( prte_filem_base_request_t *request);
-PRTE_EXPORT int prte_filem_base_none_wait_all( prte_list_t *request_list);
-int prte_filem_base_none_preposition_files(prte_job_t *jdata,
-                                           prte_filem_completion_cbfunc_t cbfunc,
+PRTE_EXPORT int prte_filem_base_none_rm(prte_filem_base_request_t *request);
+PRTE_EXPORT int prte_filem_base_none_rm_nb(prte_filem_base_request_t *request);
+PRTE_EXPORT int prte_filem_base_none_wait(prte_filem_base_request_t *request);
+PRTE_EXPORT int prte_filem_base_none_wait_all(prte_list_t *request_list);
+int prte_filem_base_none_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
                                            void *cbdata);
-int prte_filem_base_none_link_local_files(prte_job_t *jdata,
-                                          prte_app_context_t *app);
+int prte_filem_base_none_link_local_files(prte_job_t *jdata, prte_app_context_t *app);
 
 /**
  * Some utility functions
@@ -85,11 +83,8 @@ int prte_filem_base_none_link_local_files(prte_job_t *jdata,
 /* base comm functions */
 PRTE_EXPORT int prte_filem_base_comm_start(void);
 PRTE_EXPORT int prte_filem_base_comm_stop(void);
-PRTE_EXPORT void prte_filem_base_recv(int status, pmix_proc_t* sender,
-                                      pmix_data_buffer_t* buffer,
-                                      prte_rml_tag_t tag,
-                                      void* cbdata);
-
+PRTE_EXPORT void prte_filem_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                                      prte_rml_tag_t tag, void *cbdata);
 
 END_C_DECLS
 

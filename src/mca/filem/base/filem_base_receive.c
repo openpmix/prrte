@@ -32,13 +32,13 @@
 
 #include <string.h>
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
+#    include <sys/stat.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 #include "src/mca/mca.h"
@@ -47,35 +47,34 @@
 #include "src/util/printf.h"
 
 #include "constants.h"
-#include "types.h"
-#include "src/util/proc_info.h"
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/filem/base/base.h"
+#include "src/mca/filem/filem.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/state/state.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
-#include "src/pmix/pmix-internal.h"
-#include "src/mca/filem/filem.h"
-#include "src/mca/filem/base/base.h"
+#include "src/util/proc_info.h"
+#include "types.h"
 
 /*
  * Functions to process some FileM specific commands
  */
-static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t* sender,
-                                                      pmix_data_buffer_t* buffer);
-static void filem_base_process_get_remote_path_cmd(pmix_proc_t* sender,
-                                                   pmix_data_buffer_t* buffer);
+static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t *sender,
+                                                      pmix_data_buffer_t *buffer);
+static void filem_base_process_get_remote_path_cmd(pmix_proc_t *sender, pmix_data_buffer_t *buffer);
 
-static bool recv_issued=false;
+static bool recv_issued = false;
 
 int prte_filem_base_comm_start(void)
 {
     /* Only active in HNP and daemons */
-    if( !PRTE_PROC_IS_MASTER && !PRTE_PROC_IS_DAEMON ) {
+    if (!PRTE_PROC_IS_MASTER && !PRTE_PROC_IS_DAEMON) {
         return PRTE_SUCCESS;
     }
-    if ( recv_issued ) {
+    if (recv_issued) {
         return PRTE_SUCCESS;
     }
 
@@ -83,31 +82,26 @@ int prte_filem_base_comm_start(void)
                          "%s filem:base: Receive: Start command recv",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD,
-                            PRTE_RML_TAG_FILEM_BASE,
-                            PRTE_RML_PERSISTENT,
-                            prte_filem_base_recv,
-                            NULL);
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE, PRTE_RML_PERSISTENT,
+                            prte_filem_base_recv, NULL);
 
     recv_issued = true;
 
     return PRTE_SUCCESS;
 }
 
-
 int prte_filem_base_comm_stop(void)
 {
     /* Only active in HNP and daemons */
-    if( !PRTE_PROC_IS_MASTER && !PRTE_PROC_IS_DAEMON ) {
+    if (!PRTE_PROC_IS_MASTER && !PRTE_PROC_IS_DAEMON) {
         return PRTE_SUCCESS;
     }
-    if ( recv_issued ) {
+    if (recv_issued) {
         return PRTE_SUCCESS;
     }
 
     PRTE_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
-                         "%s filem:base:receive stop comm",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s filem:base:receive stop comm", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE);
     recv_issued = false;
@@ -115,15 +109,13 @@ int prte_filem_base_comm_stop(void)
     return PRTE_SUCCESS;
 }
 
-
 /*
  * handle message from proxies
  * NOTE: The incoming buffer "buffer" is PRTE_RELEASED by the calling program.
  * DO NOT RELEASE THIS BUFFER IN THIS CODE
  */
-void prte_filem_base_recv(int status, pmix_proc_t* sender,
-                          pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                          void* cbdata)
+void prte_filem_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                          prte_rml_tag_t tag, void *cbdata)
 {
     prte_filem_cmd_flag_t command;
     int32_t count;
@@ -141,29 +133,29 @@ void prte_filem_base_recv(int status, pmix_proc_t* sender,
     }
 
     switch (command) {
-        case PRTE_FILEM_GET_PROC_NODE_NAME_CMD:
-            PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
-                                 "%s filem:base: Command: Get Proc node name command",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    case PRTE_FILEM_GET_PROC_NODE_NAME_CMD:
+        PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
+                             "%s filem:base: Command: Get Proc node name command",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-            filem_base_process_get_proc_node_name_cmd(sender, buffer);
-            break;
+        filem_base_process_get_proc_node_name_cmd(sender, buffer);
+        break;
 
-        case PRTE_FILEM_GET_REMOTE_PATH_CMD:
-            PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
-                                 "%s filem:base: Command: Get remote path command",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+    case PRTE_FILEM_GET_REMOTE_PATH_CMD:
+        PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
+                             "%s filem:base: Command: Get remote path command",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-            filem_base_process_get_remote_path_cmd(sender, buffer);
-            break;
+        filem_base_process_get_remote_path_cmd(sender, buffer);
+        break;
 
-        default:
-            PRTE_ERROR_LOG(PRTE_ERR_VALUE_OUT_OF_BOUNDS);
+    default:
+        PRTE_ERROR_LOG(PRTE_ERR_VALUE_OUT_OF_BOUNDS);
     }
 }
 
-static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t* sender,
-                                                      pmix_data_buffer_t* buffer)
+static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t *sender,
+                                                      pmix_data_buffer_t *buffer)
 {
     pmix_data_buffer_t *answer;
     int32_t count;
@@ -193,7 +185,7 @@ static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t* sender,
         return;
     }
     /* get the proc object for it */
-    proc = (prte_proc_t*)prte_pointer_array_get_item(jdata->procs, name.rank);
+    proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, name.rank);
     if (NULL == proc || NULL == proc->node) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
@@ -212,8 +204,7 @@ static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t* sender,
         return;
     }
 
-    if (0 > (rc = prte_rml.send_buffer_nb(sender, answer,
-                                          PRTE_RML_TAG_FILEM_BASE_RESP,
+    if (0 > (rc = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_FILEM_BASE_RESP,
                                           prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
@@ -228,8 +219,7 @@ static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t* sender,
  * - Verify the existence of the file/dir
  * - Determine if the specified file/dir is in fact a file or dir or unknown if not found.
  */
-static void filem_base_process_get_remote_path_cmd(pmix_proc_t* sender,
-                                                   pmix_data_buffer_t* buffer)
+static void filem_base_process_get_remote_path_cmd(pmix_proc_t *sender, pmix_data_buffer_t *buffer)
 {
     pmix_data_buffer_t *answer;
     int32_t count;
@@ -256,30 +246,27 @@ static void filem_base_process_get_remote_path_cmd(pmix_proc_t* sender,
             return;
         }
         prte_asprintf(&tmp_name, "%s/%s", cwd, filename);
-    }
-    else {
+    } else {
         tmp_name = strdup(filename);
     }
 
     prte_output_verbose(10, prte_filem_base_framework.framework_output,
-                        "filem:base: process_get_remote_path_cmd: %s -> %s: Filename Requested (%s) translated to (%s)",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        PRTE_NAME_PRINT(sender),
-                        filename, tmp_name);
+                        "filem:base: process_get_remote_path_cmd: %s -> %s: Filename Requested "
+                        "(%s) translated to (%s)",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender), filename,
+                        tmp_name);
 
     /*
      * Determine if the file/dir exists at that absolute path
      * Determine if the file/dir is a file or a directory
      */
-    if (0 != (rc = stat(tmp_name, &file_status) ) ){
+    if (0 != (rc = stat(tmp_name, &file_status))) {
         file_type = PRTE_FILEM_TYPE_UNKNOWN;
-    }
-    else {
+    } else {
         /* Is it a directory? */
-        if(S_ISDIR(file_status.st_mode)) {
+        if (S_ISDIR(file_status.st_mode)) {
             file_type = PRTE_FILEM_TYPE_DIR;
-        }
-        else if(S_ISREG(file_status.st_mode)) {
+        } else if (S_ISREG(file_status.st_mode)) {
             file_type = PRTE_FILEM_TYPE_FILE;
         }
     }
@@ -307,20 +294,19 @@ static void filem_base_process_get_remote_path_cmd(pmix_proc_t* sender,
         goto CLEANUP;
     }
 
-    if (0 > (rc = prte_rml.send_buffer_nb(sender, answer,
-                                          PRTE_RML_TAG_FILEM_BASE_RESP,
+    if (0 > (rc = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_FILEM_BASE_RESP,
                                           prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(answer);
     }
 
- CLEANUP:
-    if( NULL != filename) {
+CLEANUP:
+    if (NULL != filename) {
         free(filename);
         filename = NULL;
     }
-    if( NULL != tmp_name) {
+    if (NULL != tmp_name) {
         free(tmp_name);
         tmp_name = NULL;
     }

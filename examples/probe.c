@@ -15,6 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,8 +28,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <pmix.h>
 
@@ -46,7 +47,7 @@ int main(int argc, char **argv)
         exit(1);
     }
     pid = getpid();
-    fprintf(stderr, "Client %lu: Running\n", (unsigned long)pid);
+    fprintf(stderr, "Client %lu: Running\n", (unsigned long) pid);
 
     /* init us - note that the call to "init" includes the return of
      * any job-related info provided by the RM. This includes any
@@ -54,41 +55,47 @@ int main(int argc, char **argv)
      * is included, then the process will be stopped in this call until
      * the "debugger release" notification arrives */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %d\n", myproc.nspace, myproc.rank, rc);
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %d\n", myproc.nspace, myproc.rank,
+                rc);
         exit(0);
     }
-    fprintf(stderr, "Client ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank, (unsigned long)pid);
-
+    fprintf(stderr, "Client ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank,
+            (unsigned long) pid);
 
     /* get our universe size */
     PMIX_PROC_CONSTRUCT(&proc);
-    (void)strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
+    (void) strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
 
     if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_UNIV_SIZE, NULL, 0, &val))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Get universe size failed: %d\n", myproc.nspace, myproc.rank, rc);
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get universe size failed: %d\n", myproc.nspace,
+                myproc.rank, rc);
         goto done;
     }
-    fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank, val->data.uint32);
+    fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank,
+            val->data.uint32);
 
     /* now get the universe size of the specified nspace */
-    (void)strncpy(proc.nspace, argv[1], PMIX_MAX_NSLEN);
+    (void) strncpy(proc.nspace, argv[1], PMIX_MAX_NSLEN);
     if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_UNIV_SIZE, NULL, 0, &val))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Get of target nspace %s universe size failed: %d\n",
+        fprintf(stderr,
+                "Client ns %s rank %d: PMIx_Get of target nspace %s universe size failed: %d\n",
                 myproc.nspace, myproc.rank, argv[1], rc);
         goto done;
     }
-    fprintf(stderr, "Client %s:%d target nspace %s universe size %d\n",
-            myproc.nspace, myproc.rank, argv[1], val->data.uint32);
+    fprintf(stderr, "Client %s:%d target nspace %s universe size %d\n", myproc.nspace, myproc.rank,
+            argv[1], val->data.uint32);
 
- done:
+done:
     /* finalize us */
     fprintf(stderr, "Client ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {
-        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize failed: %d\n", myproc.nspace, myproc.rank, rc);
+        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize failed: %d\n", myproc.nspace,
+                myproc.rank, rc);
     } else {
-        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize successfully completed\n", myproc.nspace, myproc.rank);
+        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize successfully completed\n",
+                myproc.nspace, myproc.rank);
     }
     fflush(stderr);
-    return(0);
+    return (0);
 }

@@ -28,30 +28,28 @@
 
 #include "prte_config.h"
 
-#include <string.h>
 #include <ctype.h>
+#include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+#    include <sys/param.h>
 #endif
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+#    include <netdb.h>
 #endif
 
+#include "src/class/prte_pointer_array.h"
+#include "src/class/prte_value_array.h"
+#include "src/include/prte_portable_platform.h"
 #include "src/include/version.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/class/prte_value_array.h"
-#include "src/class/prte_pointer_array.h"
 #include "src/util/printf.h"
-#include "src/include/prte_portable_platform.h"
 
 #include "src/util/show_help.h"
 
-
 #include "src/tools/prte_info/pinfo.h"
-
 
 /*
  * Public variables
@@ -97,7 +95,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
          */
         count = prte_cmd_line_get_ninsts(prte_info_cmd_line, "param");
         for (i = 0; i < count; ++i) {
-            pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int)i, 0);
+            pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int) i, 0);
             if (0 == strcmp(prte_info_type_all, pval->value.data.string)) {
                 want_all = true;
                 break;
@@ -108,20 +106,20 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
     /* Show the params */
     if (want_all) {
         for (i = 0; i < mca_types.size; ++i) {
-            if (NULL == (type = (char *)prte_pointer_array_get_item(&mca_types, i))) {
+            if (NULL == (type = (char *) prte_pointer_array_get_item(&mca_types, i))) {
                 continue;
             }
             prte_info_show_mca_params(type, prte_info_component_all, want_internal);
         }
     } else {
         for (i = 0; i < count; ++i) {
-            pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int)i, 0);
+            pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int) i, 0);
             type = pval->value.data.string;
-            pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int)i, 1);
+            pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int) i, 1);
             component = pval->value.data.string;
 
             for (found = false, i = 0; i < mca_types.size; ++i) {
-                if (NULL == (str = (char *)prte_pointer_array_get_item(&mca_types, i))) {
+                if (NULL == (str = (char *) prte_pointer_array_get_item(&mca_types, i))) {
                     continue;
                 }
                 if (0 == strcmp(str, type)) {
@@ -142,7 +140,8 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
     }
 }
 
-static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *group, bool want_internal)
+static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *group,
+                                            bool want_internal)
 {
     const prte_mca_base_var_t *var;
     const int *variables;
@@ -151,25 +150,27 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
     char **strings;
 
     variables = PRTE_VALUE_ARRAY_GET_BASE(&group->group_vars, const int);
-    count = prte_value_array_get_size((prte_value_array_t *)&group->group_vars);
+    count = prte_value_array_get_size((prte_value_array_t *) &group->group_vars);
 
-    for (i = 0 ; i < count ; ++i) {
+    for (i = 0; i < count; ++i) {
         ret = prte_mca_base_var_get(variables[i], &var);
-        if (PRTE_SUCCESS != ret || ((var->mbv_flags & PRTE_MCA_BASE_VAR_FLAG_INTERNAL) &&
-                                    !want_internal)) {
+        if (PRTE_SUCCESS != ret
+            || ((var->mbv_flags & PRTE_MCA_BASE_VAR_FLAG_INTERNAL) && !want_internal)) {
             continue;
         }
 
-        ret = prte_mca_base_var_dump(variables[i], &strings, !prte_info_pretty ? PRTE_MCA_BASE_VAR_DUMP_PARSABLE : PRTE_MCA_BASE_VAR_DUMP_READABLE);
+        ret = prte_mca_base_var_dump(variables[i], &strings,
+                                     !prte_info_pretty ? PRTE_MCA_BASE_VAR_DUMP_PARSABLE
+                                                       : PRTE_MCA_BASE_VAR_DUMP_READABLE);
         if (PRTE_SUCCESS != ret) {
             continue;
         }
 
-        for (j = 0 ; strings[j] ; ++j) {
+        for (j = 0; strings[j]; ++j) {
             if (0 == j && prte_info_pretty) {
                 char *message;
 
-                prte_asprintf (&message, "MCA %s", group->group_framework);
+                prte_asprintf(&message, "MCA %s", group->group_framework);
                 prte_info_out(message, message, strings[j]);
                 free(message);
             } else {
@@ -181,9 +182,9 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
     }
 
     groups = PRTE_VALUE_ARRAY_GET_BASE(&group->group_subgroups, const int);
-    count = prte_value_array_get_size((prte_value_array_t *)&group->group_subgroups);
+    count = prte_value_array_get_size((prte_value_array_t *) &group->group_subgroups);
 
-    for (i = 0 ; i < count ; ++i) {
+    for (i = 0; i < count; ++i) {
         ret = prte_mca_base_var_group_get(groups[i], &group);
         if (PRTE_SUCCESS != ret) {
             continue;
@@ -192,13 +193,12 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
     }
 }
 
-void prte_info_show_mca_params(const char *type, const char *component,
-                               bool want_internal)
+void prte_info_show_mca_params(const char *type, const char *component, bool want_internal)
 {
     const prte_mca_base_var_group_t *group;
     int ret;
 
-    if (0 == strcmp (component, "all")) {
+    if (0 == strcmp(component, "all")) {
         ret = prte_mca_base_var_group_find("*", type, NULL);
         if (0 > ret) {
             return;
@@ -285,7 +285,8 @@ void prte_info_do_path(bool want_all, prte_cmd_line_t *cmd_line)
             } else if (0 == strcmp(prte_info_path_datadir, scope)) {
                 prte_info_show_path(prte_info_path_datadir, prte_install_dirs.datadir);
             } else if (0 == strcmp(prte_info_path_sharedstatedir, scope)) {
-                prte_info_show_path(prte_info_path_sharedstatedir, prte_install_dirs.sharedstatedir);
+                prte_info_show_path(prte_info_path_sharedstatedir,
+                                    prte_install_dirs.sharedstatedir);
             } else if (0 == strcmp(prte_info_path_localstatedir, scope)) {
                 prte_info_show_path(prte_info_path_localstatedir, prte_install_dirs.localstatedir);
             } else if (0 == strcmp(prte_info_path_infodir, scope)) {
@@ -304,7 +305,6 @@ void prte_info_do_path(bool want_all, prte_cmd_line_t *cmd_line)
     }
 }
 
-
 void prte_info_show_path(const char *type, const char *value)
 {
     char *pretty, *path;
@@ -318,18 +318,15 @@ void prte_info_show_path(const char *type, const char *value)
     free(path);
 }
 
-
 void prte_info_do_arch()
 {
     prte_info_out("Configured architecture", "config:arch", PRTE_ARCH);
 }
 
-
 void prte_info_do_hostname()
 {
     prte_info_out("Configure host", "config:host", PRTE_CONFIGURE_HOST);
 }
-
 
 /*
  * do_config
@@ -372,8 +369,10 @@ void prte_info_do_config(bool want_all)
 
     prte_info_out("C compiler", "compiler:c:command", PRTE_CC);
     prte_info_out("C compiler absolute", "compiler:c:absolute", PRTE_CC_ABSOLUTE);
-    prte_info_out("C compiler family name", "compiler:c:familyname", _STRINGIFY(PLATFORM_COMPILER_FAMILYNAME));
-    prte_info_out("C compiler version", "compiler:c:version", _STRINGIFY(PLATFORM_COMPILER_VERSION_STR));
+    prte_info_out("C compiler family name", "compiler:c:familyname",
+                  _STRINGIFY(PLATFORM_COMPILER_FAMILYNAME));
+    prte_info_out("C compiler version", "compiler:c:version",
+                  _STRINGIFY(PLATFORM_COMPILER_VERSION_STR));
 
     if (want_all) {
         prte_info_out_int("C char size", "compiler:c:sizeof:char", sizeof(char));
@@ -395,7 +394,6 @@ void prte_info_do_config(bool want_all)
 
     if (want_all) {
 
-
         prte_info_out("Build CFLAGS", "option:build:cflags", PRTE_BUILD_CFLAGS);
         prte_info_out("Build LDFLAGS", "option:build:ldflags", PRTE_BUILD_LDFLAGS);
         prte_info_out("Build LIBS", "option:build:libs", PRTE_BUILD_LIBS);
@@ -404,16 +402,13 @@ void prte_info_do_config(bool want_all)
                       PRTE_WRAPPER_EXTRA_CFLAGS);
         prte_info_out("Wrapper extra LDFLAGS", "option:wrapper:extra_ldflags",
                       PRTE_WRAPPER_EXTRA_LDFLAGS);
-        prte_info_out("Wrapper extra LIBS", "option:wrapper:extra_libs",
-                      PRTE_WRAPPER_EXTRA_LIBS);
+        prte_info_out("Wrapper extra LIBS", "option:wrapper:extra_libs", PRTE_WRAPPER_EXTRA_LIBS);
     }
 
     prte_info_out("Internal debug support", "option:debug", debug);
     prte_info_out("dl support", "option:dlopen", have_dl);
-    prte_info_out("prun default --prefix", "prun:prefix_by_default",
-                  prun_prefix_by_default);
+    prte_info_out("prun default --prefix", "prun:prefix_by_default", prun_prefix_by_default);
     prte_info_out("Symbol vis. support", "options:visibility", symbol_visibility);
     prte_info_out("Manpages built", "options:man-pages", manpages);
     prte_info_out("Resilience support", "options:ft", resilience);
-
 }

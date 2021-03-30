@@ -16,6 +16,7 @@
  *
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,58 +36,59 @@
 #include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 
 BEGIN_C_DECLS
 
-  /**
-   * Append a string (by value) to an new or existing NULL-terminated
-   * argv array.
-   *
-   * @param argc Pointer to the length of the argv array.  Must not be
-   * NULL.
-   * @param argv Pointer to an argv array.
-   * @param str Pointer to the string to append.
-   *
-   * @retval PRTE_SUCCESS On success
-   * @retval PRTE_ERROR On failure
-   *
-   * This function adds a string to an argv array of strings by value;
-   * it is permissable to pass a string on the stack as the str
-   * argument to this function.
-   *
-   * To add the first entry to an argv array, call this function with
-   * (*argv == NULL).  This function will allocate an array of length
-   * 2; the first entry will point to a copy of the string passed in
-   * arg, the second entry will be set to NULL.
-   *
-   * If (*argv != NULL), it will be realloc'ed to be 1 (char*) larger,
-   * and the next-to-last entry will point to a copy of the string
-   * passed in arg.  The last entry will be set to NULL.
-   *
-   * Just to reinforce what was stated above: the string is copied by
-   * value into the argv array; there is no need to keep the original
-   * string (i.e., the arg parameter) after invoking this function.
-   */
-PRTE_EXPORT  int prte_argv_append(int *argc, char ***argv, const char *arg) __prte_attribute_nonnull__(1) __prte_attribute_nonnull__(3);
+/**
+ * Append a string (by value) to an new or existing NULL-terminated
+ * argv array.
+ *
+ * @param argc Pointer to the length of the argv array.  Must not be
+ * NULL.
+ * @param argv Pointer to an argv array.
+ * @param str Pointer to the string to append.
+ *
+ * @retval PRTE_SUCCESS On success
+ * @retval PRTE_ERROR On failure
+ *
+ * This function adds a string to an argv array of strings by value;
+ * it is permissable to pass a string on the stack as the str
+ * argument to this function.
+ *
+ * To add the first entry to an argv array, call this function with
+ * (*argv == NULL).  This function will allocate an array of length
+ * 2; the first entry will point to a copy of the string passed in
+ * arg, the second entry will be set to NULL.
+ *
+ * If (*argv != NULL), it will be realloc'ed to be 1 (char*) larger,
+ * and the next-to-last entry will point to a copy of the string
+ * passed in arg.  The last entry will be set to NULL.
+ *
+ * Just to reinforce what was stated above: the string is copied by
+ * value into the argv array; there is no need to keep the original
+ * string (i.e., the arg parameter) after invoking this function.
+ */
+PRTE_EXPORT int prte_argv_append(int *argc, char ***argv, const char *arg)
+    __prte_attribute_nonnull__(1) __prte_attribute_nonnull__(3);
 
-  /**
-   * Append to an argv-style array, but ignore the size of the array.
-   *
-   * @param argv Pointer to an argv array.
-   * @param str Pointer to the string to append.
-   *
-   * @retval PRTE_SUCCESS On success
-   * @retval PRTE_ERROR On failure
-   *
-   * This function is identical to the prte_argv_append() function
-   * except that it does not take a pointer to an argc (integer
-   * representing the size of the array).  This is handy for
-   * argv-style arrays that do not have integers that are actively
-   * maintaing their sizes.
-   */
-PRTE_EXPORT  int prte_argv_append_nosize(char ***argv, const char *arg);
+/**
+ * Append to an argv-style array, but ignore the size of the array.
+ *
+ * @param argv Pointer to an argv array.
+ * @param str Pointer to the string to append.
+ *
+ * @retval PRTE_SUCCESS On success
+ * @retval PRTE_ERROR On failure
+ *
+ * This function is identical to the prte_argv_append() function
+ * except that it does not take a pointer to an argc (integer
+ * representing the size of the array).  This is handy for
+ * argv-style arrays that do not have integers that are actively
+ * maintaing their sizes.
+ */
+PRTE_EXPORT int prte_argv_append_nosize(char ***argv, const char *arg);
 
 /**
  * Insert the provided arg at the beginning of the array
@@ -113,164 +115,168 @@ PRTE_EXPORT int prte_argv_prepend_nosize(char ***argv, const char *arg);
  * except that it only appends the provided argument if it does not already
  * exist in the provided array.
  */
-PRTE_EXPORT  int prte_argv_append_unique_nosize(char ***argv, const char *arg);
+PRTE_EXPORT int prte_argv_append_unique_nosize(char ***argv, const char *arg);
 
 /**
-   * Free a NULL-terminated argv array.
-   *
-   * @param argv Argv array to free.
-   *
-   * This function frees an argv array and all of the strings that it
-   * contains.  Since the argv parameter is passed by value, it is not
-   * set to NULL in the caller's scope upon return.
-   *
-   * It is safe to invoke this function with a NULL pointer.  It is
-   * not safe to invoke this function with a non-NULL-terminated argv
-   * array.
-   */
-PRTE_EXPORT  void prte_argv_free(char **argv);
+ * Free a NULL-terminated argv array.
+ *
+ * @param argv Argv array to free.
+ *
+ * This function frees an argv array and all of the strings that it
+ * contains.  Since the argv parameter is passed by value, it is not
+ * set to NULL in the caller's scope upon return.
+ *
+ * It is safe to invoke this function with a NULL pointer.  It is
+ * not safe to invoke this function with a non-NULL-terminated argv
+ * array.
+ */
+PRTE_EXPORT void prte_argv_free(char **argv);
 
-  /**
-   * Split a string into a NULL-terminated argv array. Do not include empty
-   * strings in result array.
-   *
-   * @param src_string Input string.
-   * @param delimiter Delimiter character.
-   *
-   * @retval argv pointer to new argv array on success
-   * @retval NULL on error
-   *
-   * All strings are insertted into the argv array by value; the
-   * newly-allocated array makes no references to the src_string
-   * argument (i.e., it can be freed after calling this function
-   * without invalidating the output argv).
-   */
-PRTE_EXPORT  char **prte_argv_split(const char *src_string, int delimiter) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+/**
+ * Split a string into a NULL-terminated argv array. Do not include empty
+ * strings in result array.
+ *
+ * @param src_string Input string.
+ * @param delimiter Delimiter character.
+ *
+ * @retval argv pointer to new argv array on success
+ * @retval NULL on error
+ *
+ * All strings are insertted into the argv array by value; the
+ * newly-allocated array makes no references to the src_string
+ * argument (i.e., it can be freed after calling this function
+ * without invalidating the output argv).
+ */
+PRTE_EXPORT char **prte_argv_split(const char *src_string, int delimiter)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
-  /**
-   * Split a string into a NULL-terminated argv array. Include empty
-   * strings in result array.
-   *
-   * @param src_string Input string.
-   * @param delimiter Delimiter character.
-   *
-   * @retval argv pointer to new argv array on success
-   * @retval NULL on error
-   *
-   * All strings are insertted into the argv array by value; the
-   * newly-allocated array makes no references to the src_string
-   * argument (i.e., it can be freed after calling this function
-   * without invalidating the output argv).
-   */
-PRTE_EXPORT  char **prte_argv_split_with_empty(const char *src_string, int delimiter) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+/**
+ * Split a string into a NULL-terminated argv array. Include empty
+ * strings in result array.
+ *
+ * @param src_string Input string.
+ * @param delimiter Delimiter character.
+ *
+ * @retval argv pointer to new argv array on success
+ * @retval NULL on error
+ *
+ * All strings are insertted into the argv array by value; the
+ * newly-allocated array makes no references to the src_string
+ * argument (i.e., it can be freed after calling this function
+ * without invalidating the output argv).
+ */
+PRTE_EXPORT char **prte_argv_split_with_empty(const char *src_string, int delimiter)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
-  /**
-   * Return the length of a NULL-terminated argv array.
-   *
-   * @param argv The input argv array.
-   *
-   * @retval 0 If NULL is passed as argv.
-   * @retval count Number of entries in the argv array.
-   *
-   * The argv array must be NULL-terminated.
-   */
-PRTE_EXPORT  int prte_argv_count(char **argv);
+/**
+ * Return the length of a NULL-terminated argv array.
+ *
+ * @param argv The input argv array.
+ *
+ * @retval 0 If NULL is passed as argv.
+ * @retval count Number of entries in the argv array.
+ *
+ * The argv array must be NULL-terminated.
+ */
+PRTE_EXPORT int prte_argv_count(char **argv);
 
-  /**
-   * Join all the elements of an argv array into a single
-   * newly-allocated string.
-   *
-   * @param argv The input argv array.
-   * @param delimiter Delimiter character placed between each argv string.
-   *
-   * @retval new_string Output string on success.
-   * @retval NULL On failure.
-   *
-   * Similar to the Perl join function, this function takes an input
-   * argv and joins them into into a single string separated by the
-   * delimiter character.
-   *
-   * It is the callers responsibility to free the returned string.
-   */
-PRTE_EXPORT  char *prte_argv_join(char **argv, int delimiter) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+/**
+ * Join all the elements of an argv array into a single
+ * newly-allocated string.
+ *
+ * @param argv The input argv array.
+ * @param delimiter Delimiter character placed between each argv string.
+ *
+ * @retval new_string Output string on success.
+ * @retval NULL On failure.
+ *
+ * Similar to the Perl join function, this function takes an input
+ * argv and joins them into into a single string separated by the
+ * delimiter character.
+ *
+ * It is the callers responsibility to free the returned string.
+ */
+PRTE_EXPORT char *prte_argv_join(char **argv, int delimiter)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
-PRTE_EXPORT  char *prte_argv_join_range(char **argv, size_t start, size_t end, int delimiter) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_argv_join_range(char **argv, size_t start, size_t end, int delimiter)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
-  /**
-   * Return the number of bytes consumed by an argv array.
-   *
-   * @param argv The input argv array.
-   *
-   * Count the number of bytes consumed by a NULL-terminated argv
-   * array.  This includes the number of bytes used by each of the
-   * strings as well as the pointers used in the argv array.
-   */
-PRTE_EXPORT  size_t prte_argv_len(char **argv);
+/**
+ * Return the number of bytes consumed by an argv array.
+ *
+ * @param argv The input argv array.
+ *
+ * Count the number of bytes consumed by a NULL-terminated argv
+ * array.  This includes the number of bytes used by each of the
+ * strings as well as the pointers used in the argv array.
+ */
+PRTE_EXPORT size_t prte_argv_len(char **argv);
 
-  /**
-   * Copy a NULL-terminated argv array.
-   *
-   * @param argv The input argv array.
-   *
-   * @retval argv Copied argv array on success.
-   * @retval NULL On failure.
-   *
-   * Copy an argv array, including copying all off its strings.
-   * Specifically, the output argv will be an array of the same length
-   * as the input argv, and strcmp(argv_in[i], argv_out[i]) will be 0.
-   */
-PRTE_EXPORT  char **prte_argv_copy(char **argv) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+/**
+ * Copy a NULL-terminated argv array.
+ *
+ * @param argv The input argv array.
+ *
+ * @retval argv Copied argv array on success.
+ * @retval NULL On failure.
+ *
+ * Copy an argv array, including copying all off its strings.
+ * Specifically, the output argv will be an array of the same length
+ * as the input argv, and strcmp(argv_in[i], argv_out[i]) will be 0.
+ */
+PRTE_EXPORT char **
+prte_argv_copy(char **argv) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
-    /**
-     * Delete one or more tokens from the middle of an argv.
-     *
-     * @param argv The argv to delete from
-     * @param start The index of the first token to delete
-     * @param num_to_delete How many tokens to delete
-     *
-     * @retval PRTE_SUCCESS Always
-     *
-     * Delete some tokens from within an existing argv.  The start
-     * parameter specifies the first token to delete, and will delete
-     * (num_to_delete-1) tokens following it.  argv will be realloc()ed
-     * to *argc - num_deleted size.
-     *
-     * If start is beyond the end of the argv array, this function is
-     * a no-op.
-     *
-     * If num_to_delete runs beyond the end of the argv array, this
-     * function will delete all tokens starting with start to the end
-     * of the array.
-     *
-     * All deleted items in the argv array will have their contents
-     * free()ed (it is assumed that the argv "owns" the memory that
-     * the pointer points to).
-     */
-PRTE_EXPORT  int prte_argv_delete(int *argc, char ***argv,
-                                    int start, int num_to_delete);
+/**
+ * Delete one or more tokens from the middle of an argv.
+ *
+ * @param argv The argv to delete from
+ * @param start The index of the first token to delete
+ * @param num_to_delete How many tokens to delete
+ *
+ * @retval PRTE_SUCCESS Always
+ *
+ * Delete some tokens from within an existing argv.  The start
+ * parameter specifies the first token to delete, and will delete
+ * (num_to_delete-1) tokens following it.  argv will be realloc()ed
+ * to *argc - num_deleted size.
+ *
+ * If start is beyond the end of the argv array, this function is
+ * a no-op.
+ *
+ * If num_to_delete runs beyond the end of the argv array, this
+ * function will delete all tokens starting with start to the end
+ * of the array.
+ *
+ * All deleted items in the argv array will have their contents
+ * free()ed (it is assumed that the argv "owns" the memory that
+ * the pointer points to).
+ */
+PRTE_EXPORT int prte_argv_delete(int *argc, char ***argv, int start, int num_to_delete);
 
-    /**
-     * Insert one argv array into the middle of another
-     *
-     * @param target The argv to insert tokens into
-     * @param start Index where the first token will be placed in target
-     * @param source The argv to copy tokens from
-     *
-     * @retval PRTE_SUCCESS upon success
-     * @retval PRTE_BAD_PARAM if any parameters are non-sensical
-     *
-     * This function takes one arg and inserts it in the middle of
-     * another.  The first token in source will be insertted at index
-     * start in the target argv; all other tokens will follow it.
-     * Similar to prte_argv_append(), the target may be realloc()'ed
-     * to accomodate the new storage requirements.
-     *
-     * The source array is left unaffected -- its contents are copied
-     * by value over to the target array (i.e., the strings that
-     * source points to are strdup'ed into the new locations in
-     * target).
-     */
-PRTE_EXPORT  int prte_argv_insert(char ***target, int start, char **source);
+/**
+ * Insert one argv array into the middle of another
+ *
+ * @param target The argv to insert tokens into
+ * @param start Index where the first token will be placed in target
+ * @param source The argv to copy tokens from
+ *
+ * @retval PRTE_SUCCESS upon success
+ * @retval PRTE_BAD_PARAM if any parameters are non-sensical
+ *
+ * This function takes one arg and inserts it in the middle of
+ * another.  The first token in source will be insertted at index
+ * start in the target argv; all other tokens will follow it.
+ * Similar to prte_argv_append(), the target may be realloc()'ed
+ * to accomodate the new storage requirements.
+ *
+ * The source array is left unaffected -- its contents are copied
+ * by value over to the target array (i.e., the strings that
+ * source points to are strdup'ed into the new locations in
+ * target).
+ */
+PRTE_EXPORT int prte_argv_insert(char ***target, int start, char **source);
 
 /**
  * Insert one argv element in front of a specific position in an array
@@ -293,7 +299,7 @@ PRTE_EXPORT  int prte_argv_insert(char ***target, int start, char **source);
  * source points to is strdup'ed into the new location in
  * target).
  */
-PRTE_EXPORT  int prte_argv_insert_element(char ***target, int location, char *source);
+PRTE_EXPORT int prte_argv_insert_element(char ***target, int location, char *source);
 
 END_C_DECLS
 

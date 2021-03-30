@@ -12,6 +12,7 @@
  * Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,11 +33,9 @@
 
 BEGIN_C_DECLS
 
-PRTE_EXPORT int prte_util_check_context_app(prte_app_context_t *context,
-                                              char **env);
+PRTE_EXPORT int prte_util_check_context_app(prte_app_context_t *context, char **env);
 
-PRTE_EXPORT int prte_util_check_context_cwd(prte_app_context_t *context,
-                                              bool want_chdir);
+PRTE_EXPORT int prte_util_check_context_cwd(prte_app_context_t *context, bool want_chdir);
 
 END_C_DECLS
 #endif

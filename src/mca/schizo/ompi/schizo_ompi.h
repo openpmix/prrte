@@ -21,7 +21,6 @@
 #include "src/mca/base/base.h"
 #include "src/mca/schizo/schizo.h"
 
-
 BEGIN_C_DECLS
 
 typedef struct {
@@ -35,4 +34,3 @@ extern prte_schizo_base_module_t prte_schizo_ompi_module;
 END_C_DECLS
 
 #endif /* MCA_SCHIZO_OMPI_H_ */
-

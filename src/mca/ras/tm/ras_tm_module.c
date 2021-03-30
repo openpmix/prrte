@@ -26,20 +26,19 @@
 #include "types.h"
 
 #include <errno.h>
-#include <unistd.h>
 #include <string.h>
+#include <unistd.h>
 
-#include "src/util/show_help.h"
-#include "src/util/os_path.h"
 #include "src/util/net.h"
+#include "src/util/os_path.h"
+#include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 
-#include "src/mca/ras/base/ras_private.h"
 #include "ras_tm.h"
-
+#include "src/mca/ras/base/ras_private.h"
 
 /*
  * Local functions
@@ -47,7 +46,7 @@
 static int allocate(prte_job_t *jdata, prte_list_t *nodes);
 static int finalize(void);
 
-static int discover(prte_list_t* nodelist, char *pbs_jobid);
+static int discover(prte_list_t *nodelist, char *pbs_jobid);
 static char *tm_getline(FILE *fp);
 
 #define TM_FILE_MAX_LINE_LENGTH 512
@@ -57,13 +56,7 @@ static char *filename;
 /*
  * Global variable
  */
-prte_ras_base_module_t prte_ras_tm_module = {
-    NULL,
-    allocate,
-    NULL,
-    finalize
-};
-
+prte_ras_base_module_t prte_ras_tm_module = {NULL, allocate, NULL, finalize};
 
 /**
  * Discover available (pre-allocated) nodes and report
@@ -114,7 +107,6 @@ static int finalize(void)
     return PRTE_SUCCESS;
 }
 
-
 /**
  * Discover the available resources.  Obtain directly from TM (and
  * therefore have no need to validate) -- ignore hostfile or any other
@@ -124,11 +116,11 @@ static int finalize(void)
  *  - check for additional nodes that have already been allocated
  */
 
-static int discover(prte_list_t* nodelist, char *pbs_jobid)
+static int discover(prte_list_t *nodelist, char *pbs_jobid)
 {
     int32_t nodeid;
     prte_node_t *node;
-    prte_list_item_t* item;
+    prte_list_item_t *item;
     FILE *fp;
     char *hostname, *cppn;
     int ppn;
@@ -158,8 +150,7 @@ static int discover(prte_list_t* nodelist, char *pbs_jobid)
     }
 
     /* setup the full path to the PBS file */
-    filename = prte_os_path(false, prte_ras_tm_component.nodefile_dir,
-                            pbs_jobid, NULL);
+    filename = prte_os_path(false, prte_ras_tm_component.nodefile_dir, pbs_jobid, NULL);
     fp = fopen(filename, "r");
     if (NULL == fp) {
         PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
@@ -172,9 +163,9 @@ static int discover(prte_list_t* nodelist, char *pbs_jobid)
        resolving to the same hostname (i.e., vcpu's on a single
        host). */
 
-    nodeid=0;
+    nodeid = 0;
     while (NULL != (hostname = tm_getline(fp))) {
-        if( !prte_keep_fqdn_hostnames && !prte_net_isaddr(hostname) ) {
+        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(hostname)) {
             if (NULL != (ptr = strchr(hostname, '.'))) {
                 *ptr = '\0';
             }
@@ -187,10 +178,9 @@ static int discover(prte_list_t* nodelist, char *pbs_jobid)
         /* Remember that TM may list the same node more than once.  So
            we have to check for duplicates. */
 
-        for (item = prte_list_get_first(nodelist);
-             prte_list_get_end(nodelist) != item;
+        for (item = prte_list_get_first(nodelist); prte_list_get_end(nodelist) != item;
              item = prte_list_get_next(item)) {
-            node = (prte_node_t*) item;
+            node = (prte_node_t *) item;
             if (0 == strcmp(node->name, hostname)) {
                 if (prte_ras_tm_component.smp_mode) {
                     /* this cannot happen in smp mode */
@@ -219,7 +209,8 @@ static int discover(prte_list_t* nodelist, char *pbs_jobid)
 
             node = PRTE_NEW(prte_node_t);
             node->name = hostname;
-            prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL, &nodeid, PMIX_INT32);
+            prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL, &nodeid,
+                               PMIX_INT32);
             node->slots_inuse = 0;
             node->slots_max = 0;
             node->slots = ppn;
@@ -246,11 +237,10 @@ static char *tm_getline(FILE *fp)
 
     ret = fgets(input, TM_FILE_MAX_LINE_LENGTH, fp);
     if (NULL != ret) {
-        input[strlen(input)-1] = '\0';  /* remove newline */
+        input[strlen(input) - 1] = '\0'; /* remove newline */
         buff = strdup(input);
         return buff;
     }
 
     return NULL;
 }
-

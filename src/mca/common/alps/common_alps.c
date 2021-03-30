@@ -13,6 +13,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,9 +34,8 @@
 #include "src/mca/common/alps/common_alps.h"
 
 #include <stdio.h>
-#include <unistd.h>
 #include <sys/syscall.h>
-
+#include <unistd.h>
 
 /*
  * determine whether or not calling process is in a Cray PAGG container
@@ -44,7 +44,7 @@
 int prte_common_alps_proc_in_pagg(bool *flag)
 {
     int rc = PRTE_SUCCESS;
-    const char proc_job_file[]="/proc/job";
+    const char proc_job_file[] = "/proc/job";
     FILE *fd = NULL, *fd_task_is_app = NULL;
     char task_is_app_fname[PATH_MAX];
 
@@ -56,12 +56,12 @@ int prte_common_alps_proc_in_pagg(bool *flag)
     if (fd == NULL) {
         *flag = 0;
     } else {
-        snprintf(task_is_app_fname,sizeof(task_is_app_fname),
-                 "/proc/self/task/%ld/task_is_app",syscall(SYS_gettid));
+        snprintf(task_is_app_fname, sizeof(task_is_app_fname), "/proc/self/task/%ld/task_is_app",
+                 syscall(SYS_gettid));
         fd_task_is_app = fopen(task_is_app_fname, "r");
-        if (fd_task_is_app != NULL) {   /* okay we're in a PAGG container,
-                                           and we are an app task (not just a process
-                                           running on a mom node, for example), */
+        if (fd_task_is_app != NULL) { /* okay we're in a PAGG container,
+                                         and we are an app task (not just a process
+                                         running on a mom node, for example), */
             *flag = 1;
             fclose(fd_task_is_app);
         } else {
@@ -72,4 +72,3 @@ int prte_common_alps_proc_in_pagg(bool *flag)
 
     return rc;
 }
-

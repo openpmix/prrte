@@ -29,30 +29,27 @@
 #include "prte_config.h"
 
 #include "src/event/event-internal.h"
-#include "src/pmix/pmix-internal.h"
 #include "src/mca/oob/oob.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/mca/rml/base/base.h"
 
 BEGIN_C_DECLS
 
 typedef struct {
-    prte_rml_base_module_t  api;
-    prte_list_t             queued_routing_messages;
-    prte_event_t            *timer_event;
-    struct timeval          timeout;
-    char                    *routed; // name of routed module to be used
+    prte_rml_base_module_t api;
+    prte_list_t queued_routing_messages;
+    prte_event_t *timer_event;
+    struct timeval timeout;
+    char *routed; // name of routed module to be used
 } prte_rml_oob_module_t;
 
 PRTE_MODULE_EXPORT extern prte_rml_component_t prte_rml_oob_component;
 
 void prte_rml_oob_fini(struct prte_rml_base_module_t *mod);
 
-int prte_rml_oob_send_buffer_nb(pmix_proc_t* peer,
-                                pmix_data_buffer_t* buffer,
-                                prte_rml_tag_t tag,
-                                prte_rml_buffer_callback_fn_t cbfunc,
-                                void* cbdata);
+int prte_rml_oob_send_buffer_nb(pmix_proc_t *peer, pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
+                                prte_rml_buffer_callback_fn_t cbfunc, void *cbdata);
 
 END_C_DECLS
 

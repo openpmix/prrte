@@ -16,6 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -63,9 +64,7 @@ prte_ess_base_component_t prte_ess_env_component = {
     },
 };
 
-
-int
-prte_ess_env_component_open(void)
+int prte_ess_env_component_open(void)
 {
     return PRTE_SUCCESS;
 }
@@ -77,7 +76,7 @@ int prte_ess_env_component_query(prte_mca_base_module_t **module, int *priority)
      * to override us */
     if (PRTE_PROC_IS_DAEMON) {
         *priority = 1;
-        *module = (prte_mca_base_module_t *)&prte_ess_env_module;
+        *module = (prte_mca_base_module_t *) &prte_ess_env_module;
         return PRTE_SUCCESS;
     }
 
@@ -87,10 +86,7 @@ int prte_ess_env_component_query(prte_mca_base_module_t **module, int *priority)
     return PRTE_ERROR;
 }
 
-
-int
-prte_ess_env_component_close(void)
+int prte_ess_env_component_close(void)
 {
     return PRTE_SUCCESS;
 }
-

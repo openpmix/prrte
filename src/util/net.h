@@ -16,6 +16,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,13 +32,13 @@
 #include "prte_config.h"
 
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
+#    include <sys/socket.h>
 #endif
 #ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
+#    include <netinet/in.h>
 #endif
 
 BEGIN_C_DECLS
@@ -54,7 +55,7 @@ BEGIN_C_DECLS
  *                        buffer creation
  */
 PRTE_EXPORT int prte_net_init(void);
-PRTE_EXPORT void prte_net_finalize (void);
+PRTE_EXPORT void prte_net_finalize(void);
 
 /**
  * Calculate netmask in network byte order from CIDR notation
@@ -63,7 +64,6 @@ PRTE_EXPORT void prte_net_finalize (void);
  * @return                netmask in network byte order
  */
 PRTE_EXPORT uint32_t prte_net_prefix2netmask(uint32_t prefixlen);
-
 
 /**
  * Determine if given IP address is in the localhost range
@@ -78,7 +78,6 @@ PRTE_EXPORT uint32_t prte_net_prefix2netmask(uint32_t prefixlen);
  */
 PRTE_EXPORT bool prte_net_islocalhost(const struct sockaddr *addr);
 
-
 /**
  * Are we on the same network?
  *
@@ -91,10 +90,8 @@ PRTE_EXPORT bool prte_net_islocalhost(const struct sockaddr *addr);
  * @return                  true if \c addr1 and \c addr2 are on the
  *                          same net, false otherwise.
  */
-PRTE_EXPORT bool prte_net_samenetwork(const struct sockaddr *addr1,
-                                        const struct sockaddr *addr2,
-                                        uint32_t prefixlen);
-
+PRTE_EXPORT bool prte_net_samenetwork(const struct sockaddr *addr1, const struct sockaddr *addr2,
+                                      uint32_t prefixlen);
 
 /**
  * Is the given address a public IPv4 address?  Returns false for IPv6
@@ -124,8 +121,7 @@ PRTE_EXPORT bool prte_net_addr_isipv6linklocal(const struct sockaddr *addr);
  * @param addr              struct sockaddr of address
  * @return                  literal representation of \c addr
  */
-PRTE_EXPORT char* prte_net_get_hostname(const struct sockaddr *addr);
-
+PRTE_EXPORT char *prte_net_get_hostname(const struct sockaddr *addr);
 
 /**
  * Get port number from struct sockaddr

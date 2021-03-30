@@ -16,6 +16,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  * Additional copyrights may follow
  * $HEADER$
@@ -130,16 +131,15 @@ BEGIN_C_DECLS
 
 #if PRTE_ENABLE_DEBUG
 /* Any kind of unique ID should do the job */
-#define PRTE_OBJ_MAGIC_ID ((0xdeafbeedULL << 32) + 0xdeafbeedULL)
+#    define PRTE_OBJ_MAGIC_ID ((0xdeafbeedULL << 32) + 0xdeafbeedULL)
 #endif
 
 /* typedefs ***********************************************************/
 
 typedef struct prte_object_t prte_object_t;
 typedef struct prte_class_t prte_class_t;
-typedef void (*prte_construct_t) (prte_object_t *);
-typedef void (*prte_destruct_t) (prte_object_t *);
-
+typedef void (*prte_construct_t)(prte_object_t *);
+typedef void (*prte_destruct_t)(prte_object_t *);
 
 /* types **************************************************************/
 
@@ -157,10 +157,10 @@ struct prte_class_t {
     int cls_initialized;            /**< is class initialized */
     int cls_depth;                  /**< depth of class hierarchy tree */
     prte_construct_t *cls_construct_array;
-                                    /**< array of parent class constructors */
+    /**< array of parent class constructors */
     prte_destruct_t *cls_destruct_array;
-                                    /**< array of parent class destructors */
-    size_t cls_sizeof;              /**< size of an object instance */
+    /**< array of parent class destructors */
+    size_t cls_sizeof; /**< size of an object instance */
 };
 
 PRTE_EXPORT extern int prte_class_init_epoch;
@@ -171,20 +171,16 @@ PRTE_EXPORT extern int prte_class_init_epoch;
  * @param NAME   Name of the class to initialize
  */
 #if PRTE_ENABLE_DEBUG
-#define PRTE_OBJ_STATIC_INIT(BASE_CLASS)        \
-    {                                           \
-        .obj_magic_id = PRTE_OBJ_MAGIC_ID,      \
-        .obj_class = PRTE_CLASS(BASE_CLASS),     \
-        .obj_reference_count = 1,               \
-        .cls_init_file_name = __FILE__,         \
-        .cls_init_lineno = __LINE__,            \
-    }
+#    define PRTE_OBJ_STATIC_INIT(BASE_CLASS)                                                       \
+        {                                                                                          \
+            .obj_magic_id = PRTE_OBJ_MAGIC_ID, .obj_class = PRTE_CLASS(BASE_CLASS),                \
+            .obj_reference_count = 1, .cls_init_file_name = __FILE__, .cls_init_lineno = __LINE__, \
+        }
 #else
-#define PRTE_OBJ_STATIC_INIT(BASE_CLASS)        \
-    {                                           \
-        .obj_class = PRTE_CLASS(BASE_CLASS),     \
-        .obj_reference_count = 1,               \
-    }
+#    define PRTE_OBJ_STATIC_INIT(BASE_CLASS)                               \
+        {                                                                  \
+            .obj_class = PRTE_CLASS(BASE_CLASS), .obj_reference_count = 1, \
+        }
 #endif
 
 /**
@@ -198,12 +194,13 @@ struct prte_object_t {
         struct's memory */
     uint64_t obj_magic_id;
 #endif
-    prte_class_t *obj_class;            /**< class descriptor */
-    prte_atomic_int32_t obj_reference_count;   /**< reference count */
+    prte_class_t *obj_class;                 /**< class descriptor */
+    prte_atomic_int32_t obj_reference_count; /**< reference count */
 #if PRTE_ENABLE_DEBUG
-   const char* cls_init_file_name;        /**< In debug mode store the file where the object get contructed */
-   int   cls_init_lineno;           /**< In debug mode store the line number where the object get contructed */
-#endif  /* PRTE_ENABLE_DEBUG */
+    const char
+        *cls_init_file_name; /**< In debug mode store the file where the object get contructed */
+    int cls_init_lineno; /**< In debug mode store the line number where the object get contructed */
+#endif                   /* PRTE_ENABLE_DEBUG */
 };
 
 /* macros ************************************************************/
@@ -215,8 +212,7 @@ struct prte_object_t {
  * @param NAME          Name of class
  * @return              Pointer to class descriptor
  */
-#define PRTE_CLASS(NAME)     (&(NAME ## _class))
-
+#define PRTE_CLASS(NAME) (&(NAME##_class))
 
 /**
  * Static initializer for a class descriptor
@@ -228,16 +224,16 @@ struct prte_object_t {
  *
  * Put this in NAME.c
  */
-#define PRTE_CLASS_INSTANCE(NAME, PARENT, CONSTRUCTOR, DESTRUCTOR)       \
-    prte_class_t NAME ## _class = {                                     \
-        # NAME,                                                         \
-        PRTE_CLASS(PARENT),                                              \
-        (prte_construct_t) CONSTRUCTOR,                                 \
-        (prte_destruct_t) DESTRUCTOR,                                   \
-        0, 0, NULL, NULL,                                               \
-        sizeof(NAME)                                                    \
-    }
-
+#define PRTE_CLASS_INSTANCE(NAME, PARENT, CONSTRUCTOR, DESTRUCTOR) \
+    prte_class_t NAME##_class = {#NAME,                            \
+                                 PRTE_CLASS(PARENT),               \
+                                 (prte_construct_t) CONSTRUCTOR,   \
+                                 (prte_destruct_t) DESTRUCTOR,     \
+                                 0,                                \
+                                 0,                                \
+                                 NULL,                             \
+                                 NULL,                             \
+                                 sizeof(NAME)}
 
 /**
  * Declaration for class descriptor
@@ -246,9 +242,7 @@ struct prte_object_t {
  *
  * Put this in NAME.h
  */
-#define PRTE_CLASS_DECLARATION(NAME)             \
-    extern prte_class_t NAME ## _class
-
+#define PRTE_CLASS_DECLARATION(NAME) extern prte_class_t NAME##_class
 
 /**
  * Create an object: dynamically allocate storage and run the class
@@ -257,22 +251,20 @@ struct prte_object_t {
  * @param type          Type (class) of the object
  * @return              Pointer to the object
  */
-static inline prte_object_t *prte_obj_new(prte_class_t * cls);
+static inline prte_object_t *prte_obj_new(prte_class_t *cls);
 #if PRTE_ENABLE_DEBUG
-static inline prte_object_t *prte_obj_new_debug(prte_class_t* type, const char* file, int line)
+static inline prte_object_t *prte_obj_new_debug(prte_class_t *type, const char *file, int line)
 {
-    prte_object_t* object = prte_obj_new(type);
+    prte_object_t *object = prte_obj_new(type);
     object->obj_magic_id = PRTE_OBJ_MAGIC_ID;
     object->cls_init_file_name = file;
     object->cls_init_lineno = line;
     return object;
 }
-#define PRTE_NEW(type)                                   \
-    ((type *)prte_obj_new_debug(PRTE_CLASS(type), __FILE__, __LINE__))
+#    define PRTE_NEW(type) ((type *) prte_obj_new_debug(PRTE_CLASS(type), __FILE__, __LINE__))
 #else
-#define PRTE_NEW(type)                                   \
-    ((type *) prte_obj_new(PRTE_CLASS(type)))
-#endif  /* PRTE_ENABLE_DEBUG */
+#    define PRTE_NEW(type) ((type *) prte_obj_new(PRTE_CLASS(type)))
+#endif /* PRTE_ENABLE_DEBUG */
 
 /**
  * Retain an object (by incrementing its reference count)
@@ -280,15 +272,15 @@ static inline prte_object_t *prte_obj_new_debug(prte_class_t* type, const char* 
  * @param object        Pointer to the object
  */
 #if PRTE_ENABLE_DEBUG
-#define PRTE_RETAIN(object)                                              \
-    do {                                                                \
-        assert(NULL != ((prte_object_t *) (object))->obj_class);        \
-        assert(PRTE_OBJ_MAGIC_ID == ((prte_object_t *) (object))->obj_magic_id); \
-        prte_obj_update((prte_object_t *) (object), 1);                 \
-        assert(((prte_object_t *) (object))->obj_reference_count >= 0); \
-    } while (0)
+#    define PRTE_RETAIN(object)                                                      \
+        do {                                                                         \
+            assert(NULL != ((prte_object_t *) (object))->obj_class);                 \
+            assert(PRTE_OBJ_MAGIC_ID == ((prte_object_t *) (object))->obj_magic_id); \
+            prte_obj_update((prte_object_t *) (object), 1);                          \
+            assert(((prte_object_t *) (object))->obj_reference_count >= 0);          \
+        } while (0)
 #else
-#define PRTE_RETAIN(object)  prte_obj_update((prte_object_t *) (object), 1);
+#    define PRTE_RETAIN(object) prte_obj_update((prte_object_t *) (object), 1);
 #endif
 
 /**
@@ -296,19 +288,19 @@ static inline prte_object_t *prte_obj_new_debug(prte_class_t* type, const char* 
  * an object change.
  */
 #if PRTE_ENABLE_DEBUG
-#define PRTE_REMEMBER_FILE_AND_LINENO( OBJECT, FILE, LINENO )    \
-    do {                                                        \
-        ((prte_object_t*)(OBJECT))->cls_init_file_name = FILE;  \
-        ((prte_object_t*)(OBJECT))->cls_init_lineno = LINENO;   \
-    } while(0)
-#define PRTE_SET_MAGIC_ID( OBJECT, VALUE )                       \
-    do {                                                        \
-        ((prte_object_t*)(OBJECT))->obj_magic_id = (VALUE);     \
-    } while(0)
+#    define PRTE_REMEMBER_FILE_AND_LINENO(OBJECT, FILE, LINENO)      \
+        do {                                                         \
+            ((prte_object_t *) (OBJECT))->cls_init_file_name = FILE; \
+            ((prte_object_t *) (OBJECT))->cls_init_lineno = LINENO;  \
+        } while (0)
+#    define PRTE_SET_MAGIC_ID(OBJECT, VALUE)                      \
+        do {                                                      \
+            ((prte_object_t *) (OBJECT))->obj_magic_id = (VALUE); \
+        } while (0)
 #else
-#define PRTE_REMEMBER_FILE_AND_LINENO( OBJECT, FILE, LINENO )
-#define PRTE_SET_MAGIC_ID( OBJECT, VALUE )
-#endif  /* PRTE_ENABLE_DEBUG */
+#    define PRTE_REMEMBER_FILE_AND_LINENO(OBJECT, FILE, LINENO)
+#    define PRTE_SET_MAGIC_ID(OBJECT, VALUE)
+#endif /* PRTE_ENABLE_DEBUG */
 
 /**
  * Release an object (by decrementing its reference count).  If the
@@ -323,29 +315,28 @@ static inline prte_object_t *prte_obj_new_debug(prte_class_t* type, const char* 
  *
  */
 #if PRTE_ENABLE_DEBUG
-#define PRTE_RELEASE(object)                                             \
-    do {                                                                \
-        assert(PRTE_OBJ_MAGIC_ID == ((prte_object_t *) (object))->obj_magic_id); \
-        assert(NULL != ((prte_object_t *) (object))->obj_class);        \
-        if (0 == prte_obj_update((prte_object_t *) (object), -1)) {     \
-            PRTE_SET_MAGIC_ID((object), 0);                              \
-            prte_obj_run_destructors((prte_object_t *) (object));       \
-            PRTE_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
-            free(object);                                               \
-            object = NULL;                                              \
-        }                                                               \
-    } while (0)
+#    define PRTE_RELEASE(object)                                                     \
+        do {                                                                         \
+            assert(PRTE_OBJ_MAGIC_ID == ((prte_object_t *) (object))->obj_magic_id); \
+            assert(NULL != ((prte_object_t *) (object))->obj_class);                 \
+            if (0 == prte_obj_update((prte_object_t *) (object), -1)) {              \
+                PRTE_SET_MAGIC_ID((object), 0);                                      \
+                prte_obj_run_destructors((prte_object_t *) (object));                \
+                PRTE_REMEMBER_FILE_AND_LINENO(object, __FILE__, __LINE__);           \
+                free(object);                                                        \
+                object = NULL;                                                       \
+            }                                                                        \
+        } while (0)
 #else
-#define PRTE_RELEASE(object)                                             \
-    do {                                                                \
-        if (0 == prte_obj_update((prte_object_t *) (object), -1)) {     \
-            prte_obj_run_destructors((prte_object_t *) (object));       \
-            free(object);                                               \
-            object = NULL;                                              \
-        }                                                               \
-    } while (0)
+#    define PRTE_RELEASE(object)                                        \
+        do {                                                            \
+            if (0 == prte_obj_update((prte_object_t *) (object), -1)) { \
+                prte_obj_run_destructors((prte_object_t *) (object));   \
+                free(object);                                           \
+                object = NULL;                                          \
+            }                                                           \
+        } while (0)
 #endif
-
 
 /**
  * Construct (initialize) objects that are not dynamically allocated.
@@ -354,23 +345,22 @@ static inline prte_object_t *prte_obj_new_debug(prte_class_t* type, const char* 
  * @param type          The object type
  */
 
-#define PRTE_CONSTRUCT(object, type)                             \
-do {                                                            \
-    PRTE_CONSTRUCT_INTERNAL((object), PRTE_CLASS(type));          \
-} while (0)
+#define PRTE_CONSTRUCT(object, type)                         \
+    do {                                                     \
+        PRTE_CONSTRUCT_INTERNAL((object), PRTE_CLASS(type)); \
+    } while (0)
 
-#define PRTE_CONSTRUCT_INTERNAL(object, type)                        \
-do {                                                                \
-    PRTE_SET_MAGIC_ID((object), PRTE_OBJ_MAGIC_ID);                  \
-    if (prte_class_init_epoch != (type)->cls_initialized) {         \
-        prte_class_initialize((type));                              \
-    }                                                               \
-    ((prte_object_t *) (object))->obj_class = (type);               \
-    ((prte_object_t *) (object))->obj_reference_count = 1;          \
-    prte_obj_run_constructors((prte_object_t *) (object));          \
-    PRTE_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
-} while (0)
-
+#define PRTE_CONSTRUCT_INTERNAL(object, type)                      \
+    do {                                                           \
+        PRTE_SET_MAGIC_ID((object), PRTE_OBJ_MAGIC_ID);            \
+        if (prte_class_init_epoch != (type)->cls_initialized) {    \
+            prte_class_initialize((type));                         \
+        }                                                          \
+        ((prte_object_t *) (object))->obj_class = (type);          \
+        ((prte_object_t *) (object))->obj_reference_count = 1;     \
+        prte_obj_run_constructors((prte_object_t *) (object));     \
+        PRTE_REMEMBER_FILE_AND_LINENO(object, __FILE__, __LINE__); \
+    } while (0)
 
 /**
  * Destruct (finalize) an object that is not dynamically allocated.
@@ -378,19 +368,19 @@ do {                                                                \
  * @param object        Pointer to the object
  */
 #if PRTE_ENABLE_DEBUG
-#define PRTE_DESTRUCT(object)                                    \
-do {                                                            \
-    assert(PRTE_OBJ_MAGIC_ID == ((prte_object_t *) (object))->obj_magic_id); \
-    PRTE_SET_MAGIC_ID((object), 0);                              \
-    prte_obj_run_destructors((prte_object_t *) (object));       \
-    PRTE_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
-} while (0)
+#    define PRTE_DESTRUCT(object)                                                    \
+        do {                                                                         \
+            assert(PRTE_OBJ_MAGIC_ID == ((prte_object_t *) (object))->obj_magic_id); \
+            PRTE_SET_MAGIC_ID((object), 0);                                          \
+            prte_obj_run_destructors((prte_object_t *) (object));                    \
+            PRTE_REMEMBER_FILE_AND_LINENO(object, __FILE__, __LINE__);               \
+        } while (0)
 #else
-#define PRTE_DESTRUCT(object)                                    \
-do {                                                            \
-    prte_obj_run_destructors((prte_object_t *) (object));       \
-    PRTE_REMEMBER_FILE_AND_LINENO( object, __FILE__, __LINE__ ); \
-} while (0)
+#    define PRTE_DESTRUCT(object)                                      \
+        do {                                                           \
+            prte_obj_run_destructors((prte_object_t *) (object));      \
+            PRTE_REMEMBER_FILE_AND_LINENO(object, __FILE__, __LINE__); \
+        } while (0)
 #endif
 
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_object_t);
@@ -430,19 +420,18 @@ PRTE_EXPORT int prte_class_finalize(void);
  * Hardwired for fairly shallow inheritance trees
  * @param size          Pointer to the object.
  */
-static inline void prte_obj_run_constructors(prte_object_t * object)
+static inline void prte_obj_run_constructors(prte_object_t *object)
 {
-    prte_construct_t* cls_construct;
+    prte_construct_t *cls_construct;
 
     assert(NULL != object->obj_class);
 
     cls_construct = object->obj_class->cls_construct_array;
-    while( NULL != *cls_construct ) {
+    while (NULL != *cls_construct) {
         (*cls_construct)(object);
         cls_construct++;
     }
 }
-
 
 /**
  * Run the hierarchy of class destructors for this object, in a
@@ -452,19 +441,18 @@ static inline void prte_obj_run_constructors(prte_object_t * object)
  *
  * @param size          Pointer to the object.
  */
-static inline void prte_obj_run_destructors(prte_object_t * object)
+static inline void prte_obj_run_destructors(prte_object_t *object)
 {
-    prte_destruct_t* cls_destruct;
+    prte_destruct_t *cls_destruct;
 
     assert(NULL != object->obj_class);
 
     cls_destruct = object->obj_class->cls_destruct_array;
-    while( NULL != *cls_destruct ) {
+    while (NULL != *cls_destruct) {
         (*cls_destruct)(object);
         cls_destruct++;
     }
 }
-
 
 /**
  * Create new object: dynamically allocate storage and run the class
@@ -476,7 +464,7 @@ static inline void prte_obj_run_destructors(prte_object_t * object)
  * @param cls           Pointer to the class descriptor of this object
  * @return              Pointer to the object
  */
-static inline prte_object_t *prte_obj_new(prte_class_t * cls)
+static inline prte_object_t *prte_obj_new(prte_class_t *cls)
 {
     prte_object_t *object;
     assert(cls->cls_sizeof >= sizeof(prte_object_t));
@@ -492,7 +480,6 @@ static inline prte_object_t *prte_obj_new(prte_class_t * cls)
     }
     return object;
 }
-
 
 /**
  * Atomically update the object's reference count by some increment.

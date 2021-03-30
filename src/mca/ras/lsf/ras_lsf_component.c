@@ -16,6 +16,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,15 +65,13 @@ prte_ras_base_component_t prte_ras_lsf_component = {
     },
 };
 
-
 /**
-  * component open/close/init function
-  */
+ * component open/close/init function
+ */
 static int prte_ras_lsf_open(void)
 {
     return PRTE_SUCCESS;
 }
-
 
 static int prte_ras_lsf_component_query(prte_mca_base_module_t **module, int *priority)
 {
@@ -103,9 +102,8 @@ static int prte_ras_lsf_register(void)
     (void) prte_mca_base_component_var_register(&prte_ras_lsf_component.base_version,
                                                 "skip_affinity_file",
                                                 "Skip processing the LSB_AFFINITY_HOSTFILE.",
-                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL,
-                                                0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                                PRTE_INFO_LVL_3,
+                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
                                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                                 &prte_ras_lsf_skip_affinity_file);
 

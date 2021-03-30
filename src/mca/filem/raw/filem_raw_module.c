@@ -20,88 +20,82 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include <string.h>
 #include <stdlib.h>
-#include <sys/types.h>
+#include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #ifdef HAVE_DIRENT_H
-#include <dirent.h>
-#endif  /* HAVE_DIRENT_H */
+#    include <dirent.h>
+#endif /* HAVE_DIRENT_H */
 #ifdef HAVE_FCNTL_H
-#include <fcntl.h>
+#    include <fcntl.h>
 #endif
 
 #include "src/class/prte_list.h"
 #include "src/event/event-internal.h"
 
-#include "src/util/show_help.h"
 #include "src/util/argv.h"
-#include "src/util/output.h"
-#include "src/util/prte_environ.h"
+#include "src/util/basename.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
+#include "src/util/output.h"
 #include "src/util/path.h"
-#include "src/util/basename.h"
+#include "src/util/prte_environ.h"
+#include "src/util/show_help.h"
 
-#include "src/util/name_fns.h"
-#include "src/util/proc_info.h"
-#include "src/util/session_dir.h"
-#include "src/threads/threads.h"
-#include "src/runtime/prte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/rml/rml.h"
+#include "src/runtime/prte_globals.h"
+#include "src/threads/threads.h"
+#include "src/util/name_fns.h"
+#include "src/util/proc_info.h"
+#include "src/util/session_dir.h"
 
-#include "src/mca/filem/filem.h"
 #include "src/mca/filem/base/base.h"
+#include "src/mca/filem/filem.h"
 
 #include "filem_raw.h"
 
 static int raw_init(void);
 static int raw_finalize(void);
-static int raw_preposition_files(prte_job_t *jdata,
-                                 prte_filem_completion_cbfunc_t cbfunc,
+static int raw_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
                                  void *cbdata);
-static int raw_link_local_files(prte_job_t *jdata,
-                                prte_app_context_t *app);
+static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app);
 
-prte_filem_base_module_t prte_filem_raw_module = {
-    .filem_init = raw_init,
-    .filem_finalize = raw_finalize,
-    /* we don't use any of the following */
-    .put = prte_filem_base_none_put,
-    .put_nb = prte_filem_base_none_put_nb,
-    .get = prte_filem_base_none_get,
-    .get_nb = prte_filem_base_none_get_nb,
-    .rm = prte_filem_base_none_rm,
-    .rm_nb = prte_filem_base_none_rm_nb,
-    .wait = prte_filem_base_none_wait,
-    .wait_all = prte_filem_base_none_wait_all,
-    /* now the APIs we *do* use */
-    .preposition_files = raw_preposition_files,
-    .link_local_files = raw_link_local_files
-};
+prte_filem_base_module_t prte_filem_raw_module = {.filem_init = raw_init,
+                                                  .filem_finalize = raw_finalize,
+                                                  /* we don't use any of the following */
+                                                  .put = prte_filem_base_none_put,
+                                                  .put_nb = prte_filem_base_none_put_nb,
+                                                  .get = prte_filem_base_none_get,
+                                                  .get_nb = prte_filem_base_none_get_nb,
+                                                  .rm = prte_filem_base_none_rm,
+                                                  .rm_nb = prte_filem_base_none_rm_nb,
+                                                  .wait = prte_filem_base_none_wait,
+                                                  .wait_all = prte_filem_base_none_wait_all,
+                                                  /* now the APIs we *do* use */
+                                                  .preposition_files = raw_preposition_files,
+                                                  .link_local_files = raw_link_local_files};
 
 static prte_list_t outbound_files;
 static prte_list_t incoming_files;
 static prte_list_t positioned_files;
 
 static void send_chunk(int fd, short argc, void *cbdata);
-static void recv_files(int status, pmix_proc_t* sender,
-                       pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                       void* cbdata);
-static void recv_ack(int status, pmix_proc_t* sender,
-                     pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                     void* cbdata);
+static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                       prte_rml_tag_t tag, void *cbdata);
+static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                     prte_rml_tag_t tag, void *cbdata);
 static void write_handler(int fd, short event, void *cbdata);
 
 static char *filem_session_dir(void)
 {
     char *session_dir = prte_process_info.jobfam_session_dir;
-    if( NULL == session_dir ){
+    if (NULL == session_dir) {
         /* if no job family session dir was provided -
          * use the job session dir */
         session_dir = prte_process_info.job_session_dir;
@@ -114,21 +108,15 @@ static int raw_init(void)
     PRTE_CONSTRUCT(&incoming_files, prte_list_t);
 
     /* start a recv to catch any files sent to me */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD,
-                            PRTE_RML_TAG_FILEM_BASE,
-                            PRTE_RML_PERSISTENT,
-                            recv_files,
-                            NULL);
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE, PRTE_RML_PERSISTENT,
+                            recv_files, NULL);
 
     /* if I'm the HNP, start a recv to catch acks sent to me */
     if (PRTE_PROC_IS_MASTER) {
         PRTE_CONSTRUCT(&outbound_files, prte_list_t);
         PRTE_CONSTRUCT(&positioned_files, prte_list_t);
-        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD,
-                                PRTE_RML_TAG_FILEM_BASE_RESP,
-                                PRTE_RML_PERSISTENT,
-                                recv_ack,
-                                NULL);
+        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE_RESP,
+                                PRTE_RML_PERSISTENT, recv_ack, NULL);
     }
 
     return PRTE_SUCCESS;
@@ -183,9 +171,8 @@ static void xfer_complete(int status, prte_filem_raw_xfer_t *xfer)
     }
 }
 
-static void recv_ack(int status, pmix_proc_t* sender,
-                     pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                     void* cbdata)
+static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                     prte_rml_tag_t tag, void *cbdata)
 {
     prte_list_item_t *item, *itm;
     prte_filem_raw_outbound_t *outbound;
@@ -194,7 +181,7 @@ static void recv_ack(int status, pmix_proc_t* sender,
     int st, n, rc;
 
     /* unpack the file */
-    n=1;
+    n = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &file, &n, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -202,7 +189,7 @@ static void recv_ack(int status, pmix_proc_t* sender,
     }
 
     /* unpack the status */
-    n=1;
+    n = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &st, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -211,18 +198,15 @@ static void recv_ack(int status, pmix_proc_t* sender,
 
     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw: recvd ack from %s for file %s status %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(sender), file, st));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender), file, st));
 
     /* find the corresponding outbound object */
-    for (item = prte_list_get_first(&outbound_files);
-         item != prte_list_get_end(&outbound_files);
+    for (item = prte_list_get_first(&outbound_files); item != prte_list_get_end(&outbound_files);
          item = prte_list_get_next(item)) {
-        outbound = (prte_filem_raw_outbound_t*)item;
+        outbound = (prte_filem_raw_outbound_t *) item;
         for (itm = prte_list_get_first(&outbound->xfers);
-             itm != prte_list_get_end(&outbound->xfers);
-             itm = prte_list_get_next(itm)) {
-            xfer = (prte_filem_raw_xfer_t*)itm;
+             itm != prte_list_get_end(&outbound->xfers); itm = prte_list_get_next(itm)) {
+            xfer = (prte_filem_raw_xfer_t *) itm;
             if (0 == strcmp(file, xfer->file)) {
                 /* if the status isn't success, record it */
                 if (0 != st) {
@@ -234,8 +218,7 @@ static void recv_ack(int status, pmix_proc_t* sender,
                 if (xfer->nrecvd == prte_process_info.num_daemons) {
                     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                          "%s filem:raw: xfer complete for file %s status %d",
-                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                         file, xfer->status));
+                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), file, xfer->status));
                     xfer_complete(xfer->status, xfer);
                 }
                 free(file);
@@ -245,8 +228,7 @@ static void recv_ack(int status, pmix_proc_t* sender,
     }
 }
 
-static int raw_preposition_files(prte_job_t *jdata,
-                                 prte_filem_completion_cbfunc_t cbfunc,
+static int raw_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
                                  void *cbdata)
 {
     prte_app_context_t *app;
@@ -255,7 +237,7 @@ static int raw_preposition_files(prte_job_t *jdata,
     int fd;
     prte_filem_raw_xfer_t *xfer, *xptr;
     int flags, i, j;
-    char **files=NULL;
+    char **files = NULL;
     prte_filem_raw_outbound_t *outbound, *optr;
     char *cptr, *nxt, *filestring;
     prte_list_t fsets;
@@ -263,23 +245,21 @@ static int raw_preposition_files(prte_job_t *jdata,
 
     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw: preposition files for job %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_JOBID_PRINT(jdata->nspace)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace)));
 
     /* cycle across the app_contexts looking for files or
      * binaries to be prepositioned
      */
     PRTE_CONSTRUCT(&fsets, prte_list_t);
-    for (i=0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, i))) {
+    for (i = 0; i < jdata->apps->size; i++) {
+        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
         if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PMIX_BOOL)) {
             /* add the executable to our list */
             PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: preload executable %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 app->app));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), app->app));
             fs = PRTE_NEW(prte_filem_base_file_set_t);
             fs->local_target = strdup(app->app);
             fs->target_flag = PRTE_FILEM_TYPE_EXE;
@@ -295,10 +275,11 @@ static int raw_preposition_files(prte_job_t *jdata,
             app->argv[0] = strdup(app->app);
             fs->remote_target = strdup(app->app);
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void**)&filestring, PMIX_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void **) &filestring,
+                               PMIX_STRING)) {
             files = prte_argv_split(filestring, ',');
             free(filestring);
-            for (j=0; NULL != files[j]; j++) {
+            for (j = 0; NULL != files[j]; j++) {
                 fs = PRTE_NEW(prte_filem_base_file_set_t);
                 fs->local_target = strdup(files[j]);
                 /* check any suffix for file type */
@@ -306,20 +287,17 @@ static int raw_preposition_files(prte_job_t *jdata,
                     if (0 == strncmp(cptr, ".tar", 4)) {
                         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                              "%s filem:raw: marking file %s as TAR",
-                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                             files[j]));
+                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), files[j]));
                         fs->target_flag = PRTE_FILEM_TYPE_TAR;
                     } else if (0 == strncmp(cptr, ".bz", 3)) {
                         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                              "%s filem:raw: marking file %s as BZIP",
-                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                             files[j]));
+                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), files[j]));
                         fs->target_flag = PRTE_FILEM_TYPE_BZIP;
                     } else if (0 == strncmp(cptr, ".gz", 3)) {
                         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                              "%s filem:raw: marking file %s as GZIP",
-                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                             files[j]));
+                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), files[j]));
                         fs->target_flag = PRTE_FILEM_TYPE_GZIP;
                     } else {
                         fs->target_flag = PRTE_FILEM_TYPE_FILE;
@@ -389,7 +367,8 @@ static int raw_preposition_files(prte_job_t *jdata,
              * can find them on the remote end
              */
             filestring = prte_argv_join(files, ',');
-            prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, PRTE_ATTR_GLOBAL, filestring, PMIX_STRING);
+            prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, PRTE_ATTR_GLOBAL,
+                               filestring, PMIX_STRING);
             /* cleanup for the next app */
             prte_argv_free(files);
             free(filestring);
@@ -409,8 +388,7 @@ static int raw_preposition_files(prte_job_t *jdata,
 
     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw: found %d files to position",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (int)prte_list_get_size(&fsets)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) prte_list_get_size(&fsets)));
 
     /* track the outbound file sets */
     outbound = PRTE_NEW(prte_filem_raw_outbound_t);
@@ -423,18 +401,17 @@ static int raw_preposition_files(prte_job_t *jdata,
      * daemon
      */
     while (NULL != (item = prte_list_remove_first(&fsets))) {
-        fs = (prte_filem_base_file_set_t*)item;
+        fs = (prte_filem_base_file_set_t *) item;
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: checking prepositioning of file %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             fs->local_target));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fs->local_target));
 
         /* have we already sent this file? */
         already_sent = false;
         for (itm = prte_list_get_first(&positioned_files);
              !already_sent && itm != prte_list_get_end(&positioned_files);
              itm = prte_list_get_next(itm)) {
-            xptr = (prte_filem_raw_xfer_t*)itm;
+            xptr = (prte_filem_raw_xfer_t *) itm;
             if (0 == strcmp(fs->local_target, xptr->src)) {
                 already_sent = true;
             }
@@ -454,11 +431,10 @@ static int raw_preposition_files(prte_job_t *jdata,
         for (itm = prte_list_get_first(&outbound_files);
              !already_sent && itm != prte_list_get_end(&outbound_files);
              itm = prte_list_get_next(itm)) {
-            optr = (prte_filem_raw_outbound_t*)itm;
-            for (itm2 = prte_list_get_first(&optr->xfers);
-                 itm2 != prte_list_get_end(&optr->xfers);
+            optr = (prte_filem_raw_outbound_t *) itm;
+            for (itm2 = prte_list_get_first(&optr->xfers); itm2 != prte_list_get_end(&optr->xfers);
                  itm2 = prte_list_get_next(itm2)) {
-                xptr = (prte_filem_raw_xfer_t*)itm2;
+                xptr = (prte_filem_raw_xfer_t *) itm2;
                 if (0 == strcmp(fs->local_target, xptr->src)) {
                     already_sent = true;
                 }
@@ -475,8 +451,8 @@ static int raw_preposition_files(prte_job_t *jdata,
 
         /* attempt to open the specified file */
         if (0 > (fd = open(fs->local_target, O_RDONLY))) {
-            prte_output(0, "%s CANNOT ACCESS FILE %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fs->local_target);
+            prte_output(0, "%s CANNOT ACCESS FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        fs->local_target);
             PRTE_RELEASE(item);
             prte_list_remove_item(&outbound_files, &outbound->super);
             PRTE_RELEASE(outbound);
@@ -484,13 +460,15 @@ static int raw_preposition_files(prte_job_t *jdata,
         }
         /* set the flags to non-blocking */
         if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-            prte_output(prte_filem_base_framework.framework_output, "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
-                        __FILE__, __LINE__, errno);
+            prte_output(prte_filem_base_framework.framework_output,
+                        "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__,
+                        errno);
         } else {
             flags |= O_NONBLOCK;
             if (fcntl(fd, F_SETFL, flags) < 0) {
-                prte_output(prte_filem_base_framework.framework_output, "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n",
-                            __FILE__, __LINE__, errno);
+                prte_output(prte_filem_base_framework.framework_output,
+                            "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__,
+                            errno);
             }
         }
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
@@ -566,9 +544,8 @@ static int raw_preposition_files(prte_job_t *jdata,
     if (0 < prte_output_get_verbosity(prte_filem_base_framework.framework_output)) {
         prte_output(0, "%s Files to be positioned:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         for (itm2 = prte_list_get_first(&outbound->xfers);
-             itm2 != prte_list_get_end(&outbound->xfers);
-             itm2 = prte_list_get_next(itm2)) {
-            xptr = (prte_filem_raw_xfer_t*)itm2;
+             itm2 != prte_list_get_end(&outbound->xfers); itm2 = prte_list_get_next(itm2)) {
+            xptr = (prte_filem_raw_xfer_t *) itm2;
             prte_output(0, "%s\t%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), xptr->src);
         }
     }
@@ -576,8 +553,7 @@ static int raw_preposition_files(prte_job_t *jdata,
     return PRTE_SUCCESS;
 }
 
-static int create_link(char *my_dir, char *path,
-                       char *link_pt)
+static int create_link(char *my_dir, char *path, char *link_pt)
 {
     char *mypath, *fullname, *basedir;
     struct stat buf;
@@ -593,14 +569,13 @@ static int create_link(char *my_dir, char *path,
     if (0 != stat(fullname, &buf)) {
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: creating symlink to %s\n\tmypath: %s\n\tlink: %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), link_pt,
-                             mypath, fullname));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), link_pt, mypath, fullname));
         /* create any required path to the link location */
         basedir = prte_dirname(fullname);
         if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(basedir, S_IRWXU))) {
             PRTE_ERROR_LOG(rc);
-            prte_output(0, "%s Failed to symlink %s to %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), mypath, fullname);
+            prte_output(0, "%s Failed to symlink %s to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        mypath, fullname);
             free(basedir);
             free(mypath);
             free(fullname);
@@ -609,8 +584,8 @@ static int create_link(char *my_dir, char *path,
         free(basedir);
         /* do the symlink */
         if (0 != symlink(mypath, fullname)) {
-            prte_output(0, "%s Failed to symlink %s to %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), mypath, fullname);
+            prte_output(0, "%s Failed to symlink %s to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        mypath, fullname);
             rc = PRTE_ERROR;
         }
     }
@@ -619,15 +594,14 @@ static int create_link(char *my_dir, char *path,
     return rc;
 }
 
-static int raw_link_local_files(prte_job_t *jdata,
-                                prte_app_context_t *app)
+static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
 {
-    char *session_dir, *path=NULL;
+    char *session_dir, *path = NULL;
     prte_proc_t *proc;
     int i, j, rc;
     prte_filem_raw_incoming_t *inbnd;
     prte_list_item_t *item;
-    char **files=NULL, *bname, *filestring;
+    char **files = NULL, *bname, *filestring;
 
     /* check my jobfam session directory for files I have received and
      * symlink them to the proc-level session directory of each
@@ -637,7 +611,7 @@ static int raw_link_local_files(prte_job_t *jdata,
      *  intention here
      */
     session_dir = filem_session_dir();
-    if( NULL == session_dir){
+    if (NULL == session_dir) {
         /* we were unable to find any suitable directory */
         rc = PRTE_ERR_BAD_PARAM;
         PRTE_ERROR_LOG(rc);
@@ -645,7 +619,8 @@ static int raw_link_local_files(prte_job_t *jdata,
     }
 
     /* get the list of files this app wants */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void**)&filestring, PMIX_STRING)) {
+    if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void **) &filestring,
+                           PMIX_STRING)) {
         files = prte_argv_split(filestring, ',');
         free(filestring);
     }
@@ -661,41 +636,36 @@ static int raw_link_local_files(prte_job_t *jdata,
         return PRTE_SUCCESS;
     }
 
-    for (i=0; i < prte_local_children->size; i++) {
-        if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, i))) {
+    for (i = 0; i < prte_local_children->size; i++) {
+        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
             continue;
         }
         PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                              "%s filem:raw: working symlinks for proc %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(&proc->name)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
         if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
             PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: proc %s not part of job %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 PRTE_NAME_PRINT(&proc->name),
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                                  PRTE_JOBID_PRINT(jdata->nspace)));
             continue;
         }
         if (proc->app_idx != app->idx) {
             PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: proc %s not part of app_idx %d",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 PRTE_NAME_PRINT(&proc->name),
-                                 (int)app->idx));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
+                                 (int) app->idx));
             continue;
         }
         /* ignore children we have already handled */
-        if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_ALIVE) ||
-            (PRTE_PROC_STATE_INIT != proc->state &&
-             PRTE_PROC_STATE_RESTART != proc->state)) {
+        if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_ALIVE)
+            || (PRTE_PROC_STATE_INIT != proc->state && PRTE_PROC_STATE_RESTART != proc->state)) {
             continue;
         }
 
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: creating symlinks for %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(&proc->name)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
 
         /* get the session dir name in absolute form */
         path = prte_process_info.proc_session_dir;
@@ -712,25 +682,24 @@ static int raw_link_local_files(prte_job_t *jdata,
 
         /* cycle thru the incoming files */
         for (item = prte_list_get_first(&incoming_files);
-             item != prte_list_get_end(&incoming_files);
-             item = prte_list_get_next(item)) {
-            inbnd = (prte_filem_raw_incoming_t*)item;
+             item != prte_list_get_end(&incoming_files); item = prte_list_get_next(item)) {
+            inbnd = (prte_filem_raw_incoming_t *) item;
             PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: checking file %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inbnd->file));
 
             /* is this file for this app_context? */
-            for (j=0; NULL != files[j]; j++) {
+            for (j = 0; NULL != files[j]; j++) {
                 if (0 == strcmp(inbnd->file, files[j])) {
                     /* this must be one of the files we are to link against */
                     if (NULL != inbnd->link_pts) {
                         PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                              "%s filem:raw: creating links for file %s",
-                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                             inbnd->file));
+                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inbnd->file));
                         /* cycle thru the link points and create symlinks to them */
-                        for (j=0; NULL != inbnd->link_pts[j]; j++) {
-                            if (PRTE_SUCCESS != (rc = create_link(session_dir, path, inbnd->link_pts[j]))) {
+                        for (j = 0; NULL != inbnd->link_pts[j]; j++) {
+                            if (PRTE_SUCCESS
+                                != (rc = create_link(session_dir, path, inbnd->link_pts[j]))) {
                                 PRTE_ERROR_LOG(rc);
                                 free(files);
                                 return rc;
@@ -739,8 +708,7 @@ static int raw_link_local_files(prte_job_t *jdata,
                     } else {
                         PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                              "%s filem:raw: file %s has no link points",
-                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                             inbnd->file));
+                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inbnd->file));
                     }
                     break;
                 }
@@ -753,7 +721,7 @@ static int raw_link_local_files(prte_job_t *jdata,
 
 static void send_chunk(int fd, short argc, void *cbdata)
 {
-    prte_filem_raw_xfer_t *rev = (prte_filem_raw_xfer_t*)cbdata;
+    prte_filem_raw_xfer_t *rev = (prte_filem_raw_xfer_t *) cbdata;
     unsigned char data[PRTE_FILEM_RAW_CHUNK_MAX];
     int32_t numbytes;
     int rc;
@@ -799,8 +767,7 @@ static void send_chunk(int fd, short argc, void *cbdata)
 
     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw:read handler sending chunk %d of %d bytes for file %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         rev->nchunk, numbytes, rev->file));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rev->nchunk, numbytes, rev->file));
 
     /* package it for transmission */
     PMIX_DATA_BUFFER_CONSTRUCT(&chunk);
@@ -838,7 +805,7 @@ static void send_chunk(int fd, short argc, void *cbdata)
 
     /* goes to all daemons */
     sig = PRTE_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t*)malloc(sizeof(pmix_proc_t));
+    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     sig->sz = 1;
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
     if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_FILEM_BASE, &chunk))) {
@@ -883,8 +850,7 @@ static void send_complete(char *file, int status)
         PMIX_DATA_BUFFER_RELEASE(buf);
         return;
     }
-    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
-                                          PRTE_RML_TAG_FILEM_BASE_RESP,
+    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_FILEM_BASE_RESP,
                                           prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
         PRTE_RELEASE(buf);
@@ -903,8 +869,7 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
 
     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw: identifying links for archive %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         inbnd->fullpath));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inbnd->fullpath));
 
     prte_asprintf(&cmd, "tar tf %s", inbnd->fullpath);
     fp = popen(cmd, "r");
@@ -919,35 +884,30 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
      */
     while (fgets(path, sizeof(path), fp) != NULL) {
         PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
-                             "%s filem:raw: path %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             path));
+                             "%s filem:raw: path %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
         /* protect against an empty result */
         if (0 == strlen(path)) {
             continue;
         }
         /* trim the trailing cr */
-        path[strlen(path)-1] = '\0';
+        path[strlen(path) - 1] = '\0';
         /* ignore directories */
-        if ('/' == path[strlen(path)-1]) {
+        if ('/' == path[strlen(path) - 1]) {
             PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: path %s is a directory - ignoring it",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 path));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
             continue;
         }
         /* ignore specific useless directory trees */
         if (NULL != strstr(path, ".deps")) {
             PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: path %s includes .deps - ignoring it",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 path));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
             continue;
         }
         PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                              "%s filem:raw: adding path %s to link points",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             path));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
         prte_argv_append_nosize(&inbnd->link_pts, path);
     }
     /* close */
@@ -955,9 +915,8 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
     return PRTE_SUCCESS;
 }
 
-static void recv_files(int status, pmix_proc_t* sender,
-                       pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                       void* cbdata)
+static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                       prte_rml_tag_t tag, void *cbdata)
 {
     char *file, *session_dir;
     int32_t nchunk, n, nbytes;
@@ -970,14 +929,14 @@ static void recv_files(int status, pmix_proc_t* sender,
     char *cptr;
 
     /* unpack the data */
-    n=1;
+    n = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &file, &n, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         send_complete(NULL, rc);
         return;
     }
-    n=1;
+    n = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &nchunk, &n, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -990,7 +949,7 @@ static void recv_files(int status, pmix_proc_t* sender,
         /* just set nbytes to zero so we close the fd */
         nbytes = 0;
     } else {
-        nbytes=PRTE_FILEM_RAW_CHUNK_MAX;
+        nbytes = PRTE_FILEM_RAW_CHUNK_MAX;
         rc = PMIx_Data_unpack(NULL, buffer, data, &nbytes, PMIX_BYTE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -1001,7 +960,7 @@ static void recv_files(int status, pmix_proc_t* sender,
     }
     /* if the chunk is 0, then additional info should be present */
     if (0 == nchunk) {
-        n=1;
+        n = 1;
         rc = PMIx_Data_unpack(NULL, buffer, &type, &n, PMIX_INT32);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -1013,15 +972,13 @@ static void recv_files(int status, pmix_proc_t* sender,
 
     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw: received chunk %d for file %s containing %d bytes",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         nchunk, file, nbytes));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nchunk, file, nbytes));
 
     /* do we already have this file on our list of incoming? */
     incoming = NULL;
-    for (item = prte_list_get_first(&incoming_files);
-         item != prte_list_get_end(&incoming_files);
+    for (item = prte_list_get_first(&incoming_files); item != prte_list_get_end(&incoming_files);
          item = prte_list_get_next(item)) {
-        ptr = (prte_filem_raw_incoming_t*)item;
+        ptr = (prte_filem_raw_incoming_t *) item;
         if (0 == strcmp(file, ptr->file)) {
             incoming = ptr;
             break;
@@ -1069,9 +1026,9 @@ static void recv_files(int status, pmix_proc_t* sender,
         }
         /* open the file descriptor for writing */
         if (PRTE_FILEM_TYPE_EXE == type) {
-            if (0 > (incoming->fd = open(incoming->fullpath, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU))) {
-                prte_output(0, "%s CANNOT CREATE FILE %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+            if (0
+                > (incoming->fd = open(incoming->fullpath, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU))) {
+                prte_output(0, "%s CANNOT CREATE FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             incoming->fullpath);
                 send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
                 free(file);
@@ -1079,9 +1036,9 @@ static void recv_files(int status, pmix_proc_t* sender,
                 return;
             }
         } else {
-            if (0 > (incoming->fd = open(incoming->fullpath, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR))) {
-                prte_output(0, "%s CANNOT CREATE FILE %s",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+            if (0 > (incoming->fd = open(incoming->fullpath, O_RDWR | O_CREAT | O_TRUNC,
+                                         S_IRUSR | S_IWUSR))) {
+                prte_output(0, "%s CANNOT CREATE FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             incoming->fullpath);
                 send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
                 free(file);
@@ -1090,8 +1047,8 @@ static void recv_files(int status, pmix_proc_t* sender,
             }
         }
         free(tmp);
-        prte_event_set(prte_event_base, &incoming->ev, incoming->fd,
-                       PRTE_EV_WRITE, write_handler, incoming);
+        prte_event_set(prte_event_base, &incoming->ev, incoming->fd, PRTE_EV_WRITE, write_handler,
+                       incoming);
         prte_event_set_priority(&incoming->ev, PRTE_MSG_PRI);
     }
     /* create an output object for this data */
@@ -1119,10 +1076,9 @@ static void recv_files(int status, pmix_proc_t* sender,
     free(file);
 }
 
-
 static void write_handler(int fd, short event, void *cbdata)
 {
-    prte_filem_raw_incoming_t *sink = (prte_filem_raw_incoming_t*)cbdata;
+    prte_filem_raw_incoming_t *sink = (prte_filem_raw_incoming_t *) cbdata;
     prte_list_item_t *item;
     prte_filem_raw_output_t *output;
     int num_written;
@@ -1133,26 +1089,23 @@ static void write_handler(int fd, short event, void *cbdata)
     PRTE_ACQUIRE_OBJECT(sink);
 
     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
-                         "%s write:handler writing data to %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         "%s write:handler writing data to %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          sink->fd));
 
     /* note that the event is off */
     sink->pending = false;
 
     while (NULL != (item = prte_list_remove_first(&sink->outputs))) {
-        output = (prte_filem_raw_output_t*)item;
+        output = (prte_filem_raw_output_t *) item;
         if (0 == output->numbytes) {
             /* indicates we are to close this stream */
             PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                  "%s write:handler zero bytes - reporting complete for file %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 sink->file));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sink->file));
             /* close the file descriptor */
             close(sink->fd);
             sink->fd = -1;
-            if (PRTE_FILEM_TYPE_FILE == sink->type ||
-                PRTE_FILEM_TYPE_EXE == sink->type) {
+            if (PRTE_FILEM_TYPE_FILE == sink->type || PRTE_FILEM_TYPE_EXE == sink->type) {
                 /* just link to the top as this will be the
                  * name we will want in each proc's session dir
                  */
@@ -1184,8 +1137,7 @@ static void write_handler(int fd, short event, void *cbdata)
                 }
                 PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                      "%s write:handler unarchiving file %s with cmd: %s",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     sink->file, cmd));
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sink->file, cmd));
                 if (0 != system(cmd)) {
                     PRTE_ERROR_LOG(PRTE_ERROR);
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
@@ -1211,8 +1163,7 @@ static void write_handler(int fd, short event, void *cbdata)
         num_written = write(sink->fd, output->data, output->numbytes);
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s write:handler wrote %d bytes to file %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             num_written, sink->file));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_written, sink->file));
         if (num_written < 0) {
             if (EAGAIN == errno || EINTR == errno) {
                 /* push this item back on the front of the list */
@@ -1230,8 +1181,7 @@ static void write_handler(int fd, short event, void *cbdata)
              */
             PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                  "%s write:handler error on write for file %s: %s",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 sink->file, strerror(errno)));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sink->file, strerror(errno)));
             PRTE_RELEASE(output);
             prte_list_remove_item(&incoming_files, &sink->super);
             send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
@@ -1277,9 +1227,7 @@ static void xfer_destruct(prte_filem_raw_xfer_t *ptr)
         free(ptr->file);
     }
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_xfer_t,
-                   prte_list_item_t,
-                   xfer_construct, xfer_destruct);
+PRTE_CLASS_INSTANCE(prte_filem_raw_xfer_t, prte_list_item_t, xfer_construct, xfer_destruct);
 
 static void out_construct(prte_filem_raw_outbound_t *ptr)
 {
@@ -1297,9 +1245,7 @@ static void out_destruct(prte_filem_raw_outbound_t *ptr)
     }
     PRTE_DESTRUCT(&ptr->xfers);
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_outbound_t,
-                   prte_list_item_t,
-                   out_construct, out_destruct);
+PRTE_CLASS_INSTANCE(prte_filem_raw_outbound_t, prte_list_item_t, out_construct, out_destruct);
 
 static void in_construct(prte_filem_raw_incoming_t *ptr)
 {
@@ -1337,14 +1283,10 @@ static void in_destruct(prte_filem_raw_incoming_t *ptr)
     }
     PRTE_DESTRUCT(&ptr->outputs);
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_incoming_t,
-                   prte_list_item_t,
-                   in_construct, in_destruct);
+PRTE_CLASS_INSTANCE(prte_filem_raw_incoming_t, prte_list_item_t, in_construct, in_destruct);
 
 static void output_construct(prte_filem_raw_output_t *ptr)
 {
     ptr->numbytes = 0;
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_output_t,
-                   prte_list_item_t,
-                   output_construct, NULL);
+PRTE_CLASS_INSTANCE(prte_filem_raw_output_t, prte_list_item_t, output_construct, NULL);

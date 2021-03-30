@@ -1,12 +1,11 @@
+#include <pmix.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pmix.h>
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     int pause = 0;
-    if (argc > 1)
-    {
+    if (argc > 1) {
         pause = atoi(argv[1]);
     }
 

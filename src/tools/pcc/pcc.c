@@ -27,39 +27,39 @@
 
 #include "prte_config.h"
 
-#include <stdio.h>
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
-#endif  /* HAVE_SYS_STAT_H */
+#    include <sys/stat.h>
+#endif /* HAVE_SYS_STAT_H */
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif  /* HAVE_SYS_TYPES_H */
+#    include <sys/types.h>
+#endif /* HAVE_SYS_TYPES_H */
 #ifdef HAVE_REGEX_H
-#include <regex.h>
+#    include <regex.h>
 #endif
 #ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
-#endif  /* HAVE_SYS_WAIT_H */
+#    include <sys/wait.h>
+#endif /* HAVE_SYS_WAIT_H */
 #include <string.h>
 
-#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/include/constants.h"
+#include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/runtime/runtime.h"
 #include "src/util/argv.h"
+#include "src/util/basename.h"
 #include "src/util/error.h"
+#include "src/util/few.h"
 #include "src/util/keyval_parse.h"
+#include "src/util/os_path.h"
+#include "src/util/path.h"
+#include "src/util/printf.h"
 #include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
-#include "src/util/path.h"
-#include "src/util/few.h"
-#include "src/util/basename.h"
-#include "src/util/os_path.h"
-#include "src/util/printf.h"
 
-#define PRTE_INCLUDE_FLAG  "-I"
-#define PRTE_LIBDIR_FLAG   "-L"
+#define PRTE_INCLUDE_FLAG "-I"
+#define PRTE_LIBDIR_FLAG  "-L"
 
 struct options_data_t {
     char **compiler_args;
@@ -93,20 +93,19 @@ static int user_data_idx = -1;
 /* index of options to use by default */
 static int default_data_idx = -1;
 
-#define COMP_DRY_RUN       0x001
-#define COMP_SHOW_ERROR    0x002
-#define COMP_WANT_COMMAND  0x004
-#define COMP_WANT_PREPROC  0x008
-#define COMP_WANT_COMPILE  0x010
-#define COMP_WANT_LINK     0x020
-#define COMP_WANT_PMPI     0x040
-#define COMP_WANT_STATIC   0x080
-#define COMP_WANT_LINKALL  0x100
+#define COMP_DRY_RUN      0x001
+#define COMP_SHOW_ERROR   0x002
+#define COMP_WANT_COMMAND 0x004
+#define COMP_WANT_PREPROC 0x008
+#define COMP_WANT_COMPILE 0x010
+#define COMP_WANT_LINK    0x020
+#define COMP_WANT_PMPI    0x040
+#define COMP_WANT_STATIC  0x080
+#define COMP_WANT_LINKALL 0x100
 
-static void
-options_data_init(struct options_data_t *data)
+static void options_data_init(struct options_data_t *data)
 {
-    data->compiler_args = (char **) malloc(sizeof(char*));
+    data->compiler_args = (char **) malloc(sizeof(char *));
     data->compiler_args[0] = NULL;
     data->language = NULL;
     data->compiler = NULL;
@@ -115,17 +114,17 @@ options_data_init(struct options_data_t *data)
     data->version = NULL;
     data->compiler_env = NULL;
     data->compiler_flags_env = NULL;
-    data->preproc_flags = (char **) malloc(sizeof(char*));
+    data->preproc_flags = (char **) malloc(sizeof(char *));
     data->preproc_flags[0] = NULL;
-    data->comp_flags = (char **) malloc(sizeof(char*));
+    data->comp_flags = (char **) malloc(sizeof(char *));
     data->comp_flags[0] = NULL;
-    data->comp_flags_prefix = (char **) malloc(sizeof(char*));
+    data->comp_flags_prefix = (char **) malloc(sizeof(char *));
     data->comp_flags_prefix[0] = NULL;
-    data->link_flags = (char **) malloc(sizeof(char*));
+    data->link_flags = (char **) malloc(sizeof(char *));
     data->link_flags[0] = NULL;
-    data->libs = (char **) malloc(sizeof(char*));
+    data->libs = (char **) malloc(sizeof(char *));
     data->libs[0] = NULL;
-    data->libs_static = (char **) malloc(sizeof(char*));
+    data->libs_static = (char **) malloc(sizeof(char *));
     data->libs_static[0] = NULL;
     data->dyn_lib_file = NULL;
     data->static_lib_file = NULL;
@@ -136,40 +135,53 @@ options_data_init(struct options_data_t *data)
     data->path_prtelibdir = NULL;
 }
 
-static void
-options_data_free(struct options_data_t *data)
+static void options_data_free(struct options_data_t *data)
 {
     if (NULL != data->compiler_args) {
         prte_argv_free(data->compiler_args);
     }
-    if (NULL != data->language) free(data->language);
-    if (NULL != data->compiler) free(data->compiler);
-    if (NULL != data->project) free(data->project);
-    if (NULL != data->project_short) free(data->project_short);
-    if (NULL != data->version) free(data->version);
-    if (NULL != data->compiler_env) free(data->compiler_env);
-    if (NULL != data->compiler_flags_env) free(data->compiler_flags_env);
+    if (NULL != data->language)
+        free(data->language);
+    if (NULL != data->compiler)
+        free(data->compiler);
+    if (NULL != data->project)
+        free(data->project);
+    if (NULL != data->project_short)
+        free(data->project_short);
+    if (NULL != data->version)
+        free(data->version);
+    if (NULL != data->compiler_env)
+        free(data->compiler_env);
+    if (NULL != data->compiler_flags_env)
+        free(data->compiler_flags_env);
     prte_argv_free(data->preproc_flags);
     prte_argv_free(data->comp_flags);
     prte_argv_free(data->comp_flags_prefix);
     prte_argv_free(data->link_flags);
     prte_argv_free(data->libs);
     prte_argv_free(data->libs_static);
-    if (NULL != data->dyn_lib_file) free(data->dyn_lib_file);
-    if (NULL != data->static_lib_file) free(data->static_lib_file);
-    if (NULL != data->req_file) free(data->req_file);
-    if (NULL != data->path_includedir) free(data->path_includedir);
-    if (NULL != data->path_libdir) free(data->path_libdir);
-    if (NULL != data->path_prteincludedir) free(data->path_prteincludedir);
-    if (NULL != data->path_prtelibdir) free(data->path_prtelibdir);
+    if (NULL != data->dyn_lib_file)
+        free(data->dyn_lib_file);
+    if (NULL != data->static_lib_file)
+        free(data->static_lib_file);
+    if (NULL != data->req_file)
+        free(data->req_file);
+    if (NULL != data->path_includedir)
+        free(data->path_includedir);
+    if (NULL != data->path_libdir)
+        free(data->path_libdir);
+    if (NULL != data->path_prteincludedir)
+        free(data->path_prteincludedir);
+    if (NULL != data->path_prtelibdir)
+        free(data->path_prtelibdir);
 }
 
-static void
-options_data_expand(const char *value)
+static void options_data_expand(const char *value)
 {
     /* make space for the new set of args */
     parse_options_idx++;
-    options_data = (struct options_data_t *) realloc(options_data, sizeof(struct options_data_t) * (parse_options_idx + 1));
+    options_data = (struct options_data_t *) realloc(options_data, sizeof(struct options_data_t)
+                                                                       * (parse_options_idx + 1));
     options_data_init(&(options_data[parse_options_idx]));
 
     /* if there are values, this is not the default case.
@@ -177,8 +189,7 @@ options_data_expand(const char *value)
     if (NULL != value && 0 != strcmp(value, "")) {
         char **values = prte_argv_split(value, ';');
         prte_argv_insert(&(options_data[parse_options_idx].compiler_args),
-                         prte_argv_count(options_data[parse_options_idx].compiler_args),
-                         values);
+                         prte_argv_count(options_data[parse_options_idx].compiler_args), values);
         prte_argv_free(values);
     } else {
         free(options_data[parse_options_idx].compiler_args);
@@ -188,9 +199,7 @@ options_data_expand(const char *value)
     }
 }
 
-
-static int
-find_options_index(const char *arg)
+static int find_options_index(const char *arg)
 {
     int i, j;
 #ifdef HAVE_REGEXEC
@@ -198,14 +207,14 @@ find_options_index(const char *arg)
     regex_t res;
 #endif
 
-    for (i = 0 ; i <= parse_options_idx ; ++i) {
+    for (i = 0; i <= parse_options_idx; ++i) {
         if (NULL == options_data[i].compiler_args) {
             continue;
         }
 
 #ifdef HAVE_REGEXEC
         args_count = prte_argv_count(options_data[i].compiler_args);
-        for (j = 0 ; j < args_count ; ++j) {
+        for (j = 0; j < args_count; ++j) {
             if (0 != regcomp(&res, options_data[i].compiler_args[j], REG_NOSUB)) {
                 return -1;
             }
@@ -218,7 +227,7 @@ find_options_index(const char *arg)
             regfree(&res);
         }
 #else
-        for (j = 0 ; j < prte_argv_count(options_data[i].compiler_args) ; ++j) {
+        for (j = 0; j < prte_argv_count(options_data[i].compiler_args); ++j) {
             if (0 == strcmp(arg, options_data[i].compiler_args[j])) {
                 return i;
             }
@@ -229,14 +238,12 @@ find_options_index(const char *arg)
     return -1;
 }
 
-
-static void
-expand_flags(char **argv)
+static void expand_flags(char **argv)
 {
     int i;
     char *tmp;
 
-    for (i = 0 ; argv[i] != NULL ; ++i) {
+    for (i = 0; argv[i] != NULL; ++i) {
         tmp = prte_install_dirs_expand(argv[i]);
         if (tmp != argv[i]) {
             free(argv[i]);
@@ -245,10 +252,7 @@ expand_flags(char **argv)
     }
 }
 
-
-static void
-data_callback(const char *file, int lineno,
-              const char *key, const char *value)
+static void data_callback(const char *file, int lineno, const char *key, const char *value)
 {
     /* handle case where text file does not contain any special
        compiler options field */
@@ -259,25 +263,27 @@ data_callback(const char *file, int lineno,
     if (0 == strcmp(key, "compiler_args")) {
         options_data_expand(value);
     } else if (0 == strcmp(key, "language")) {
-        if (NULL != value) options_data[parse_options_idx].language = strdup(value);
+        if (NULL != value)
+            options_data[parse_options_idx].language = strdup(value);
     } else if (0 == strcmp(key, "compiler")) {
-        if (NULL != value) options_data[parse_options_idx].compiler = strdup(value);
+        if (NULL != value)
+            options_data[parse_options_idx].compiler = strdup(value);
     } else if (0 == strcmp(key, "project")) {
-        if (NULL != value) options_data[parse_options_idx].project = strdup(value);
+        if (NULL != value)
+            options_data[parse_options_idx].project = strdup(value);
     } else if (0 == strcmp(key, "version")) {
-        if (NULL != value) options_data[parse_options_idx].version = strdup(value);
+        if (NULL != value)
+            options_data[parse_options_idx].version = strdup(value);
     } else if (0 == strcmp(key, "preprocessor_flags")) {
         char **values = prte_argv_split(value, ' ');
         prte_argv_insert(&options_data[parse_options_idx].preproc_flags,
-                         prte_argv_count(options_data[parse_options_idx].preproc_flags),
-                         values);
+                         prte_argv_count(options_data[parse_options_idx].preproc_flags), values);
         expand_flags(options_data[parse_options_idx].preproc_flags);
         prte_argv_free(values);
     } else if (0 == strcmp(key, "compiler_flags")) {
         char **values = prte_argv_split(value, ' ');
         prte_argv_insert(&options_data[parse_options_idx].comp_flags,
-                         prte_argv_count(options_data[parse_options_idx].comp_flags),
-                         values);
+                         prte_argv_count(options_data[parse_options_idx].comp_flags), values);
         expand_flags(options_data[parse_options_idx].comp_flags);
         prte_argv_free(values);
     } else if (0 == strcmp(key, "compiler_flags_prefix")) {
@@ -290,65 +296,65 @@ data_callback(const char *file, int lineno,
     } else if (0 == strcmp(key, "linker_flags")) {
         char **values = prte_argv_split(value, ' ');
         prte_argv_insert(&options_data[parse_options_idx].link_flags,
-                         prte_argv_count(options_data[parse_options_idx].link_flags),
-                         values);
+                         prte_argv_count(options_data[parse_options_idx].link_flags), values);
         expand_flags(options_data[parse_options_idx].link_flags);
         prte_argv_free(values);
     } else if (0 == strcmp(key, "libs")) {
         char **values = prte_argv_split(value, ' ');
         prte_argv_insert(&options_data[parse_options_idx].libs,
-                         prte_argv_count(options_data[parse_options_idx].libs),
-                         values);
+                         prte_argv_count(options_data[parse_options_idx].libs), values);
         prte_argv_free(values);
     } else if (0 == strcmp(key, "libs_static")) {
         char **values = prte_argv_split(value, ' ');
         prte_argv_insert(&options_data[parse_options_idx].libs_static,
-                         prte_argv_count(options_data[parse_options_idx].libs_static),
-                         values);
+                         prte_argv_count(options_data[parse_options_idx].libs_static), values);
         prte_argv_free(values);
     } else if (0 == strcmp(key, "dyn_lib_file")) {
-        if (NULL != value) options_data[parse_options_idx].dyn_lib_file = strdup(value);
+        if (NULL != value)
+            options_data[parse_options_idx].dyn_lib_file = strdup(value);
     } else if (0 == strcmp(key, "static_lib_file")) {
-        if (NULL != value) options_data[parse_options_idx].static_lib_file = strdup(value);
+        if (NULL != value)
+            options_data[parse_options_idx].static_lib_file = strdup(value);
     } else if (0 == strcmp(key, "required_file")) {
-        if (NULL != value) options_data[parse_options_idx].req_file = strdup(value);
+        if (NULL != value)
+            options_data[parse_options_idx].req_file = strdup(value);
     } else if (0 == strcmp(key, "project_short")) {
-        if (NULL != value) options_data[parse_options_idx].project_short = strdup(value);
+        if (NULL != value)
+            options_data[parse_options_idx].project_short = strdup(value);
     } else if (0 == strcmp(key, "compiler_env")) {
-        if (NULL != value) options_data[parse_options_idx].compiler_env = strdup(value);
+        if (NULL != value)
+            options_data[parse_options_idx].compiler_env = strdup(value);
     } else if (0 == strcmp(key, "compiler_flags_env")) {
-        if (NULL != value) options_data[parse_options_idx].compiler_flags_env = strdup(value);
+        if (NULL != value)
+            options_data[parse_options_idx].compiler_flags_env = strdup(value);
     }
 }
 
-
-static int
-data_init(const char *appname)
+static int data_init(const char *appname)
 {
     int ret;
     char *datafile;
 
     /* now load the data */
-    prte_asprintf(&datafile, "%s%s%s-wrapper-data.txt",
-             prte_install_dirs.prtedatadir, PRTE_PATH_SEP, appname);
-    if (NULL == datafile) return PRTE_ERR_TEMP_OUT_OF_RESOURCE;
+    prte_asprintf(&datafile, "%s%s%s-wrapper-data.txt", prte_install_dirs.prtedatadir,
+                  PRTE_PATH_SEP, appname);
+    if (NULL == datafile)
+        return PRTE_ERR_TEMP_OUT_OF_RESOURCE;
 
     ret = prte_util_keyval_parse(datafile, data_callback);
-    if( PRTE_SUCCESS != ret ) {
-        fprintf(stderr, "Cannot open configuration file %s\n", datafile );
+    if (PRTE_SUCCESS != ret) {
+        fprintf(stderr, "Cannot open configuration file %s\n", datafile);
     }
     free(datafile);
 
     return ret;
 }
 
-
-static int
-data_finalize(void)
+static int data_finalize(void)
 {
     int i;
 
-    for (i = 0 ; i <= parse_options_idx ; ++i) {
+    for (i = 0; i <= parse_options_idx; ++i) {
         options_data_free(&(options_data[i]));
     }
     free(options_data);
@@ -356,32 +362,31 @@ data_finalize(void)
     return PRTE_SUCCESS;
 }
 
-
-static void
-print_flags(char **args, char *pattern)
+static void print_flags(char **args, char *pattern)
 {
     int i;
     bool found = false;
 
-    for (i = 0 ; args[i] != NULL ; ++i) {
+    for (i = 0; args[i] != NULL; ++i) {
         if (0 == strncmp(args[i], pattern, strlen(pattern))) {
-            if (found)  printf(" ");
+            if (found)
+                printf(" ");
             printf("%s", args[i] + strlen(pattern));
             found = true;
         }
     }
 
-    if (found) printf("\n");
+    if (found)
+        printf("\n");
 }
 
-
-static void
-load_env_data(const char *project, const char *flag, char **data)
+static void load_env_data(const char *project, const char *flag, char **data)
 {
     char *envname;
     char *envvalue;
 
-    if (NULL == project || NULL == flag) return;
+    if (NULL == project || NULL == flag)
+        return;
 
     prte_asprintf(&envname, "%s_MPI%s", project, flag);
     if (NULL == (envvalue = getenv(envname))) {
@@ -394,18 +399,18 @@ load_env_data(const char *project, const char *flag, char **data)
     }
     free(envname);
 
-    if (NULL != *data) free(*data);
+    if (NULL != *data)
+        free(*data);
     *data = strdup(envvalue);
 }
 
-
-static void
-load_env_data_argv(const char *project, const char *flag, char ***data)
+static void load_env_data_argv(const char *project, const char *flag, char ***data)
 {
     char *envname;
     char *envvalue;
 
-    if (NULL == project || NULL == flag) return;
+    if (NULL == project || NULL == flag)
+        return;
 
     prte_asprintf(&envname, "%s_MPI%s", project, flag);
     if (NULL == (envvalue = getenv(envname))) {
@@ -418,14 +423,13 @@ load_env_data_argv(const char *project, const char *flag, char ***data)
     }
     free(envname);
 
-    if (NULL != *data) prte_argv_free(*data);
+    if (NULL != *data)
+        prte_argv_free(*data);
 
     *data = prte_argv_split(envvalue, ' ');
 }
 
-
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     int exit_status = 0, ret, flags = 0, i;
     int exec_argc = 0, user_argc = 0;
@@ -446,27 +450,27 @@ main(int argc, char *argv[])
 
     base_argv0 = prte_basename(argv[0]);
 #if defined(EXEEXT)
-    if( 0 != strlen(EXEEXT) ) {
+    if (0 != strlen(EXEEXT)) {
         char extension[] = EXEEXT;
-        char* temp = strstr( base_argv0, extension );
-        char* old_match = temp;
-        while( NULL != temp ) {
+        char *temp = strstr(base_argv0, extension);
+        char *old_match = temp;
+        while (NULL != temp) {
             old_match = temp;
-            temp = strstr( temp + 1, extension );
+            temp = strstr(temp + 1, extension);
         }
         /* Only if there was a match of .exe, erase the last occurence of .exe */
-        if ( NULL != old_match ) {
+        if (NULL != old_match) {
             *old_match = '\0';
         }
     }
-#endif  /* defined(EXEEXT) */
+#endif /* defined(EXEEXT) */
 
     if (PRTE_SUCCESS != (ret = data_init(base_argv0))) {
         fprintf(stderr, "Error parsing data file %s: %s\n", base_argv0, prte_strerror(ret));
         return ret;
     }
 
-    for (i = 1 ; i < argc && user_data_idx < 0 ; ++i) {
+    for (i = 1; i < argc && user_data_idx < 0; ++i) {
         user_data_idx = find_options_index(argv[i]);
     }
     /* if we didn't find a match, look for the NULL (base case) options */
@@ -476,28 +480,31 @@ main(int argc, char *argv[])
     /* if we still didn't find a match, abort */
     if (user_data_idx < 0) {
         char *flat = prte_argv_join(argv, ' ');
-        prte_show_help("help-pcc.txt", "no-options-support", true,
-                       base_argv0, flat, NULL);
+        prte_show_help("help-pcc.txt", "no-options-support", true, base_argv0, flat, NULL);
         free(flat);
         exit(1);
     }
 
     /* compiler */
-    load_env_data(options_data[user_data_idx].project_short, options_data[user_data_idx].compiler_env, &options_data[user_data_idx].compiler);
+    load_env_data(options_data[user_data_idx].project_short,
+                  options_data[user_data_idx].compiler_env, &options_data[user_data_idx].compiler);
 
     /* preprocessor flags */
-    load_env_data_argv(options_data[user_data_idx].project_short, "CPPFLAGS", &options_data[user_data_idx].preproc_flags);
+    load_env_data_argv(options_data[user_data_idx].project_short, "CPPFLAGS",
+                       &options_data[user_data_idx].preproc_flags);
 
     /* compiler flags */
-    load_env_data_argv(options_data[user_data_idx].project_short, options_data[user_data_idx].compiler_flags_env,
+    load_env_data_argv(options_data[user_data_idx].project_short,
+                       options_data[user_data_idx].compiler_flags_env,
                        &options_data[user_data_idx].comp_flags);
 
     /* linker flags */
-    load_env_data_argv(options_data[user_data_idx].project_short, "LDFLAGS", &options_data[user_data_idx].link_flags);
+    load_env_data_argv(options_data[user_data_idx].project_short, "LDFLAGS",
+                       &options_data[user_data_idx].link_flags);
 
     /* libs */
-    load_env_data_argv(options_data[user_data_idx].project_short, "LIBS", &options_data[user_data_idx].libs);
-
+    load_env_data_argv(options_data[user_data_idx].project_short, "LIBS",
+                       &options_data[user_data_idx].libs);
 
     /****************************************************
      *
@@ -517,10 +524,12 @@ main(int argc, char *argv[])
         if (options_data[user_data_idx].req_file[0] != '\0') {
             char *filename;
             struct stat buf;
-            filename = prte_os_path( false, options_data[user_data_idx].path_libdir, options_data[user_data_idx].req_file, NULL );
+            filename = prte_os_path(false, options_data[user_data_idx].path_libdir,
+                                    options_data[user_data_idx].req_file, NULL);
             if (0 != stat(filename, &buf)) {
-                prte_show_help("help-pcc.txt", "file-not-found", true,
-                               base_argv0, options_data[user_data_idx].req_file, options_data[user_data_idx].language, NULL);
+                prte_show_help("help-pcc.txt", "file-not-found", true, base_argv0,
+                               options_data[user_data_idx].req_file,
+                               options_data[user_data_idx].language, NULL);
             }
         }
     }
@@ -530,68 +539,74 @@ main(int argc, char *argv[])
      * Parse user flags
      *
      ****************************************************/
-    flags = COMP_WANT_COMMAND|COMP_WANT_PREPROC|
-        COMP_WANT_COMPILE|COMP_WANT_LINK;
+    flags = COMP_WANT_COMMAND | COMP_WANT_PREPROC | COMP_WANT_COMPILE | COMP_WANT_LINK;
 
     user_argv = prte_argv_copy(argv + 1);
     user_argc = prte_argv_count(user_argv);
 
-    for (i = 0 ; i < user_argc ; ++i) {
-        if (0 == strncmp(user_argv[i], "-showme", strlen("-showme")) ||
-            0 == strncmp(user_argv[i], "--showme", strlen("--showme")) ||
-            0 == strncmp(user_argv[i], "-show", strlen("-show")) ||
-            0 == strncmp(user_argv[i], "--show", strlen("--show"))) {
+    for (i = 0; i < user_argc; ++i) {
+        if (0 == strncmp(user_argv[i], "-showme", strlen("-showme"))
+            || 0 == strncmp(user_argv[i], "--showme", strlen("--showme"))
+            || 0 == strncmp(user_argv[i], "-show", strlen("-show"))
+            || 0 == strncmp(user_argv[i], "--show", strlen("--show"))) {
             bool done_now = false;
 
             /* check for specific things we want to see.  First three
                still invoke all the building routines.  Last set want
                to parse out certain flags, so we don't go through the
                normal build routine - skip to cleanup. */
-            if (0 == strncmp(user_argv[i], "-showme:command", strlen("-showme:command")) ||
-                0 == strncmp(user_argv[i], "--showme:command", strlen("--showme:command"))) {
+            if (0 == strncmp(user_argv[i], "-showme:command", strlen("-showme:command"))
+                || 0 == strncmp(user_argv[i], "--showme:command", strlen("--showme:command"))) {
                 flags = COMP_WANT_COMMAND;
                 /* we know what we want, so don't process any more args */
                 done_now = true;
-            } else if (0 == strncmp(user_argv[i], "-showme:compile", strlen("-showme:compile")) ||
-                0 == strncmp(user_argv[i], "--showme:compile", strlen("--showme:compile"))) {
-                flags = COMP_WANT_PREPROC|COMP_WANT_COMPILE;
+            } else if (0 == strncmp(user_argv[i], "-showme:compile", strlen("-showme:compile"))
+                       || 0
+                              == strncmp(user_argv[i], "--showme:compile",
+                                         strlen("--showme:compile"))) {
+                flags = COMP_WANT_PREPROC | COMP_WANT_COMPILE;
                 /* we know what we want, so don't process any more args */
                 done_now = true;
-            } else if (0 == strncmp(user_argv[i], "-showme:link", strlen("-showme:link")) ||
-                       0 == strncmp(user_argv[i], "--showme:link", strlen("--showme:link"))) {
-                flags = COMP_WANT_COMPILE|COMP_WANT_LINK;
+            } else if (0 == strncmp(user_argv[i], "-showme:link", strlen("-showme:link"))
+                       || 0 == strncmp(user_argv[i], "--showme:link", strlen("--showme:link"))) {
+                flags = COMP_WANT_COMPILE | COMP_WANT_LINK;
                 /* we know what we want, so don't process any more args */
                 done_now = true;
-            } else if (0 == strncmp(user_argv[i], "-showme:incdirs", strlen("-showme:incdirs")) ||
-                       0 == strncmp(user_argv[i], "--showme:incdirs", strlen("--showme:incdirs"))) {
+            } else if (0 == strncmp(user_argv[i], "-showme:incdirs", strlen("-showme:incdirs"))
+                       || 0
+                              == strncmp(user_argv[i], "--showme:incdirs",
+                                         strlen("--showme:incdirs"))) {
                 print_flags(options_data[user_data_idx].preproc_flags, PRTE_INCLUDE_FLAG);
                 goto cleanup;
-            } else if (0 == strncmp(user_argv[i], "-showme:libdirs", strlen("-showme:libdirs")) ||
-                       0 == strncmp(user_argv[i], "--showme:libdirs", strlen("--showme:libdirs"))) {
+            } else if (0 == strncmp(user_argv[i], "-showme:libdirs", strlen("-showme:libdirs"))
+                       || 0
+                              == strncmp(user_argv[i], "--showme:libdirs",
+                                         strlen("--showme:libdirs"))) {
                 print_flags(options_data[user_data_idx].link_flags, PRTE_LIBDIR_FLAG);
                 goto cleanup;
-            } else if (0 == strncmp(user_argv[i], "-showme:libs", strlen("-showme:libs")) ||
-                       0 == strncmp(user_argv[i], "--showme:libs", strlen("--showme:libs"))) {
+            } else if (0 == strncmp(user_argv[i], "-showme:libs", strlen("-showme:libs"))
+                       || 0 == strncmp(user_argv[i], "--showme:libs", strlen("--showme:libs"))) {
                 print_flags(options_data[user_data_idx].libs, "-l");
                 goto cleanup;
-            } else if (0 == strncmp(user_argv[i], "-showme:version", strlen("-showme:version")) ||
-                       0 == strncmp(user_argv[i], "--showme:version", strlen("--showme:version"))) {
-                char * str;
-                str = prte_show_help_string("help-pcc.txt",
-                                            "version", false,
-                                            argv[0], options_data[user_data_idx].project, options_data[user_data_idx].version, options_data[user_data_idx].language, NULL);
+            } else if (0 == strncmp(user_argv[i], "-showme:version", strlen("-showme:version"))
+                       || 0
+                              == strncmp(user_argv[i], "--showme:version",
+                                         strlen("--showme:version"))) {
+                char *str;
+                str = prte_show_help_string("help-pcc.txt", "version", false, argv[0],
+                                            options_data[user_data_idx].project,
+                                            options_data[user_data_idx].version,
+                                            options_data[user_data_idx].language, NULL);
                 if (NULL != str) {
                     printf("%s", str);
                     free(str);
                 }
                 goto cleanup;
-            } else if (0 == strncmp(user_argv[i], "-showme:help", strlen("-showme:help")) ||
-                       0 == strncmp(user_argv[i], "--showme:help", strlen("--showme:help"))) {
+            } else if (0 == strncmp(user_argv[i], "-showme:help", strlen("-showme:help"))
+                       || 0 == strncmp(user_argv[i], "--showme:help", strlen("--showme:help"))) {
                 char *str;
-                str = prte_show_help_string("help-pcc.txt", "usage",
-                                            false, argv[0],
-                                            options_data[user_data_idx].project,
-                                            NULL);
+                str = prte_show_help_string("help-pcc.txt", "usage", false, argv[0],
+                                            options_data[user_data_idx].project, NULL);
                 if (NULL != str) {
                     printf("%s", str);
                     free(str);
@@ -599,17 +614,15 @@ main(int argc, char *argv[])
 
                 exit_status = 0;
                 goto cleanup;
-            } else if (0 == strncmp(user_argv[i], "-showme:", strlen("-showme:")) ||
-                       0 == strncmp(user_argv[i], "--showme:", strlen("--showme:"))) {
-                fprintf(stderr, "%s: unrecognized option: %s\n", argv[0],
-                        user_argv[i]);
-                fprintf(stderr, "Type '%s --showme:help' for usage.\n",
-                        argv[0]);
+            } else if (0 == strncmp(user_argv[i], "-showme:", strlen("-showme:"))
+                       || 0 == strncmp(user_argv[i], "--showme:", strlen("--showme:"))) {
+                fprintf(stderr, "%s: unrecognized option: %s\n", argv[0], user_argv[i]);
+                fprintf(stderr, "Type '%s --showme:help' for usage.\n", argv[0]);
                 exit_status = 1;
                 goto cleanup;
             }
 
-            flags |= (COMP_DRY_RUN|COMP_SHOW_ERROR);
+            flags |= (COMP_DRY_RUN | COMP_SHOW_ERROR);
             /* remove element from user_argv */
             prte_argv_delete(&user_argc, &user_argv, i, 1);
             --i;
@@ -622,8 +635,7 @@ main(int argc, char *argv[])
         } else if (0 == strcmp(user_argv[i], "-c")) {
             flags &= ~COMP_WANT_LINK;
             real_flag = true;
-        } else if (0 == strcmp(user_argv[i], "-E") ||
-                   0 == strcmp(user_argv[i], "-M")) {
+        } else if (0 == strcmp(user_argv[i], "-E") || 0 == strcmp(user_argv[i], "-M")) {
             flags &= ~(COMP_WANT_COMPILE | COMP_WANT_LINK);
             real_flag = true;
         } else if (0 == strcmp(user_argv[i], "-S")) {
@@ -635,19 +647,17 @@ main(int argc, char *argv[])
             /* remove element from user_argv */
             prte_argv_delete(&user_argc, &user_argv, i, 1);
             --i;
-        } else if (0 == strcmp(user_argv[i], "-static") ||
-                   0 == strcmp(user_argv[i], "--static") ||
-                   0 == strcmp(user_argv[i], "-Bstatic") ||
-                   0 == strcmp(user_argv[i], "-Wl,-static") ||
-                   0 == strcmp(user_argv[i], "-Wl,--static") ||
-                   0 == strcmp(user_argv[i], "-Wl,-Bstatic")) {
+        } else if (0 == strcmp(user_argv[i], "-static") || 0 == strcmp(user_argv[i], "--static")
+                   || 0 == strcmp(user_argv[i], "-Bstatic")
+                   || 0 == strcmp(user_argv[i], "-Wl,-static")
+                   || 0 == strcmp(user_argv[i], "-Wl,--static")
+                   || 0 == strcmp(user_argv[i], "-Wl,-Bstatic")) {
             flags |= COMP_WANT_STATIC;
-        } else if (0 == strcmp(user_argv[i], "-dynamic") ||
-                   0 == strcmp(user_argv[i], "--dynamic") ||
-                   0 == strcmp(user_argv[i], "-Bdynamic") ||
-                   0 == strcmp(user_argv[i], "-Wl,-dynamic") ||
-                   0 == strcmp(user_argv[i], "-Wl,--dynamic") ||
-                   0 == strcmp(user_argv[i], "-Wl,-Bdynamic")) {
+        } else if (0 == strcmp(user_argv[i], "-dynamic") || 0 == strcmp(user_argv[i], "--dynamic")
+                   || 0 == strcmp(user_argv[i], "-Bdynamic")
+                   || 0 == strcmp(user_argv[i], "-Wl,-dynamic")
+                   || 0 == strcmp(user_argv[i], "-Wl,--dynamic")
+                   || 0 == strcmp(user_argv[i], "-Wl,-Bdynamic")) {
             flags &= ~COMP_WANT_STATIC;
         } else if (0 == strcmp(user_argv[i], "--openmpi:linkall")) {
             /* This is an intentionally undocummented wrapper compiler
@@ -701,7 +711,7 @@ main(int argc, char *argv[])
        prte_wrapper -showme a.c    : don't clear our flags
     */
     if (disable_flags && !((flags & COMP_DRY_RUN) && !real_flag)) {
-        flags &= ~(COMP_WANT_PREPROC|COMP_WANT_COMPILE|COMP_WANT_LINK);
+        flags &= ~(COMP_WANT_PREPROC | COMP_WANT_COMPILE | COMP_WANT_LINK);
     }
 
     /****************************************************
@@ -715,7 +725,7 @@ main(int argc, char *argv[])
         exec_argv = prte_argv_split(options_data[user_data_idx].compiler, ' ');
         exec_argc = prte_argv_count(exec_argv);
     } else {
-        exec_argv = (char **) malloc(sizeof(char*));
+        exec_argv = (char **) malloc(sizeof(char *));
         exec_argv[0] = NULL;
         exec_argc = 0;
     }
@@ -728,8 +738,7 @@ main(int argc, char *argv[])
     }
 
     if (flags & COMP_WANT_COMPILE) {
-        prte_argv_insert(&exec_argv, exec_argc,
-                         options_data[user_data_idx].comp_flags_prefix);
+        prte_argv_insert(&exec_argv, exec_argc, options_data[user_data_idx].comp_flags_prefix);
         exec_argc = prte_argv_count(exec_argv);
     }
 
@@ -777,14 +786,16 @@ main(int argc, char *argv[])
 
         */
 
-        filename1 = prte_os_path( false, options_data[user_data_idx].path_libdir, options_data[user_data_idx].static_lib_file, NULL );
+        filename1 = prte_os_path(false, options_data[user_data_idx].path_libdir,
+                                 options_data[user_data_idx].static_lib_file, NULL);
         if (0 == stat(filename1, &buf)) {
             have_static_lib = true;
         } else {
             have_static_lib = false;
         }
 
-        filename2 = prte_os_path( false, options_data[user_data_idx].path_libdir, options_data[user_data_idx].dyn_lib_file, NULL );
+        filename2 = prte_os_path(false, options_data[user_data_idx].path_libdir,
+                                 options_data[user_data_idx].dyn_lib_file, NULL);
         if (0 == stat(filename2, &buf)) {
             have_dyn_lib = true;
         } else {
@@ -800,7 +811,9 @@ main(int argc, char *argv[])
             if (have_static_lib || have_dyn_lib) {
                 use_static_libs = true;
             } else {
-                fprintf(stderr, "The linkall option has failed as we were unable to find either static or dynamic libs\n"
+                fprintf(stderr,
+                        "The linkall option has failed as we were unable to find either static or "
+                        "dynamic libs\n"
                         "Files looked for:\n  Static: %s\n  Dynamic: %s\n",
                         filename1, filename2);
                 free(filename1);
@@ -838,7 +851,6 @@ main(int argc, char *argv[])
         exec_argc = prte_argv_count(exec_argv);
     }
 
-
     /****************************************************
      *
      * Execute the command
@@ -858,24 +870,24 @@ main(int argc, char *argv[])
 
         tmp = prte_path_findv(exec_argv[0], 0, environ, NULL);
         if (NULL == tmp) {
-            prte_show_help("help-pcc.txt", "no-compiler-found", true,
-                           exec_argv[0], NULL);
+            prte_show_help("help-pcc.txt", "no-compiler-found", true, exec_argv[0], NULL);
             errno = 0;
             exit_status = 1;
-        }  else {
+        } else {
             int status;
 
             free(exec_argv[0]);
             exec_argv[0] = tmp;
             ret = prte_few(exec_argv, &status);
-            exit_status = WIFEXITED(status) ? WEXITSTATUS(status) :
-                              (WIFSIGNALED(status) ? WTERMSIG(status) :
-                                  (WIFSTOPPED(status) ? WSTOPSIG(status) : 255));
-            if( (PRTE_SUCCESS != ret) || ((0 != exit_status) && (flags & COMP_SHOW_ERROR)) ) {
-                char* exec_cmd = prte_argv_join(exec_argv, ' ');
-                if( PRTE_SUCCESS != ret ) {
-                    prte_show_help("help-pcc.txt", "spawn-failed", true,
-                                   exec_argv[0], strerror(status), exec_cmd, NULL);
+            exit_status = WIFEXITED(status) ? WEXITSTATUS(status)
+                                            : (WIFSIGNALED(status)
+                                                   ? WTERMSIG(status)
+                                                   : (WIFSTOPPED(status) ? WSTOPSIG(status) : 255));
+            if ((PRTE_SUCCESS != ret) || ((0 != exit_status) && (flags & COMP_SHOW_ERROR))) {
+                char *exec_cmd = prte_argv_join(exec_argv, ' ');
+                if (PRTE_SUCCESS != ret) {
+                    prte_show_help("help-pcc.txt", "spawn-failed", true, exec_argv[0],
+                                   strerror(status), exec_cmd, NULL);
                 } else {
 #if 0
                     prte_show_help("help-pcc.txt", "compiler-failed", true,
@@ -892,11 +904,12 @@ main(int argc, char *argv[])
      * Cleanup
      *
      ****************************************************/
- cleanup:
+cleanup:
 
     prte_argv_free(exec_argv);
     prte_argv_free(user_argv);
-    if (NULL != base_argv0) free(base_argv0);
+    if (NULL != base_argv0)
+        free(base_argv0);
 
     if (PRTE_SUCCESS != (ret = data_finalize())) {
         return ret;

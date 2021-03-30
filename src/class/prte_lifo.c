@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,7 +25,7 @@
 #include "prte_config.h"
 #include "src/class/prte_lifo.h"
 
-static void prte_lifo_construct (prte_lifo_t *lifo)
+static void prte_lifo_construct(prte_lifo_t *lifo)
 {
     PRTE_CONSTRUCT(&lifo->prte_lifo_ghost, prte_list_item_t);
     lifo->prte_lifo_ghost.prte_list_next = &lifo->prte_lifo_ghost;

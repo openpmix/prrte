@@ -24,9 +24,9 @@
 
 #include "src/class/prte_list.h"
 #include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/mca.h"
 #include "src/util/cmd_line.h"
 #include "src/util/printf.h"
-#include "src/mca/mca.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -39,7 +39,7 @@ BEGIN_C_DECLS
  */
 PRTE_EXPORT extern prte_mca_base_framework_t prte_schizo_base_framework;
 /* select all components */
-PRTE_EXPORT    int prte_schizo_base_select(void);
+PRTE_EXPORT int prte_schizo_base_select(void);
 
 /**
  * Struct to hold data global to the schizo framework
@@ -67,41 +67,31 @@ typedef struct {
 PRTE_CLASS_DECLARATION(prte_schizo_base_active_module_t);
 
 /* base support functions */
-PRTE_EXPORT int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
-                                         char *option, char *directive,
-                                         char *modifier, bool report);
+PRTE_EXPORT int prte_schizo_base_convert(char ***argv, int idx, int ntodelete, char *option,
+                                         char *directive, char *modifier, bool report);
 
 /* the base stub functions */
 
-PRTE_EXPORT int prte_schizo_base_parse_env(prte_cmd_line_t *cmd_line,
-                                             char **srcenv,
-                                             char ***dstenv,
-                                             bool cmdline);
-PRTE_EXPORT prte_schizo_base_module_t* prte_schizo_base_detect_proxy(char *cmdpath);
+PRTE_EXPORT int prte_schizo_base_parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv,
+                                           bool cmdline);
+PRTE_EXPORT prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath);
 
 PRTE_EXPORT int prte_schizo_base_setup_app(prte_app_context_t *app);
-PRTE_EXPORT int prte_schizo_base_setup_fork(prte_job_t *jdata,
-                                              prte_app_context_t *context);
-PRTE_EXPORT int prte_schizo_base_setup_child(prte_job_t *jobdat,
-                                               prte_proc_t *child,
-                                               prte_app_context_t *app,
-                                               char ***env);
+PRTE_EXPORT int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *context);
+PRTE_EXPORT int prte_schizo_base_setup_child(prte_job_t *jobdat, prte_proc_t *child,
+                                             prte_app_context_t *app, char ***env);
 PRTE_EXPORT void prte_schizo_base_job_info(prte_cmd_line_t *cmdline, void *jobinfo);
 PRTE_EXPORT int prte_schizo_base_check_sanity(prte_cmd_line_t *cmdline);
 PRTE_EXPORT void prte_schizo_base_finalize(void);
 PRTE_EXPORT void prte_schizo_base_root_error_msg(void);
 PRTE_EXPORT char *prte_schizo_base_getline(FILE *fp);
 PRTE_EXPORT bool prte_schizo_base_check_ini(char *cmdpath, char *file);
-PRTE_EXPORT char* prte_schizo_base_strip_quotes(char *p);
-PRTE_EXPORT int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline,
-                                                        int *argc, char ***argv,
-                                                        char **options,
+PRTE_EXPORT char *prte_schizo_base_strip_quotes(char *p);
+PRTE_EXPORT int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline, int *argc,
+                                                        char ***argv, char **options,
                                                         prte_schizo_convertor_fn_t convert);
-PRTE_EXPORT int prte_schizo_base_parse_prte(int argc, int start,
-                                            char **argv, char ***target);
-PRTE_EXPORT int prte_schizo_base_parse_pmix(int argc, int start,
-                                            char **argv, char ***target);
-
+PRTE_EXPORT int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target);
+PRTE_EXPORT int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target);
 
 END_C_DECLS
 

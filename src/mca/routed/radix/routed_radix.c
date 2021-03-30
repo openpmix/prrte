@@ -23,30 +23,28 @@
 
 #include <stddef.h>
 
-#include "src/class/prte_hash_table.h"
 #include "src/class/prte_bitmap.h"
+#include "src/class/prte_hash_table.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/rml_types.h"
-#include "src/util/name_fns.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime.h"
+#include "src/util/name_fns.h"
 
 #include "src/mca/rml/base/rml_contact.h"
 
-#include "src/mca/routed/base/base.h"
 #include "routed_radix.h"
-
+#include "src/mca/routed/base/base.h"
 
 static int init(void);
 static int finalize(void);
 static int delete_route(pmix_proc_t *proc);
-static int update_route(pmix_proc_t *target,
-                        pmix_proc_t *route);
+static int update_route(pmix_proc_t *target, pmix_proc_t *route);
 static pmix_proc_t get_route(pmix_proc_t *target);
 static int route_lost(const pmix_proc_t *route);
 static bool route_is_defined(const pmix_proc_t *target);
@@ -70,11 +68,11 @@ prte_routed_module_t prte_routed_radix_module = {
 };
 
 /* local globals */
-static pmix_proc_t      *lifeline=NULL;
-static pmix_proc_t      local_lifeline;
-static int                      num_children;
-static prte_list_t              my_children;
-static bool                     hnp_direct=true;
+static pmix_proc_t *lifeline = NULL;
+static pmix_proc_t local_lifeline;
+static int num_children;
+static prte_list_t my_children;
+static bool hnp_direct = true;
 
 static int init(void)
 {
@@ -121,10 +119,8 @@ static int delete_route(pmix_proc_t *proc)
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_routed_base_framework.framework_output,
-                         "%s routed_radix_delete_route for %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         "%s routed_radix_delete_route for %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(proc)));
-
 
     /* THIS CAME FROM OUR OWN JOB FAMILY...there is nothing
      * to do here. The routes will be redefined when we update
@@ -134,33 +130,27 @@ static int delete_route(pmix_proc_t *proc)
     return PRTE_SUCCESS;
 }
 
-static int update_route(pmix_proc_t *target,
-                        pmix_proc_t *route)
+static int update_route(pmix_proc_t *target, pmix_proc_t *route)
 {
     if (PMIX_PROCID_INVALID(target)) {
         return PRTE_ERR_BAD_PARAM;
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_routed_base_framework.framework_output,
-                         "%s routed_radix_update: %s --> %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(target),
-                         PRTE_NAME_PRINT(route)));
-
+                         "%s routed_radix_update: %s --> %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(target), PRTE_NAME_PRINT(route)));
 
     /* if I am a daemon and the target is my HNP, then check
      * the route - if it isn't direct, then we just flag that
      * we have a route to the HNP
      */
-    if (PMIX_CHECK_PROCID(PRTE_PROC_MY_HNP, target) &&
-        PMIX_CHECK_PROCID(PRTE_PROC_MY_HNP, route)) {
+    if (PMIX_CHECK_PROCID(PRTE_PROC_MY_HNP, target) && PMIX_CHECK_PROCID(PRTE_PROC_MY_HNP, route)) {
         hnp_direct = false;
         return PRTE_SUCCESS;
     }
 
     return PRTE_SUCCESS;
 }
-
 
 static pmix_proc_t get_route(pmix_proc_t *target)
 {
@@ -229,10 +219,9 @@ static pmix_proc_t get_route(pmix_proc_t *target)
         goto found;
     } else {
         /* search routing tree for next step to that daemon */
-        for (item = prte_list_get_first(&my_children);
-             item != prte_list_get_end(&my_children);
+        for (item = prte_list_get_first(&my_children); item != prte_list_get_end(&my_children);
              item = prte_list_get_next(item)) {
-            child = (prte_routed_tree_t*)item;
+            child = (prte_routed_tree_t *) item;
             if (child->rank == daemon.rank) {
                 /* the child is hosting the proc - just send it there */
                 ret = &daemon;
@@ -257,10 +246,8 @@ static pmix_proc_t get_route(pmix_proc_t *target)
 
 found:
     PRTE_OUTPUT_VERBOSE((1, prte_routed_base_framework.framework_output,
-                         "%s routed_radix_get(%s) --> %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(target),
-                         PRTE_NAME_PRINT(ret)));
+                         "%s routed_radix_get(%s) --> %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PRTE_NAME_PRINT(target), PRTE_NAME_PRINT(ret)));
 
     return *ret;
 }
@@ -270,23 +257,19 @@ static int route_lost(const pmix_proc_t *route)
     prte_list_item_t *item;
     prte_routed_tree_t *child;
 
-    PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
-                         "%s route to %s lost",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         PRTE_NAME_PRINT(route)));
+    PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output, "%s route to %s lost",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(route)));
 
     /* if we lose the connection to the lifeline and we are NOT already,
      * in finalize, tell the OOB to abort.
      * NOTE: we cannot call abort from here as the OOB needs to first
      * release a thread-lock - otherwise, we will hang!!
      */
-    if (!prte_finalizing &&
-        NULL != lifeline &&
-        PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL, route, lifeline)) {
+    if (!prte_finalizing && NULL != lifeline
+        && PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL, route, lifeline)) {
         PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
                              "%s routed:radix: Connection to lifeline %s lost",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             PRTE_NAME_PRINT(lifeline)));
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(lifeline)));
         return PRTE_ERR_FATAL;
     }
 
@@ -294,10 +277,9 @@ static int route_lost(const pmix_proc_t *route)
      * see if it is one of our children - if so, remove it
      */
     if (PMIX_CHECK_NSPACE(route->nspace, PRTE_PROC_MY_NAME->nspace)) {
-        for (item = prte_list_get_first(&my_children);
-             item != prte_list_get_end(&my_children);
+        for (item = prte_list_get_first(&my_children); item != prte_list_get_end(&my_children);
              item = prte_list_get_next(item)) {
-            child = (prte_routed_tree_t*)item;
+            child = (prte_routed_tree_t *) item;
             if (child->rank == route->rank) {
                 prte_list_remove_item(&my_children, item);
                 PRTE_RELEASE(item);
@@ -313,7 +295,7 @@ static int route_lost(const pmix_proc_t *route)
 static bool route_is_defined(const pmix_proc_t *target)
 {
     /* find out what daemon hosts this proc */
-    if (PMIX_RANK_INVALID == prte_get_proc_daemon_vpid((pmix_proc_t*)target)) {
+    if (PMIX_RANK_INVALID == prte_get_proc_daemon_vpid((pmix_proc_t *) target)) {
         return false;
     }
 
@@ -331,18 +313,18 @@ static int set_lifeline(pmix_proc_t *proc)
     return PRTE_SUCCESS;
 }
 
-static void radix_tree(int rank, int *num_children_out,
-                       prte_list_t *children, prte_bitmap_t *relatives)
+static void radix_tree(int rank, int *num_children_out, prte_list_t *children,
+                       prte_bitmap_t *relatives)
 {
     int i, peer, Sum, NInLevel;
     prte_routed_tree_t *child;
     prte_bitmap_t *relations;
 
     /* compute how many procs are at my level */
-    Sum=1;
-    NInLevel=1;
+    Sum = 1;
+    NInLevel = 1;
 
-    while ( Sum < (rank+1) ) {
+    while (Sum < (rank + 1)) {
         NInLevel *= prte_routed_radix_component.radix;
         Sum += NInLevel;
     }
@@ -350,7 +332,7 @@ static void radix_tree(int rank, int *num_children_out,
     /* our children start at our rank + num_in_level */
     peer = rank + NInLevel;
     for (i = 0; i < prte_routed_radix_component.radix; i++) {
-        if (peer < (int)prte_process_info.num_daemons) {
+        if (peer < (int) prte_process_info.num_daemons) {
             child = PRTE_NEW(prte_routed_tree_t);
             child->rank = peer;
             if (NULL != children) {
@@ -364,7 +346,8 @@ static void radix_tree(int rank, int *num_children_out,
             } else {
                 /* we are recording someone's relatives - set the bit */
                 if (PRTE_SUCCESS != prte_bitmap_set_bit(relatives, peer)) {
-                    prte_output(0, "%s Error: could not set relations bit!", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+                    prte_output(0, "%s Error: could not set relations bit!",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                 }
                 /* point to this relations */
                 relations = relatives;
@@ -382,7 +365,7 @@ static void update_routing_plan(void)
     prte_routed_tree_t *child;
     int j;
     prte_list_item_t *item;
-    int Level,Sum,NInLevel,Ii;
+    int Level, Sum, NInLevel, Ii;
     int NInPrevLevel;
     prte_job_t *dmns;
     prte_proc_t *d;
@@ -394,24 +377,24 @@ static void update_routing_plan(void)
     num_children = 0;
 
     /* compute my parent */
-    Ii =  PRTE_PROC_MY_NAME->rank;
-    Level=0;
-    Sum=1;
-    NInLevel=1;
+    Ii = PRTE_PROC_MY_NAME->rank;
+    Level = 0;
+    Sum = 1;
+    NInLevel = 1;
 
-    while ( Sum < (Ii+1) ) {
+    while (Sum < (Ii + 1)) {
         Level++;
         NInLevel *= prte_routed_radix_component.radix;
         Sum += NInLevel;
     }
     Sum -= NInLevel;
 
-    NInPrevLevel = NInLevel/prte_routed_radix_component.radix;
+    NInPrevLevel = NInLevel / prte_routed_radix_component.radix;
 
-    if( 0 == Ii ) {
+    if (0 == Ii) {
         PRTE_PROC_MY_PARENT->rank = -1;
-    }  else {
-        PRTE_PROC_MY_PARENT->rank = (Ii-Sum) % NInPrevLevel;
+    } else {
+        PRTE_PROC_MY_PARENT->rank = (Ii - Sum) % NInPrevLevel;
         PRTE_PROC_MY_PARENT->rank += (Sum - NInPrevLevel);
     }
 
@@ -421,15 +404,16 @@ static void update_routing_plan(void)
     radix_tree(Ii, &num_children, &my_children, NULL);
 
     if (0 < prte_output_get_verbosity(prte_routed_base_framework.framework_output)) {
-        prte_output(0, "%s: parent %d num_children %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_PROC_MY_PARENT->rank, num_children);
+        prte_output(0, "%s: parent %d num_children %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                    PRTE_PROC_MY_PARENT->rank, num_children);
         dmns = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-        for (item = prte_list_get_first(&my_children);
-             item != prte_list_get_end(&my_children);
+        for (item = prte_list_get_first(&my_children); item != prte_list_get_end(&my_children);
              item = prte_list_get_next(item)) {
-            child = (prte_routed_tree_t*)item;
-            d = (prte_proc_t*)prte_pointer_array_get_item(dmns->procs, child->rank);
-            prte_output(0, "%s: \tchild %d node %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), child->rank, d->node->name);
-            for (j=0; j < (int)prte_process_info.num_daemons; j++) {
+            child = (prte_routed_tree_t *) item;
+            d = (prte_proc_t *) prte_pointer_array_get_item(dmns->procs, child->rank);
+            prte_output(0, "%s: \tchild %d node %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        child->rank, d->node->name);
+            for (j = 0; j < (int) prte_process_info.num_daemons; j++) {
                 if (prte_bitmap_is_set_bit(&child->relatives, j)) {
                     prte_output(0, "%s: \t\trelation %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), j);
                 }

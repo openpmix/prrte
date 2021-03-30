@@ -15,6 +15,7 @@
  *                         reserved.
  * Copyright (c) 2016-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,9 +25,9 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
 #include "constants.h"
 #include "src/class/prte_graph.h"
+#include "src/class/prte_list.h"
 #include "src/util/output.h"
 
 static int compare_vertex_distance(const void *item1, const void *item2);
@@ -35,49 +36,28 @@ static int compare_vertex_distance(const void *item1, const void *item2);
  *  Graph classes
  */
 
-
 static void prte_graph_vertex_construct(prte_graph_vertex_t *vertex);
 static void prte_graph_vertex_destruct(prte_graph_vertex_t *vertex);
 
-PRTE_CLASS_INSTANCE(
-    prte_graph_vertex_t,
-    prte_list_item_t,
-    prte_graph_vertex_construct,
-    prte_graph_vertex_destruct
-);
-
+PRTE_CLASS_INSTANCE(prte_graph_vertex_t, prte_list_item_t, prte_graph_vertex_construct,
+                    prte_graph_vertex_destruct);
 
 static void prte_graph_edge_construct(prte_graph_edge_t *edge);
 static void prte_graph_edge_destruct(prte_graph_edge_t *edge);
 
-PRTE_CLASS_INSTANCE(
-    prte_graph_edge_t,
-    prte_list_item_t,
-    prte_graph_edge_construct,
-    prte_graph_edge_destruct
-);
+PRTE_CLASS_INSTANCE(prte_graph_edge_t, prte_list_item_t, prte_graph_edge_construct,
+                    prte_graph_edge_destruct);
 
 static void prte_graph_construct(prte_graph_t *graph);
 static void prte_graph_destruct(prte_graph_t *graph);
 
-PRTE_CLASS_INSTANCE(
-    prte_graph_t,
-    prte_object_t,
-    prte_graph_construct,
-    prte_graph_destruct
-);
+PRTE_CLASS_INSTANCE(prte_graph_t, prte_object_t, prte_graph_construct, prte_graph_destruct);
 
 static void prte_adjacency_list_construct(prte_adjacency_list_t *aj_list);
 static void prte_adjacency_list_destruct(prte_adjacency_list_t *aj_list);
 
-PRTE_CLASS_INSTANCE(
-    prte_adjacency_list_t,
-    prte_list_item_t,
-    prte_adjacency_list_construct,
-    prte_adjacency_list_destruct
-);
-
-
+PRTE_CLASS_INSTANCE(prte_adjacency_list_t, prte_list_item_t, prte_adjacency_list_construct,
+                    prte_adjacency_list_destruct);
 
 /*
  *
@@ -113,7 +93,6 @@ static void prte_graph_vertex_destruct(prte_graph_vertex_t *vertex)
     vertex->print_vertex = NULL;
 }
 
-
 /*
  *
  *      prte_graph_edge_t interface
@@ -128,7 +107,6 @@ static void prte_graph_edge_construct(prte_graph_edge_t *edge)
     edge->in_adj_list = NULL;
 }
 
-
 static void prte_graph_edge_destruct(prte_graph_edge_t *edge)
 {
     edge->end = NULL;
@@ -137,13 +115,11 @@ static void prte_graph_edge_destruct(prte_graph_edge_t *edge)
     edge->in_adj_list = NULL;
 }
 
-
 /*
  *
  *     prte_graph_t  interface
  *
  */
-
 
 static void prte_graph_construct(prte_graph_t *graph)
 {
@@ -173,8 +149,8 @@ static void prte_adjacency_list_construct(prte_adjacency_list_t *aj_list)
 
 static void prte_adjacency_list_destruct(prte_adjacency_list_t *aj_list)
 {
-   aj_list->vertex = NULL;
-   PRTE_LIST_RELEASE(aj_list->edges);
+    aj_list->vertex = NULL;
+    PRTE_LIST_RELEASE(aj_list->edges);
 }
 
 /**
@@ -192,17 +168,19 @@ static void delete_all_edges_conceded_to_vertex(prte_graph_t *graph, prte_graph_
     /**
      * for all the adjacency list in the graph
      */
-    PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t) {
+    PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t)
+    {
         /**
          * for all the edges in the adjacency list
          */
-        PRTE_LIST_FOREACH_SAFE(edge, next, aj_list->edges, prte_graph_edge_t) {
+        PRTE_LIST_FOREACH_SAFE(edge, next, aj_list->edges, prte_graph_edge_t)
+        {
             /**
              * if the edge is ended in the vertex
              */
             if (edge->end == vertex) {
                 /* Delete this edge  */
-                prte_list_remove_item(edge->in_adj_list->edges, (prte_list_item_t*)edge);
+                prte_list_remove_item(edge->in_adj_list->edges, (prte_list_item_t *) edge);
                 /* distract this edge */
                 PRTE_RELEASE(edge);
             }
@@ -219,30 +197,30 @@ static void delete_all_edges_conceded_to_vertex(prte_graph_t *graph, prte_graph_
  */
 void prte_graph_add_vertex(prte_graph_t *graph, prte_graph_vertex_t *vertex)
 {
-   prte_adjacency_list_t *aj_list;
+    prte_adjacency_list_t *aj_list;
 
-   /**
-    * Find if this vertex already exists in the graph.
-    */
-   PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t) {
-       if (aj_list->vertex == vertex) {
-           /* If this vertex exists, dont do anything. */
-           return;
-       }
-   }
-   /* Construct a new adjacency list */
-   aj_list = PRTE_NEW(prte_adjacency_list_t);
-   aj_list->vertex = vertex;
-   /* point the vertex to the adjacency list of the vertex (for easy searching) */
-   vertex->in_adj_list = aj_list;
-   /* Append the new creates adjacency list to the graph */
-   prte_list_append(graph->adjacency_list, (prte_list_item_t*)aj_list);
-   /* point the vertex to the graph it belongs to (mostly for debug uses)*/
-   vertex->in_graph = graph;
-   /* increase the number of vertices in the graph */
-   graph->number_of_vertices++;
+    /**
+     * Find if this vertex already exists in the graph.
+     */
+    PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t)
+    {
+        if (aj_list->vertex == vertex) {
+            /* If this vertex exists, dont do anything. */
+            return;
+        }
+    }
+    /* Construct a new adjacency list */
+    aj_list = PRTE_NEW(prte_adjacency_list_t);
+    aj_list->vertex = vertex;
+    /* point the vertex to the adjacency list of the vertex (for easy searching) */
+    vertex->in_adj_list = aj_list;
+    /* Append the new creates adjacency list to the graph */
+    prte_list_append(graph->adjacency_list, (prte_list_item_t *) aj_list);
+    /* point the vertex to the graph it belongs to (mostly for debug uses)*/
+    vertex->in_graph = graph;
+    /* increase the number of vertices in the graph */
+    graph->number_of_vertices++;
 }
-
 
 /**
  * This graph API adds an edge (connection between two
@@ -257,14 +235,14 @@ void prte_graph_add_vertex(prte_graph_t *graph, prte_graph_vertex_t *vertex)
  */
 int prte_graph_add_edge(prte_graph_t *graph, prte_graph_edge_t *edge)
 {
-    prte_adjacency_list_t *aj_list, *start_aj_list= NULL;
+    prte_adjacency_list_t *aj_list, *start_aj_list = NULL;
     bool end_found = false;
-
 
     /**
      * find the vertices that this edge should connect.
      */
-    PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t) {
+    PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t)
+    {
         if (aj_list->vertex == edge->start) {
             start_aj_list = aj_list;
         }
@@ -280,14 +258,13 @@ int prte_graph_add_edge(prte_graph_t *graph, prte_graph_edge_t *edge)
         return PRTE_ERROR;
     }
     /* point the edge to the adjacency list of the start vertex (for easy search) */
-    edge->in_adj_list=start_aj_list;
+    edge->in_adj_list = start_aj_list;
     /* append the edge to the adjacency list of the start vertex */
-    prte_list_append(start_aj_list->edges, (prte_list_item_t*)edge);
+    prte_list_append(start_aj_list->edges, (prte_list_item_t *) edge);
     /* increase the graph size */
     graph->number_of_edges++;
     return PRTE_SUCCESS;
 }
-
 
 /**
  * This graph API removes an edge (a connection between two
@@ -300,10 +277,10 @@ int prte_graph_add_edge(prte_graph_t *graph, prte_graph_edge_t *edge)
  * @param graph The graph that this edge will be remove from.
  * @param edge the edge that we want to remove.
  */
-void prte_graph_remove_edge (prte_graph_t *graph, prte_graph_edge_t *edge)
+void prte_graph_remove_edge(prte_graph_t *graph, prte_graph_edge_t *edge)
 {
     /* remove the edge from the list it belongs to */
-    prte_list_remove_item(edge->in_adj_list->edges, (prte_list_item_t*)edge);
+    prte_list_remove_item(edge->in_adj_list->edges, (prte_list_item_t *) edge);
     /* decrees the number of edges in the graph */
     graph->number_of_edges--;
     /* Note that the edge is not destructed - the caller should destruct this edge. */
@@ -329,7 +306,7 @@ void prte_graph_remove_vertex(prte_graph_t *graph, prte_graph_vertex_t *vertex)
      * remove the adjscency list of this vertex from the graph and
      * destruct it.
      */
-    prte_list_remove_item(graph->adjacency_list, (prte_list_item_t*)adj_list);
+    prte_list_remove_item(graph->adjacency_list, (prte_list_item_t *) adj_list);
     PRTE_RELEASE(adj_list);
     /**
      * delete all the edges that connected *to* the vertex.
@@ -352,7 +329,8 @@ void prte_graph_remove_vertex(prte_graph_t *graph, prte_graph_vertex_t *vertex)
  *         vertices or infinity if the vertices are not
  *         connected.
  */
-uint32_t prte_graph_adjacent(prte_graph_t *graph, prte_graph_vertex_t *vertex1, prte_graph_vertex_t *vertex2)
+uint32_t prte_graph_adjacent(prte_graph_t *graph, prte_graph_vertex_t *vertex1,
+                             prte_graph_vertex_t *vertex2)
 {
     prte_adjacency_list_t *adj_list;
     prte_graph_edge_t *edge;
@@ -361,14 +339,16 @@ uint32_t prte_graph_adjacent(prte_graph_t *graph, prte_graph_vertex_t *vertex1, 
      * Verify that the first vertex belongs to the graph.
      */
     if (graph != vertex1->in_graph) {
-        PRTE_OUTPUT((0,"prte_graph_adjacent 1 Vertex1 %p not in the graph %p\n",(void *)vertex1,(void *)graph));
+        PRTE_OUTPUT((0, "prte_graph_adjacent 1 Vertex1 %p not in the graph %p\n", (void *) vertex1,
+                     (void *) graph));
         return DISTANCE_INFINITY;
     }
     /**
      * Verify that the second vertex belongs to the graph.
      */
     if (graph != vertex2->in_graph) {
-        PRTE_OUTPUT((0,"prte_graph_adjacent 2 Vertex2 %p not in the graph %p\n",(void *)vertex2,(void *)graph));
+        PRTE_OUTPUT((0, "prte_graph_adjacent 2 Vertex2 %p not in the graph %p\n", (void *) vertex2,
+                     (void *) graph));
         return DISTANCE_INFINITY;
     }
     /**
@@ -383,9 +363,11 @@ uint32_t prte_graph_adjacent(prte_graph_t *graph, prte_graph_vertex_t *vertex1, 
      * vertex.
      */
     adj_list = (prte_adjacency_list_t *) vertex1->in_adj_list;
-    PRTE_LIST_FOREACH(edge, adj_list->edges, prte_graph_edge_t) {
+    PRTE_LIST_FOREACH(edge, adj_list->edges, prte_graph_edge_t)
+    {
         if (edge->end == vertex2) {
-            /* if the second vertex was found in the adjacency list of the first one, return the weight */
+            /* if the second vertex was found in the adjacency list of the first one, return the
+             * weight */
             return edge->weight;
         }
     }
@@ -435,7 +417,8 @@ prte_graph_vertex_t *prte_graph_find_vertex(prte_graph_t *graph, void *vertex_da
     /**
      * Run on all the vertices of the graph
      */
-    PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t) {
+    PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t)
+    {
         if (NULL != aj_list->vertex->compare_vertex) {
             /* if the vertex data of a vertex is equal to the vertex data */
             if (0 == aj_list->vertex->compare_vertex(aj_list->vertex->vertex_data, vertex_data)) {
@@ -447,7 +430,6 @@ prte_graph_vertex_t *prte_graph_find_vertex(prte_graph_t *graph, void *vertex_da
     /* if a vertex is not found, return NULL */
     return NULL;
 }
-
 
 /**
  * This graph API returns an array of pointers of all the
@@ -472,9 +454,10 @@ int prte_graph_get_graph_vertices(prte_graph_t *graph, prte_pointer_array_t *ver
         return 0;
     }
     /* Run on all the vertices of the graph */
-    PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t) {
+    PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t)
+    {
         /* Add the vertex to the vertices array */
-        prte_pointer_array_add(vertices_list,(void *)aj_list->vertex);
+        prte_pointer_array_add(vertices_list, (void *) aj_list->vertex);
     }
     /* return the vertices list */
     return graph->number_of_vertices;
@@ -493,7 +476,8 @@ int prte_graph_get_graph_vertices(prte_graph_t *graph, prte_pointer_array_t *ver
  *
  * @return int the number of adjacents in the list.
  */
-int prte_graph_get_adjacent_vertices(prte_graph_t *graph, prte_graph_vertex_t *vertex, prte_value_array_t *adjacents)
+int prte_graph_get_adjacent_vertices(prte_graph_t *graph, prte_graph_vertex_t *vertex,
+                                     prte_value_array_t *adjacents)
 {
     prte_adjacency_list_t *adj_list;
     prte_graph_edge_t *edge;
@@ -504,7 +488,7 @@ int prte_graph_get_adjacent_vertices(prte_graph_t *graph, prte_graph_vertex_t *v
      * Verify that the vertex belongs to the graph.
      */
     if (graph != vertex->in_graph) {
-        PRTE_OUTPUT((0,"Vertex %p not in the graph %p\n", (void *)vertex, (void *)graph));
+        PRTE_OUTPUT((0, "Vertex %p not in the graph %p\n", (void *) vertex, (void *) graph));
         return 0;
     }
     /**
@@ -514,7 +498,8 @@ int prte_graph_get_adjacent_vertices(prte_graph_t *graph, prte_graph_vertex_t *v
     /* find the number of adjcents of this vertex */
     adjacents_number = prte_list_get_size(adj_list->edges);
     /* Run on all the edges from this vertex */
-    PRTE_LIST_FOREACH(edge, adj_list->edges, prte_graph_edge_t) {
+    PRTE_LIST_FOREACH(edge, adj_list->edges, prte_graph_edge_t)
+    {
         /* assign vertices and their weight in the adjcents list */
         distance_from.vertex = edge->end;
         distance_from.weight = edge->weight;
@@ -534,7 +519,8 @@ int prte_graph_get_adjacent_vertices(prte_graph_t *graph, prte_graph_vertex_t *v
  * @return uint32_t the distance between the two vertices.
  */
 
-uint32_t prte_graph_spf(prte_graph_t *graph, prte_graph_vertex_t *vertex1, prte_graph_vertex_t *vertex2)
+uint32_t prte_graph_spf(prte_graph_t *graph, prte_graph_vertex_t *vertex1,
+                        prte_graph_vertex_t *vertex2)
 {
     prte_value_array_t *distance_array;
     uint32_t items_in_distance_array, spf = DISTANCE_INFINITY;
@@ -545,14 +531,16 @@ uint32_t prte_graph_spf(prte_graph_t *graph, prte_graph_vertex_t *vertex1, prte_
      * Verify that the first vertex belongs to the graph.
      */
     if (graph != vertex1->in_graph) {
-        PRTE_OUTPUT((0,"prte_graph_spf 1 Vertex1 %p not in the graph %p\n",(void *)vertex1,(void *)graph));
+        PRTE_OUTPUT((0, "prte_graph_spf 1 Vertex1 %p not in the graph %p\n", (void *) vertex1,
+                     (void *) graph));
         return DISTANCE_INFINITY;
     }
     /**
      * Verify that the second vertex belongs to the graph.
      */
     if (graph != vertex2->in_graph) {
-        PRTE_OUTPUT((0,"prte_graph_spf 2 Vertex2 %p not in the graph %p\n",(void *)vertex2,(void *)graph));
+        PRTE_OUTPUT((0, "prte_graph_spf 2 Vertex2 %p not in the graph %p\n", (void *) vertex2,
+                     (void *) graph));
         return DISTANCE_INFINITY;
     }
     /**
@@ -560,7 +548,7 @@ uint32_t prte_graph_spf(prte_graph_t *graph, prte_graph_vertex_t *vertex1, prte_
      */
     distance_array = PRTE_NEW(prte_value_array_t);
     prte_value_array_init(distance_array, sizeof(vertex_distance_from_t));
-    prte_value_array_reserve(distance_array,50);
+    prte_value_array_reserve(distance_array, 50);
     items_in_distance_array = prte_graph_dijkstra(graph, vertex1, distance_array);
     /**
      * find the end vertex in the distance array that Dijkstra
@@ -596,8 +584,8 @@ static int compare_vertex_distance(const void *item1, const void *item2)
     vertex_distance_from_t *vertex_dist1, *vertex_dist2;
 
     /* convert the void pointers to vertex distance pointers. */
-    vertex_dist1 = (vertex_distance_from_t *)item1;
-    vertex_dist2 = (vertex_distance_from_t *)item2;
+    vertex_dist1 = (vertex_distance_from_t *) item1;
+    vertex_dist2 = (vertex_distance_from_t *) item2;
 
     /* If the first item weight is higher then the second item weight return 1*/
     if (vertex_dist1->weight > vertex_dist2->weight) {
@@ -611,7 +599,6 @@ static int compare_vertex_distance(const void *item1, const void *item2)
     return -1;
 }
 
-
 /**
  * This graph API returns the distance (weight) from a reference
  * vertex to all other vertices in the graph using the Dijkstra
@@ -624,7 +611,8 @@ static int compare_vertex_distance(const void *item1, const void *item2)
  *
  * @return uint32_t the size of the distance array
  */
-uint32_t prte_graph_dijkstra(prte_graph_t *graph, prte_graph_vertex_t *vertex, prte_value_array_t *distance_array)
+uint32_t prte_graph_dijkstra(prte_graph_t *graph, prte_graph_vertex_t *vertex,
+                             prte_value_array_t *distance_array)
 {
     int graph_order;
     vertex_distance_from_t *Q, *q_start, *current_vertex;
@@ -633,22 +621,23 @@ uint32_t prte_graph_dijkstra(prte_graph_t *graph, prte_graph_vertex_t *vertex, p
     int i;
     uint32_t weight;
 
-
     /**
      * Verify that the reference vertex belongs to the graph.
      */
     if (graph != vertex->in_graph) {
-        PRTE_OUTPUT((0,"prte:graph:dijkstra: vertex %p not in the graph %p\n",(void *)vertex,(void *)graph));
+        PRTE_OUTPUT((0, "prte:graph:dijkstra: vertex %p not in the graph %p\n", (void *) vertex,
+                     (void *) graph));
         return 0;
     }
     /* get the order of the graph and allocate a working queue accordingly */
     graph_order = prte_graph_get_order(graph);
-    Q = (vertex_distance_from_t *)malloc(graph_order * sizeof(vertex_distance_from_t));
+    Q = (vertex_distance_from_t *) malloc(graph_order * sizeof(vertex_distance_from_t));
     /* assign a pointer to the start of the queue */
     q_start = Q;
     /* run on all the vertices of the graph */
     i = 0;
-    PRTE_LIST_FOREACH(adj_list, graph->adjacency_list, prte_adjacency_list_t) {
+    PRTE_LIST_FOREACH(adj_list, graph->adjacency_list, prte_adjacency_list_t)
+    {
         /* insert the vertices pointes to the working queue */
         Q[i].vertex = adj_list->vertex;
         /**
@@ -668,7 +657,8 @@ uint32_t prte_graph_dijkstra(prte_graph_t *graph, prte_graph_vertex_t *vertex, p
         q_start++;
         /* decrees the number of vertices in the queue */
         number_of_items_in_q--;
-        /* find the distance of all other vertices in the queue from the first vertex in the queue */
+        /* find the distance of all other vertices in the queue from the first vertex in the queue
+         */
         for (i = 0; i < number_of_items_in_q; i++) {
             weight = prte_graph_adjacent(graph, current_vertex->vertex, q_start[i].vertex);
             /**
@@ -683,18 +673,18 @@ uint32_t prte_graph_dijkstra(prte_graph_t *graph, prte_graph_vertex_t *vertex, p
             }
         }
         /* sort again the working queue */
-        qsort(q_start, number_of_items_in_q, sizeof(vertex_distance_from_t), compare_vertex_distance);
+        qsort(q_start, number_of_items_in_q, sizeof(vertex_distance_from_t),
+              compare_vertex_distance);
     }
     /* copy the working queue the the returned distance array */
-    for (i = 0; i < graph_order-1; i++) {
-        prte_value_array_append_item(distance_array, (void *)&(Q[i+1]));
+    for (i = 0; i < graph_order - 1; i++) {
+        prte_value_array_append_item(distance_array, (void *) &(Q[i + 1]));
     }
     /* free the working queue */
     free(Q);
     /* assign the distance array size. */
     return graph_order - 1;
 }
-
 
 /**
  * This graph API duplicates a graph. Note that this API does
@@ -713,7 +703,8 @@ void prte_graph_duplicate(prte_graph_t **dest, prte_graph_t *src)
     /* construct a new graph */
     *dest = PRTE_NEW(prte_graph_t);
     /* Run on all the vertices of the src graph */
-    PRTE_LIST_FOREACH(aj_list, src->adjacency_list, prte_adjacency_list_t) {
+    PRTE_LIST_FOREACH(aj_list, src->adjacency_list, prte_adjacency_list_t)
+    {
         /* for each vertex in the src graph, construct a new vertex */
         vertex = PRTE_NEW(prte_graph_vertex_t);
         /* associate the new vertex to a vertex from the original graph */
@@ -742,14 +733,17 @@ void prte_graph_duplicate(prte_graph_t **dest, prte_graph_t *src)
      * Now, copy all the edges from the source graph
      */
     /* Run on all the adjscency lists in the graph */
-    PRTE_LIST_FOREACH(aj_list, src->adjacency_list, prte_adjacency_list_t) {
+    PRTE_LIST_FOREACH(aj_list, src->adjacency_list, prte_adjacency_list_t)
+    {
         /* for all the edges in the adjscency list */
-        PRTE_LIST_FOREACH(edge, aj_list->edges, prte_graph_edge_t) {
+        PRTE_LIST_FOREACH(edge, aj_list->edges, prte_graph_edge_t)
+        {
             /* construct new edge for the new graph */
             new_edge = PRTE_NEW(prte_graph_edge_t);
             /* copy the edge weight from the original edge */
             new_edge->weight = edge->weight;
-            /* connect the new edge according to start and end associations to the vertices of the src graph */
+            /* connect the new edge according to start and end associations to the vertices of the
+             * src graph */
             new_edge->start = edge->start->sibling;
             new_edge->end = edge->end->sibling;
             /* add the new edge to the new graph */
@@ -773,31 +767,31 @@ void prte_graph_print(prte_graph_t *graph)
     prte_output(0, "      Graph         ");
     prte_output(0, "====================");
     /* run on all the vertices of the graph */
-    PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t) {
+    PRTE_LIST_FOREACH(aj_list, graph->adjacency_list, prte_adjacency_list_t)
+    {
         /* print vertex data to temporary string*/
         if (NULL != aj_list->vertex->print_vertex) {
             need_free1 = true;
             tmp_str1 = aj_list->vertex->print_vertex(aj_list->vertex->vertex_data);
-        }
-        else {
+        } else {
             need_free1 = false;
             tmp_str1 = "";
         }
         /* print vertex */
-        prte_output(0, "V(%s) Connections:",tmp_str1);
+        prte_output(0, "V(%s) Connections:", tmp_str1);
         /* run on all the edges of the vertex */
-        PRTE_LIST_FOREACH(edge, aj_list->edges, prte_graph_edge_t) {
+        PRTE_LIST_FOREACH(edge, aj_list->edges, prte_graph_edge_t)
+        {
             /* print the vertex data of the vertex in the end of the edge to a temporary string */
             if (NULL != edge->end->print_vertex) {
                 need_free2 = true;
                 tmp_str2 = edge->end->print_vertex(edge->end->vertex_data);
-            }
-            else {
+            } else {
                 need_free2 = false;
                 tmp_str2 = "";
             }
             /* print the edge */
-            prte_output(0, "    E(%s -> %d -> %s)",tmp_str1, edge->weight, tmp_str2);
+            prte_output(0, "    E(%s -> %d -> %s)", tmp_str1, edge->weight, tmp_str2);
             if (need_free2) {
                 free(tmp_str2);
             }

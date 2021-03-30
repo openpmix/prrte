@@ -14,6 +14,7 @@
  *                         reserved.
  * Copyright (c) 2012-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,11 +33,11 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/mca/mca.h"
 #include "src/hwloc/hwloc-internal.h"
+#include "src/mca/mca.h"
 
-#include "src/util/proc_info.h"
 #include "src/runtime/runtime.h"
+#include "src/util/proc_info.h"
 
 BEGIN_C_DECLS
 
@@ -71,9 +72,9 @@ typedef void (*prte_ess_base_module_abort_fn_t)(int status, bool report);
  * the standard module data structure
  */
 struct prte_ess_base_module_3_0_0_t {
-    prte_ess_base_module_init_fn_t                  init;
-    prte_ess_base_module_finalize_fn_t              finalize;
-    prte_ess_base_module_abort_fn_t                 abort;
+    prte_ess_base_module_init_fn_t init;
+    prte_ess_base_module_finalize_fn_t finalize;
+    prte_ess_base_module_abort_fn_t abort;
 };
 typedef struct prte_ess_base_module_3_0_0_t prte_ess_base_module_3_0_0_t;
 typedef struct prte_ess_base_module_3_0_0_t prte_ess_base_module_t;
@@ -91,11 +92,10 @@ typedef struct prte_ess_base_component_2_0_0_t prte_ess_base_component_t;
 /*
  * Macro for use in components that are of type ess
  */
-#define PRTE_ESS_BASE_VERSION_3_0_0 \
-    PRTE_MCA_BASE_VERSION_2_1_0("ess", 3, 0, 0)
+#define PRTE_ESS_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_2_1_0("ess", 3, 0, 0)
 
 /* Global structure for accessing ESS functions */
-PRTE_EXPORT extern prte_ess_base_module_t prte_ess;  /* holds selected module's function pointers */
+PRTE_EXPORT extern prte_ess_base_module_t prte_ess; /* holds selected module's function pointers */
 
 END_C_DECLS
 

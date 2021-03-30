@@ -54,8 +54,8 @@
 
 #include "src/class/prte_list.h"
 
-#include "src/mca/rml/rml_types.h"
 #include "src/mca/iof/iof.h"
+#include "src/mca/rml/rml_types.h"
 
 BEGIN_C_DECLS
 
@@ -72,9 +72,8 @@ typedef struct prte_iof_prted_component_t prte_iof_prted_component_t;
 PRTE_MODULE_EXPORT extern prte_iof_prted_component_t prte_iof_prted_component;
 extern prte_iof_base_module_t prte_iof_prted_module;
 
-void prte_iof_prted_recv(int status, pmix_proc_t* sender,
-                         pmix_data_buffer_t* buffer, prte_rml_tag_t tag,
-                         void* cbdata);
+void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                         prte_rml_tag_t tag, void *cbdata);
 
 void prte_iof_prted_read_handler(int fd, short event, void *data);
 void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag);

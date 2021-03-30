@@ -68,9 +68,9 @@
 
 #include "src/class/prte_list.h"
 #include "src/class/prte_value_array.h"
+#include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/base/prte_mca_base_var_enum.h"
 #include "src/mca/base/prte_mca_base_var_group.h"
-#include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/mca.h"
 
 /**
@@ -180,24 +180,24 @@ typedef enum {
 } prte_mca_base_var_info_lvl_t;
 
 typedef enum {
-    PRTE_MCA_BASE_VAR_SYN_FLAG_NONE       = 0x0000,
+    PRTE_MCA_BASE_VAR_SYN_FLAG_NONE = 0x0000,
     PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED = 0x0001,
-    PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL   = 0x0002
+    PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL = 0x0002
 } prte_mca_base_var_syn_flag_t;
 
 typedef enum {
-    PRTE_MCA_BASE_VAR_FLAG_NONE         = 0x0000,
+    PRTE_MCA_BASE_VAR_FLAG_NONE = 0x0000,
     /** Variable is internal (hidden from *_info/MPIT) */
-    PRTE_MCA_BASE_VAR_FLAG_INTERNAL     = 0x0001,
+    PRTE_MCA_BASE_VAR_FLAG_INTERNAL = 0x0001,
     /** Variable will always be the default value. Implies
         !MCA_BASE_VAR_FLAG_SETTABLE */
     PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY = 0x0002,
     /** Variable can be set with mca_base_var_set() */
-    PRTE_MCA_BASE_VAR_FLAG_SETTABLE     = 0x0004,
+    PRTE_MCA_BASE_VAR_FLAG_SETTABLE = 0x0004,
     /** Variable is deprecated */
-    PRTE_MCA_BASE_VAR_FLAG_DEPRECATED   = 0x0008,
+    PRTE_MCA_BASE_VAR_FLAG_DEPRECATED = 0x0008,
     /** Variable has been overridden */
-    PRTE_MCA_BASE_VAR_FLAG_OVERRIDE     = 0x0010,
+    PRTE_MCA_BASE_VAR_FLAG_OVERRIDE = 0x0010,
     /** Variable may not be set from a file */
     PRTE_MCA_BASE_VAR_FLAG_ENVIRONMENT_ONLY = 0x0020,
     /** Variable should be deregistered when the group is deregistered
@@ -206,12 +206,11 @@ typedef enum {
         mca_base_component_var_register(), but can also be set
         manually when you register a variable with
         mca_base_var_register(). */
-    PRTE_MCA_BASE_VAR_FLAG_DWG          = 0x0040,
+    PRTE_MCA_BASE_VAR_FLAG_DWG = 0x0040,
     /** Variable has a default value of "unset". Meaning to only
      * be set when the user explicitly asks for it */
-    PRTE_MCA_BASE_VAR_FLAG_DEF_UNSET    = 0x0080,
+    PRTE_MCA_BASE_VAR_FLAG_DEF_UNSET = 0x0080,
 } prte_mca_base_var_flag_t;
-
 
 /**
  * Types for MCA parameters.
@@ -244,7 +243,6 @@ typedef union {
     /** double value */
     double lfval;
 } prte_mca_base_var_storage_t;
-
 
 /**
  * Entry for holding information about an MCA variable.
@@ -284,10 +282,10 @@ struct prte_mca_base_var_t {
     prte_value_array_t mbv_synonyms;
 
     /** Variable flags */
-    prte_mca_base_var_flag_t  mbv_flags;
+    prte_mca_base_var_flag_t mbv_flags;
 
     /** Variable scope */
-    prte_mca_base_var_scope_t  mbv_scope;
+    prte_mca_base_var_scope_t mbv_scope;
 
     /** Source of the current value */
     prte_mca_base_var_source_t mbv_source;
@@ -339,7 +337,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_var_t);
  * here for completeness.
  */
 PRTE_EXPORT int prte_mca_base_var_init(void);
-PRTE_EXPORT void prte_mca_base_var_finalize (void);
+PRTE_EXPORT void prte_mca_base_var_finalize(void);
 
 /**
  * Register an MCA variable
@@ -430,12 +428,13 @@ PRTE_EXPORT void prte_mca_base_var_finalize (void);
  * the caller may free the original string after this function returns
  * successfully.
  */
-PRTE_EXPORT int prte_mca_base_var_register (const char *project_name, const char *framework_name,
-                                         const char *component_name, const char *variable_name,
-                                         const char *description, prte_mca_base_var_type_t type,
-                                         prte_mca_base_var_enum_t *enumerator, int bind, prte_mca_base_var_flag_t flags,
-                                         prte_mca_base_var_info_lvl_t info_lvl,
-                                         prte_mca_base_var_scope_t scope, void *storage);
+PRTE_EXPORT int prte_mca_base_var_register(const char *project_name, const char *framework_name,
+                                           const char *component_name, const char *variable_name,
+                                           const char *description, prte_mca_base_var_type_t type,
+                                           prte_mca_base_var_enum_t *enumerator, int bind,
+                                           prte_mca_base_var_flag_t flags,
+                                           prte_mca_base_var_info_lvl_t info_lvl,
+                                           prte_mca_base_var_scope_t scope, void *storage);
 
 /**
  * Convenience function for registering a variable associated with a
@@ -446,25 +445,22 @@ PRTE_EXPORT int prte_mca_base_var_register (const char *project_name, const char
  * be unregistered / made unavailable when that component is closed by
  * its framework.
  */
-PRTE_EXPORT int prte_mca_base_component_var_register (const prte_mca_base_component_t *component,
-                                                   const char *variable_name, const char *description,
-                                                   prte_mca_base_var_type_t type, prte_mca_base_var_enum_t *enumerator,
-                                                   int bind, prte_mca_base_var_flag_t flags,
-                                                   prte_mca_base_var_info_lvl_t info_lvl,
-                                                   prte_mca_base_var_scope_t scope, void *storage);
+PRTE_EXPORT int prte_mca_base_component_var_register(
+    const prte_mca_base_component_t *component, const char *variable_name, const char *description,
+    prte_mca_base_var_type_t type, prte_mca_base_var_enum_t *enumerator, int bind,
+    prte_mca_base_var_flag_t flags, prte_mca_base_var_info_lvl_t info_lvl,
+    prte_mca_base_var_scope_t scope, void *storage);
 
 /**
  * Convenience function for registering a variable associated with a framework. This
  * function is equivalent to mca_base_var_register with component_name = "base" and
  * with the MCA_BASE_VAR_FLAG_DWG set. See mca_base_var_register().
  */
-PRTE_EXPORT int prte_mca_base_framework_var_register (const prte_mca_base_framework_t *framework,
-                                     const char *variable_name,
-                                     const char *help_msg, prte_mca_base_var_type_t type,
-                                     prte_mca_base_var_enum_t *enumerator, int bind,
-                                     prte_mca_base_var_flag_t flags,
-                                     prte_mca_base_var_info_lvl_t info_level,
-                                     prte_mca_base_var_scope_t scope, void *storage);
+PRTE_EXPORT int prte_mca_base_framework_var_register(
+    const prte_mca_base_framework_t *framework, const char *variable_name, const char *help_msg,
+    prte_mca_base_var_type_t type, prte_mca_base_var_enum_t *enumerator, int bind,
+    prte_mca_base_var_flag_t flags, prte_mca_base_var_info_lvl_t info_level,
+    prte_mca_base_var_scope_t scope, void *storage);
 
 /**
  * Register a synonym name for an MCA variable.
@@ -501,11 +497,11 @@ PRTE_EXPORT int prte_mca_base_framework_var_register (const prte_mca_base_framew
  * variable names "B" and "C" (and does *not* set a value for
  * "A"), it is undefined as to which value will be used.
  */
-PRTE_EXPORT int prte_mca_base_var_register_synonym (int synonym_for, const char *project_name,
-                                                 const char *framework_name,
-                                                 const char *component_name,
-                                                 const char *synonym_name,
-                                                 prte_mca_base_var_syn_flag_t flags);
+PRTE_EXPORT int prte_mca_base_var_register_synonym(int synonym_for, const char *project_name,
+                                                   const char *framework_name,
+                                                   const char *component_name,
+                                                   const char *synonym_name,
+                                                   prte_mca_base_var_syn_flag_t flags);
 
 /**
  * Deregister a MCA variable or synonym
@@ -520,7 +516,6 @@ PRTE_EXPORT int prte_mca_base_var_register_synonym (int synonym_for, const char 
  * If an enumerator is associated with this variable it will be dereferenced.
  */
 PRTE_EXPORT int prte_mca_base_var_deregister(int vari);
-
 
 /**
  * Get the current value of an MCA variable.
@@ -540,9 +535,9 @@ PRTE_EXPORT int prte_mca_base_var_deregister(int vari);
  * Note: The value can be changed by the registering code without using
  * the mca_base_var_* interface so the source may be incorrect.
  */
-PRTE_EXPORT int prte_mca_base_var_get_value (int vari, const void *value,
-                                          prte_mca_base_var_source_t *source,
-                                          const char **source_file);
+PRTE_EXPORT int prte_mca_base_var_get_value(int vari, const void *value,
+                                            prte_mca_base_var_source_t *source,
+                                            const char **source_file);
 
 /**
  * Sets an "override" value for an integer MCA variable.
@@ -565,9 +560,9 @@ PRTE_EXPORT int prte_mca_base_var_get_value (int vari, const void *value,
  * a synonym the variable the synonym represents) if the value is
  * settable.
  */
-PRTE_EXPORT int prte_mca_base_var_set_value (int vari, const void *value, size_t size,
-                                          prte_mca_base_var_source_t source,
-                                          const char *source_file);
+PRTE_EXPORT int prte_mca_base_var_set_value(int vari, const void *value, size_t size,
+                                            prte_mca_base_var_source_t source,
+                                            const char *source_file);
 
 /**
  * Get the string name corresponding to the MCA variable
@@ -582,8 +577,7 @@ PRTE_EXPORT int prte_mca_base_var_set_value (int vari, const void *value, size_t
  * The string that is returned is owned by the caller; if
  * appropriate, it must be eventually freed by the caller.
  */
-PRTE_EXPORT int prte_mca_base_var_env_name(const char *param_name,
-                                        char **env_name);
+PRTE_EXPORT int prte_mca_base_var_env_name(const char *param_name, char **env_name);
 
 /**
  * Find the index for an MCA variable based on its names.
@@ -602,10 +596,8 @@ PRTE_EXPORT int prte_mca_base_var_env_name(const char *param_name,
  * of any registered variable.  The returned index can be used with
  * mca_base_var_get() and mca_base_var_get_value().
  */
-PRTE_EXPORT int prte_mca_base_var_find (const char *project_name,
-                                     const char *type_name,
-                                     const char *component_name,
-                                     const char *param_name);
+PRTE_EXPORT int prte_mca_base_var_find(const char *project_name, const char *type_name,
+                                       const char *component_name, const char *param_name);
 
 /**
  * Find the index for a variable based on its full name
@@ -615,7 +607,7 @@ PRTE_EXPORT int prte_mca_base_var_find (const char *project_name,
  *
  * See mca_base_var_find().
  */
-PRTE_EXPORT int prte_mca_base_var_find_by_name (const char *full_name, int *vari);
+PRTE_EXPORT int prte_mca_base_var_find_by_name(const char *full_name, int *vari);
 
 /**
  * Check that two MCA variables were not both set to non-default
@@ -645,13 +637,10 @@ PRTE_EXPORT int prte_mca_base_var_find_by_name (const char *full_name, int *vari
  * are not MCA_BASE_VAR_SOURCE_DEFAULT.
  * @returns PRTE_SUCCESS otherwise.
  */
-PRTE_EXPORT int prte_mca_base_var_check_exclusive (const char *project,
-                                                const char *type_a,
-                                                const char *component_a,
-                                                const char *param_a,
-                                                const char *type_b,
-                                                const char *component_b,
-                                                const char *param_b);
+PRTE_EXPORT int prte_mca_base_var_check_exclusive(const char *project, const char *type_a,
+                                                  const char *component_a, const char *param_a,
+                                                  const char *type_b, const char *component_b,
+                                                  const char *param_b);
 
 /**
  * Set or unset a flag on a variable.
@@ -664,8 +653,7 @@ PRTE_EXPORT int prte_mca_base_var_check_exclusive (const char *project,
  * @returns PRTE_ERR_BAD_PARAM If the variable is not registered.
  * @returns PRTE_ERROR Otherwise
  */
-PRTE_EXPORT int prte_mca_base_var_set_flag(int vari, prte_mca_base_var_flag_t flag,
-                                        bool set);
+PRTE_EXPORT int prte_mca_base_var_set_flag(int vari, prte_mca_base_var_flag_t flag, bool set);
 
 /**
  * Obtain basic info on a single variable (name, help message, etc)
@@ -679,7 +667,7 @@ PRTE_EXPORT int prte_mca_base_var_set_flag(int vari, prte_mca_base_var_flag_t fl
  * The returned pointer belongs to the MCA variable system. Do not
  * modify/free/retain the pointer.
  */
-PRTE_EXPORT int prte_mca_base_var_get (int vari, const prte_mca_base_var_t **var);
+PRTE_EXPORT int prte_mca_base_var_get(int vari, const prte_mca_base_var_t **var);
 
 /**
  * Obtain the number of variables that have been registered.
@@ -692,7 +680,7 @@ PRTE_EXPORT int prte_mca_base_var_get (int vari, const prte_mca_base_var_t **var
  * returned is equal to the number of calls to mca_base_var_register with
  * unique names. ie. two calls with the same name will not affect the count.
  */
-PRTE_EXPORT int prte_mca_base_var_get_count (void);
+PRTE_EXPORT int prte_mca_base_var_get_count(void);
 
 /**
  * Obtain a list of enironment variables describing the all
@@ -711,8 +699,7 @@ PRTE_EXPORT int prte_mca_base_var_get_count (void);
  * its output is in terms of an argv-style array of key=value
  * strings, suitable for using in an environment.
  */
-PRTE_EXPORT int prte_mca_base_var_build_env(char ***env, int *num_env,
-                                         bool internal);
+PRTE_EXPORT int prte_mca_base_var_build_env(char ***env, int *num_env, bool internal);
 
 typedef enum {
     /* Dump human-readable strings */
@@ -720,7 +707,7 @@ typedef enum {
     /* Dump easily parsable strings */
     PRTE_MCA_BASE_VAR_DUMP_PARSABLE = 1,
     /* Dump simple name=value string */
-    PRTE_MCA_BASE_VAR_DUMP_SIMPLE   = 2
+    PRTE_MCA_BASE_VAR_DUMP_SIMPLE = 2
 } prte_mca_base_var_dump_type_t;
 
 /**
@@ -733,11 +720,11 @@ typedef enum {
  * This function returns an array of strings describing the variable. All strings
  * and the array must be freed by the caller.
  */
-PRTE_EXPORT int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t output_type);
+PRTE_EXPORT int prte_mca_base_var_dump(int vari, char ***out,
+                                       prte_mca_base_var_dump_type_t output_type);
 
 #define PRTE_MCA_COMPILETIME_VER "print_compiletime_version"
-#define PRTE_MCA_RUNTIME_VER "print_runtime_version"
-
+#define PRTE_MCA_RUNTIME_VER     "print_runtime_version"
 
 END_C_DECLS
 

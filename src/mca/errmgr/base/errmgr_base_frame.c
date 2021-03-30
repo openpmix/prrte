@@ -16,6 +16,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,27 +24,26 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 #include "constants.h"
 
 #include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
-#include "src/util/prte_environ.h"
 #include "src/util/output.h"
+#include "src/util/prte_environ.h"
 
-#include "src/util/show_help.h"
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/errmgr/base/errmgr_private.h"
+#include "src/util/show_help.h"
 
 #include "src/mca/errmgr/base/static-components.h"
 
@@ -53,23 +53,19 @@
 prte_errmgr_base_t prte_errmgr_base = {{{0}}};
 
 /* Public module provides a wrapper around previous functions */
-prte_errmgr_base_module_t prte_errmgr_default_fns = {
-    .init = NULL, /* init     */
-    .finalize = NULL, /* finalize */
-    .logfn = prte_errmgr_base_log,
-    .abort = prte_errmgr_base_abort,
-    .abort_peers = prte_errmgr_base_abort_peers,
-    .enable_detector = NULL
-};
+prte_errmgr_base_module_t prte_errmgr_default_fns = {.init = NULL,     /* init     */
+                                                     .finalize = NULL, /* finalize */
+                                                     .logfn = prte_errmgr_base_log,
+                                                     .abort = prte_errmgr_base_abort,
+                                                     .abort_peers = prte_errmgr_base_abort_peers,
+                                                     .enable_detector = NULL};
 
 /* NOTE: ABSOLUTELY MUST initialize this
  * struct to include the log function as it
  * gets called even if the errmgr hasn't been
  * opened yet due to error
  */
-prte_errmgr_base_module_t prte_errmgr = {
-    .logfn = prte_errmgr_base_log
-};
+prte_errmgr_base_module_t prte_errmgr = {.logfn = prte_errmgr_base_log};
 
 static int prte_errmgr_base_close(void)
 {
@@ -103,6 +99,6 @@ static int prte_errmgr_base_open(prte_mca_base_open_flag_t flags)
     return prte_mca_base_framework_components_open(&prte_errmgr_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, errmgr, "PRTE Error Manager", NULL,
-                                 prte_errmgr_base_open, prte_errmgr_base_close,
-                                 prte_errmgr_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, errmgr, "PRTE Error Manager", NULL, prte_errmgr_base_open,
+                                prte_errmgr_base_close, prte_errmgr_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

@@ -13,6 +13,7 @@
  * Copyright (c) 2014-2015 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,8 +26,8 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef HAVE_LIBGEN_H
-#include <libgen.h>
-#endif  /* HAVE_LIBGEN_H */
+#    include <libgen.h>
+#endif /* HAVE_LIBGEN_H */
 
 #include "src/util/basename.h"
 #include "src/util/os_path.h"
@@ -38,22 +39,22 @@
  * of characters.
  * If the last character on the string is a path separator, it will be skipped.
  */
-static inline char* prte_find_last_path_separator( const char* filename, size_t n )
+static inline char *prte_find_last_path_separator(const char *filename, size_t n)
 {
-    char* p = (char*)filename + n;
+    char *p = (char *) filename + n;
 
     /* First skip the latest separators */
-    for ( ; p >= filename; p-- ) {
-        if( *p != PRTE_PATH_SEP[0] )
+    for (; p >= filename; p--) {
+        if (*p != PRTE_PATH_SEP[0])
             break;
     }
 
-    for ( ; p >= filename; p-- ) {
-        if( *p == PRTE_PATH_SEP[0] )
+    for (; p >= filename; p--) {
+        if (*p == PRTE_PATH_SEP[0])
             return p;
     }
 
-    return NULL;  /* nothing found inside the filename */
+    return NULL; /* nothing found inside the filename */
 }
 
 char *prte_basename(const char *filename)
@@ -88,7 +89,7 @@ char *prte_basename(const char *filename)
     }
 
     /* Look for the final sep */
-    ret = prte_find_last_path_separator( tmp, strlen(tmp) );
+    ret = prte_find_last_path_separator(tmp, strlen(tmp));
     if (NULL == ret) {
         return tmp;
     }
@@ -97,10 +98,10 @@ char *prte_basename(const char *filename)
     return ret;
 }
 
-char* prte_dirname(const char* filename)
+char *prte_dirname(const char *filename)
 {
 #if defined(HAVE_DIRNAME) || PRTE_HAVE_DIRNAME
-    char* safe_tmp = strdup(filename), *result;
+    char *safe_tmp = strdup(filename), *result;
     if (NULL == safe_tmp) {
         return NULL;
     }
@@ -108,21 +109,21 @@ char* prte_dirname(const char* filename)
     free(safe_tmp);
     return result;
 #else
-    const char* p = prte_find_last_path_separator(filename, strlen(filename));
+    const char *p = prte_find_last_path_separator(filename, strlen(filename));
     /* NOTE: p will be NULL if no path separator was in the filename - i.e.,
      * if filename is just a local file */
 
-    for( ; NULL != p && p != filename; p-- ) {
-        if( (*p == '\\') || (*p == '/') ) {
+    for (; NULL != p && p != filename; p--) {
+        if ((*p == '\\') || (*p == '/')) {
             /* If there are several delimiters remove them all */
-            for( --p; p != filename; p-- ) {
-                if( (*p != '\\') && (*p != '/') ) {
+            for (--p; p != filename; p--) {
+                if ((*p != '\\') && (*p != '/')) {
                     p++;
                     break;
                 }
             }
-            if( p != filename ) {
-                char* ret = (char*)malloc( p - filename + 1 );
+            if (p != filename) {
+                char *ret = (char *) malloc(p - filename + 1);
                 if (NULL == ret) {
                     return NULL;
                 }
@@ -130,9 +131,9 @@ char* prte_dirname(const char* filename)
                 ret[p - filename] = '\0';
                 return prte_make_filename_os_friendly(ret);
             }
-            break;  /* return the duplicate of "." */
+            break; /* return the duplicate of "." */
         }
     }
     return strdup(".");
-#endif  /* defined(HAVE_DIRNAME) || PRTE_HAVE_DIRNAME */
+#endif /* defined(HAVE_DIRNAME) || PRTE_HAVE_DIRNAME */
 }

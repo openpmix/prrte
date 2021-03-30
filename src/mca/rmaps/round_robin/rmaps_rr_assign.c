@@ -26,36 +26,35 @@
 
 #include <string.h>
 
-#include "src/util/output.h"
 #include "src/hwloc/hwloc-internal.h"
+#include "src/util/output.h"
 
-#include "src/util/show_help.h"
-#include "src/util/name_fns.h"
-#include "src/runtime/prte_globals.h"
 #include "src/mca/errmgr/errmgr.h"
+#include "src/runtime/prte_globals.h"
+#include "src/util/name_fns.h"
+#include "src/util/show_help.h"
 
-#include "src/mca/rmaps/base/rmaps_private.h"
-#include "src/mca/rmaps/base/base.h"
 #include "rmaps_rr.h"
+#include "src/mca/rmaps/base/base.h"
+#include "src/mca/rmaps/base/rmaps_private.h"
 
 int prte_rmaps_rr_assign_root_level(prte_job_t *jdata)
 {
     int i, m;
     prte_node_t *node;
     prte_proc_t *proc;
-    hwloc_obj_t obj=NULL;
+    hwloc_obj_t obj = NULL;
 
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: assigning procs to root level for job %s",
                         PRTE_JOBID_PRINT(jdata->nspace));
 
-    for (m=0; m < jdata->map->nodes->size; m++) {
-        if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(jdata->map->nodes, m))) {
+    for (m = 0; m < jdata->map->nodes->size; m++) {
+        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m))) {
             continue;
         }
         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rr:slot working node %s",
-                            node->name);
+                            "mca:rmaps:rr:slot working node %s", node->name);
         /* get the root object as we are not assigning
          * locale here except at the node level */
         if (NULL == node->topology || NULL == node->topology->topo) {
@@ -63,8 +62,8 @@ int prte_rmaps_rr_assign_root_level(prte_job_t *jdata)
             continue;
         }
         obj = hwloc_get_root_obj(node->topology->topo);
-        for (i=0; i < node->procs->size; i++) {
-            if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, i))) {
+        for (i = 0; i < node->procs->size; i++) {
+            if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i))) {
                 continue;
             }
             /* ignore procs from other jobs */
@@ -74,7 +73,8 @@ int prte_rmaps_rr_assign_root_level(prte_job_t *jdata)
                                     PRTE_NAME_PRINT(&proc->name));
                 continue;
             }
-            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
+            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj,
+                               PMIX_POINTER);
         }
     }
     return PRTE_SUCCESS;
@@ -84,15 +84,13 @@ int prte_rmaps_rr_assign_root_level(prte_job_t *jdata)
  * but has the added complication of possibly having different
  * numbers of objects on each node
  */
-int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
-                               hwloc_obj_type_t target,
-                               unsigned cache_level)
+int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target, unsigned cache_level)
 {
     int start, j, m, n, k, npus, cpus_per_rank;
     prte_app_context_t *app;
     prte_node_t *node;
     prte_proc_t *proc;
-    hwloc_obj_t obj=NULL, root;
+    hwloc_obj_t obj = NULL, root;
     unsigned int nobjs;
     uint16_t u16, *u16ptr = &u16;
     char *job_cpuset;
@@ -102,15 +100,15 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
 
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: assigning locations by %s for job %s",
-                        hwloc_obj_type_string(target),
-                        PRTE_JOBID_PRINT(jdata->nspace));
+                        hwloc_obj_type_string(target), PRTE_JOBID_PRINT(jdata->nspace));
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void**)&job_cpuset, PMIX_STRING);
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void **) &job_cpuset, PMIX_STRING);
 
     /* see if they want multiple cpus/rank */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void**)&u16ptr, PMIX_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr,
+                           PMIX_UINT16)) {
         cpus_per_rank = u16;
     } else {
         cpus_per_rank = 1;
@@ -127,17 +125,17 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
      * all procs are mapped. If one pass doesn't catch all the required procs,
      * then loop thru the list again to handle the oversubscription
      */
-    for (n=0; n < jdata->apps->size; n++) {
-        if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, n))) {
+    for (n = 0; n < jdata->apps->size; n++) {
+        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n))) {
             continue;
         }
-        for (m=0; m < jdata->map->nodes->size; m++) {
-            if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(jdata->map->nodes, m))) {
+        for (m = 0; m < jdata->map->nodes->size; m++) {
+            if (NULL
+                == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m))) {
                 continue;
             }
             if (NULL == node->topology || NULL == node->topology->topo) {
-                prte_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing",
-                               true, node->name);
+                prte_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
                 return PRTE_ERR_SILENT;
             }
             /* get the number of objects of this type on this node */
@@ -159,30 +157,30 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
                 }
                 return PRTE_ERR_BAD_PARAM;
             }
-            rdata = (prte_hwloc_topo_data_t*)root->userdata;
+            rdata = (prte_hwloc_topo_data_t *) root->userdata;
             available = hwloc_bitmap_dup(rdata->available);
             if (NULL != job_cpuset) {
                 /* deal with any "soft" cgroup specification */
-                mycpus = prte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus, job_cpuset);
+                mycpus = prte_hwloc_base_generate_cpuset(node->topology->topo, use_hwthread_cpus,
+                                                         job_cpuset);
                 hwloc_bitmap_and(available, mycpus, available);
                 hwloc_bitmap_free(mycpus);
             }
 
             prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps:rr: found %u %s objects on node %s",
-                                nobjs, hwloc_obj_type_string(target), node->name);
+                                "mca:rmaps:rr: found %u %s objects on node %s", nobjs,
+                                hwloc_obj_type_string(target), node->name);
 
             /* if this is a comm_spawn situation, start with the object
              * where the parent left off and increment */
-            if (!PMIX_NSPACE_INVALID(jdata->originator.nspace) &&
-                UINT_MAX != jdata->bkmark_obj) {
+            if (!PMIX_NSPACE_INVALID(jdata->originator.nspace) && UINT_MAX != jdata->bkmark_obj) {
                 start = (jdata->bkmark_obj + 1) % nobjs;
             } else {
                 start = 0;
             }
             /* loop over the procs on this node */
-            for (j=0; j < node->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(node->procs, j))) {
+            for (j = 0; j < node->procs->size; j++) {
+                if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
                     continue;
                 }
                 /* ignore procs from other jobs */
@@ -203,7 +201,9 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
                 k = start;
                 do {
                     /* get the hwloc object */
-                    if (NULL == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, k))) {
+                    if (NULL
+                        == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target,
+                                                                  cache_level, k))) {
                         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                         hwloc_bitmap_free(available);
                         if (NULL != job_cpuset) {
@@ -212,7 +212,7 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
                         return PRTE_ERR_NOT_FOUND;
                     }
                     npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
-                                                     available, obj);
+                                                    available, obj);
                     if (npus >= cpus_per_rank) {
                         break;
                     }
@@ -231,7 +231,8 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata,
                 }
                 prte_output_verbose(20, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rr: assigning proc to object %d", k);
-                prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
+                prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj,
+                                   PMIX_POINTER);
                 /* Position at next sequential resource for next search */
                 start = (k + 1) % nobjs;
                 /* track the bookmark */

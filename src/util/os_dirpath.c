@@ -13,6 +13,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,31 +21,30 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 
 #include <errno.h>
 #include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #include <stdlib.h>
 #if HAVE_SYS_STAT_H
-#include <sys/stat.h>
+#    include <sys/stat.h>
 #endif /* HAVE_SYS_STAT_H */
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif  /* HAVE_SYS_TYPES_H */
+#    include <sys/types.h>
+#endif /* HAVE_SYS_TYPES_H */
 #ifdef HAVE_DIRENT_H
-#include <dirent.h>
-#endif  /* HAVE_DIRENT_H */
+#    include <dirent.h>
+#endif /* HAVE_DIRENT_H */
 
-#include "src/util/output.h"
-#include "src/util/os_dirpath.h"
-#include "src/util/show_help.h"
-#include "src/util/argv.h"
-#include "src/util/os_path.h"
 #include "constants.h"
+#include "src/util/argv.h"
+#include "src/util/os_dirpath.h"
+#include "src/util/os_path.h"
+#include "src/util/output.h"
+#include "src/util/show_help.h"
 
 static const char path_sep[] = PRTE_PATH_SEP;
 
@@ -56,24 +56,23 @@ int prte_os_dirpath_create(const char *path, const mode_t mode)
     int ret;
 
     if (NULL == path) { /* protect ourselves from errors */
-        return(PRTE_ERR_BAD_PARAM);
+        return (PRTE_ERR_BAD_PARAM);
     }
 
-    if (0 == (ret = stat(path, &buf))) { /* already exists */
+    if (0 == (ret = stat(path, &buf))) {    /* already exists */
         if (mode == (mode & buf.st_mode)) { /* has correct mode */
-            return(PRTE_SUCCESS);
+            return (PRTE_SUCCESS);
         }
         if (0 == (ret = chmod(path, (buf.st_mode | mode)))) { /* successfully change mode */
-            return(PRTE_SUCCESS);
+            return (PRTE_SUCCESS);
         }
-        prte_show_help("help-prte-util.txt", "dir-mode", true,
-                    path, mode, strerror(errno));
-        return(PRTE_ERR_PERM); /* can't set correct mode */
+        prte_show_help("help-prte-util.txt", "dir-mode", true, path, mode, strerror(errno));
+        return (PRTE_ERR_PERM); /* can't set correct mode */
     }
 
     /* quick -- try to make directory */
     if (0 == mkdir(path, mode)) {
-        return(PRTE_SUCCESS);
+        return (PRTE_SUCCESS);
     }
 
     /* didnt work, so now have to build our way down the tree */
@@ -84,7 +83,7 @@ int prte_os_dirpath_create(const char *path, const mode_t mode)
     /* Ensure to allocate enough space for tmp: the strlen of the
        incoming path + 1 (for \0) */
 
-    tmp = (char*)malloc(strlen(path) + 1);
+    tmp = (char *) malloc(strlen(path) + 1);
     tmp[0] = '\0';
 
     /* Iterate through all the subdirectory names in the path,
@@ -115,19 +114,18 @@ int prte_os_dirpath_create(const char *path, const mode_t mode)
 
         /* Now that we have the name, try to create it */
         mkdir(tmp, mode);
-        ret = errno;  // save the errno for an error msg, if needed
+        ret = errno; // save the errno for an error msg, if needed
         if (0 != stat(tmp, &buf)) {
-            prte_show_help("help-prte-util.txt", "mkdir-failed", true,
-                        tmp, strerror(ret));
+            prte_show_help("help-prte-util.txt", "mkdir-failed", true, tmp, strerror(ret));
             prte_argv_free(parts);
             free(tmp);
             return PRTE_ERROR;
-        } else if (i == (len-1) && (mode != (mode & buf.st_mode)) && (0 > chmod(tmp, (buf.st_mode | mode)))) {
-            prte_show_help("help-prte-util.txt", "dir-mode", true,
-                           tmp, mode, strerror(errno));
+        } else if (i == (len - 1) && (mode != (mode & buf.st_mode))
+                   && (0 > chmod(tmp, (buf.st_mode | mode)))) {
+            prte_show_help("help-prte-util.txt", "dir-mode", true, tmp, mode, strerror(errno));
             prte_argv_free(parts);
             free(tmp);
-            return(PRTE_ERR_PERM); /* can't set correct mode */
+            return (PRTE_ERR_PERM); /* can't set correct mode */
         }
     }
 
@@ -146,8 +144,7 @@ int prte_os_dirpath_create(const char *path, const mode_t mode)
  * removed.  If the callback returns non-zero, then no removal is
  * done.
  */
-int prte_os_dirpath_destroy(const char *path,
-                            bool recursive,
+int prte_os_dirpath_destroy(const char *path, bool recursive,
                             prte_os_dirpath_destroy_callback_fn_t cbfunc)
 {
     int rc, exit_status = PRTE_SUCCESS;
@@ -157,7 +154,7 @@ int prte_os_dirpath_destroy(const char *path,
     char *filenm;
     struct stat buf;
 
-    if (NULL == path) {  /* protect against error */
+    if (NULL == path) { /* protect against error */
         return PRTE_ERROR;
     }
 
@@ -179,8 +176,7 @@ int prte_os_dirpath_destroy(const char *path,
         /* skip:
          *  - . and ..
          */
-        if ((0 == strcmp(ep->d_name, ".")) ||
-            (0 == strcmp(ep->d_name, ".."))) {
+        if ((0 == strcmp(ep->d_name, ".")) || (0 == strcmp(ep->d_name, ".."))) {
             continue;
         }
 
@@ -252,31 +248,31 @@ int prte_os_dirpath_destroy(const char *path,
     /* Done with this directory */
     closedir(dp);
 
- cleanup:
+cleanup:
 
     /*
      * If the directory is empty, them remove it
      */
-    if(prte_os_dirpath_is_empty(path)) {
+    if (prte_os_dirpath_is_empty(path)) {
         rmdir(path);
     }
 
     return exit_status;
 }
 
-bool prte_os_dirpath_is_empty(const char *path ) {
+bool prte_os_dirpath_is_empty(const char *path)
+{
     DIR *dp;
     struct dirent *ep;
 
-    if (NULL != path) {  /* protect against error */
+    if (NULL != path) { /* protect against error */
         dp = opendir(path);
         if (NULL != dp) {
             while ((ep = readdir(dp))) {
-                        if ((0 != strcmp(ep->d_name, ".")) &&
-                            (0 != strcmp(ep->d_name, ".."))) {
-                            closedir(dp);
-                            return false;
-                        }
+                if ((0 != strcmp(ep->d_name, ".")) && (0 != strcmp(ep->d_name, ".."))) {
+                    closedir(dp);
+                    return false;
+                }
             }
             closedir(dp);
             return true;
@@ -287,9 +283,10 @@ bool prte_os_dirpath_is_empty(const char *path ) {
     return true;
 }
 
-int prte_os_dirpath_access(const char *path, const mode_t in_mode ) {
+int prte_os_dirpath_access(const char *path, const mode_t in_mode)
+{
     struct stat buf;
-    mode_t loc_mode = S_IRWXU;  /* looking for full rights */
+    mode_t loc_mode = S_IRWXU; /* looking for full rights */
 
     /*
      * If there was no mode specified, use the default mode
@@ -298,15 +295,15 @@ int prte_os_dirpath_access(const char *path, const mode_t in_mode ) {
         loc_mode = in_mode;
     }
 
-    if (0 == stat(path, &buf)) { /* exists - check access */
+    if (0 == stat(path, &buf)) {                    /* exists - check access */
         if ((buf.st_mode & loc_mode) == loc_mode) { /* okay, I can work here */
-            return(PRTE_SUCCESS);
+            return (PRTE_SUCCESS);
         } else {
             /* Don't have access rights to the existing path */
-            return(PRTE_ERROR);
+            return (PRTE_ERROR);
         }
     } else {
         /* We could not find the path */
-        return( PRTE_ERR_NOT_FOUND );
+        return (PRTE_ERR_NOT_FOUND);
     }
 }

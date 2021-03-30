@@ -14,6 +14,7 @@
  * Copyright (c) 2016      University of Houston. All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +32,7 @@
 #include "constants.h"
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 BEGIN_C_DECLS
@@ -55,8 +56,8 @@ BEGIN_C_DECLS
  *
  * The caller is responsible for freeing the returned string.
  */
-PRTE_EXPORT char *prte_path_find(char *fname, char **pathv, int mode,
-                                   char **envv) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 /**
  *  Locates a file with certain permissions from a list of search
@@ -76,8 +77,8 @@ PRTE_EXPORT char *prte_path_find(char *fname, char **pathv, int mode,
  *
  * The caller is responsible for freeing the returned string.
  */
-PRTE_EXPORT char *prte_path_findv(char *fname, int mode,
-                                    char **envv, char *wrkdir) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 /**
  *  Detect if the requested path is absolute or relative.
  *
@@ -90,7 +91,7 @@ PRTE_EXPORT char *prte_path_findv(char *fname, int mode,
  *  with special care as an absolute path on Windows starts
  *  with [A-Za-z]: or \\ instead of the usual / on UNIX.
  */
-PRTE_EXPORT bool prte_path_is_absolute( const char *path );
+PRTE_EXPORT bool prte_path_is_absolute(const char *path);
 
 /**
  * Find the absolute path for an executable and return it.
@@ -109,7 +110,7 @@ PRTE_EXPORT bool prte_path_is_absolute( const char *path );
  * function will return NULL. Otherwise, an newly allocated string
  * will be returned.
  */
-PRTE_EXPORT char* prte_find_absolute_path( char* app_name ) __prte_attribute_warn_unused_result__;
+PRTE_EXPORT char *prte_find_absolute_path(char *app_name) __prte_attribute_warn_unused_result__;
 
 /**
  * Forms a complete pathname and checks it for existance and
@@ -124,8 +125,8 @@ PRTE_EXPORT char* prte_find_absolute_path( char* app_name ) __prte_attribute_war
  *
  * The caller is responsible for freeing the returned string.
  */
-PRTE_EXPORT char *prte_path_access(char *fname, char *path, int mode) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
-
+PRTE_EXPORT char *prte_path_access(char *fname, char *path, int mode)
+    __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 /**
  * @brief Figure out, whether fname is on network file system
@@ -155,9 +156,8 @@ PRTE_EXPORT bool prte_path_nfs(char *fname, char **fstype) __prte_attribute_warn
  * @retval PRTE_SUCCESS  If the operation was successful
  * @retval PRTE_ERROR    otherwise
  */
-PRTE_EXPORT int
-prte_path_df(const char *path,
-             uint64_t *out_avail)__prte_attribute_warn_unused_result__;
+PRTE_EXPORT int prte_path_df(const char *path,
+                             uint64_t *out_avail) __prte_attribute_warn_unused_result__;
 
 END_C_DECLS
 #endif /* PRTE_PATH_H */

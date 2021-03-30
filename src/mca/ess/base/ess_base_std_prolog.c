@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,19 +22,19 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include <sys/types.h>
 #include <stdio.h>
+#include <sys/types.h>
 #ifdef HAVE_FCNTL_H
-#include <fcntl.h>
+#    include <fcntl.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/util/show_help.h"
 #include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime_internals.h"
+#include "src/util/show_help.h"
 
 #include "src/mca/ess/base/base.h"
 
@@ -58,10 +59,9 @@ int prte_ess_base_std_prolog(void)
 
     return PRTE_SUCCESS;
 
- error:
-    prte_show_help("help-prte-runtime",
-                   "prte_init:startup:internal-failure",
-                   true, error, PRTE_ERROR_NAME(ret), ret);
+error:
+    prte_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true, error,
+                   PRTE_ERROR_NAME(ret), ret);
 
     return ret;
 }

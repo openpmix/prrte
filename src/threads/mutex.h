@@ -17,6 +17,7 @@
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  *
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,8 +25,8 @@
  * $HEADER$
  */
 
-#ifndef  PRTE_MUTEX_H
-#define  PRTE_MUTEX_H 1
+#ifndef PRTE_MUTEX_H
+#define PRTE_MUTEX_H 1
 
 #include "prte_config.h"
 
@@ -55,7 +56,6 @@ typedef struct prte_mutex_t prte_recursive_mutex_t;
  */
 static inline int prte_mutex_trylock(prte_mutex_t *mutex);
 
-
 /**
  * Acquire a mutex.
  *
@@ -63,14 +63,12 @@ static inline int prte_mutex_trylock(prte_mutex_t *mutex);
  */
 static inline void prte_mutex_lock(prte_mutex_t *mutex);
 
-
 /**
  * Release a mutex.
  *
  * @param mutex         Address of the mutex.
  */
 static inline void prte_mutex_unlock(prte_mutex_t *mutex);
-
 
 /**
  * Try to acquire a mutex using atomic operations.
@@ -80,14 +78,12 @@ static inline void prte_mutex_unlock(prte_mutex_t *mutex);
  */
 static inline int prte_mutex_atomic_trylock(prte_mutex_t *mutex);
 
-
 /**
  * Acquire a mutex using atomic operations.
  *
  * @param mutex         Address of the mutex.
  */
 static inline void prte_mutex_atomic_lock(prte_mutex_t *mutex);
-
 
 /**
  * Release a mutex using atomic operations.
@@ -100,4 +96,4 @@ END_C_DECLS
 
 #include "mutex_unix.h"
 
-#endif                          /* PRTE_MUTEX_H */
+#endif /* PRTE_MUTEX_H */

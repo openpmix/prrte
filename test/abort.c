@@ -11,7 +11,7 @@
 
 #include "pmix.h"
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     int size;
     int errcode;
@@ -35,12 +35,14 @@ int main(int argc, char* argv[])
     PMIX_LOAD_PROCID(&proc, myproc.nspace, PMIX_RANK_WILDCARD);
     rc = PMIx_Get(&proc, PMIX_JOB_SIZE, NULL, 0, &val);
     if (PMIX_SUCCESS != rc) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Get job size failed: %s\n", myproc.nspace, myproc.rank, PMIx_Error_string(rc));
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get job size failed: %s\n", myproc.nspace,
+                myproc.rank, PMIx_Error_string(rc));
         goto done;
     }
     PMIX_VALUE_GET_NUMBER(rc, val, size, int);
     if (PMIX_SUCCESS != rc) {
-        fprintf(stderr, "Client ns %s rank %d: get size number failed: %s\n", myproc.nspace, myproc.rank, PMIx_Error_string(rc));
+        fprintf(stderr, "Client ns %s rank %d: get size number failed: %s\n", myproc.nspace,
+                myproc.rank, PMIx_Error_string(rc));
         goto done;
     }
     PMIX_VALUE_RELEASE(val);
@@ -48,7 +50,7 @@ int main(int argc, char* argv[])
     printf("Hello, World, I am %d of %d\n", myproc.rank, size);
 
     if (1 == size) {
-            PMIx_Abort(errcode, "Aborting", NULL, 0);
+        PMIx_Abort(errcode, "Aborting", NULL, 0);
     } else {
         if (1 == myproc.rank) {
             PMIx_Abort(errcode, "Aborting", NULL, 0);

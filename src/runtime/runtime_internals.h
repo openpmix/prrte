@@ -12,6 +12,7 @@
  * Copyright (c) 2007-2008 Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,8 +35,7 @@ BEGIN_C_DECLS
 /**
  * Init the PRTE datatype support
  */
-PRTE_EXPORT   int prte_dt_init(void);
-
+PRTE_EXPORT int prte_dt_init(void);
 
 END_C_DECLS
 

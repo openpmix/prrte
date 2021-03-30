@@ -26,26 +26,24 @@
 
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif  /* HAVE_UNISTD_H */
+#    include <unistd.h>
+#endif /* HAVE_UNISTD_H */
 #include <string.h>
 
-#include "src/pmix/pmix-internal.h"
+#include "src/mca/errmgr/errmgr.h"
+#include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/rml_types.h"
-#include "src/mca/errmgr/errmgr.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/mca/grpcomm/grpcomm.h"
 #include "src/util/name_fns.h"
 
-#include "src/mca/iof/iof.h"
 #include "src/mca/iof/base/base.h"
+#include "src/mca/iof/iof.h"
 
 #include "iof_hnp.h"
 
-int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host,
-                                       pmix_proc_t *target,
-                                       prte_iof_tag_t tag,
+int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host, pmix_proc_t *target, prte_iof_tag_t tag,
                                        unsigned char *data, int numbytes)
 {
     pmix_data_buffer_t *buf;
@@ -97,13 +95,13 @@ int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host,
     }
 
     /* if the target is wildcard, then this needs to go to everyone - xcast it */
-    if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, host->nspace) &&
-        PMIX_RANK_WILDCARD == host->rank) {
+    if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, host->nspace)
+        && PMIX_RANK_WILDCARD == host->rank) {
         /* xcast this to everyone - the local daemons will know how to handle it */
         PMIX_PROC_CREATE(sig.signature, 1);
         sig.sz = 1;
         PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-        (void)prte_grpcomm.xcast(&sig, PRTE_RML_TAG_IOF_PROXY, buf);
+        (void) prte_grpcomm.xcast(&sig, PRTE_RML_TAG_IOF_PROXY, buf);
         PMIX_DATA_BUFFER_RELEASE(buf);
         PMIX_PROC_FREE(sig.signature, 1);
         return PRTE_SUCCESS;
@@ -112,8 +110,8 @@ int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host,
     /* send the buffer to the host - this is either a daemon or
      * a tool that requested IOF
      */
-    if (0 > (rc = prte_rml.send_buffer_nb(host, buf, PRTE_RML_TAG_IOF_PROXY,
-                                          prte_rml_send_callback, NULL))) {
+    if (0 > (rc = prte_rml.send_buffer_nb(host, buf, PRTE_RML_TAG_IOF_PROXY, prte_rml_send_callback,
+                                          NULL))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -13,21 +14,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
+#    include <sys/stat.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <string.h>
 
+#include "constants.h"
 #include "src/util/basename.h"
 #include "src/util/prte_getcwd.h"
 #include "src/util/string_copy.h"
-#include "constants.h"
-
 
 /*
  * Use $PWD instead of getcwd() a) if $PWD exists and b) is a valid

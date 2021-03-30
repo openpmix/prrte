@@ -36,47 +36,46 @@
 
 #include <sys/types.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
+#    include <sys/time.h>
 #endif
 #ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
+#    include <sys/stat.h>
 #endif
 #ifdef HAVE_FCNTL_H
-#include <fcntl.h>
+#    include <fcntl.h>
 #endif
 
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/argv.h"
-#include "src/util/output.h"
-#include "src/util/prte_environ.h"
-#include "src/util/path.h"
 #include "src/util/basename.h"
+#include "src/util/output.h"
+#include "src/util/path.h"
+#include "src/util/prte_environ.h"
 
-#include "src/runtime/prte_globals.h"
-#include "src/util/name_fns.h"
-#include "src/util/show_help.h"
-#include "src/threads/threads.h"
-#include "src/runtime/prte_wait.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/mca/schizo/schizo.h"
 #include "src/mca/state/state.h"
+#include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_wait.h"
+#include "src/threads/threads.h"
+#include "src/util/name_fns.h"
+#include "src/util/show_help.h"
 
-#include "src/mca/plm/plm.h"
+#include "plm_alps.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
-#include "plm_alps.h"
-
+#include "src/mca/plm/plm.h"
 
 /*
  * Local functions
@@ -87,24 +86,20 @@ static int plm_alps_terminate_orteds(void);
 static int plm_alps_signal_job(pmix_nspace_t jobid, int32_t signal);
 static int plm_alps_finalize(void);
 
-static int plm_alps_start_proc(int argc, char **argv, char **env,
-                                char *prefix);
-
+static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix);
 
 /*
  * Global variable
  */
-prte_plm_base_module_t prte_plm_alps_module = {
-    plm_alps_init,
-    prte_plm_base_set_hnp_name,
-    plm_alps_launch_job,
-    NULL,
-    prte_plm_base_prted_terminate_job,
-    plm_alps_terminate_orteds,
-    prte_plm_base_prted_kill_local_procs,
-    plm_alps_signal_job,
-    plm_alps_finalize
-};
+prte_plm_base_module_t prte_plm_alps_module = {plm_alps_init,
+                                               prte_plm_base_set_hnp_name,
+                                               plm_alps_launch_job,
+                                               NULL,
+                                               prte_plm_base_prted_terminate_job,
+                                               plm_alps_terminate_orteds,
+                                               prte_plm_base_prted_kill_local_procs,
+                                               plm_alps_signal_job,
+                                               plm_alps_finalize};
 
 /*
  * Local variables
@@ -113,15 +108,14 @@ static prte_proc_t *alpsrun = NULL;
 static bool failed_launch;
 static void launch_daemons(int fd, short args, void *cbdata);
 
-
 /**
-* Init the module
+ * Init the module
  */
 static int plm_alps_init(void)
 {
     int rc;
     prte_job_t *daemons;
-    
+
     if (PRTE_SUCCESS != (rc = prte_plm_base_comm_start())) {
         PRTE_ERROR_LOG(rc);
         return rc;
@@ -142,15 +136,15 @@ static int plm_alps_init(void)
     }
 
     /* point to our launch command */
-    if (PRTE_SUCCESS != (rc = prte_state.add_job_state(PRTE_JOB_STATE_LAUNCH_DAEMONS,
-                                                       launch_daemons, PRTE_SYS_PRI))) {
+    if (PRTE_SUCCESS
+        != (rc = prte_state.add_job_state(PRTE_JOB_STATE_LAUNCH_DAEMONS, launch_daemons,
+                                          PRTE_SYS_PRI))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
 
     return rc;
 }
-
 
 /* When working in this function, ALWAYS jump to "cleanup" if
  * you encounter an error so that prun will be woken up and
@@ -177,7 +171,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     int argc;
     int rc;
     char *tmp;
-    char** env = NULL;
+    char **env = NULL;
     char *nodelist_flat;
     char **nodelist_argv;
     int nodelist_argc;
@@ -190,7 +184,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_node_t *node;
     int32_t nnode;
     prte_job_t *daemons;
-    prte_state_caddy_t *state = (prte_state_caddy_t*)cbdata;
+    prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
 
     PRTE_ACQUIRE_OBJECT(state);
 
@@ -211,7 +205,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         goto cleanup;
     }
 
-   /* if we don't want to launch, then don't attempt to
+    /* if we don't want to launch, then don't attempt to
      * launch the daemons - the user really wants to just
      * look at the proposed process map
      */
@@ -269,9 +263,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_argv_append(&argc, &argv, prte_plm_alps_component.aprun_cmd);
 
     /* Append user defined arguments to aprun */
-    if ( NULL != prte_plm_alps_component.custom_args ) {
+    if (NULL != prte_plm_alps_component.custom_args) {
         custom_strings = prte_argv_split(prte_plm_alps_component.custom_args, ' ');
-        num_args       = prte_argv_count(custom_strings);
+        num_args = prte_argv_count(custom_strings);
         for (i = 0; i < num_args; ++i) {
             prte_argv_append(&argc, &argv, custom_strings[i]);
         }
@@ -289,10 +283,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_argv_append(&argc, &argv, "none");
     /*
      * stuff below is necessary in the event that we've sadly configured PRTE with --disable-dlopen,
-     * which results in the orted's being linked against all kinds of unnecessary cray libraries, including
-     * the cray pmi, which has a ctor that cause bad things if run when using mpirun/orted based launch.
+     * which results in the orted's being linked against all kinds of unnecessary cray libraries,
+     * including the cray pmi, which has a ctor that cause bad things if run when using mpirun/orted
+     * based launch.
      *
-     * Code below adds env. variables for aprun to forward which suppresses the action of the Cray PMI ctor.
+     * Code below adds env. variables for aprun to forward which suppresses the action of the Cray
+     * PMI ctor.
      */
     prte_argv_append(&argc, &argv, "-e");
     prte_argv_append(&argc, &argv, "PMI_NO_PREINITIALIZE=1");
@@ -309,8 +305,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
         nodelist_argv = NULL;
         nodelist_argc = 0;
 
-        for (nnode=0; nnode < map->nodes->size; nnode++) {
-            if (NULL == (node = (prte_node_t*)prte_pointer_array_get_item(map->nodes, nnode))) {
+        for (nnode = 0; nnode < map->nodes->size; nnode++) {
+            if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, nnode))) {
                 continue;
             }
 
@@ -339,7 +335,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
         free(nodelist_flat);
     }
 
-
     /*
      * PRTED OPTIONS
      */
@@ -348,9 +343,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_base_setup_prted_cmd(&argc, &argv);
 
     /* Add basic orted command line options, including debug flags */
-    prte_plm_base_prted_append_basic_args(&argc, &argv,
-                                           NULL,
-                                           &proc_vpid_index);
+    prte_plm_base_prted_append_basic_args(&argc, &argv, NULL, &proc_vpid_index);
 
     /* tell the new daemons the base of the name list so they can compute
      * their own name on the other end
@@ -381,19 +374,20 @@ static void launch_daemons(int fd, short args, void *cbdata)
        don't support different --prefix'es for different nodes in
        the ALPS plm) */
     cur_prefix = NULL;
-    for (i=0; i < state->jdata->apps->size; i++) {
+    for (i = 0; i < state->jdata->apps->size; i++) {
         char *app_prefix_dir = NULL;
-        if (NULL == (app = (prte_app_context_t*)prte_pointer_array_get_item(state->jdata->apps, i))) {
+        if (NULL
+            == (app = (prte_app_context_t *) prte_pointer_array_get_item(state->jdata->apps, i))) {
             continue;
         }
-        prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void**)&app_prefix_dir, PMIX_STRING);
+        prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &app_prefix_dir,
+                           PMIX_STRING);
         /* Check for already set cur_prefix_dir -- if different,
            complain */
         if (NULL != app_prefix_dir) {
-            if (NULL != cur_prefix &&
-                0 != strcmp (cur_prefix, app_prefix_dir)) {
-                prte_show_help("help-plm-alps.txt", "multiple-prefixes",
-                               true, cur_prefix, app_prefix_dir);
+            if (NULL != cur_prefix && 0 != strcmp(cur_prefix, app_prefix_dir)) {
+                prte_show_help("help-plm-alps.txt", "multiple-prefixes", true, cur_prefix,
+                               app_prefix_dir);
                 goto cleanup;
             }
 
@@ -402,8 +396,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             if (NULL == cur_prefix) {
                 cur_prefix = strdup(app_prefix_dir);
                 if (prte_plm_alps_component.debug) {
-                    prte_output (0, "plm:alps: Set prefix:%s",
-                                 cur_prefix);
+                    prte_output(0, "plm:alps: Set prefix:%s", cur_prefix);
                 }
             }
             free(app_prefix_dir);
@@ -420,9 +413,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
         param = prte_argv_join(argv, ' ');
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:alps: final top-level argv:\n\t%s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             (NULL == param) ? "NULL" : param));
-        if (NULL != param) free(param);
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == param) ? "NULL" : param));
+        if (NULL != param)
+            free(param);
     }
 
     /* exec the daemon(s) */
@@ -438,7 +431,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* flag that launch was successful, so far as we currently know */
     failed_launch = false;
 
- cleanup:
+cleanup:
     if (NULL != argv) {
         prte_argv_free(argv);
     }
@@ -455,10 +448,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     PRTE_RELEASE(state);
 }
 
-
-
 /**
-* Terminate the orteds for a given job
+ * Terminate the orteds for a given job
  */
 static int plm_alps_terminate_orteds(void)
 {
@@ -466,8 +457,7 @@ static int plm_alps_terminate_orteds(void)
     prte_job_t *jdata;
 
     PRTE_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
-                            "%s plm:alps: terminating orteds",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s plm:alps: terminating orteds", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* deregister the waitpid callback to ensure we don't make it look like
      * alps failed when it didn't. Since the alps may have already completed,
@@ -487,11 +477,9 @@ static int plm_alps_terminate_orteds(void)
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
 
     PRTE_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
-                            "%s plm:alps: terminated orteds",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s plm:alps: terminated orteds", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     return rc;
 }
-
 
 /**
  * Signal all the processes in the child alps by sending the signal directly to it
@@ -499,11 +487,10 @@ static int plm_alps_terminate_orteds(void)
 static int plm_alps_signal_job(pmix_nspace_t jobid, int32_t signal)
 {
     if (NULL != alpsrun && 0 != alpsrun->pid) {
-        kill(alpsrun->pid, (int)signal);
-   }
+        kill(alpsrun->pid, (int) signal);
+    }
     return PRTE_SUCCESS;
 }
-
 
 static int plm_alps_finalize(void)
 {
@@ -521,9 +508,9 @@ static int plm_alps_finalize(void)
     return PRTE_SUCCESS;
 }
 
-
-static void alps_wait_cb(int sd, short args, void *cbdata) {
-    prte_wait_tracker_t *t2 = (prte_wait_tracker_t*)cbdata;
+static void alps_wait_cb(int sd, short args, void *cbdata)
+{
+    prte_wait_tracker_t *t2 = (prte_wait_tracker_t *) cbdata;
     prte_proc_t *proc = t2->child;
     prte_job_t *jdata;
 
@@ -560,9 +547,7 @@ static void alps_wait_cb(int sd, short args, void *cbdata) {
     PRTE_RELEASE(t2);
 }
 
-
-static int plm_alps_start_proc(int argc, char **argv, char **env,
-                                char *prefix)
+static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
 {
     int fd;
     pid_t alps_pid;
@@ -585,7 +570,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env,
     /* setup the waitpid so we can find out if alps succeeds! */
     prte_wait_cb(alpsrun, alps_wait_cb, prte_event_base, NULL);
 
-    if (0 == alps_pid) {  /* child */
+    if (0 == alps_pid) { /* child */
         char *bin_base = NULL, *lib_base = NULL;
 
         /* Figure out the basenames for the libdir and bindir.  There
@@ -623,14 +608,13 @@ static int plm_alps_start_proc(int argc, char **argv, char **env,
             }
             prte_setenv("LD_LIBRARY_PATH", newenv, true, &env);
             if (prte_plm_alps_component.debug) {
-                prte_output(0, "plm:alps: reset LD_LIBRARY_PATH: %s",
-                            newenv);
+                prte_output(0, "plm:alps: reset LD_LIBRARY_PATH: %s", newenv);
             }
             free(newenv);
         }
 
-        fd = open("/dev/null", O_CREAT|O_WRONLY|O_TRUNC, 0666);
-        if(fd > 0) {
+        fd = open("/dev/null", O_CREAT | O_WRONLY | O_TRUNC, 0666);
+        if (fd > 0) {
             dup2(fd, 0);
         }
 
@@ -639,10 +623,10 @@ static int plm_alps_start_proc(int argc, char **argv, char **env,
         if (0 == prte_plm_alps_component.debug && !prte_debug_daemons_flag) {
             if (fd >= 0) {
                 if (fd != 1) {
-                    dup2(fd,1);
+                    dup2(fd, 1);
                 }
                 if (fd != 2) {
-                    dup2(fd,2);
+                    dup2(fd, 2);
                 }
             }
         }
@@ -656,14 +640,13 @@ static int plm_alps_start_proc(int argc, char **argv, char **env,
            cntl-c) don't get sent to alps */
         setpgid(0, 0);
 
-
         execve(exec_argv, argv, env);
 
         prte_output(0, "plm:alps:start_proc: exec failed");
         /* don't return - need to exit - returning would be bad -
            we're not in the calling process anymore */
         exit(1);
-    } else {  /* parent */
+    } else { /* parent */
         /* just in case, make sure that the alps process is not in our
         process group any more.  Stevens says always do this on both
         sides of the fork... */

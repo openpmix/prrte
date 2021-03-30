@@ -3,6 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -12,12 +13,11 @@
 
 #include "prte_config.h"
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
-#include "src/mca/prtedl/prtedl.h"
 #include "src/mca/prtedl/base/base.h"
-
+#include "src/mca/prtedl/prtedl.h"
 
 int prte_dl_base_close(void)
 {

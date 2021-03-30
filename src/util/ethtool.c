@@ -4,6 +4,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -13,29 +14,29 @@
 
 #include "prte_config.h"
 
-#include <string.h>
 #include <limits.h>
+#include <string.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif
 #ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
+#    include <sys/socket.h>
 #endif
 #ifdef HAVE_NET_IF_H
-#include <net/if.h>
+#    include <net/if.h>
 #endif
 #ifdef HAVE_LINUX_ETHTOOL_H
-#include <linux/ethtool.h>
+#    include <linux/ethtool.h>
 #endif
 #ifdef HAVE_SYS_IOCTL_H
-#include <sys/ioctl.h>
+#    include <sys/ioctl.h>
 #endif
 #ifdef HAVE_LINUX_SOCKIOS_H
-#include <linux/sockios.h>
+#    include <linux/sockios.h>
 #endif
 
 #include "src/util/ethtool.h"
@@ -47,8 +48,7 @@
  * get this via an ioctl(). Elsewhere or in the error case, we return the
  * speed as 0.
  */
-unsigned int
-prte_ethtool_get_speed (const char *if_name)
+unsigned int prte_ethtool_get_speed(const char *if_name)
 {
     unsigned int speed = 0;
 
@@ -66,19 +66,19 @@ prte_ethtool_get_speed (const char *if_name)
 
     memset(&ifr, 0, sizeof(struct ifreq));
     prte_string_copy(ifr.ifr_name, if_name, PRTE_IF_NAMESIZE);
-    ifr.ifr_data = (char *)&edata;
+    ifr.ifr_data = (char *) &edata;
 
     if (ioctl(sockfd, SIOCETHTOOL, &ifr) < 0) {
         goto out;
     }
 
-#if HAVE_DECL_ETHTOOL_CMD_SPEED
+#    if HAVE_DECL_ETHTOOL_CMD_SPEED
     speed = ethtool_cmd_speed(&edata);
-#elif defined(HAVE_STRUCT_ETHTOOL_CMD_SPEED_HI)
+#    elif defined(HAVE_STRUCT_ETHTOOL_CMD_SPEED_HI)
     speed = (edata.speed_hi << 16) | edata.speed;
-#else
+#    else
     speed = edata.speed;
-#endif
+#    endif
     if (UINT_MAX == speed) {
         speed = 0;
     }

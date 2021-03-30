@@ -4,6 +4,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,8 +51,8 @@
 
 #include "prte_config.h"
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
 BEGIN_C_DECLS
 
@@ -86,9 +87,9 @@ typedef struct prte_dl_handle_t prte_dl_handle_t;
  * or freed by the caller.  The contents of the err_msg string may
  * change after successive calls to prte_prtedl API calls.
  */
-typedef int (*prte_prtedl_base_module_open_fn_t)
-    (const char *fname, bool use_ext, bool private_namespace,
-     prte_dl_handle_t **handle, char **err_msg);
+typedef int (*prte_prtedl_base_module_open_fn_t)(const char *fname, bool use_ext,
+                                                 bool private_namespace, prte_dl_handle_t **handle,
+                                                 char **err_msg);
 
 /**
  * Lookup a symbol in an opened file.
@@ -107,8 +108,8 @@ typedef int (*prte_prtedl_base_module_open_fn_t)
  * or freed by the caller.  The contents of the err_msg string may
  * change after successive calls to prte_prtedl API calls.
  */
-typedef int (*prte_prtedl_base_module_lookup_fn_t)
-    (prte_dl_handle_t *handle, const char *symbol, void **ptr, char **err_msg);
+typedef int (*prte_prtedl_base_module_lookup_fn_t)(prte_dl_handle_t *handle, const char *symbol,
+                                                   void **ptr, char **err_msg);
 
 /**
  * Dynamically close a previously dynamically-opened file.
@@ -121,8 +122,7 @@ typedef int (*prte_prtedl_base_module_lookup_fn_t)
  * This function should close the file and free and resources
  * associated with it (e.g., whatever is cached on the handle).
  */
-typedef int (*prte_prtedl_base_module_close_fn_t)
-    (prte_dl_handle_t *handle);
+typedef int (*prte_prtedl_base_module_close_fn_t)(prte_dl_handle_t *handle);
 
 /**
  * Search through a path of directories, invoking a callback on each
@@ -137,10 +137,8 @@ typedef int (*prte_prtedl_base_module_close_fn_t)
  * Returns:
  *   PRTE_SUCESS on success, PRTE_ERR* otherwise
  */
-typedef int (*prte_prtedl_base_module_foreachfile_fn_t)
-    (const char *search_path,
-     int (*cb_func)(const char *filename, void *context),
-     void *context);
+typedef int (*prte_prtedl_base_module_foreachfile_fn_t)(
+    const char *search_path, int (*cb_func)(const char *filename, void *context), void *context);
 
 /**
  * Structure for DL components.
@@ -161,17 +159,17 @@ typedef struct prte_prtedl_base_component_1_0_0_t prte_prtedl_base_component_t;
  * Structure for DL modules
  */
 struct prte_prtedl_base_module_1_0_0_t {
-    prte_mca_base_module_2_0_0_t                 super;
+    prte_mca_base_module_2_0_0_t super;
 
     /** Open / close */
-    prte_prtedl_base_module_open_fn_t           open;
-    prte_prtedl_base_module_close_fn_t          close;
+    prte_prtedl_base_module_open_fn_t open;
+    prte_prtedl_base_module_close_fn_t close;
 
     /** Lookup a symbol */
-    prte_prtedl_base_module_lookup_fn_t         lookup;
+    prte_prtedl_base_module_lookup_fn_t lookup;
 
     /** Iterate looking for files */
-    prte_prtedl_base_module_foreachfile_fn_t    foreachfile;
+    prte_prtedl_base_module_foreachfile_fn_t foreachfile;
 };
 typedef struct prte_prtedl_base_module_1_0_0_t prte_prtedl_base_module_1_0_0_t;
 typedef struct prte_prtedl_base_module_1_0_0_t prte_prtedl_base_module_t;
@@ -179,8 +177,7 @@ typedef struct prte_prtedl_base_module_1_0_0_t prte_prtedl_base_module_t;
 /**
  * Macro for use in components that are of type DL
  */
-#define PRTE_DL_BASE_VERSION_1_0_0              \
-    PRTE_MCA_BASE_VERSION_2_1_0("prtedl", 1, 0, 0)
+#define PRTE_DL_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_2_1_0("prtedl", 1, 0, 0)
 
 END_C_DECLS
 

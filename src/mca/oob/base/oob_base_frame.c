@@ -24,19 +24,18 @@
  * $HEADER$
  */
 
-
 #include "prte_config.h"
 #include "constants.h"
 
 #include "src/class/prte_bitmap.h"
+#include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_progress_threads.h"
 #include "src/util/output.h"
-#include "src/mca/base/base.h"
 
-#include "src/mca/rml/base/base.h"
 #include "src/mca/oob/base/base.h"
+#include "src/mca/rml/base/base.h"
 
 /*
  * The following file was created by configure.  It contains extern
@@ -57,8 +56,10 @@ static int prte_oob_base_close(void)
     prte_mca_base_component_list_item_t *cli;
 
     /* shutdown all active transports */
-    while (NULL != (cli = (prte_mca_base_component_list_item_t *) prte_list_remove_first (&prte_oob_base.actives))) {
-        component = (prte_oob_base_component_t*)cli->cli_component;
+    while (NULL
+           != (cli = (prte_mca_base_component_list_item_t *) prte_list_remove_first(
+                   &prte_oob_base.actives))) {
+        component = (prte_oob_base_component_t *) cli->cli_component;
         if (NULL != component->shutdown) {
             component->shutdown();
         }
@@ -85,18 +86,16 @@ static int prte_oob_base_open(prte_mca_base_open_flag_t flags)
     PRTE_CONSTRUCT(&prte_oob_base.peers, prte_list_t);
     PRTE_CONSTRUCT(&prte_oob_base.actives, prte_list_t);
 
-     /* Open up all available components */
+    /* Open up all available components */
     return prte_mca_base_framework_components_open(&prte_oob_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, oob, "Out-of-Band Messaging Subsystem",
-                                 NULL, prte_oob_base_open, prte_oob_base_close,
-                                 prte_oob_base_static_components, PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, oob, "Out-of-Band Messaging Subsystem", NULL,
+                                prte_oob_base_open, prte_oob_base_close,
+                                prte_oob_base_static_components,
+                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
-
-PRTE_CLASS_INSTANCE(prte_oob_send_t,
-                   prte_object_t,
-                   NULL, NULL);
+PRTE_CLASS_INSTANCE(prte_oob_send_t, prte_object_t, NULL, NULL);
 
 static void pr_cons(prte_oob_base_peer_t *ptr)
 {
@@ -109,6 +108,4 @@ static void pr_des(prte_oob_base_peer_t *ptr)
 {
     PRTE_DESTRUCT(&ptr->addressable);
 }
-PRTE_CLASS_INSTANCE(prte_oob_base_peer_t,
-                   prte_list_item_t,
-                   pr_cons, pr_des);
+PRTE_CLASS_INSTANCE(prte_oob_base_peer_t, prte_list_item_t, pr_cons, pr_des);

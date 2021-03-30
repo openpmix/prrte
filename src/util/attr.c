@@ -12,8 +12,8 @@
  */
 
 #include "prte_config.h"
-#include "types.h"
 #include "constants.h"
+#include "types.h"
 
 #include "src/util/argv.h"
 #include "src/util/output.h"
@@ -24,7 +24,7 @@
 
 #include "src/util/attr.h"
 
-#define MAX_CONVERTERS 5
+#define MAX_CONVERTERS            5
 #define MAX_CONVERTER_PROJECT_LEN 10
 
 typedef struct {
@@ -38,14 +38,14 @@ typedef struct {
 /* all default to NULL */
 static prte_attr_converter_t converters[MAX_CONVERTERS];
 
-bool prte_get_attribute(prte_list_t *attributes,
-                        prte_attribute_key_t key,
-                        void **data, pmix_data_type_t type)
+bool prte_get_attribute(prte_list_t *attributes, prte_attribute_key_t key, void **data,
+                        pmix_data_type_t type)
 {
     prte_attribute_t *kv;
     int rc;
 
-    PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t) {
+    PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t)
+    {
         if (key == kv->key) {
             if (kv->data.type != type) {
                 PRTE_ERROR_LOG(PRTE_ERR_TYPE_MISMATCH);
@@ -63,14 +63,14 @@ bool prte_get_attribute(prte_list_t *attributes,
     return false;
 }
 
-int prte_set_attribute(prte_list_t *attributes,
-                       prte_attribute_key_t key, bool local,
-                       void *data, pmix_data_type_t type)
+int prte_set_attribute(prte_list_t *attributes, prte_attribute_key_t key, bool local, void *data,
+                       pmix_data_type_t type)
 {
     prte_attribute_t *kv;
     int rc;
 
-    PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t) {
+    PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t)
+    {
         if (key == kv->key) {
             if (kv->data.type != type) {
                 return PRTE_ERR_TYPE_MISMATCH;
@@ -93,8 +93,7 @@ int prte_set_attribute(prte_list_t *attributes,
     return PRTE_SUCCESS;
 }
 
-prte_attribute_t* prte_fetch_attribute(prte_list_t *attributes,
-                                       prte_attribute_t *prev,
+prte_attribute_t *prte_fetch_attribute(prte_list_t *attributes, prte_attribute_t *prev,
                                        prte_attribute_key_t key)
 {
     prte_attribute_t *kv, *end, *next;
@@ -102,7 +101,8 @@ prte_attribute_t* prte_fetch_attribute(prte_list_t *attributes,
     /* if prev is NULL, then find the first attr on the list
      * that matches the key */
     if (NULL == prev) {
-        PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t) {
+        PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t)
+        {
             if (key == kv->key) {
                 return kv;
             }
@@ -112,29 +112,28 @@ prte_attribute_t* prte_fetch_attribute(prte_list_t *attributes,
     }
 
     /* if we are at the end of the list, then nothing to do */
-    end = (prte_attribute_t*)prte_list_get_end(attributes);
-    if (prev == end || end == (prte_attribute_t*)prte_list_get_next(&prev->super) ||
-        NULL == prte_list_get_next(&prev->super)) {
+    end = (prte_attribute_t *) prte_list_get_end(attributes);
+    if (prev == end || end == (prte_attribute_t *) prte_list_get_next(&prev->super)
+        || NULL == prte_list_get_next(&prev->super)) {
         return NULL;
     }
 
     /* starting with the next item on the list, search
      * for the next attr with the matching key */
-    next = (prte_attribute_t*)prte_list_get_next(&prev->super);
+    next = (prte_attribute_t *) prte_list_get_next(&prev->super);
     while (NULL != next) {
         if (next->key == key) {
             return next;
         }
-        next = (prte_attribute_t*)prte_list_get_next(&next->super);
+        next = (prte_attribute_t *) prte_list_get_next(&next->super);
     }
 
     /* if we get here, then no matching key was found */
     return NULL;
 }
 
-int prte_add_attribute(prte_list_t *attributes,
-                       prte_attribute_key_t key, bool local,
-                       void *data, pmix_data_type_t type)
+int prte_add_attribute(prte_list_t *attributes, prte_attribute_key_t key, bool local, void *data,
+                       pmix_data_type_t type)
 {
     prte_attribute_t *kv;
     int rc;
@@ -150,8 +149,7 @@ int prte_add_attribute(prte_list_t *attributes,
     return PRTE_SUCCESS;
 }
 
-int prte_prepend_attribute(prte_list_t *attributes,
-                           prte_attribute_key_t key, bool local,
+int prte_prepend_attribute(prte_list_t *attributes, prte_attribute_key_t key, bool local,
                            void *data, pmix_data_type_t type)
 {
     prte_attribute_t *kv;
@@ -172,7 +170,8 @@ void prte_remove_attribute(prte_list_t *attributes, prte_attribute_key_t key)
 {
     prte_attribute_t *kv;
 
-    PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t) {
+    PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t)
+    {
         if (key == kv->key) {
             prte_list_remove_item(attributes, &kv->super);
             PRTE_RELEASE(kv);
@@ -181,19 +180,16 @@ void prte_remove_attribute(prte_list_t *attributes, prte_attribute_key_t key)
     }
 }
 
-int prte_attr_register(const char *project,
-                       prte_attribute_key_t key_base,
-                       prte_attribute_key_t key_max,
-                       prte_attr2str_fn_t converter)
+int prte_attr_register(const char *project, prte_attribute_key_t key_base,
+                       prte_attribute_key_t key_max, prte_attr2str_fn_t converter)
 {
     int i;
 
-    for (i = 0 ; i < MAX_CONVERTERS ; ++i) {
+    for (i = 0; i < MAX_CONVERTERS; ++i) {
         if (0 == converters[i].init) {
             converters[i].init = 1;
-            prte_string_copy(converters[i].project, project,
-                             MAX_CONVERTER_PROJECT_LEN);
-            converters[i].project[MAX_CONVERTER_PROJECT_LEN-1] = '\0';
+            prte_string_copy(converters[i].project, project, MAX_CONVERTER_PROJECT_LEN);
+            converters[i].project[MAX_CONVERTER_PROJECT_LEN - 1] = '\0';
             converters[i].key_base = key_base;
             converters[i].key_max = key_max;
             converters[i].converter = converter;
@@ -209,7 +205,8 @@ char *prte_attr_print_list(prte_list_t *attributes)
     char *out1, **cache = NULL;
     prte_attribute_t *attr;
 
-    PRTE_LIST_FOREACH(attr, attributes, prte_attribute_t) {
+    PRTE_LIST_FOREACH(attr, attributes, prte_attribute_t)
+    {
         prte_argv_append_nosize(&cache, prte_attr_key_to_str(attr->key));
     }
     if (NULL != cache) {
@@ -225,10 +222,9 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
 {
     int i;
 
-    if (PRTE_ATTR_KEY_BASE < key &&
-        key < PRTE_ATTR_KEY_MAX) {
+    if (PRTE_ATTR_KEY_BASE < key && key < PRTE_ATTR_KEY_MAX) {
         /* belongs to PRTE, so we handle it */
-        switch(key) {
+        switch (key) {
         case PRTE_APP_HOSTFILE:
             return "APP-HOSTFILE";
         case PRTE_APP_ADD_HOSTFILE:
@@ -505,10 +501,9 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
     }
 
     /* see if one of the converters can handle it */
-    for (i = 0 ; i < MAX_CONVERTERS ; ++i) {
+    for (i = 0; i < MAX_CONVERTERS; ++i) {
         if (0 != converters[i].init) {
-            if (converters[i].key_base < key &&
-                key < converters[i].key_max) {
+            if (converters[i].key_base < key && key < converters[i].key_max) {
                 return converters[i].converter(key);
             }
         }
@@ -518,9 +513,7 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
     return "UNKNOWN-KEY";
 }
 
-
-int prte_attr_load(prte_attribute_t *kv,
-                   void *data, pmix_data_type_t type)
+int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
 {
     pmix_byte_object_t *boptr;
     struct timeval *tv;
@@ -550,61 +543,61 @@ int prte_attr_load(prte_attribute_t *kv,
 
     switch (type) {
     case PMIX_BOOL:
-        kv->data.data.flag = *(bool*)(data);
+        kv->data.data.flag = *(bool *) (data);
         break;
     case PMIX_BYTE:
-        kv->data.data.byte = *(uint8_t*)(data);
+        kv->data.data.byte = *(uint8_t *) (data);
         break;
     case PMIX_STRING:
         if (NULL != kv->data.data.string) {
             free(kv->data.data.string);
         }
-        kv->data.data.string = strdup( (const char *) data);
+        kv->data.data.string = strdup((const char *) data);
         break;
     case PMIX_SIZE:
-        kv->data.data.size = *(size_t*)(data);
+        kv->data.data.size = *(size_t *) (data);
         break;
     case PMIX_PID:
-        kv->data.data.pid = *(pid_t*)(data);
+        kv->data.data.pid = *(pid_t *) (data);
         break;
 
     case PMIX_INT:
-        kv->data.data.integer = *(int*)(data);
+        kv->data.data.integer = *(int *) (data);
         break;
     case PMIX_INT8:
-        kv->data.data.int8 = *(int8_t*)(data);
+        kv->data.data.int8 = *(int8_t *) (data);
         break;
     case PMIX_INT16:
-        kv->data.data.int16 = *(int16_t*)(data);
+        kv->data.data.int16 = *(int16_t *) (data);
         break;
     case PMIX_INT32:
-        kv->data.data.int32 = *(int32_t*)(data);
+        kv->data.data.int32 = *(int32_t *) (data);
         break;
     case PMIX_INT64:
-        kv->data.data.int64 = *(int64_t*)(data);
+        kv->data.data.int64 = *(int64_t *) (data);
         break;
 
     case PMIX_UINT:
-        kv->data.data.uint = *(unsigned int*)(data);
+        kv->data.data.uint = *(unsigned int *) (data);
         break;
     case PMIX_UINT8:
-        kv->data.data.uint8 = *(uint8_t*)(data);
+        kv->data.data.uint8 = *(uint8_t *) (data);
         break;
     case PMIX_UINT16:
-        kv->data.data.uint16 = *(uint16_t*)(data);
+        kv->data.data.uint16 = *(uint16_t *) (data);
         break;
     case PMIX_UINT32:
-        kv->data.data.uint32 = *(uint32_t*)data;
+        kv->data.data.uint32 = *(uint32_t *) data;
         break;
     case PMIX_UINT64:
-        kv->data.data.uint64 = *(uint64_t*)(data);
+        kv->data.data.uint64 = *(uint64_t *) (data);
         break;
 
     case PMIX_BYTE_OBJECT:
         if (NULL != kv->data.data.bo.bytes) {
             free(kv->data.data.bo.bytes);
         }
-        boptr = (pmix_byte_object_t*)data;
+        boptr = (pmix_byte_object_t *) data;
         if (NULL != boptr && NULL != boptr->bytes && 0 < boptr->size) {
             kv->data.data.bo.bytes = (char *) malloc(boptr->size);
             memcpy(kv->data.data.bo.bytes, boptr->bytes, boptr->size);
@@ -616,11 +609,11 @@ int prte_attr_load(prte_attribute_t *kv,
         break;
 
     case PMIX_FLOAT:
-        kv->data.data.fval = *(float*)(data);
+        kv->data.data.fval = *(float *) (data);
         break;
 
     case PMIX_TIMEVAL:
-        tv = (struct timeval*)data;
+        tv = (struct timeval *) data;
         kv->data.data.tv.tv_sec = tv->tv_sec;
         kv->data.data.tv.tv_usec = tv->tv_usec;
         break;
@@ -630,22 +623,22 @@ int prte_attr_load(prte_attribute_t *kv,
         break;
 
     case PMIX_PROC_RANK:
-        kv->data.data.rank = *(pmix_rank_t *)data;
+        kv->data.data.rank = *(pmix_rank_t *) data;
         break;
 
     case PMIX_PROC_NSPACE:
         PMIX_PROC_CREATE(kv->data.data.proc, 1);
-        PMIX_LOAD_NSPACE(kv->data.data.proc->nspace, (char*)data);
+        PMIX_LOAD_NSPACE(kv->data.data.proc->nspace, (char *) data);
         break;
 
     case PMIX_PROC:
         PMIX_PROC_CREATE(kv->data.data.proc, 1);
-        PMIX_XFER_PROCID(kv->data.data.proc, (pmix_proc_t *)data);
+        PMIX_XFER_PROCID(kv->data.data.proc, (pmix_proc_t *) data);
         break;
 
     case PMIX_ENVAR:
         PMIX_ENVAR_CONSTRUCT(&kv->data.data.envar);
-        envar = (pmix_envar_t*)data;
+        envar = (pmix_envar_t *) data;
         if (NULL != envar->envar) {
             kv->data.data.envar.envar = strdup(envar->envar);
         }
@@ -662,20 +655,12 @@ int prte_attr_load(prte_attribute_t *kv,
     return PRTE_SUCCESS;
 }
 
-int prte_attr_unload(prte_attribute_t *kv,
-                     void **data, pmix_data_type_t type)
+int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
 {
     pmix_byte_object_t *boptr;
     pmix_envar_t *envar;
-    pmix_data_type_t pointers[] = {
-        PMIX_STRING,
-        PMIX_BYTE_OBJECT,
-        PMIX_POINTER,
-        PMIX_PROC_NSPACE,
-        PMIX_PROC,
-        PMIX_ENVAR,
-        PMIX_UNDEF
-    };
+    pmix_data_type_t pointers[] = {PMIX_STRING, PMIX_BYTE_OBJECT, PMIX_POINTER, PMIX_PROC_NSPACE,
+                                   PMIX_PROC,   PMIX_ENVAR,       PMIX_UNDEF};
     int n;
     bool found = false;
 
@@ -689,7 +674,7 @@ int prte_attr_unload(prte_attribute_t *kv,
     /* if they didn't give us a storage address
      * and the data type isn't one where we can
      * create storage, then this is an error */
-    for (n=0; PMIX_UNDEF != pointers[n]; n++) {
+    for (n = 0; PMIX_UNDEF != pointers[n]; n++) {
         if (type == pointers[n]) {
             found = true;
             break;
@@ -754,9 +739,9 @@ int prte_attr_unload(prte_attribute_t *kv,
         break;
 
     case PMIX_BYTE_OBJECT:
-        boptr = (pmix_byte_object_t*)malloc(sizeof(pmix_byte_object_t));
+        boptr = (pmix_byte_object_t *) malloc(sizeof(pmix_byte_object_t));
         if (NULL != kv->data.data.bo.bytes && 0 < kv->data.data.bo.size) {
-            boptr->bytes = (char*) malloc(kv->data.data.bo.size);
+            boptr->bytes = (char *) malloc(kv->data.data.bo.size);
             memcpy(boptr->bytes, kv->data.data.bo.bytes, kv->data.data.bo.size);
             boptr->size = kv->data.data.bo.size;
         } else {

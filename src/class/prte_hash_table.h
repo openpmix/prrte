@@ -39,29 +39,26 @@
 
 #include "prte_config.h"
 
-#include <stdint.h>
-#include "src/include/types.h"
 #include "src/class/prte_list.h"
+#include "src/include/types.h"
 #include "src/pmix/pmix-internal.h"
+#include <stdint.h>
 
 BEGIN_C_DECLS
 
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_hash_table_t);
 
-struct prte_hash_table_t
-{
-    prte_object_t        super;          /**< subclass of prte_object_t */
-    struct prte_hash_element_t * ht_table;       /**< table of elements (opaque to users) */
-    size_t               ht_capacity;    /**< allocated size (capacity) of table */
-    size_t               ht_size;        /**< number of extant entries */
-    size_t               ht_growth_trigger; /**< size hits this and table is grown  */
-    int                  ht_density_numer, ht_density_denom; /**< max allowed density of table */
-    int                  ht_growth_numer, ht_growth_denom;   /**< growth factor when grown  */
-    const struct prte_hash_type_methods_t * ht_type_methods;
+struct prte_hash_table_t {
+    prte_object_t super;                    /**< subclass of prte_object_t */
+    struct prte_hash_element_t *ht_table;   /**< table of elements (opaque to users) */
+    size_t ht_capacity;                     /**< allocated size (capacity) of table */
+    size_t ht_size;                         /**< number of extant entries */
+    size_t ht_growth_trigger;               /**< size hits this and table is grown  */
+    int ht_density_numer, ht_density_denom; /**< max allowed density of table */
+    int ht_growth_numer, ht_growth_denom;   /**< growth factor when grown  */
+    const struct prte_hash_type_methods_t *ht_type_methods;
 };
 typedef struct prte_hash_table_t prte_hash_table_t;
-
-
 
 /**
  *  Initializes the table size, must be called before using
@@ -74,12 +71,12 @@ typedef struct prte_hash_table_t prte_hash_table_t;
  *
  */
 
-PRTE_EXPORT int prte_hash_table_init(prte_hash_table_t* ht, size_t table_size);
+PRTE_EXPORT int prte_hash_table_init(prte_hash_table_t *ht, size_t table_size);
 
 /* this could be the new init if people wanted a more general API */
-PRTE_EXPORT int prte_hash_table_init2(prte_hash_table_t* ht, size_t estimated_max_size,
-                                        int density_numer, int density_denom,
-                                        int growth_numer, int growth_denom);
+PRTE_EXPORT int prte_hash_table_init2(prte_hash_table_t *ht, size_t estimated_max_size,
+                                      int density_numer, int density_denom, int growth_numer,
+                                      int growth_denom);
 
 /**
  *  Returns the number of elements currently stored in the table.
@@ -117,8 +114,8 @@ PRTE_EXPORT int prte_hash_table_remove_all(prte_hash_table_t *ht);
  *
  */
 
-PRTE_EXPORT int prte_hash_table_get_value_uint32(prte_hash_table_t* table, uint32_t key,
-                                                   void** ptr);
+PRTE_EXPORT int prte_hash_table_get_value_uint32(prte_hash_table_t *table, uint32_t key,
+                                                 void **ptr);
 
 /**
  *  Set value based on uint32_t key.
@@ -130,7 +127,8 @@ PRTE_EXPORT int prte_hash_table_get_value_uint32(prte_hash_table_t* table, uint3
  *
  */
 
-PRTE_EXPORT int prte_hash_table_set_value_uint32(prte_hash_table_t* table, uint32_t key, void* value);
+PRTE_EXPORT int prte_hash_table_set_value_uint32(prte_hash_table_t *table, uint32_t key,
+                                                 void *value);
 
 /**
  *  Remove value based on uint32_t key.
@@ -141,7 +139,7 @@ PRTE_EXPORT int prte_hash_table_set_value_uint32(prte_hash_table_t* table, uint3
  *
  */
 
-PRTE_EXPORT int prte_hash_table_remove_value_uint32(prte_hash_table_t* table, uint32_t key);
+PRTE_EXPORT int prte_hash_table_remove_value_uint32(prte_hash_table_t *table, uint32_t key);
 
 /**
  *  Retrieve value via uint64_t key.
@@ -157,7 +155,7 @@ PRTE_EXPORT int prte_hash_table_remove_value_uint32(prte_hash_table_t* table, ui
  */
 
 PRTE_EXPORT int prte_hash_table_get_value_uint64(prte_hash_table_t *table, uint64_t key,
-                                                   void **ptr);
+                                                 void **ptr);
 
 /**
  *  Set value based on uint64_t key.
@@ -169,7 +167,8 @@ PRTE_EXPORT int prte_hash_table_get_value_uint64(prte_hash_table_t *table, uint6
  *
  */
 
-PRTE_EXPORT int prte_hash_table_set_value_uint64(prte_hash_table_t *table, uint64_t key, void* value);
+PRTE_EXPORT int prte_hash_table_set_value_uint64(prte_hash_table_t *table, uint64_t key,
+                                                 void *value);
 
 /**
  *  Remove value based on uint64_t key.
@@ -195,8 +194,8 @@ PRTE_EXPORT int prte_hash_table_remove_value_uint64(prte_hash_table_t *table, ui
  *
  */
 
-PRTE_EXPORT int prte_hash_table_get_value_ptr(prte_hash_table_t *table, const void* key,
-                                                size_t keylen, void **ptr);
+PRTE_EXPORT int prte_hash_table_get_value_ptr(prte_hash_table_t *table, const void *key,
+                                              size_t keylen, void **ptr);
 
 /**
  *  Set value based on arbitrary length binary key.
@@ -208,7 +207,8 @@ PRTE_EXPORT int prte_hash_table_get_value_ptr(prte_hash_table_t *table, const vo
  *
  */
 
-PRTE_EXPORT int prte_hash_table_set_value_ptr(prte_hash_table_t *table, const void* key, size_t keylen, void* value);
+PRTE_EXPORT int prte_hash_table_set_value_ptr(prte_hash_table_t *table, const void *key,
+                                              size_t keylen, void *value);
 
 /**
  *  Remove value based on arbitrary length binary key.
@@ -219,8 +219,8 @@ PRTE_EXPORT int prte_hash_table_set_value_ptr(prte_hash_table_t *table, const vo
  *
  */
 
-PRTE_EXPORT int prte_hash_table_remove_value_ptr(prte_hash_table_t *table, const void* key, size_t keylen);
-
+PRTE_EXPORT int prte_hash_table_remove_value_ptr(prte_hash_table_t *table, const void *key,
+                                                 size_t keylen);
 
 /** The following functions are only for allowing iterating through
     the hash table. The calls return along with a key, a pointer to
@@ -245,8 +245,7 @@ PRTE_EXPORT int prte_hash_table_remove_value_ptr(prte_hash_table_t *table, const
  */
 
 PRTE_EXPORT int prte_hash_table_get_first_key_uint32(prte_hash_table_t *table, uint32_t *key,
-                                        void **value, void **node);
-
+                                                     void **value, void **node);
 
 /**
  *  Get the next 32 bit key from the hash table, knowing the current key
@@ -263,9 +262,7 @@ PRTE_EXPORT int prte_hash_table_get_first_key_uint32(prte_hash_table_t *table, u
  */
 
 PRTE_EXPORT int prte_hash_table_get_next_key_uint32(prte_hash_table_t *table, uint32_t *key,
-                                       void **value, void *in_node,
-                                       void **out_node);
-
+                                                    void **value, void *in_node, void **out_node);
 
 /**
  *  Get the first 64 key from the hash table, which can be used later to
@@ -281,8 +278,7 @@ PRTE_EXPORT int prte_hash_table_get_next_key_uint32(prte_hash_table_t *table, ui
  */
 
 PRTE_EXPORT int prte_hash_table_get_first_key_uint64(prte_hash_table_t *table, uint64_t *key,
-                                       void **value, void **node);
-
+                                                     void **value, void **node);
 
 /**
  *  Get the next 64 bit key from the hash table, knowing the current key
@@ -299,9 +295,7 @@ PRTE_EXPORT int prte_hash_table_get_first_key_uint64(prte_hash_table_t *table, u
  */
 
 PRTE_EXPORT int prte_hash_table_get_next_key_uint64(prte_hash_table_t *table, uint64_t *key,
-                                       void **value, void *in_node,
-                                       void **out_node);
-
+                                                    void **value, void *in_node, void **out_node);
 
 /**
  *  Get the first ptr bit key from the hash table, which can be used later to
@@ -317,9 +311,8 @@ PRTE_EXPORT int prte_hash_table_get_next_key_uint64(prte_hash_table_t *table, ui
  *
  */
 
-PRTE_EXPORT int prte_hash_table_get_first_key_ptr(prte_hash_table_t *table, void* *key,
-                                        size_t *key_size, void **value, void **node);
-
+PRTE_EXPORT int prte_hash_table_get_first_key_ptr(prte_hash_table_t *table, void **key,
+                                                  size_t *key_size, void **value, void **node);
 
 /**
  *  Get the next ptr bit key from the hash table, knowing the current key
@@ -336,9 +329,9 @@ PRTE_EXPORT int prte_hash_table_get_first_key_ptr(prte_hash_table_t *table, void
  *
  */
 
-PRTE_EXPORT int prte_hash_table_get_next_key_ptr(prte_hash_table_t *table, void* *key,
-                                       size_t *key_size, void **value,
-                                       void *in_node, void **out_node);
+PRTE_EXPORT int prte_hash_table_get_next_key_ptr(prte_hash_table_t *table, void **key,
+                                                 size_t *key_size, void **value, void *in_node,
+                                                 void **out_node);
 
 /**
  * Loop over a hash table.
@@ -360,17 +353,20 @@ PRTE_EXPORT int prte_hash_table_get_next_key_ptr(prte_hash_table_t *table, void*
  * }
  */
 #define PRTE_HASH_TABLE_FOREACH(key, type, value, ht) \
-  for (void *_nptr=NULL;                                   \
-       PRTE_SUCCESS == prte_hash_table_get_next_key_##type(ht, &key, (void **)&value, _nptr, &_nptr);)
+    for (void *_nptr = NULL;                          \
+         PRTE_SUCCESS                                 \
+         == prte_hash_table_get_next_key_##type(ht, &key, (void **) &value, _nptr, &_nptr);)
 
-#define PRTE_HASH_TABLE_FOREACH_PTR(key, value, ht, body)        \
-{                                    \
-    size_t key_size_;                            \
-    for (void *_nptr=NULL;                        \
-         PRTE_SUCCESS == prte_hash_table_get_next_key_ptr (ht, &key, &key_size_, (void **)&value, _nptr, &_nptr);) \
-    body                                \
-}
+#define PRTE_HASH_TABLE_FOREACH_PTR(key, value, ht, body)                                       \
+    {                                                                                           \
+        size_t key_size_;                                                                       \
+        for (void *_nptr = NULL;                                                                \
+             PRTE_SUCCESS                                                                       \
+             == prte_hash_table_get_next_key_ptr(ht, &key, &key_size_, (void **) &value, _nptr, \
+                                                 &_nptr);)                                      \
+            body                                                                                \
+    }
 
 END_C_DECLS
 
-#endif  /* PRTE_HASH_TABLE_H */
+#endif /* PRTE_HASH_TABLE_H */

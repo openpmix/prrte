@@ -16,6 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,7 +29,7 @@
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 
 BEGIN_C_DECLS
-    PRTE_EXPORT extern const prte_backtrace_base_component_2_0_0_t prte_backtrace_none_component;
+PRTE_EXPORT extern const prte_backtrace_base_component_2_0_0_t prte_backtrace_none_component;
 END_C_DECLS
 
 const prte_backtrace_base_component_2_0_0_t prte_prtebacktrace_none_component = {

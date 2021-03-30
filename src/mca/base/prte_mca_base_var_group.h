@@ -16,6 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -79,9 +80,9 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_var_group_t);
  * this call is equivalent to mca_base_ver_find_group().
  */
 PRTE_EXPORT int prte_mca_base_var_group_register(const char *project_name,
-                                                   const char *framework_name,
-                                                   const char *component_name,
-                                                   const char *description);
+                                                 const char *framework_name,
+                                                 const char *component_name,
+                                                 const char *description);
 
 /**
  * Register an MCA variable group for a component
@@ -93,8 +94,9 @@ PRTE_EXPORT int prte_mca_base_var_group_register(const char *project_name,
  * @retval index Unique group index
  * @return prte error code on Error
  */
-PRTE_EXPORT int prte_mca_base_var_group_component_register (const prte_mca_base_component_t *component,
-                                                              const char *description);
+PRTE_EXPORT int
+prte_mca_base_var_group_component_register(const prte_mca_base_component_t *component,
+                                           const char *description);
 
 /**
  * Deregister an MCA param group
@@ -104,7 +106,7 @@ PRTE_EXPORT int prte_mca_base_var_group_component_register (const prte_mca_base_
  *
  * This call deregisters all associated variables and subgroups.
  */
-PRTE_EXPORT int prte_mca_base_var_group_deregister (int group_index);
+PRTE_EXPORT int prte_mca_base_var_group_deregister(int group_index);
 
 /**
  * Find an MCA group
@@ -116,9 +118,8 @@ PRTE_EXPORT int prte_mca_base_var_group_deregister (int group_index);
  * @returns PRTE_SUCCESS if found
  * @returns PRTE_ERR_NOT_FOUND if not found
  */
-PRTE_EXPORT int prte_mca_base_var_group_find (const char *project_name,
-                                                const char *framework_name,
-                                                const char *component_name);
+PRTE_EXPORT int prte_mca_base_var_group_find(const char *project_name, const char *framework_name,
+                                             const char *component_name);
 
 /**
  * Find an MCA group by its full name
@@ -129,7 +130,7 @@ PRTE_EXPORT int prte_mca_base_var_group_find (const char *project_name,
  * @returns PRTE_SUCCESS if found
  * @returns PRTE_ERR_NOT_FOUND if not found
  */
-PRTE_EXPORT int prte_mca_base_var_group_find_by_name (const char *full_name, int *index);
+PRTE_EXPORT int prte_mca_base_var_group_find_by_name(const char *full_name, int *index);
 
 /**
  * Get the group at a specified index
@@ -143,8 +144,8 @@ PRTE_EXPORT int prte_mca_base_var_group_find_by_name (const char *full_name, int
  * The returned pointer belongs to the MCA variable system. Do not modify/release/retain
  * the pointer.
  */
-PRTE_EXPORT int prte_mca_base_var_group_get (const int group_index,
-                                               const prte_mca_base_var_group_t **group);
+PRTE_EXPORT int prte_mca_base_var_group_get(const int group_index,
+                                            const prte_mca_base_var_group_t **group);
 
 /**
  * Set/unset a flags for all variables in a group.
@@ -155,15 +156,14 @@ PRTE_EXPORT int prte_mca_base_var_group_get (const int group_index,
  *
  * Set a flag for every variable in a group. See mca_base_var_set_flag() for more info.
  */
-PRTE_EXPORT int prte_mca_base_var_group_set_var_flag (const int group_index, int flags,
-                                                        bool set);
+PRTE_EXPORT int prte_mca_base_var_group_set_var_flag(const int group_index, int flags, bool set);
 
 /**
  * Get the number of registered MCA groups
  *
  * @retval count Number of registered MCA groups
  */
-PRTE_EXPORT int prte_mca_base_var_group_get_count (void);
+PRTE_EXPORT int prte_mca_base_var_group_get_count(void);
 
 /**
  * Get a relative timestamp for the MCA group system
@@ -172,6 +172,6 @@ PRTE_EXPORT int prte_mca_base_var_group_get_count (void);
  *
  * This value will change if groups or variables are either added or removed.
  */
-PRTE_EXPORT int prte_mca_base_var_group_get_stamp (void);
+PRTE_EXPORT int prte_mca_base_var_group_get_stamp(void);
 
 #endif /* PRTE_MCA_BASE_VAR_GROUP_H */

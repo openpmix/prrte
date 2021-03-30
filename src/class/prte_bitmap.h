@@ -13,6 +13,7 @@
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010-2012 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,10 +51,10 @@
 BEGIN_C_DECLS
 
 struct prte_bitmap_t {
-    prte_object_t  super;       /**< Subclass of prte_object_t */
-    uint64_t      *bitmap;      /**< The actual bitmap array of characters */
-    int            array_size;  /**< The actual array size that maintains the bitmap */
-    int            max_size;    /**< The maximum size that this bitmap may grow (optional) */
+    prte_object_t super; /**< Subclass of prte_object_t */
+    uint64_t *bitmap;    /**< The actual bitmap array of characters */
+    int array_size;      /**< The actual array size that maintains the bitmap */
+    int max_size;        /**< The maximum size that this bitmap may grow (optional) */
 };
 
 typedef struct prte_bitmap_t prte_bitmap_t;
@@ -69,8 +70,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_bitmap_t);
  * @return PRTE error code or success
  *
  */
-PRTE_EXPORT int prte_bitmap_set_max_size (prte_bitmap_t *bm, int max_size);
-
+PRTE_EXPORT int prte_bitmap_set_max_size(prte_bitmap_t *bm, int max_size);
 
 /**
  * Initializes the bitmap and sets its size. This must be called
@@ -81,8 +81,7 @@ PRTE_EXPORT int prte_bitmap_set_max_size (prte_bitmap_t *bm, int max_size);
  * @return PRTE error code or success
  *
  */
-PRTE_EXPORT int prte_bitmap_init (prte_bitmap_t *bm, int size);
-
+PRTE_EXPORT int prte_bitmap_init(prte_bitmap_t *bm, int size);
 
 /**
  * Set a bit of the bitmap. If the bit asked for is beyond the current
@@ -96,7 +95,6 @@ PRTE_EXPORT int prte_bitmap_init (prte_bitmap_t *bm, int size);
  */
 PRTE_EXPORT int prte_bitmap_set_bit(prte_bitmap_t *bm, int bit);
 
-
 /**
  * Clear/unset a bit of the bitmap. If the bit is beyond the current
  * size of the bitmap, an error is returned
@@ -108,20 +106,18 @@ PRTE_EXPORT int prte_bitmap_set_bit(prte_bitmap_t *bm, int bit);
  */
 PRTE_EXPORT int prte_bitmap_clear_bit(prte_bitmap_t *bm, int bit);
 
-
 /**
-  * Find out if a bit is set in the bitmap
-  *
-  * @param  bitmap  The input bitmap (IN)
-  * @param  bit     The bit which is to be checked (IN)
-  * @return true    if the bit is set
-  *         false   if the bit is not set OR the index
-  *                 is outside the bounds of the provided
-  *                 bitmap
-  *
-  */
+ * Find out if a bit is set in the bitmap
+ *
+ * @param  bitmap  The input bitmap (IN)
+ * @param  bit     The bit which is to be checked (IN)
+ * @return true    if the bit is set
+ *         false   if the bit is not set OR the index
+ *                 is outside the bounds of the provided
+ *                 bitmap
+ *
+ */
 PRTE_EXPORT bool prte_bitmap_is_set_bit(prte_bitmap_t *bm, int bit);
-
 
 /**
  * Find the first clear bit in the bitmap and set it
@@ -131,9 +127,7 @@ PRTE_EXPORT bool prte_bitmap_is_set_bit(prte_bitmap_t *bm, int bit);
 
  * @return err        PRTE_SUCCESS on success
  */
-PRTE_EXPORT int prte_bitmap_find_and_set_first_unset_bit(prte_bitmap_t *bm,
-                                                           int *position);
-
+PRTE_EXPORT int prte_bitmap_find_and_set_first_unset_bit(prte_bitmap_t *bm, int *position);
 
 /**
  * Clear all bits in the bitmap
@@ -144,7 +138,6 @@ PRTE_EXPORT int prte_bitmap_find_and_set_first_unset_bit(prte_bitmap_t *bm,
  */
 PRTE_EXPORT int prte_bitmap_clear_all_bits(prte_bitmap_t *bm);
 
-
 /**
  * Set all bits in the bitmap
  * @param bitmap The input bitmap (IN)
@@ -152,7 +145,6 @@ PRTE_EXPORT int prte_bitmap_clear_all_bits(prte_bitmap_t *bm);
  *
  */
 PRTE_EXPORT int prte_bitmap_set_all_bits(prte_bitmap_t *bm);
-
 
 /**
  * Gives the current size (number of bits) in the bitmap. This is the
@@ -167,7 +159,6 @@ static inline int prte_bitmap_size(prte_bitmap_t *bm)
     return (NULL == bm) ? 0 : (bm->array_size * ((int) (sizeof(*bm->bitmap) * 8)));
 }
 
-
 /**
  * Copy a bitmap
  *
@@ -177,10 +168,11 @@ static inline int prte_bitmap_size(prte_bitmap_t *bm)
  */
 static inline void prte_bitmap_copy(prte_bitmap_t *dest, prte_bitmap_t *src)
 {
-    if( dest->array_size < src->array_size ) {
-        if( NULL != dest->bitmap) free(dest->bitmap);
+    if (dest->array_size < src->array_size) {
+        if (NULL != dest->bitmap)
+            free(dest->bitmap);
         dest->max_size = src->max_size;
-        dest->bitmap = (uint64_t*)malloc(src->array_size*sizeof(uint64_t));
+        dest->bitmap = (uint64_t *) malloc(src->array_size * sizeof(uint64_t));
     }
     memcpy(dest->bitmap, src->bitmap, src->array_size * sizeof(uint64_t));
     dest->array_size = src->array_size;
@@ -229,7 +221,7 @@ PRTE_EXPORT bool prte_bitmap_are_different(prte_bitmap_t *left, prte_bitmap_t *r
  * @param bitmap Point to the bitmap to represent
  * @return Pointer to the string (caller must free if not NULL)
  */
-PRTE_EXPORT char * prte_bitmap_get_string(prte_bitmap_t *bitmap);
+PRTE_EXPORT char *prte_bitmap_get_string(prte_bitmap_t *bitmap);
 
 /**
  * Return the number of 'unset' bits, upto the specified length

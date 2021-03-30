@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,8 +24,8 @@
 
 #include <stdio.h>
 
-#include "src/mca/mca.h"
 #include "src/mca/base/base.h"
+#include "src/mca/mca.h"
 
 #include "src/mca/ras/base/base.h"
 
@@ -39,17 +40,16 @@ int prte_ras_base_finalize(void)
     return PRTE_SUCCESS;
 }
 
-
 int prte_ras_base_close(void)
 {
     /* Close all remaining available components (may be one if this is a
        PRTE program, or [possibly] multiple if this is ompi_info) */
 
-    mca_base_components_close(prte_ras_base_framework.framework_output,
-                              &prte_ras_base.ras_opened, NULL);
+    mca_base_components_close(prte_ras_base_framework.framework_output, &prte_ras_base.ras_opened,
+                              NULL);
 
     /* Close the framework output */
-    prte_output_close (prte_ras_base_framework.framework_output);
+    prte_output_close(prte_ras_base_framework.framework_output);
     prte_ras_base_framework.framework_output = -1;
 
     return PRTE_SUCCESS;

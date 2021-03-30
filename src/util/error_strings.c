@@ -28,18 +28,18 @@
 
 #include <stdio.h>
 #ifdef HAVE_SYS_SIGNAL_H
-#include <sys/signal.h>
+#    include <sys/signal.h>
 #else
-#include <signal.h>
+#    include <signal.h>
 #endif
 
 #include "src/mca/plm/plm_types.h"
-#include "src/util/error_strings.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/error_strings.h"
 
 const char *prte_job_state_to_str(prte_job_state_t state)
 {
-    switch(state) {
+    switch (state) {
     case PRTE_JOB_STATE_UNDEF:
         return "UNDEFINED";
     case PRTE_JOB_STATE_INIT:
@@ -149,7 +149,7 @@ const char *prte_job_state_to_str(prte_job_state_t state)
 
 const char *prte_app_ctx_state_to_str(prte_app_state_t state)
 {
-    switch(state) {
+    switch (state) {
     case PRTE_APP_STATE_UNDEF:
         return "UNDEFINED";
     case PRTE_APP_STATE_INIT:
@@ -167,7 +167,7 @@ const char *prte_app_ctx_state_to_str(prte_app_state_t state)
 
 const char *prte_proc_state_to_str(prte_proc_state_t state)
 {
-    switch(state) {
+    switch (state) {
     case PRTE_PROC_STATE_UNDEF:
         return "UNDEFINED";
     case PRTE_PROC_STATE_INIT:
@@ -239,7 +239,7 @@ const char *prte_proc_state_to_str(prte_proc_state_t state)
 
 const char *prte_node_state_to_str(prte_node_state_t state)
 {
-    switch(state) {
+    switch (state) {
     case PRTE_NODE_STATE_UNDEF:
         return "UNDEF";
     case PRTE_NODE_STATE_UNKNOWN:
@@ -256,7 +256,7 @@ const char *prte_node_state_to_str(prte_node_state_t state)
         return "NOT_INCLUDED";
     case PRTE_NODE_STATE_ADDED:
         return "ADDED";
-   default:
+    default:
         return "UNKNOWN STATE!";
     }
 }

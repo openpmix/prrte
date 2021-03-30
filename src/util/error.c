@@ -19,6 +19,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,21 +29,20 @@
 
 #include "prte_config.h"
 
-#include <string.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
-#include "src/util/error.h"
-#include "src/util/string_copy.h"
 #include "constants.h"
-#include "src/util/proc_info.h"
-#include "src/util/printf.h"
 #include "src/runtime/prte_globals.h"
+#include "src/util/error.h"
+#include "src/util/printf.h"
+#include "src/util/proc_info.h"
+#include "src/util/string_copy.h"
 
-const char *
-prte_strerror(int errnum)
+const char *prte_strerror(int errnum)
 {
     const char *retval;
 
@@ -285,7 +285,8 @@ prte_strerror(int errnum)
         retval = "All the slots on a given node have been used";
         break;
     case PRTE_ERR_INVALID_NUM_PROCS:
-        retval = "Multiple applications were specified, but at least one failed to specify the number of processes to run";
+        retval = "Multiple applications were specified, but at least one failed to specify the "
+                 "number of processes to run";
         break;
     case PRTE_ERR_SILENT:
         if (prte_report_silent_errors) {
@@ -295,7 +296,8 @@ prte_strerror(int errnum)
         }
         break;
     case PRTE_ERR_ADDRESSEE_UNKNOWN:
-        retval = "A message is attempting to be sent to a process whose contact information is unknown";
+        retval = "A message is attempting to be sent to a process whose contact information is "
+                 "unknown";
         break;
     case PRTE_ERR_SYS_LIMITS_PIPES:
         retval = "The system limit on number of pipes a process can open was reached";
@@ -325,7 +327,8 @@ prte_strerror(int errnum)
         retval = "The specified application failed to start";
         break;
     case PRTE_ERR_FILE_NOT_EXECUTABLE:
-        retval = "A system-required executable either could not be found or was not executable by this user";
+        retval = "A system-required executable either could not be found or was not executable by "
+                 "this user";
         break;
     case PRTE_ERR_HNP_COULD_NOT_START:
         retval = "Unable to start a daemon on the local node";
