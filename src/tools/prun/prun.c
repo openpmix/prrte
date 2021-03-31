@@ -603,6 +603,11 @@ int prun(int argc, char *argv[])
             fscanf(fp, "%lu", (unsigned long *) &pid);
             fclose(fp);
             PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
+        } else { /* a string that's neither an integer nor starts with 'file:' */
+                prte_show_help("help-prun.txt", "bad-option-input", true,
+                               prte_tool_basename, "--pid",
+                               pval->value.data.string, "file:path");
+                return PRTE_ERR_BAD_PARAM;
         }
     }
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "namespace", 0, 0))) {
