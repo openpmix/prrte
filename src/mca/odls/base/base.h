@@ -31,7 +31,7 @@
 #include "prte_config.h"
 
 #include "src/mca/mca.h"
-
+#include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/odls/odls.h"
 
 BEGIN_C_DECLS
