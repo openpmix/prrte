@@ -232,7 +232,7 @@ static void iof_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbd
     int i;
     mylock_t *lock = (mylock_t *) cbdata;
 
-    printf("%s called to register/de-register IOF handler refid=%ld\n", __FUNCTION__,
+    printf("%s called to register IOF handler refid=%ld\n", __FUNCTION__,
            evhandler_ref);
     if (PMIX_SUCCESS != status) {
         fprintf(stderr, "Client %s:%d EVENT HANDLER REGISTRATION FAILED WITH STATUS %d, ref=%lu\n",
@@ -257,7 +257,8 @@ static void iof_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbd
 
 static void iof_dereg_callbk(pmix_status_t status, void *cbdata)
 {
-    printf("%s called as reult of de-registering I/O forwarding\n", __FUNCTION__);
+    printf("%s called as reult of de-registering I/O forwarding, status %s\n",
+           __FUNCTION__, PMIx_Error_string(status));
 }
 
 int main(int argc, char **argv)

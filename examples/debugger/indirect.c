@@ -334,7 +334,7 @@ int main(int argc, char **argv)
 
     /* spawn the launcher - the function will return when the launcher
      * has been started. */
-    fprintf(stderr, "SPAWNING LAUNCHER\n");
+    printf("SPAWNING LAUNCHER\n");
     rc = PMIx_Spawn(info, ninfo, app, napps, clientspace);
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
     PMIX_APP_FREE(app, napps);
