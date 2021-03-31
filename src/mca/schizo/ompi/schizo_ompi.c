@@ -511,11 +511,7 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     }
     /* --display-devel-map  -> --display allocation-devel */
     else if (0 == strcmp(option, "--display-devel-map")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation-devel", true);
-    }
-    /* --display-devel-allocation  ->  --display allocation-devel */
-    else if (0 == strcmp(option, "--display-devel-allocation")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation-devel", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-devel", true);
     }
     /* --output-proctable  ->  --display proctable */
     else if (0 == strcmp(option, "--output-proctable")) {
@@ -570,7 +566,6 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***arg
                        "--am",
                        "--rankfile",
                        "--display-devel-map",
-                       "--display-devel-allocation",
                        "--display-map",
                        "--display-topo",
                        "--display-diff",
