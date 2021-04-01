@@ -15,6 +15,8 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,7 +36,7 @@
 
 #include "constants.h"
 #include "src/class/prte_object.h"
-#include "src/sys/atomic.h"
+#include "src/threads/mutex.h"
 
 /*
  * Instantiation of class descriptor for the base class.  This is
@@ -58,7 +60,7 @@ int prte_class_init_epoch = 1;
 /*
  * Local variables
  */
-static prte_atomic_lock_t class_lock = PRTE_ATOMIC_LOCK_INIT;
+static prte_mutex_t class_lock = PRTE_MUTEX_STATIC_INIT;
 static void **classes = NULL;
 static int num_classes = 0;
 static int max_classes = 0;
@@ -90,14 +92,14 @@ void prte_class_initialize(prte_class_t *cls)
     if (prte_class_init_epoch == cls->cls_initialized) {
         return;
     }
-    prte_atomic_lock(&class_lock);
+    prte_mutex_lock(&class_lock);
 
     /* If another thread initializing this same class came in at
        roughly the same time, it may have gotten the lock and
        initialized.  So check again. */
 
     if (prte_class_init_epoch == cls->cls_initialized) {
-        prte_atomic_unlock(&class_lock);
+        prte_mutex_unlock(&class_lock);
         return;
     }
 
@@ -159,7 +161,7 @@ void prte_class_initialize(prte_class_t *cls)
 
     /* All done */
 
-    prte_atomic_unlock(&class_lock);
+    prte_mutex_unlock(&class_lock);
 }
 
 /*

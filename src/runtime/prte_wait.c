@@ -16,6 +16,8 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -52,7 +54,6 @@
 #include "src/class/prte_list.h"
 #include "src/class/prte_object.h"
 #include "src/event/event-internal.h"
-#include "src/sys/atomic.h"
 #include "src/threads/mutex.h"
 #include "src/util/output.h"
 

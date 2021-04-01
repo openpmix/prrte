@@ -18,6 +18,8 @@
  *
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -69,28 +71,6 @@ static inline void prte_mutex_lock(prte_mutex_t *mutex);
  * @param mutex         Address of the mutex.
  */
 static inline void prte_mutex_unlock(prte_mutex_t *mutex);
-
-/**
- * Try to acquire a mutex using atomic operations.
- *
- * @param mutex         Address of the mutex.
- * @return              0 if the mutex was acquired, 1 otherwise.
- */
-static inline int prte_mutex_atomic_trylock(prte_mutex_t *mutex);
-
-/**
- * Acquire a mutex using atomic operations.
- *
- * @param mutex         Address of the mutex.
- */
-static inline void prte_mutex_atomic_lock(prte_mutex_t *mutex);
-
-/**
- * Release a mutex using atomic operations.
- *
- * @param mutex         Address of the mutex.
- */
-static inline void prte_mutex_atomic_unlock(prte_mutex_t *mutex);
 
 END_C_DECLS
 

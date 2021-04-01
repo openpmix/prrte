@@ -20,6 +20,8 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,11 +63,11 @@ static inline void prte_atomic_mb(void)
 
 static inline void prte_atomic_rmb(void)
 {
-#if PRTE_ASSEMBLY_ARCH == PRTE_X86_64
+#if defined(PRTE_ATOMIC_X86_64)
     /* work around a bug in older gcc versions where ACQUIRE seems to get
      * treated as a no-op instead of being equivalent to
      * __asm__ __volatile__("": : :"memory") */
-    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    __asm__ __volatile__("" : : : "memory");
 #else
     __atomic_thread_fence(__ATOMIC_ACQUIRE);
 #endif
@@ -76,7 +78,7 @@ static inline void prte_atomic_wmb(void)
     __atomic_thread_fence(__ATOMIC_RELEASE);
 }
 
-#define MB() prte_atomic_mb()
+#define PRTEMB() prte_atomic_mb()
 
 /**********************************************************************
  *
@@ -125,9 +127,19 @@ static inline int32_t prte_atomic_fetch_add_32(prte_atomic_int32_t *addr, int32_
     return __atomic_fetch_add(addr, delta, __ATOMIC_RELAXED);
 }
 
+static inline int32_t prte_atomic_add_fetch_32(prte_atomic_int32_t *addr, int32_t delta)
+{
+    return __atomic_fetch_add(addr, delta, __ATOMIC_RELAXED) + delta;
+}
+
 static inline int32_t prte_atomic_fetch_and_32(prte_atomic_int32_t *addr, int32_t value)
 {
     return __atomic_fetch_and(addr, value, __ATOMIC_RELAXED);
+}
+
+static inline int32_t prte_atomic_and_fetch_32(prte_atomic_int32_t *addr, int32_t value)
+{
+    return __atomic_fetch_and(addr, value, __ATOMIC_RELAXED) & value;
 }
 
 static inline int32_t prte_atomic_fetch_or_32(prte_atomic_int32_t *addr, int32_t value)
@@ -135,14 +147,29 @@ static inline int32_t prte_atomic_fetch_or_32(prte_atomic_int32_t *addr, int32_t
     return __atomic_fetch_or(addr, value, __ATOMIC_RELAXED);
 }
 
+static inline int32_t prte_atomic_or_fetch_32(prte_atomic_int32_t *addr, int32_t value)
+{
+    return __atomic_fetch_or(addr, value, __ATOMIC_RELAXED) | value;
+}
+
 static inline int32_t prte_atomic_fetch_xor_32(prte_atomic_int32_t *addr, int32_t value)
 {
     return __atomic_fetch_xor(addr, value, __ATOMIC_RELAXED);
 }
 
+static inline int32_t prte_atomic_xor_fetch_32(prte_atomic_int32_t *addr, int32_t value)
+{
+    return __atomic_fetch_xor(addr, value, __ATOMIC_RELAXED) ^ value;
+}
+
 static inline int32_t prte_atomic_fetch_sub_32(prte_atomic_int32_t *addr, int32_t delta)
 {
     return __atomic_fetch_sub(addr, delta, __ATOMIC_RELAXED);
+}
+
+static inline int32_t prte_atomic_sub_fetch_32(prte_atomic_int32_t *addr, int32_t delta)
+{
+    return __atomic_fetch_sub(addr, delta, __ATOMIC_RELAXED) - delta;
 }
 
 static inline bool prte_atomic_compare_exchange_strong_acq_64(prte_atomic_int64_t *addr,
@@ -178,9 +205,19 @@ static inline int64_t prte_atomic_fetch_add_64(prte_atomic_int64_t *addr, int64_
     return __atomic_fetch_add(addr, delta, __ATOMIC_RELAXED);
 }
 
+static inline int64_t prte_atomic_add_fetch_64(prte_atomic_int64_t *addr, int64_t delta)
+{
+    return __atomic_fetch_add(addr, delta, __ATOMIC_RELAXED) + delta;
+}
+
 static inline int64_t prte_atomic_fetch_and_64(prte_atomic_int64_t *addr, int64_t value)
 {
     return __atomic_fetch_and(addr, value, __ATOMIC_RELAXED);
+}
+
+static inline int64_t prte_atomic_and_fetch_64(prte_atomic_int64_t *addr, int64_t value)
+{
+    return __atomic_fetch_and(addr, value, __ATOMIC_RELAXED) & value;
 }
 
 static inline int64_t prte_atomic_fetch_or_64(prte_atomic_int64_t *addr, int64_t value)
@@ -188,9 +225,19 @@ static inline int64_t prte_atomic_fetch_or_64(prte_atomic_int64_t *addr, int64_t
     return __atomic_fetch_or(addr, value, __ATOMIC_RELAXED);
 }
 
+static inline int64_t prte_atomic_or_fetch_64(prte_atomic_int64_t *addr, int64_t value)
+{
+    return __atomic_fetch_or(addr, value, __ATOMIC_RELAXED) | value;
+}
+
 static inline int64_t prte_atomic_fetch_xor_64(prte_atomic_int64_t *addr, int64_t value)
 {
     return __atomic_fetch_xor(addr, value, __ATOMIC_RELAXED);
+}
+
+static inline int64_t prte_atomic_xor_fetch_64(prte_atomic_int64_t *addr, int64_t value)
+{
+    return __atomic_fetch_xor(addr, value, __ATOMIC_RELAXED) ^ value;
 }
 
 static inline int64_t prte_atomic_fetch_sub_64(prte_atomic_int64_t *addr, int64_t delta)
@@ -198,77 +245,58 @@ static inline int64_t prte_atomic_fetch_sub_64(prte_atomic_int64_t *addr, int64_
     return __atomic_fetch_sub(addr, delta, __ATOMIC_RELAXED);
 }
 
-#if PRTE_HAVE_GCC_BUILTIN_CSWAP_INT128
+static inline int64_t prte_atomic_sub_fetch_64(prte_atomic_int64_t *addr, int64_t delta)
+{
+    return __atomic_fetch_sub(addr, delta, __ATOMIC_RELAXED) - delta;
+}
 
-#    define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 1
+static inline size_t prte_atomic_fetch_add_size_t(prte_atomic_size_t *addr, size_t delta)
+{
+    return __atomic_fetch_add(addr, delta, __ATOMIC_RELAXED);
+}
 
-static inline bool prte_atomic_compare_exchange_strong_128(prte_atomic_int128_t *addr,
-                                                           prte_int128_t *oldval,
-                                                           prte_int128_t newval)
+static inline size_t prte_atomic_add_fetch_size_t(prte_atomic_size_t *addr, size_t delta)
+{
+    return __atomic_fetch_add(addr, delta, __ATOMIC_RELAXED) + delta;
+}
+
+static inline size_t prte_atomic_fetch_sub_size_t(prte_atomic_size_t *addr, size_t delta)
+{
+    return __atomic_fetch_sub(addr, delta, __ATOMIC_RELAXED);
+}
+
+static inline size_t prte_atomic_sub_fetch_size_t(prte_atomic_size_t *addr, size_t delta)
+{
+    return __atomic_fetch_sub(addr, delta, __ATOMIC_RELAXED) - delta;
+}
+
+static inline bool prte_atomic_compare_exchange_strong_acq_ptr(prte_atomic_intptr_t *addr,
+                                                               int64_t *oldval, int64_t newval)
 {
     return __atomic_compare_exchange_n(addr, oldval, newval, false, __ATOMIC_ACQUIRE,
                                        __ATOMIC_RELAXED);
 }
 
-#elif defined(PRTE_HAVE_SYNC_BUILTIN_CSWAP_INT128) && PRTE_HAVE_SYNC_BUILTIN_CSWAP_INT128
-
-#    define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 1
-
-/* __atomic version is not lock-free so use legacy __sync version */
-
-static inline bool prte_atomic_compare_exchange_strong_128(prte_atomic_prte_int128_t *addr,
-                                                           prte_int128_t *oldval,
-                                                           prte_int128_t newval)
+static inline bool prte_atomic_compare_exchange_strong_rel_ptr(prte_atomic_intptr_t *addr,
+                                                               void *oldval, intptr_t newval)
 {
-    prte_int128_t prev = __sync_val_compare_and_swap(addr, *oldval, newval);
-    bool ret = prev == *oldval;
-    *oldval = prev;
-    return ret;
+    return __atomic_compare_exchange_n(addr, oldval, newval, false, __ATOMIC_RELEASE,
+                                       __ATOMIC_RELAXED);
 }
 
-#endif
-
-#if defined(__HLE__)
-
-#    include <immintrin.h>
-
-#    define PRTE_HAVE_ATOMIC_SPINLOCKS 1
-
-static inline void prte_atomic_lock_init(prte_atomic_lock_t *lock, int32_t value)
+static inline bool prte_atomic_compare_exchange_strong_ptr(prte_atomic_intptr_t *addr,
+                                                           void *oldval, intptr_t newval)
 {
-    lock->u.lock = value;
+    return __atomic_compare_exchange_n(addr, oldval, newval, false, __ATOMIC_ACQUIRE,
+                                       __ATOMIC_RELAXED);
 }
 
-static inline int prte_atomic_trylock(prte_atomic_lock_t *lock)
+static inline intptr_t prte_atomic_swap_ptr(prte_atomic_intptr_t *addr, intptr_t newval)
 {
-    int ret = __atomic_exchange_n(&lock->u.lock, PRTE_ATOMIC_LOCK_LOCKED,
-                                  __ATOMIC_ACQUIRE | __ATOMIC_HLE_ACQUIRE);
-    if (PRTE_ATOMIC_LOCK_LOCKED == ret) {
-        /* abort the transaction */
-        _mm_pause();
-        return 1;
-    }
-
-    return 0;
+    intptr_t oldval;
+    __atomic_exchange(addr, &newval, &oldval, __ATOMIC_RELAXED);
+    return oldval;
 }
-
-static inline void prte_atomic_lock(prte_atomic_lock_t *lock)
-{
-    while (PRTE_ATOMIC_LOCK_LOCKED
-           == __atomic_exchange_n(&lock->u.lock, PRTE_ATOMIC_LOCK_LOCKED,
-                                  __ATOMIC_ACQUIRE | __ATOMIC_HLE_ACQUIRE)) {
-        /* abort the transaction */
-        _mm_pause();
-    }
-}
-
-static inline void prte_atomic_unlock(prte_atomic_lock_t *lock)
-{
-    __atomic_store_n(&lock->u.lock, PRTE_ATOMIC_LOCK_UNLOCKED,
-                     __ATOMIC_RELEASE | __ATOMIC_HLE_RELEASE);
-}
-
-#endif
 
 #if defined(__SUNPRO_C) || defined(__SUNPRO_CC)
 #    pragma error_messages(default, E_ARG_INCOMPATIBLE_WITH_ARG_L)

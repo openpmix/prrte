@@ -17,6 +17,8 @@
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -53,10 +55,6 @@ static void prte_mutex_construct(prte_mutex_t *m)
     pthread_mutex_init(&m->m_lock_pthread, NULL);
 
 #endif /* PRTE_ENABLE_DEBUG */
-
-#if PRTE_HAVE_ATOMIC_SPINLOCKS
-    prte_atomic_lock_init(&m->m_lock_atomic, PRTE_ATOMIC_LOCK_UNLOCKED);
-#endif
 }
 
 static void prte_mutex_destruct(prte_mutex_t *m)
@@ -81,10 +79,6 @@ static void prte_recursive_mutex_construct(prte_recursive_mutex_t *m)
 
     pthread_mutex_init(&m->m_lock_pthread, &attr);
     pthread_mutexattr_destroy(&attr);
-
-#if PRTE_HAVE_ATOMIC_SPINLOCKS
-    prte_atomic_lock_init(&m->m_lock_atomic, PRTE_ATOMIC_LOCK_UNLOCKED);
-#endif
 }
 
 PRTE_CLASS_INSTANCE(prte_recursive_mutex_t, prte_object_t, prte_recursive_mutex_construct,

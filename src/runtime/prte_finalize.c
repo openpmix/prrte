@@ -17,6 +17,8 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,7 +61,7 @@ int prte_finalize(void)
     PRTE_RELEASE_THREAD(&prte_init_lock);
 
     /* protect against multiple calls */
-    if (prte_atomic_trylock(&prte_finalize_lock)) {
+    if (prte_mutex_trylock(&prte_finalize_lock)) {
         return PRTE_SUCCESS;
     }
 

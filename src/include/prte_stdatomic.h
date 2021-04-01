@@ -5,6 +5,8 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,22 +19,7 @@
 
 #    include "prte_stdint.h"
 
-#    if PRTE_ASSEMBLY_BUILTIN != PRTE_BUILTIN_C11
-
-typedef volatile int prte_atomic_int_t;
-typedef volatile long prte_atomic_long_t;
-
-typedef volatile int32_t prte_atomic_int32_t;
-typedef volatile uint32_t prte_atomic_uint32_t;
-typedef volatile int64_t prte_atomic_int64_t;
-typedef volatile uint64_t prte_atomic_uint64_t;
-
-typedef volatile size_t prte_atomic_size_t;
-typedef volatile ssize_t prte_atomic_ssize_t;
-typedef volatile intptr_t prte_atomic_intptr_t;
-typedef volatile uintptr_t prte_atomic_uintptr_t;
-
-#    else /* PRTE_HAVE_C__ATOMIC */
+#    if PRTE_ATOMIC_C11
 
 #        include <stdatomic.h>
 
@@ -49,20 +36,20 @@ typedef _Atomic ssize_t prte_atomic_ssize_t;
 typedef _Atomic intptr_t prte_atomic_intptr_t;
 typedef _Atomic uintptr_t prte_atomic_uintptr_t;
 
-#    endif /* PRTE_HAVE_C__ATOMIC */
+#    else
 
-#    if HAVE_PRTE_INT128_T
+typedef volatile int prte_atomic_int_t;
+typedef volatile long prte_atomic_long_t;
 
-/* do not use C11 atomics for __int128 if they are not lock free */
-#        if PRTE_HAVE_C11_CSWAP_INT128
+typedef volatile int32_t prte_atomic_int32_t;
+typedef volatile uint32_t prte_atomic_uint32_t;
+typedef volatile int64_t prte_atomic_int64_t;
+typedef volatile uint64_t prte_atomic_uint64_t;
 
-typedef _Atomic prte_int128_t prte_atomic_int128_t;
-
-#        else
-
-typedef volatile prte_int128_t prte_atomic_int128_t;
-
-#        endif
+typedef volatile size_t prte_atomic_size_t;
+typedef volatile ssize_t prte_atomic_ssize_t;
+typedef volatile intptr_t prte_atomic_intptr_t;
+typedef volatile uintptr_t prte_atomic_uintptr_t;
 
 #    endif
 

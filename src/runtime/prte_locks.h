@@ -12,6 +12,8 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,18 +31,18 @@
 
 #include "prte_config.h"
 
-#include "src/sys/atomic.h"
+#include "src/threads/mutex.h"
 #include "src/threads/threads.h"
 
 BEGIN_C_DECLS
 
 /* for everyone */
-PRTE_EXPORT extern prte_atomic_lock_t prte_finalize_lock;
+PRTE_EXPORT extern prte_mutex_t prte_finalize_lock;
 
 /* for HNPs */
-PRTE_EXPORT extern prte_atomic_lock_t prte_abort_inprogress_lock;
-PRTE_EXPORT extern prte_atomic_lock_t prte_jobs_complete_lock;
-PRTE_EXPORT extern prte_atomic_lock_t prte_quit_lock;
+PRTE_EXPORT extern prte_mutex_t prte_abort_inprogress_lock;
+PRTE_EXPORT extern prte_mutex_t prte_jobs_complete_lock;
+PRTE_EXPORT extern prte_mutex_t prte_quit_lock;
 PRTE_EXPORT extern prte_lock_t prte_init_lock;
 
 /**

@@ -8,6 +8,8 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,7 +29,7 @@
 #if !defined(PRTE_ATOMIC_STDC_H)
 #    define PRTE_ATOMIC_STDC_H
 
-#    include "prte_stdint.h"
+#    include "src/include/prte_stdint.h"
 #    include <stdatomic.h>
 #    include <stdint.h>
 
@@ -77,11 +79,11 @@ static inline void prte_atomic_wmb(void)
 
 static inline void prte_atomic_rmb(void)
 {
-#    if PRTE_ASSEMBLY_ARCH == PRTE_X86_64
+#    if defined(PRTE_ATOMIC_X86_64)
     /* work around a bug in older gcc versions (observed in gcc 6.x)
      * where acquire seems to get treated as a no-op instead of being
      * equivalent to __asm__ __volatile__("": : :"memory") on x86_64 */
-    prte_atomic_mb();
+    __asm__ __volatile__("" : : : "memory");
 #    else
     atomic_thread_fence(memory_order_acquire);
 #    endif
@@ -154,7 +156,6 @@ static inline void prte_atomic_rmb(void)
             {                                                                                    \
                 return atomic_fetch_##op##_explicit((type *) addr, value, memory_order_relaxed); \
             }                                                                                    \
-                                                                                                 \
             static inline type prte_atomic_##op##_fetch_##bits(prte_atomic_##type *addr,         \
                                                                type value)                       \
             {                                                                                    \
@@ -254,77 +255,5 @@ static inline int64_t prte_atomic_max_fetch_64(prte_atomic_int64_t *addr, int64_
     int64_t old = prte_atomic_fetch_max_64(addr, value);
     return old >= value ? old : value;
 }
-
-#    define PRTE_ATOMIC_LOCK_UNLOCKED false
-#    define PRTE_ATOMIC_LOCK_LOCKED   true
-
-#    define PRTE_ATOMIC_LOCK_INIT ATOMIC_FLAG_INIT
-
-typedef atomic_flag prte_atomic_lock_t;
-
-/*
- * Lock initialization function. It set the lock to UNLOCKED.
- */
-static inline void prte_atomic_lock_init(prte_atomic_lock_t *lock, bool value)
-{
-#    ifdef PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC
-    atomic_flag_clear(lock);
-#    else
-    atomic_flag_clear((volatile void *) lock);
-#    endif
-}
-
-static inline int prte_atomic_trylock(prte_atomic_lock_t *lock)
-{
-#    ifdef PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC
-    return (int) atomic_flag_test_and_set(lock);
-#    else
-    return (int) atomic_flag_test_and_set((volatile void *) lock);
-#    endif
-}
-
-static inline void prte_atomic_lock(prte_atomic_lock_t *lock)
-{
-    while (prte_atomic_trylock(lock)) {
-    }
-}
-
-static inline void prte_atomic_unlock(prte_atomic_lock_t *lock)
-{
-#    ifdef PRTE_HAVE_CLANG_BUILTIN_ATOMIC_C11_FUNC
-    atomic_flag_clear(lock);
-#    else
-    atomic_flag_clear((volatile void *) lock);
-#    endif
-}
-
-#    if PRTE_HAVE_C11_CSWAP_INT128
-
-/* the C11 atomic compare-exchange is lock free so use it */
-#        define prte_atomic_compare_exchange_strong_128 atomic_compare_exchange_strong
-
-#        define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 1
-
-#    elif PRTE_HAVE_SYNC_BUILTIN_CSWAP_INT128
-
-/* fall back on the __sync builtin if available since it will emit the expected instruction on
- * x86_64 (cmpxchng16b) */
-__prte_attribute_always_inline__ static inline bool
-prte_atomic_compare_exchange_strong_128(prte_atomic_int128_t *addr, prte_int128_t *oldval,
-                                        prte_int128_t newval)
-{
-    prte_int128_t prev = __sync_val_compare_and_swap(addr, *oldval, newval);
-    bool ret = prev == *oldval;
-    *oldval = prev;
-    return ret;
-}
-
-#        define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 1
-
-#    else
-
-#        define PRTE_HAVE_ATOMIC_COMPARE_EXCHANGE_128 0
-
-#    endif
 
 #endif /* !defined(PRTE_ATOMIC_STDC_H) */
