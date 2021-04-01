@@ -578,7 +578,6 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
 
     /* get the job object for this proc */
     if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
-        prte_output(0, "NO JOB");
         goto cleanup;
     }
     if (PRTE_PROC_STATE_READY_FOR_DEBUG == state) {
@@ -587,7 +586,11 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
             || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, (void**)&tptr, PMIX_PROC_RANK)
             || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, (void**)&tptr, PMIX_PROC_RANK)) {
             if (PMIX_CHECK_RANK(proc->rank, tgt)) {
-                jdata->num_ready_for_debug++;
+                if (PMIX_RANK_LOCAL_PEERS == proc->rank) {
+                    jdata->num_ready_for_debug += jdata->num_local_procs;
+                } else {
+                    jdata->num_ready_for_debug++;
+                }
                 if (PMIX_RANK_WILDCARD == tgt && jdata->num_ready_for_debug < jdata->num_local_procs) {
                     goto cleanup;
                 }
@@ -604,10 +607,9 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
 
     pdata = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank);
     if (NULL == pdata) {
-        prte_output(0, "NO PROC");
         goto cleanup;
     }
-    prte_output(0, "WTF");
+
     if (PRTE_PROC_STATE_RUNNING == state) {
         /* update the proc state */
         if (pdata->state < PRTE_PROC_STATE_TERMINATED) {
