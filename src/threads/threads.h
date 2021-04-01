@@ -74,6 +74,7 @@ typedef pthread_cond_t prte_condition_t;
     } while (0)
 
 typedef struct {
+    size_t hdlr_id;
     int status;
     prte_mutex_t mutex;
     prte_condition_t cond;
@@ -82,8 +83,8 @@ typedef struct {
 
 #define PRTE_LOCK_STATIC_INIT                                                             \
     {                                                                                     \
-        .status = 0, .mutex = PRTE_MUTEX_STATIC_INIT, .cond = PRTE_CONDITION_STATIC_INIT, \
-        .active = false                                                                   \
+        .hdlr_id = 0, .status = 0, .mutex = PRTE_MUTEX_STATIC_INIT,                       \
+        .cond = PRTE_CONDITION_STATIC_INIT, .active = false                               \
     }
 
 #define PRTE_CONSTRUCT_LOCK(l)                     \

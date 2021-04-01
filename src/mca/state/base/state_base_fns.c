@@ -559,6 +559,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     pmix_proc_t *proc;
+    pmix_rank_t tgt, *tptr;
     prte_proc_state_t state;
     prte_job_t *jdata;
     prte_proc_t *pdata;
@@ -577,13 +578,36 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
 
     /* get the job object for this proc */
     if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
+        prte_output(0, "NO JOB");
         goto cleanup;
     }
-    pdata = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank);
-    if (NULL == pdata) {
+    if (PRTE_PROC_STATE_READY_FOR_DEBUG == state) {
+        tptr = &tgt;
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, (void**)&tptr, PMIX_PROC_RANK)
+            || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, (void**)&tptr, PMIX_PROC_RANK)
+            || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, (void**)&tptr, PMIX_PROC_RANK)) {
+            if (PMIX_CHECK_RANK(proc->rank, tgt)) {
+                jdata->num_ready_for_debug++;
+                if (PMIX_RANK_WILDCARD == tgt && jdata->num_ready_for_debug < jdata->num_local_procs) {
+                    goto cleanup;
+                }
+                PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                                     "%s state:base all local %s procs on node %s ready for debug",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                     proc->nspace, prte_process_info.nodename));
+                /* let the DVM master know we are ready */
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_READY_FOR_DEBUG);
+            }
+        }
         goto cleanup;
     }
 
+    pdata = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank);
+    if (NULL == pdata) {
+        prte_output(0, "NO PROC");
+        goto cleanup;
+    }
+    prte_output(0, "WTF");
     if (PRTE_PROC_STATE_RUNNING == state) {
         /* update the proc state */
         if (pdata->state < PRTE_PROC_STATE_TERMINATED) {

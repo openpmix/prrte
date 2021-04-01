@@ -428,11 +428,10 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *so
     pmix_data_buffer_t pbkt;
     pmix_status_t ret;
     size_t n;
-    prte_job_t *jdata;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s local process %s:%d generated event code %s range %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), source->nspace, source->rank,
+                        "%s local process %s generated event code %s range %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(source),
                         PMIx_Error_string(code), PMIx_Data_range_string(range));
 
     /* we can get events prior to completing prte_init as we have
@@ -454,9 +453,8 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *so
 
     /* if this is notification of procs being ready for debug, then
      * we treat this as a state change */
-    if (PMIX_DEBUG_WAITING_FOR_NOTIFY == code) {
-        jdata = prte_get_job_data_object(source->nspace);
-        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_READY_FOR_DEBUG);
+    if (PMIX_READY_FOR_DEBUG == code) {
+        PRTE_ACTIVATE_PROC_STATE((pmix_proc_t*)source, PRTE_PROC_STATE_READY_FOR_DEBUG);
         goto done;
     }
 

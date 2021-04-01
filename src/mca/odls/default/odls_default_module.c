@@ -126,6 +126,7 @@
 #include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rtc/rtc.h"
+#include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/threads/threads.h"
@@ -383,13 +384,19 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     }
 
 #if PRTE_HAVE_STOP_ON_EXEC
-    if (prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
-        errno = 0;
-        i = ptrace(PRTE_TRACEME, 0, 0, 0);
-        if (0 != errno) {
-            send_error_show_help(write_fd, 1, "help-prun.txt", "prun:stop-on-exec", "prted",
-                                 strerror(errno), prte_process_info.nodename,
-                                 (NULL == cd->child) ? 0 : cd->child->app_rank);
+    {
+        pmix_rank_t tgt, *tptr;
+        tptr = &tgt;
+        if (prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, (void**)&tptr, PMIX_PROC_RANK)) {
+            if (PMIX_CHECK_RANK(cd->child->name.rank, tgt)) {
+                errno = 0;
+                i = ptrace(PRTE_TRACEME, 0, 0, 0);
+                if (0 != errno) {
+                    send_error_show_help(write_fd, 1, "help-prun.txt", "prun:stop-on-exec", "prted",
+                                         strerror(errno), prte_process_info.nodename,
+                                         (NULL == cd->child) ? 0 : cd->child->app_rank);
+                }
+            }
         }
     }
 #endif
@@ -427,45 +434,46 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
     }
 
 #if PRTE_HAVE_STOP_ON_EXEC
-    if (NULL != cd->child
-        && prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL)) {
-        rc = waitpid(cd->child->pid, &status, WUNTRACED);
-        if (-1 == rc) {
-            /* doomed */
-            cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
-            PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
-            close(read_fd);
-            return PRTE_ERR_FAILED_TO_START;
-        }
-        /* tell the child to stop */
-        if (WIFSTOPPED(status)) {
-            rc = kill(cd->child->pid, SIGSTOP);
-            if (-1 == rc) {
-                /* doomed */
-                cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
-                PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
-                close(read_fd);
-                return PRTE_ERR_FAILED_TO_START;
-            }
-            errno = 0;
+    if (NULL != cd->child) {
+        pmix_rank_t tgt, *tptr;
+        tptr = &tgt;
+        if (prte_get_attribute(&cd->jdata->attributes, PRTE_JOB_STOP_ON_EXEC, (void**)&tptr, PMIX_PROC_RANK)) {
+            if (PMIX_CHECK_RANK(cd->child->name.rank, tgt)) {
+                rc = waitpid(cd->child->pid, &status, WUNTRACED);
+                if (-1 == rc) {
+                    /* doomed */
+                    cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
+                    PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
+                    close(read_fd);
+                    return PRTE_ERR_FAILED_TO_START;
+                }
+                /* tell the child to stop */
+                if (WIFSTOPPED(status)) {
+                    rc = kill(cd->child->pid, SIGSTOP);
+                    if (-1 == rc) {
+                        /* doomed */
+                        cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
+                        PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
+                        close(read_fd);
+                        return PRTE_ERR_FAILED_TO_START;
+                    }
+                    errno = 0;
 #    if PRTE_HAVE_LINUX_PTRACE
-            ptrace(PRTE_DETACH, cd->child->pid, 0, (void *) SIGSTOP);
+                    ptrace(PRTE_DETACH, cd->child->pid, 0, (void *) SIGSTOP);
 #    else
-            ptrace(PRTE_DETACH, cd->child->pid, 0, SIGSTOP);
+                    ptrace(PRTE_DETACH, cd->child->pid, 0, SIGSTOP);
 #    endif
-            if (0 != errno) {
-                /* couldn't detach */
-                cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
-                PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
-                close(read_fd);
-                return PRTE_ERR_FAILED_TO_START;
+                    if (0 != errno) {
+                        /* couldn't detach */
+                        cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
+                        PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
+                        close(read_fd);
+                        return PRTE_ERR_FAILED_TO_START;
+                    }
+                    /* record that this proc is ready for debug */
+                    PRTE_ACTIVATE_PROC_STATE(&cd->child->name, PRTE_PROC_STATE_READY_FOR_DEBUG);
+                }
             }
-        } else {
-            /* we are doomed */
-            cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
-            PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
-            close(read_fd);
-            return PRTE_ERR_FAILED_TO_START;
         }
         cd->child->state = PRTE_PROC_STATE_RUNNING;
         PRTE_FLAG_SET(cd->child, PRTE_PROC_FLAG_ALIVE);
