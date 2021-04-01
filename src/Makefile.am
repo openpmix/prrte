@@ -16,6 +16,8 @@
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -26,18 +28,18 @@
 SUBDIRS = \
 	include \
 	etc \
-    util \
-    mca/base \
+	util \
+	mca/base \
 	$(MCA_prte_FRAMEWORKS_SUBDIRS) \
 	$(MCA_prte_FRAMEWORK_COMPONENT_STATIC_SUBDIRS) \
-    . \
+	. \
 	$(MCA_prte_FRAMEWORK_COMPONENT_DSO_SUBDIRS)
 
 DIST_SUBDIRS = \
 	include \
 	etc \
-    util \
-    mca/base \
+	util \
+	mca/base \
 	$(MCA_prte_FRAMEWORKS_SUBDIRS) \
 	$(MCA_prte_FRAMEWORK_COMPONENT_ALL_SUBDIRS)
 
@@ -47,11 +49,14 @@ lib_LTLIBRARIES = libprrte.la
 libprrte_la_SOURCES =
 
 libprrte_la_LIBADD = \
-        mca/base/libprrte_mca_base.la \
-		util/libprrteutil.la \
-		$(MCA_prte_FRAMEWORK_LIBS) \
-		$(PRTE_EXTRA_LIB)
-libprrte_la_DEPENDENCIES =
+	mca/base/libprrte_mca_base.la \
+	util/libprrteutil.la \
+	$(MCA_prte_FRAMEWORK_LIBS) \
+	$(PRTE_EXTRA_LIB)
+libprrte_la_DEPENDENCIES = \
+	mca/base/libprrte_mca_base.la \
+	util/libprrteutil.la \
+	$(MCA_prte_FRAMEWORK_LIBS)
 libprrte_la_LDFLAGS = -version-info $(libprrte_so_version)
 libprrte_la_CPPFLAGS =
 
