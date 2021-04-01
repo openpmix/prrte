@@ -293,7 +293,7 @@ static void track_jobs(int fd, short argc, void *cbdata)
                     PMIX_DATA_BUFFER_RELEASE(alert);
                     goto cleanup;
                 }
-                /* pack the RUNNING state to avoid any race conditions */
+                /* pack the READY-FOR-DEBUG state to avoid any race conditions */
                 rc = PMIx_Data_pack(NULL, alert, &running, 1, PMIX_UINT32);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
@@ -373,7 +373,11 @@ static void track_procs(int fd, short argc, void *cbdata)
             || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, (void**)&tptr, PMIX_PROC_RANK)
             || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, (void**)&tptr, PMIX_PROC_RANK)) {
             if (PMIX_CHECK_RANK(proc->rank, tgt)) {
-                jdata->num_ready_for_debug++;
+                if (PMIX_RANK_LOCAL_PEERS == proc->rank) {
+                    jdata->num_ready_for_debug += jdata->num_local_procs;
+                } else {
+                    jdata->num_ready_for_debug++;
+                }
                 if (PMIX_RANK_WILDCARD == tgt && jdata->num_ready_for_debug < jdata->num_local_procs) {
                     goto cleanup;
                 }

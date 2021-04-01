@@ -313,7 +313,7 @@ static int cospawn_launch(myrel_t *myrel)
     app[1].maxprocs = app_np / app_npernode;
     /* Provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
-    app[1].ninfo = 3;
+    app[1].ninfo = 2;
     n = 0;
     PMIX_INFO_CREATE(app[1].info, app[1].ninfo);
     /* This process is a debugger daemon */
@@ -322,8 +322,6 @@ static int cospawn_launch(myrel_t *myrel)
     /* Notify this process when debugger job completes */
     PMIX_INFO_LOAD(&app[1].info[n], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
     n++;
-    /* Tell daemon that application is waiting for daemon to relase it */
-    PMIX_INFO_LOAD(&app[1].info[n], PMIX_DEBUG_WAIT_FOR_NOTIFY, NULL, PMIX_BOOL);
 
     /* Spawn the job - the function will return when the app
      * has been launched */
@@ -376,6 +374,8 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     pmix_proc_t proc;
     uint16_t num_daemons_per_node = 1;
     char map_str[128];
+    void *tinfo;
+    pmix_data_array_t darray;
 
     printf("Calling %s to spawn the debugger daemon\n", __FUNCTION__);
     /* Setup the debugger  spawn parameters*/
@@ -397,44 +397,37 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     debugger[0].info = NULL;
     /* Set attributes for debugger daemon launch and let the RM know these are
      * debugger daemons */
-    dninfo = 7;
-    n = 0;
-    PMIX_INFO_CREATE(dinfo, dninfo);
+    PMIX_INFO_LIST_START(tinfo);
     /* Indicate a debugger daemon is being spawned */
-    PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL);
-    n++;
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL);
     /* Set the name of the namespace being debugged */
     PMIX_LOAD_PROCID(&proc, appspace, PMIX_RANK_WILDCARD);
-    PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_TARGET, &proc, PMIX_PROC);
-    n++;
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_DEBUG_TARGET, &proc, PMIX_PROC);
     /* Number of daemons per node in the application allocation */
     if (daemon_colocate_per_node > 0) {
-        PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_DAEMONS_PER_NODE, &daemon_colocate_per_node,
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_DEBUG_DAEMONS_PER_NODE, &daemon_colocate_per_node,
                        PMIX_UINT16);
-        n++;
     }
     /* Number of daemons per proc in the application allocation */
     else if (daemon_colocate_per_proc > 0) {
-        PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_DAEMONS_PER_PROC, &daemon_colocate_per_proc,
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_DEBUG_DAEMONS_PER_PROC, &daemon_colocate_per_proc,
                        PMIX_UINT16);
-        n++;
     }
     /* Launch one daemon per node -- only needed if co-launch is not supported */
     else {
-        PMIX_INFO_LOAD(&dinfo[n], PMIX_MAPBY, "ppr:1:node", PMIX_STRING);
-        n++;
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_MAPBY, "ppr:1:node", PMIX_STRING);
     }
     /* Notify this process when the job completes */
-    PMIX_INFO_LOAD(&dinfo[n], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
-    n++;
-    /* Tell debugger daemon application processes are waiting to be released */
-    PMIX_INFO_LOAD(&dinfo[n], PMIX_DEBUG_WAIT_FOR_NOTIFY, NULL, PMIX_BOOL);
-    n++;
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
     /* Forward stdout to this process */
-    PMIX_INFO_LOAD(&dinfo[n], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);
-    n++;
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL);
     /* Forward stderr to this process */
-    PMIX_INFO_LOAD(&dinfo[n], PMIX_FWD_STDERR, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_FWD_STDERR, NULL, PMIX_BOOL);
+
+    PMIX_INFO_LIST_CONVERT(rc, tinfo, &darray);
+    dinfo = (pmix_info_t*)darray.array;
+    dninfo = darray.size;
+    PMIX_INFO_LIST_RELEASE(tinfo);
 
     /* Spawn the daemons */
     printf("Debugger: spawning %s\n", debugger[0].cmd);
@@ -687,8 +680,7 @@ int main(int argc, char **argv)
                 stop_on_exec_supported = true;
             }
             /* See if stop in init is included */
-            else if (NULL
-                     != strstr(myquery_data.info[n].value.data.string, PMIX_DEBUG_STOP_IN_INIT)) {
+            if (NULL != strstr(myquery_data.info[n].value.data.string, PMIX_DEBUG_STOP_IN_INIT)) {
                 stop_in_init_supported = true;
             }
         }
