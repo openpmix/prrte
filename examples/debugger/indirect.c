@@ -206,6 +206,7 @@ int main(int argc, char **argv)
     char *myuri = NULL;
     void *jinfo, *linfo, *dirs;
     myquery_data_t *mydata = NULL;
+    pmix_rank_t rank;
 
     /* need to provide args */
     if (2 > argc) {
@@ -321,7 +322,8 @@ int main(int argc, char **argv)
     /* create the launch directives to tell the launcher what
      * to do with the app it is going to spawn for us */
     PMIX_INFO_LIST_START(linfo);
-    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);
+    rank = PMIX_RANK_WILDCARD;
+    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);  // stop all procs in init
     PMIX_INFO_LIST_CONVERT(rc, linfo, &darray);
     PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_LAUNCH_DIRECTIVES, &darray, PMIX_DATA_ARRAY);
     PMIX_INFO_LIST_RELEASE(linfo);
@@ -370,12 +372,12 @@ int main(int argc, char **argv)
      * nspace of the child job and alerting us that things are ready
      * for us to spawn the debugger daemons - this will be registered
      * with the IL we started */
-    printf("REGISTERING LAUNCH_COMPLETE HANDLER\n");
+    printf("REGISTERING READY-FOR-DEBUG HANDLER\n");
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    code = PMIX_LAUNCH_COMPLETE;
+    code = PMIX_READY_FOR_DEBUG;
     n = 0;
     PMIX_INFO_CREATE(info, 1);
-    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_HDLR_NAME, "LAUNCH-COMPLETE", PMIX_STRING);
+    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_HDLR_NAME, "READY-FOR-DEBUG", PMIX_STRING);
     PMIx_Register_event_handler(&code, 1, info, 1, spawn_cbfunc, evhandler_reg_callbk,
                                 (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);

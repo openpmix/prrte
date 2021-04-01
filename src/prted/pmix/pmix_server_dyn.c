@@ -465,18 +465,25 @@ static void interim(int sd, short args, void *cbdata)
             /***   STOP ON EXEC FOR DEBUGGER   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_ON_EXEC)) {
 #if PRTE_HAVE_STOP_ON_EXEC
-            flag = PMIX_INFO_TRUE(info);
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL, &flag,
-                               PMIX_BOOL);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL,
+                               &info->value.data.rank, PMIX_PROC_RANK);
 #else
             /* we cannot support the request */
             rc = PRTE_ERR_NOT_SUPPORTED;
             goto complete;
 #endif
 
-            /***   STOP IN INIT AND WAIT AT SOME PROGRAMMATIC POINT FOR DEBUGGER    ***/
-            /***   ALLOW TO FALL INTO THE JOB-LEVEL CACHE AS THEY ARE INCLUDED IN   ***/
-            /***   THE INITIAL JOB-INFO DELIVERED TO PROCS                          ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_IN_INIT)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
+                               &info->value.data.rank, PMIX_PROC_RANK);
+            /* also must add to job-level cache */
+            pmix_server_cache_job_info(jdata, info);
+
+        } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_IN_APP)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, PRTE_ATTR_GLOBAL,
+                               &info->value.data.rank, PMIX_PROC_RANK);
+            /* also must add to job-level cache */
+            pmix_server_cache_job_info(jdata, info);
 
             /***   TAG STDOUT   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_TAG_OUTPUT)

@@ -269,6 +269,12 @@ char *prte_util_print_vpids(const pmix_rank_t vpid)
         snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "INVALID");
     } else if (PMIX_RANK_WILDCARD == vpid) {
         snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "WILDCARD");
+    } else if (PMIX_RANK_LOCAL_NODE == vpid) {
+        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "LOCALNODE");
+    } else if (PMIX_RANK_LOCAL_PEERS == vpid) {
+        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "LOCALPEERS");
+    } else if (PMIX_RANK_UNDEF == vpid) {
+        snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%s", "UNDEFINED");
     } else {
         snprintf(ptr->buffers[ptr->cntr++], PRTE_PRINT_NAME_ARGS_MAX_SIZE, "%u", vpid);
     }
@@ -281,20 +287,20 @@ int prte_util_convert_vpid_to_string(char **vpid_string, const pmix_rank_t vpid)
     /* check for wildcard value - handle appropriately */
     if (PMIX_RANK_WILDCARD == vpid) {
         *vpid_string = strdup("WILDCARD");
-        return PRTE_SUCCESS;
-    }
-
-    /* check for invalid value - handle appropriately */
-    if (PMIX_RANK_INVALID == vpid) {
+    } else if (PMIX_RANK_INVALID == vpid) {
         *vpid_string = strdup("INVALID");
-        return PRTE_SUCCESS;
+    } else if (PMIX_RANK_LOCAL_NODE == vpid) {
+        *vpid_string = strdup("LOCALNODE");
+    } else if (PMIX_RANK_LOCAL_PEERS == vpid) {
+        *vpid_string = strdup("LOCALPEERS");
+    } else if (PMIX_RANK_UNDEF == vpid) {
+        *vpid_string = strdup("UNDEFINED");
+    } else {
+        if (0 > prte_asprintf(vpid_string, "%u", vpid)) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
     }
-
-    if (0 > prte_asprintf(vpid_string, "%u", vpid)) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-
     return PRTE_SUCCESS;
 }
 

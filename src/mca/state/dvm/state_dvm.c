@@ -83,20 +83,27 @@ static void dvm_notify(int sd, short args, void *cbdata);
 /* defined default state machine sequence - individual
  * plm's must add a state for launching daemons
  */
-static prte_job_state_t launch_states[] = {PRTE_JOB_STATE_INIT, PRTE_JOB_STATE_INIT_COMPLETE,
+static prte_job_state_t launch_states[] = {PRTE_JOB_STATE_INIT,
+                                           PRTE_JOB_STATE_INIT_COMPLETE,
                                            PRTE_JOB_STATE_ALLOCATE,
                                            PRTE_JOB_STATE_ALLOCATION_COMPLETE,
                                            PRTE_JOB_STATE_DAEMONS_LAUNCHED,
-                                           PRTE_JOB_STATE_DAEMONS_REPORTED, PRTE_JOB_STATE_VM_READY,
-                                           PRTE_JOB_STATE_MAP, PRTE_JOB_STATE_MAP_COMPLETE,
-                                           PRTE_JOB_STATE_SYSTEM_PREP, PRTE_JOB_STATE_LAUNCH_APPS,
-                                           PRTE_JOB_STATE_SEND_LAUNCH_MSG, PRTE_JOB_STATE_STARTED,
+                                           PRTE_JOB_STATE_DAEMONS_REPORTED,
+                                           PRTE_JOB_STATE_VM_READY,
+                                           PRTE_JOB_STATE_MAP,
+                                           PRTE_JOB_STATE_MAP_COMPLETE,
+                                           PRTE_JOB_STATE_SYSTEM_PREP,
+                                           PRTE_JOB_STATE_LAUNCH_APPS,
+                                           PRTE_JOB_STATE_SEND_LAUNCH_MSG,
+                                           PRTE_JOB_STATE_STARTED,
                                            PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE,
-                                           PRTE_JOB_STATE_READY_FOR_DEBUG, PRTE_JOB_STATE_RUNNING,
+                                           PRTE_JOB_STATE_READY_FOR_DEBUG,
+                                           PRTE_JOB_STATE_RUNNING,
                                            PRTE_JOB_STATE_REGISTERED,
                                            /* termination states */
                                            PRTE_JOB_STATE_TERMINATED,
-                                           PRTE_JOB_STATE_NOTIFY_COMPLETED, PRTE_JOB_STATE_NOTIFIED,
+                                           PRTE_JOB_STATE_NOTIFY_COMPLETED,
+                                           PRTE_JOB_STATE_NOTIFIED,
                                            PRTE_JOB_STATE_ALL_JOBS_COMPLETE};
 static prte_state_cbfunc_t launch_callbacks[] = {prte_plm_base_setup_job,
                                                  init_complete,
@@ -120,11 +127,14 @@ static prte_state_cbfunc_t launch_callbacks[] = {prte_plm_base_setup_job,
                                                  cleanup_job,
                                                  prte_quit};
 
-static prte_proc_state_t proc_states[] = {PRTE_PROC_STATE_RUNNING, PRTE_PROC_STATE_REGISTERED,
+static prte_proc_state_t proc_states[] = {PRTE_PROC_STATE_RUNNING,
+                                          PRTE_PROC_STATE_READY_FOR_DEBUG,
+                                          PRTE_PROC_STATE_REGISTERED,
                                           PRTE_PROC_STATE_IOF_COMPLETE,
                                           PRTE_PROC_STATE_WAITPID_FIRED,
                                           PRTE_PROC_STATE_TERMINATED};
 static prte_state_cbfunc_t proc_callbacks[] = {prte_state_base_track_procs,
+                                               prte_state_base_track_procs,
                                                prte_state_base_track_procs,
                                                prte_state_base_track_procs,
                                                prte_state_base_track_procs,
@@ -396,16 +406,55 @@ static void ready_for_debug(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata = caddy->jdata;
+    pmix_proc_t *nptr;
+    time_t timestamp;
+    pmix_info_t *iptr;
+    size_t ninfo;
+    pmix_data_array_t darray;
+    void *tinfo;
+    pmix_status_t rc;
 
-    /* track number of procs at this point */
-    jdata->num_ready_for_debug++;
-
-    /* check if all have reported */
-    if (jdata->num_procs == jdata->num_ready_for_debug) {
-        /* generate the event notifying any connected tool that
-         * the specified job is ready for debug */
-        // TODO?
+    /* launch was requested by a TOOL, so we notify the launch proxy
+     * and NOT the originator (as that would be us) */
+    nptr = NULL;
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr,
+                            PMIX_PROC)
+        || NULL == nptr) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        goto DONE;
     }
+    timestamp = time(NULL);
+    PMIX_INFO_LIST_START(tinfo);
+    /* target this notification solely to that one tool */
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_CUSTOM_RANGE, nptr, PMIX_PROC);
+    PMIX_PROC_RELEASE(nptr);
+    /* pass the nspace of the job */
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_NSPACE, jdata->nspace, PMIX_STRING);
+    /* not to be delivered to a default event handler */
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+    /* provide the timestamp */
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_TIMESTAMP, &timestamp, PMIX_TIME);
+    PMIX_INFO_LIST_CONVERT(rc, tinfo, &darray);
+    if (PMIX_ERR_EMPTY == rc) {
+        iptr = NULL;
+        ninfo = 0;
+    } else if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PRTE_UPDATE_EXIT_STATUS(rc);
+        PMIX_INFO_LIST_RELEASE(tinfo);
+        PMIX_PROC_RELEASE(nptr);
+        goto DONE;
+    } else {
+        iptr = (pmix_info_t *) darray.array;
+        ninfo = darray.size;
+    }
+    PMIX_INFO_LIST_RELEASE(tinfo);
+
+    PMIx_Notify_event(PMIX_READY_FOR_DEBUG, PRTE_PROC_MY_NAME, PMIX_RANGE_CUSTOM, iptr,
+                      ninfo, NULL, NULL);
+    PMIX_INFO_FREE(iptr, ninfo);
+
+DONE:
     PRTE_RELEASE(caddy);
 }
 

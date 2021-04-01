@@ -212,7 +212,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_OUTPUT_TO_DIRECTORY \
     (PRTE_JOB_START_KEY + 61) // string - path of directory to which stdout/err is to be directed
 #define PRTE_JOB_STOP_ON_EXEC \
-    (PRTE_JOB_START_KEY + 62) // bool - stop procs on first instruction for debugger attach
+    (PRTE_JOB_START_KEY + 62) // pmix_rank_t of procs to stop on first instruction for debugger attach
 #define PRTE_JOB_SPAWN_NOTIFIED \
     (PRTE_JOB_START_KEY         \
      + 63) // bool - process requesting a spawn operation has been notified of result
@@ -254,6 +254,8 @@ typedef uint16_t prte_job_flags_t;
     (PRTE_JOB_START_KEY + 86) // uint16_t - Number of debug daemons per node
 #define PRTE_JOB_DEBUG_DAEMONS_PER_PROC \
     (PRTE_JOB_START_KEY + 87) // uint16_t - Number of debug daemons per application proc
+#define PRTE_JOB_STOP_IN_INIT      (PRTE_JOB_START_KEY + 88) // pmix_rank_t of procs to stop
+#define PRTE_JOB_STOP_IN_APP       (PRTE_JOB_START_KEY + 89) // pmix_rank_t of procs to stop
 
 #define PRTE_JOB_MAX_KEY 300
 

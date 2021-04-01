@@ -21,7 +21,6 @@
 #include <string.h>
 
 #include "src/pmix/pmix-internal.h"
-#include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/iof/base/base.h"
@@ -33,6 +32,8 @@
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_quit.h"
 #include "src/threads/threads.h"
+#include "src/util/output.h"
+#include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
 
 #include "src/mca/state/base/base.h"
@@ -72,11 +73,17 @@ static prte_job_state_t job_states[] = {PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE,
                                         PRTE_JOB_STATE_READY_FOR_DEBUG};
 static prte_state_cbfunc_t job_callbacks[] = {track_jobs, track_jobs};
 
-static prte_proc_state_t proc_states[] = {PRTE_PROC_STATE_RUNNING, PRTE_PROC_STATE_REGISTERED,
+static prte_proc_state_t proc_states[] = {PRTE_PROC_STATE_RUNNING,
+                                          PRTE_PROC_STATE_READY_FOR_DEBUG,
+                                          PRTE_PROC_STATE_REGISTERED,
                                           PRTE_PROC_STATE_IOF_COMPLETE,
                                           PRTE_PROC_STATE_WAITPID_FIRED,
                                           PRTE_PROC_STATE_TERMINATED};
-static prte_state_cbfunc_t proc_callbacks[] = {track_procs, track_procs, track_procs, track_procs,
+static prte_state_cbfunc_t proc_callbacks[] = {track_procs,
+                                               track_procs,
+                                               track_procs,
+                                               track_procs,
+                                               track_procs,
                                                track_procs};
 
 /************************
@@ -333,6 +340,7 @@ static void track_procs(int fd, short argc, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     pmix_proc_t *proc;
+    pmix_rank_t tgt, *tptr;
     prte_proc_state_t state;
     prte_job_t *jdata;
     prte_proc_t *pdata, *pptr;
@@ -359,6 +367,27 @@ static void track_procs(int fd, short argc, void *cbdata)
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         goto cleanup;
     }
+    if (PRTE_PROC_STATE_READY_FOR_DEBUG == state) {
+        tptr = &tgt;
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, (void**)&tptr, PMIX_PROC_RANK)
+            || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, (void**)&tptr, PMIX_PROC_RANK)
+            || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, (void**)&tptr, PMIX_PROC_RANK)) {
+            if (PMIX_CHECK_RANK(proc->rank, tgt)) {
+                jdata->num_ready_for_debug++;
+                if (PMIX_RANK_WILDCARD == tgt && jdata->num_ready_for_debug < jdata->num_local_procs) {
+                    goto cleanup;
+                }
+                PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                                     "%s state:prted all local %s procs on node %s ready for debug",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                     proc->nspace, prte_process_info.nodename));
+                /* let the DVM master know we are ready */
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_READY_FOR_DEBUG);
+            }
+        }
+        goto cleanup;
+    }
+
     pdata = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank);
     if (NULL == pdata) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);

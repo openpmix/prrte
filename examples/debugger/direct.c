@@ -25,6 +25,7 @@
  */
 
 #define _GNU_SOURCE
+#include <ctype.h>
 #include <limits.h>
 #include <pthread.h>
 #include <stdio.h>

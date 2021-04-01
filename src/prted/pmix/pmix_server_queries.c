@@ -247,8 +247,11 @@ static void _query(int sd, short args, void *cbdata)
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_DEBUG_SUPPORT)) {
                 ans = NULL;
                 prte_argv_append_nosize(&ans, PMIX_DEBUG_STOP_IN_INIT);
+                prte_argv_append_nosize(&ans, PMIX_DEBUG_STOP_IN_APP);
+#if PRTE_HAVE_STOP_ON_EXEC
+                prte_argv_append_nosize(&ans, PMIX_DEBUG_STOP_ON_EXEC);
+#endif
                 prte_argv_append_nosize(&ans, PMIX_DEBUG_TARGET);
-                prte_argv_append_nosize(&ans, PMIX_DEBUG_WAIT_FOR_NOTIFY);
                 /* create the return kv */
                 kv = PRTE_NEW(prte_info_item_t);
                 tmp = prte_argv_join(ans, ',');
