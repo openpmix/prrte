@@ -17,6 +17,8 @@
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,8 +61,6 @@ struct prte_mutex_t {
     const char *m_lock_file;
     int m_lock_line;
 #endif
-
-    prte_atomic_lock_t m_lock_atomic;
 };
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mutex_t);
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_recursive_mutex_t);
@@ -76,13 +76,13 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_recursive_mutex_t);
         {                                                                                        \
             .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                                         \
             .m_lock_pthread = PTHREAD_MUTEX_INITIALIZER, .m_lock_debug = 0, .m_lock_file = NULL, \
-            .m_lock_line = 0, .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT,                            \
+            .m_lock_line = 0,                                                                    \
         }
 #else
 #    define PRTE_MUTEX_STATIC_INIT                                                               \
         {                                                                                        \
             .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                                         \
-            .m_lock_pthread = PTHREAD_MUTEX_INITIALIZER, .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT, \
+            .m_lock_pthread = PTHREAD_MUTEX_INITIALIZER,                                         \
         }
 #endif
 
@@ -93,14 +93,13 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_recursive_mutex_t);
             {                                                                                  \
                 .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                                   \
                 .m_lock_pthread = PRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER, .m_lock_debug = 0, \
-                .m_lock_file = NULL, .m_lock_line = 0, .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT, \
+                .m_lock_file = NULL, .m_lock_line = 0,                                         \
             }
 #    else
 #        define PRTE_RECURSIVE_MUTEX_STATIC_INIT                            \
             {                                                               \
                 .super = PRTE_OBJ_STATIC_INIT(prte_mutex_t),                \
                 .m_lock_pthread = PRTE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER, \
-                .m_lock_atomic = PRTE_ATOMIC_LOCK_INIT,                     \
             }
 #    endif
 
@@ -108,7 +107,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_recursive_mutex_t);
 
 /************************************************************************
  *
- * mutex operations (non-atomic versions)
+ * mutex operations
  *
  ************************************************************************/
 
@@ -154,56 +153,6 @@ static inline void prte_mutex_unlock(prte_mutex_t *m)
     pthread_mutex_unlock(&m->m_lock_pthread);
 #endif
 }
-
-/************************************************************************
- *
- * mutex operations (atomic versions)
- *
- ************************************************************************/
-
-#if PRTE_HAVE_ATOMIC_SPINLOCKS
-
-/************************************************************************
- * Spin Locks
- ************************************************************************/
-
-static inline int prte_mutex_atomic_trylock(prte_mutex_t *m)
-{
-    return prte_atomic_trylock(&m->m_lock_atomic);
-}
-
-static inline void prte_mutex_atomic_lock(prte_mutex_t *m)
-{
-    prte_atomic_lock(&m->m_lock_atomic);
-}
-
-static inline void prte_mutex_atomic_unlock(prte_mutex_t *m)
-{
-    prte_atomic_unlock(&m->m_lock_atomic);
-}
-
-#else
-
-/************************************************************************
- * Standard locking
- ************************************************************************/
-
-static inline int prte_mutex_atomic_trylock(prte_mutex_t *m)
-{
-    return prte_mutex_trylock(m);
-}
-
-static inline void prte_mutex_atomic_lock(prte_mutex_t *m)
-{
-    prte_mutex_lock(m);
-}
-
-static inline void prte_mutex_atomic_unlock(prte_mutex_t *m)
-{
-    prte_mutex_unlock(m);
-}
-
-#endif
 
 END_C_DECLS
 

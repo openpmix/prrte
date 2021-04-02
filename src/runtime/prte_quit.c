@@ -19,6 +19,8 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -85,7 +87,7 @@ void prte_quit(int fd, short args, void *cbdata)
     }
 
     /* check one-time lock to protect against "bounce" */
-    if (prte_atomic_trylock(&prte_quit_lock)) { /* returns 1 if already locked */
+    if (prte_mutex_trylock(&prte_quit_lock)) { /* returns 1 if already locked */
         return;
     }
 

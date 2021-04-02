@@ -23,7 +23,7 @@
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
-# Copyright (c) 2018      Amazon.com, Inc. or its affiliates.
+# Copyright (c) 2018-2021 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # Copyright (c) 2021      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
@@ -477,9 +477,8 @@ PRTE_CHECK_COMPILER_VERSION_ID
 # Assembler Configuration
 ##################################
 
-prte_show_subtitle "Assembler"
+prte_show_subtitle "Atomics"
 
-AM_PROG_AS
 PRTE_CONFIG_ASM
 
 ##################################

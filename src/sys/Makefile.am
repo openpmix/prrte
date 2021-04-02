@@ -16,6 +16,8 @@
 # Copyright (c) 2017      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+#                         reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -26,16 +28,6 @@
 # This makefile.am does not stand on its own - it is included from src/Makefile.am
 
 headers += \
-	sys/architecture.h \
 	sys/atomic.h \
 	sys/atomic_stdc.h \
-	sys/atomic_impl.h \
-	sys/timer.h \
-    sys/cma.h
-
-include sys/x86_64/Makefile.am
-include sys/arm/Makefile.am
-include sys/arm64/Makefile.am
-include sys/ia32/Makefile.am
-include sys/powerpc/Makefile.am
-include sys/gcc_builtin/Makefile.am
+	sys/atomic_gcc_builtin.h

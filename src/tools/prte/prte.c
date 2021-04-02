@@ -20,6 +20,8 @@
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -67,7 +69,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/sys/atomic.h"
+#include "src/threads/mutex.h"
 #include "src/util/argv.h"
 #include "src/util/basename.h"
 #include "src/util/cmd_line.h"
@@ -114,7 +116,7 @@ static prte_event_t term_handler;
 static prte_event_t die_handler;
 static prte_event_t epipe_handler;
 static int term_pipe[2];
-static prte_atomic_lock_t prun_abort_inprogress_lock = PRTE_ATOMIC_LOCK_INIT;
+static prte_mutex_t prun_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
 static prte_event_t *forward_signals_events = NULL;
 static char *mypidfile = NULL;
 static bool verbose = false;
@@ -252,7 +254,6 @@ int prte(int argc, char *argv[])
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
-    prte_atomic_lock_init(&prun_abort_inprogress_lock, PRTE_ATOMIC_LOCK_UNLOCKED);
     /* init the tiny part of PRTE we use */
     prte_init_util(PRTE_PROC_MASTER);
 
@@ -1248,7 +1249,7 @@ static void clean_abort(int fd, short flags, void *arg)
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
      */
-    if (prte_atomic_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
+    if (prte_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
         if (forcibly_die) {
             /* exit with a non-zero status */
             exit(1);
