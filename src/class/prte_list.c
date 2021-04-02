@@ -23,6 +23,7 @@
 #include "prte_config.h"
 
 #include "constants.h"
+#include "src/sys/atomic.h"
 #include "src/class/prte_list.h"
 
 /*
