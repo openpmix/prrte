@@ -350,7 +350,14 @@ int main(int argc, char *argv[])
                                "--pid", pval->value.data.string, param);
                 return PRTE_ERR_BAD_PARAM;
             }
-            fscanf(fp, "%lu", (unsigned long *) &pid);
+            rc = fscanf(fp, "%lu", (unsigned long *) &pid);
+            if (1 != rc) {
+                /* if we were unable to obtain the single conversion we
+                 * require, then error out */
+                prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
+                               "--pid", pval->value.data.string, param);
+                return PRTE_ERR_BAD_PARAM;
+            }
             fclose(fp);
             PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
         }

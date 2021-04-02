@@ -185,28 +185,6 @@ Internal error -- the prte_base_user_debugger MCA parameter was not able to
 be found.  Please contact the PRTE developers; this should not
 happen.
 #
-[debugger-prte_base_user_debugger-empty]
-The MCA parameter "prte_base_user_debugger" was empty, indicating that
-no user-level debuggers have been defined.  Please set this MCA
-parameter to a value and try again.
-#
-[debugger-not-found]
-A suitable debugger could not be found in your PATH.  Check the values
-specified in the prte_base_user_debugger MCA parameter for the list of
-debuggers that was searched.
-#
-[debugger-exec-failed]
-%s was unable to launch the specified debugger.  This is what was
-launched:
-
-    %s
-
-Things to check:
-
-    - Ensure that the debugger is installed properly
-    - Ensure that the "%s" executable is in your path
-    - Ensure that any required licenses are available to run the debugger
-#
 [prun:sys-limit-pipe]
 %s was unable to launch the specified application as it encountered an error:
 
@@ -320,34 +298,6 @@ error on node %s. More information may be available above.
 [prun:proc-failed-to-start-no-status-no-node]
 %s was unable to start the specified application as it encountered an
 error.  More information may be available above.
-#
-[debugger requires -np]
-The number of MPI processes to launch was not specified on the command
-line.
-
-The %s debugger requires that you specify a number of MPI processes to
-launch on the command line via the "-np" command line parameter.  For
-example:
-
-    %s -np 4 %s
-
-Skipping the %s debugger for now.
-#
-[debugger requires executable]
-The %s debugger requires that you specify an executable on the %s
-command line; you cannot specify application context files when
-launching this job in the %s debugger.  For example:
-
-    %s -np 4 my_mpi_executable
-
-Skipping the %s debugger for now.
-#
-[debugger only accepts single app]
-The %s debugger only accepts SPMD-style launching; specifying an
-MPMD-style launch (with multiple applications separated via ':') is
-not permitted.
-
-Skipping the %s debugger for now.
 #
 [prun:daemon-died-during-execution]
 %s has detected that a required daemon terminated during execution
@@ -736,3 +686,12 @@ Please correct the option and try again.
   file: %s
 
 Please correct the option and try again.
+#
+[bad-file]
+%s was unable to read the necessary info from the provided file:
+
+  option: %s
+  argument: %s
+  file: %s
+
+Please correct the option or the file and try again.

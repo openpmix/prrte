@@ -601,7 +601,14 @@ int prun(int argc, char *argv[])
                                "--pid", pval->value.data.string, param);
                 return PRTE_ERR_BAD_PARAM;
             }
-            fscanf(fp, "%lu", (unsigned long *) &pid);
+            rc = fscanf(fp, "%lu", (unsigned long *) &pid);
+            if (1 != rc) {
+                /* if we were unable to obtain the single conversion we
+                 * require, then error out */
+                prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
+                               "--pid", pval->value.data.string, param);
+                return PRTE_ERR_BAD_PARAM;
+            }
             fclose(fp);
             PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
         } else { /* a string that's neither an integer nor starts with 'file:' */
