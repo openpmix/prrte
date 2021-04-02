@@ -134,7 +134,7 @@ bool prte_list_insert(prte_list_t *list, prte_list_item_t *item, long long idx)
         /* Spot check: ensure this item is only on the list that we
            just insertted it into */
 
-        prte_atomic_add(&(item->prte_list_item_refcount), 1);
+        item->prte_list_item_refcount = prte_atomic_fetch_add_32(&(item->prte_list_item_refcount), 1);
         assert(1 == item->prte_list_item_refcount);
         item->prte_list_item_belong_to = list;
 #endif
