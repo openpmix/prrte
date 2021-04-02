@@ -430,14 +430,6 @@ int prun(int argc, char *argv[])
         return 1;
     }
 
-    /* check if we are running as root - if we are, then only allow
-     * us to proceed if the allow-run-as-root flag was given. Otherwise,
-     * exit with a giant warning message
-     */
-    if (0 == geteuid()) {
-        schizo->allow_run_as_root(prte_cmd_line); // will exit us if not allowed
-    }
-
     /* setup the cmd line - this is specific to the proxy */
     prte_cmd_line = PRTE_NEW(prte_cmd_line_t);
     if (PRTE_SUCCESS != (rc = schizo->define_cli(prte_cmd_line))) {
@@ -478,6 +470,14 @@ int prun(int argc, char *argv[])
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         }
         return rc;
+    }
+
+    /* check if we are running as root - if we are, then only allow
+     * us to proceed if the allow-run-as-root flag was given. Otherwise,
+     * exit with a giant warning message
+     */
+    if (0 == geteuid()) {
+        schizo->allow_run_as_root(prte_cmd_line); // will exit us if not allowed
     }
 
     /* check command line sanity - ensure there aren't multiple instances of
