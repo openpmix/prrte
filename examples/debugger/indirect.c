@@ -381,7 +381,6 @@ int main(int argc, char **argv)
     /* wait for the IL to have launched its application */
     int icount = 0;
     while (dbactive && ilactive) {
-        printf("dbactive=%d ilactive=%d (icount %d)\n", dbactive, ilactive, icount);
         struct timespec tp = {0, 500000000};
         nanosleep(&tp, NULL);
         ++icount;

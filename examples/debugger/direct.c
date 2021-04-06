@@ -39,6 +39,8 @@
 static pmix_proc_t myproc;
 static char client_nspace[PMIX_MAX_NSLEN + 1];
 static char daemon_nspace[PMIX_MAX_NSLEN + 1];
+static pmix_proc_t *connected_servers;
+static pmix_proc_t fence_procs[2];
 
 static bool stop_in_init = true;
 static bool stop_on_exec = false;
@@ -46,6 +48,7 @@ static bool stop_in_init_supported = false;
 static bool stop_on_exec_supported = false;
 static bool cospawn_supported = false;
 static bool cospawn_reqd = false;
+static bool dbactive = true;
 static int app_npernode = 2; // > 0. Default 2 ppn
 static int app_np
     = 2; // <= 0 means use default from prte. Default to single node. Must be multiple of npernode
@@ -235,6 +238,76 @@ static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, voi
     DEBUG_WAKEUP_THREAD(lock);
 }
 
+static void debug_ready_cb(size_t evhdlr_registration_id, pmix_status_t status,
+                           const pmix_proc_t *source, pmix_info_t info[],
+                           size_t ninfo, pmix_info_t results[], size_t nresults,
+                           pmix_event_notification_cbfunc_fn_t cbfunc,
+                           void *cbdata)
+{
+    size_t n;
+    printf("%s called for event notification %s from nspace %s\n", __FUNCTION__,
+           PMIx_Error_string(status), source->nspace);
+    for (n = 0; n < ninfo; n++) {
+        if (PMIX_CHECK_KEY(&info[n], PMIX_NSPACE)) {
+            printf("Got %s notification for target nspace %s\n",
+                   PMIx_Error_string(status), info[n].value.data.string);
+            break;
+        }
+    }
+    dbactive = false;
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+}
+
+/* Register for a PMIX_READY_FOR_DEBUG event issued by the system server then
+ * wait for that event to be issued or until the timeout limit is reached */
+static int wait_for_ready(myrel_t *myrel) 
+{
+    pmix_info_t *info;
+    pmix_status_t rc;
+    size_t ninfo;
+    int n;
+    mylock_t mylock;
+    pmix_status_t code = PMIX_READY_FOR_DEBUG;
+
+    DEBUG_CONSTRUCT_LOCK(&mylock);
+    ninfo = 2;
+    n = 0;
+    PMIX_INFO_CREATE(info, ninfo);
+    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
+    n++;
+    /* Register for PMIX_READY_FOR_DEBUG event. This is sent from system server once all
+     * application processes are ready for debug. */
+    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_AFFECTED_PROC, &connected_servers[0], PMIX_PROC);
+    PMIx_Register_event_handler(&code, 1, info, ninfo, debug_ready_cb,
+                                evhandler_reg_callbk, (void *) &mylock);
+    DEBUG_WAIT_THREAD(&mylock);
+    printf("Debugger: Registered for READY_FOR_DEBUG event for nspace %s\n", 
+           connected_servers[0].nspace);
+    rc = mylock.status;
+    DEBUG_DESTRUCT_LOCK(&mylock);
+    PMIX_INFO_FREE(info, ninfo);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "Registration for PMIX_READY_FOR_DEBUG failed: %s\n",
+                PMIx_Error_string(rc));
+        return -1;
+    }
+
+    n = 0;
+    printf("Waiting for PMIX_READY_FOR_DEBUG event to be posted\n");
+    while (dbactive) {
+        struct timespec tp = {0, 500000000};
+        nanosleep(&tp, NULL);
+        ++n;
+        if (n > 10) {
+            fprintf(stderr, "Error: Target not ready for debug by timeout limit\n");
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static int cospawn_launch(myrel_t *myrel)
 {
     pmix_info_t *info;
@@ -246,6 +319,7 @@ static int cospawn_launch(myrel_t *myrel)
     pmix_data_array_t data_array;
     mylock_t mylock;
     pmix_proc_t daemon_proc;
+    pmix_rank_t all_ranks = PMIX_RANK_WILDCARD;
     char cwd[_POSIX_PATH_MAX + 1];
     char map_str[128];
 
@@ -274,8 +348,9 @@ static int cospawn_launch(myrel_t *myrel)
     PMIX_APP_CREATE(app, 2);
     /* setup the executable */
     app[0].cmd = strdup("./hello");
-    /* Set up the executable command arguments, in this case just the
-     * application (argv[0]) */
+    /* Set up the executable command arguments, For the co-spawn case
+     * the daemon needs to know the namespace of the tool process
+     * in addition to setting the application (argv[0]) */
     PMIX_ARGV_APPEND(rc, app->argv, app[0].cmd);
     app[0].env = NULL;
     /* Set the working directory */
@@ -292,10 +367,12 @@ static int cospawn_launch(myrel_t *myrel)
         n = 0;
         if (stop_on_exec) {
             /* Stop application at first instruction */
-            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);
+            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_ON_EXEC, &all_ranks,
+                           PMIX_PROC_RANK);
         } else if (stop_in_init) {
             /* Stop application in PMIx_Init */
-            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);
+            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_IN_INIT, &all_ranks,
+                           PMIX_PROC_RANK);
         }
     } else {
         app[0].ninfo = 0;
@@ -306,6 +383,7 @@ static int cospawn_launch(myrel_t *myrel)
     app[1].cmd = strdup("./daemon");
     /* Set up daemon arguments, in this case just the executable (argv[0]) */
     PMIX_ARGV_APPEND(rc, app[1].argv, app[1].cmd);
+    PMIX_ARGV_APPEND(rc, app[1].argv, myproc.nspace);
     app[1].env = NULL;
     /* Set the working directory */
     app[1].cwd = strdup(cwd);
@@ -358,6 +436,32 @@ static int cospawn_launch(myrel_t *myrel)
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);
     PMIX_INFO_FREE(info, 2);
+#if 0
+    /* Commenting this out since when both the direct program and daemon issue
+     * identical PMIx_Fence calls, they both block on the PMIx_Fence call, and
+     * because the PMIX_READY_FOR_DEBUG event handled in wait_for_debug is currently
+     * not being generated. 
+     * Keeping this here as a note that we do need a syncronization operation
+     * here so the daemon doesn't interact with the application when the
+     * application is not ready. */
+    /* We need to issue PMIx_Fence here to satisfy the corresponding fence in the
+     * daemon processes. The daemons are waiting for the tool process to join the
+     * fence operation before the daemons proceed to interact with the application
+     * processes. When this tool process joins the fence, that is an indication that
+     * the application processes have reached 'debug ready' state.
+     * Note that we don't check return status for wait_for_ready since if the
+     * PMIx_Fence call is not executed, the tool daemons that also issued a
+     * PMIx_Fence call may be left hanging. */
+    wait_for_ready(myrel);
+    strcpy(fence_procs[0].nspace, myproc.nspace);
+    fence_procs[0].rank = 0;
+    strcpy(fence_procs[1].nspace, client_nspace);
+    fence_procs[1].rank = daemon_proc.rank;
+    if (PMIX_SUCCESS != PMIx_Fence(fence_procs, 2, NULL, 0)) {
+        fprintf(stderr, "Tool process PMIx_Fence failed: %s(%d)\n",
+                PMIx_Error_string(rc), rc);
+    }
+#endif
     return rc;
 }
 
@@ -475,7 +579,7 @@ int main(int argc, char **argv)
     char *nspace = NULL;
     int i, n;
     pmix_query_t *query;
-    size_t nq;
+    size_t nq, num_servers;
     myquery_data_t myquery_data;
     pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
     mylock_t mylock;
@@ -487,6 +591,7 @@ int main(int argc, char **argv)
     char *tmp;
     char cwd[_POSIX_PATH_MAX];
     char map_str[128];
+    pmix_rank_t all_ranks = PMIX_RANK_WILDCARD;
 
     pid = getpid();
 
@@ -605,6 +710,16 @@ int main(int argc, char **argv)
     printf("Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank,
            (unsigned long) pid);
 
+    /* We need to know the server we connected to so we can register for 
+     * PMIX_READY_FOR_DEBUG notifications from that server when target processes
+     * are ready for debug. There should be only one server */
+    if (PMIX_SUCCESS != PMIx_tool_get_servers(&connected_servers, &num_servers)) {
+        fprintf(stderr, "Unable to get connected servers: %s(%n)\n",
+                PMIx_Error_string(rc), rc);
+        exit(1);
+    }
+    printf("Connected system server is %s:%d\n", connected_servers[0].nspace,
+           connected_servers[0].rank);
     /* Construct my own release first */
     DEBUG_CONSTRUCT_LOCK(&myrel.lock);
 
@@ -723,11 +838,13 @@ int main(int argc, char **argv)
         n = 0;
         PMIX_INFO_CREATE(info, ninfo);
         if (stop_on_exec) {
-            PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_STOP_ON_EXEC, NULL,
-                           PMIX_BOOL); // procs are to stop on first instruction
+            // procs are to stop on first instruction
+            PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_STOP_ON_EXEC, &all_ranks,
+                           PMIX_PROC_RANK);
         } else {
-            PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_STOP_IN_INIT, NULL,
-                           PMIX_BOOL); // procs are to pause in PMIx_Init for debugger attach
+            // procs are to pause in PMIx_Init for debugger attach
+            PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_STOP_IN_INIT, &all_ranks,
+                           PMIX_PROC_RANK);
         }
         n++;
         sprintf(map_str, "ppr:%d:node", app_npernode);
@@ -771,7 +888,16 @@ int main(int argc, char **argv)
         rc = mylock.status;
         DEBUG_DESTRUCT_LOCK(&mylock);
         PMIX_INFO_FREE(info, ninfo);
+        if (PMIX_SUCCESS != rc) {
+            fprintf(stderr, "Registration for PMIX_ERR_JOB_TERMINATED failed: %s\n",
+                    PMIx_Error_string(rc));
+            goto done;
+        }
 
+        rc = wait_for_ready(&myrel);
+        if (0 != rc) {
+            goto done;
+        }
         /* Get the proctable for this nspace */
         PMIX_QUERY_CREATE(query, 1);
         PMIX_ARGV_APPEND(rc, query[0].keys, PMIX_QUERY_PROC_TABLE);
