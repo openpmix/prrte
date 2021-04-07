@@ -455,6 +455,12 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
         rc = prte_schizo_base_convert(argv, i, 2, "--map-by", NULL, p2, true);
         free(p2);
     }
+    /* -N ->   map-by ppr:N:node */
+    else if (0 == strcmp(option, "-N")) {
+        prte_asprintf(&p2, "ppr:%s:node", pargs[i + 1]);
+        rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL, true);
+        free(p2);
+    }
     /* --npernode X and --npersocket X -> --map-by ppr:X:node/socket */
     else if (0 == strcmp(option, "--npernode")) {
         prte_asprintf(&p2, "ppr:%s:node", pargs[i + 1]);
@@ -558,6 +564,7 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***arg
                        "--byslot",
                        "--cpus-per-proc",
                        "--cpus-per-rank",
+                       "-N",
                        "--npernode",
                        "--pernode",
                        "--npersocket",
