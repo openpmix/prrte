@@ -53,21 +53,21 @@ int main(int argc, char **argv)
      * the "debugger release" notification arrives */
     rc = PMIx_Init(&myproc, NULL, 0);
     if (PMIX_SUCCESS != rc && PMIX_ERR_UNREACH != rc) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %s\n", myproc.nspace, myproc.rank,
-                PMIx_Error_string(rc));
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %s\n",
+                myproc.nspace, myproc.rank, PMIx_Error_string(rc));
         exit(0);
     }
     /* get our local rank */
     if (PMIX_SUCCESS != (rc = PMIx_Get(&myproc, PMIX_LOCAL_RANK, NULL, 0, &val))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Get local rank failed: %s\n", myproc.nspace,
-                myproc.rank, PMIx_Error_string(rc));
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get local rank failed: %s\n",
+                myproc.nspace, myproc.rank, PMIx_Error_string(rc));
         goto done;
     }
     localrank = val->data.uint16;
     PMIX_VALUE_RELEASE(val);
 
     fprintf(stderr, "Client ns %s rank %d pid %lu: Running on host %s localrank %d\n",
-            myproc.nspace, myproc.rank, (unsigned long) pid, hostname, (int) localrank);
+            myproc.nspace, myproc.rank, (unsigned long)pid, hostname , (int)localrank);
 
     pmix_proc_t wild;
     PMIX_LOAD_PROCID(&wild, myproc.nspace, PMIX_RANK_WILDCARD);
@@ -78,13 +78,13 @@ int main(int argc, char **argv)
         fprintf(stderr, "%s:%u - local peers %s\n", myproc.nspace, myproc.rank, val->data.string);
     }
 
-done:
+  done:
     /* finalize us */
 
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {
-        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize failed: %s\n", myproc.nspace,
-                myproc.rank, PMIx_Error_string(rc));
+        fprintf(stderr, "Client ns %s rank %d:PMIx_Finalize failed: %s\n",
+                myproc.nspace, myproc.rank, PMIx_Error_string(rc));
     }
     fflush(stderr);
-    return (0);
+    return(0);
 }

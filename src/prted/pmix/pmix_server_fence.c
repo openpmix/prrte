@@ -85,8 +85,7 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
 {
     prte_pmix_mdx_caddy_t *cd = NULL;
     int rc;
-    pmix_data_buffer_t *buf = NULL;
-    pmix_byte_object_t bo;
+    pmix_data_buffer_t buf;
 
     cd = PRTE_NEW(prte_pmix_mdx_caddy_t);
     cd->cbfunc = cbfunc;
@@ -99,26 +98,25 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
         cd->sig->signature = (pmix_proc_t *) malloc(cd->sig->sz * sizeof(pmix_proc_t));
         memcpy(cd->sig->signature, procs, cd->sig->sz * sizeof(pmix_proc_t));
     }
-    PMIX_DATA_BUFFER_CREATE(buf);
+    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
 
     if (NULL != data) {
-        bo.bytes = data;
-        bo.size = ndata;
-        rc = PMIx_Data_load(buf, &bo);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
+        /* do not use PMIx_Data_load as it would modify
+         * the data and we don't own it */
+        buf.base_ptr = (char*)data;
+        buf.pack_ptr = buf.base_ptr + ndata;
+        buf.unpack_ptr = buf.base_ptr;
+        buf.bytes_used = ndata;
+        buf.bytes_allocated = ndata;
     }
 
     /* pass it to the global collective algorithm */
     /* pass along any data that was collected locally */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.allgather(cd->sig, buf, 0, pmix_server_release, cd))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm.allgather(cd->sig, &buf, 0, pmix_server_release, cd))) {
         PRTE_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(buf);
         PRTE_RELEASE(cd);
         return PMIX_ERROR;
     }
-    PMIX_DATA_BUFFER_RELEASE(buf);
     return PMIX_SUCCESS;
 }
 

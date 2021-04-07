@@ -151,6 +151,7 @@ typedef struct {
     pmix_data_buffer_t *buf;
     pmix_modex_cbfunc_t cbfunc;
     pmix_info_cbfunc_t infocbfunc;
+    pmix_op_cbfunc_t opcbfunc;
     int mode;
     pmix_info_t *info;
     size_t ninfo;
