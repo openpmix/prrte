@@ -21,9 +21,11 @@
 
 static void local_eviction_callback(int fd, short flags, void *arg)
 {
-    prte_hotel_room_eviction_callback_arg_t *eargs = (prte_hotel_room_eviction_callback_arg_t *)
-        arg;
-    void *occupant = eargs->hotel->rooms[eargs->room_num].occupant;
+    prte_hotel_room_eviction_callback_arg_t *eargs;
+    void *occupant;
+
+    eargs = (prte_hotel_room_eviction_callback_arg_t *) arg;
+    occupant = eargs->hotel->rooms[eargs->room_num].occupant;
 
     /* Remove the occupant from the room.
 
@@ -33,9 +35,6 @@ static void local_eviction_callback(int fd, short flags, void *arg)
     prte_hotel_t *hotel = eargs->hotel;
     prte_hotel_room_t *room = &(hotel->rooms[eargs->room_num]);
     room->occupant = NULL;
-    hotel->last_unoccupied_room++;
-    assert(hotel->last_unoccupied_room < hotel->num_rooms);
-    hotel->unoccupied_rooms[hotel->last_unoccupied_room] = eargs->room_num;
 
     /* Invoke the user callback to tell them that they were evicted */
     hotel->evict_callback_fn(hotel, eargs->room_num, occupant);
@@ -62,15 +61,11 @@ int prte_hotel_init(prte_hotel_t *h, int num_rooms, prte_event_base_t *evbase,
         h->eviction_args = (prte_hotel_room_eviction_callback_arg_t *) malloc(
             num_rooms * sizeof(prte_hotel_room_eviction_callback_arg_t));
     }
-    h->unoccupied_rooms = (int *) malloc(num_rooms * sizeof(int));
     h->last_unoccupied_room = num_rooms - 1;
 
     for (i = 0; i < num_rooms; ++i) {
         /* Mark this room as unoccupied */
         h->rooms[i].occupant = NULL;
-
-        /* Setup this room in the unoccupied index array */
-        h->unoccupied_rooms[i] = i;
 
         /* Setup the eviction callback args */
         h->eviction_args[i].hotel = h;
@@ -98,7 +93,6 @@ static void constructor(prte_hotel_t *h)
     h->evict_callback_fn = NULL;
     h->rooms = NULL;
     h->eviction_args = NULL;
-    h->unoccupied_rooms = NULL;
     h->last_unoccupied_room = -1;
 }
 
@@ -120,9 +114,6 @@ static void destructor(prte_hotel_t *h)
     }
     if (NULL != h->eviction_args) {
         free(h->eviction_args);
-    }
-    if (NULL != h->unoccupied_rooms) {
-        free(h->unoccupied_rooms);
     }
 }
 
