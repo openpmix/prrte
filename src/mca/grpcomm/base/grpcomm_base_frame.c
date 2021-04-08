@@ -105,6 +105,7 @@ static int prte_grpcomm_base_open(prte_mca_base_open_flag_t flags)
     PRTE_CONSTRUCT(&prte_grpcomm_base.ongoing, prte_list_t);
     PRTE_CONSTRUCT(&prte_grpcomm_base.sig_table, prte_hash_table_t);
     prte_hash_table_init(&prte_grpcomm_base.sig_table, 128);
+    prte_grpcomm_base.context_id = UINT32_MAX;
 
     return prte_mca_base_framework_components_open(&prte_grpcomm_base_framework, flags);
 }

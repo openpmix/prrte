@@ -260,8 +260,8 @@ static void allgather_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *
             if (1 == mode) {
                 size_t sz;
                 sz = prte_grpcomm_base.context_id;
-                ++prte_grpcomm_base.context_id;
-                rc = PMIx_Data_pack(NULL, reply, &sz, 1, PMIX_SIZE);
+                --prte_grpcomm_base.context_id;
+                rc = PMIx_Data_pack(NULL, reply, &sz, 1, PMIX_UINT32);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
