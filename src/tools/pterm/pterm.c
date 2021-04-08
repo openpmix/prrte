@@ -323,15 +323,13 @@ int main(int argc, char *argv[])
         ui32 = pval->value.data.integer;
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "pid", 0, 0))
-        && 0 < pval->value.data.integer) {
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "pid", 0, 0))) {
         /* see if it is an integer value */
         char *leftover;
         leftover = NULL;
         pid = strtol(pval->value.data.string, &leftover, 10);
         if (NULL == leftover || 0 == strlen(leftover)) {
             /* it is an integer */
-            pid = pval->value.data.integer;
             PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
         } else if (0 == strncasecmp(pval->value.data.string, "file", 4)) {
             FILE *fp;
