@@ -42,7 +42,9 @@ TESTS = \
 	abort \
 	simple_spawn \
 	hello \
-	connect
+	connect \
+	loop_child \
+	loop_spawn
 
 all: $(TESTS)
 

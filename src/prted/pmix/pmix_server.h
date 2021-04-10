@@ -40,6 +40,8 @@ PRTE_EXPORT int prte_pmix_server_register_nspace(prte_job_t *jdata);
 
 PRTE_EXPORT void prte_pmix_server_clear(pmix_proc_t *pname);
 
+PRTE_EXPORT void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret);
+
 END_C_DECLS
 
 #endif /* PMIX_SERVER_H_ */

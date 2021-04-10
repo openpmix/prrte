@@ -67,7 +67,7 @@
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/odls.h"
 #include "src/mca/oob/base/base.h"
-#include "src/mca/plm/base/plm_private.h"
+#include "src/mca/plm/base/base.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/rml/rml.h"
@@ -478,6 +478,12 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
             /* we can safely ignore this request as the job
              * was already cleaned up, or it was a tool */
             goto CLEANUP;
+        }
+        /* if would be rare, but a very fast terminating job could conceivably
+         * reach here prior to the spawn requestor being notified of spawn */
+        ret = prte_plm_base_spawn_response(PMIX_SUCCESS, jdata);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
         }
 
         /* release all resources (even those on other nodes) that we
