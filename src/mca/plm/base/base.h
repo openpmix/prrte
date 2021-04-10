@@ -70,6 +70,7 @@ PRTE_EXPORT void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
 PRTE_EXPORT void prte_plm_base_post_launch(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_registered(int fd, short args, void *cbdata);
 PRTE_EXPORT void prte_plm_base_wrap_args(char **args);
+PRTE_EXPORT int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata);
 
 END_C_DECLS
 

@@ -22,6 +22,7 @@
 
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/nidmap.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/output.h"
@@ -509,7 +510,7 @@ static void check_complete(int fd, short args, void *cbdata)
         if (0 == prte_routed.num_routes()) {
             /* orteds are done! */
             PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
-                                 "%s orteds complete - exiting",
+                                 "%s prteds complete - exiting",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             if (NULL == jdata) {
                 jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
@@ -528,6 +529,13 @@ static void check_complete(int fd, short args, void *cbdata)
      */
     if (jdata->state < PRTE_JOB_STATE_UNTERMINATED) {
         jdata->state = PRTE_JOB_STATE_TERMINATED;
+    }
+
+    /* if would be rare, but a very fast terminating job could conceivably
+     * reach here prior to the spawn requestor being notified of spawn */
+    rc = prte_plm_base_spawn_response(PMIX_SUCCESS, jdata);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
     }
 
     /* cleanup any pending server ops */

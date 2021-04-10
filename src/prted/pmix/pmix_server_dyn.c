@@ -53,14 +53,53 @@
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 
+void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
+{
+    pmix_server_req_t *req;
+    prte_job_t *jdata;
+
+    jdata = prte_get_job_data_object(jobid);
+    if (NULL != jdata
+        && prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, NULL, PMIX_BOOL)) {
+        /* already done */
+        return;
+    }
+
+    /* retrieve the request */
+    prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
+    if (NULL == req) {
+        /* we are hosed */
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        prte_output(0, "UNABLE TO RETRIEVE SPWN_REQ FOR JOB %s [room=%d]", jobid, room);
+        return;
+    }
+
+    /* execute the callback */
+    if (NULL != req->spcbfunc) {
+        req->spcbfunc(ret, jobid, req->cbdata);
+    } else if (NULL != req->toolcbfunc) {
+        /* if success, then add to our job info */
+        if (PRTE_SUCCESS == ret) {
+            jdata = PRTE_NEW(prte_job_t);
+            PMIX_LOAD_NSPACE(jdata->nspace, jobid);
+            PMIX_LOAD_PROCID(&req->target, jobid, 0);
+            prte_pmix_server_tool_conn_complete(jdata, req);
+        }
+        req->toolcbfunc(ret, &req->target, req->cbdata);
+    }
+    /* cleanup */
+    PRTE_RELEASE(req);
+
+    /* mark that we sent it */
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED,
+                       PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+}
 void pmix_server_launch_resp(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                              prte_rml_tag_t tg, void *cbdata)
 {
-    pmix_server_req_t *req;
     int rc, room;
     int32_t ret, cnt;
     pmix_nspace_t jobid;
-    prte_job_t *jdata;
 
     /* unpack the status - this is already a PMIx value */
     cnt = 1;
@@ -89,29 +128,7 @@ void pmix_server_launch_resp(int status, pmix_proc_t *sender, pmix_data_buffer_t
         return;
     }
 
-    /* retrieve the request */
-    prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
-    if (NULL == req) {
-        /* we are hosed */
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return;
-    }
-
-    /* execute the callback */
-    if (NULL != req->spcbfunc) {
-        req->spcbfunc(ret, jobid, req->cbdata);
-    } else if (NULL != req->toolcbfunc) {
-        /* if success, then add to our job info */
-        if (PRTE_SUCCESS == ret) {
-            jdata = PRTE_NEW(prte_job_t);
-            PMIX_LOAD_NSPACE(jdata->nspace, jobid);
-            PMIX_LOAD_PROCID(&req->target, jobid, 0);
-            prte_pmix_server_tool_conn_complete(jdata, req);
-        }
-        req->toolcbfunc(ret, &req->target, req->cbdata);
-    }
-    /* cleanup */
-    PRTE_RELEASE(req);
+    pmix_server_notify_spawn(jobid, room, ret);
 }
 
 static void spawn(int sd, short args, void *cbdata)
