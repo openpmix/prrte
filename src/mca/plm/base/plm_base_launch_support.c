@@ -41,6 +41,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/include/hash_string.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/prted/pmix/pmix_server.h"
 #include "src/util/argv.h"
 #include "src/util/printf.h"
 #include "src/util/prte_environ.h"
@@ -588,7 +589,7 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
     PRTE_RELEASE(caddy);
 }
 
-int prte_plm_base_spawn_reponse(int32_t status, prte_job_t *jdata)
+int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
 {
     int rc;
     pmix_data_buffer_t *answer;
@@ -639,6 +640,18 @@ int prte_plm_base_spawn_reponse(int32_t status, prte_job_t *jdata)
         PMIX_INFO_FREE(iptr, 4);
     }
 
+    rmptr = &room;
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void **) &rmptr, PMIX_INT)) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
+
+    /* if the originator is me, then just do the notification */
+    if (PMIX_CHECK_PROCID(&jdata->originator, PRTE_PROC_MY_NAME)) {
+        pmix_server_notify_spawn(jdata->nspace, room, PMIX_SUCCESS);
+        return PRTE_SUCCESS;
+    }
+
     /* prep the response to the spawn requestor */
     PMIX_DATA_BUFFER_CREATE(answer);
 
@@ -657,15 +670,13 @@ int prte_plm_base_spawn_reponse(int32_t status, prte_job_t *jdata)
         return prte_pmix_convert_status(rc);
     }
     /* pack the room number */
-    rmptr = &room;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void **) &rmptr, PMIX_INT)) {
-        rc = PMIx_Data_pack(NULL, answer, &room, 1, PMIX_INT);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(answer);
-            return prte_pmix_convert_status(rc);
-        }
+    rc = PMIx_Data_pack(NULL, answer, &room, 1, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(answer);
+        return prte_pmix_convert_status(rc);
     }
+
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:launch sending dyn release of job %s to %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
@@ -677,9 +688,6 @@ int prte_plm_base_spawn_reponse(int32_t status, prte_job_t *jdata)
         return rc;
     }
 
-    /* mark that we sent it */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
-                       PMIX_BOOL);
     return PRTE_SUCCESS;
 }
 
@@ -954,7 +962,7 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace)));
 
     /* notify the spawn requestor */
-    rc = prte_plm_base_spawn_reponse(PRTE_SUCCESS, jdata);
+    rc = prte_plm_base_spawn_response(PRTE_SUCCESS, jdata);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }

@@ -424,7 +424,8 @@ void prte_pmix_server_clear(pmix_proc_t *pname)
     for (n = 0; n < prte_pmix_server_globals.reqs.num_rooms; n++) {
         prte_hotel_knock(&prte_pmix_server_globals.reqs, n, (void **) &req);
         if (NULL != req) {
-            if (PMIX_CHECK_PROCID(&req->tproc, pname)) {
+            if (0 == strncmp(req->tproc.nspace, pname->nspace, PMIX_MAX_NSLEN) &&
+                PMIX_CHECK_RANK(req->tproc.rank, pname->rank)) {
                 prte_hotel_checkout(&prte_pmix_server_globals.reqs, n);
                 PRTE_RELEASE(req);
             }

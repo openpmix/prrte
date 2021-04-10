@@ -43,7 +43,7 @@
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/base/odls_private.h"
 #include "src/mca/odls/odls.h"
-#include "src/mca/plm/base/plm_private.h"
+#include "src/mca/plm/base/base.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/rml/rml.h"
@@ -333,7 +333,7 @@ static void job_errors(int fd, short args, void *cbdata)
      * has been notified that the spawn completed - otherwise, a quick-failing
      * job might not generate a spawn response */
     rc = prte_pmix_convert_job_state_to_error(jobstate);
-    rc = prte_plm_base_spawn_reponse(rc, jdata);
+    rc = prte_plm_base_spawn_response(rc, jdata);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
@@ -522,7 +522,7 @@ keep_going:
     /* all jobs were spawned by a requestor, so ensure that requestor
      * has been notified that the spawn completed - otherwise, a quick-failing
      * job might not generate a spawn response */
-    rc = prte_plm_base_spawn_reponse(PRTE_SUCCESS, jdata);
+    rc = prte_plm_base_spawn_response(PRTE_SUCCESS, jdata);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
@@ -753,7 +753,7 @@ keep_going:
 
 cleanup:
     rc = prte_pmix_convert_proc_state_to_error(state);
-    rc = prte_plm_base_spawn_reponse(rc, jdata);
+    rc = prte_plm_base_spawn_response(rc, jdata);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
