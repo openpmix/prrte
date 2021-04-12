@@ -238,6 +238,18 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
     }
 }
 
+static void debug_cbfunc(size_t evhdlr_registration_id, pmix_status_t status,
+                         const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                         pmix_info_t *results, size_t nresults,
+                         pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+{
+    /* we _always_ have to execute the evhandler callback or
+     * else the event progress engine will hang */
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+}
+
 static void setupcbfunc(pmix_status_t status, pmix_info_t info[], size_t ninfo,
                         void *provided_cbdata, pmix_op_cbfunc_t cbfunc, void *cbdata)
 {
@@ -329,6 +341,7 @@ int prun(int argc, char *argv[])
     prte_schizo_base_module_t *schizo;
     char hostname[PRTE_PATH_MAX];
     pmix_rank_t rank;
+    pmix_status_t code;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
@@ -552,10 +565,18 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LIST_START(tinfo);
 
     /* tell PMIx what our name should be */
-    prte_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, getpid());
-    PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_NSPACE, param, PMIX_STRING);
-    free(param);
-    rank = 0;
+    if (NULL != (param = getenv("PMIX_NAMESPACE"))) {
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_NSPACE, param, PMIX_STRING);
+    } else {
+        prte_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, getpid());
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_NSPACE, param, PMIX_STRING);
+        free(param);
+    }
+    if (NULL != (param = getenv("PMIX_RANK"))) {
+        rank = strtoul(param, NULL, 10);
+    } else {
+        rank = 0;
+    }
     PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_RANK, &rank, PMIX_PROC_RANK);
 
     if (prte_cmd_line_is_taken(prte_cmd_line, "do-not-connect")) {
@@ -648,8 +669,7 @@ int prun(int argc, char *argv[])
     ninfo = darray.size;
     PMIX_INFO_LIST_RELEASE(tinfo);
 
-    /* now initialize PMIx - we have to indicate we are a launcher so that we
-     * will provide rendezvous points for tools to connect to us */
+    /* now initialize PMIx */
     if (PMIX_SUCCESS != (ret = PMIx_tool_init(&myproc, iptr, ninfo))) {
         fprintf(stderr, "%s failed to initialize, likely due to no DVM being available\n",
                 prte_tool_basename);
@@ -957,6 +977,22 @@ int prun(int argc, char *argv[])
         rc = ret;
         goto DONE;
     }
+
+    /* register to receive the ready-for-debug event - the internal
+     * event library can relay it to any tool connected to us */
+    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+    code = PMIX_READY_FOR_DEBUG;
+    n = 0;
+    PMIX_INFO_CREATE(iptr, 2);
+    PMIX_INFO_LOAD(&iptr[n], PMIX_EVENT_HDLR_NAME, "READY-FOR-DEBUG", PMIX_STRING);
+    ++n;
+    PMIX_LOAD_PROCID(&pname, spawnednspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&iptr[n], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
+    PMIx_Register_event_handler(&code, 1, iptr, 2, debug_cbfunc, regcbfunc,
+                                (void *) &lock);
+    PRTE_PMIX_WAIT_THREAD(&lock);
+    PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(iptr, 2);
 
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, spawnednspace, 0); // forward stdin to rank=0
