@@ -123,9 +123,7 @@ typedef struct prte_hotel_t {
        rationale above for why this is a separate array) */
     prte_hotel_room_eviction_callback_arg_t *eviction_args;
 
-    /* All currently unoccupied rooms in this hotel (not necessarily
-       in any particular order) */
-    int *unoccupied_rooms;
+    /* where the next occupant will go */
     int last_unoccupied_room;
 } prte_hotel_t;
 PRTE_CLASS_DECLARATION(prte_hotel_t);
@@ -181,43 +179,46 @@ PRTE_EXPORT int prte_hotel_init(prte_hotel_t *hotel, int num_rooms, prte_event_b
 static inline int prte_hotel_checkin(prte_hotel_t *hotel, void *occupant, int *room_num)
 {
     prte_hotel_room_t *room;
+    int n;
 
     /* Do we have any rooms available? */
     if (PRTE_UNLIKELY(hotel->last_unoccupied_room < 0)) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    /* Put this occupant into the first empty room that we have */
-    *room_num = hotel->unoccupied_rooms[hotel->last_unoccupied_room--];
+    /* Put this occupant into the next empty room */
+    *room_num = hotel->last_unoccupied_room;
     room = &(hotel->rooms[*room_num]);
     room->occupant = occupant;
-
     /* Assign the event and make it pending */
     if (NULL != hotel->evbase) {
         prte_event_add(&(room->eviction_timer_event), &(hotel->eviction_timeout));
+    }
+
+    /* find the next unoccupied room */
+    n = hotel->last_unoccupied_room;
+    room = &(hotel->rooms[n]);
+    while (NULL != room->occupant && 0 != n) {
+        --n;
+        room = &(hotel->rooms[n]);
+    }
+    /* if we didn't find one, start over again at the top */
+    if (NULL != room->occupant) {
+        n = hotel->num_rooms - 1;
+        room = &(hotel->rooms[n]);
+        while (NULL != room->occupant && hotel->last_unoccupied_room != n) {
+            --n;
+            room = &(hotel->rooms[n]);
+        }
+    }
+    /* if we couldn't find one, then mark this hotel as full */
+    if (NULL != room->occupant) {
+        hotel->last_unoccupied_room = -1;
+    } else {
+        hotel->last_unoccupied_room = n;
     }
 
     return PRTE_SUCCESS;
-}
-
-/**
- * Same as prte_hotel_checkin(), but slightly optimized for when the
- * caller *knows* that there is a room available.
- */
-static inline void prte_hotel_checkin_with_res(prte_hotel_t *hotel, void *occupant, int *room_num)
-{
-    prte_hotel_room_t *room;
-
-    /* Put this occupant into the first empty room that we have */
-    *room_num = hotel->unoccupied_rooms[hotel->last_unoccupied_room--];
-    room = &(hotel->rooms[*room_num]);
-    assert(room->occupant == NULL);
-    room->occupant = occupant;
-
-    /* Assign the event and make it pending */
-    if (NULL != hotel->evbase) {
-        prte_event_add(&(room->eviction_timer_event), &(hotel->eviction_timeout));
-    }
 }
 
 /**
@@ -248,9 +249,6 @@ static inline void prte_hotel_checkout(prte_hotel_t *hotel, int room_num)
         if (NULL != hotel->evbase) {
             prte_event_del(&(room->eviction_timer_event));
         }
-        hotel->last_unoccupied_room++;
-        assert(hotel->last_unoccupied_room < hotel->num_rooms);
-        hotel->unoccupied_rooms[hotel->last_unoccupied_room] = room_num;
     }
 
     /* Don't bother returning whether we actually checked someone out
@@ -288,9 +286,6 @@ static inline void prte_hotel_checkout_and_return_occupant(prte_hotel_t *hotel, 
         if (NULL != hotel->evbase) {
             prte_event_del(&(room->eviction_timer_event));
         }
-        hotel->last_unoccupied_room++;
-        assert(hotel->last_unoccupied_room < hotel->num_rooms);
-        hotel->unoccupied_rooms[hotel->last_unoccupied_room] = room_num;
     } else {
         *occupant = NULL;
     }
@@ -304,10 +299,16 @@ static inline void prte_hotel_checkout_and_return_occupant(prte_hotel_t *hotel, 
  */
 static inline bool prte_hotel_is_empty(prte_hotel_t *hotel)
 {
-    if (hotel->last_unoccupied_room == hotel->num_rooms - 1)
-        return true;
-    else
-        return false;
+    prte_hotel_room_t *room;
+    int n;
+
+    for (n=0; n < hotel->num_rooms; n++) {
+        room = &(hotel->rooms[n]);
+        if (NULL != room->occupant) {
+            return false;
+        }
+    }
+    return true;
 }
 
 /**

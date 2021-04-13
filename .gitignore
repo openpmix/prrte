@@ -168,3 +168,5 @@ test/abort
 test/simple_spawn
 test/hello
 test/connect
+test/loop_child
+test/loop_spawn

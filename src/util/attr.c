@@ -445,6 +445,18 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB_NOINHERIT";
         case PRTE_JOB_FILE:
             return "JOB-FILE";
+        case PRTE_JOB_DO_NOT_RESOLVE:
+            return "DO-NOT-RESOLVE";
+        case PRTE_JOB_DEBUG_TARGET:
+            return "DEBUG-TARGET";
+        case PRTE_JOB_DEBUG_DAEMONS_PER_NODE:
+            return "DEBUG-DAEMONS-PER-NODE";
+        case PRTE_JOB_DEBUG_DAEMONS_PER_PROC:
+            return "DEBUG-DAEMONS-PER-PROC";
+        case PRTE_JOB_STOP_IN_INIT:
+            return "STOP-IN-INIT";
+        case PRTE_JOB_STOP_IN_APP:
+            return "STOP-IN-APP";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

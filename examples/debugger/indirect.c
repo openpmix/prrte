@@ -368,26 +368,6 @@ int main(int argc, char **argv)
     }
     PMIX_INFO_FREE(info, ninfo);
 
-    /* register to receive the launch complete event telling us the
-     * nspace of the child job and alerting us that things are ready
-     * for us to spawn the debugger daemons - this will be registered
-     * with the IL we started */
-    printf("REGISTERING READY-FOR-DEBUG HANDLER\n");
-    DEBUG_CONSTRUCT_LOCK(&mylock);
-    code = PMIX_READY_FOR_DEBUG;
-    n = 0;
-    PMIX_INFO_CREATE(info, 1);
-    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_HDLR_NAME, "READY-FOR-DEBUG", PMIX_STRING);
-    PMIx_Register_event_handler(&code, 1, info, 1, spawn_cbfunc, evhandler_reg_callbk,
-                                (void *) &mylock);
-    DEBUG_WAIT_THREAD(&mylock);
-    DEBUG_DESTRUCT_LOCK(&mylock);
-    PMIX_INFO_FREE(info, 1);
-    if (!ilactive) {
-        fprintf(stderr, "Error: Launcher not active\n");
-        goto done;
-    }
-
     printf("RELEASING %s [%s:%d]\n", argv[1], proc.nspace, proc.rank);
     /* release the IL to spawn its job */
     PMIX_INFO_CREATE(info, 2);
@@ -401,7 +381,6 @@ int main(int argc, char **argv)
     /* wait for the IL to have launched its application */
     int icount = 0;
     while (dbactive && ilactive) {
-        printf("dbactive=%d ilactive=%d (icount %d)\n", dbactive, ilactive, icount);
         struct timespec tp = {0, 500000000};
         nanosleep(&tp, NULL);
         ++icount;
@@ -421,6 +400,26 @@ int main(int argc, char **argv)
         goto done;
     }
     printf("APPLICATION HAS LAUNCHED: %s\n", (char *) appnspace);
+
+    /* register to receive the ready-for-debug event alerting us that things are ready
+     * for us to spawn the debugger daemons - this will be registered
+     * with the IL we started */
+    printf("REGISTERING READY-FOR-DEBUG HANDLER\n");
+    DEBUG_CONSTRUCT_LOCK(&mylock);
+    code = PMIX_READY_FOR_DEBUG;
+    PMIX_INFO_CREATE(info, 2);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_HDLR_NAME, "READY-FOR-DEBUG", PMIX_STRING);
+    PMIX_LOAD_PROCID(&proc, appnspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
+    PMIx_Register_event_handler(&code, 1, info, 2, spawn_cbfunc, evhandler_reg_callbk,
+                                (void *) &mylock);
+    DEBUG_WAIT_THREAD(&mylock);
+    DEBUG_DESTRUCT_LOCK(&mylock);
+    PMIX_INFO_FREE(info, 2);
+    if (!ilactive) {
+        fprintf(stderr, "Error: Launcher not active\n");
+        goto done;
+    }
 
     /* setup the debugger */
     mydata = (myquery_data_t *) malloc(sizeof(myquery_data_t));
