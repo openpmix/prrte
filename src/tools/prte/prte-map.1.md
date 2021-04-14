@@ -194,7 +194,7 @@ of one or more of the following to the `--bind-to` option:
 
 :   Display the detected allocation of resources (e.g., nodes, slots)
 
-`--bind-to :REPORT`
+`--bind-to :DISPLAY`
 
 :   Report bindings for launched processes to `stderr`.
 
@@ -644,7 +644,7 @@ The lowest level CPUs are 'cores' and we have 20 total (10 per package).
 
 If we run:
 ```
-prun --np 20 --hostfile myhostfile --map-by package --bind-to package:REPORT hostname
+prun --np 20 --hostfile myhostfile --map-by package --bind-to package:DISPLAY hostname
 ```
 
 Then 10 processes are mapped to each package, and bound at the package level.
@@ -653,7 +653,7 @@ at the hardware level.
 
 However, if we run:
 ```
-prun --np 21 --hostfile myhostfile --map-by package --bind-to package:REPORT hostname
+prun --np 21 --hostfile myhostfile --map-by package --bind-to package:DISPLAY hostname
 ```
 
 Then 11 processes are mapped to the first package and 10 to the second package.
@@ -677,7 +677,7 @@ The lowest level CPUs are 'hwthreads' (because we are going to use the
 
 If we re-run (from the package example) and add the `:HWTCPUS` qualifier:
 ```
-prun --np 21 --hostfile myhostfile --map-by package:HWTCPUS --bind-to package:REPORT hostname
+prun --np 21 --hostfile myhostfile --map-by package:HWTCPUS --bind-to package:DISPLAY hostname
 ```
 
 Without the `:HWTCPUS` qualifier this would be overloading (as we saw
@@ -688,7 +688,7 @@ with the `:HWTCPUS` qualifier, it is not overloading since we have
 
 Alternatively, if we run:
 ```
-prun --np 161 --hostfile myhostfile --map-by package:HWTCPUS --bind-to package:REPORT hostname
+prun --np 161 --hostfile myhostfile --map-by package:HWTCPUS --bind-to package:DISPLAY hostname
 ```
 
 Then 81 processes are mapped to the first package and 80 to the second package.
@@ -702,7 +702,7 @@ So the first package is overloaded.
 PRTE provides various diagnostic reports that aid the user in verifying and
 tuning the mapping/ranking/binding for a specific job.
 
-The `:REPORT` qualifier to `--bind-to` command line option can be used to
+The `:DISPLAY` qualifier to `--bind-to` command line option can be used to
 report process bindings.
 
 As an example, consider a node with:
@@ -714,7 +714,7 @@ In each of the examples below the binding is reported in a human readable
 format.
 
 ```
-$ prun --np 4 --map-by core --bind-to core:REPORT ./a.out
+$ prun --np 4 --map-by core --bind-to core:DISPLAY ./a.out
 [node01:103137] MCW rank 0 bound to package[0][core:0]
 [node01:103137] MCW rank 1 bound to package[0][core:1]
 [node01:103137] MCW rank 2 bound to package[0][core:2]
@@ -724,7 +724,7 @@ $ prun --np 4 --map-by core --bind-to core:REPORT ./a.out
 The example above processes bind to successive cores on the first package.
 
 ```
-$ prun --np 4 --map-by package --bind-to package:REPORT ./a.out
+$ prun --np 4 --map-by package --bind-to package:DISPLAY ./a.out
 [node01:103115] MCW rank 0 bound to package[0][core:0-9]
 [node01:103115] MCW rank 1 bound to package[1][core:10-19]
 [node01:103115] MCW rank 2 bound to package[0][core:0-9]
@@ -736,7 +736,7 @@ The processes cycle though the packages in a round-robin fashion as many times
 as are needed.
 
 ```
-$ prun --np 4 --map-by package:PE=2 --bind-to core:REPORT ./a.out
+$ prun --np 4 --map-by package:PE=2 --bind-to core:DISPLAY ./a.out
 [node01:103328] MCW rank 0 bound to package[0][core:0-1]
 [node01:103328] MCW rank 1 bound to package[1][core:10-11]
 [node01:103328] MCW rank 2 bound to package[0][core:2-3]
@@ -751,7 +751,7 @@ as are needed.
 
 
 ```
-$ prun --np 4 --map-by core:PE=2:HWTCPUS --bind-to :REPORT  hostname
+$ prun --np 4 --map-by core:PE=2:HWTCPUS --bind-to :DISPLAY  hostname
 [node01:103506] MCW rank 0 bound to package[0][hwt:0-1]
 [node01:103506] MCW rank 1 bound to package[0][hwt:8-9]
 [node01:103506] MCW rank 2 bound to package[0][hwt:16-17]
@@ -768,7 +768,7 @@ The processes cycle though the cores in a round-robin fashion as many times
 as are needed.
 
 ```
-$ prun --np 4 --bind-to none:REPORT  hostname
+$ prun --np 4 --bind-to none:DISPLAY  hostname
 [node01:107126] MCW rank 0 is not bound (or bound to all available processors)
 [node01:107126] MCW rank 1 is not bound (or bound to all available processors)
 [node01:107126] MCW rank 2 is not bound (or bound to all available processors)
@@ -991,7 +991,7 @@ These deprecated options will be removed in a future release.
 
 `--report-bindings`
 
-:   **(Deprecated: Use `--bind-to :REPORT`)**
+:   **(Deprecated: Use `--bind-to :DISPLAY`)**
     Report any bindings for launched processes.
 
 `--tag-output`

@@ -219,7 +219,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                                "mapping policy", ck2[i]);
                 return PRTE_ERR_SILENT;
             }
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, PRTE_ATTR_GLOBAL,
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DEVEL, PRTE_ATTR_GLOBAL,
                                NULL, PMIX_BOOL);
 
         } else if (0 == strcasecmp(ck2[i], "DISPLAYTOPO")) {
@@ -237,7 +237,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                                "mapping policy", ck2[i]);
                 return PRTE_ERR_SILENT;
             }
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, PRTE_ATTR_GLOBAL, NULL,
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_XML, PRTE_ATTR_GLOBAL, NULL,
                                PMIX_BOOL);
 
         } else if (0 == strcasecmp(ck2[i], "DISPLAYALLOC")) {

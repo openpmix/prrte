@@ -890,7 +890,7 @@ int prte(int argc, char *argv[])
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);
             }
             if (0 == strcmp(targv[idx], "bind")) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":REPORT", PMIX_STRING);
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":DISPLAY", PMIX_STRING);
             }
             if (0 == strcmp(targv[idx], "proctable")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);

@@ -349,7 +349,7 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB-FWD-IO-TO-TOOL";
         case PRTE_JOB_LAUNCHED_DAEMONS:
             return "JOB-LAUNCHED-DAEMONS";
-        case PRTE_JOB_REPORT_BINDINGS:
+        case PRTE_JOB_DISPLAY_BINDINGS:
             return "JOB-REPORT-BINDINGS";
         case PRTE_JOB_CPUSET:
             return "JOB-CPUSET";
@@ -407,12 +407,12 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB_SPAWN_NOTIFIED";
         case PRTE_JOB_DISPLAY_MAP:
             return "DISPLAY_JOB_MAP";
-        case PRTE_JOB_DISPLAY_DEVEL_MAP:
-            return "DISPLAY_DEVEL_JOB_MAP";
+        case PRTE_JOB_DISPLAY_MAP_DEVEL:
+            return "DISPLAY_JOB_MAP_DEVEL";
         case PRTE_JOB_DISPLAY_TOPO:
             return "DISPLAY_TOPOLOGY";
-        case PRTE_JOB_DISPLAY_DIFF:
-            return "DISPLAY_DIFFABLE";
+        case PRTE_JOB_DISPLAY_MAP_XML:
+            return "DISPLAY_JOB_MAP_XML";
         case PRTE_JOB_DISPLAY_ALLOC:
             return "DISPLAY_ALLOCATION";
         case PRTE_JOB_DO_NOT_LAUNCH:

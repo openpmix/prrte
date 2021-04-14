@@ -150,7 +150,7 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
         return;
     }
 
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DEVEL, NULL, PMIX_BOOL)) {
         /* just provide a simple output for users */
         prte_asprintf(&tmp, "\nData for node: %s\tNum slots: %ld\tMax slots: %ld\tNum procs: %ld",
                       (NULL == src->name) ? "UNKNOWN" : src->name, (long) src->slots,
@@ -281,7 +281,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
         return;
     }
 
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DEVEL, NULL, PMIX_BOOL)) {
         if (prte_get_attribute(&src->attributes, PRTE_PROC_CPU_BITMAP, (void **) &cpu_bitmap,
                                PMIX_STRING)
             && NULL != cpu_bitmap && NULL != src->node->topology
@@ -488,7 +488,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
         }
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DEVEL, NULL, PMIX_BOOL)) {
         prte_asprintf(
             &tmp,
             "\n=================================   JOB MAP   =================================\n"
