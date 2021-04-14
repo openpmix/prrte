@@ -531,9 +531,9 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--display-topo")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "topo", true);
     }
-    /* --display-diffable-map  ->  --display map-diffable */
+    /* --display-diffable-map  ->  --display map-xml */
     else if (0 == strcmp(option, "--display-diff")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-diffable", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-xml", true);
     }
     /* --report-bindings  ->  --display bind */
     else if (0 == strcmp(option, "--report-bindings")) {
