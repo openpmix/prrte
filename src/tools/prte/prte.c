@@ -895,8 +895,8 @@ int prte(int argc, char *argv[])
             if (0 == strcmp(targv[idx], "map-devel")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDEVEL", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "map-xml")) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYXML", PMIX_STRING);
+            if (0 == strcmp(targv[idx], "map-diffable")) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDIFF", PMIX_STRING);
             }
             if (0 == strcmp(targv[idx], "proctable")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);

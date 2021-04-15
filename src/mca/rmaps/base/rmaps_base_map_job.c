@@ -758,7 +758,7 @@ ranking:
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DEVEL, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_XML, NULL, PMIX_BOOL)) {
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DIFF, NULL, PMIX_BOOL)) {
         /* compute and save local ranks */
         if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_local_ranks(jdata))) {
             PRTE_ERROR_LOG(rc);
@@ -807,7 +807,7 @@ ranking:
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DEVEL, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_XML, NULL, PMIX_BOOL)) {
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DIFF, NULL, PMIX_BOOL)) {
         /* display the map */
         prte_rmaps_base_display_map(jdata);
     }
@@ -846,7 +846,7 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
         return;
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_XML, NULL, PMIX_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DIFF, NULL, PMIX_BOOL)) {
         /* intended solely to test mapping methods, this output
          * can become quite long when testing at scale. Rather
          * than enduring all the malloc/free's required to

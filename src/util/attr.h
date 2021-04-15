@@ -219,7 +219,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_DISPLAY_MAP       (PRTE_JOB_START_KEY + 64) // bool - display job map
 #define PRTE_JOB_DISPLAY_MAP_DEVEL (PRTE_JOB_START_KEY + 65) // bool - display devel level job map
 #define PRTE_JOB_DISPLAY_TOPO      (PRTE_JOB_START_KEY + 66) // bool - display topology with job map
-#define PRTE_JOB_DISPLAY_MAP_XML   (PRTE_JOB_START_KEY + 67) // bool - display diffable XML job map
+#define PRTE_JOB_DISPLAY_MAP_DIFF  (PRTE_JOB_START_KEY + 67) // bool - display diffable XML job map
 #define PRTE_JOB_DISPLAY_ALLOC     (PRTE_JOB_START_KEY + 68) // bool - display allocation
 #define PRTE_JOB_DO_NOT_LAUNCH     (PRTE_JOB_START_KEY + 69) // bool - do not launch job
 #define PRTE_JOB_XML_OUTPUT        (PRTE_JOB_START_KEY + 70) // bool - print in xml format

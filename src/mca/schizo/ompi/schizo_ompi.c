@@ -310,7 +310,7 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     /* display options */
     {'\0', "display", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Comma-delimited list of options for displaying information about the allocation and job."
-     "Allowed values: allocation, bind, map, map-devel, map-xml, proctable, topo",
+     "Allowed values: allocation, bind, map, map-devel, map-diffable, proctable, topo",
      PRTE_CMD_LINE_OTYPE_DEBUG},
     /* developer options */
     {'\0', "do-not-launch", 0, PRTE_CMD_LINE_TYPE_BOOL,
@@ -531,9 +531,9 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--display-topo")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "topo", true);
     }
-    /* --display-diffable-map  ->  --display map-xml */
+    /* --display-diffable-map  ->  --display map-diffable */
     else if (0 == strcmp(option, "--display-diff")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-xml", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-diffable", true);
     }
     /* --report-bindings  ->  --display bind */
     else if (0 == strcmp(option, "--report-bindings")) {

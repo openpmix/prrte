@@ -168,7 +168,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DEVEL, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_XML, NULL, PMIX_BOOL)) {
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DIFF, NULL, PMIX_BOOL)) {
         dobind = true;
     }
     /* reset usage */
@@ -473,7 +473,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DEVEL, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_XML, NULL, PMIX_BOOL)) {
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DIFF, NULL, PMIX_BOOL)) {
         dobind = true;
     }
 
@@ -803,7 +803,7 @@ static int bind_to_cpuset(prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DEVEL, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_XML, NULL, PMIX_BOOL)) {
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DIFF, NULL, PMIX_BOOL)) {
         dobind = true;
     }
 
@@ -1058,7 +1058,7 @@ execute:
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DEVEL, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_XML, NULL, PMIX_BOOL)) {
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP_DIFF, NULL, PMIX_BOOL)) {
         dobind = true;
     }
 

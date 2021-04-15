@@ -411,8 +411,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "DISPLAY_JOB_MAP_DEVEL";
         case PRTE_JOB_DISPLAY_TOPO:
             return "DISPLAY_TOPOLOGY";
-        case PRTE_JOB_DISPLAY_MAP_XML:
-            return "DISPLAY_JOB_MAP_XML";
+        case PRTE_JOB_DISPLAY_MAP_DIFF:
+            return "DISPLAY_JOB_MAP_DIFF";
         case PRTE_JOB_DISPLAY_ALLOC:
             return "DISPLAY_ALLOCATION";
         case PRTE_JOB_DO_NOT_LAUNCH:
