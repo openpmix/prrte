@@ -448,6 +448,18 @@ void prte_map_print(char **output, prte_job_t *jdata)
             free(tmp);
             tmp = tmp3;
         }
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+            prte_asprintf(&tmp2, "%s\t<comment>\n"
+                "\t\tWarning: This map has been generated with the DONOTLAUNCH option;\n"
+                "\t\tThe compute node architecture has not been probed, and the displayed\n"
+                "\t\tmap reflects the HEADNODE ARCHITECTURE. On systems with a different\n"
+                "\t\tarchitecture between headnode and compute nodes, the map can be\n"
+                "\t\tdisplayed using `prte --display map /bin/true`, which will launch\n"
+                "\t\tenough of the DVM to probe the compute node architecture.\n"
+                "\t</comment>\n", tmp);
+            free(tmp);
+            tmp = tmp2;
+        }
         prte_asprintf(&tmp2, "%s</map>\n", tmp);
         free(tmp);
         *output = tmp2;
@@ -530,6 +542,18 @@ void prte_map_print(char **output, prte_job_t *jdata)
         free(tmp);
         free(tmp2);
         tmp = tmp3;
+    }
+
+    /* put some warning out for the donotlaunch case */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+        prte_asprintf(&tmp2, "%s\n\nWarning: This map has been generated with the DONOTLAUNCH option;\n"
+                             "\tThe compute node architecture has not been probed, and the displayed\n"
+                             "\tmap reflects the HEADNODE ARCHITECTURE. On systems with a different\n"
+                             "\tarchitecture between headnode and compute nodes, the map can be\n"
+                             "\tdisplayed using `prte --display map /bin/true`, which will launch\n"
+                             "\tenough of the DVM to probe the compute node architecture.", tmp);
+        free(tmp);
+        tmp = tmp2;
     }
 
     /* let's make it easier to see */
