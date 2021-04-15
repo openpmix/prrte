@@ -296,7 +296,7 @@ static prte_cmd_line_init_t prte_cmd_line_init[] = {
     /* display options */
     {'\0', "display", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Comma-delimited list of options for displaying information about the allocation and job."
-     "Allowed values: allocation, map, bind, proctable, allocation, map-xml, topo",
+     "Allowed values: allocation, bind, map, map-devel, map-xml, proctable, topo",
      PRTE_CMD_LINE_OTYPE_DEBUG},
     /* developer options */
     {'\0', "do-not-launch", 0, PRTE_CMD_LINE_TYPE_BOOL,
