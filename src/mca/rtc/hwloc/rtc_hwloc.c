@@ -149,7 +149,7 @@ static void set(prte_job_t *jobdat, prte_proc_t *child, char ***environ_copy, in
                     return;
                 }
             }
-            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_DISPLAY_BINDINGS, NULL,
+            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_DISPLAY_BIND, NULL,
                                    PMIX_BOOL)) {
                 if (0 == rc) {
                     report_binding(jobdat, child->name.rank);
@@ -159,7 +159,7 @@ static void set(prte_job_t *jobdat, prte_proc_t *child, char ***environ_copy, in
                                 child->name.rank);
                 }
             }
-        } else if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_DISPLAY_BINDINGS, NULL,
+        } else if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_DISPLAY_BIND, NULL,
                                       PMIX_BOOL)) {
             prte_output(0, "MCW rank %d is not bound (or bound to all available processors)",
                         child->name.rank);
@@ -229,7 +229,7 @@ static void set(prte_job_t *jobdat, prte_proc_t *child, char ***environ_copy, in
         }
 
         if (0 == rc
-            && prte_get_attribute(&jobdat->attributes, PRTE_JOB_DISPLAY_BINDINGS, NULL, PMIX_BOOL)) {
+            && prte_get_attribute(&jobdat->attributes, PRTE_JOB_DISPLAY_BIND, NULL, PMIX_BOOL)) {
             report_binding(jobdat, child->name.rank);
         }
 

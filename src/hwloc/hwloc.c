@@ -448,7 +448,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                                    "binding policy", quals[i]);
                     return PRTE_ERR_SILENT;
                 }
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_BINDINGS, PRTE_ATTR_GLOBAL,
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_BIND, PRTE_ATTR_GLOBAL,
                                    NULL, PMIX_BOOL);
             } else {
                 /* unknown option */

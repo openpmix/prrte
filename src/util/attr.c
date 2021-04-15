@@ -349,7 +349,7 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB-FWD-IO-TO-TOOL";
         case PRTE_JOB_LAUNCHED_DAEMONS:
             return "JOB-LAUNCHED-DAEMONS";
-        case PRTE_JOB_DISPLAY_BINDINGS:
+        case PRTE_JOB_DISPLAY_BIND:
             return "JOB-REPORT-BINDINGS";
         case PRTE_JOB_CPUSET:
             return "JOB-CPUSET";

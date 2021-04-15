@@ -421,9 +421,9 @@ static void interim(int sd, short args, void *cbdata)
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_SUBSCRIBE_GIVEN);
 
             /***   REPORT BINDINGS  ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_BINDINGS)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_REPORT_BINDINGS)) {
             flag = PMIX_INFO_TRUE(info);
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_BINDINGS, PRTE_ATTR_GLOBAL,
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_BIND, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
 
             /***   CPU LIST  ***/

@@ -165,7 +165,7 @@ typedef uint16_t prte_job_flags_t;
     (PRTE_JOB_START_KEY + 33) // Forward IO for this job to the tool requesting its spawn
 #define PRTE_JOB_LAUNCHED_DAEMONS \
     (PRTE_JOB_START_KEY + 35) // bool - Job caused new daemons to be spawned
-#define PRTE_JOB_DISPLAY_BINDINGS (PRTE_JOB_START_KEY + 36) // bool - Report process bindings
+#define PRTE_JOB_DISPLAY_BIND    (PRTE_JOB_START_KEY + 36) // bool - Report process bindings
 #define PRTE_JOB_CPUSET          (PRTE_JOB_START_KEY + 37) // string - "soft" cgroup envelope for the job
 #define PRTE_JOB_NOTIFICATIONS \
     (PRTE_JOB_START_KEY + 38) // string - comma-separated list of desired notifications+methods
