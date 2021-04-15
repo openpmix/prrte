@@ -925,7 +925,18 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
                                 prte_hwloc_base_print_locality(locality));
                 }
             }
-            prte_output(prte_clean_output, "\t</locality>\n</map>");
+            prte_output(prte_clean_output, "\t</locality>\n");
+            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+                prte_output(prte_clean_output, "\t<comment>\n"
+                    "\t\tWarning: This map has been generated with the DONOTLAUNCH option;\n"
+                    "\t\tThe compute node architecture has not been probed, and the displayed\n"
+                    "\t\tmap reflects the HEADNODE ARCHITECTURE. On systems with a different\n"
+                    "\t\tarchitecture between headnode and compute nodes, the map can be\n"
+                    "\t\tdisplayed using `prte --display map /bin/true`, which will launch\n"
+                    "\t\tenough of the DVM to probe the compute node architecture.\n"
+                    "\t</comment>\n");
+            }
+            prte_output(prte_clean_output, "</map>\n");
             fflush(stderr);
             if (NULL != p0bitmap) {
                 free(p0bitmap);
