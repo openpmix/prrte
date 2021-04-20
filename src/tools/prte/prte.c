@@ -895,9 +895,6 @@ int prte(int argc, char *argv[])
             if (0 == strcmp(targv[idx], "map-devel")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDEVEL", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "map-diffable")) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDIFF", PMIX_STRING);
-            }
             if (0 == strcmp(targv[idx], "topo")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYTOPO", PMIX_STRING);
             }

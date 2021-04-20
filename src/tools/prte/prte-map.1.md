@@ -899,17 +899,6 @@ These deprecated options will be removed in a future release.
     Display a detailed process map (mostly intended for developers) just
     before launch.
 
-`--display-diff`
-
-:   **(Deprecated: Use `--map-by :DISPLAYDIFF`)**
-    Display a diffable process map (mostly intended for developers) just
-    before launch.
-
-`--display-diffable-map`
-
-:   **(Deprecated: Use `--map-by :DISPLAYDIFF`)**
-    Alias for `--display-diff`
-
 `--display-map`
 
 :   **(Deprecated: Use `--map-by :DISPLAY`)**

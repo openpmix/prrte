@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2011 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -229,15 +229,6 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO, PRTE_ATTR_GLOBAL, NULL,
-                               PMIX_BOOL);
-
-        } else if (0 == strcasecmp(ck2[i], "DISPLAYDIFF")) {
-            if (NULL == jdata) {
-                prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
-                               "mapping policy", ck2[i]);
-                return PRTE_ERR_SILENT;
-            }
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, PRTE_ATTR_GLOBAL, NULL,
                                PMIX_BOOL);
 
         } else if (0 == strcasecmp(ck2[i], "DISPLAYALLOC")) {
