@@ -4,6 +4,9 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      The University of Tennessee and The University
+ *                         of Tennessee Research Foundation.  All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -219,7 +222,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_DISPLAY_MAP       (PRTE_JOB_START_KEY + 64) // bool - display job map
 #define PRTE_JOB_DISPLAY_DEVEL_MAP (PRTE_JOB_START_KEY + 65) // bool - display devel level job map
 #define PRTE_JOB_DISPLAY_TOPO      (PRTE_JOB_START_KEY + 66) // bool - display topology with job map
-#define PRTE_JOB_DISPLAY_DIFF      (PRTE_JOB_START_KEY + 67) // bool - display diffable job map
+// 67 was removed option diffable map
 #define PRTE_JOB_DISPLAY_ALLOC     (PRTE_JOB_START_KEY + 68) // bool - display allocation
 #define PRTE_JOB_DO_NOT_LAUNCH     (PRTE_JOB_START_KEY + 69) // bool - do not launch job
 #define PRTE_JOB_XML_OUTPUT        (PRTE_JOB_START_KEY + 70) // bool - print in xml format

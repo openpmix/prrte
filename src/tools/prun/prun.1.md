@@ -397,11 +397,6 @@ useful to most users:
 :   Display a more detailed table showing the mapped location of each
     process prior to launch.
 
-`--map-by :DISPLAYDIFF`
-
-:   Display a diffable process map (mostly intended for developers) just
-    before launch.
-
 `--map-by :DISPLAYTOPO`
 
 :   Display the topology as part of the process map just before launch.

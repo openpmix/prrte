@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2011 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -513,7 +513,6 @@ PRTE_EXPORT extern int prted_debug_failure_delay;
 PRTE_EXPORT extern bool prte_never_launched;
 PRTE_EXPORT extern bool prte_devel_level_output;
 PRTE_EXPORT extern bool prte_display_topo_with_map;
-PRTE_EXPORT extern bool prte_display_diffable_output;
 
 PRTE_EXPORT extern char **prte_launch_environ;
 
