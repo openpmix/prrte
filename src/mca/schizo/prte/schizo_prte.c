@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2011 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -296,7 +296,7 @@ static prte_cmd_line_init_t prte_cmd_line_init[] = {
     /* display options */
     {'\0', "display", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Comma-delimited list of options for displaying information about the allocation and job."
-     "Allowed values: allocation, map, bind, proctable, allocation, map-diffable, topo",
+     "Allowed values: allocation, map, bind, allocation, map-diffable, topo",
      PRTE_CMD_LINE_OTYPE_DEBUG},
     /* developer options */
     {'\0', "do-not-launch", 0, PRTE_CMD_LINE_TYPE_BOOL,
@@ -434,9 +434,9 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     if (0 == strcmp(option, "--display-devel-map")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-devel", true);
     }
-    /* --output-proctable  ->  --display proctable */
+    /* --output-proctable  ->  --display map-devel */
     else if (0 == strcmp(option, "--output-proctable")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "proctable", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-devel", true);
     }
     /* --display-map  ->  --display map */
     else if (0 == strcmp(option, "--display-map")) {
