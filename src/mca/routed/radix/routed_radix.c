@@ -52,6 +52,7 @@ static void update_routing_plan(void);
 static void get_routing_list(prte_list_t *coll);
 static int set_lifeline(pmix_proc_t *proc);
 static size_t num_routes(void);
+static int get_num_contributors(pmix_proc_t *dmns, size_t ndmns);
 
 prte_routed_module_t prte_routed_radix_module = {
     .initialize = init,
@@ -65,6 +66,7 @@ prte_routed_module_t prte_routed_radix_module = {
     .update_routing_plan = update_routing_plan,
     .get_routing_list = get_routing_list,
     .num_routes = num_routes,
+    .get_num_contributors = get_num_contributors
 };
 
 /* local globals */
@@ -430,4 +432,21 @@ static void get_routing_list(prte_list_t *coll)
 static size_t num_routes(void)
 {
     return prte_list_get_size(&my_children);
+}
+
+static int get_num_contributors(pmix_proc_t *dmns, size_t ndmns)
+{
+    int j, n;
+    prte_routed_tree_t *child;
+
+    n = 0;
+    PRTE_LIST_FOREACH(child, &my_children, prte_routed_tree_t) {
+        for (j = 0; j < (int) ndmns; j++) {
+            if (prte_bitmap_is_set_bit(&child->relatives, dmns[j].rank)) {
+                n++;
+                break;
+            }
+        }
+    }
+    return n;
 }

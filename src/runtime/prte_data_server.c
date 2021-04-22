@@ -570,7 +570,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                         rinfo->persistence = data->persistence;
                         prte_list_append(&answers, &rinfo->super);
                         prte_output_verbose(1, prte_data_server_output,
-                                            "%s data server: adding %s to data from %s:%d",
+                                            "%s data server: adding %s to data from %s",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), data->info[n].key,
                                             PRTE_NAME_PRINT(&data->owner));
                     }
