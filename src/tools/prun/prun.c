@@ -568,7 +568,7 @@ int prun(int argc, char *argv[])
     if (NULL != (param = getenv("PMIX_NAMESPACE"))) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_NSPACE, param, PMIX_STRING);
     } else {
-        prte_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, getpid());
+        prte_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, (unsigned long)getpid());
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_NSPACE, param, PMIX_STRING);
         free(param);
     }

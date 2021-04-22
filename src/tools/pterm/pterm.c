@@ -302,7 +302,7 @@ int main(int argc, char *argv[])
     PMIX_INFO_LIST_START(tinfo);
 
     /* tell PMIx what our name should be */
-    prte_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, getpid());
+    prte_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, (unsigned long)getpid());
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_TOOL_NSPACE, param, PMIX_STRING);
     free(param);
     rank = 0;

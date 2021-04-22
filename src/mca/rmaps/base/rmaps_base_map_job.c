@@ -829,15 +829,6 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
 {
     /* ignore daemon job */
     char *output = NULL;
-    int i, j, cnt;
-    prte_node_t *node;
-    prte_proc_t *proc;
-    char *tmp1;
-    hwloc_obj_t bd = NULL;
-    ;
-    prte_hwloc_locality_t locality;
-    prte_proc_t *p0;
-    char *p0bitmap, *procbitmap;
 
     /* only have rank=0 output this */
     if (0 != PRTE_PROC_MY_NAME->rank) {
