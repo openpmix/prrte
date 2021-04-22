@@ -175,7 +175,7 @@ typedef int (*prte_routed_module_set_lifeline_fn_t)(pmix_proc_t *proc);
  */
 typedef size_t (*prte_routed_module_num_routes_fn_t)(void);
 
-typedef int (*prte_routed_module_get_num_contributors_fn_t)(pmix_proc_t *dmns, size_t ndmns);
+typedef int (*prte_routed_module_get_num_contributors_fn_t)(pmix_rank_t *dmns, size_t ndmns);
 /* ******************************************************************** */
 
 /**
