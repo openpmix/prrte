@@ -42,7 +42,7 @@ static void update_routing_plan(void);
 static void get_routing_list(prte_list_t *coll);
 static int set_lifeline(pmix_proc_t *proc);
 static size_t num_routes(void);
-static int get_num_contributors(pmix_proc_t *dmns, size_t ndmns);
+static int get_num_contributors(pmix_rank_t *dmns, size_t ndmns);
 
 prte_routed_module_t prte_routed_direct_module = {
     .initialize = init,
@@ -263,7 +263,7 @@ static size_t num_routes(void)
     return prte_list_get_size(&my_children);
 }
 
-static int get_num_contributors(pmix_proc_t *dmns, size_t ndmns)
+static int get_num_contributors(pmix_rank_t *dmns, size_t ndmns)
 {
     return ndmns;
 }
