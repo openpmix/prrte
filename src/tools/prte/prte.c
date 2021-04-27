@@ -75,6 +75,7 @@
 #include "src/util/cmd_line.h"
 #include "src/util/daemon_init.h"
 #include "src/util/fd.h"
+#include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
@@ -88,6 +89,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
+#include "src/mca/odls/odls.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/mca/rmaps/rmaps_types.h"
@@ -1276,6 +1278,7 @@ static void clean_abort(int fd, short flags, void *arg)
 
 static struct timeval current, last = {0, 0};
 static bool first = true;
+static bool second = true;
 
 /*
  * Attempt to terminate the job and wait for callback indicating
@@ -1301,7 +1304,13 @@ static void abort_signal_callback(int fd)
          * exit - we are probably stuck
          */
         if ((current.tv_sec - last.tv_sec) < 5) {
-            exit(1);
+            if (second) {
+                prte_odls.kill_local_procs(NULL);  // ensure we attempt to kill everything
+                prte_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, NULL);
+                second = false;
+            } else {
+                exit(1);
+            }
         }
         if (-1 == write(1, (void *) msg, strlen(msg))) {
             exit(1);
