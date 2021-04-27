@@ -33,6 +33,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"
 #include "src/util/proc_info.h"
+#include "src/util/show_help.h"
 
 #include "grpcomm_direct.h"
 #include "src/mca/grpcomm/base/base.h"
@@ -396,7 +397,8 @@ static void xcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                 return;
             }
         } else {
-            PMIX_ERROR_LOG(PMIX_ERROR);
+            prte_show_help("help-prte-runtime.txt", "failed-to-uncompress",
+                           true, prte_process_info.nodename);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
             PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
