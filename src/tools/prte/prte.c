@@ -1276,9 +1276,39 @@ static void clean_abort(int fd, short flags, void *arg)
     prte_plm.terminate_orteds();
 }
 
-static struct timeval current, last = {0, 0};
 static bool first = true;
 static bool second = true;
+
+static void surekill(void)
+{
+    prte_proc_t *child;
+    int n;
+    pid_t pid;
+
+    for (n=0; n < prte_local_children->size; n++) {
+        child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, n);
+        if (NULL != child && 0 < child->pid) {
+            pid = child->pid;
+#if HAVE_SETPGID
+            {
+                pid_t pgrp;
+                pgrp = getpgid(pid);
+                if (-1 != pgrp) {
+                    /* target the lead process of the process
+                     * group so we ensure that the signal is
+                     * seen by all members of that group. This
+                     * ensures that the signal is seen by any
+                     * child processes our child may have
+                     * started
+                     */
+                    pid = -pgrp;
+                }
+            }
+#endif
+            kill(pid, SIGKILL);
+        }
+    }
+}
 
 /*
  * Attempt to terminate the job and wait for callback indicating
@@ -1288,38 +1318,26 @@ static void abort_signal_callback(int fd)
 {
     uint8_t foo = 1;
     char *msg
-        = "Abort is in progress...hit ctrl-c again within 5 seconds to forcibly terminate\n\n";
+        = "Abort is in progress...hit ctrl-c again to forcibly terminate\n\n";
 
     /* if this is the first time thru, just get
      * the current time
      */
     if (first) {
         first = false;
-        gettimeofday(&current, NULL);
-    } else {
-        /* get the current time */
-        gettimeofday(&current, NULL);
-        /* if this is within 5 seconds of the
-         * last time we were called, then just
-         * exit - we are probably stuck
-         */
-        if ((current.tv_sec - last.tv_sec) < 5) {
-            if (second) {
-                prte_odls.kill_local_procs(NULL);  // ensure we attempt to kill everything
-                prte_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, NULL);
-                second = false;
-            } else {
-                exit(1);
-            }
-        }
-        if (-1 == write(1, (void *) msg, strlen(msg))) {
+        /* tell the event lib to attempt to abnormally terminate */
+        if (-1 == write(term_pipe[1], &foo, 1)) {
             exit(1);
         }
-    }
-    /* save the time */
-    last.tv_sec = current.tv_sec;
-    /* tell the event lib to attempt to abnormally terminate */
-    if (-1 == write(term_pipe[1], &foo, 1)) {
+    } else if (second) {
+        if (-1 == write(2, (void *) msg, strlen(msg))) {
+            exit(1);
+        }
+        fflush(stderr);
+        second = false;
+    } else {
+        surekill();  // ensure we attempt to kill everything
+        prte_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, NULL);
         exit(1);
     }
 }
