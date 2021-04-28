@@ -566,6 +566,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
     int i;
     pmix_proc_t parent, target;
     prte_pmix_lock_t lock;
+    pmix_rank_t threshold;
 
     PRTE_ACQUIRE_OBJECT(caddy);
     proc = &caddy->name;
@@ -585,13 +586,18 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, (void**)&tptr, PMIX_PROC_RANK)
             || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, (void**)&tptr, PMIX_PROC_RANK)
             || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, (void**)&tptr, PMIX_PROC_RANK)) {
+            if (PRTE_PROC_IS_MASTER) {
+                threshold = jdata->num_procs;
+            } else {
+                threshold = jdata->num_local_procs;
+            }
             if (PMIX_CHECK_RANK(proc->rank, tgt)) {
                 if (PMIX_RANK_LOCAL_PEERS == proc->rank) {
                     jdata->num_ready_for_debug += jdata->num_local_procs;
                 } else {
                     jdata->num_ready_for_debug++;
                 }
-                if (PMIX_RANK_WILDCARD == tgt && jdata->num_ready_for_debug < jdata->num_local_procs) {
+                if (PMIX_RANK_WILDCARD == tgt && jdata->num_ready_for_debug < threshold) {
                     goto cleanup;
                 }
                 PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
