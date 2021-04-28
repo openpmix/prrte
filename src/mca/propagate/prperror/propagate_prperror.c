@@ -370,7 +370,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
     sig = PRTE_NEW(prte_grpcomm_signature_t);
     sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.rbcast(sig, PRTE_RML_TAG_PROPAGATE, &prperror_buffer))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm_API_rbcast(sig, PRTE_RML_TAG_PROPAGATE, &prperror_buffer))) {
         PRTE_ERROR_LOG(rc);
     }
     /* notify this error locally, only from rbcast dont have a source id */
@@ -392,7 +392,6 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source, pmix
                                     prte_proc_state_t state, pmix_data_buffer_t *buffer,
                                     pmix_data_buffer_t *rly)
 {
-
     int rc = PRTE_SUCCESS;
     /* don't need to check jobid because this can be different: daemon and process has different
      * jobids */
@@ -408,24 +407,16 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source, pmix
                 (10, prte_propagate_base_framework.framework_output,
                  "propagate: prperror: already propagated this msg: error proc is %s",
                  PRTE_NAME_PRINT(errorproc)));
-            return rc;
+            return false;
         }
     }
     PRTE_OUTPUT_VERBOSE((10, prte_propagate_base_framework.framework_output,
-                         "propagate: prperror: interal forward: error proc is %s",
+                         "propagate: prperror: internal forward: error proc is %s",
                          PRTE_NAME_PRINT(errorproc)));
 
     nm = PRTE_NEW(prte_namelist_t);
     PMIX_XFER_PROCID(&nm->name, errorproc);
     prte_list_append(&prte_error_procs, &(nm->super));
-    /* goes to all daemons */
-    prte_grpcomm_signature_t *sig;
-    sig = PRTE_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-    PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.rbcast(sig, PRTE_RML_TAG_PROPAGATE, rly))) {
-        PRTE_ERROR_LOG(rc);
-    }
 
     pmix_info_t *pinfo;
     int ret;
@@ -435,7 +426,7 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source, pmix
     ret = PMIx_Data_unpack(NULL, buffer, &num_affected, &cnt, PMIX_INT);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
-        return false;
+        return true;
     }
     pcnt = 1 + num_affected;
     PMIX_INFO_CREATE(pinfo, pcnt);
@@ -449,7 +440,7 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source, pmix
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_INFO_FREE(pinfo, pcnt);
-            return rc;
+            return true;
         }
         PMIX_INFO_LOAD(&pinfo[i + 1], PMIX_EVENT_AFFECTED_PROC, &ename, PMIX_PROC);
     }
@@ -461,7 +452,7 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source, pmix
             PRTE_RELEASE(pinfo);
         }
     }
-    return rc;
+    return true;
 }
 
 static int prte_propagate_prperror_recv(pmix_data_buffer_t *buffer)
@@ -504,7 +495,6 @@ static int prte_propagate_prperror_recv(pmix_data_buffer_t *buffer)
          "%s propagete: prperror: daemon received %s gone forwarding with status %d",
          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&errorproc), state));
 
-    _prte_propagate_prperror(prte_process_info.myproc.nspace, NULL, &errorproc, state, buffer,
-                             &rly);
-    return false;
+    return _prte_propagate_prperror(prte_process_info.myproc.nspace, NULL, &errorproc, state, buffer,
+                                    &rly);
 }
