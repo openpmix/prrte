@@ -165,10 +165,12 @@ int main(int argc, char **argv)
     }
     PMIX_INFO_FREE(info, 1);
 
+    PMIX_INFO_CREATE(info, 1);
+    PMIX_INFO_LOAD(info, PMIX_IMMEDIATE, NULL, PMIX_BOOL);
     /* check the returned data */
     for (n = 0; n < nprocs; n++) {
         proc.rank = n;
-        if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, "test-key", NULL, 0, &val))) {
+        if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, "test-key", info, 1, &val))) {
             fprintf(stderr, "Client ns %s rank %d: PMIx_Get on rank %u failed: %d\n", myproc.nspace,
                     myproc.rank, proc.rank, rc);
             goto done;
