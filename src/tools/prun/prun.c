@@ -287,10 +287,10 @@ static prte_cmd_line_init_t prte_tool_options[] = {
     {'\0', "do-not-connect", 0, PRTE_CMD_LINE_TYPE_BOOL, "Do not connect to a server",
      PRTE_CMD_LINE_OTYPE_DVM},
     /* wait to connect */
-    {'\0', "wait-to-connect", 0, PRTE_CMD_LINE_TYPE_INT,
+    {'\0', "wait-to-connect", 1, PRTE_CMD_LINE_TYPE_INT,
      "Delay specified number of seconds before trying to connect", PRTE_CMD_LINE_OTYPE_DVM},
     /* number of times to try to connect */
-    {'\0', "num-connect-retries", 0, PRTE_CMD_LINE_TYPE_INT,
+    {'\0', "num-connect-retries", 1, PRTE_CMD_LINE_TYPE_INT,
      "Max number of times to try to connect", PRTE_CMD_LINE_OTYPE_DVM},
     /* provide a connection PID */
     {'\0', "pid", 1, PRTE_CMD_LINE_TYPE_STRING,
@@ -589,6 +589,7 @@ int prun(int argc, char *argv[])
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "wait-to-connect", 0, 0))
         && 0 < pval->value.data.integer) {
+        sleep(pval->value.data.integer);
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
 
