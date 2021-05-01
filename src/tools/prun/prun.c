@@ -589,12 +589,13 @@ int prun(int argc, char *argv[])
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "wait-to-connect", 0, 0))
         && 0 < pval->value.data.integer) {
-        sleep(pval->value.data.integer);
+        ui32 = pval->value.data.integer;
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "num-connect-retries", 0, 0))
         && 0 < pval->value.data.integer) {
+        ui32 = pval->value.data.integer;
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
 
