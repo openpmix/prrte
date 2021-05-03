@@ -918,6 +918,9 @@ int prun(int argc, char *argv[])
         }
         PMIX_INFO_FREE(mylock.info, mylock.ninfo);
     }
+    /* mark that we harvested envars so prte knows not to do it again */
+    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_ENVARS_HARVESTED, NULL, PMIX_BOOL);
+
 
     /* they want to run an application, so let's parse
      * the cmd line to get it */
