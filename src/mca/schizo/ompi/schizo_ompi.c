@@ -149,7 +149,9 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
      "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
      PRTE_CMD_LINE_OTYPE_DVM},
 
-    {'\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL, "Top-level PRTE debug switch (default: false)",
+    {'\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Top-level PRTE debug switch (default: false) "
+     "This CLI option will be deprecated starting in Open MPI v5",
      PRTE_CMD_LINE_OTYPE_DEBUG},
     {'\0', "debug-verbose", 1, PRTE_CMD_LINE_TYPE_INT,
      "Verbosity level for PRTE debug messages (default: 1)", PRTE_CMD_LINE_OTYPE_DEBUG},
@@ -536,6 +538,13 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--display-allocation")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation", true);
     }
+    /* --debug will be deprecated starting with open mpi v5
+     */
+    else if (0 == strcmp(option, "--debug")) {
+        prte_show_help("help-schizo-base.txt", "deprecated-inform", true, option,
+                       "This CLI option will be deprecated starting in Open MPI v5");
+        rc = PRTE_ERR_TAKE_NEXT_OPTION;
+    }
 
     return rc;
 }
@@ -575,6 +584,7 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***arg
                        "--timestamp-output",
                        "--xml",
                        "--output-proctable",
+                       "--debug",
                        NULL};
 
     rc = prte_schizo_base_process_deprecated_cli(cmdline, argc, argv, options,

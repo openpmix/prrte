@@ -140,7 +140,9 @@ static prte_cmd_line_init_t prte_cmd_line_init[] = {
      "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
      PRTE_CMD_LINE_OTYPE_DVM},
 
-    {'\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL, "Top-level PRTE debug switch (default: false)",
+    {'\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Top-level PRTE debug switch (default: false) "
+     "This option will be deprecated, use --debug-devel instead.",
      PRTE_CMD_LINE_OTYPE_DEBUG},
     {'\0', "debug-verbose", 1, PRTE_CMD_LINE_TYPE_INT,
      "Verbosity level for PRTE debug messages (default: 1)", PRTE_CMD_LINE_OTYPE_DEBUG},
@@ -481,6 +483,15 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
         rc = prte_schizo_base_convert(argv, i, 2, "--map-by", p2, NULL, true);
         free(p2);
     }
+    /* -N ->   map-by ppr:N:node */
+    else if (0 == strcmp(option, "--debug")) {
+        output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, option,
+                                       "--debug-devel");
+        fprintf(stderr, "%s\n", output);
+        pargs[i] = "--debug-devel";
+        free(output);
+        rc = PRTE_ERR_TAKE_NEXT_OPTION;
+    }
     /* --map-by socket ->  --map-by package */
     else if (0 == strcmp(option, "--map-by")) {
         /* if the option consists solely of qualifiers, then add
@@ -602,6 +613,7 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***arg
                        "--rank-by",
                        "--bind-to",
                        "--output-proctable",
+                       "--debug",
                        NULL};
 
     rc = prte_schizo_base_process_deprecated_cli(cmdline, argc, argv, options,
