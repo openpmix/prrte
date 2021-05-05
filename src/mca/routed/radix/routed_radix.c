@@ -446,6 +446,11 @@ static int get_num_contributors(pmix_rank_t *dmns, size_t ndmns)
     n = 0;
     PRTE_LIST_FOREACH(child, &my_children, prte_routed_tree_t) {
         for (j = 0; j < (int) ndmns; j++) {
+            /* if the child is one of the daemons, then take it */
+            if (dmns[j] == child->rank) {
+                n++;
+                break;
+            }
             if (prte_bitmap_is_set_bit(&child->relatives, dmns[j])) {
                 n++;
                 break;
