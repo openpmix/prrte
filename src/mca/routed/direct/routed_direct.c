@@ -265,5 +265,20 @@ static size_t num_routes(void)
 
 static int get_num_contributors(pmix_rank_t *dmns, size_t ndmns)
 {
-    return ndmns;
+    size_t nsize = ndmns;
+    size_t n;
+
+    if (PRTE_PROC_IS_MASTER) {
+        /* if I am one of the daemons, leave me out - I'll
+         * be accounted for separately */
+        for (n=0; n < ndmns; n++) {
+            if (dmns[n] == PRTE_PROC_MY_NAME->rank) {
+                nsize -= 1;
+                break;
+            }
+        }
+        return nsize;
+    } else {
+        return 0;
+    }
 }
