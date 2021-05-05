@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2018 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -757,8 +757,7 @@ ranking:
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)
         || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
         /* compute and save local ranks */
         if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_local_ranks(jdata))) {
             PRTE_ERROR_LOG(rc);
@@ -806,8 +805,7 @@ ranking:
     }
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
+        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
         /* display the map */
         prte_rmaps_base_display_map(jdata);
     }
@@ -831,112 +829,13 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
 {
     /* ignore daemon job */
     char *output = NULL;
-    int i, j, cnt;
-    prte_node_t *node;
-    prte_proc_t *proc;
-    char *tmp1;
-    hwloc_obj_t bd = NULL;
-    ;
-    prte_hwloc_locality_t locality;
-    prte_proc_t *p0;
-    char *p0bitmap, *procbitmap;
 
     /* only have rank=0 output this */
     if (0 != PRTE_PROC_MY_NAME->rank) {
         return;
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DIFF, NULL, PMIX_BOOL)) {
-        /* intended solely to test mapping methods, this output
-         * can become quite long when testing at scale. Rather
-         * than enduring all the malloc/free's required to
-         * create an arbitrary-length string, custom-generate
-         * the output a line at a time here
-         */
-        /* display just the procs in a diffable format */
-        prte_output(prte_clean_output, "<map>\n");
-        fflush(stderr);
-        /* loop through nodes */
-        cnt = 0;
-        for (i = 0; i < jdata->map->nodes->size; i++) {
-            if (NULL
-                == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, i))) {
-                continue;
-            }
-            prte_output(prte_clean_output, "\t<host num=%d>", cnt);
-            fflush(stderr);
-            cnt++;
-            for (j = 0; j < node->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
-                    continue;
-                }
-                if (proc->job != jdata) {
-                    continue;
-                }
-                if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND, (void **) &bd,
-                                       PMIX_POINTER)) {
-                    if (NULL == bd) {
-                        tmp1 = strdup("UNBOUND");
-                    } else {
-                        tmp1 = prte_hwloc_base_cset2str(bd->cpuset, false, node->topology->topo);
-                    }
-                } else {
-                    tmp1 = strdup("UNBOUND");
-                }
-                prte_output(
-                    prte_clean_output,
-                    "\t\t<process rank=%s app_idx=%ld local_rank=%lu node_rank=%lu binding=%s>",
-                    PRTE_VPID_PRINT(proc->name.rank), (long) proc->app_idx,
-                    (unsigned long) proc->local_rank, (unsigned long) proc->node_rank, tmp1);
-                free(tmp1);
-            }
-            prte_output(prte_clean_output, "\t</host>");
-            fflush(stderr);
-        }
-
-        /* test locality - for the first node, print the locality of each proc relative to the first
-         * one */
-        node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, 0);
-        p0 = (prte_proc_t *) prte_pointer_array_get_item(node->procs, 0);
-        if (NULL == p0) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            return;
-        }
-        p0bitmap = NULL;
-        if (prte_get_attribute(&p0->attributes, PRTE_PROC_CPU_BITMAP, (void **) &p0bitmap,
-                               PMIX_STRING)
-            && NULL != p0bitmap) {
-            prte_output(prte_clean_output, "\t<locality>");
-            for (j = 1; j < node->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
-                    continue;
-                }
-                if (proc->job != jdata) {
-                    continue;
-                }
-                procbitmap = NULL;
-                if (prte_get_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP,
-                                       (void **) &procbitmap, PMIX_STRING)
-                    && NULL != procbitmap) {
-                    locality = prte_hwloc_base_get_relative_locality(node->topology->topo, p0bitmap,
-                                                                     procbitmap);
-                    prte_output(prte_clean_output, "\t\t<rank=%s rank=%s locality=%s>",
-                                PRTE_VPID_PRINT(p0->name.rank), PRTE_VPID_PRINT(proc->name.rank),
-                                prte_hwloc_base_print_locality(locality));
-                }
-            }
-            prte_output(prte_clean_output, "\t</locality>\n</map>");
-            fflush(stderr);
-            if (NULL != p0bitmap) {
-                free(p0bitmap);
-            }
-            if (NULL != procbitmap) {
-                free(procbitmap);
-            }
-        }
-    } else {
-        prte_map_print(&output, jdata);
-        prte_output(prte_clean_output, "%s\n", output);
-        free(output);
-    }
+    prte_map_print(&output, jdata);
+    prte_output(prte_clean_output, "%s\n", output);
+    free(output);
 }

@@ -612,12 +612,15 @@ static void interim(int sd, short args, void *cbdata)
 
             /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
             /* there can be multiple of these, so we add them to the attribute list */
+        } else if (PMIX_CHECK_KEY(info, PMIX_ENVARS_HARVESTED)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ENVARS_HARVESTED,
+                               PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
         } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
             envar.separator = info->value.data.envar.separator;
-            prte_add_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR, PRTE_ATTR_GLOBAL, &envar,
-                               PMIX_ENVAR);
+            prte_add_attribute(&jdata->attributes, PRTE_JOB_SET_ENVAR,
+                               PRTE_ATTR_GLOBAL, &envar, PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_ADD_ENVAR)) {
             envar.envar = info->value.data.envar.envar;
             envar.value = info->value.data.envar.value;
@@ -663,10 +666,6 @@ static void interim(int sd, short args, void *cbdata)
         } else {
             pmix_server_cache_job_info(jdata, info);
         }
-    }
-    /* if the job is missing a personality setting, add it */
-    if (NULL == jdata->personality) {
-        prte_argv_append_nosize(&jdata->personality, "ompi");
     }
 
     /* indicate the requestor so bookmarks can be correctly set */

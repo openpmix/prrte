@@ -161,7 +161,6 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     pmix_data_buffer_t jobdata, priorjob;
     int8_t flag;
     prte_proc_t *proc;
-    pmix_info_t *info;
     pmix_status_t ret;
     prte_node_t *node;
     int i, k;
@@ -171,6 +170,8 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     uint32_t uid;
     uint32_t gid;
     pmix_byte_object_t pbo;
+    void *ilist, *mlist;
+    pmix_data_array_t darray;
 
     /* get the job data pointer */
     if (NULL == (jdata = prte_get_job_data_object(job))) {
@@ -286,8 +287,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     /* assemble the node and proc map info */
     list = NULL;
     procs = NULL;
-    cd.ninfo = 5;
-    PMIX_INFO_CREATE(cd.info, cd.ninfo);
+    PMIX_INFO_LIST_START(ilist);
     for (i = 0; i < map->nodes->size; i++) {
         micro = NULL;
         if (NULL != (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, i))) {
@@ -322,7 +322,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
             return prte_pmix_convert_status(ret);
         }
         free(tmp);
-        PMIX_INFO_LOAD(&cd.info[0], PMIX_NODE_MAP, regex, PMIX_REGEX);
+        PMIX_INFO_LIST_ADD(ret, ilist, PMIX_NODE_MAP, regex, PMIX_REGEX);
         free(regex);
     }
 
@@ -338,37 +338,55 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
             return prte_pmix_convert_status(ret);
         }
         free(tmp);
-        PMIX_INFO_LOAD(&cd.info[1], PMIX_PROC_MAP, regex, PMIX_REGEX);
+        PMIX_INFO_LIST_ADD(ret, ilist, PMIX_PROC_MAP, regex, PMIX_REGEX);
         free(regex);
+    }
+
+    /* add in the personality */
+    if (NULL != jdata->personality) {
+        tmp = prte_argv_join(jdata->personality, ',');
+        PMIX_INFO_LIST_ADD(ret, ilist, PMIX_PERSONALITY, tmp, PMIX_STRING);
+        free(tmp);
     }
 
     /* construct the actual request - we just let them pick the
      * default transport for now. Someday, we will add to prun
      * the ability for transport specifications */
-    (void) strncpy(cd.info[2].key, PMIX_ALLOC_NETWORK, PMIX_MAX_KEYLEN);
-    cd.info[2].value.type = PMIX_DATA_ARRAY;
-    PMIX_DATA_ARRAY_CREATE(cd.info[2].value.data.darray, 3, PMIX_INFO);
-    info = (pmix_info_t *) cd.info[2].value.data.darray->array;
+    PMIX_INFO_LIST_START(mlist);
+
     asprintf(&tmp, "%s.net", jdata->nspace);
-    PMIX_INFO_LOAD(&info[0], PMIX_ALLOC_NETWORK_ID, tmp, PMIX_STRING);
+    PMIX_INFO_LIST_ADD(ret, mlist, PMIX_ALLOC_NETWORK_ID, tmp, PMIX_STRING);
     free(tmp);
-    PMIX_INFO_LOAD(&info[1], PMIX_ALLOC_NETWORK_SEC_KEY, NULL, PMIX_BOOL);
-    PMIX_INFO_LOAD(&info[2], PMIX_SETUP_APP_ENVARS, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_ADD(ret, mlist, PMIX_ALLOC_NETWORK_SEC_KEY, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_CONVERT(ret, mlist, &darray);
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_ALLOC_NETWORK, &darray, PMIX_DATA_ARRAY);
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
+    PMIX_INFO_LIST_RELEASE(mlist);
 
     /* add in the user's uid and gid */
     uid = geteuid();
-    PMIX_INFO_LOAD(&cd.info[3], PMIX_USERID, &uid, PMIX_UINT32);
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_USERID, &uid, PMIX_UINT32);
     gid = getegid();
-    PMIX_INFO_LOAD(&cd.info[4], PMIX_GRPID, &gid, PMIX_UINT32);
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_GRPID, &gid, PMIX_UINT32);
+
+    /* if they haven't harvested envars, do so now */
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_ENVARS_HARVESTED, NULL, PMIX_BOOL)) {
+        PMIX_INFO_LIST_ADD(ret, ilist, PMIX_SETUP_APP_ENVARS, NULL, PMIX_BOOL);
+    }
+    /* convert the job info into an array */
+    PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
+    cd.info = (pmix_info_t *) darray.array;
+    cd.ninfo = darray.size;
+    PMIX_INFO_LIST_RELEASE(ilist);
 
     /* we don't want to block here because it could
      * take some indeterminate time to get the info */
     rc = PRTE_SUCCESS;
     cd.jdata = jdata;
     PRTE_PMIX_CONSTRUCT_LOCK(&cd.lock);
-    if (PMIX_SUCCESS
-        != (ret = PMIx_server_setup_application(jdata->nspace, cd.info, cd.ninfo, setup_cbfunc,
-                                                &cd))) {
+    ret = PMIx_server_setup_application(jdata->nspace, cd.info, cd.ninfo,
+                                        setup_cbfunc, &cd);
+    if (PMIX_SUCCESS != ret) {
         prte_output(0, "[%s:%d] PMIx_server_setup_application failed: %s", __FILE__, __LINE__,
                     PMIx_Error_string(ret));
         rc = PRTE_ERROR;

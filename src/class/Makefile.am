@@ -32,9 +32,6 @@ headers += \
         class/prte_hotel.h \
         class/prte_list.h \
         class/prte_object.h \
-        class/prte_graph.h\
-        class/prte_lifo.h \
-        class/prte_fifo.h \
         class/prte_pointer_array.h \
         class/prte_value_array.h \
         class/prte_ring_buffer.h
@@ -45,9 +42,6 @@ libprrte_la_SOURCES += \
         class/prte_hotel.c \
         class/prte_list.c \
         class/prte_object.c \
-        class/prte_graph.c\
-        class/prte_lifo.c \
-        class/prte_fifo.c \
         class/prte_pointer_array.c \
         class/prte_value_array.c \
         class/prte_ring_buffer.c

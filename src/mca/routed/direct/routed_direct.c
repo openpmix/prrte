@@ -42,6 +42,7 @@ static void update_routing_plan(void);
 static void get_routing_list(prte_list_t *coll);
 static int set_lifeline(pmix_proc_t *proc);
 static size_t num_routes(void);
+static int get_num_contributors(pmix_rank_t *dmns, size_t ndmns);
 
 prte_routed_module_t prte_routed_direct_module = {
     .initialize = init,
@@ -55,6 +56,7 @@ prte_routed_module_t prte_routed_direct_module = {
     .update_routing_plan = update_routing_plan,
     .get_routing_list = get_routing_list,
     .num_routes = num_routes,
+    .get_num_contributors = get_num_contributors
 };
 
 static pmix_proc_t mylifeline;
@@ -259,4 +261,24 @@ static size_t num_routes(void)
         return 0;
     }
     return prte_list_get_size(&my_children);
+}
+
+static int get_num_contributors(pmix_rank_t *dmns, size_t ndmns)
+{
+    size_t nsize = ndmns;
+    size_t n;
+
+    if (PRTE_PROC_IS_MASTER) {
+        /* if I am one of the daemons, leave me out - I'll
+         * be accounted for separately */
+        for (n=0; n < ndmns; n++) {
+            if (dmns[n] == PRTE_PROC_MY_NAME->rank) {
+                nsize -= 1;
+                break;
+            }
+        }
+        return nsize;
+    } else {
+        return 0;
+    }
 }

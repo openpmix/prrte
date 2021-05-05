@@ -64,3 +64,13 @@ as the mapping.
 PRTE was unable to determine the number of nodes in your allocation. We
 are therefore assuming a very large number to ensure you receive proper error
 messages.
+#
+[failed-to-uncompress]
+A compressed message was received that could not be
+decompressed. This is most likely due to a missing
+libz library on the receiving node:
+
+  node:  %s
+
+Please ensure that the libz library is present on all
+compute nodes.

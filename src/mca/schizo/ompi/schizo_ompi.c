@@ -149,7 +149,9 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
      "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
      PRTE_CMD_LINE_OTYPE_DVM},
 
-    {'\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL, "Top-level PRTE debug switch (default: false)",
+    {'\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL,
+     "Top-level PRTE debug switch (default: false) "
+     "This CLI option will be deprecated starting in Open MPI v5",
      PRTE_CMD_LINE_OTYPE_DEBUG},
     {'\0', "debug-verbose", 1, PRTE_CMD_LINE_TYPE_INT,
      "Verbosity level for PRTE debug messages (default: 1)", PRTE_CMD_LINE_OTYPE_DEBUG},
@@ -310,7 +312,7 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     /* display options */
     {'\0', "display", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Comma-delimited list of options for displaying information about the allocation and job."
-     "Allowed values: allocation, map, bind, proctable, allocation, map-diffable, topo",
+     "Allowed values: allocation, bind, map, map-devel, topo",
      PRTE_CMD_LINE_OTYPE_DEBUG},
     /* developer options */
     {'\0', "do-not-launch", 0, PRTE_CMD_LINE_TYPE_BOOL,
@@ -323,9 +325,6 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     {'\0', "display-topo", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Display the topology as part of the process map (mostly intended for developers) just before "
      "launch",
-     PRTE_CMD_LINE_OTYPE_DEVEL},
-    {'\0', "display-diffable-map", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Display a diffable process map (mostly intended for developers) just before launch",
      PRTE_CMD_LINE_OTYPE_DEVEL},
     {'\0', "report-bindings", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Whether to report process bindings to stderr", PRTE_CMD_LINE_OTYPE_DEVEL},
@@ -519,9 +518,9 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--display-devel-map")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-devel", true);
     }
-    /* --output-proctable  ->  --display proctable */
+    /* --output-proctable  ->  --display map-devel */
     else if (0 == strcmp(option, "--output-proctable")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "proctable", true);
+        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-devel", true);
     }
     /* --display-map  ->  --display map */
     else if (0 == strcmp(option, "--display-map")) {
@@ -531,10 +530,6 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--display-topo")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "topo", true);
     }
-    /* --display-diffable-map  ->  --display map-diffable */
-    else if (0 == strcmp(option, "--display-diff")) {
-        rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "map-diffable", true);
-    }
     /* --report-bindings  ->  --display bind */
     else if (0 == strcmp(option, "--report-bindings")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "bind", true);
@@ -542,6 +537,13 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     /* --display-allocation  ->  --display allocation */
     else if (0 == strcmp(option, "--display-allocation")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--display", NULL, "allocation", true);
+    }
+    /* --debug will be deprecated starting with open mpi v5
+     */
+    else if (0 == strcmp(option, "--debug")) {
+        prte_show_help("help-schizo-base.txt", "deprecated-inform", true, option,
+                       "This CLI option will be deprecated starting in Open MPI v5");
+        rc = PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
     return rc;
@@ -582,6 +584,7 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***arg
                        "--timestamp-output",
                        "--xml",
                        "--output-proctable",
+                       "--debug",
                        NULL};
 
     rc = prte_schizo_base_process_deprecated_cli(cmdline, argc, argv, options,
@@ -1533,7 +1536,8 @@ static int detect_proxy(char *cmdpath)
      * proxy, so let's check */
     /* if the basename of the cmd was "mpirun" or "mpiexec",
      * we default to us */
-    if (prte_schizo_base.test_proxy_launch || 0 == strcmp(prte_tool_basename, "mpirun")
+    if (prte_schizo_base.test_proxy_launch
+        || 0 == strcmp(prte_tool_basename, "mpirun")
         || 0 == strcmp(prte_tool_basename, "mpiexec")
         || 0 == strcmp(prte_tool_basename, "oshrun")) {
         return prte_schizo_ompi_component.priority;

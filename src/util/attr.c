@@ -4,6 +4,9 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      The University of Tennessee and The University
+ *                         of Tennessee Research Foundation.  All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -411,8 +414,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "DISPLAY_DEVEL_JOB_MAP";
         case PRTE_JOB_DISPLAY_TOPO:
             return "DISPLAY_TOPOLOGY";
-        case PRTE_JOB_DISPLAY_DIFF:
-            return "DISPLAY_DIFFABLE";
         case PRTE_JOB_DISPLAY_ALLOC:
             return "DISPLAY_ALLOCATION";
         case PRTE_JOB_DO_NOT_LAUNCH:
@@ -457,6 +458,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "STOP-IN-INIT";
         case PRTE_JOB_STOP_IN_APP:
             return "STOP-IN-APP";
+        case PRTE_JOB_ENVARS_HARVESTED:
+            return "ENVARS-HARVESTED";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

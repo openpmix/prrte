@@ -16,6 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +41,6 @@ static pmix_proc_t myproc;
 static char client_nspace[PMIX_MAX_NSLEN + 1];
 static char daemon_nspace[PMIX_MAX_NSLEN + 1];
 static pmix_proc_t *connected_servers;
-static pmix_proc_t fence_procs[2];
 
 static bool stop_in_init = true;
 static bool stop_on_exec = false;
@@ -139,7 +139,7 @@ static void notification_fn(size_t evhdlr_registration_id, pmix_status_t status,
 }
 
 /* this is an event notification function that we explicitly request
- * be called when the PMIX_ERR_JOB_TERMINATED notification is issued.
+ * be called when the PMIX_EVENT_JOB_END notification is issued.
  * We could catch it in the general event notification function and test
  * the status to see if it was "job terminated", but it often is simpler
  * to declare a use-specific notification callback point. In this case,
@@ -151,7 +151,6 @@ static void release_fn(size_t evhdlr_registration_id, pmix_status_t status,
                        pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     myrel_t *lock;
-    pmix_status_t rc;
     bool found;
     int exit_code;
     size_t n;
@@ -264,30 +263,33 @@ static void debug_ready_cb(size_t evhdlr_registration_id, pmix_status_t status,
  * wait for that event to be issued or until the timeout limit is reached */
 static int wait_for_ready(myrel_t *myrel) 
 {
+    void *dirs;
     pmix_info_t *info;
     pmix_status_t rc;
     size_t ninfo;
     int n;
     mylock_t mylock;
     pmix_status_t code = PMIX_READY_FOR_DEBUG;
+    pmix_data_array_t darray;
 
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    ninfo = 2;
-    n = 0;
-    PMIX_INFO_CREATE(info, ninfo);
-    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
-    n++;
+    PMIX_INFO_LIST_START(dirs);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
     /* Register for PMIX_READY_FOR_DEBUG event. This is sent from system server once all
      * application processes are ready for debug. */
-    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_AFFECTED_PROC, &connected_servers[0], PMIX_PROC);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_AFFECTED_PROC, &connected_servers[0], PMIX_PROC);
+    PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
+    PMIX_INFO_LIST_RELEASE(dirs);
+    info = darray.array;
+    ninfo = darray.size;
     PMIx_Register_event_handler(&code, 1, info, ninfo, debug_ready_cb,
                                 evhandler_reg_callbk, (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
     printf("Debugger: Registered for READY_FOR_DEBUG event for nspace %s\n", 
            connected_servers[0].nspace);
     rc = mylock.status;
     DEBUG_DESTRUCT_LOCK(&mylock);
-    PMIX_INFO_FREE(info, ninfo);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "Registration for PMIX_READY_FOR_DEBUG failed: %s\n",
                 PMIx_Error_string(rc));
@@ -310,10 +312,11 @@ static int wait_for_ready(myrel_t *myrel)
 
 static int cospawn_launch(myrel_t *myrel)
 {
+    void *dirs;
     pmix_info_t *info;
     pmix_app_t *app;
     size_t ninfo;
-    int code = PMIX_ERR_JOB_TERMINATED;
+    int code = PMIX_EVENT_JOB_END;
     pmix_status_t rc;
     int n;
     pmix_data_array_t data_array;
@@ -322,25 +325,25 @@ static int cospawn_launch(myrel_t *myrel)
     pmix_rank_t all_ranks = PMIX_RANK_WILDCARD;
     char cwd[_POSIX_PATH_MAX + 1];
     char map_str[128];
+    pmix_data_array_t darray, daemon_darray;
 
     printf("Calling %s to spawn application processes and debugger daemon\n", __FUNCTION__);
     /* Provide job-level directives so the apps do what the user requested.
      * These attributes apply to both the application and daemon processes. */
-    ninfo = 4;
-    n = 0;
-    PMIX_INFO_CREATE(info, ninfo);
+    PMIX_INFO_LIST_START(dirs);
     /* Forward stdout to this process */
-    PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDOUT, NULL, PMIX_BOOL);
-    n++;
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDOUT, NULL, PMIX_BOOL);
     /* Forward stderr to this process */
-    PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDERR, NULL, PMIX_BOOL);
-    n++;
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDERR, NULL, PMIX_BOOL);
     /* Process that is spawning processes is a tool process */
-    PMIX_INFO_LOAD(&info[n], PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
-    n++;
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
     /* Map spawned processes by slot */
     sprintf(map_str, "ppr:%d:node", app_npernode);
-    PMIX_INFO_LOAD(&info[n], PMIX_MAPBY, map_str, PMIX_STRING);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_MAPBY, map_str, PMIX_STRING);
+    PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
+    PMIX_INFO_LIST_RELEASE(dirs);
+    info = darray.array;
+    ninfo = darray.size;
 
     /* The application and daemon processes are being spawned together
      * so create 2 pmix_app_t structures. The first is parameters for
@@ -391,23 +394,23 @@ static int cospawn_launch(myrel_t *myrel)
     app[1].maxprocs = app_np / app_npernode;
     /* Provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
-    app[1].ninfo = 2;
-    n = 0;
-    PMIX_INFO_CREATE(app[1].info, app[1].ninfo);
+    PMIX_INFO_LIST_START(dirs);
     /* This process is a debugger daemon */
-    PMIX_INFO_LOAD(&app[1].info[n], PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL);
-    n++;
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL);
     /* Notify this process when debugger job completes */
-    PMIX_INFO_LOAD(&app[1].info[n], PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
-    n++;
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_CONVERT(rc, dirs, &daemon_darray);
+    PMIX_INFO_LIST_RELEASE(dirs);
+    app[1].info = daemon_darray.array;
+    app[1].ninfo = daemon_darray.size;
 
     /* Spawn the job - the function will return when the app
      * has been launched */
     rc = PMIx_Spawn(info, ninfo, app, 2, client_nspace);
     myrel->lock.count = 1; // app[0].maxprocs + app[1].maxprocs;
     myrel->nspace = strdup(client_nspace);
-    PMIX_INFO_FREE(info, ninfo);
-    PMIX_APP_FREE(app, 2);
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
+    PMIX_DATA_ARRAY_DESTRUCT(&daemon_darray);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "Application failed to launch with error: %s(%d)\n", PMIx_Error_string(rc),
                 rc);
@@ -427,57 +430,34 @@ static int cospawn_launch(myrel_t *myrel)
     data_array.size = 1;
     data_array.type = PMIX_PROC;
     data_array.array = &daemon_proc;
-    PMIX_INFO_CREATE(info, 2);
-    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_CUSTOM_RANGE, &data_array, PMIX_DATA_ARRAY);
-    PMIX_INFO_LOAD(&info[1], PMIX_EVENT_RETURN_OBJECT, myrel, PMIX_POINTER);
+    PMIX_INFO_LIST_START(dirs);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_CUSTOM_RANGE, &data_array, PMIX_DATA_ARRAY);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_RETURN_OBJECT, myrel, PMIX_POINTER);
+    PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
+    PMIX_INFO_LIST_RELEASE(dirs);
+    info = darray.array;
+    ninfo = darray.size;
+
     DEBUG_CONSTRUCT_LOCK(&mylock);
     PMIx_Register_event_handler(&code, 1, info, 2, release_fn, evhandler_reg_callbk,
                                 (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);
-    PMIX_INFO_FREE(info, 2);
-#if 0
-    /* Commenting this out since when both the direct program and daemon issue
-     * identical PMIx_Fence calls, they both block on the PMIx_Fence call, and
-     * because the PMIX_READY_FOR_DEBUG event handled in wait_for_debug is currently
-     * not being generated. 
-     * Keeping this here as a note that we do need a syncronization operation
-     * here so the daemon doesn't interact with the application when the
-     * application is not ready. */
-    /* We need to issue PMIx_Fence here to satisfy the corresponding fence in the
-     * daemon processes. The daemons are waiting for the tool process to join the
-     * fence operation before the daemons proceed to interact with the application
-     * processes. When this tool process joins the fence, that is an indication that
-     * the application processes have reached 'debug ready' state.
-     * Note that we don't check return status for wait_for_ready since if the
-     * PMIx_Fence call is not executed, the tool daemons that also issued a
-     * PMIx_Fence call may be left hanging. */
-    wait_for_ready(myrel);
-    strcpy(fence_procs[0].nspace, myproc.nspace);
-    fence_procs[0].rank = 0;
-    strcpy(fence_procs[1].nspace, client_nspace);
-    fence_procs[1].rank = daemon_proc.rank;
-    if (PMIX_SUCCESS != PMIx_Fence(fence_procs, 2, NULL, 0)) {
-        fprintf(stderr, "Tool process PMIx_Fence failed: %s(%d)\n",
-                PMIx_Error_string(rc), rc);
-    }
-#endif
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
     return rc;
 }
 
 static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
 {
+    void *dirs;
     pmix_status_t rc;
     pmix_info_t *dinfo;
     pmix_app_t *debugger;
     size_t dninfo;
-    int n;
     char cwd[_POSIX_PATH_MAX];
     mylock_t mylock;
-    pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
+    pmix_status_t code = PMIX_EVENT_JOB_END;
     pmix_proc_t proc;
-    uint16_t num_daemons_per_node = 1;
-    char map_str[128];
     void *tinfo;
     pmix_data_array_t darray;
 
@@ -536,7 +516,7 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     /* Spawn the daemons */
     printf("Debugger: spawning %s\n", debugger[0].cmd);
     rc = PMIx_Spawn(dinfo, dninfo, debugger, 1, daemon_nspace);
-    PMIX_INFO_FREE(dinfo, dninfo);
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
     PMIX_APP_FREE(debugger, 1);
     if (PMIX_SUCCESS != rc) {
         fprintf(stderr, "Debugger daemons failed to launch with error: %s\n",
@@ -547,14 +527,15 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
 
     /* Register callback for when this job terminates */
     myrel->nspace = strdup(daemon_nspace);
-    dninfo = 2;
-    n = 0;
-    PMIX_INFO_CREATE(dinfo, dninfo);
-    PMIX_INFO_LOAD(&dinfo[n], PMIX_EVENT_RETURN_OBJECT, myrel, PMIX_POINTER);
-    n++;
-    /* Only call me back when this specific job terminates */
     PMIX_LOAD_PROCID(&proc, daemon_nspace, PMIX_RANK_WILDCARD);
-    PMIX_INFO_LOAD(&dinfo[n], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
+    PMIX_INFO_LIST_START(dirs);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_RETURN_OBJECT, myrel, PMIX_POINTER);
+    /* Only call me back when this specific job terminates */
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
+    PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
+    PMIX_INFO_LIST_RELEASE(dirs);
+    dinfo = darray.array;
+    dninfo = darray.size;
     /* Track that we need both jobs to terminate */
     myrel->lock.count++;
 
@@ -562,33 +543,31 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     PMIx_Register_event_handler(&code, 1, dinfo, dninfo, release_fn, evhandler_reg_callbk,
                                 (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
     printf("Debugger: Registered for termination on nspace %s\n", daemon_nspace);
     rc = mylock.status;
     DEBUG_DESTRUCT_LOCK(&mylock);
-    PMIX_INFO_FREE(dinfo, 2);
 
     return rc;
 }
 
 int main(int argc, char **argv)
 {
+    void *dirs;
     pmix_status_t rc;
-    pmix_info_t *info, *iptr;
+    pmix_info_t *info;
     pmix_app_t *app;
     size_t ninfo, napps;
-    char *nspace = NULL;
     int i, n;
     pmix_query_t *query;
     size_t nq, num_servers;
     myquery_data_t myquery_data;
-    pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
+    pmix_status_t code = PMIX_EVENT_JOB_END;
     mylock_t mylock;
     myrel_t myrel;
     pid_t pid;
-    pmix_envar_t envar;
     pmix_proc_t proc;
     pmix_data_array_t darray;
-    char *tmp;
     char cwd[_POSIX_PATH_MAX];
     char map_str[128];
     pmix_rank_t all_ranks = PMIX_RANK_WILDCARD;
@@ -691,21 +670,21 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    info = NULL;
-    ninfo = 2;
-    n = 0;
+    PMIX_INFO_LIST_START(dirs);
 
     /* Use the system connection first, if available */
-    PMIX_INFO_CREATE(info, ninfo);
-    PMIX_INFO_LOAD(&info[n], PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
-    n++;
-    PMIX_INFO_LOAD(&info[n], PMIX_LAUNCHER, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_LAUNCHER, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
+    PMIX_INFO_LIST_RELEASE(dirs);
+    info = darray.array;
+    ninfo = darray.size;
     /* Init as a tool */
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, info, ninfo))) {
         fprintf(stderr, "PMIx_tool_init failed: %s(%d)\n", PMIx_Error_string(rc), rc);
         exit(rc);
     }
-    PMIX_INFO_FREE(info, ninfo);
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
 
     printf("Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank,
            (unsigned long) pid);
@@ -714,8 +693,8 @@ int main(int argc, char **argv)
      * PMIX_READY_FOR_DEBUG notifications from that server when target processes
      * are ready for debug. There should be only one server */
     if (PMIX_SUCCESS != PMIx_tool_get_servers(&connected_servers, &num_servers)) {
-        fprintf(stderr, "Unable to get connected servers: %s(%n)\n",
-                PMIx_Error_string(rc), rc);
+        fprintf(stderr, "Unable to get connected servers: %s\n",
+                PMIx_Error_string(rc));
         exit(1);
     }
     printf("Connected system server is %s:%d\n", connected_servers[0].nspace,
@@ -725,9 +704,8 @@ int main(int argc, char **argv)
 
     /* Register a default event handler */
     ninfo = 1;
-    n = 0;
     PMIX_INFO_CREATE(info, ninfo);
-    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
     DEBUG_CONSTRUCT_LOCK(&mylock);
     PMIx_Register_event_handler(NULL, 0, info, ninfo, notification_fn, evhandler_reg_callbk,
                                 (void *) &mylock);
@@ -834,28 +812,26 @@ int main(int argc, char **argv)
         }
         app[0].ninfo = 0;
         /* Provide job-level directives so the apps do what the user requested */
-        ninfo = 5;
-        n = 0;
-        PMIX_INFO_CREATE(info, ninfo);
+        PMIX_INFO_LIST_START(dirs);
         if (stop_on_exec) {
             // procs are to stop on first instruction
-            PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_STOP_ON_EXEC, &all_ranks,
+            PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_STOP_ON_EXEC, &all_ranks,
                            PMIX_PROC_RANK);
         } else {
             // procs are to pause in PMIx_Init for debugger attach
-            PMIX_INFO_LOAD(&info[n], PMIX_DEBUG_STOP_IN_INIT, &all_ranks,
+            PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_STOP_IN_INIT, &all_ranks,
                            PMIX_PROC_RANK);
         }
-        n++;
         sprintf(map_str, "ppr:%d:node", app_npernode);
-        PMIX_INFO_LOAD(&info[n], PMIX_MAPBY, map_str, PMIX_STRING); // 1 per node
-        n++;
-        PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
-        n++;
-        PMIX_INFO_LOAD(&info[n], PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
-        n++;
-        PMIX_INFO_LOAD(&info[n], PMIX_NOTIFY_COMPLETION, NULL,
+        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_MAPBY, map_str, PMIX_STRING); // 1 per node
+        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
+        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
+        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_NOTIFY_COMPLETION, NULL,
                        PMIX_BOOL); // notify us when the job completes
+        PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
+        PMIX_INFO_LIST_RELEASE(dirs);
+        info = darray.array;
+        ninfo = darray.size;
 
         /* Spawn the job - the function will return when the app
          * has been launched */
@@ -865,18 +841,19 @@ int main(int argc, char **argv)
                     PMIx_Error_string(rc), rc);
             goto done;
         }
-        PMIX_INFO_FREE(info, ninfo);
+        PMIX_DATA_ARRAY_DESTRUCT(&darray);
         PMIX_APP_FREE(app, napps);
 
-        /* Register callback for when the app terminates */
-        ninfo = 2;
-        n = 0;
-        PMIX_INFO_CREATE(info, ninfo);
-        PMIX_INFO_LOAD(&info[n], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
-        n++;
         /* Only call me back when this specific job terminates */
         PMIX_LOAD_PROCID(&proc, client_nspace, PMIX_RANK_WILDCARD);
-        PMIX_INFO_LOAD(&info[n], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
+        /* Register callback for when the app terminates */
+        PMIX_INFO_LIST_START(dirs);
+        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
+        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
+        PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
+        PMIX_INFO_LIST_RELEASE(dirs);
+        info = darray.array;
+        ninfo = darray.size;
         /* track number of jobs to terminate */
         myrel.lock.count++;
 
@@ -887,9 +864,9 @@ int main(int argc, char **argv)
         printf("Debugger: Registered for termination on nspace %s\n", client_nspace);
         rc = mylock.status;
         DEBUG_DESTRUCT_LOCK(&mylock);
-        PMIX_INFO_FREE(info, ninfo);
+        PMIX_DATA_ARRAY_DESTRUCT(&darray);
         if (PMIX_SUCCESS != rc) {
-            fprintf(stderr, "Registration for PMIX_ERR_JOB_TERMINATED failed: %s\n",
+            fprintf(stderr, "Registration for PMIX_EVENT_JOB_END failed: %s\n",
                     PMIx_Error_string(rc));
             goto done;
         }
@@ -963,7 +940,6 @@ int main(int argc, char **argv)
         }
     }
 
-rundebugger:
     /* This is where a debugger tool would wait until the debug operation is complete */
     DEBUG_WAIT_THREAD(&myrel.lock);
 

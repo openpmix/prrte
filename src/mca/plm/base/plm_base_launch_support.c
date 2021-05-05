@@ -1079,7 +1079,8 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
             rc = PMIx_Data_load(&datbuf, &bo);
             PMIX_BYTE_OBJECT_DESTRUCT(&bo);
         } else {
-            PMIX_ERROR_LOG(PMIX_ERROR);
+            prte_show_help("help-prte-runtime.txt", "failed-to-uncompress",
+                           true, prte_process_info.nodename);
             prted_failed_launch = true;
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             goto CLEANUP;
@@ -1492,7 +1493,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                             goto CLEANUP;
                         }
                     } else {
-                        PMIX_ERROR_LOG(PMIX_ERROR);
+                        prte_show_help("help-prte-runtime.txt", "failed-to-uncompress",
+                                       true, prte_process_info.nodename);
                         prted_failed_launch = true;
                         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                         PMIX_BYTE_OBJECT_DESTRUCT(&bo);

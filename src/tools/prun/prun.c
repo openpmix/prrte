@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2008 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -287,10 +287,10 @@ static prte_cmd_line_init_t prte_tool_options[] = {
     {'\0', "do-not-connect", 0, PRTE_CMD_LINE_TYPE_BOOL, "Do not connect to a server",
      PRTE_CMD_LINE_OTYPE_DVM},
     /* wait to connect */
-    {'\0', "wait-to-connect", 0, PRTE_CMD_LINE_TYPE_INT,
+    {'\0', "wait-to-connect", 1, PRTE_CMD_LINE_TYPE_INT,
      "Delay specified number of seconds before trying to connect", PRTE_CMD_LINE_OTYPE_DVM},
     /* number of times to try to connect */
-    {'\0', "num-connect-retries", 0, PRTE_CMD_LINE_TYPE_INT,
+    {'\0', "num-connect-retries", 1, PRTE_CMD_LINE_TYPE_INT,
      "Max number of times to try to connect", PRTE_CMD_LINE_OTYPE_DVM},
     /* provide a connection PID */
     {'\0', "pid", 1, PRTE_CMD_LINE_TYPE_STRING,
@@ -568,7 +568,7 @@ int prun(int argc, char *argv[])
     if (NULL != (param = getenv("PMIX_NAMESPACE"))) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_NSPACE, param, PMIX_STRING);
     } else {
-        prte_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, getpid());
+        prte_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, (unsigned long)getpid());
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_NSPACE, param, PMIX_STRING);
         free(param);
     }
@@ -589,11 +589,13 @@ int prun(int argc, char *argv[])
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "wait-to-connect", 0, 0))
         && 0 < pval->value.data.integer) {
+        ui32 = pval->value.data.integer;
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "num-connect-retries", 0, 0))
         && 0 < pval->value.data.integer) {
+        ui32 = pval->value.data.integer;
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
 
@@ -726,14 +728,8 @@ int prun(int argc, char *argv[])
             if (0 == strcmp(targv[idx], "bind")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":REPORT", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "proctable")) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);
-            }
             if (0 == strcmp(targv[idx], "map-devel")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDEVEL", PMIX_STRING);
-            }
-            if (0 == strcmp(targv[idx], "map-diffable")) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDIFF", PMIX_STRING);
             }
             if (0 == strcmp(targv[idx], "topo")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYTOPO", PMIX_STRING);
@@ -922,6 +918,9 @@ int prun(int argc, char *argv[])
         }
         PMIX_INFO_FREE(mylock.info, mylock.ninfo);
     }
+    /* mark that we harvested envars so prte knows not to do it again */
+    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_ENVARS_HARVESTED, NULL, PMIX_BOOL);
+
 
     /* they want to run an application, so let's parse
      * the cmd line to get it */

@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2008 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -75,6 +75,7 @@
 #include "src/util/cmd_line.h"
 #include "src/util/daemon_init.h"
 #include "src/util/fd.h"
+#include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
@@ -88,6 +89,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
+#include "src/mca/odls/odls.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/mca/rmaps/rmaps_types.h"
@@ -892,14 +894,8 @@ int prte(int argc, char *argv[])
             if (0 == strcmp(targv[idx], "bind")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":REPORT", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "proctable")) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);
-            }
             if (0 == strcmp(targv[idx], "map-devel")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDEVEL", PMIX_STRING);
-            }
-            if (0 == strcmp(targv[idx], "map-diffable")) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDIFF", PMIX_STRING);
             }
             if (0 == strcmp(targv[idx], "topo")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYTOPO", PMIX_STRING);
@@ -1280,8 +1276,39 @@ static void clean_abort(int fd, short flags, void *arg)
     prte_plm.terminate_orteds();
 }
 
-static struct timeval current, last = {0, 0};
 static bool first = true;
+static bool second = true;
+
+static void surekill(void)
+{
+    prte_proc_t *child;
+    int n;
+    pid_t pid;
+
+    for (n=0; n < prte_local_children->size; n++) {
+        child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, n);
+        if (NULL != child && 0 < child->pid) {
+            pid = child->pid;
+#if HAVE_SETPGID
+            {
+                pid_t pgrp;
+                pgrp = getpgid(pid);
+                if (-1 != pgrp) {
+                    /* target the lead process of the process
+                     * group so we ensure that the signal is
+                     * seen by all members of that group. This
+                     * ensures that the signal is seen by any
+                     * child processes our child may have
+                     * started
+                     */
+                    pid = -pgrp;
+                }
+            }
+#endif
+            kill(pid, SIGKILL);
+        }
+    }
+}
 
 /*
  * Attempt to terminate the job and wait for callback indicating
@@ -1291,32 +1318,26 @@ static void abort_signal_callback(int fd)
 {
     uint8_t foo = 1;
     char *msg
-        = "Abort is in progress...hit ctrl-c again within 5 seconds to forcibly terminate\n\n";
+        = "Abort is in progress...hit ctrl-c again to forcibly terminate\n\n";
 
     /* if this is the first time thru, just get
      * the current time
      */
     if (first) {
         first = false;
-        gettimeofday(&current, NULL);
+        /* tell the event lib to attempt to abnormally terminate */
+        if (-1 == write(term_pipe[1], &foo, 1)) {
+            exit(1);
+        }
+    } else if (second) {
+        if (-1 == write(2, (void *) msg, strlen(msg))) {
+            exit(1);
+        }
+        fflush(stderr);
+        second = false;
     } else {
-        /* get the current time */
-        gettimeofday(&current, NULL);
-        /* if this is within 5 seconds of the
-         * last time we were called, then just
-         * exit - we are probably stuck
-         */
-        if ((current.tv_sec - last.tv_sec) < 5) {
-            exit(1);
-        }
-        if (-1 == write(1, (void *) msg, strlen(msg))) {
-            exit(1);
-        }
-    }
-    /* save the time */
-    last.tv_sec = current.tv_sec;
-    /* tell the event lib to attempt to abnormally terminate */
-    if (-1 == write(term_pipe[1], &foo, 1)) {
+        surekill();  // ensure we attempt to kill everything
+        prte_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, NULL);
         exit(1);
     }
 }

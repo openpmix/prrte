@@ -591,6 +591,7 @@ static void check_complete(int fd, short args, void *cbdata)
             /* if this is a tool it might be interested in the terminated event */
             if (PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_TOOL)) {
                 ++num_tools_attached;
+                continue;
             }
             /* if the job is flagged to not be monitored, skip it */
             if (PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_DO_NOT_MONITOR)) {

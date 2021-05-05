@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2011 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -86,7 +86,6 @@ int prted_debug_failure_delay = -1;
 bool prte_never_launched = false;
 bool prte_devel_level_output = false;
 bool prte_display_topo_with_map = false;
-bool prte_display_diffable_output = false;
 
 char **prte_launch_environ = NULL;
 

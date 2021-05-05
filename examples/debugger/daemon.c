@@ -16,6 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -101,7 +102,7 @@ static void notification_fn(size_t evhdlr_registration_id, pmix_status_t status,
 }
 
 /* This is an event notification function that we explicitly request
- * be called when the PMIX_ERR_JOB_TERMINATED notification is issued.
+ * be called when the PMIX_EVENT_JOB_END notification is issued.
  * We could catch it in the general event notification function and test
  * the status to see if it was "job terminated", but it often is simpler
  * to declare a use-specific notification callback point. In this case,
@@ -113,7 +114,6 @@ static void release_fn(size_t evhdlr_registration_id, pmix_status_t status,
                        pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     myrel_t *lock;
-    pmix_status_t rc;
     bool found;
     int exit_code;
     size_t n;
@@ -199,7 +199,8 @@ int main(int argc, char **argv)
 {
     pmix_status_t rc;
     pmix_value_t *val;
-    pmix_proc_t proc, target_proc;
+    void *dirs;
+    pmix_proc_t proc;
     pmix_info_t *info;
     size_t ninfo;
     pmix_query_t *query;
@@ -208,14 +209,17 @@ int main(int argc, char **argv)
     size_t n;
     myquery_data_t myquery_data;
     pid_t pid;
-    pmix_status_t code = PMIX_ERR_JOB_TERMINATED;
+    pmix_status_t code = PMIX_EVENT_JOB_END;
     mylock_t mylock;
     myrel_t myrel;
     uint16_t localrank;
     int i;
+    pmix_data_array_t darray;
     int cospawned_namespace = 0;
+    char hostname[256];
 
     pid = getpid();
+    gethostname(hostname, sizeof hostname);
 
     /* Initialize this daemon - since we were launched by the RM, our
      * connection info * will have been provided at startup. */
@@ -223,8 +227,8 @@ int main(int argc, char **argv)
         fprintf(stderr, "Debugger daemon: PMIx_tool_init failed: %s\n", PMIx_Error_string(rc));
         exit(0);
     }
-    printf("Debugger daemon ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank,
-           (unsigned long) pid);
+    printf("Debugger daemon ns %s on host %s rank %d pid %lu: Running\n", myproc.nspace,
+            hostname, myproc.rank, (unsigned long) pid);
 
     /* Register our default event handler */
     DEBUG_CONSTRUCT_LOCK(&mylock);
@@ -318,16 +322,16 @@ int main(int argc, char **argv)
 
     PMIX_LOAD_PROCID(&proc, target_namespace, PMIX_RANK_WILDCARD);
 
-    ninfo = 2;
-    PMIX_INFO_CREATE(info, ninfo);
-    n = 0;
+    PMIX_INFO_LIST_START(dirs);
     /* Pass the lock we will use to wait for notification of the
-     * PMIX_ERR_JOB_TERMINATED event */
-    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
-    n++;
+     * PMIX_EVENT_JOB_END event */
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
     /* Only call me back when this specific job terminates */
-    PMIX_INFO_LOAD(&info[n], PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
-
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
+    PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
+    PMIX_INFO_LIST_RELEASE(dirs);
+    ninfo = darray.size;
+    info = darray.array;
     printf("[%s:%d:%lu] registering for termination of '%s'\n", myproc.nspace, myproc.rank,
            (unsigned long) pid, proc.nspace);
 
@@ -337,9 +341,9 @@ int main(int argc, char **argv)
     PMIx_Register_event_handler(&code, 1, info, ninfo, release_fn, evhandler_reg_callbk,
                                 (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
-    PMIX_INFO_FREE(info, ninfo);
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
     if (PMIX_SUCCESS != mylock.status) {
-        fprintf(stderr, "Failed to register handler for PMIX_ERR_JOB_TERMINATED: %s\n",
+        fprintf(stderr, "Failed to register handler for PMIX_EVENT_JOB_END: %s\n",
                 PMIx_Error_string(mylock.status));
         rc = mylock.status;
         DEBUG_DESTRUCT_LOCK(&mylock);
@@ -412,23 +416,24 @@ int main(int argc, char **argv)
     // from the application (this is a bug) so just have everyone
     // send the release.
     if (0 == myproc.rank || 1 == cospawned_namespace) {
-        n = 0;
-        ninfo = 2;
-        PMIX_INFO_CREATE(info, ninfo);
 
+        PMIX_INFO_LIST_START(dirs);
         /* Send release notification to application namespace */
-        PMIX_INFO_LOAD(&info[n], PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);
-        n++;
+        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);
         /* Don't send notification to default event handlers */
-        PMIX_INFO_LOAD(&info[n], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+        PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
+        PMIX_INFO_LIST_RELEASE(dirs);
+        info = darray.array;
+        ninfo = darray.size;
 
         // Todo: Move this to the main tool
         // https://github.com/openpmix/prrte/pull/857#discussion_r600849033
         sleep(1);
-
         printf("[%s:%u:%lu] Sending release\n", myproc.nspace, myproc.rank, (unsigned long) pid);
         rc = PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, NULL, PMIX_RANGE_CUSTOM, info, ninfo, NULL,
                                NULL);
+        PMIX_DATA_ARRAY_DESTRUCT(&darray);
         if (PMIX_SUCCESS != rc) {
             fprintf(stderr, "[%s:%u:%lu] Sending release failed with error %s(%d)\n", myproc.nspace,
                     myproc.rank, (unsigned long) pid, PMIx_Error_string(rc), rc);
@@ -441,7 +446,7 @@ int main(int argc, char **argv)
      * needed, or just wait for the application * termination.
      * This example just waits for application termination.
      * Note that if the application processes and daemon processes are spawned
-     * by the same PMIx_Spawn call, then no PMIX_ERR_JOB_TERMINATED
+     * by the same PMIx_Spawn call, then no PMIX_EVENT_JOB_END
      * notifications are sent since the daemons are part of the same namespace
      * and are still running.
      */

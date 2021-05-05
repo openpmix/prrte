@@ -281,8 +281,6 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
 {
     prte_grpcomm_coll_t *coll;
     int rc;
-    prte_namelist_t *nm;
-    prte_list_t children;
     size_t n;
 
     /* search the existing tracker list to see if this already exists */
@@ -328,21 +326,8 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
         return NULL;
     }
 
-    /* cycle thru the array of daemons and compare them to our
-     * children in the routing tree, counting the ones that match
-     * so we know how many daemons we should receive contributions from */
-    PRTE_CONSTRUCT(&children, prte_list_t);
-    prte_routed.get_routing_list(&children);
-    while (NULL != (nm = (prte_namelist_t *) prte_list_remove_first(&children))) {
-        for (n = 0; n < coll->ndmns; n++) {
-            if (nm->name.rank == coll->dmns[n]) {
-                coll->nexpected++;
-                break;
-            }
-        }
-        PRTE_RELEASE(nm);
-    }
-    PRTE_LIST_DESTRUCT(&children);
+    /* count the number of contributions we should get */
+    coll->nexpected = prte_routed.get_num_contributors(coll->dmns, coll->ndmns);
 
     /* see if I am in the array of participants - note that I may
      * be in the rollup tree even though I'm not participating
