@@ -12,6 +12,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,9 +34,9 @@
 #endif /* HAVE_UNISTD_H */
 #include "src/util/crc.h"
 
-#if (PRTE_ALIGNMENT_LONG == 8)
+#if (ALIGNOF_LONG == 8)
 #    define PRTE_CRC_WORD_MASK_ 0x7
-#elif (PRTE_ALIGNMENT_LONG == 4)
+#elif (ALIGNOF_LONG == 4)
 #    define PRTE_CRC_WORD_MASK_ 0x3
 #else
 #    define PRTE_CRC_WORD_MASK_ 0xFFFF
