@@ -239,7 +239,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
 
 static int init(void)
 {
-    fd_event_base = prte_sync_event_base;
+    fd_event_base = prte_event_base;
 
     if (PRTE_PROC_IS_DAEMON) {
         prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT_REQUEST,
@@ -265,10 +265,10 @@ int finalize(void)
         prte_event_del(&prte_errmgr_world_detector.fd_event);
         prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT_REQUEST);
         prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT);
-        if (prte_sync_event_base != fd_event_base) {
+        if (prte_event_base != fd_event_base) {
             prte_event_base_free(fd_event_base);
         }
-        /* set heartbeat peroid to infinity and observer to invalid */
+        /* set heartbeat period to infinity and observer to invalid */
         prte_errmgr_world_detector.hb_period = INFINITY;
         prte_errmgr_world_detector.hb_observer = PMIX_RANK_INVALID;
     }
@@ -556,7 +556,8 @@ static void fd_heartbeat_recv_cb(int status, pmix_proc_t *sender, pmix_data_buff
     prte_errmgr_detector_t *detector = &prte_errmgr_world_detector;
     int rc;
     int32_t cnt;
-    uint32_t vpid, jobid;
+    pmix_rank_t vpid;
+    pmix_nspace_t jobid;
 
     if (sender->rank == prte_process_info.myproc.rank) {
         /* this is a quit msg from observed process, stop detector */
