@@ -369,6 +369,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
     /* goes to all daemons */
     sig = PRTE_NEW(prte_grpcomm_signature_t);
     sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
+    sig->sz = 1;
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
     if (PRTE_SUCCESS != (rc = prte_grpcomm_API_rbcast(sig, PRTE_RML_TAG_PROPAGATE, &prperror_buffer))) {
         PRTE_ERROR_LOG(rc);
@@ -381,7 +382,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
             PMIX_INFO_FREE(pinfo, pcnt);
         }
     }
-    // PRTE_DESTRUCT(&prperror_buffer);
+    PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
     PMIX_INFO_FREE(pinfo, pcnt);
     PRTE_RELEASE(sig);
     /* we're done! */
