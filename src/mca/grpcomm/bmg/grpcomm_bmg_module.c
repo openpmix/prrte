@@ -161,7 +161,6 @@ static int rbcast(pmix_data_buffer_t *buf)
         }
     }
 
-//    PMIX_DATA_BUFFER_RELEASE(buf);
     return rc;
 }
 
@@ -194,7 +193,7 @@ static void rbcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     PMIX_DATA_BUFFER_CONSTRUCT(&datbuf);
     /* unpack the flag to see if this payload is compressed */
     cnt = 1;
-    ret = PMIx_Data_unpack(NULL, buffer, &flag, &cnt, PMIX_INT8);
+    ret = PMIx_Data_unpack(NULL, buffer, &flag, &cnt, PMIX_BOOL);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_RELEASE(rly);
@@ -289,7 +288,7 @@ static void rbcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
 
     /* get the cbtype */
     cnt = 1;
-    ret = PMIx_Data_unpack(NULL, data, &cbtype, &cnt, PMIX_INT32);
+    ret = PMIx_Data_unpack(NULL, data, &cbtype, &cnt, PMIX_INT);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
@@ -298,7 +297,12 @@ static void rbcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     }
     if (prte_grpcomm_rbcast_cb[cbtype](relay)) {
         /* forward the rbcast */
-        if (PRTE_SUCCESS == (ret = rbcast(rly))) {
+        ret = rbcast(rly);
+        if (PRTE_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+            goto CLEANUP;
         }
     }
 
