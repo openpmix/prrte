@@ -218,7 +218,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
 
     /* if compressed, decompress */
     if (compressed) {
-        if (!PMIx_Data_decompress((uint8_t **) &raw, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+        if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &raw, &sz)) {
             PRTE_ERROR_LOG(PRTE_ERROR);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             rc = PRTE_ERROR;
@@ -251,7 +251,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
 
     /* if compressed, decompress */
     if (compressed) {
-        if (!PMIx_Data_decompress((uint8_t **) &vpid, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+        if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &vpid, &sz)) {
             PRTE_ERROR_LOG(PRTE_ERROR);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             rc = PRTE_ERROR;
@@ -697,7 +697,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
 
         /* if compressed, decompress */
         if (compressed) {
-            if (!PMIx_Data_decompress((uint8_t **) &bytes, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &bytes, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -785,7 +785,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         }
         /* if compressed, decompress */
         if (compressed) {
-            if (!PMIx_Data_decompress((uint8_t **) &bytes, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &bytes, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -872,7 +872,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         }
         /* if compressed, decompress */
         if (1 == i16) {
-            if (!PMIx_Data_decompress((uint8_t **) &slots, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &slots, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -924,7 +924,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         }
         /* if compressed, decompress */
         if (2 == i8) {
-            if (!PMIx_Data_decompress((uint8_t **) &flags, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &flags, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -1100,7 +1100,7 @@ int prte_util_decode_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf)
 
         /* decompress if required */
         if (compressed) {
-            if (!PMIx_Data_decompress(&bytes, &sz, (uint8_t *) bo.bytes, bo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) bo.bytes, bo.size, &bytes, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&bo);
                 return PRTE_ERROR;
