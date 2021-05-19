@@ -296,11 +296,9 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         prte_pointer_array_set_item(prte_node_pool, n, nd);
         /* see if this is our node */
         if (prte_check_host_is_local(names[n])) {
-            /* add our aliases as an attribute - will include all the interface aliases captured in
+            /* add our aliases - will include all the interface aliases captured in
              * prte_init */
-            raw = prte_argv_join(prte_process_info.aliases, ',');
-            prte_set_attribute(&nd->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, raw, PMIX_STRING);
-            free(raw);
+            nd->aliases = prte_argv_copy(prte_process_info.aliases);
         }
         /* set the topology - always default to homogeneous
          * as that is the most common scenario */

@@ -188,9 +188,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, node->name, PMIX_STRING);
             prte_list_append(&iarray->infolist, &kv->super);
             /* add any aliases */
-            if (prte_get_attribute(&node->attributes, PRTE_NODE_ALIAS, (void **) &regex,
-                                   PMIX_STRING)
-                && NULL != regex) {
+            if (NULL != node->aliases) {
+                regex = pmix_argv_join(node->aliases, ',');
                 kv = PRTE_NEW(prte_info_item_t);
                 PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME_ALIASES, regex, PMIX_STRING);
                 prte_list_append(&iarray->infolist, &kv->super);

@@ -1258,7 +1258,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     bool found;
     prte_daemon_cmd_flag_t cmd;
     char *myendian;
-    char *alias, **atmp;
+    char *alias;
     uint8_t naliases, ni;
     hwloc_obj_t root;
     prte_hwloc_topo_data_t *sum;
@@ -1295,11 +1295,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                              "%s plm:base:orted_report_launch from daemon %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&dname)));
 
-        atmp = NULL;
         /* update state and record for this daemon contact info */
-        if (NULL
-            == (daemon = (prte_proc_t *) prte_pointer_array_get_item(jdatorted->procs,
-                                                                     dname.rank))) {
+        daemon = (prte_proc_t *) prte_pointer_array_get_item(jdatorted->procs, dname.rank);
+        if (NULL == daemon) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             prted_failed_launch = true;
             goto CLEANUP;
@@ -1358,8 +1356,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
 
             for (n = 0; n < ninfo; n++) {
                 /* store this in a daemon wireup buffer for later distribution */
-                if (PMIX_SUCCESS
-                    != (ret = PMIx_Store_internal(&dname, info[n].key, &info[n].value))) {
+                ret = PMIx_Store_internal(&dname, info[n].key, &info[n].value);
+                if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_INFO_FREE(info, ninfo);
                     prted_failed_launch = true;
@@ -1377,7 +1375,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             prted_failed_launch = true;
             goto CLEANUP;
         }
-        if (!prte_have_fqdn_allocation) {
+        if (!prte_have_fqdn_allocation && !prte_keep_fqdn_hostnames) {
+            /* retain whatever was returned */
+            prte_argv_append_unique_nosize(&daemon->node->aliases, nodename);
             /* remove any domain info */
             if (NULL != (ptr = strchr(nodename, '.'))) {
                 *ptr = '\0';
@@ -1403,7 +1403,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
          * by gethostname, yet the daemon will have returned the latter
          * and apps may refer to the host by that name
          */
-        prte_argv_append_nosize(&atmp, nodename);
+        prte_argv_append_unique_nosize(&daemon->node->aliases, nodename);
         /* unpack and store the provided aliases */
         idx = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &naliases, &idx, PMIX_UINT8);
@@ -1420,16 +1420,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
-            prte_argv_append_nosize(&atmp, alias);
+            prte_argv_append_unique_nosize(&daemon->node->aliases, alias);
             free(alias);
         }
-        if (0 < naliases) {
-            alias = prte_argv_join(atmp, ',');
-            prte_set_attribute(&daemon->node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, alias,
-                               PMIX_STRING);
-            free(alias);
-        }
-        prte_argv_free(atmp);
 
         /* unpack the topology signature for that node */
         idx = 1;
@@ -1596,8 +1589,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         /* do we already have this topology from some other node? */
         found = false;
         for (i = 0; i < prte_node_topologies->size; i++) {
-            if (NULL
-                == (t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, i))) {
+            t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, i);
+            if (NULL == t) {
                 continue;
             }
             /* just check the signature */

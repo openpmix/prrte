@@ -52,7 +52,6 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
     char *ptr;
     bool hnp_alone = true, skiphnp = false;
     prte_attribute_t *kv;
-    char **alias = NULL, **nalias;
     prte_proc_t *daemon;
     prte_job_t *djob;
 
@@ -147,42 +146,8 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
             } else {
                 PRTE_FLAG_UNSET(hnp_node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             }
-            /* use the local name for our node - don't trust what
-             * we got from an RM. If requested, store the resolved
-             * nodename info
-             */
-            if (prte_show_resolved_nodenames) {
-                /* if the node name is different, store it as an alias */
-                if (0 != strcmp(node->name, hnp_node->name)) {
-                    /* get any current list of aliases */
-                    ptr = NULL;
-                    prte_get_attribute(&hnp_node->attributes, PRTE_NODE_ALIAS, (void **) &ptr,
-                                       PMIX_STRING);
-                    if (NULL != ptr) {
-                        alias = prte_argv_split(ptr, ',');
-                        free(ptr);
-                    }
-                    /* add to list of aliases for this node - only add if unique */
-                    prte_argv_append_unique_nosize(&alias, node->name);
-                }
-                if (prte_get_attribute(&node->attributes, PRTE_NODE_ALIAS, (void **) &ptr,
-                                       PMIX_STRING)) {
-                    nalias = prte_argv_split(ptr, ',');
-                    /* now copy over any aliases that are unique */
-                    for (i = 0; NULL != nalias[i]; i++) {
-                        prte_argv_append_unique_nosize(&alias, nalias[i]);
-                    }
-                    prte_argv_free(nalias);
-                }
-                /* and store the result */
-                if (0 < prte_argv_count(alias)) {
-                    ptr = prte_argv_join(alias, ',');
-                    prte_set_attribute(&hnp_node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, ptr,
-                                       PMIX_STRING);
-                    free(ptr);
-                }
-                prte_argv_free(alias);
-            }
+            /* if the node name is different, store it as an alias */
+            prte_argv_append_unique_nosize(&hnp_node->aliases, node->name);
             /* don't keep duplicate copy */
             PRTE_RELEASE(node);
             /* create copies, if required */
