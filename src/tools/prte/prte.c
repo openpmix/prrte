@@ -256,6 +256,23 @@ int prte(int argc, char *argv[])
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
+
+    /* because we have to use the schizo framework and init our hostname
+     * prior to parsing the incoming argv for cmd line options, do a hacky
+     * search to support passing of impacted options (e.g., verbosity for schizo) */
+    for (i = 1; NULL != argv[i]; i++) {
+        if (0 == strcmp(argv[i], "--prtemca") || 0 == strcmp(argv[i], "--mca")) {
+            if (0 == strncmp(argv[i + 1], "schizo", 6) ||
+                0 == strcmp(argv[i + 1], "prte_keep_fqdn_hostnames") ||
+                0 == strcmp(argv[i + 1], "prte_strip_prefix")) {
+                prte_asprintf(&param, "PRTE_MCA_%s", argv[i + 1]);
+                prte_setenv(param, argv[i + 2], true, &environ);
+                free(param);
+                i += 2;
+            }
+        }
+    }
+
     /* init the tiny part of PRTE we use */
     prte_init_util(PRTE_PROC_MASTER);
 
@@ -306,20 +323,6 @@ int prte(int argc, char *argv[])
     signal(SIGTERM, abort_signal_callback);
     signal(SIGINT, abort_signal_callback);
     signal(SIGHUP, abort_signal_callback);
-
-    /* because we have to use the schizo framework prior to parsing the
-     * incoming argv for cmd line options, do a hacky search to support
-     * passing of options (e.g., verbosity) for schizo */
-    for (i = 1; NULL != argv[i]; i++) {
-        if (0 == strcmp(argv[i], "--prtemca") || 0 == strcmp(argv[i], "--mca")) {
-            if (0 == strncmp(argv[i + 1], "schizo", 6)) {
-                prte_asprintf(&param, "PRTE_MCA_%s", argv[i + 1]);
-                prte_setenv(param, argv[i + 2], true, &environ);
-                free(param);
-                i += 2;
-            }
-        }
-    }
 
     /* open the SCHIZO framework */
     if (PRTE_SUCCESS

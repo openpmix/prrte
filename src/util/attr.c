@@ -283,8 +283,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "NODE-LAUNCHID";
         case PRTE_NODE_HOSTID:
             return "NODE-HOSTID";
-        case PRTE_NODE_ALIAS:
-            return "NODE-ALIAS";
         case PRTE_NODE_SERIAL_NUMBER:
             return "NODE-SERIAL-NUM";
 

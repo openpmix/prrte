@@ -39,8 +39,10 @@
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/argv.h"
 #include "src/util/attr.h"
+#include "src/util/if.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
@@ -50,28 +52,29 @@
 /* provide a connection to a reqd variable */
 extern bool prte_keep_fqdn_hostnames;
 
-PRTE_EXPORT prte_process_info_t prte_process_info = {.myproc = {{0}, 0},
-                                                     .my_hnp = {{0}, 0},
-                                                     .my_hnp_uri = NULL,
-                                                     .my_parent = {{0}, 0},
-                                                     .hnp_pid = 0,
-                                                     .num_daemons = 1,
-                                                     .num_nodes = 1,
-                                                     .nodename = NULL,
-                                                     .aliases = NULL,
-                                                     .pid = 0,
-                                                     .proc_type = PRTE_PROC_TYPE_NONE,
-                                                     .my_port = 0,
-                                                     .num_restarts = 0,
-                                                     .tmpdir_base = NULL,
-                                                     .top_session_dir = NULL,
-                                                     .jobfam_session_dir = NULL,
-                                                     .job_session_dir = NULL,
-                                                     .proc_session_dir = NULL,
-                                                     .sock_stdin = NULL,
-                                                     .sock_stdout = NULL,
-                                                     .sock_stderr = NULL,
-                                                     .cpuset = NULL};
+PRTE_EXPORT prte_process_info_t prte_process_info = {
+    .myproc = {{0}, 0},
+    .my_hnp = {{0}, 0},
+    .my_hnp_uri = NULL,
+    .my_parent = {{0}, 0},
+    .hnp_pid = 0,
+    .num_daemons = 1,
+    .num_nodes = 1,
+    .nodename = NULL,
+    .aliases = NULL,
+    .pid = 0,
+    .proc_type = PRTE_PROC_TYPE_NONE,
+    .my_port = 0,
+    .num_restarts = 0,
+    .tmpdir_base = NULL,
+    .top_session_dir = NULL,
+    .jobfam_session_dir = NULL,
+    .job_session_dir = NULL,
+    .proc_session_dir = NULL,
+    .sock_stdin = NULL,
+    .sock_stdout = NULL,
+    .sock_stderr = NULL,
+    .cpuset = NULL};
 
 static bool init = false;
 static char *prte_strip_prefix;
@@ -96,15 +99,6 @@ void prte_setup_hostname(void)
     gethostname(hostname, sizeof(hostname));
     /* add this to our list of aliases */
     prte_argv_append_nosize(&prte_process_info.aliases, hostname);
-
-    // Strip off the FQDN if present, ignore IP addresses
-    if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(hostname)) {
-        if (NULL != (ptr = strchr(hostname, '.'))) {
-            *ptr = '\0';
-            /* add this to our list of aliases */
-            prte_argv_append_nosize(&prte_process_info.aliases, hostname);
-        }
-    }
 
     prte_strip_prefix = NULL;
     (void) prte_mca_base_var_register(
@@ -135,7 +129,7 @@ void prte_setup_hostname(void)
                     prte_process_info.nodename = strdup(&hostname[idx]);
                 }
                 /* add this to our list of aliases */
-                prte_argv_append_nosize(&prte_process_info.aliases, prte_process_info.nodename);
+                prte_argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
                 match = true;
                 break;
             }
@@ -148,16 +142,37 @@ void prte_setup_hostname(void)
     } else {
         prte_process_info.nodename = strdup(hostname);
     }
+    prte_argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
+
+    // if we are not keeping FQDN, then strip it off if not an IP address
+    if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(hostname)) {
+        if (NULL != (ptr = strchr(hostname, '.'))) {
+            *ptr = '\0';
+            /* add this to our list of aliases */
+            prte_argv_append_unique_nosize(&prte_process_info.aliases, hostname);
+        }
+    }
+
 }
 
-bool prte_check_host_is_local(char *name)
+bool prte_check_host_is_local(const char *name)
 {
     int i;
 
     for (i = 0; NULL != prte_process_info.aliases[i]; i++) {
-        if (0 == strcmp(name, prte_process_info.aliases[i]) || 0 == strcmp(name, "localhost")
-            || 0 == strcmp(name, "127.0.0.1")) {
+        if (0 == strcmp(name, prte_process_info.aliases[i]) ||
+            0 == strcmp(name, "localhost") ||
+            0 == strcmp(name, "127.0.0.1")) {
             return true;
+        }
+        /* if it wasn't one of those and we are allowed
+         * to resolve addresses, then try that too */
+        if (!prte_do_not_resolve) {
+            if (prte_ifislocal(name)) {
+                /* add to our aliases */
+                prte_argv_append_nosize(&prte_process_info.aliases, name);
+                return true;
+            }
         }
     }
     return false;

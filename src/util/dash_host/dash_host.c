@@ -150,8 +150,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                     }
                     for (k = 0; 0 < j && k < prte_node_pool->size; k++) {
                         if (NULL
-                            != (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool,
-                                                                                   k))) {
+                            != (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, k))) {
                             if (0 == node->num_procs) {
                                 prte_argv_append_nosize(&mini_map, node->name);
                                 --j;
@@ -187,10 +186,8 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                         nodeidx++;
                     }
                     /* see if that location is filled */
-
-                    if (NULL
-                        == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool,
-                                                                               nodeidx))) {
+                    node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, nodeidx);
+                    if (NULL == node) {
                         /* this is an error */
                         prte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
                                        true, nodeidx, mapped_nodes[i]);
@@ -222,7 +219,8 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
         bump the slots count for each duplicate */
     for (i = 0; NULL != mini_map[i]; i++) {
         PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                             "%s dashhost: working node %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             "%s dashhost: working node %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              mini_map[i]));
 
         /* see if the node contains the number of slots */
@@ -245,20 +243,12 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
             ndname = prte_process_info.nodename;
         } else {
             ndname = mini_map[i];
-
-            // Strip off the FQDN if present, ignore IP addresses
-            if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(ndname)) {
-                if (NULL != (ptr = strchr(ndname, '.'))) {
-                    *ptr = '\0';
-                }
-            }
         }
         /* see if the node is already on the list */
         found = false;
-        PRTE_LIST_FOREACH(node, &adds, prte_node_t)
-        {
-            if (0 == strcmp(node->name, ndname)) {
-                found = true;
+        PRTE_LIST_FOREACH(node, &adds, prte_node_t) {
+            found = prte_node_match(node, ndname);
+            if (found) {
                 if (slots_given) {
                     node->slots += slots;
                     if (0 < slots) {
@@ -303,6 +293,14 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
             }
             prte_list_append(&adds, &node->super);
         }
+        // if we are not keeping FQDN, then strip it off if not an IP address
+        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(ndname)) {
+            if (NULL != (ptr = strchr(ndname, '.'))) {
+                *ptr = '\0';
+            }
+            /* ensure we retain this alias */
+            prte_argv_append_unique_nosize(&node->aliases, ndname);
+        }
     }
     prte_argv_free(mini_map);
 
@@ -313,10 +311,9 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
         for (itm = prte_list_get_first(nodes); itm != prte_list_get_end(nodes);
              itm = prte_list_get_next(itm)) {
             node = (prte_node_t *) itm;
-            if (0 == strcmp(nd->name, node->name)) {
-                found = true;
-                PRTE_OUTPUT_VERBOSE(
-                    (1, prte_ras_base_framework.framework_output,
+            found = prte_node_match(nd, node->name);
+            if (found) {
+                PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                      "%s dashhost: found existing node %s on input list - adding slots",
                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
                 if (PRTE_FLAG_TEST(nd, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
@@ -340,15 +337,12 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
     if (prte_managed_allocation) {
         prte_node_t *node_from_pool = NULL;
         for (i = 0; i < prte_node_pool->size; i++) {
-            if (NULL
-                == (node_from_pool = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool,
-                                                                                 i))) {
+            node_from_pool = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i);
+            if (NULL == node_from_pool) {
                 continue;
             }
-            for (itm = prte_list_get_first(nodes); itm != prte_list_get_end(nodes);
-                 itm = prte_list_get_next(itm)) {
-                node = (prte_node_t *) itm;
-                if (0 == strcmp(node_from_pool->name, node->name)) {
+            PRTE_LIST_FOREACH(node, nodes, prte_node_t) {
+                if (prte_node_match(node_from_pool, node->name)) {
                     if (node->slots < node_from_pool->slots) {
                         node_from_pool->slots = node->slots;
                     }
@@ -484,6 +478,7 @@ int prte_util_filter_dash_host_nodes(prte_list_t *nodes, char *hosts, bool remov
     bool want_all_empty = false;
     char *cptr;
     size_t lst, lmn;
+    bool found;
 
     /* if the incoming node list is empty, then there
      * is nothing to filter!
@@ -564,9 +559,7 @@ int prte_util_filter_dash_host_nodes(prte_list_t *nodes, char *hosts, bool remov
             if (NULL != (cptr = strchr(mapped_nodes[i], ':'))) {
                 *cptr = '\0';
             }
-            /* we are looking for a specific node on the list. The
-             * parser will have substituted our local name for any
-             * alias, so we only have to do a strcmp here. */
+            /* we are looking for a specific node on the list. */
             cptr = NULL;
             lmn = strtoul(mapped_nodes[i], &cptr, 10);
             item = prte_list_get_first(nodes);
@@ -592,7 +585,8 @@ int prte_util_filter_dash_host_nodes(prte_list_t *nodes, char *hosts, bool remov
                         test = (lmn == lst) ? 0 : 1;
                     }
                 } else {
-                    test = strcmp(node->name, mapped_nodes[i]);
+                    found = prte_node_match(node, mapped_nodes[i]);
+                    test = (found) ? 0 : 1;
                 }
                 if (0 == test) {
                     if (remove) {

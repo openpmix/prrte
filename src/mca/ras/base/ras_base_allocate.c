@@ -501,7 +501,8 @@ addlocal:
 
 DISPLAY:
     /* shall we display the results? */
-    if (4 < prte_output_get_verbosity(prte_ras_base_framework.framework_output)) {
+    if (4 < prte_output_get_verbosity(prte_ras_base_framework.framework_output) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PMIX_BOOL)) {
         prte_ras_base_display_alloc(jdata);
     }
 
