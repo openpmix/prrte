@@ -39,13 +39,14 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/threads.h"
-#include "src/util/argv.h"
-#include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/mca/rml/rml.h"
+#include "src/util/argv.h"
 #include "src/util/name_fns.h"
+#include "src/util/net.h"
+#include "src/util/output.h"
 #include "src/util/proc_info.h"
 
 #include "src/runtime/prte_globals.h"
@@ -78,7 +79,7 @@ char *prte_oob_static_ports = NULL;
 bool prte_keep_fqdn_hostnames = false;
 bool prte_have_fqdn_allocation = false;
 bool prte_show_resolved_nodenames = false;
-int prte_use_hostname_alias = -1;
+bool prte_do_not_resolve = false;
 int prte_hostname_cutoff = 1000;
 
 int prted_debug_failure = -1;
@@ -325,17 +326,41 @@ prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc)
     return proct->node_rank;
 }
 
-bool prte_node_match(prte_node_t *n1, char *name)
+bool prte_node_match(prte_node_t *n1, const char *name)
 {
-    char **n2names = NULL;
-    char *n2alias = NULL;
-    char **n1names = NULL;
-    char *n1alias = NULL;
     int i, m;
     prte_node_t *nptr;
+    size_t len, l2;
+
+    if (prte_net_isaddr(name)) {
+        len = strlen(name);
+    } else if (prte_keep_fqdn_hostnames) {
+        len = strlen(name);
+    } else {
+        /* if this is an fqdn, then we only want the first part */
+        len = 0;
+        for (i=0; '\0' != name[i] && '.' != name[i]; i++) {
+            ++len;
+        }
+    }
+    /* same for the node's name */
+    if (prte_net_isaddr(n1->name)) {
+        l2 = strlen(n1->name);
+    } else if (prte_keep_fqdn_hostnames) {
+        l2 = strlen(n1->name);
+    } else {
+        l2 = 0;
+        for (i=0; '\0' != n1->name[i] && '.' != n1->name[i]; i++) {
+            ++l2;
+        }
+    }
+    if (l2 != len) {
+        /* can't be a match */
+        return false;
+    }
 
     /* start with the simple check */
-    if (0 == strcmp(n1->name, name)) {
+    if (0 == strncmp(n1->name, name, len)) {
         return true;
     }
 
@@ -344,70 +369,42 @@ bool prte_node_match(prte_node_t *n1, char *name)
         return true;
     }
 
-    /* get the aliases for n1 and check those against "name" */
-    if (prte_get_attribute(&n1->attributes, PRTE_NODE_ALIAS, (void **) &n1alias, PMIX_STRING)) {
-        n1names = prte_argv_split(n1alias, ',');
-        free(n1alias);
-    }
-    if (NULL != n1names) {
-        for (i = 0; NULL != n1names[i]; i++) {
-            if (0 == strcmp(name, n1names[i])) {
-                prte_argv_free(n1names);
-                return true;
-            }
-        }
-    }
-
     /* "name" itself might be an alias, so find the node object for this name */
     for (i = 0; i < prte_node_pool->size; i++) {
         if (NULL == (nptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i))) {
             continue;
         }
-        if (prte_get_attribute(&nptr->attributes, PRTE_NODE_ALIAS, (void **) &n2alias,
-                               PMIX_STRING)) {
-            n2names = prte_argv_split(n2alias, ',');
-            free(n2alias);
-        }
-        if (NULL == n2names) {
+        if (NULL == nptr->aliases) {
             continue;
         }
         /* no choice but an exhaustive search - fortunately, these lists are short! */
-        for (m = 0; NULL != n2names[m]; m++) {
-            if (0 == strcmp(name, n2names[m])) {
+        for (m = 0; NULL != nptr->aliases[m]; m++) {
+            if (0 == strncmp(name, nptr->aliases[m], len)) {
                 /* this is the node! */
                 goto complete;
             }
         }
-        prte_argv_free(n2names);
-        n2names = NULL;
+    }
+    /* we didn't find a node for "name", so just
+     * check the aliases for n1 against "name" itself */
+    if (NULL != n1->aliases) {
+        for (i = 0; NULL != n1->aliases[i]; i++) {
+            if (0 == strncmp(name, n1->aliases[i], len)) {
+                return true;
+            }
+        }
     }
     return false;
 
 complete:
-    /* only get here is we found the node for "name" */
-    if (NULL == n1names) {
-        for (m = 0; NULL != n2names[m]; m++) {
-            if (0 == strcmp(n1->name, n2names[m])) {
-                prte_argv_free(n2names);
-                return true;
-            }
-        }
-    } else {
-        for (i = 0; NULL != n1names[i]; i++) {
-            for (m = 0; NULL != n2names[m]; m++) {
-                if (0 == strcmp(n1->name, n2names[m])) {
-                    prte_argv_free(n1names);
-                    prte_argv_free(n2names);
+    if (NULL != n1->aliases && NULL != nptr->aliases) {
+        for (i = 0; NULL != n1->aliases[i]; i++) {
+            for (m = 0; NULL != nptr->aliases[m]; m++) {
+                if (0 == strncmp(n1->aliases[i], nptr->aliases[m], len)) {
                     return true;
                 }
             }
         }
-    }
-    if (NULL != n1names) {
-        prte_argv_free(n1names);
-    }
-    if (NULL != n2names) {
-        prte_argv_free(n2names);
     }
     return false;
 }
@@ -595,6 +592,7 @@ static void prte_node_construct(prte_node_t *node)
 {
     node->index = -1;
     node->name = NULL;
+    node->aliases = NULL;
     node->daemon = NULL;
 
     node->num_procs = 0;
@@ -623,7 +621,10 @@ static void prte_node_destruct(prte_node_t *node)
         free(node->name);
         node->name = NULL;
     }
-
+    if (NULL != node->aliases) {
+        prte_argv_free(node->aliases);
+        node->aliases = NULL;
+    }
     if (NULL != node->daemon) {
         node->daemon->node = NULL;
         PRTE_RELEASE(node->daemon);
