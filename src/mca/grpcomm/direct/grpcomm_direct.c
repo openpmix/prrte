@@ -384,8 +384,8 @@ static void xcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     }
     if (compressed) {
         /* decompress the data */
-        if (PMIx_Data_decompress((uint8_t **) &bo.bytes, &bo.size, (uint8_t *) pbo.bytes,
-                                 pbo.size)) {
+        if (PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size,
+                                 (uint8_t **) &bo.bytes, &bo.size)) {
             /* the data has been uncompressed */
             ret = PMIx_Data_load(&datbuf, &bo);
             if (PMIX_SUCCESS != ret) {
