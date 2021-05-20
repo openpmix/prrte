@@ -330,37 +330,9 @@ bool prte_node_match(prte_node_t *n1, const char *name)
 {
     int i, m;
     prte_node_t *nptr;
-    size_t len, l2;
-
-    if (prte_net_isaddr(name)) {
-        len = strlen(name);
-    } else if (prte_keep_fqdn_hostnames) {
-        len = strlen(name);
-    } else {
-        /* if this is an fqdn, then we only want the first part */
-        len = 0;
-        for (i=0; '\0' != name[i] && '.' != name[i]; i++) {
-            ++len;
-        }
-    }
-    /* same for the node's name */
-    if (prte_net_isaddr(n1->name)) {
-        l2 = strlen(n1->name);
-    } else if (prte_keep_fqdn_hostnames) {
-        l2 = strlen(n1->name);
-    } else {
-        l2 = 0;
-        for (i=0; '\0' != n1->name[i] && '.' != n1->name[i]; i++) {
-            ++l2;
-        }
-    }
-    if (l2 != len) {
-        /* can't be a match */
-        return false;
-    }
 
     /* start with the simple check */
-    if (0 == strncmp(n1->name, name, len)) {
+    if (0 == strcmp(n1->name, name)) {
         return true;
     }
 
@@ -374,12 +346,15 @@ bool prte_node_match(prte_node_t *n1, const char *name)
         if (NULL == (nptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i))) {
             continue;
         }
+        if (0 == strcmp(nptr->name, name)) {
+            goto complete;
+        }
         if (NULL == nptr->aliases) {
             continue;
         }
         /* no choice but an exhaustive search - fortunately, these lists are short! */
         for (m = 0; NULL != nptr->aliases[m]; m++) {
-            if (0 == strncmp(name, nptr->aliases[m], len)) {
+            if (0 == strcmp(name, nptr->aliases[m])) {
                 /* this is the node! */
                 goto complete;
             }
@@ -389,7 +364,7 @@ bool prte_node_match(prte_node_t *n1, const char *name)
      * check the aliases for n1 against "name" itself */
     if (NULL != n1->aliases) {
         for (i = 0; NULL != n1->aliases[i]; i++) {
-            if (0 == strncmp(name, n1->aliases[i], len)) {
+            if (0 == strcmp(name, n1->aliases[i])) {
                 return true;
             }
         }
@@ -397,11 +372,53 @@ bool prte_node_match(prte_node_t *n1, const char *name)
     return false;
 
 complete:
-    if (NULL != n1->aliases && NULL != nptr->aliases) {
+    if (NULL != n1->aliases) {
         for (i = 0; NULL != n1->aliases[i]; i++) {
-            for (m = 0; NULL != nptr->aliases[m]; m++) {
-                if (0 == strncmp(n1->aliases[i], nptr->aliases[m], len)) {
-                    return true;
+            if (0 == strcmp(n1->aliases[i], name)) {
+                return true;
+            }
+            if (NULL != nptr->aliases) {
+                for (m = 0; NULL != nptr->aliases[m]; m++) {
+                    if (0 == strcmp(nptr->aliases[m], n1->name)) {
+                        return true;
+                    }
+                    if (0 == strcmp(n1->aliases[i], nptr->aliases[m])) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2)
+{
+    size_t i, m;
+
+    /* start with the simple check */
+    if (0 == strcmp(n1->name, n2->name)) {
+        return true;
+    }
+
+    /* do the node and the name both refer to me? */
+    if (prte_check_host_is_local(n1->name) && prte_check_host_is_local(n2->name)) {
+        return true;
+    }
+
+    if (NULL != n1->aliases) {
+        for (i = 0; NULL != n1->aliases[i]; i++) {
+            if (0 == strcmp(n1->aliases[i], n2->name)) {
+                return true;
+            }
+            if (NULL != n2->aliases) {
+                for (m = 0; NULL != n2->aliases[m]; m++) {
+                    if (0 == strcmp(n2->aliases[m], n1->name)) {
+                        return true;
+                    }
+                    if (0 == strcmp(n1->aliases[i], n2->aliases[m])) {
+                        return true;
+                    }
                 }
             }
         }

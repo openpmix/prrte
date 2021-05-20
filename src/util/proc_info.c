@@ -165,14 +165,14 @@ bool prte_check_host_is_local(const char *name)
             0 == strcmp(name, "127.0.0.1")) {
             return true;
         }
-        /* if it wasn't one of those and we are allowed
-         * to resolve addresses, then try that too */
-        if (!prte_do_not_resolve) {
-            if (prte_ifislocal(name)) {
-                /* add to our aliases */
-                prte_argv_append_nosize(&prte_process_info.aliases, name);
-                return true;
-            }
+    }
+    /* if it wasn't one of those and we are allowed
+     * to resolve addresses, then try that too */
+    if (!prte_do_not_resolve) {
+        if (prte_ifislocal(name)) {
+            /* add to our aliases */
+            prte_argv_append_nosize(&prte_process_info.aliases, name);
+            return true;
         }
     }
     return false;

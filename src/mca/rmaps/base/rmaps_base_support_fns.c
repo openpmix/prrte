@@ -258,7 +258,7 @@ int prte_rmaps_base_get_target_nodes(prte_list_t *allocated_nodes, int32_t *tota
                                          "NODE %s HAS NO DAEMON", node->name));
                     continue;
                 }
-                if (!prte_node_match(node, nptr->name)) {
+                if (!prte_nptr_match(node, nptr)) {
                     PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                          "NODE %s DOESNT MATCH NODE %s", node->name, nptr->name));
                     continue;

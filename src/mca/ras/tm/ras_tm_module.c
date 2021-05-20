@@ -120,11 +120,10 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
 {
     int32_t nodeid;
     prte_node_t *node;
-    prte_list_item_t *item;
     FILE *fp;
     char *hostname, *cppn;
     int ppn;
-    char *ptr;
+    bool found;
 
     /* Ignore anything that the user already specified -- we're
        getting nodes only from TM. */
@@ -165,11 +164,6 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
 
     nodeid = 0;
     while (NULL != (hostname = tm_getline(fp))) {
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(hostname)) {
-            if (NULL != (ptr = strchr(hostname, '.'))) {
-                *ptr = '\0';
-            }
-        }
 
         PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s ras:tm:allocate:discover: got hostname %s",
@@ -177,10 +171,8 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
 
         /* Remember that TM may list the same node more than once.  So
            we have to check for duplicates. */
-
-        for (item = prte_list_get_first(nodelist); prte_list_get_end(nodelist) != item;
-             item = prte_list_get_next(item)) {
-            node = (prte_node_t *) item;
+        found = false;
+        PRTE_LIST_FOREACH(node, nodelist, prte_node_t) {
             if (0 == strcmp(node->name, hostname)) {
                 if (prte_ras_tm_component.smp_mode) {
                     /* this cannot happen in smp mode */
@@ -192,14 +184,14 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
                 PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                      "%s ras:tm:allocate:discover: found -- bumped slots to %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->slots));
-
+                found = true;
                 break;
             }
         }
 
         /* Did we find it? */
 
-        if (prte_list_get_end(nodelist) == item) {
+        if (!found) {
 
             /* Nope -- didn't find it, so add a new item to the list */
 
@@ -209,8 +201,8 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
 
             node = PRTE_NEW(prte_node_t);
             node->name = hostname;
-            prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL, &nodeid,
-                               PMIX_INT32);
+            prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID,
+                               PRTE_ATTR_LOCAL, &nodeid, PMIX_INT32);
             node->slots_inuse = 0;
             node->slots_max = 0;
             node->slots = ppn;
