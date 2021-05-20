@@ -65,11 +65,10 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, prte_list_t *nodelist
 {
     char *pe_hostfile = getenv("PE_HOSTFILE");
     char *job_id = getenv("JOB_ID");
-    char buf[1024], *tok, *num, *queue, *arch, *ptr, *tmp;
+    char buf[1024], *tok, *num, *queue, *arch, *ptr;
     int rc;
     FILE *fp;
     prte_node_t *node;
-    prte_list_item_t *item;
     bool found;
 
     /* show the Grid Engine's JOB_ID */
@@ -98,17 +97,9 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, prte_list_t *nodelist
         queue = strtok_r(NULL, " \n", &tok);
         arch = strtok_r(NULL, " \n", &tok);
 
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(ptr)) {
-            if (NULL != (tmp = strchr(ptr, '.'))) {
-                *tmp = '\0';
-            }
-        }
-
         /* see if we already have this node */
         found = false;
-        for (item = prte_list_get_first(nodelist); item != prte_list_get_end(nodelist);
-             item = prte_list_get_next(item)) {
-            node = (prte_node_t *) item;
+        PRTE_LIST_FOREACH(node, nodelist, prte_node_t) {
             if (0 == strcmp(ptr, node->name)) {
                 /* just add the slots */
                 node->slots += (int) strtol(num, (char **) NULL, 10);

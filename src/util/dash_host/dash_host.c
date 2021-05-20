@@ -82,7 +82,7 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
  */
 int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocating)
 {
-    prte_list_item_t *item, *itm;
+    prte_list_item_t *item;
     int32_t i, j, k;
     int rc, nodeidx;
     char **host_argv = NULL;
@@ -92,7 +92,8 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
     bool found;
     int slots = 0;
     bool slots_given;
-    char *cptr, *ptr;
+    char *cptr;
+    char *shortname;
 
     PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s dashhost: parsing args %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -238,16 +239,29 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
             }
         }
 
-        /* check for local name */
+        /* check for local name and compute non-fqdn name */
+        shortname = NULL;
         if (prte_check_host_is_local(mini_map[i])) {
             ndname = prte_process_info.nodename;
-        } else {
+        } else if (!prte_keep_fqdn_hostnames) {
             ndname = mini_map[i];
+            /* compute the non-fqdn version */
+            if (!prte_net_isaddr(ndname)) {
+                cptr = strchr(ndname, '.');
+                if (NULL != cptr) {
+                    *cptr = '\0';
+                    shortname = strdup(ndname);
+                    *cptr = '.';
+                }
+            }
         }
-        /* see if the node is already on the list */
+        /* see if a node of this name is already on the list */
         found = false;
         PRTE_LIST_FOREACH(node, &adds, prte_node_t) {
             found = prte_node_match(node, ndname);
+            if (!found && NULL != shortname) {
+                found = prte_node_match(node, shortname);
+            }
             if (found) {
                 if (slots_given) {
                     node->slots += slots;
@@ -292,14 +306,14 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             }
             prte_list_append(&adds, &node->super);
+        } else if (0 != strcmp(node->name, mini_map[i])) {
+            // add the mini_map name to the list of aliases
+            prte_argv_append_unique_nosize(&node->aliases, mini_map[i]);
         }
-        // if we are not keeping FQDN, then strip it off if not an IP address
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(ndname)) {
-            if (NULL != (ptr = strchr(ndname, '.'))) {
-                *ptr = '\0';
-            }
-            /* ensure we retain this alias */
-            prte_argv_append_unique_nosize(&node->aliases, ndname);
+        // ensure the non-fqdn version is saved
+        if (NULL != shortname) {
+            prte_argv_append_unique_nosize(&node->aliases, shortname);
+            free(shortname);
         }
     }
     prte_argv_free(mini_map);
@@ -308,10 +322,8 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
     while (NULL != (item = prte_list_remove_first(&adds))) {
         nd = (prte_node_t *) item;
         found = false;
-        for (itm = prte_list_get_first(nodes); itm != prte_list_get_end(nodes);
-             itm = prte_list_get_next(itm)) {
-            node = (prte_node_t *) itm;
-            found = prte_node_match(nd, node->name);
+        PRTE_LIST_FOREACH(node, nodes, prte_node_t) {
+            found = prte_nptr_match(nd, node);
             if (found) {
                 PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                      "%s dashhost: found existing node %s on input list - adding slots",
@@ -342,7 +354,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                 continue;
             }
             PRTE_LIST_FOREACH(node, nodes, prte_node_t) {
-                if (prte_node_match(node_from_pool, node->name)) {
+                if (prte_nptr_match(node_from_pool, node)) {
                     if (node->slots < node_from_pool->slots) {
                         node_from_pool->slots = node->slots;
                     }
