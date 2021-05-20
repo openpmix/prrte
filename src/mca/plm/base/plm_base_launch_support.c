@@ -1073,8 +1073,8 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     /* if compressed, decompress it */
     if (flag) {
         /* decompress the data */
-        if (PMIx_Data_decompress((uint8_t **) &bo.bytes, &bo.size, (uint8_t *) pbo.bytes,
-                                 pbo.size)) {
+        if (PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size,
+                                 (uint8_t **) &bo.bytes, &bo.size)) {
             /* the data has been uncompressed */
             rc = PMIx_Data_load(&datbuf, &bo);
             PMIX_BYTE_OBJECT_DESTRUCT(&bo);
@@ -1474,8 +1474,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             } else {
                 if (compressed) {
                     /* decompress the data */
-                    if (PMIx_Data_decompress((uint8_t **) &bo.bytes, &bo.size,
-                                             (uint8_t *) pbo.bytes, pbo.size)) {
+                    if (PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size,
+                                             (uint8_t **) &bo.bytes, &bo.size)) {
                         /* the data has been uncompressed */
                         ret = PMIx_Data_load(&datbuf, &bo);
                         PMIX_BYTE_OBJECT_DESTRUCT(&bo);
