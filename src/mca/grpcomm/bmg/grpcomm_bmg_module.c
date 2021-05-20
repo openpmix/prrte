@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2016-2020 The University of Tennessee and The University
+ * Copyright (c) 2016-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
@@ -132,7 +132,6 @@ static int rbcast(pmix_data_buffer_t *buf)
     }
     for (i = start_i; i <= log2no + 1 && i > 0; i = i + increase_val) {
         for (d = 1; d >= -1; d -= 2) {
-            // for(i=1; i <= nprocs/2; i*=2) for(d=1; d >= -1; d-=2) {
             int idx = (nprocs + vpid + d * ((int) pow(2, i) - 1)) % nprocs;
 
             /* daemon.vpid cannot be 0, because daemond id ranges 1-nprocs, thus if idx==0, change
@@ -141,12 +140,20 @@ static int rbcast(pmix_data_buffer_t *buf)
                 idx = nprocs;
             }*/
             PMIX_LOAD_PROCID(&daemon, prte_process_info.myproc.nspace, idx);
-            PRTE_RETAIN(buf);
 
             PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:bmg: broadcast message in %d daemons to %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nprocs,
                                  PRTE_NAME_PRINT(&daemon)));
+
+            pmix_data_buffer_t* sndbuf;
+            PMIX_DATA_BUFFER_CREATE(sndbuf);
+            rc = PMIx_Data_copy_payload(sndbuf, buf);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_DATA_BUFFER_RELEASE(sndbuf);
+                PRTE_ERROR_LOG(rc);
+                return rc;
+            }
             if (0 > (rc = prte_rml.send_buffer_nb(&daemon, buf, PRTE_RML_TAG_RBCAST,
                                                   prte_rml_send_callback, NULL))) {
                 PRTE_ERROR_LOG(rc);
@@ -186,7 +193,7 @@ static void rbcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     PMIX_DATA_BUFFER_CONSTRUCT(&datbuf);
     /* unpack the flag to see if this payload is compressed */
     cnt = 1;
-    ret = PMIx_Data_unpack(NULL, buffer, &flag, &cnt, PMIX_INT8);
+    ret = PMIx_Data_unpack(NULL, buffer, &flag, &cnt, PMIX_BOOL);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_RELEASE(rly);
@@ -281,7 +288,7 @@ static void rbcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
 
     /* get the cbtype */
     cnt = 1;
-    ret = PMIx_Data_unpack(NULL, data, &cbtype, &cnt, PMIX_INT32);
+    ret = PMIx_Data_unpack(NULL, data, &cbtype, &cnt, PMIX_INT);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
@@ -290,7 +297,12 @@ static void rbcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     }
     if (prte_grpcomm_rbcast_cb[cbtype](relay)) {
         /* forward the rbcast */
-        if (PRTE_SUCCESS == (ret = rbcast(rly))) {
+        ret = rbcast(rly);
+        if (PRTE_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+            goto CLEANUP;
         }
     }
 
