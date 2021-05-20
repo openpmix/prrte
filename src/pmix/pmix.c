@@ -78,7 +78,7 @@ pmix_status_t prte_pmix_convert_rc(int rc)
         return PMIX_ERR_NODE_OFFLINE;
 
     case PRTE_ERR_JOB_TERMINATED:
-        return PMIX_ERR_JOB_TERMINATED;
+        return PMIX_EVENT_JOB_END;
 
     case PRTE_ERR_PROC_RESTART:
         return PMIX_ERR_PROC_RESTART;
@@ -162,7 +162,7 @@ int prte_pmix_convert_status(pmix_status_t status)
     case PMIX_ERR_NODE_OFFLINE:
         return PRTE_ERR_NODE_OFFLINE;
 
-    case PMIX_ERR_JOB_TERMINATED:
+    case PMIX_EVENT_JOB_END:
         return PRTE_ERR_JOB_TERMINATED;
 
     case PMIX_ERR_PROC_RESTART:
@@ -352,7 +352,7 @@ pmix_status_t prte_pmix_convert_job_state_to_error(int state)
         return PMIX_ERR_JOB_TERM_WO_SYNC;
 
     case PRTE_JOB_STATE_TERMINATED:
-        return PMIX_ERR_JOB_TERMINATED;
+        return PMIX_EVENT_JOB_END;
 
     default:
         return PMIX_ERROR;
