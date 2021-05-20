@@ -415,7 +415,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 pmix_info_t info[3];
                 bool flag;
                 prte_job_t *jd;
-                pmix_status_t xrc = PMIX_ERR_JOB_TERMINATED;
+                pmix_status_t xrc = PMIX_EVENT_JOB_END;
                 /* we need to notify this job that its CHILD job terminated
                  * as that is the job it is looking for */
                 jd = (prte_job_t *) prte_list_get_first(&jdata->children);
@@ -431,7 +431,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 PMIX_LOAD_PROCID(&pname, jd->nspace, PMIX_RANK_WILDCARD);
                 PMIX_INFO_LOAD(&info[2], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
                 PRTE_PMIX_CONSTRUCT_LOCK(&lk);
-                PMIx_Notify_event(PMIX_ERR_JOB_TERMINATED, &pname, PMIX_RANGE_SESSION, info, 3,
+                PMIx_Notify_event(PMIX_EVENT_JOB_END, &pname, PMIX_RANGE_SESSION, info, 3,
                                   _notify_release, &lk);
                 PRTE_PMIX_WAIT_THREAD(&lk);
                 PRTE_PMIX_DESTRUCT_LOCK(&lk);

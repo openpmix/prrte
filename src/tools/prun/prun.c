@@ -1011,7 +1011,7 @@ int prun(int argc, char *argv[])
 
     /* register to be notified when
      * our job completes */
-    ret = PMIX_ERR_JOB_TERMINATED;
+    ret = PMIX_EVENT_JOB_END;
     /* setup the info */
     ninfo = 3;
     PMIX_INFO_CREATE(iptr, ninfo);

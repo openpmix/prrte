@@ -413,7 +413,7 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         PRTE_RELEASE(cd);
     }
 
-    if (PMIX_ERR_JOB_TERMINATED == code) {
+    if (PMIX_EVENT_JOB_END == code) {
         jdata = prte_get_job_data_object(source.nspace);
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
     }

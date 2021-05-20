@@ -150,7 +150,7 @@ int main(int argc, char **argv)
         }
         if (sync) {
             DEBUG_CONSTRUCT_LOCK(&rellock);
-            rc = PMIX_ERR_JOB_TERMINATED;
+            rc = PMIX_EVENT_JOB_END;
             /* give the handler a name */
             PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_HDLR_NAME, "JOB_TERMINATION_EVENT", PMIX_STRING);
             /* specify we only want to be notified when our

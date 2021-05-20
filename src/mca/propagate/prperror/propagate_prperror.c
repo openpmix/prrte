@@ -100,7 +100,7 @@ static void flush_error_list(size_t evhdlr_registration_id, pmix_status_t status
 static int init(void)
 {
     PRTE_CONSTRUCT(&prte_error_procs, prte_list_t);
-    pmix_status_t pcode1 = PMIX_ERR_JOB_TERMINATED;
+    pmix_status_t pcode1 = PMIX_EVENT_JOB_END;
     PMIx_Register_event_handler(&pcode1, 1, NULL, 0, flush_error_list, NULL, NULL);
     return PRTE_SUCCESS;
 }
