@@ -35,9 +35,6 @@
 #include "src/mca/mca.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
-#include "src/util/output.h"
-#include "src/util/printf.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -46,10 +43,14 @@
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
 #include "src/threads/threads.h"
+#include "src/util/argv.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/error_strings.h"
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
+#include "src/util/net.h"
+#include "src/util/output.h"
+#include "src/util/printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 
@@ -174,6 +175,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     prte_app_context_t *app;
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     char *hosts = NULL;
+    char *ptr;
     pmix_status_t ret;
 
     PRTE_ACQUIRE_OBJECT(caddy);
@@ -258,6 +260,18 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     if (!prte_list_is_empty(&nodes)) {
         /* flag that the allocation is managed */
         prte_managed_allocation = true;
+        /* if we are not retaining FQDN hostnames, then record
+         * aliases where appropriate */
+        if (!prte_keep_fqdn_hostnames) {
+            PRTE_LIST_FOREACH(node, &nodes, prte_node_t) {
+                if (!prte_net_isaddr(node->name) &&
+                    NULL != (ptr = strchr(node->name, '.'))) {
+                    *ptr = '\0';
+                    prte_argv_append_unique_nosize(&node->aliases, node->name);
+                    *ptr = '.';
+                }
+            }
+        }
         /* store the results in the global resource pool - this removes the
          * list items
          */

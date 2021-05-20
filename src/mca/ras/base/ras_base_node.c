@@ -35,6 +35,7 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
+#include "src/util/net.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/ras/base/ras_private.h"
@@ -49,7 +50,6 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
     int32_t num_nodes;
     int rc, i;
     prte_node_t *node, *hnp_node, *nptr;
-    char *ptr;
     bool hnp_alone = true, skiphnp = false;
     prte_attribute_t *kv;
     prte_proc_t *daemon;
@@ -135,8 +135,9 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
             /* copy across any attributes */
             PRTE_LIST_FOREACH(kv, &node->attributes, prte_attribute_t)
             {
-                prte_set_attribute(&node->attributes, kv->key, PRTE_ATTR_LOCAL, &kv->data,
-                                   kv->data.type);
+                prte_set_attribute(&node->attributes, kv->key,
+                                   PRTE_ATTR_LOCAL,
+                                   &kv->data, kv->data.type);
             }
             if (prte_managed_allocation || PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
                 /* the slots are always treated as sacred
@@ -194,7 +195,7 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
             /* update the total slots in the job */
             prte_ras_base.total_slots_alloc += node->slots;
             /* check if we have fqdn names in the allocation */
-            if (NULL != strchr(node->name, '.')) {
+            if (!prte_net_isaddr(node->name) && NULL != strchr(node->name, '.')) {
                 prte_have_fqdn_allocation = true;
             }
             /* indicate the HNP is not alone */
@@ -206,16 +207,6 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
                 }
                 nptr->index = prte_pointer_array_add(prte_node_pool, nptr);
             }
-        }
-    }
-
-    /* if we didn't find any fqdn names in the allocation, then
-     * ensure we don't have any domain info in the node record
-     * for the hnp
-     */
-    if (NULL != hnp_node && !prte_have_fqdn_allocation && !hnp_alone) {
-        if (NULL != (ptr = strchr(hnp_node->name, '.'))) {
-            *ptr = '\0';
         }
     }
 

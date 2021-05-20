@@ -489,7 +489,6 @@ static int process_file(char *path, prte_list_t *list)
     FILE *fp;
     seq_node_t *sq;
     char *sep, *eptr;
-    char *ptr;
 
     /* open the file */
     fp = fopen(path, "r");
@@ -519,13 +518,6 @@ static int process_file(char *path, prte_list_t *list)
             }
             *(eptr + 1) = 0;
             sq->cpuset = strdup(sep);
-        }
-
-        // Strip off the FQDN if present, ignore IP addresses
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(hstname)) {
-            if (NULL != (ptr = strchr(hstname, '.'))) {
-                *ptr = '\0';
-            }
         }
 
         sq->hostname = hstname;
