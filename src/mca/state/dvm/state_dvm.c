@@ -605,13 +605,12 @@ static void check_complete(int fd, short args, void *cbdata)
 
         /* Let the tools know that a job terminated before we shutdown */
         if (num_tools_attached > 0 && jdata->state != PRTE_JOB_STATE_NOTIFIED) {
-            PRTE_OUTPUT_VERBOSE(
-                (2, prte_state_base_framework.framework_output,
-                 "%s state:dvm:check_job_completed state is terminated - activating notify",
-                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+            PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                                 "%s state:dvm:check_job_completed state is terminated - activating notify",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+            prte_job_term_ordered = true;  // flag that the DVM is to terminate
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NOTIFY_COMPLETED);
-            /* mark the job as notified */
-            jdata->state = PRTE_JOB_STATE_NOTIFIED;
+            return;
         }
 
         /* if we fell thru to this point, then nobody is still
@@ -743,10 +742,9 @@ release:
     }
 
     if (jdata->state != PRTE_JOB_STATE_NOTIFIED) {
-        PRTE_OUTPUT_VERBOSE(
-            (2, prte_state_base_framework.framework_output,
-             "%s state:dvm:check_job_completed state is terminated - activating notify",
-             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                             "%s state:dvm:check_job_completed state is terminated - activating notify",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NOTIFY_COMPLETED);
         /* mark the job as notified */
         jdata->state = PRTE_JOB_STATE_NOTIFIED;
@@ -760,6 +758,10 @@ static void cleanup_job(int sd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
 
     PRTE_ACQUIRE_OBJECT(caddy);
+
+    if (prte_job_term_ordered) {
+        prte_plm.terminate_orteds();
+    }
 
     PRTE_RELEASE(caddy);
 }
@@ -846,7 +848,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
 
         /* pack the status code */
-        code = PMIX_ERR_JOB_TERMINATED;
+        code = PMIX_EVENT_JOB_END;
         if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &code, 1, PMIX_STATUS))) {
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
