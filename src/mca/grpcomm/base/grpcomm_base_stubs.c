@@ -284,8 +284,7 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
     size_t n;
 
     /* search the existing tracker list to see if this already exists */
-    PRTE_LIST_FOREACH(coll, &prte_grpcomm_base.ongoing, prte_grpcomm_coll_t)
-    {
+    PRTE_LIST_FOREACH(coll, &prte_grpcomm_base.ongoing, prte_grpcomm_coll_t) {
         if (NULL == sig->signature) {
             if (NULL == coll->sig->signature) {
                 /* only one collective can operate at a time
@@ -295,8 +294,8 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
             /* if only one is NULL, then we can't possibly match */
             break;
         }
-        if (sig->sz == coll->sig->sz
-            && 0 == memcmp(sig->signature, coll->sig->signature, sig->sz * sizeof(pmix_proc_t))) {
+        if (sig->sz == coll->sig->sz &&
+            0 == memcmp(sig->signature, coll->sig->signature, sig->sz * sizeof(pmix_proc_t))) {
             PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:base:returning existing collective",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
