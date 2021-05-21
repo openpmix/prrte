@@ -50,7 +50,7 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
     int32_t num_nodes;
     int rc, i;
     prte_node_t *node, *hnp_node, *nptr;
-    bool hnp_alone = true, skiphnp = false;
+    bool skiphnp = false;
     prte_attribute_t *kv;
     prte_proc_t *daemon;
     prte_job_t *djob;
@@ -198,8 +198,7 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
             if (!prte_net_isaddr(node->name) && NULL != strchr(node->name, '.')) {
                 prte_have_fqdn_allocation = true;
             }
-            /* indicate the HNP is not alone */
-            hnp_alone = false;
+            /* duplicate the node if requested */
             for (i = 1; i < prte_ras_base.multiplier; i++) {
                 rc = prte_node_copy(&nptr, node);
                 if (PRTE_SUCCESS != rc) {
