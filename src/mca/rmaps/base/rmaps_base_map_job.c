@@ -54,7 +54,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_node_t *node;
     prte_job_map_t *app_map, *daemon_map;
     prte_proc_t *proc;
-    int rc;
+    int rc = PRTE_SUCCESS;
     bool did_map, pernode = false, perpackage = false;
     prte_rmaps_base_selected_module_t *mod;
     prte_job_t *parent = NULL, *target_jdata;
@@ -234,6 +234,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 PRTE_SET_MAPPING_DIRECTIVE(daemon_map->mapping, PRTE_MAPPING_SUBSCRIBE_GIVEN);
             }
         }
+        nprocs = jdata->num_procs;
         goto ranking;
     }
 
