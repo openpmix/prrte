@@ -286,7 +286,11 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                 prte_argv_free(mapped_nodes);
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
-            node->name = strdup(ndname);
+            if (prte_keep_fqdn_hostnames || NULL == shortname) {
+                node->name = strdup(ndname);
+            } else {
+                node->name = strdup(shortname);
+            }
             PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: added node %s to list - slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, slots));
@@ -311,7 +315,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
             prte_argv_append_unique_nosize(&node->aliases, mini_map[i]);
         }
         // ensure the non-fqdn version is saved
-        if (NULL != shortname) {
+        if (NULL != shortname && 0 != strcmp(shortname, node->name)) {
             prte_argv_append_unique_nosize(&node->aliases, shortname);
             free(shortname);
         }
