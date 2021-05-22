@@ -218,6 +218,13 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 prte_list_append(&iarray->infolist, &kv->super);
                 free(tmp);
             }
+            /* if oversubscribed, mark it */
+            if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_OVERSUBSCRIBED)) {
+                prte_output(0, "NODE %s IS OVERSUB", node->name);
+                kv = PRTE_NEW(prte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_NODE_OVERSUBSCRIBED, NULL, PMIX_BOOL);
+                prte_list_append(&iarray->infolist, &kv->super);
+            }
             /* add to the overall payload */
             prte_list_append(&nodeinfo, &iarray->super);
         }

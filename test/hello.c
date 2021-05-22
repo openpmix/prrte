@@ -42,6 +42,7 @@ int main(int argc, char **argv)
     pmix_value_t *val;
     uint16_t localrank;
     size_t n;
+    pmix_info_t optional;
 
     pid = getpid();
     gethostname(hostname, 1024);
@@ -76,6 +77,15 @@ int main(int argc, char **argv)
         fprintf(stderr, "Unable to get local peers\n");
     } else {
         fprintf(stderr, "%s:%u - local peers %s\n", myproc.nspace, myproc.rank, val->data.string);
+    }
+
+    PMIX_LOAD_PROCID(&wild, myproc.nspace, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LOAD(&optional, PMIX_OPTIONAL, NULL, PMIX_BOOL);
+    rc = PMIx_Get(&wild, PMIX_NODE_OVERSUBSCRIBED, &optional, 1, &val);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "Not oversubscribed\n");
+    } else {
+        fprintf(stderr, "%s:%u - oversubscribed\n", myproc.nspace, myproc.rank);
     }
 
   done:
