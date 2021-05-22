@@ -260,15 +260,23 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     if (!prte_list_is_empty(&nodes)) {
         /* flag that the allocation is managed */
         prte_managed_allocation = true;
+        /* since this is a managed allocation, we do not resolve */
+        prte_do_not_resolve = true;
         /* if we are not retaining FQDN hostnames, then record
          * aliases where appropriate */
-        if (!prte_keep_fqdn_hostnames) {
-            PRTE_LIST_FOREACH(node, &nodes, prte_node_t) {
-                if (!prte_net_isaddr(node->name) &&
-                    NULL != (ptr = strchr(node->name, '.'))) {
+        PRTE_LIST_FOREACH(node, &nodes, prte_node_t) {
+            if (!prte_net_isaddr(node->name) &&
+                NULL != (ptr = strchr(node->name, '.'))) {
+                if (prte_keep_fqdn_hostnames) {
+                    /* retain the non-fqdn name as an alias */
                     *ptr = '\0';
                     prte_argv_append_unique_nosize(&node->aliases, node->name);
                     *ptr = '.';
+                } else {
+                    /* add the fqdn name as an alias */
+                    prte_argv_append_unique_nosize(&node->aliases, node->name);
+                    /* retain the non-fqdn name as the node's name */
+                    *ptr = '\0';
                 }
             }
         }
