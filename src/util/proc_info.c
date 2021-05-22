@@ -97,7 +97,7 @@ void prte_setup_hostname(void)
 
     /* get the nodename */
     gethostname(hostname, sizeof(hostname));
-    /* add this to our list of aliases */
+    /* add the raw name to our list of aliases */
     prte_argv_append_nosize(&prte_process_info.aliases, hostname);
 
     prte_strip_prefix = NULL;
@@ -142,14 +142,20 @@ void prte_setup_hostname(void)
     } else {
         prte_process_info.nodename = strdup(hostname);
     }
-    prte_argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
 
     // if we are not keeping FQDN, then strip it off if not an IP address
-    if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(hostname)) {
-        if (NULL != (ptr = strchr(hostname, '.'))) {
+    if (!prte_net_isaddr(prte_process_info.nodename) &&
+        NULL != (ptr = strchr(prte_process_info.nodename, '.'))) {
+        if (prte_keep_fqdn_hostnames) {
+            /* retain the non-fqdn name as an alias */
             *ptr = '\0';
-            /* add this to our list of aliases */
-            prte_argv_append_unique_nosize(&prte_process_info.aliases, hostname);
+            prte_argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
+            *ptr = '.';
+        } else {
+            /* add the fqdn name as an alias */
+            prte_argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
+            /* retain the non-fqdn name as the node's name */
+            *ptr = '\0';
         }
     }
 

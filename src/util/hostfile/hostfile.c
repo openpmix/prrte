@@ -152,7 +152,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         prte_argv_free(argv);
 
         // Strip off the FQDN if present, ignore IP addresses
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(node_name)) {
+        if (!prte_net_isaddr(node_name)) {
             char *ptr;
             alias = strdup(node_name);
             if (NULL != (ptr = strchr(alias, '.'))) {
@@ -187,12 +187,16 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
                if it's already in the exclude list */
             if (NULL == (node = hostfile_lookup(exclude, node_name))) {
                 node = PRTE_NEW(prte_node_t);
-                node->name = node_name;
+                if (prte_keep_fqdn_hostnames || NULL == alias) {
+                    node->name = strdup(node_name);
+                } else {
+                    node->name = strdup(alias);
+                }
                 if (NULL != username) {
                     prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL,
                                        username, PMIX_STRING);
                 }
-                if (NULL != alias) {
+                if (NULL != alias && 0 != strcmp(alias, node->name)) {
                     // new node object, so alias must be unique
                     prte_argv_append_nosize(&node->aliases, alias);
                 }
@@ -204,7 +208,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
                     prte_argv_append_unique_nosize(&node->aliases, node_name);
                 }
                 free(node_name);
-                if (NULL != alias) {
+                if (NULL != alias && 0 != strcmp(alias, node->name)) {
                     prte_argv_append_unique_nosize(&node->aliases, alias);
                 }
             }
@@ -226,13 +230,17 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         /* Do we need to make a new node object? */
         if (keep_all || NULL == (node = hostfile_lookup(updates, node_name))) {
             node = PRTE_NEW(prte_node_t);
-            node->name = node_name;
+            if (prte_keep_fqdn_hostnames || NULL == alias) {
+                node->name = strdup(node_name);
+            } else {
+                node->name = strdup(alias);
+            }
             node->slots = 1;
             if (NULL != username) {
                 prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username,
                                    PMIX_STRING);
             }
-            if (NULL != alias) {
+            if (NULL != alias && 0 != strcmp(alias, node->name)) {
                 // new node object, so alias must be unique
                 prte_argv_append_nosize(&node->aliases, alias);
             }
@@ -247,23 +255,30 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
                 prte_argv_append_unique_nosize(&node->aliases, node_name);
             }
             free(node_name);
-            if (NULL != alias) {
+            if (NULL != alias && 0 != strcmp(alias, node->name)) {
                 prte_argv_append_unique_nosize(&node->aliases, alias);
             }
         }
     } else if (PRTE_HOSTFILE_RELATIVE == token) {
         /* store this for later processing */
         node = PRTE_NEW(prte_node_t);
-        node->name = strdup(prte_util_hostfile_value.sval);
         // Strip off the FQDN if present, ignore IP addresses
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(node->name)) {
+        if (!prte_net_isaddr(prte_util_hostfile_value.sval)) {
             char *ptr;
-            alias = strdup(node->name);
+            alias = strdup(prte_util_hostfile_value.sval);
             if (NULL != (ptr = strchr(alias, '.'))) {
                 *ptr = '\0';
+            } else {
+                free(alias);
+                alias = NULL;
             }
         }
-        if (NULL != alias) {
+        if (prte_keep_fqdn_hostnames || NULL == alias) {
+            node->name = strdup(prte_util_hostfile_value.sval);
+        } else {
+            node->name = strdup(alias);
+        }
+        if (NULL != alias && 0 != strcmp(alias, node->name)) {
             // new node object, so alias must be unique
             prte_argv_append_nosize(&node->aliases, alias);
             free(alias);

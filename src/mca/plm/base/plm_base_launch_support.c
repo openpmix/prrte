@@ -42,9 +42,6 @@
 #include "src/include/hash_string.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
-#include "src/util/argv.h"
-#include "src/util/printf.h"
-#include "src/util/prte_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -71,9 +68,13 @@
 #include "src/threads/threads.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
+#include "src/util/argv.h"
 #include "src/util/name_fns.h"
+#include "src/util/net.h"
 #include "src/util/nidmap.h"
+#include "src/util/printf.h"
 #include "src/util/proc_info.h"
+#include "src/util/prte_environ.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
@@ -1375,16 +1376,13 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             prted_failed_launch = true;
             goto CLEANUP;
         }
-        if (!prte_have_fqdn_allocation && !prte_keep_fqdn_hostnames) {
-            /* retain whatever was returned */
+
+        if (!prte_net_isaddr(nodename) &&
+            NULL != (ptr = strchr(nodename, '.'))) {
+            /* retain the non-fqdn name as an alias */
+            *ptr = '\0';
             prte_argv_append_unique_nosize(&daemon->node->aliases, nodename);
-            /* remove any domain info */
-            if (NULL != (ptr = strchr(nodename, '.'))) {
-                *ptr = '\0';
-                ptr = strdup(nodename);
-                free(nodename);
-                nodename = ptr;
-            }
+            *ptr = '.';
         }
 
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
