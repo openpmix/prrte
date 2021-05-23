@@ -306,7 +306,7 @@ int prte_mca_base_var_init(void)
 
 #if PRTE_WANT_HOME_CONFIG_FILES
         /* do the user's home default param files */
-        tmp = prte_os_path(false, home, ".prte", "prte-mca-params.conf", NULL);
+        tmp = prte_os_path(false, home, ".prte", "mca-params.conf", NULL);
         ret = prte_util_keyval_parse(tmp, save_value);
         free(tmp);
         if (PRTE_SUCCESS != ret && PRTE_ERR_NOT_FOUND != ret) {
