@@ -218,7 +218,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
 
     /* if compressed, decompress */
     if (compressed) {
-        if (!PMIx_Data_decompress((uint8_t **) &raw, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+        if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &raw, &sz)) {
             PRTE_ERROR_LOG(PRTE_ERROR);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             rc = PRTE_ERROR;
@@ -251,7 +251,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
 
     /* if compressed, decompress */
     if (compressed) {
-        if (!PMIx_Data_decompress((uint8_t **) &vpid, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+        if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &vpid, &sz)) {
             PRTE_ERROR_LOG(PRTE_ERROR);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             rc = PRTE_ERROR;
@@ -296,11 +296,9 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         prte_pointer_array_set_item(prte_node_pool, n, nd);
         /* see if this is our node */
         if (prte_check_host_is_local(names[n])) {
-            /* add our aliases as an attribute - will include all the interface aliases captured in
+            /* add our aliases - will include all the interface aliases captured in
              * prte_init */
-            raw = prte_argv_join(prte_process_info.aliases, ',');
-            prte_set_attribute(&nd->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, raw, PMIX_STRING);
-            free(raw);
+            nd->aliases = prte_argv_copy(prte_process_info.aliases);
         }
         /* set the topology - always default to homogeneous
          * as that is the most common scenario */
@@ -699,7 +697,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
 
         /* if compressed, decompress */
         if (compressed) {
-            if (!PMIx_Data_decompress((uint8_t **) &bytes, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &bytes, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -787,7 +785,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         }
         /* if compressed, decompress */
         if (compressed) {
-            if (!PMIx_Data_decompress((uint8_t **) &bytes, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &bytes, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -874,7 +872,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         }
         /* if compressed, decompress */
         if (1 == i16) {
-            if (!PMIx_Data_decompress((uint8_t **) &slots, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &slots, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -926,7 +924,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         }
         /* if compressed, decompress */
         if (2 == i8) {
-            if (!PMIx_Data_decompress((uint8_t **) &flags, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &flags, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -1102,7 +1100,7 @@ int prte_util_decode_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf)
 
         /* decompress if required */
         if (compressed) {
-            if (!PMIx_Data_decompress(&bytes, &sz, (uint8_t *) bo.bytes, bo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) bo.bytes, bo.size, &bytes, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&bo);
                 return PRTE_ERROR;

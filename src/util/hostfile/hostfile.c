@@ -104,11 +104,10 @@ static char *hostfile_parse_string(void)
 
 static prte_node_t *hostfile_lookup(prte_list_t *nodes, const char *name)
 {
-    prte_list_item_t *item;
-    for (item = prte_list_get_first(nodes); item != prte_list_get_end(nodes);
-         item = prte_list_get_next(item)) {
-        prte_node_t *node = (prte_node_t *) item;
-        if (strcmp(node->name, name) == 0) {
+    prte_node_t *node;
+
+    PRTE_LIST_FOREACH(node, nodes, prte_node_t) {
+        if (prte_node_match(node, name)) {
             return node;
         }
     }
@@ -127,6 +126,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
     int cnt;
     int number_of_slots = 0;
     char buff[64];
+    char *alias = NULL;
 
     if (PRTE_HOSTFILE_STRING == token || PRTE_HOSTFILE_HOSTNAME == token
         || PRTE_HOSTFILE_INT == token || PRTE_HOSTFILE_IPV4 == token
@@ -152,9 +152,10 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         prte_argv_free(argv);
 
         // Strip off the FQDN if present, ignore IP addresses
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(node_name)) {
+        if (!prte_net_isaddr(node_name)) {
             char *ptr;
-            if (NULL != (ptr = strchr(node_name, '.'))) {
+            alias = strdup(node_name);
+            if (NULL != (ptr = strchr(alias, '.'))) {
                 *ptr = '\0';
             }
         }
@@ -186,14 +187,33 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
                if it's already in the exclude list */
             if (NULL == (node = hostfile_lookup(exclude, node_name))) {
                 node = PRTE_NEW(prte_node_t);
-                node->name = node_name;
+                if (prte_keep_fqdn_hostnames || NULL == alias) {
+                    node->name = strdup(node_name);
+                } else {
+                    node->name = strdup(alias);
+                }
                 if (NULL != username) {
                     prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL,
                                        username, PMIX_STRING);
                 }
+                if (NULL != alias && 0 != strcmp(alias, node->name)) {
+                    // new node object, so alias must be unique
+                    prte_argv_append_nosize(&node->aliases, alias);
+                }
                 prte_list_append(exclude, &node->super);
             } else {
+                /* the node name may not match the prior entry, so ensure we
+                 * keep it if necessary */
+                if (0 != strcmp(node_name, node->name)) {
+                    prte_argv_append_unique_nosize(&node->aliases, node_name);
+                }
                 free(node_name);
+                if (NULL != alias && 0 != strcmp(alias, node->name)) {
+                    prte_argv_append_unique_nosize(&node->aliases, alias);
+                }
+            }
+            if (NULL != alias) {
+                free(alias);
             }
             return PRTE_SUCCESS;
         }
@@ -210,23 +230,59 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         /* Do we need to make a new node object? */
         if (keep_all || NULL == (node = hostfile_lookup(updates, node_name))) {
             node = PRTE_NEW(prte_node_t);
-            node->name = node_name;
+            if (prte_keep_fqdn_hostnames || NULL == alias) {
+                node->name = strdup(node_name);
+            } else {
+                node->name = strdup(alias);
+            }
             node->slots = 1;
             if (NULL != username) {
                 prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username,
                                    PMIX_STRING);
+            }
+            if (NULL != alias && 0 != strcmp(alias, node->name)) {
+                // new node object, so alias must be unique
+                prte_argv_append_nosize(&node->aliases, alias);
             }
             prte_list_append(updates, &node->super);
         } else {
             /* this node was already found once - add a slot and mark slots as "given" */
             node->slots++;
             PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+            /* the node name may not match the prior entry, so ensure we
+             * keep it if necessary */
+            if (0 != strcmp(node_name, node->name)) {
+                prte_argv_append_unique_nosize(&node->aliases, node_name);
+            }
             free(node_name);
+            if (NULL != alias && 0 != strcmp(alias, node->name)) {
+                prte_argv_append_unique_nosize(&node->aliases, alias);
+            }
         }
     } else if (PRTE_HOSTFILE_RELATIVE == token) {
         /* store this for later processing */
         node = PRTE_NEW(prte_node_t);
-        node->name = strdup(prte_util_hostfile_value.sval);
+        // Strip off the FQDN if present, ignore IP addresses
+        if (!prte_net_isaddr(prte_util_hostfile_value.sval)) {
+            char *ptr;
+            alias = strdup(prte_util_hostfile_value.sval);
+            if (NULL != (ptr = strchr(alias, '.'))) {
+                *ptr = '\0';
+            } else {
+                free(alias);
+                alias = NULL;
+            }
+        }
+        if (prte_keep_fqdn_hostnames || NULL == alias) {
+            node->name = strdup(prte_util_hostfile_value.sval);
+        } else {
+            node->name = strdup(alias);
+        }
+        if (NULL != alias && 0 != strcmp(alias, node->name)) {
+            // new node object, so alias must be unique
+            prte_argv_append_nosize(&node->aliases, alias);
+            free(alias);
+        }
         prte_list_append(updates, &node->super);
     } else if (PRTE_HOSTFILE_RANK == token) {
         /* we can ignore the rank, but we need to extract the node name. we
@@ -265,7 +321,8 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         // Strip off the FQDN if present, ignore IP addresses
         if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(node_name)) {
             char *ptr;
-            if (NULL != (ptr = strchr(node_name, '.'))) {
+            alias = strdup(node_name);
+            if (NULL != (ptr = strchr(alias, '.'))) {
                 *ptr = '\0';
             }
         }
@@ -276,14 +333,23 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
             node->name = node_name;
             node->slots = 1;
             if (NULL != username) {
-                prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL, username,
-                                   PMIX_STRING);
+                prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME,
+                                   PRTE_ATTR_LOCAL, username, PMIX_STRING);
             }
             prte_list_append(updates, &node->super);
         } else {
             /* add a slot */
             node->slots++;
             free(node_name);
+            /* the node name may not match the prior entry, so ensure we
+             * keep it if necessary */
+            if (0 != strcmp(node_name, node->name)) {
+                prte_argv_append_unique_nosize(&node->aliases, node_name);
+            }
+        }
+        if (NULL != alias) {
+            prte_argv_append_unique_nosize(&node->aliases, alias);
+            free(alias);
         }
         PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s hostfile: node %s slots %d nodes-given %s",
@@ -502,8 +568,8 @@ unlock:
 int prte_util_add_hostfile_nodes(prte_list_t *nodes, char *hostfile)
 {
     prte_list_t exclude, adds;
-    prte_list_item_t *item, *itm;
-    int rc;
+    prte_list_item_t *item;
+    int rc, i;
     prte_node_t *nd, *node;
     bool found;
 
@@ -520,10 +586,7 @@ int prte_util_add_hostfile_nodes(prte_list_t *nodes, char *hostfile)
     }
 
     /* check for any relative node directives */
-    for (item = prte_list_get_first(&adds); item != prte_list_get_end(&adds);
-         item = prte_list_get_next(item)) {
-        node = (prte_node_t *) item;
-
+    PRTE_LIST_FOREACH(node, &adds, prte_node_t) {
         if ('+' == node->name[0]) {
             prte_show_help("help-hostfile.txt", "hostfile:relative-syntax", true, node->name);
             rc = PRTE_ERR_SILENT;
@@ -535,13 +598,11 @@ int prte_util_add_hostfile_nodes(prte_list_t *nodes, char *hostfile)
     while (NULL != (item = prte_list_remove_first(&exclude))) {
         nd = (prte_node_t *) item;
         /* check for matches on nodes */
-        for (itm = prte_list_get_first(&adds); itm != prte_list_get_end(&adds);
-             itm = prte_list_get_next(itm)) {
-            node = (prte_node_t *) itm;
-            if (0 == strcmp(nd->name, node->name)) {
+        PRTE_LIST_FOREACH(node, &adds, prte_node_t) {
+            if (prte_nptr_match(nd, node)) {
                 /* match - remove it */
-                prte_list_remove_item(&adds, itm);
-                PRTE_RELEASE(itm);
+                prte_list_remove_item(&adds, &node->super);
+                PRTE_RELEASE(node);
                 break;
             }
         }
@@ -552,21 +613,27 @@ int prte_util_add_hostfile_nodes(prte_list_t *nodes, char *hostfile)
     while (NULL != (item = prte_list_remove_first(&adds))) {
         nd = (prte_node_t *) item;
         found = false;
-        for (itm = prte_list_get_first(nodes); itm != prte_list_get_end(nodes);
-             itm = prte_list_get_next(itm)) {
-            node = (prte_node_t *) itm;
-            if (0 == strcmp(nd->name, node->name)) {
+        PRTE_LIST_FOREACH(node, nodes, prte_node_t) {
+            if (prte_nptr_match(nd, node)) {
                 found = true;
                 break;
             }
         }
-        if (!found) {
+        if (found) {
+            /* add this node name as alias */
+            prte_argv_append_unique_nosize(&node->aliases, nd->name);
+            /* ensure all other aliases are also transferred */
+            if (NULL != nd->aliases) {
+                for (i=0; NULL != nd->aliases[i]; i++) {
+                    prte_argv_append_unique_nosize(&node->aliases, nd->aliases[i]);
+                }
+            }
+           PRTE_RELEASE(item);
+        } else {
             prte_list_append(nodes, &nd->super);
             PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s hostfile: adding node %s slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nd->name, nd->slots));
-        } else {
-            PRTE_RELEASE(item);
         }
     }
 
@@ -622,7 +689,7 @@ int prte_util_filter_hostfile_nodes(prte_list_t *nodes, char *hostfile, bool rem
         for (item2 = prte_list_get_first(&newnodes); item2 != prte_list_get_end(&newnodes);
              item2 = prte_list_get_next(item2)) {
             prte_node_t *node = (prte_node_t *) item2;
-            if (0 == strcmp(node_from_file->name, node->name)) {
+            if (prte_nptr_match(node_from_file, node)) {
                 /* match - remove it */
                 prte_list_remove_item(&newnodes, item2);
                 PRTE_RELEASE(item2);
@@ -672,7 +739,7 @@ int prte_util_filter_hostfile_nodes(prte_list_t *nodes, char *hostfile, bool rem
                              item3 != prte_list_get_end(&newnodes);
                              item3 = prte_list_get_next(item3)) {
                             node3 = (prte_node_t *) item3;
-                            if (0 == strcmp(node3->name, node_from_list->name)) {
+                            if (prte_nptr_match(node3, node_from_list)) {
                                 /* match - don't use it */
                                 goto skipnode;
                             }
@@ -703,9 +770,8 @@ int prte_util_filter_hostfile_nodes(prte_list_t *nodes, char *hostfile, bool rem
                  * look it up on global pool
                  */
                 nodeidx = strtol(&node_from_file->name[2], NULL, 10);
-                if (NULL
-                    == (node_from_pool = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool,
-                                                                                     nodeidx))) {
+                node_from_pool = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, nodeidx);
+                if (NULL == node_from_pool) {
                     /* this is an error */
                     prte_show_help("help-hostfile.txt", "hostfile:relative-node-not-found", true,
                                    nodeidx, node_from_file->name);
@@ -716,7 +782,7 @@ int prte_util_filter_hostfile_nodes(prte_list_t *nodes, char *hostfile, bool rem
                 for (item1 = prte_list_get_first(nodes); item1 != prte_list_get_end(nodes);
                      item1 = prte_list_get_next(item1)) {
                     node_from_list = (prte_node_t *) item1;
-                    if (prte_node_match(node_from_pool, node_from_list->name)) {
+                    if (prte_nptr_match(node_from_pool, node_from_list)) {
                         if (remove) {
                             /* match - remove item from list */
                             prte_list_remove_item(nodes, item1);
@@ -746,10 +812,8 @@ int prte_util_filter_hostfile_nodes(prte_list_t *nodes, char *hostfile, bool rem
                  item1 = prte_list_get_next(item1)) {
                 node_from_list = (prte_node_t *) item1;
                 /* we have converted all aliases for ourself
-                 * to our own detected nodename, so no need
-                 * to check for interfaces again - a simple
-                 * strcmp will suffice */
-                if (0 == strcmp(node_from_file->name, node_from_list->name)) {
+                 * to our own detected nodename */
+                if (prte_nptr_match(node_from_file, node_from_list)) {
                     /* if the slot count here is less than the
                      * total slots avail on this node, set it
                      * to the specified count - this allows people
@@ -877,9 +941,8 @@ int prte_util_get_ordered_host_list(prte_list_t *nodes, char *hostfile)
                 startempty = 1;
             }
             for (i = startempty; 0 < num_empty && i < prte_node_pool->size; i++) {
-                if (NULL
-                    == (node_from_pool = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool,
-                                                                                     i))) {
+                node_from_pool = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i);
+                if (NULL == node_from_pool) {
                     continue;
                 }
                 if (0 == node_from_pool->slots_inuse) {
@@ -926,9 +989,8 @@ int prte_util_get_ordered_host_list(prte_list_t *nodes, char *hostfile)
                 nodeidx++;
             }
             /* see if that location is filled */
-            if (NULL
-                == (node_from_pool = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool,
-                                                                                 nodeidx))) {
+            node_from_pool = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, nodeidx);
+            if (NULL == node_from_pool) {
                 /* this is an error */
                 prte_show_help("help-hostfile.txt", "hostfile:relative-node-not-found", true,
                                nodeidx, node->name);
@@ -974,7 +1036,7 @@ int prte_util_get_ordered_host_list(prte_list_t *nodes, char *hostfile)
         for (itm = prte_list_get_first(nodes); itm != prte_list_get_end(nodes);
              itm = prte_list_get_next(itm)) {
             prte_node_t *node = (prte_node_t *) itm;
-            if (0 == strcmp(exnode->name, node->name)) {
+            if (prte_nptr_match(exnode, node)) {
                 /* match - remove it */
                 prte_list_remove_item(nodes, itm);
                 PRTE_RELEASE(itm);

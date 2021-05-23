@@ -311,25 +311,9 @@ bool prte_ifislocal(const char *hostname)
 #    else
     char addrname[ADDRLEN + 1];
 #    endif
-    int i;
 
-    /* see if it matches any of our known aliases */
-    if (NULL != prte_process_info.aliases) {
-        for (i = 0; NULL != prte_process_info.aliases[i]; i++) {
-            if (0 == strcmp(hostname, prte_process_info.aliases[i])) {
-                return true;
-            }
-        }
-    }
-
-    /* okay, have to resolve the address - the prte_ifislocal
-     * function will not attempt to resolve the address if
-     * told not to do so */
+    /* resolve the address */
     if (PRTE_SUCCESS == prte_ifaddrtoname(hostname, addrname, ADDRLEN)) {
-        if (0 != strcmp(hostname, "localhost") && 0 != strcmp(hostname, "127.0.0.1")) {
-            /* add this to our known aliases */
-            prte_argv_append_nosize(&prte_process_info.aliases, hostname);
-        }
         return true;
     }
 

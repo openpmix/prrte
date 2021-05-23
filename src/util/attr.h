@@ -80,7 +80,6 @@ typedef uint8_t prte_node_flags_t;
 #define PRTE_NODE_LAUNCH_ID     (PRTE_NODE_START_KEY + 2) // int32 - Launch id needed by some systems to launch a proc on this node
 #define PRTE_NODE_HOSTID        (PRTE_NODE_START_KEY + 3) // pmix_rank_t - if this "node" is a coprocessor being hosted on a different node, then
                                                           // we need to know the id of our "host" to help any procs on us to determine locality
-#define PRTE_NODE_ALIAS         (PRTE_NODE_START_KEY + 4) // comma-separate list of alternate names for the node
 #define PRTE_NODE_SERIAL_NUMBER (PRTE_NODE_START_KEY + 5) // string - serial number: used if node is a coprocessor
 #define PRTE_NODE_PORT          (PRTE_NODE_START_KEY + 6) // int32 - Alternate port to be passed to plm
 

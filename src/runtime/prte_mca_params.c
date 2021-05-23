@@ -383,14 +383,14 @@ int prte_register_params(void)
     prted_debug_failure_delay = 0;
     (void) prte_mca_base_var_register(
         "prte", "prte", NULL, "daemon_fail_delay",
-        "Have the specified prted fail after specified number of seconds (default: 0 => no delay)",
+        "Have the specified prted fail after specified number of seconds [default: 0 => no delay]",
         PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prted_debug_failure_delay);
 
     prte_startup_timeout = 0;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "startup_timeout",
                                       "Seconds to wait for startup or job launch before declaring "
-                                      "failed_to_start (default: 0 => do not check)",
+                                      "failed_to_start [default: 0 => do not check]",
                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_startup_timeout);
@@ -441,33 +441,34 @@ int prte_register_params(void)
         PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hostname_cutoff);
 
-    /* which alias to use in MPIR_proctab */
-    prte_use_hostname_alias = 1;
-    (void) prte_mca_base_var_register(
-        "prte", "prte", NULL, "hostname_alias_index",
-        "Which alias to use for the debugger proc table [default: 1st alias]",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_use_hostname_alias);
-
     prte_show_resolved_nodenames = false;
     (void) prte_mca_base_var_register(
         "prte", "prte", NULL, "show_resolved_nodenames",
-        "Display any node names that are resolved to a different name (default: false)",
+        "Display any node names that are resolved to a different name [default: false]",
         PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_show_resolved_nodenames);
+
+    prte_do_not_resolve = false;
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "do_not_resolve",
+                                      "Do not attempt to resolve hostnames "
+                                      "[always true for managed allocations, "
+                                      "defaults to false otherwise]",
+                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_do_not_resolve);
 
     /* allow specification of the launch agent */
     prte_launch_agent = "prted";
     (void) prte_mca_base_var_register(
         "prte", "prte", NULL, "launch_agent",
-        "Command used to start processes on remote nodes (default: prted)",
+        "Command used to start processes on remote nodes [default: prted]",
         PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_launch_agent);
 
     prte_fork_agent_string = NULL;
     (void)
         prte_mca_base_var_register("prte", "prte", NULL, "fork_agent",
-                                   "Command used to fork processes on remote nodes (default: NULL)",
+                                   "Command used to fork processes on remote nodes [default: NULL]",
                                    PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                    PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                    PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_fork_agent_string);
@@ -538,7 +539,7 @@ int prte_register_params(void)
     /* tool communication controls */
     prte_report_events_uri = NULL;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "report_events",
-                                      "URI to which events are to be reported (default: NULL)",
+                                      "URI to which events are to be reported [default: NULL]",
                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_report_events_uri);

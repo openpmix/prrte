@@ -42,9 +42,6 @@
 #include "src/include/hash_string.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
-#include "src/util/argv.h"
-#include "src/util/printf.h"
-#include "src/util/prte_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -71,9 +68,13 @@
 #include "src/threads/threads.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
+#include "src/util/argv.h"
 #include "src/util/name_fns.h"
+#include "src/util/net.h"
 #include "src/util/nidmap.h"
+#include "src/util/printf.h"
 #include "src/util/proc_info.h"
+#include "src/util/prte_environ.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
@@ -1073,8 +1074,8 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     /* if compressed, decompress it */
     if (flag) {
         /* decompress the data */
-        if (PMIx_Data_decompress((uint8_t **) &bo.bytes, &bo.size, (uint8_t *) pbo.bytes,
-                                 pbo.size)) {
+        if (PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size,
+                                 (uint8_t **) &bo.bytes, &bo.size)) {
             /* the data has been uncompressed */
             rc = PMIx_Data_load(&datbuf, &bo);
             PMIX_BYTE_OBJECT_DESTRUCT(&bo);
@@ -1258,7 +1259,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     bool found;
     prte_daemon_cmd_flag_t cmd;
     char *myendian;
-    char *alias, **atmp;
+    char *alias;
     uint8_t naliases, ni;
     hwloc_obj_t root;
     prte_hwloc_topo_data_t *sum;
@@ -1295,11 +1296,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                              "%s plm:base:orted_report_launch from daemon %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&dname)));
 
-        atmp = NULL;
         /* update state and record for this daemon contact info */
-        if (NULL
-            == (daemon = (prte_proc_t *) prte_pointer_array_get_item(jdatorted->procs,
-                                                                     dname.rank))) {
+        daemon = (prte_proc_t *) prte_pointer_array_get_item(jdatorted->procs, dname.rank);
+        if (NULL == daemon) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             prted_failed_launch = true;
             goto CLEANUP;
@@ -1358,8 +1357,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
 
             for (n = 0; n < ninfo; n++) {
                 /* store this in a daemon wireup buffer for later distribution */
-                if (PMIX_SUCCESS
-                    != (ret = PMIx_Store_internal(&dname, info[n].key, &info[n].value))) {
+                ret = PMIx_Store_internal(&dname, info[n].key, &info[n].value);
+                if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_INFO_FREE(info, ninfo);
                     prted_failed_launch = true;
@@ -1377,14 +1376,13 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             prted_failed_launch = true;
             goto CLEANUP;
         }
-        if (!prte_have_fqdn_allocation) {
-            /* remove any domain info */
-            if (NULL != (ptr = strchr(nodename, '.'))) {
-                *ptr = '\0';
-                ptr = strdup(nodename);
-                free(nodename);
-                nodename = ptr;
-            }
+
+        if (!prte_net_isaddr(nodename) &&
+            NULL != (ptr = strchr(nodename, '.'))) {
+            /* retain the non-fqdn name as an alias */
+            *ptr = '\0';
+            prte_argv_append_unique_nosize(&daemon->node->aliases, nodename);
+            *ptr = '.';
         }
 
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
@@ -1403,7 +1401,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
          * by gethostname, yet the daemon will have returned the latter
          * and apps may refer to the host by that name
          */
-        prte_argv_append_nosize(&atmp, nodename);
+        prte_argv_append_unique_nosize(&daemon->node->aliases, nodename);
         /* unpack and store the provided aliases */
         idx = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &naliases, &idx, PMIX_UINT8);
@@ -1420,16 +1418,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
-            prte_argv_append_nosize(&atmp, alias);
+            prte_argv_append_unique_nosize(&daemon->node->aliases, alias);
             free(alias);
         }
-        if (0 < naliases) {
-            alias = prte_argv_join(atmp, ',');
-            prte_set_attribute(&daemon->node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, alias,
-                               PMIX_STRING);
-            free(alias);
-        }
-        prte_argv_free(atmp);
 
         /* unpack the topology signature for that node */
         idx = 1;
@@ -1481,8 +1472,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             } else {
                 if (compressed) {
                     /* decompress the data */
-                    if (PMIx_Data_decompress((uint8_t **) &bo.bytes, &bo.size,
-                                             (uint8_t *) pbo.bytes, pbo.size)) {
+                    if (PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size,
+                                             (uint8_t **) &bo.bytes, &bo.size)) {
                         /* the data has been uncompressed */
                         ret = PMIx_Data_load(&datbuf, &bo);
                         PMIX_BYTE_OBJECT_DESTRUCT(&bo);
@@ -1596,8 +1587,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         /* do we already have this topology from some other node? */
         found = false;
         for (i = 0; i < prte_node_topologies->size; i++) {
-            if (NULL
-                == (t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, i))) {
+            t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, i);
+            if (NULL == t) {
                 continue;
             }
             /* just check the signature */

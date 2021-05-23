@@ -110,7 +110,6 @@ static int rte_init(int argc, char **argv)
     prte_node_t *node;
     prte_proc_t *proc;
     prte_app_context_t *app;
-    char *aptr;
     char *coprocessors, **sns;
     uint32_t h;
     int idx;
@@ -369,9 +368,7 @@ static int rte_init(int argc, char **argv)
     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
     node->state = PRTE_NODE_STATE_UP;
     /* get our aliases - will include all the interface aliases captured in prte_init */
-    aptr = prte_argv_join(prte_process_info.aliases, ',');
-    prte_set_attribute(&node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, aptr, PMIX_STRING);
-    free(aptr);
+    node->aliases = prte_argv_copy(prte_process_info.aliases);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
     jdata->state = PRTE_JOB_STATE_RUNNING;

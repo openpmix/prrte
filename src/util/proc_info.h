@@ -135,7 +135,7 @@ PRTE_EXPORT int prte_proc_info_finalize(void);
 
 PRTE_EXPORT void prte_setup_hostname(void);
 
-PRTE_EXPORT bool prte_check_host_is_local(char *name);
+PRTE_EXPORT bool prte_check_host_is_local(const char *name);
 
 END_C_DECLS
 
