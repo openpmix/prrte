@@ -531,9 +531,19 @@ static void check_complete(int fd, short args, void *cbdata)
         jdata->state = PRTE_JOB_STATE_TERMINATED;
     }
 
+    /* see if there was any problem */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, NULL, PMIX_POINTER)) {
+        rc = prte_pmix_convert_rc(jdata->exit_code);
+        /* or whether we got cancelled by the user */
+    } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CANCELLED, NULL, PMIX_BOOL)) {
+        rc = prte_pmix_convert_rc(PRTE_ERR_JOB_CANCELLED);
+    } else {
+        rc = prte_pmix_convert_rc(jdata->exit_code);
+    }
+
     /* if would be rare, but a very fast terminating job could conceivably
      * reach here prior to the spawn requestor being notified of spawn */
-    rc = prte_plm_base_spawn_response(PMIX_SUCCESS, jdata);
+    rc = prte_plm_base_spawn_response(rc, jdata);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }

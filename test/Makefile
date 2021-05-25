@@ -44,7 +44,8 @@ TESTS = \
 	hello \
 	connect \
 	loop_child \
-	loop_spawn
+	loop_spawn \
+	reinit
 
 all: $(TESTS)
 

@@ -649,7 +649,7 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
 
     /* if the originator is me, then just do the notification */
     if (PMIX_CHECK_PROCID(&jdata->originator, PRTE_PROC_MY_NAME)) {
-        pmix_server_notify_spawn(jdata->nspace, room, PMIX_SUCCESS);
+        pmix_server_notify_spawn(jdata->nspace, room, status);
         return PRTE_SUCCESS;
     }
 
