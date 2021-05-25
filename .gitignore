@@ -170,3 +170,4 @@ test/hello
 test/connect
 test/loop_child
 test/loop_spawn
+test/reinit
