@@ -151,6 +151,13 @@ static void force_quit(int fd, short args, void *cbdata)
 }
 
 /************************
+ * Local variables
+ ************************/
+static bool terminate_dvm = false;
+static bool dvm_terminated = false;
+
+
+/************************
  * API Definitions
  ************************/
 static int init(void)
@@ -603,10 +610,6 @@ static void check_complete(int fd, short args, void *cbdata)
                 ++num_tools_attached;
                 continue;
             }
-            /* if the job is flagged to not be monitored, skip it */
-            if (PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_DO_NOT_MONITOR)) {
-                continue;
-            }
             if (jptr->state < PRTE_JOB_STATE_TERMINATED) {
                 /* still alive - finish processing this job's termination */
                 goto release;
@@ -618,7 +621,7 @@ static void check_complete(int fd, short args, void *cbdata)
             PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                  "%s state:dvm:check_job_completed state is terminated - activating notify",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            prte_job_term_ordered = true;  // flag that the DVM is to terminate
+            terminate_dvm = true;  // flag that the DVM is to terminate
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NOTIFY_COMPLETED);
             return;
         }
@@ -769,7 +772,8 @@ static void cleanup_job(int sd, short args, void *cbdata)
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
-    if (prte_job_term_ordered) {
+    if (terminate_dvm && !dvm_terminated) {
+        dvm_terminated = true;
         prte_plm.terminate_orteds();
     }
 
