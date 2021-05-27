@@ -52,8 +52,10 @@ int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
                                prte_iof_write_event_t *channel)
 {
     char starttag[PRTE_IOF_BASE_TAG_MAX], endtag[PRTE_IOF_BASE_TAG_MAX], *suffix;
+    char timestamp[PRTE_IOF_BASE_TAG_MAX], outtag[PRTE_IOF_BASE_TAG_MAX];
+    char begintag[PRTE_IOF_BASE_TAG_MAX];
     prte_iof_write_output_t *output;
-    int i, j, k, starttaglen, endtaglen, num_buffered;
+    int i, j, k, taglen, endtaglen, num_buffered;
     bool endtagged;
     char qprint[10];
     prte_job_t *jdata;
@@ -73,6 +75,11 @@ int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
 
     /* setup output object */
     output = PRTE_NEW(prte_iof_write_output_t);
+    memset(begintag, 0, PRTE_IOF_BASE_TAG_MAX);
+    memset(starttag, 0, PRTE_IOF_BASE_TAG_MAX);
+    memset(endtag, 0, PRTE_IOF_BASE_TAG_MAX);
+    memset(timestamp, 0, PRTE_IOF_BASE_TAG_MAX);
+    memset(outtag, 0, PRTE_IOF_BASE_TAG_MAX);
 
     /* get the job object for this process */
     jdata = prte_get_job_data_object(name->nspace);
@@ -110,14 +117,41 @@ int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
         return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
     }
 
+    if (!prte_xml_output && !prte_timestamp_output && !prte_tag_output) {
+       /* the data is not to be tagged - just copy it
+        * and move on to processing
+        */
+        if (0 < numbytes) {
+            /* don't copy 0 bytes - we just need to pass
+             * the zero bytes so the fd can be closed
+             * after it writes everything out
+             */
+            memcpy(output->data, data, numbytes);
+        }
+        output->numbytes = numbytes;
+        goto process;
+    }
+
     /* if this is to be xml tagged, create a tag with the correct syntax - we do not allow
      * timestamping of xml output
      */
     if (prte_xml_output) {
-        snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "<%s rank=\"%s\">", suffix,
-                 PRTE_VPID_PRINT(name->rank));
-        snprintf(endtag, PRTE_IOF_BASE_TAG_MAX, "</%s>", suffix);
-        goto construct;
+        if (prte_tag_output) {
+            snprintf(begintag, PRTE_IOF_BASE_TAG_MAX,
+                     "<%s nspace=\"%s\" rank=\"%s\"", suffix,
+                     PRTE_LOCAL_JOBID_PRINT(name->nspace),
+                     PRTE_VPID_PRINT(name->rank));
+        } else if (prte_timestamp_output) {
+            snprintf(begintag, PRTE_IOF_BASE_TAG_MAX,
+                     "<%s rank=\"%s\"", suffix,
+                     PRTE_VPID_PRINT(name->rank));
+        } else {
+            snprintf(begintag, PRTE_IOF_BASE_TAG_MAX,
+                     "<%s rank=\"%s\">", suffix,
+                     PRTE_VPID_PRINT(name->rank));
+        }
+        snprintf(endtag, PRTE_IOF_BASE_TAG_MAX,
+                 "</%s>", suffix);
     }
 
     /* if we are to timestamp output, start the tag with that */
@@ -129,49 +163,59 @@ int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
         cptr = ctime(&mytime);
         cptr[strlen(cptr) - 1] = '\0'; /* remove trailing newline */
 
-        if (prte_tag_output) {
-            /* if we want it tagged as well, use both */
-            snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "%s[%s,%s]<%s>:", cptr,
-                     PRTE_LOCAL_JOBID_PRINT(name->nspace), PRTE_VPID_PRINT(name->rank), suffix);
+        if (prte_xml_output && !prte_tag_output) {
+            snprintf(timestamp, PRTE_IOF_BASE_TAG_MAX,
+                     " timestamp=\"%s\">", cptr);
+        } else if (prte_xml_output && prte_tag_output) {
+            snprintf(timestamp, PRTE_IOF_BASE_TAG_MAX,
+                     " timestamp=\"%s\"", cptr);
+        } else if (prte_tag_output) {
+            snprintf(timestamp, PRTE_IOF_BASE_TAG_MAX, "%s", cptr);
         } else {
-            /* only use timestamp */
-            snprintf(starttag, PRTE_IOF_BASE_TAG_MAX, "%s<%s>:", cptr, suffix);
+            snprintf(timestamp, PRTE_IOF_BASE_TAG_MAX, "%s<%s>", cptr, suffix);
         }
-        /* no endtag for this option */
-        memset(endtag, '\0', PRTE_IOF_BASE_TAG_MAX);
-        goto construct;
     }
 
-    if (prte_tag_output) {
-        snprintf(starttag, PRTE_IOF_BASE_TAG_MAX,
-                 "[%s,%s]<%s>:", PRTE_LOCAL_JOBID_PRINT(name->nspace), PRTE_VPID_PRINT(name->rank),
+    if (prte_tag_output && !prte_xml_output) {
+        snprintf(outtag, PRTE_IOF_BASE_TAG_MAX,
+                 "[%s,%s]<%s>",
+                 PRTE_LOCAL_JOBID_PRINT(name->nspace),
+                 PRTE_VPID_PRINT(name->rank),
                  suffix);
-        /* no endtag for this option */
-        memset(endtag, '\0', PRTE_IOF_BASE_TAG_MAX);
-        goto construct;
     }
 
-    /* if we get here, then the data is not to be tagged - just copy it
-     * and move on to processing
-     */
-    if (0 < numbytes) {
-        /* don't copy 0 bytes - we just need to pass
-         * the zero bytes so the fd can be closed
-         * after it writes everything out
-         */
-        memcpy(output->data, data, numbytes);
-    }
-    output->numbytes = numbytes;
-    goto process;
-
-construct:
-    starttaglen = strlen(starttag);
     endtaglen = strlen(endtag);
     endtagged = false;
-    /* start with the tag */
-    for (j = 0, k = 0; j < starttaglen && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
+    k = 0;
+    /* start with the starttag */
+    taglen = strlen(begintag);
+    for (j = 0; j < taglen && k < PRTE_IOF_BASE_TAG_MAX; j++) {
+        starttag[k++] = begintag[j];
+    }
+    /* add the timestamp */
+    taglen = strlen(timestamp);
+    for (j = 0; j < taglen && k < PRTE_IOF_BASE_TAG_MAX; j++) {
+        starttag[k++] = timestamp[j];
+    }
+    /* add the output tag */
+    taglen = strlen(outtag);
+    for (j = 0; j < taglen && k < PRTE_IOF_BASE_TAG_MAX; j++) {
+        starttag[k++] = outtag[j];
+    }
+    /* if xml, end the starttag with a '>' */
+    if (prte_xml_output) {
+        starttag[k++] = '>';
+    } else {
+        starttag[k++] = ':';
+    }
+
+    /* transfer to output */
+    k = 0;
+    taglen = strlen(starttag);
+    for (j = 0; j < taglen && k < PRTE_IOF_BASE_TAG_MAX; j++) {
         output->data[k++] = starttag[j];
     }
+
     /* cycle through the data looking for <cr>
      * and replace those with the tag
      */
@@ -223,8 +267,8 @@ construct:
                     /* move the <cr> over */
                     output->data[k++] = '\n';
                     /* if this isn't the end of the data buffer, add a new start tag */
-                    if (i < numbytes - 1 && (k + starttaglen) < PRTE_IOF_BASE_TAGGED_OUT_MAX) {
-                        for (j = 0; j < starttaglen && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
+                    if (i < numbytes - 1 && (k + taglen) < PRTE_IOF_BASE_TAGGED_OUT_MAX) {
+                        for (j = 0; j < taglen && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
                             output->data[k++] = starttag[j];
                             endtagged = false;
                         }
@@ -245,7 +289,7 @@ construct:
                 output->data[k++] = '\n';
                 /* if this isn't the end of the data buffer, add a new start tag */
                 if (i < numbytes - 1) {
-                    for (j = 0; j < starttaglen && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
+                    for (j = 0; j < taglen && k < PRTE_IOF_BASE_TAGGED_OUT_MAX; j++) {
                         output->data[k++] = starttag[j];
                         endtagged = false;
                     }
