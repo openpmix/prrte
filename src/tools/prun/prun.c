@@ -501,10 +501,10 @@ int prun(int argc, char *argv[])
     if (PRTE_SUCCESS != rc) {
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
+            param = prte_argv_join(pargv, ' ');
+            fprintf(stderr, "\n******* Cmd line: %s\n\n\n", param);
+            free(param);
         }
-        param = prte_argv_join(pargv, ' ');
-        fprintf(stderr, "\n******* Cmd line: %s\n\n\n", param);
-        free(param);
         return rc;
     }
 
@@ -721,19 +721,19 @@ int prun(int argc, char *argv[])
         targv = prte_argv_split(pval->value.data.string, ',');
 
         for (int idx = 0; idx < prte_argv_count(targv); idx++) {
-            if (0 == strcmp(targv[idx], "allocation")) {
+            if (0 == strncasecmp(targv[idx], "allocation", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYALLOC", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "map")) {
+            if (0 == strcasecmp(targv[idx], "map")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "bind")) {
+            if (0 == strncasecmp(targv[idx], "bind", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":REPORT", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "map-devel")) {
+            if (0 == strcasecmp(targv[idx], "map-devel")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDEVEL", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "topo")) {
+            if (0 == strncasecmp(targv[idx], "topo", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYTOPO", PMIX_STRING);
             }
         }
@@ -746,16 +746,16 @@ int prun(int argc, char *argv[])
         targv = prte_argv_split(pval->value.data.string, ',');
 
         for (int idx = 0; idx < prte_argv_count(targv); idx++) {
-            if (0 == strcmp(targv[idx], "tag")) {
+            if (0 == strncasecmp(targv[idx], "tag", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TAG_OUTPUT, &flag, PMIX_BOOL);
             }
-            if (0 == strcmp(targv[idx], "timestamp")) {
+            if (0 == strncasecmp(targv[idx], "timestamp", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
             }
-            if (0 == strcmp(targv[idx], "xml")) {
+            if (0 == strncasecmp(targv[idx], "xml", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":XMLOUTPUT", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "merge-stderr-to-stdout")) {
+            if (0 == strncasecmp(targv[idx], "merge-stderr-to-stdout", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
             }
             if (NULL != (ptr = strchr(targv[idx], ':'))) {
@@ -806,6 +806,7 @@ int prun(int argc, char *argv[])
         }
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
         free(param);
+        free(ptr);
     }
 
     /* check what user wants us to do with stdin */
