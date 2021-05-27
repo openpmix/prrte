@@ -127,11 +127,11 @@ mapping operation. This can happen if you request a map type
 
 #
 [unrecognized-policy]
-The specified %s policy is not recognized:
+The specified %s directive is not recognized:
 
-  Policy: %s
+  Directive: %s
 
-Please check for a typo or ensure that the option is a supported
+Please check for a typo or ensure that the directive is a supported
 one.
 #
 [oversubscribe-conflict]
@@ -524,3 +524,19 @@ hardware thread in that core.
 In contrast, a case such as "--map-by package:hwtcpus --bind-to hwthread"
 would result in each process being bound to successive hardware threads
 on each package.
+#
+[unrecognized-qualifier]
+The %s directive contains an unrecognized qualifier:
+
+  Qualifier: %s
+  Valid qualifiers: %s
+
+Please check for a typo or ensure that the qualifier is a supported one.
+#
+[unrecognized-directive]
+The specified %s directive is not recognized:
+
+  Directive: %s
+  Valid directives: %s
+
+Please check for a typo or ensure that the directive is a supported one.
