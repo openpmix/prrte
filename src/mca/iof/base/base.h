@@ -83,7 +83,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_job_t);
  * Maximum size of single msg
  */
 #define PRTE_IOF_BASE_MSG_MAX        4096
-#define PRTE_IOF_BASE_TAG_MAX        50
+#define PRTE_IOF_BASE_TAG_MAX        1024
 #define PRTE_IOF_BASE_TAGGED_OUT_MAX 8192
 #define PRTE_IOF_MAX_INPUT_BUFFERS   50
 

@@ -307,12 +307,11 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
         }
     }
 
-    PRTE_OUTPUT_VERBOSE(
-        (1, prte_iof_base_framework.framework_output, "%s read %d bytes from %s of %s",
-         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
-         (PRTE_IOF_STDOUT & rev->tag) ? "stdout"
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output, "%s read %d bytes from %s of %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
+                         (PRTE_IOF_STDOUT & rev->tag) ? "stdout"
                                       : ((PRTE_IOF_STDERR & rev->tag) ? "stderr" : "stddiag"),
-         PRTE_NAME_PRINT(&proct->name)));
+                         PRTE_NAME_PRINT(&proct->name)));
 
     if (0 == numbytes) {
         /* if we read 0 bytes from the stdout/err/diag, there is
