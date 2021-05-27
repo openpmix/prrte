@@ -65,7 +65,6 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
 static int detect_proxy(char *argv);
 static void allow_run_as_root(prte_cmd_line_t *cmd_line);
 static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
-static int check_sanity(prte_cmd_line_t *cmd_line);
 
 prte_schizo_base_module_t prte_schizo_ompi_module = {.name = "ompi",
                                                      .define_cli = define_cli,
@@ -75,7 +74,7 @@ prte_schizo_base_module_t prte_schizo_ompi_module = {.name = "ompi",
                                                      .detect_proxy = detect_proxy,
                                                      .allow_run_as_root = allow_run_as_root,
                                                      .job_info = job_info,
-                                                     .check_sanity = check_sanity};
+                                                     .check_sanity = prte_schizo_base_sanity};
 
 static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     /* basic options */
@@ -1585,9 +1584,4 @@ static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
             PMIX_ERROR_LOG(rc);
         }
     }
-}
-
-static int check_sanity(prte_cmd_line_t *cmd_line)
-{
-    return PRTE_SUCCESS;
 }
