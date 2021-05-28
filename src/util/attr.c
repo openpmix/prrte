@@ -458,6 +458,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "STOP-IN-APP";
         case PRTE_JOB_ENVARS_HARVESTED:
             return "ENVARS-HARVESTED";
+        case PRTE_JOB_OUTPUT_NOCOPY:
+            return "DO-NOT-COPY-OUTPUT";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

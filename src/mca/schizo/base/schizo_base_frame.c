@@ -499,6 +499,7 @@ int prte_schizo_base_sanity(prte_cmd_line_t *cmd_line)
     char *bndquals[] = {"overload-allowed", "if-supported", "ordered", "report", NULL};
 
     char *outputs[] = {"tag", "timestamp", "xml", "merge-stderr-to-stdout", "directory", "filename", NULL};
+    char *outquals[] = {"nocopy", NULL};
 
     char *displays[] = {"allocation", "map", "bind", "map-devel", "topo", NULL};
 
@@ -554,7 +555,7 @@ int prte_schizo_base_sanity(prte_cmd_line_t *cmd_line)
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "output", 0, 0))) {
-        if (!check_directives("output", outputs, NULL, pval->value.data.string)) {
+        if (!check_directives("output", outputs, outquals, pval->value.data.string)) {
             return PRTE_ERR_SILENT;
         }
     }

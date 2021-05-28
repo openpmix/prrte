@@ -171,6 +171,9 @@ SETUP:
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
         proct->merge = true;
     }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY, NULL, PMIX_BOOL)) {
+        proct->copy = false;
+    }
     /* setup any requested output files */
     if (PRTE_SUCCESS != (rc = prte_iof_base_setup_output_files(dst_name, jdata, proct))) {
         PRTE_ERROR_LOG(rc);

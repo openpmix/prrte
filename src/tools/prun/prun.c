@@ -315,7 +315,7 @@ static prte_cmd_line_init_t prte_tool_options[] = {
 int prun(int argc, char *argv[])
 {
     int rc = 1, i;
-    char *param, *ptr;
+    char *param, *ptr, *cptr;
     prte_pmix_lock_t lock, rellock;
     prte_list_t apps;
     prte_pmix_app_t *app;
@@ -777,6 +777,14 @@ int prun(int argc, char *argv[])
                     return PRTE_ERR_FATAL;
                 }
                 ++ptr;
+                /* check for qualifiers */
+                if (NULL != (cptr = strchr(ptr, ':'))) {
+                    *cptr = '\0';
+                    ++cptr;
+                    if (0 != strcasecmp(cptr, "nocopy")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+                    }
+                }
                 /* If the given filename isn't an absolute path, then
                  * convert it to one so the name will be relative to
                  * the directory where prun was given as that is what
@@ -805,6 +813,14 @@ int prun(int argc, char *argv[])
                     return PRTE_ERR_FATAL;
                 }
                 ++ptr;
+                /* check for qualifiers */
+                if (NULL != (cptr = strchr(ptr, ':'))) {
+                    *cptr = '\0';
+                    ++cptr;
+                    if (0 != strcasecmp(cptr, "nocopy")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+                    }
+                }
                 /* If the given filename isn't an absolute path, then
                  * convert it to one so the name will be relative to
                  * the directory where prun was given as that is what
