@@ -115,7 +115,7 @@ int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts)
             return PRTE_ERR_SYS_LIMITS_PIPES;
         }
     }
-    if (!prte_iof_base.redirect_app_stderr_to_stdout) {
+    if (!opts->merge) {
         if (pipe(opts->p_stderr) < 0) {
             PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
             return PRTE_ERR_SYS_LIMITS_PIPES;
@@ -124,7 +124,8 @@ int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts)
     return PRTE_SUCCESS;
 }
 
-int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts, char ***env)
+int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
+                              char ***env)
 {
     int ret;
 
@@ -132,7 +133,7 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts, char ***env)
         close(opts->p_stdin[1]);
     }
     close(opts->p_stdout[0]);
-    if (!prte_iof_base.redirect_app_stderr_to_stdout) {
+    if (!opts->merge) {
         close(opts->p_stderr[0]);
     }
 
@@ -158,7 +159,7 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts, char ***env)
         if (ret < 0) {
             return PRTE_ERR_PIPE_SETUP_FAILURE;
         }
-        if (prte_iof_base.redirect_app_stderr_to_stdout) {
+        if (opts->merge) {
             ret = dup2(opts->p_stdout[1], fileno(stderr));
             if (ret < 0) {
                 return PRTE_ERR_PIPE_SETUP_FAILURE;
@@ -171,7 +172,7 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts, char ***env)
             if (ret < 0) {
                 return PRTE_ERR_PIPE_SETUP_FAILURE;
             }
-            if (prte_iof_base.redirect_app_stderr_to_stdout) {
+            if (opts->merge) {
                 ret = dup2(opts->p_stdout[1], fileno(stderr));
                 if (ret < 0) {
                     return PRTE_ERR_PIPE_SETUP_FAILURE;
@@ -200,7 +201,7 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts, char ***env)
     }
 
     if (opts->p_stderr[1] != fileno(stderr)) {
-        if (!prte_iof_base.redirect_app_stderr_to_stdout) {
+        if (!opts->merge) {
             ret = dup2(opts->p_stderr[1], fileno(stderr));
             if (ret < 0)
                 return PRTE_ERR_PIPE_SETUP_FAILURE;
@@ -211,7 +212,8 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts, char ***env)
     return PRTE_SUCCESS;
 }
 
-int prte_iof_base_setup_parent(const pmix_proc_t *name, prte_iof_base_io_conf_t *opts)
+int prte_iof_base_setup_parent(const pmix_proc_t *name,
+                               prte_iof_base_io_conf_t *opts)
 {
     int ret;
 
@@ -232,7 +234,7 @@ int prte_iof_base_setup_parent(const pmix_proc_t *name, prte_iof_base_io_conf_t 
         return ret;
     }
 
-    if (!prte_iof_base.redirect_app_stderr_to_stdout) {
+    if (!opts->merge) {
         ret = prte_iof.push(name, PRTE_IOF_STDERR, opts->p_stderr[0]);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
@@ -316,8 +318,7 @@ int prte_iof_base_setup_output_files(const pmix_proc_t *dst_name, prte_job_t *jo
             /* if they asked for stderr to be combined with stdout, then we
              * only create one file and tell the IOF to put both streams
              * into it. Otherwise, we create separate files for each stream */
-            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL,
-                                   PMIX_BOOL)) {
+            if (proct->merge) {
                 /* just use the stdout sink */
                 PRTE_RETAIN(proct->revstdout->sink);
                 proct->revstdout->sink->tag = PRTE_IOF_STDMERGE; // show that it is merged
@@ -428,7 +429,7 @@ void prte_iof_base_check_target(prte_iof_proc_t *proct)
                 sink->exclusive = (PRTE_IOF_EXCLUSIVE & preq->stream);
                 prte_list_append(proct->subscribers, &sink->super);
             }
-            if (!prte_iof_base.redirect_app_stderr_to_stdout && PRTE_IOF_STDERR & preq->stream) {
+            if (!proct->merge && PRTE_IOF_STDERR & preq->stream) {
                 PRTE_IOF_SINK_DEFINE(&sink, &proct->name, -1, PRTE_IOF_STDERR, NULL);
                 PMIX_XFER_PROCID(&sink->daemon, &preq->requestor);
                 sink->exclusive = (PRTE_IOF_EXCLUSIVE & preq->stream);
