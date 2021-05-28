@@ -253,6 +253,8 @@ int prte(int argc, char *argv[])
     prte_schizo_base_module_t *schizo;
     prte_ess_base_signal_t *sig;
     char **targv;
+    char *outdir = NULL;
+    char *outfile = NULL;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
@@ -908,11 +910,16 @@ int prte(int argc, char *argv[])
     }
 
     /* cannot have both files and directory set for output */
-    ptr = NULL;
+    outdir = NULL;
+    outfile = NULL;
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output", 0, 0))) {
         targv = prte_argv_split(pval->value.data.string, ',');
 
         for (int idx = 0; idx < prte_argv_count(targv); idx++) {
+            /* remove any '=' sign in the directive */
+            if (NULL != (ptr = strchr(targv[idx], '='))) {
+                *ptr = '\0';
+            }
             if (0 == strncasecmp(targv[idx], "tag", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TAG_OUTPUT, &flag, PMIX_BOOL);
             }
@@ -925,58 +932,70 @@ int prte(int argc, char *argv[])
             if (0 == strncasecmp(targv[idx], "merge-stderr-to-stdout", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
             }
-            if (NULL != (ptr = strchr(targv[idx], ':'))) {
+            if (0 == strncasecmp(targv[idx], "directory", strlen(targv[idx]))) {
+                if (NULL != outfile) {
+                    prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                    return PRTE_ERR_FATAL;
+                }
+                if (NULL == ptr) {
+                    prte_show_help("help-prte-rmaps-base.txt",
+                                   "missing-qualifier", true,
+                                   "output", "directory", "directory");
+                    return PRTE_ERR_FATAL;
+                }
                 ++ptr;
-                ptr = strdup(ptr);
+                /* If the given filename isn't an absolute path, then
+                 * convert it to one so the name will be relative to
+                 * the directory where prun was given as that is what
+                 * the user will have seen */
+                if (!prte_path_is_absolute(ptr)) {
+                    char cwd[PRTE_PATH_MAX];
+                    if (NULL == getcwd(cwd, sizeof(cwd))) {
+                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                        goto DONE;
+                    }
+                    outdir = prte_os_path(false, cwd, ptr, NULL);
+                } else {
+                    outdir = strdup(ptr);
+                }
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
+            }
+            if (0 == strncasecmp(targv[idx], "file", strlen(targv[idx]))) {
+                if (NULL != outdir) {
+                    prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                    return PRTE_ERR_FATAL;
+                }
+                if (NULL == ptr) {
+                    prte_show_help("help-prte-rmaps-base.txt",
+                                   "missing-qualifier", true,
+                                   "output", "filename", "filename");
+                    return PRTE_ERR_FATAL;
+                }
+                ++ptr;
+                /* If the given filename isn't an absolute path, then
+                 * convert it to one so the name will be relative to
+                 * the directory where prun was given as that is what
+                 * the user will have seen */
+                if (!prte_path_is_absolute(ptr)) {
+                    char cwd[PRTE_PATH_MAX];
+                    if (NULL == getcwd(cwd, sizeof(cwd))) {
+                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                        goto DONE;
+                    }
+                    outfile = prte_os_path(false, cwd, ptr, NULL);
+                } else {
+                    outfile = strdup(ptr);
+                }
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, outfile, PMIX_STRING);
             }
         }
         prte_argv_free(targv);
     }
-
-    param = NULL;
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output-filename", 0, 0))) {
-        param = pval->value.data.string;
+    if (NULL != outdir) {
+        free(outdir);
     }
-    if (NULL != param && NULL != ptr) {
-        prte_show_help("help-prted.txt", "both-file-and-dir-set", true, param, ptr);
-        return PRTE_ERR_FATAL;
-    } else if (NULL != param) {
-        /* if we were asked to output to files, pass it along. */
-        /* if the given filename isn't an absolute path, then
-         * convert it to one so the name will be relative to
-         * the directory where prun was given as that is what
-         * the user will have seen */
-        if (!prte_path_is_absolute(param)) {
-            char cwd[PRTE_PATH_MAX];
-            if (NULL == getcwd(cwd, sizeof(cwd))) {
-                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                goto DONE;
-            }
-            ptr = prte_os_path(false, cwd, param, NULL);
-        } else {
-            ptr = strdup(param);
-        }
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, ptr, PMIX_STRING);
-        free(ptr);
-    } else if (NULL != ptr) {
-        /* if we were asked to output to a directory, pass it along. */
-        /* If the given filename isn't an absolute path, then
-         * convert it to one so the name will be relative to
-         * the directory where prun was given as that is what
-         * the user will have seen */
-        if (!prte_path_is_absolute(ptr)) {
-            char cwd[PRTE_PATH_MAX];
-            if (NULL == getcwd(cwd, sizeof(cwd))) {
-                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                goto DONE;
-            }
-            param = prte_os_path(false, cwd, ptr, NULL);
-        } else {
-            param = strdup(ptr);
-        }
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
-        free(param);
-        free(ptr);
+    if (NULL != outfile) {
+        free(outfile);
     }
 
     /* check what user wants us to do with stdin */

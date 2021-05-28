@@ -254,8 +254,8 @@ int prte_iof_base_setup_output_files(const pmix_proc_t *dst_name, prte_job_t *jo
 
     /* see if we are to output to a directory */
     dirname = NULL;
-    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_OUTPUT_TO_DIRECTORY, (void **) &dirname,
-                           PMIX_STRING)
+    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_OUTPUT_TO_DIRECTORY,
+                           (void **) &dirname, PMIX_STRING)
         && NULL != dirname) {
         np = jobdat->num_procs / 10;
         /* determine the number of digits required for max vpid */

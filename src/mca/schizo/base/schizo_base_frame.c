@@ -403,6 +403,10 @@ static bool check_directives(char *directive,
     }
 
     args = prte_argv_split(dir, ':');
+    /* remove any '=' in the directive */
+    if (NULL != (v = strchr(args[0], '='))) {
+        *v = '\0';
+    }
     for (n = 0; NULL != valid[n]; n++) {
         l1 = strlen(args[0]);
         l2 = strlen(valid[n]);
@@ -494,7 +498,8 @@ int prte_schizo_base_sanity(prte_cmd_line_t *cmd_line)
                        "l2cache", "l3cache",  "package", NULL};
     char *bndquals[] = {"overload-allowed", "if-supported", "ordered", "report", NULL};
 
-    char *outputs[] = {"tag", "timestamp", "xml", "merge-stderr-to-stdout", NULL};
+    char *outputs[] = {"tag", "timestamp", "xml", "merge-stderr-to-stdout", "directory", "filename", NULL};
+
     char *displays[] = {"allocation", "map", "bind", "map-devel", "topo", NULL};
 
     bool hwtcpus = false;
