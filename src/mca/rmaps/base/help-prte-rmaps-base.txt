@@ -540,3 +540,11 @@ The specified %s directive is not recognized:
   Valid directives: %s
 
 Please check for a typo or ensure that the directive is a supported one.
+#
+[missing-qualifier]
+The %s option contains a directive that is missing a value:
+
+  Directive: %s
+  Valid directive: "%s=<value>"
+
+Please check for a typo or ensure that the value is provided.
