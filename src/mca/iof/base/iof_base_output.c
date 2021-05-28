@@ -138,7 +138,7 @@ int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
     if (prte_xml_output) {
         if (prte_tag_output) {
             snprintf(begintag, PRTE_IOF_BASE_TAG_MAX,
-                     "<%s nspace=\"%s\" rank=\"%s\"", suffix,
+                     "<%s localjobid=\"%s\" rank=\"%s\"", suffix,
                      PRTE_LOCAL_JOBID_PRINT(name->nspace),
                      PRTE_VPID_PRINT(name->rank));
         } else if (prte_timestamp_output) {

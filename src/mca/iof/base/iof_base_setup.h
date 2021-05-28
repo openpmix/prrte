@@ -31,6 +31,7 @@
 struct prte_iof_base_io_conf_t {
     int usepty;
     bool connect_stdin;
+    bool merge;
 
     /* private - callers should not modify these fields */
     int p_stdin[2];

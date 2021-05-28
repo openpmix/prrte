@@ -168,6 +168,9 @@ SETUP:
         PRTE_IOF_READ_EVENT(&proct->revstderr, proct, fd, PRTE_IOF_STDERR,
                             prte_iof_hnp_read_local_handler, false);
     }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
+        proct->merge = true;
+    }
     /* setup any requested output files */
     if (PRTE_SUCCESS != (rc = prte_iof_base_setup_output_files(dst_name, jdata, proct))) {
         PRTE_ERROR_LOG(rc);
@@ -180,13 +183,13 @@ SETUP:
      * been defined!
      */
     if (NULL != proct->revstdout
-        && (prte_iof_base.redirect_app_stderr_to_stdout || NULL != proct->revstderr)) {
+        && (proct->merge || NULL != proct->revstderr)) {
         prte_iof_base_check_target(proct);
         if (!proct->revstdout->activated) {
             PRTE_IOF_READ_ACTIVATE(proct->revstdout);
             proct->revstdout->activated = true;
         }
-        if (!prte_iof_base.redirect_app_stderr_to_stdout && !proct->revstderr->activated) {
+        if (!proct->merge && !proct->revstderr->activated) {
             PRTE_IOF_READ_ACTIVATE(proct->revstderr);
             proct->revstderr->activated = true;
         }

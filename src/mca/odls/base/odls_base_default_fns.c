@@ -1438,6 +1438,9 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             cd->index_argv = index_argv;
             /* setup any IOF */
             cd->opts.usepty = PRTE_ENABLE_PTY_SUPPORT;
+            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
+                cd->opts.merge = true;
+            }
 
             /* do we want to setup stdin? */
             if (jobdat->stdin_target == PMIX_RANK_WILDCARD
@@ -2087,6 +2090,9 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     cd->fork_local = fork_local;
     /* setup any IOF */
     cd->opts.usepty = PRTE_ENABLE_PTY_SUPPORT;
+    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
+        cd->opts.merge = true;
+    }
 
     /* do we want to setup stdin? */
     if (jobdat->stdin_target == PMIX_RANK_WILDCARD || child->name.rank == jobdat->stdin_target) {
