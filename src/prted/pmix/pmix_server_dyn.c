@@ -571,6 +571,11 @@ static void interim(int sd, short args, void *cbdata)
             prte_set_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_TO_DIRECTORY, PRTE_ATTR_GLOBAL,
                                info->value.data.string, PMIX_STRING);
 
+        } else if (PMIX_CHECK_KEY(info, PMIX_OUTPUT_NOCOPY)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY, PRTE_ATTR_GLOBAL,
+                               &flag, PMIX_BOOL);
+
             /***   MERGE STDERR TO STDOUT   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MERGE_STDERR_STDOUT)) {
             flag = PMIX_INFO_TRUE(info);

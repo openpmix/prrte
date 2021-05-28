@@ -186,9 +186,13 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
 
     /* output options */
     {'\0', "output", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Comma-delimited list of options that control the output generated."
-     "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir:DIRNAME",
-     PRTE_CMD_LINE_OTYPE_OUTPUT},
+        "Comma-delimited list of options that control how output is generated."
+        "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir=DIRNAME, file=filename."
+        " The dir option redirects output from application processes into DIRNAME/job/rank/std[out,err,diag]."
+        " The file option redirects output from application processes into filename.rank. In both cases, "
+        "the provided name will be converted to an absolute path. Supported qualifiers include NOCOPY"
+        " (do not copy the output to the stdout/err streams).",
+        PRTE_CMD_LINE_OTYPE_OUTPUT},
     /* exit status reporting */
     {'\0', "report-child-jobs-separately", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Return the exit status of the primary job only", PRTE_CMD_LINE_OTYPE_OUTPUT},
