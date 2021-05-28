@@ -133,6 +133,7 @@ typedef struct {
     prte_iof_read_event_t *revstderr;
     prte_list_t *subscribers;
     bool copy;
+    bool merge;
 } prte_iof_proc_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_proc_t);
 
@@ -156,7 +157,6 @@ struct prte_iof_base_t {
     size_t output_limit;
     prte_iof_sink_t *iof_write_stdout;
     prte_iof_sink_t *iof_write_stderr;
-    bool redirect_app_stderr_to_stdout;
     prte_list_t requests;
 };
 typedef struct prte_iof_base_t prte_iof_base_t;
