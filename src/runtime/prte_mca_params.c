@@ -61,8 +61,6 @@ char *prte_signal_string = NULL;
 char *prte_stacktrace_output_filename = NULL;
 char *prte_net_private_ipv4 = NULL;
 char *prte_set_max_sys_limits = NULL;
-int prte_abort_delay = 0;
-bool prte_abort_print_stack = false;
 int prte_pmix_verbose_output = 0;
 
 int prte_max_thread_in_progress = 1;
@@ -176,38 +174,6 @@ int prte_register_params(void)
         "Supported params: core, filesize, maxmem, openfiles, stacksize, maxchildren",
         PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_3,
         PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ, &prte_set_max_sys_limits);
-    if (0 > ret) {
-        return ret;
-    }
-
-    prte_abort_delay = 0;
-    ret = prte_mca_base_var_register(
-        "prte", "prte", NULL, "abort_delay",
-        "If nonzero, print out an identifying message when abort operation is invoked (hostname, "
-        "PID of the process that called abort) and delay for that many seconds before exiting (a "
-        "negative delay value means to never abort).  This allows attaching of a debugger before "
-        "quitting the job.",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_abort_delay);
-    if (0 > ret) {
-        return ret;
-    }
-
-    prte_abort_print_stack = false;
-    ret = prte_mca_base_var_register("prte", "prte", NULL, "abort_print_stack",
-                                     "If nonzero, print out a stack trace when abort is invoked",
-                                     PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, PRTE_MCA_BASE_VAR_FLAG_NONE,
-    /* If we do not have stack trace
-       capability, make this a constant
-       MCA variable */
-#if PRTE_WANT_PRETTY_PRINT_STACKTRACE
-                                     PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
-                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-#else
-                                     PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY, PRTE_INFO_LVL_5,
-                                     PRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
-#endif
-                                     &prte_abort_print_stack);
     if (0 > ret) {
         return ret;
     }
