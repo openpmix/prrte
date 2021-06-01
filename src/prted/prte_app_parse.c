@@ -224,7 +224,7 @@ static int create_app(prte_cmd_line_t *prte_cmd_line, int argc, char *argv[], pr
      * preload their binary via the preload_files option
      */
     if (NULL == strstr(app->app.argv[0], "java")) {
-        if (prte_cmd_line_is_taken(prte_cmd_line, "preload-binaries")) {
+        if (prte_cmd_line_is_taken(prte_cmd_line, "preload-binary")) {
             PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
             PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_BIN, NULL, PMIX_BOOL);
         }

@@ -45,9 +45,10 @@ PRTE_CLASS_DECLARATION(prte_filem_raw_outbound_t);
 
 typedef struct {
     prte_list_item_t super;
+    prte_event_t ev;
+    int fd;
     prte_filem_raw_outbound_t *outbound;
     prte_app_idx_t app_idx;
-    prte_event_t ev;
     bool pending;
     char *src;
     char *file;
