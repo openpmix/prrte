@@ -837,8 +837,29 @@ static int setup_path(prte_app_context_t *app, char **wdir)
 {
     int rc = PRTE_SUCCESS;
     char dir[MAXPATHLEN];
+    char *session_dir;
 
-    if (!prte_get_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, NULL, PMIX_BOOL)) {
+    if (prte_get_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, NULL, PMIX_BOOL)) {
+        /* move us to that location */
+        session_dir = prte_process_info.jobfam_session_dir;
+        if (NULL == session_dir) {
+            /* if no job family session dir was provided -
+             * use the job session dir */
+            session_dir = prte_process_info.job_session_dir;
+        }
+        if (0 != chdir(session_dir)) {
+            return PRTE_ERROR;
+        }
+        /* NOTE: if a user's program does a chdir(), then $PWD will once
+         * again not match getcwd! This is beyond our control - we are only
+         * ensuring they start out matching.
+         */
+        if (NULL == getcwd(dir, sizeof(dir))) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
+        *wdir = strdup(dir);
+        prte_setenv("PWD", dir, true, &app->env);
+    } else {
         /* Try to change to the app's cwd and check that the app
            exists and is executable The function will
            take care of outputting a pretty error message, if required
@@ -866,8 +887,6 @@ static int setup_path(prte_app_context_t *app, char **wdir)
         }
         *wdir = strdup(dir);
         prte_setenv("PWD", dir, true, &app->env);
-    } else {
-        *wdir = NULL;
     }
 
 CLEANUP:
@@ -1438,6 +1457,9 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             cd->index_argv = index_argv;
             /* setup any IOF */
             cd->opts.usepty = PRTE_ENABLE_PTY_SUPPORT;
+            if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
+                cd->opts.merge = true;
+            }
 
             /* do we want to setup stdin? */
             if (jobdat->stdin_target == PMIX_RANK_WILDCARD
@@ -2087,6 +2109,9 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     cd->fork_local = fork_local;
     /* setup any IOF */
     cd->opts.usepty = PRTE_ENABLE_PTY_SUPPORT;
+    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
+        cd->opts.merge = true;
+    }
 
     /* do we want to setup stdin? */
     if (jobdat->stdin_target == PMIX_RANK_WILDCARD || child->name.rank == jobdat->stdin_target) {

@@ -71,14 +71,6 @@ static int prte_iof_base_register(prte_mca_base_register_flag_t flags)
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                       &prte_iof_base.output_limit);
 
-    /* Redirect application stderr to stdout (at source) */
-    prte_iof_base.redirect_app_stderr_to_stdout = false;
-    (void) prte_mca_base_var_register(
-        "prte", "iof", "base", "redirect_app_stderr_to_stdout",
-        "Redirect application stderr to stdout at source (default: false)",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_iof_base.redirect_app_stderr_to_stdout);
-
     return PRTE_SUCCESS;
 }
 
@@ -160,6 +152,7 @@ static void prte_iof_base_proc_construct(prte_iof_proc_t *ptr)
     ptr->revstderr = NULL;
     ptr->subscribers = NULL;
     ptr->copy = true;
+    ptr->merge = false;
 }
 static void prte_iof_base_proc_destruct(prte_iof_proc_t *ptr)
 {

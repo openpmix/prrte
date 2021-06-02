@@ -92,6 +92,7 @@ PRTE_EXPORT int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline
                                                         prte_schizo_convertor_fn_t convert);
 PRTE_EXPORT int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target);
 PRTE_EXPORT int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target);
+PRTE_EXPORT int prte_schizo_base_sanity(prte_cmd_line_t *cmd_line);
 
 END_C_DECLS
 

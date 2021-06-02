@@ -49,6 +49,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/rml/rml.h"
+#include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/threads.h"
 #include "src/util/name_fns.h"
@@ -228,7 +229,8 @@ static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer
     }
 }
 
-static int raw_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
+static int raw_preposition_files(prte_job_t *jdata,
+                                 prte_filem_completion_cbfunc_t cbfunc,
                                  void *cbdata)
 {
     prte_app_context_t *app;
@@ -274,6 +276,9 @@ static int raw_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc
             free(app->argv[0]);
             app->argv[0] = strdup(app->app);
             fs->remote_target = strdup(app->app);
+            /* ensure the app uses that location as its cwd */
+            prte_set_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD,
+                               PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
         }
         if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void **) &filestring,
                                PMIX_STRING)) {
@@ -512,16 +517,13 @@ static int raw_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc
                 break;
             }
         }
+        xfer->fd = fd;
         xfer->file = strdup(cptr);
         xfer->type = fs->target_flag;
         xfer->app_idx = fs->app_idx;
         xfer->outbound = outbound;
         prte_list_append(&outbound->xfers, &xfer->super);
-        prte_event_set(prte_event_base, &xfer->ev, fd, PRTE_EV_READ, send_chunk, xfer);
-        prte_event_set_priority(&xfer->ev, PRTE_MSG_PRI);
-        xfer->pending = true;
-        PRTE_POST_OBJECT(xfer);
-        prte_event_add(&xfer->ev, 0);
+        PRTE_THREADSHIFT(xfer, prte_event_base, send_chunk, PRTE_MSG_PRI);
         PRTE_RELEASE(item);
     }
     PRTE_DESTRUCT(&fsets);
@@ -719,9 +721,10 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
     return PRTE_SUCCESS;
 }
 
-static void send_chunk(int fd, short argc, void *cbdata)
+static void send_chunk(int xxx, short argc, void *cbdata)
 {
     prte_filem_raw_xfer_t *rev = (prte_filem_raw_xfer_t *) cbdata;
+    int fd = rev->fd;
     unsigned char data[PRTE_FILEM_RAW_CHUNK_MAX];
     int32_t numbytes;
     int rc;
@@ -729,9 +732,6 @@ static void send_chunk(int fd, short argc, void *cbdata)
     prte_grpcomm_signature_t *sig;
 
     PRTE_ACQUIRE_OBJECT(rev);
-
-    /* flag that event has fired */
-    rev->pending = false;
 
     /* read up to the fragment size */
     numbytes = read(fd, data, sizeof(data));
@@ -747,8 +747,9 @@ static void send_chunk(int fd, short argc, void *cbdata)
         }
 
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
-                             "%s filem:raw:read error on file %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rev->file));
+                             "%s filem:raw:read error %s(%d) on file %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             strerror(errno), errno, rev->file));
 
         /* Un-recoverable error. Allow the code to flow as usual in order to
          * to send the zero bytes message up the stream, and then close the
@@ -828,7 +829,7 @@ static void send_chunk(int fd, short argc, void *cbdata)
         /* restart the read event */
         rev->pending = true;
         PRTE_POST_OBJECT(rev);
-        prte_event_add(&rev->ev, 0);
+        prte_event_active(&rev->ev, PRTE_EV_WRITE, 1);
     }
 }
 
@@ -1047,9 +1048,8 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
             }
         }
         free(tmp);
-        prte_event_set(prte_event_base, &incoming->ev, incoming->fd, PRTE_EV_WRITE, write_handler,
-                       incoming);
-        prte_event_set_priority(&incoming->ev, PRTE_MSG_PRI);
+        incoming->pending = true;
+        PRTE_THREADSHIFT(incoming, prte_event_base, write_handler, PRTE_MSG_PRI);
     }
     /* create an output object for this data */
     output = PRTE_NEW(prte_filem_raw_output_t);
@@ -1068,8 +1068,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     if (!incoming->pending) {
         /* add the event */
         incoming->pending = true;
-        PRTE_POST_OBJECT(incoming);
-        prte_event_add(&incoming->ev, 0);
+        prte_event_active(&incoming->ev, PRTE_EV_WRITE, 1);
     }
 
     /* cleanup */
@@ -1197,7 +1196,7 @@ static void write_handler(int fd, short event, void *cbdata)
              */
             sink->pending = true;
             PRTE_POST_OBJECT(sink);
-            prte_event_add(&sink->ev, 0);
+            prte_event_active(&sink->ev, PRTE_EV_WRITE, 1);
             return;
         }
         PRTE_RELEASE(output);
@@ -1206,6 +1205,8 @@ static void write_handler(int fd, short event, void *cbdata)
 
 static void xfer_construct(prte_filem_raw_xfer_t *ptr)
 {
+    memset(&ptr->ev, 0, sizeof(prte_event_t));
+    ptr->fd = -1;
     ptr->outbound = NULL;
     ptr->app_idx = 0;
     ptr->pending = false;
@@ -1227,7 +1228,9 @@ static void xfer_destruct(prte_filem_raw_xfer_t *ptr)
         free(ptr->file);
     }
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_xfer_t, prte_list_item_t, xfer_construct, xfer_destruct);
+PRTE_CLASS_INSTANCE(prte_filem_raw_xfer_t,
+                    prte_list_item_t,
+                    xfer_construct, xfer_destruct);
 
 static void out_construct(prte_filem_raw_outbound_t *ptr)
 {
@@ -1238,14 +1241,11 @@ static void out_construct(prte_filem_raw_outbound_t *ptr)
 }
 static void out_destruct(prte_filem_raw_outbound_t *ptr)
 {
-    prte_list_item_t *item;
-
-    while (NULL != (item = prte_list_remove_first(&ptr->xfers))) {
-        PRTE_RELEASE(item);
-    }
-    PRTE_DESTRUCT(&ptr->xfers);
+    PRTE_LIST_DESTRUCT(&ptr->xfers);
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_outbound_t, prte_list_item_t, out_construct, out_destruct);
+PRTE_CLASS_INSTANCE(prte_filem_raw_outbound_t,
+                    prte_list_item_t,
+                    out_construct, out_destruct);
 
 static void in_construct(prte_filem_raw_incoming_t *ptr)
 {
@@ -1260,8 +1260,6 @@ static void in_construct(prte_filem_raw_incoming_t *ptr)
 }
 static void in_destruct(prte_filem_raw_incoming_t *ptr)
 {
-    prte_list_item_t *item;
-
     if (ptr->pending) {
         prte_event_del(&ptr->ev);
     }
@@ -1278,15 +1276,16 @@ static void in_destruct(prte_filem_raw_incoming_t *ptr)
         free(ptr->fullpath);
     }
     prte_argv_free(ptr->link_pts);
-    while (NULL != (item = prte_list_remove_first(&ptr->outputs))) {
-        PRTE_RELEASE(item);
-    }
-    PRTE_DESTRUCT(&ptr->outputs);
+    PRTE_LIST_DESTRUCT(&ptr->outputs);
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_incoming_t, prte_list_item_t, in_construct, in_destruct);
+PRTE_CLASS_INSTANCE(prte_filem_raw_incoming_t,
+                    prte_list_item_t,
+                    in_construct, in_destruct);
 
 static void output_construct(prte_filem_raw_output_t *ptr)
 {
     ptr->numbytes = 0;
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_output_t, prte_list_item_t, output_construct, NULL);
+PRTE_CLASS_INSTANCE(prte_filem_raw_output_t,
+                    prte_list_item_t,
+                    output_construct, NULL);

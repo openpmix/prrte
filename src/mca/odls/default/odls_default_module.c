@@ -429,7 +429,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         close(cd->opts.p_stdin[0]);
     }
     close(cd->opts.p_stdout[1]);
-    if (!prte_iof_base.redirect_app_stderr_to_stdout) {
+    if (!cd->opts.merge) {
         close(cd->opts.p_stderr[1]);
     }
 

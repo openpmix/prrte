@@ -99,7 +99,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
 
-#include "prte.h"
+#include "include/prte.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/prted/prted.h"
 
@@ -225,7 +225,7 @@ static prte_cmd_line_init_t cmd_line_init[] = {
 int prte(int argc, char *argv[])
 {
     int rc = 1, i, j;
-    char *param, *ptr, *tpath, *fullpath;
+    char *param, *ptr, *tpath, *fullpath, *cptr;
     prte_pmix_lock_t lock;
     prte_list_t apps;
     prte_pmix_app_t *app;
@@ -253,6 +253,8 @@ int prte(int argc, char *argv[])
     prte_schizo_base_module_t *schizo;
     prte_ess_base_signal_t *sig;
     char **targv;
+    char *outdir = NULL;
+    char *outfile = NULL;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
@@ -430,10 +432,10 @@ int prte(int argc, char *argv[])
     if (PRTE_SUCCESS != rc) {
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
+            param = prte_argv_join(pargv, ' ');
+            fprintf(stderr, "\n******* Cmd line: %s\n\n\n", param);
+            free(param);
         }
-        param = prte_argv_join(pargv, ' ');
-        fprintf(stderr, "\n******* Cmd line: %s\n\n\n", param);
-        free(param);
         return rc;
     }
 
@@ -888,19 +890,19 @@ int prte(int argc, char *argv[])
         targv = prte_argv_split(pval->value.data.string, ',');
 
         for (int idx = 0; idx < prte_argv_count(targv); idx++) {
-            if (0 == strcmp(targv[idx], "allocation")) {
+            if (0 == strncasecmp(targv[idx], "allocation", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYALLOC", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "map")) {
+            if (0 == strcasecmp(targv[idx], "map")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "bind")) {
+            if (0 == strncasecmp(targv[idx], "bind", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":REPORT", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "map-devel")) {
+            if (0 == strcasecmp(targv[idx], "map-devel")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDEVEL", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "topo")) {
+            if (0 == strncasecmp(targv[idx], "topo", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYTOPO", PMIX_STRING);
             }
         }
@@ -908,74 +910,108 @@ int prte(int argc, char *argv[])
     }
 
     /* cannot have both files and directory set for output */
-    ptr = NULL;
+    outdir = NULL;
+    outfile = NULL;
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output", 0, 0))) {
         targv = prte_argv_split(pval->value.data.string, ',');
 
         for (int idx = 0; idx < prte_argv_count(targv); idx++) {
-            if (0 == strcmp(targv[idx], "tag")) {
+            /* remove any '=' sign in the directive */
+            if (NULL != (ptr = strchr(targv[idx], '='))) {
+                *ptr = '\0';
+            }
+            if (0 == strncasecmp(targv[idx], "tag", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TAG_OUTPUT, &flag, PMIX_BOOL);
             }
-            if (0 == strcmp(targv[idx], "timestamp")) {
+            if (0 == strncasecmp(targv[idx], "timestamp", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
             }
-            if (0 == strcmp(targv[idx], "xml")) {
+            if (0 == strncasecmp(targv[idx], "xml", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":XMLOUTPUT", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "merge-stderr-to-stdout")) {
+            if (0 == strncasecmp(targv[idx], "merge-stderr-to-stdout", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
             }
-            if (NULL != (ptr = strchr(targv[idx], ':'))) {
+            if (0 == strncasecmp(targv[idx], "directory", strlen(targv[idx]))) {
+                if (NULL != outfile) {
+                    prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                    return PRTE_ERR_FATAL;
+                }
+                if (NULL == ptr) {
+                    prte_show_help("help-prte-rmaps-base.txt",
+                                   "missing-qualifier", true,
+                                   "output", "directory", "directory");
+                    return PRTE_ERR_FATAL;
+                }
                 ++ptr;
-                ptr = strdup(ptr);
+                /* check for qualifiers */
+                if (NULL != (cptr = strchr(ptr, ':'))) {
+                    *cptr = '\0';
+                    ++cptr;
+                    if (0 != strcasecmp(cptr, "nocopy")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+                    }
+                }
+                /* If the given filename isn't an absolute path, then
+                 * convert it to one so the name will be relative to
+                 * the directory where prun was given as that is what
+                 * the user will have seen */
+                if (!prte_path_is_absolute(ptr)) {
+                    char cwd[PRTE_PATH_MAX];
+                    if (NULL == getcwd(cwd, sizeof(cwd))) {
+                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                        goto DONE;
+                    }
+                    outdir = prte_os_path(false, cwd, ptr, NULL);
+                } else {
+                    outdir = strdup(ptr);
+                }
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
+            }
+            if (0 == strncasecmp(targv[idx], "file", strlen(targv[idx]))) {
+                if (NULL != outdir) {
+                    prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                    return PRTE_ERR_FATAL;
+                }
+                if (NULL == ptr) {
+                    prte_show_help("help-prte-rmaps-base.txt",
+                                   "missing-qualifier", true,
+                                   "output", "filename", "filename");
+                    return PRTE_ERR_FATAL;
+                }
+                ++ptr;
+                /* check for qualifiers */
+                if (NULL != (cptr = strchr(ptr, ':'))) {
+                    *cptr = '\0';
+                    ++cptr;
+                    if (0 != strcasecmp(cptr, "nocopy")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+                    }
+                }
+                /* If the given filename isn't an absolute path, then
+                 * convert it to one so the name will be relative to
+                 * the directory where prun was given as that is what
+                 * the user will have seen */
+                if (!prte_path_is_absolute(ptr)) {
+                    char cwd[PRTE_PATH_MAX];
+                    if (NULL == getcwd(cwd, sizeof(cwd))) {
+                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                        goto DONE;
+                    }
+                    outfile = prte_os_path(false, cwd, ptr, NULL);
+                } else {
+                    outfile = strdup(ptr);
+                }
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, outfile, PMIX_STRING);
             }
         }
         prte_argv_free(targv);
     }
-
-    param = NULL;
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output-filename", 0, 0))) {
-        param = pval->value.data.string;
+    if (NULL != outdir) {
+        free(outdir);
     }
-    if (NULL != param && NULL != ptr) {
-        prte_show_help("help-prted.txt", "both-file-and-dir-set", true, param, ptr);
-        return PRTE_ERR_FATAL;
-    } else if (NULL != param) {
-        /* if we were asked to output to files, pass it along. */
-        /* if the given filename isn't an absolute path, then
-         * convert it to one so the name will be relative to
-         * the directory where prun was given as that is what
-         * the user will have seen */
-        if (!prte_path_is_absolute(param)) {
-            char cwd[PRTE_PATH_MAX];
-            if (NULL == getcwd(cwd, sizeof(cwd))) {
-                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                goto DONE;
-            }
-            ptr = prte_os_path(false, cwd, param, NULL);
-        } else {
-            ptr = strdup(param);
-        }
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, ptr, PMIX_STRING);
-        free(ptr);
-    } else if (NULL != ptr) {
-        /* if we were asked to output to a directory, pass it along. */
-        /* If the given filename isn't an absolute path, then
-         * convert it to one so the name will be relative to
-         * the directory where prun was given as that is what
-         * the user will have seen */
-        if (!prte_path_is_absolute(ptr)) {
-            char cwd[PRTE_PATH_MAX];
-            if (NULL == getcwd(cwd, sizeof(cwd))) {
-                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                goto DONE;
-            }
-            param = prte_os_path(false, cwd, ptr, NULL);
-        } else {
-            param = strdup(ptr);
-        }
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
-        free(param);
+    if (NULL != outfile) {
+        free(outfile);
     }
 
     /* check what user wants us to do with stdin */

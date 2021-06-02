@@ -65,7 +65,6 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
 static int detect_proxy(char *argv);
 static void allow_run_as_root(prte_cmd_line_t *cmd_line);
 static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
-static int check_sanity(prte_cmd_line_t *cmd_line);
 
 prte_schizo_base_module_t prte_schizo_ompi_module = {.name = "ompi",
                                                      .define_cli = define_cli,
@@ -75,7 +74,7 @@ prte_schizo_base_module_t prte_schizo_ompi_module = {.name = "ompi",
                                                      .detect_proxy = detect_proxy,
                                                      .allow_run_as_root = allow_run_as_root,
                                                      .job_info = job_info,
-                                                     .check_sanity = check_sanity};
+                                                     .check_sanity = prte_schizo_base_sanity};
 
 static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     /* basic options */
@@ -187,9 +186,13 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
 
     /* output options */
     {'\0', "output", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Comma-delimited list of options that control the output generated."
-     "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir:DIRNAME",
-     PRTE_CMD_LINE_OTYPE_OUTPUT},
+        "Comma-delimited list of options that control how output is generated."
+        "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir=DIRNAME, file=filename."
+        " The dir option redirects output from application processes into DIRNAME/job/rank/std[out,err,diag]."
+        " The file option redirects output from application processes into filename.rank. In both cases, "
+        "the provided name will be converted to an absolute path. Supported qualifiers include NOCOPY"
+        " (do not copy the output to the stdout/err streams).",
+        PRTE_CMD_LINE_OTYPE_OUTPUT},
     /* exit status reporting */
     {'\0', "report-child-jobs-separately", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Return the exit status of the primary job only", PRTE_CMD_LINE_OTYPE_OUTPUT},
@@ -1585,9 +1588,4 @@ static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
             PMIX_ERROR_LOG(rc);
         }
     }
-}
-
-static int check_sanity(prte_cmd_line_t *cmd_line)
-{
-    return PRTE_SUCCESS;
 }

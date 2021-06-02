@@ -348,7 +348,8 @@ static void job_errors(int fd, short args, void *cbdata)
     if (PRTE_JOB_STATE_FAILED_TO_START == jdata->state
         || PRTE_JOB_STATE_NEVER_LAUNCHED == jdata->state
         || PRTE_JOB_STATE_FAILED_TO_LAUNCH == jdata->state
-        || PRTE_JOB_STATE_ALLOC_FAILED == jdata->state || PRTE_JOB_STATE_MAP_FAILED == jdata->state
+        || PRTE_JOB_STATE_ALLOC_FAILED == jdata->state
+        || PRTE_JOB_STATE_MAP_FAILED == jdata->state
         || PRTE_JOB_STATE_CANNOT_LAUNCH == jdata->state) {
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
     }
@@ -517,14 +518,6 @@ keep_going:
             PRTE_ACTIVATE_PROC_STATE(&pptr->name, PRTE_PROC_STATE_IOF_COMPLETE);
         }
         goto cleanup;
-    }
-
-    /* all jobs were spawned by a requestor, so ensure that requestor
-     * has been notified that the spawn completed - otherwise, a quick-failing
-     * job might not generate a spawn response */
-    rc = prte_plm_base_spawn_response(PRTE_SUCCESS, jdata);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
     }
 
     /* ensure we record the failed proc properly so we can report
