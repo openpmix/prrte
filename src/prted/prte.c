@@ -99,7 +99,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
 
-#include "prte.h"
+#include "include/prte.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/prted/prted.h"
 
