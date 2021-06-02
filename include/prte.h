@@ -18,4 +18,9 @@
 
 #include "prte_version.h"
 
+/**
+ * Main body of prte functionality
+ */
+int prte(int argc, char *argv[]);
+
 #endif

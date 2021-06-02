@@ -6,7 +6,7 @@
  *                                                                         *
  ***************************************************************************/
 
-#include "prte.h"
+#include "include/prte.h"
 
 int main(int argc, char *argv[])
 {
