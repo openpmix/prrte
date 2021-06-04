@@ -165,6 +165,10 @@ bool prte_check_host_is_local(const char *name)
 {
     int i;
 
+    if (0 == strcmp(name, prte_process_info.nodename)) {
+        return true;
+    }
+
     for (i = 0; NULL != prte_process_info.aliases[i]; i++) {
         if (0 == strcmp(name, prte_process_info.aliases[i]) ||
             0 == strcmp(name, "localhost") ||
