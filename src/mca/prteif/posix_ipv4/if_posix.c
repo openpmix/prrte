@@ -196,12 +196,6 @@ static int if_posix_open(void)
             continue;
         }
 #endif
-#if 0
-        if (!prte_if_retain_loopback && (ifr->ifr_flags & IFF_LOOPBACK) != 0) {
-            continue;
-        }
-#endif
-
         intf = PRTE_NEW(prte_if_t);
         if (NULL == intf) {
             prte_output(0, "prte_ifinit: unable to allocated %lu bytes\n",

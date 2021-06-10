@@ -193,10 +193,16 @@ int prte_init_util(prte_proc_type_t flags)
         goto error;
     }
 
+    /* Register all MCA Params */
+    if (PRTE_SUCCESS != (ret = prte_register_params())) {
+        error = "prte_register_params";
+        goto error;
+    }
+
     /* initialize if framework */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_prteif_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    ret = prte_mca_base_framework_open(&prte_prteif_base_framework,
+                                       PRTE_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != ret) {
         fprintf(stderr,
                 "prte_prteif_base_open() failed -- process will likely abort (%s:%d, returned %d "
                 "instead of PRTE_SUCCESS)\n",
@@ -270,12 +276,6 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
         goto error;
     }
     prte_process_info.proc_type = flags;
-
-    /* Register all MCA Params */
-    if (PRTE_SUCCESS != (ret = prte_register_params())) {
-        error = "prte_register_params";
-        goto error;
-    }
 
     if (PRTE_SUCCESS != (ret = prte_hwloc_base_register())) {
         error = "prte_hwloc_base_register";
