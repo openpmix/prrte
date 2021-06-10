@@ -266,12 +266,23 @@ int main(int argc, char *argv[])
 
     /* initialize the globals */
     PMIX_DATA_BUFFER_CREATE(bucket);
-
-    /* init the tiny part of PRTE we use */
-    prte_init_util(PRTE_PROC_DAEMON);
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
+
+    /* we always need the prrte and pmix params */
+    ret = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    ret = prte_schizo_base_parse_pmix(pargc, 0, pargv, NULL);
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
+    /* init the tiny part of PRTE we use */
+    prte_init_util(PRTE_PROC_DAEMON);
 
     /* setup the cmd line - this is specific to the proxy */
     prte_cmd_line = PRTE_NEW(prte_cmd_line_t);

@@ -1422,6 +1422,15 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             free(alias);
         }
 
+        if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
+            prte_output(0, "ALIASES FOR NODE %s (%s)", daemon->node->name, nodename);
+            if (NULL != daemon->node->aliases) {
+                for (ni=0; NULL != daemon->node->aliases[ni]; ni++) {
+                    prte_output(0, "\tALIAS: %s", daemon->node->aliases[ni]);
+                }
+            }
+        }
+
         /* unpack the topology signature for that node */
         idx = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &sig, &idx, PMIX_STRING);

@@ -1069,7 +1069,6 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
 {
     char *p1, *p2;
     int i;
-    pmix_status_t rc;
     bool takeus;
     char *param = NULL;
 
@@ -1188,14 +1187,7 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
 #endif
     }
 
-    rc = prte_schizo_base_parse_prte(argc, start, argv, target);
-    if (PRTE_SUCCESS != rc) {
-        return rc;
-    }
-
-    rc = prte_schizo_base_parse_pmix(argc, start, argv, target);
-
-    return rc;
+    return PRTE_SUCCESS;
 }
 
 static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, bool cmdline)

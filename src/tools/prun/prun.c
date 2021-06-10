@@ -365,14 +365,25 @@ int prun(int argc, char *argv[])
         }
     }
 
-    /* init the tiny part of PRTE we use */
-    prte_init_util(PRTE_PROC_TOOL); // just so we pickup any PRTE params from sys/user files
-
     fullpath = prte_find_absolute_path(argv[0]);
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
     gethostname(hostname, sizeof(hostname));
+
+    /* we always need the prrte and pmix params */
+    rc = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    rc = prte_schizo_base_parse_pmix(pargc, 0, pargv, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    /* init the tiny part of PRTE we use */
+    prte_init_util(PRTE_PROC_TOOL); // just so we pickup any PRTE params from sys/user files
 
     /** setup callbacks for abort signals - from this point
      * forward, we need to abort in a manner that allows us
