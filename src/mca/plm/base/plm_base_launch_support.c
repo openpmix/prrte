@@ -1394,14 +1394,20 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         PRTE_FLAG_SET(daemon->node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
         daemon->node->state = PRTE_NODE_STATE_UP;
 
-        /* first, store the nodename itself as an alias. We do
-         * this in case the nodename isn't the same as what we
-         * were given by the allocation. For example, a hostfile
+        /* first, store the nodename itself. in case the nodename isn't
+         * the same as what we were given by the allocation, we replace
+         * the node's name with the returned value and store the allocation
+         * value as an alias. For example, a hostfile
          * might contain an IP address instead of the value returned
          * by gethostname, yet the daemon will have returned the latter
          * and apps may refer to the host by that name
          */
-        prte_argv_append_unique_nosize(&daemon->node->aliases, nodename);
+        if (0 != strcmp(nodename, daemon->node->name)) {
+            prte_argv_append_unique_nosize(&daemon->node->aliases, daemon->node->name);
+            free(daemon->node->name);
+            daemon->node->name = strdup(nodename);
+        }
+
         /* unpack and store the provided aliases */
         idx = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &naliases, &idx, PMIX_UINT8);
