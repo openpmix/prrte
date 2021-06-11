@@ -609,6 +609,8 @@ extern char *prte_signal_string;
 extern char *prte_stacktrace_output_filename;
 extern char *prte_net_private_ipv4;
 extern char *prte_set_max_sys_limits;
+extern char *prte_if_include;
+extern char *prte_if_exclude;
 
 /* Enable/disable ft */
 PRTE_EXPORT extern bool prte_enable_ft;

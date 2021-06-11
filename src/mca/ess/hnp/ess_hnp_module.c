@@ -375,6 +375,15 @@ static int rte_init(int argc, char **argv)
     /* obviously, we have "reported" */
     jdata->num_reported = 1;
 
+    if (0 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+        prte_output(0, "ALIASES FOR %s", node->name);
+        if (NULL != node->aliases) {
+            for (idx=0; NULL != node->aliases[idx]; idx++) {
+                prte_output(0, "\tALIAS: %s", node->aliases[idx]);
+            }
+        }
+    }
+
     /* Now provide a chance for the PLM
      * to perform any module-specific init functions. This
      * needs to occur AFTER the communications are setup
