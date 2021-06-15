@@ -309,11 +309,11 @@ process:
              */
             match = false;
             for (j = 0; j < prte_node_pool->size; j++) {
-                if (NULL
-                    == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, j))) {
+                node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, j);
+                if (NULL == node) {
                     continue;
                 }
-                if (prte_node_match(node, sq->hostname)) {
+                if (0 == strcmp(node->name, sq->hostname)) {
                     match = true;
                     break;
                 }
