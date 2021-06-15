@@ -265,10 +265,11 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
         shortname = NULL;
         if (prte_check_host_is_local(mini_map[i])) {
             ndname = prte_process_info.nodename;
-        } else if (!prte_keep_fqdn_hostnames) {
+        } else {
             ndname = mini_map[i];
             /* compute the non-fqdn version */
-            if (!prte_net_isaddr(ndname)) {
+            if (!prte_keep_fqdn_hostnames &&
+                !prte_net_isaddr(ndname)) {
                 cptr = strchr(ndname, '.');
                 if (NULL != cptr) {
                     *cptr = '\0';
