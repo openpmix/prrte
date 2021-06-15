@@ -97,8 +97,6 @@ void prte_setup_hostname(void)
 
     /* get the nodename */
     gethostname(hostname, sizeof(hostname));
-    /* add the raw name to our list of aliases */
-    prte_argv_append_nosize(&prte_process_info.aliases, hostname);
 
     prte_strip_prefix = NULL;
     (void) prte_mca_base_var_register(

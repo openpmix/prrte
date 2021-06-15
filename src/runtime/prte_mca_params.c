@@ -454,11 +454,10 @@ int prte_register_params(void)
         PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_show_resolved_nodenames);
 
-    prte_do_not_resolve = false;
+    prte_do_not_resolve = true;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "do_not_resolve",
                                       "Do not attempt to resolve hostnames "
-                                      "[always true for managed allocations, "
-                                      "defaults to false otherwise]",
+                                      "[defaults to true]",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_do_not_resolve);
