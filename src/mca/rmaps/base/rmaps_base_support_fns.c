@@ -418,8 +418,7 @@ complete:
      * we do so - can ignore this if we are mapping debugger
      * daemons as they do not count against the allocation */
     if (PRTE_MAPPING_DEBUGGER & PRTE_GET_MAPPING_DIRECTIVE(policy)) {
-        num_slots = prte_list_get_size(
-            allocated_nodes); // tell the mapper there is one slot/node for debuggers
+        num_slots = prte_list_get_size(allocated_nodes); // tell the mapper there is one slot/node for debuggers
     } else {
         PRTE_LIST_FOREACH_SAFE(node, next, allocated_nodes, prte_node_t)
         {
