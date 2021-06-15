@@ -111,7 +111,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     char *tmp = NULL, *tmp2, *tmp3;
     int i, istart;
     prte_node_t *alloc;
-    char *flgs;
+    char *flgs, *aliases;
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
         prte_asprintf(&tmp, "<allocation>\n");
@@ -137,11 +137,21 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
         } else {
             /* build the flags string */
             flgs = prte_ras_base_flag_string(alloc);
-            prte_asprintf(&tmp2, "\t%s: slots=%d max_slots=%d slots_inuse=%d state=%s\n\t%s\n",
+            /* build the aliases string */
+            if (NULL != alloc->aliases) {
+                aliases = prte_argv_join(alloc->aliases, ',');
+            } else {
+                aliases = NULL;
+            }
+            prte_asprintf(&tmp2, "    %s: slots=%d max_slots=%d slots_inuse=%d state=%s\n\t%s\n\taliases: %s\n",
                           (NULL == alloc->name) ? "UNKNOWN" : alloc->name, (int) alloc->slots,
                           (int) alloc->slots_max, (int) alloc->slots_inuse,
-                          prte_node_state_to_str(alloc->state), flgs);
+                          prte_node_state_to_str(alloc->state), flgs,
+                          (NULL == aliases) ? "NONE" : aliases);
             free(flgs);
+            if (NULL != aliases) {
+                free(aliases);
+            }
         }
         if (NULL == tmp) {
             tmp = tmp2;
