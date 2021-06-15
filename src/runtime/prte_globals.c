@@ -326,29 +326,28 @@ prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc)
     return proct->node_rank;
 }
 
-bool prte_node_match(prte_node_t *n1, const char *name)
+prte_node_t* prte_node_match(prte_list_t *nodes, const char *name)
 {
-    int i, m;
+    int m;
     prte_node_t *nptr;
+    char *nm;
 
-    /* start with the simple check */
-    if (0 == strcmp(n1->name, name)) {
-        return true;
+    /* does the name refer to me? */
+    if (prte_check_host_is_local(name)) {
+        nm = prte_process_info.nodename;
+    } else {
+        nm = (char*)name;
     }
 
-    /* do the node and the name both refer to me? */
-    if (prte_check_host_is_local(n1->name) && prte_check_host_is_local(name)) {
-        return true;
+    PRTE_LIST_FOREACH(nptr, nodes, prte_node_t) {
+        /* start with the simple check */
+        if (0 == strcmp(nptr->name, nm)) {
+            return nptr;
+        }
     }
 
-    /* "name" itself might be an alias, so find the node object for this name */
-    for (i = 0; i < prte_node_pool->size; i++) {
-        if (NULL == (nptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i))) {
-            continue;
-        }
-        if (0 == strcmp(nptr->name, name)) {
-            goto complete;
-        }
+    /* see if it is an alias for something already on the list */
+    PRTE_LIST_FOREACH(nptr, nodes, prte_node_t) {
         if (NULL == nptr->aliases) {
             continue;
         }
@@ -356,40 +355,12 @@ bool prte_node_match(prte_node_t *n1, const char *name)
         for (m = 0; NULL != nptr->aliases[m]; m++) {
             if (0 == strcmp(name, nptr->aliases[m])) {
                 /* this is the node! */
-                goto complete;
+                return nptr;
             }
         }
     }
-    /* we didn't find a node for "name", so just
-     * check the aliases for n1 against "name" itself */
-    if (NULL != n1->aliases) {
-        for (i = 0; NULL != n1->aliases[i]; i++) {
-            if (0 == strcmp(name, n1->aliases[i])) {
-                return true;
-            }
-        }
-    }
-    return false;
 
-complete:
-    if (NULL != n1->aliases) {
-        for (i = 0; NULL != n1->aliases[i]; i++) {
-            if (0 == strcmp(n1->aliases[i], name)) {
-                return true;
-            }
-            if (NULL != nptr->aliases) {
-                for (m = 0; NULL != nptr->aliases[m]; m++) {
-                    if (0 == strcmp(nptr->aliases[m], n1->name)) {
-                        return true;
-                    }
-                    if (0 == strcmp(n1->aliases[i], nptr->aliases[m])) {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    return false;
+    return NULL;
 }
 
 bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2)
@@ -398,11 +369,6 @@ bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2)
 
     /* start with the simple check */
     if (0 == strcmp(n1->name, n2->name)) {
-        return true;
-    }
-
-    /* do the node and the name both refer to me? */
-    if (prte_check_host_is_local(n1->name) && prte_check_host_is_local(n2->name)) {
         return true;
     }
 
