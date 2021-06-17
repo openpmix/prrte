@@ -388,10 +388,8 @@ To oversubscribe the nodes you can use the `:OVERSUBSCRIBE` qualifier to
 
 :   will launch processes 0-5 on node `aa`, 6-9 on `bb`, and 10-13 on `cc`.
 
-<!--
-// JJH TODO -- this does not work see https://github.com/openpmix/prrte/issues/770
-
-Limits to oversubscription can also be specified in the hostfile itself:
+Limits to oversubscription can also be specified in the hostfile itself
+with the `max_slots` field:
 ```
 % cat myhostfile
 aa slots=4 max_slots=4
@@ -412,7 +410,7 @@ value defaults to the limit. Now:
 Using the `:NOOVERSUBSCRIBE` qualifier to `--map-by` option can be helpful
 since the PRTE DVM currently does not get "max_slots" values from the
 resource manager.
--->
+
 
 Of course, `--np` can also be used with the `--host` option. For
 example,

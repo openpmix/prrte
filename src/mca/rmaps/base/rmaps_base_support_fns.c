@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2016      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2016-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
@@ -433,7 +433,7 @@ complete:
                 }
             }
             /** check to see if this node is fully used - remove if so */
-            if (0 != node->slots_max && node->slots_inuse > node->slots_max) {
+            if (0 != node->slots_max && node->slots_inuse >= node->slots_max) {
                 PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s Removing node %s: max %d inuse %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name,
