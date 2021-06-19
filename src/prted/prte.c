@@ -944,7 +944,7 @@ int prte(int argc, char *argv[])
                 if (NULL != (cptr = strchr(ptr, ':'))) {
                     *cptr = '\0';
                     ++cptr;
-                    if (0 != strcasecmp(cptr, "nocopy")) {
+                    if (0 == strcasecmp(cptr, "nocopy")) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
                     }
                 }

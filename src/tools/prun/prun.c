@@ -680,6 +680,9 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_URI, pval->value.data.string, PMIX_STRING);
     }
 
+    /* output all IOF */
+    PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
+
     /* convert to array of info */
     PMIX_INFO_LIST_CONVERT(ret, tinfo, &darray);
     iptr = (pmix_info_t *) darray.array;
@@ -792,7 +795,7 @@ int prun(int argc, char *argv[])
                 if (NULL != (cptr = strchr(ptr, ':'))) {
                     *cptr = '\0';
                     ++cptr;
-                    if (0 != strcasecmp(cptr, "nocopy")) {
+                    if (0 == strcasecmp(cptr, "nocopy")) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
                     }
                 }
@@ -828,7 +831,7 @@ int prun(int argc, char *argv[])
                 if (NULL != (cptr = strchr(ptr, ':'))) {
                     *cptr = '\0';
                     ++cptr;
-                    if (0 != strcasecmp(cptr, "nocopy")) {
+                    if (0 == strcasecmp(cptr, "nocopy")) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
                     }
                 }

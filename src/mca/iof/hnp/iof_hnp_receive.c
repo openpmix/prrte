@@ -65,15 +65,16 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
 void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                        prte_rml_tag_t tag, void *cbdata)
 {
-    pmix_proc_t origin, requestor;
+    pmix_proc_t origin;
     unsigned char data[PRTE_IOF_BASE_MSG_MAX];
     prte_iof_tag_t stream;
     int32_t count, numbytes;
-    prte_iof_sink_t *sink, *next;
     int rc;
-    bool exclusive;
     prte_iof_proc_t *proct;
-    prte_iof_request_t *preq;
+    pmix_iof_channel_t pchan;
+    pmix_byte_object_t bo;
+    prte_pmix_lock_t lock;
+    pmix_status_t prc;
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s received IOF msg from proc %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -115,103 +116,6 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                          "%s received IOF cmd for source %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(&origin)));
 
-    /* check to see if a tool has requested something */
-    if (PRTE_IOF_PULL & stream) {
-        /* get name of the process wishing to be the sink */
-        count = 1;
-        rc = PMIx_Data_unpack(NULL, buffer, &requestor, &count, PMIX_PROC);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            goto CLEAN_RETURN;
-        }
-
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                             "%s received pull cmd from remote tool %s for proc %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&requestor),
-                             PRTE_NAME_PRINT(&origin)));
-
-        if (PRTE_IOF_EXCLUSIVE & stream) {
-            exclusive = true;
-        } else {
-            exclusive = false;
-        }
-        /* there is a race condition between when a requestor might pull
-         * a stream and when the procs might be launched, so store the
-         * request so we can check all newly-spawned procs against it
-         * later */
-        preq = PRTE_NEW(prte_iof_request_t);
-        PMIX_XFER_PROCID(&preq->requestor, &requestor);
-        PMIX_XFER_PROCID(&preq->target, &origin);
-        preq->stream = stream;
-        prte_list_append(&prte_iof_base.requests, &preq->super);
-
-        /* do we already have this process in our list? */
-        PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
-        {
-            if (PMIX_CHECK_PROCID(&proct->name, &origin)) {
-                /* a tool is requesting that we send it a copy of the specified stream(s)
-                 * from the specified process(es), so create a sink for it
-                 */
-                if (NULL == proct->subscribers) {
-                    proct->subscribers = PRTE_NEW(prte_list_t);
-                }
-                if (PRTE_IOF_STDOUT & stream) {
-                    PRTE_IOF_SINK_DEFINE(&sink, &proct->name, -1, PRTE_IOF_STDOUT, NULL);
-                    PMIX_XFER_PROCID(&sink->daemon, &requestor);
-                    sink->exclusive = exclusive;
-                    prte_list_append(proct->subscribers, &sink->super);
-                }
-                if (PRTE_IOF_STDERR & stream) {
-                    PRTE_IOF_SINK_DEFINE(&sink, &proct->name, -1, PRTE_IOF_STDERR, NULL);
-                    PMIX_XFER_PROCID(&sink->daemon, &requestor);
-                    sink->exclusive = exclusive;
-                    prte_list_append(proct->subscribers, &sink->super);
-                }
-                if (PRTE_IOF_STDDIAG & stream) {
-                    PRTE_IOF_SINK_DEFINE(&sink, &proct->name, -1, PRTE_IOF_STDDIAG, NULL);
-                    PMIX_XFER_PROCID(&sink->daemon, &requestor);
-                    sink->exclusive = exclusive;
-                    prte_list_append(proct->subscribers, &sink->super);
-                }
-            }
-        }
-        goto CLEAN_RETURN;
-    }
-
-    if (PRTE_IOF_CLOSE & stream) {
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                             "%s received close cmd from remote tool %s for proc %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender),
-                             PRTE_NAME_PRINT(&origin)));
-        /* a tool is requesting that we no longer forward a copy of the
-         * specified stream(s) from the specified process(es) - remove the sink
-         */
-        PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
-        {
-            if (!PMIX_CHECK_PROCID(&proct->name, &origin)) {
-                continue;
-            }
-            PRTE_LIST_FOREACH_SAFE(sink, next, proct->subscribers, prte_iof_sink_t)
-            {
-                /* if the target isn't set, then this sink is for another purpose - ignore it */
-                if (PMIX_NSPACE_INVALID(sink->daemon.nspace)) {
-                    continue;
-                }
-                /* if this sink is the designated one, then remove it from list */
-                if ((stream & sink->tag) && PMIX_CHECK_PROCID(&sink->name, &origin)) {
-                    /* send an ack message to the requestor - this ensures that the RML has
-                     * completed sending anything to that requestor before it exits
-                     */
-                    prte_iof_hnp_send_data_to_endpoint(&sink->daemon, &origin, PRTE_IOF_CLOSE, NULL,
-                                                       0);
-                    prte_list_remove_item(proct->subscribers, &sink->super);
-                    PRTE_RELEASE(sink);
-                }
-            }
-        }
-        goto CLEAN_RETURN;
-    }
-
     /* this must have come from a daemon forwarding output - unpack the data */
     numbytes = PRTE_IOF_BASE_MSG_MAX;
     rc = PMIx_Data_unpack(NULL, buffer, data, &numbytes, PMIX_BYTE);
@@ -238,80 +142,32 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     proct = PRTE_NEW(prte_iof_proc_t);
     PMIX_XFER_PROCID(&proct->name, &origin);
     prte_list_append(&prte_iof_hnp_component.procs, &proct->super);
-    prte_iof_base_check_target(proct);
 
 NSTEP:
-    /* cycle through the endpoints to see if someone else wants a copy */
-    exclusive = false;
-    if (NULL != proct->subscribers) {
-        PRTE_LIST_FOREACH(sink, proct->subscribers, prte_iof_sink_t)
-        {
-            /* if the target isn't set, then this sink is for another purpose - ignore it */
-            if (PMIX_NSPACE_INVALID(sink->daemon.nspace)) {
-                continue;
-            }
-            if ((stream & sink->tag) && PMIX_CHECK_PROCID(&sink->name, &origin)) {
-                /* send the data to the tool */
-                /* don't pass along zero byte blobs */
-                if (0 < numbytes) {
-                    PRTE_OUTPUT_VERBOSE(
-                        (1, prte_iof_base_framework.framework_output,
-                         "%s sending data from proc %s of size %d via PMIx to tool %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&origin),
-                         (int) numbytes, PRTE_NAME_PRINT(&sink->daemon)));
-                    pmix_byte_object_t bo;
-                    pmix_iof_channel_t pchan;
-                    prte_pmix_lock_t lock;
-                    pmix_status_t prc;
-                    pchan = 0;
-                    if (PRTE_IOF_STDIN & stream) {
-                        pchan |= PMIX_FWD_STDIN_CHANNEL;
-                    }
-                    if (PRTE_IOF_STDOUT & stream) {
-                        pchan |= PMIX_FWD_STDOUT_CHANNEL;
-                    }
-                    if (PRTE_IOF_STDERR & stream) {
-                        pchan |= PMIX_FWD_STDERR_CHANNEL;
-                    }
-                    if (PRTE_IOF_STDDIAG & stream) {
-                        pchan |= PMIX_FWD_STDDIAG_CHANNEL;
-                    }
-                    /* setup the byte object */
-                    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-                    bo.bytes = (char *) data;
-                    bo.size = numbytes;
-                    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-                    prc = PMIx_server_IOF_deliver(&origin, pchan, &bo, NULL, 0, lkcbfunc,
-                                                  (void *) &lock);
-                    if (PMIX_SUCCESS != prc) {
-                        PMIX_ERROR_LOG(prc);
-                    } else {
-                        /* wait for completion */
-                        PRTE_PMIX_WAIT_THREAD(&lock);
-                    }
-                    PRTE_PMIX_DESTRUCT_LOCK(&lock);
-                }
-                if (sink->exclusive) {
-                    exclusive = true;
-                }
-            }
-        }
+    pchan = 0;
+    if (PRTE_IOF_STDOUT & stream) {
+        pchan |= PMIX_FWD_STDOUT_CHANNEL;
     }
-    /* if the user doesn't want a copy written to the screen, then we are done */
-    if (!proct->copy) {
-        return;
+    if (PRTE_IOF_STDERR & stream) {
+        pchan |= PMIX_FWD_STDERR_CHANNEL;
     }
-
-    /* output this to our local output unless one of the sinks was exclusive */
-    if (!exclusive) {
-        if (PRTE_IOF_STDOUT & stream) {
-            prte_iof_base_write_output(&origin, stream, data, numbytes,
-                                       prte_iof_base.iof_write_stdout->wev);
-        } else {
-            prte_iof_base_write_output(&origin, stream, data, numbytes,
-                                       prte_iof_base.iof_write_stderr->wev);
-        }
+    if (PRTE_IOF_STDDIAG & stream) {
+        pchan |= PMIX_FWD_STDDIAG_CHANNEL;
     }
+    /* output this thru our PMIx server */
+    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
+    bo.bytes = (char *) data;
+    bo.size = numbytes;
+    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+    prc = PMIx_server_IOF_deliver(&origin, pchan, &bo, NULL, 0, lkcbfunc,
+                                  (void *) &lock);
+    if (PMIX_SUCCESS != prc) {
+        PMIX_ERROR_LOG(prc);
+    } else {
+        /* wait for completion */
+        PRTE_PMIX_WAIT_THREAD(&lock);
+    }
+    PRTE_PMIX_DESTRUCT_LOCK(&lock);
 
 CLEAN_RETURN:
     return;
