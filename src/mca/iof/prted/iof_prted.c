@@ -117,7 +117,6 @@ static int prted_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
 {
     int flags;
     prte_iof_proc_t *proct;
-    int rc;
     prte_job_t *jobdat = NULL;
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
@@ -162,28 +161,21 @@ SETUP:
         PRTE_IOF_READ_EVENT(&proct->revstderr, proct, fd, PRTE_IOF_STDERR,
                             prte_iof_prted_read_handler, false);
     }
-    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
-        proct->merge = true;
-    }
-    if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_OUTPUT_NOCOPY, NULL, PMIX_BOOL)) {
-        proct->copy = false;
-    }
-    /* setup any requested output files */
-    if (PRTE_SUCCESS != (rc = prte_iof_base_setup_output_files(dst_name, jobdat, proct))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
 
     /* if -all- of the readevents for this proc have been defined, then
      * activate them. Otherwise, we can think that the proc is complete
      * because one of the readevents fires -prior- to all of them having
      * been defined!
      */
-    if (NULL != proct->revstdout
-        && (proct->merge || NULL != proct->revstderr)) {
-        PRTE_IOF_READ_ACTIVATE(proct->revstdout);
-        if (!proct->merge) {
+    if (NULL != proct->revstdout &&
+        NULL != proct->revstderr) {
+        if (!proct->revstdout->activated) {
+            PRTE_IOF_READ_ACTIVATE(proct->revstdout);
+            proct->revstdout->activated = true;
+        }
+        if (!proct->revstderr->activated) {
             PRTE_IOF_READ_ACTIVATE(proct->revstderr);
+            proct->revstderr->activated = true;
         }
     }
     return PRTE_SUCCESS;
@@ -263,14 +255,12 @@ static int prted_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag)
             }
             if ((PRTE_IOF_STDOUT & source_tag) || (PRTE_IOF_STDMERGE & source_tag)) {
                 if (NULL != proct->revstdout) {
-                    prte_iof_base_static_dump_output(proct->revstdout);
                     PRTE_RELEASE(proct->revstdout);
                 }
                 proct->revstdout = NULL;
             }
             if (PRTE_IOF_STDERR & source_tag) {
                 if (NULL != proct->revstderr) {
-                    prte_iof_base_static_dump_output(proct->revstderr);
                     PRTE_RELEASE(proct->revstderr);
                 }
                 proct->revstderr = NULL;
@@ -303,22 +293,7 @@ static void prted_complete(const prte_job_t *jdata)
 
 static int finalize(void)
 {
-    prte_iof_proc_t *proct;
-
-    /* cycle thru the procs and ensure all their output was delivered
-     * if they were writing to files */
-    while (
-        NULL
-        != (proct = (prte_iof_proc_t *) prte_list_remove_first(&prte_iof_prted_component.procs))) {
-        if (NULL != proct->revstdout) {
-            prte_iof_base_static_dump_output(proct->revstdout);
-        }
-        if (NULL != proct->revstderr) {
-            prte_iof_base_static_dump_output(proct->revstderr);
-        }
-        PRTE_RELEASE(proct);
-    }
-    PRTE_DESTRUCT(&prte_iof_prted_component.procs);
+    PRTE_LIST_DESTRUCT(&prte_iof_prted_component.procs);
 
     /* Cancel the RML receive */
     prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_PROXY);

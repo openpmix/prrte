@@ -127,32 +127,6 @@
 
 BEGIN_C_DECLS
 
-/* define a macro for requesting a proxy PULL of IO on
- * behalf of a tool that had the HNP spawn a job. First
- * argument is the prte_job_t of the spawned job, second
- * is a pointer to the name of the requesting tool */
-#define PRTE_IOF_PROXY_PULL(a, b)                                            \
-    do {                                                                     \
-        pmix_data_buffer_t *buf;                                             \
-        prte_iof_tag_t tag;                                                  \
-        pmix_proc_t nm;                                                      \
-                                                                             \
-        PMIX_DATA_BUFFER_CREATE(buf);                                        \
-                                                                             \
-        /* setup the tag to pull from HNP */                                 \
-        tag = PRTE_IOF_STDOUTALL | PRTE_IOF_PULL | PRTE_IOF_EXCLUSIVE;       \
-        PMIx_Data_pack(NULL, buf, &tag, 1, PMIX_UINT16);                     \
-        /* pack the name of the source we want to pull */                    \
-        PMIX_LOAD_PROCID(&nm, (a)->nspace, PMIX_RANK_WILDCARD);              \
-        PMIx_Data_pack(NULL, buf, &nm, 1, PMIX_PROC);                        \
-        /* pack the name of the tool */                                      \
-        PMIx_Data_pack(NULL, buf, (b), 1, PMIX_PROC);                        \
-                                                                             \
-        /* send the buffer to the HNP */                                     \
-        prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP, \
-                                prte_rml_send_callback, NULL);               \
-    } while (0);
-
 /* Initialize the selected module */
 typedef int (*prte_iof_base_init_fn_t)(void);
 

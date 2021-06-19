@@ -52,6 +52,7 @@
 #include "src/class/prte_list.h"
 #include "src/event/event-internal.h"
 #include "src/mca/mca.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/util/fd.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -70,14 +71,6 @@ PRTE_EXPORT extern prte_mca_base_framework_t prte_iof_base_framework;
  * Select an available component.
  */
 PRTE_EXPORT int prte_iof_base_select(void);
-
-/* track xon/xoff of processes */
-typedef struct {
-    prte_object_t super;
-    prte_job_t *jdata;
-    prte_bitmap_t xoff;
-} prte_iof_job_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_job_t);
 
 /*
  * Maximum size of single msg
@@ -131,19 +124,8 @@ typedef struct {
     prte_iof_sink_t *stdinev;
     prte_iof_read_event_t *revstdout;
     prte_iof_read_event_t *revstderr;
-    prte_list_t *subscribers;
-    bool copy;
-    bool merge;
 } prte_iof_proc_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_proc_t);
-
-typedef struct {
-    prte_list_item_t super;
-    pmix_proc_t requestor;
-    pmix_proc_t target;
-    uint16_t stream;
-} prte_iof_request_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_request_t);
 
 typedef struct {
     prte_list_item_t super;
@@ -151,15 +133,6 @@ typedef struct {
     int numbytes;
 } prte_iof_write_output_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_write_output_t);
-
-/* the iof globals struct */
-struct prte_iof_base_t {
-    size_t output_limit;
-    prte_iof_sink_t *iof_write_stdout;
-    prte_iof_sink_t *iof_write_stderr;
-    prte_list_t requests;
-};
-typedef struct prte_iof_base_t prte_iof_base_t;
 
 /* Write event macro's */
 
@@ -262,16 +235,13 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
 
 PRTE_EXPORT int prte_iof_base_flush(void);
 
-PRTE_EXPORT extern prte_iof_base_t prte_iof_base;
+PRTE_EXPORT extern int prte_iof_base_output_limit;
 
 /* base functions */
 PRTE_EXPORT int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
                                            const unsigned char *data, int numbytes,
                                            prte_iof_write_event_t *channel);
-PRTE_EXPORT void prte_iof_base_static_dump_output(prte_iof_read_event_t *rev);
 PRTE_EXPORT void prte_iof_base_write_handler(int fd, short event, void *cbdata);
-
-PRTE_EXPORT void prte_iof_base_check_target(prte_iof_proc_t *proct);
 
 END_C_DECLS
 

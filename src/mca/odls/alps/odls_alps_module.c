@@ -456,9 +456,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         close(cd->opts.p_stdin[0]);
     }
     close(cd->opts.p_stdout[1]);
-    if (!cd->opts.merge) {
-        close(cd->opts.p_stderr[1]);
-    }
+    close(cd->opts.p_stderr[1]);
 
     /* Block reading a message from the pipe */
     while (1) {
