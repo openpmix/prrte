@@ -58,18 +58,18 @@ prte_iof_base_module_t prte_iof = {0};
  * Global variables
  */
 
-prte_iof_base_t prte_iof_base = {0};
+int prte_iof_base_output_limit = 0;
 
 static int prte_iof_base_register(prte_mca_base_register_flag_t flags)
 {
     /* check for maximum number of pending output messages */
-    prte_iof_base.output_limit = (size_t) INT_MAX;
+    prte_iof_base_output_limit = (size_t) INT_MAX;
     (void) prte_mca_base_var_register("prte", "iof", "base", "output_limit",
                                       "Maximum backlog of output messages [default: unlimited]",
                                       PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                      &prte_iof_base.output_limit);
+                                      &prte_iof_base_output_limit);
 
     return PRTE_SUCCESS;
 }
@@ -80,16 +80,6 @@ static int prte_iof_base_close(void)
     if (NULL != prte_iof.finalize) {
         prte_iof.finalize();
     }
-
-    if (!PRTE_PROC_IS_DAEMON) {
-        if (NULL != prte_iof_base.iof_write_stdout) {
-            PRTE_RELEASE(prte_iof_base.iof_write_stdout);
-        }
-        if (NULL != prte_iof_base.iof_write_stderr) {
-            PRTE_RELEASE(prte_iof_base.iof_write_stderr);
-        }
-    }
-    PRTE_LIST_DESTRUCT(&prte_iof_base.requests);
     return prte_mca_base_framework_components_close(&prte_iof_base_framework, NULL);
 }
 
@@ -99,60 +89,22 @@ static int prte_iof_base_close(void)
  */
 static int prte_iof_base_open(prte_mca_base_open_flag_t flags)
 {
-    /* daemons do not need to do this as they do not write out stdout/err */
-    if (!PRTE_PROC_IS_DAEMON) {
-        /* setup the stdout event */
-        PRTE_IOF_SINK_DEFINE(&prte_iof_base.iof_write_stdout, PRTE_PROC_MY_NAME, 1, PRTE_IOF_STDOUT,
-                             prte_iof_base_write_handler);
-        /* setup the stderr event */
-        PRTE_IOF_SINK_DEFINE(&prte_iof_base.iof_write_stderr, PRTE_PROC_MY_NAME, 2, PRTE_IOF_STDERR,
-                             prte_iof_base_write_handler);
-
-        /* do NOT set these file descriptors to non-blocking. If we do so,
-         * we set the file descriptor to non-blocking for everyone that has
-         * that file descriptor, which includes everyone else in our shell
-         * pipeline chain.  (See
-         * http://lists.freebsd.org/pipermail/freebsd-hackers/2005-January/009742.html).
-         * This causes things like "mpirun -np 1 big_app | cat" to lose
-         * output, because cat's stdout is then ALSO non-blocking and cat
-         * isn't built to deal with that case (same with almost all other
-         * unix text utils).
-         */
-    }
-    PRTE_CONSTRUCT(&prte_iof_base.requests, prte_list_t);
-
     /* Open up all available components */
     return prte_mca_base_framework_components_open(&prte_iof_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, iof, "PRTE I/O Forwarding", prte_iof_base_register,
+PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, iof, "PRTE I/O Forwarding",
+                                prte_iof_base_register,
                                 prte_iof_base_open, prte_iof_base_close,
                                 prte_iof_base_static_components,
                                 PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 /* class instances */
-static void prte_iof_job_construct(prte_iof_job_t *ptr)
-{
-    ptr->jdata = NULL;
-    PRTE_CONSTRUCT(&ptr->xoff, prte_bitmap_t);
-}
-static void prte_iof_job_destruct(prte_iof_job_t *ptr)
-{
-    if (NULL != ptr->jdata) {
-        PRTE_RELEASE(ptr->jdata);
-    }
-    PRTE_DESTRUCT(&ptr->xoff);
-}
-PRTE_CLASS_INSTANCE(prte_iof_job_t, prte_object_t, prte_iof_job_construct, prte_iof_job_destruct);
-
 static void prte_iof_base_proc_construct(prte_iof_proc_t *ptr)
 {
     ptr->stdinev = NULL;
     ptr->revstdout = NULL;
     ptr->revstderr = NULL;
-    ptr->subscribers = NULL;
-    ptr->copy = true;
-    ptr->merge = false;
 }
 static void prte_iof_base_proc_destruct(prte_iof_proc_t *ptr)
 {
@@ -165,14 +117,10 @@ static void prte_iof_base_proc_destruct(prte_iof_proc_t *ptr)
     if (NULL != ptr->revstderr) {
         PRTE_RELEASE(ptr->revstderr);
     }
-    if (NULL != ptr->subscribers) {
-        PRTE_LIST_RELEASE(ptr->subscribers);
-    }
 }
-PRTE_CLASS_INSTANCE(prte_iof_proc_t, prte_list_item_t, prte_iof_base_proc_construct,
+PRTE_CLASS_INSTANCE(prte_iof_proc_t, prte_list_item_t,
+                    prte_iof_base_proc_construct,
                     prte_iof_base_proc_destruct);
-
-PRTE_CLASS_INSTANCE(prte_iof_request_t, prte_list_item_t, NULL, NULL);
 
 static void prte_iof_base_sink_construct(prte_iof_sink_t *ptr)
 {
@@ -192,7 +140,8 @@ static void prte_iof_base_sink_destruct(prte_iof_sink_t *ptr)
         PRTE_RELEASE(ptr->wev);
     }
 }
-PRTE_CLASS_INSTANCE(prte_iof_sink_t, prte_list_item_t, prte_iof_base_sink_construct,
+PRTE_CLASS_INSTANCE(prte_iof_sink_t, prte_list_item_t,
+                    prte_iof_base_sink_construct,
                     prte_iof_base_sink_destruct);
 
 static void prte_iof_base_read_event_construct(prte_iof_read_event_t *rev)
@@ -229,7 +178,8 @@ static void prte_iof_base_read_event_destruct(prte_iof_read_event_t *rev)
         PRTE_RELEASE(proct);
     }
 }
-PRTE_CLASS_INSTANCE(prte_iof_read_event_t, prte_object_t, prte_iof_base_read_event_construct,
+PRTE_CLASS_INSTANCE(prte_iof_read_event_t, prte_object_t,
+                    prte_iof_base_read_event_construct,
                     prte_iof_base_read_event_destruct);
 
 static void prte_iof_base_write_event_construct(prte_iof_write_event_t *wev)
@@ -257,7 +207,8 @@ static void prte_iof_base_write_event_destruct(prte_iof_write_event_t *wev)
     }
     PRTE_DESTRUCT(&wev->outputs);
 }
-PRTE_CLASS_INSTANCE(prte_iof_write_event_t, prte_list_item_t, prte_iof_base_write_event_construct,
+PRTE_CLASS_INSTANCE(prte_iof_write_event_t, prte_list_item_t,
+                    prte_iof_base_write_event_construct,
                     prte_iof_base_write_event_destruct);
 
 PRTE_CLASS_INSTANCE(prte_iof_write_output_t, prte_list_item_t, NULL, NULL);

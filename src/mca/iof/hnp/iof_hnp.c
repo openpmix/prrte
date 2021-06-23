@@ -112,9 +112,8 @@ static int init(void)
  */
 static int hnp_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int fd)
 {
-    prte_job_t *jdata;
     prte_iof_proc_t *proct;
-    int flags, rc;
+    int flags;
 
     /* don't do this if the dst vpid is invalid or the fd is negative! */
     if (PMIX_RANK_INVALID == dst_name->rank || fd < 0) {
@@ -155,11 +154,7 @@ SETUP:
         flags |= O_NONBLOCK;
         fcntl(fd, F_SETFL, flags);
     }
-    /* get the local jobdata for this proc */
-    if (NULL == (jdata = prte_get_job_data_object(proct->name.nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
-    }
+
     /* define a read event and activate it */
     if (src_tag & PRTE_IOF_STDOUT) {
         PRTE_IOF_READ_EVENT(&proct->revstdout, proct, fd, PRTE_IOF_STDOUT,
@@ -168,31 +163,19 @@ SETUP:
         PRTE_IOF_READ_EVENT(&proct->revstderr, proct, fd, PRTE_IOF_STDERR,
                             prte_iof_hnp_read_local_handler, false);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
-        proct->merge = true;
-    }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY, NULL, PMIX_BOOL)) {
-        proct->copy = false;
-    }
-    /* setup any requested output files */
-    if (PRTE_SUCCESS != (rc = prte_iof_base_setup_output_files(dst_name, jdata, proct))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
 
     /* if -all- of the readevents for this proc have been defined, then
      * activate them. Otherwise, we can think that the proc is complete
      * because one of the readevents fires -prior- to all of them having
      * been defined!
      */
-    if (NULL != proct->revstdout
-        && (proct->merge || NULL != proct->revstderr)) {
-        prte_iof_base_check_target(proct);
+    if (NULL != proct->revstdout &&
+        NULL != proct->revstderr) {
         if (!proct->revstdout->activated) {
             PRTE_IOF_READ_ACTIVATE(proct->revstdout);
             proct->revstdout->activated = true;
         }
-        if (!proct->merge && !proct->revstderr->activated) {
+        if (!proct->revstderr->activated) {
             PRTE_IOF_READ_ACTIVATE(proct->revstderr);
             proct->revstderr->activated = true;
         }
@@ -363,14 +346,12 @@ static int hnp_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag)
             }
             if ((PRTE_IOF_STDOUT & source_tag) || (PRTE_IOF_STDMERGE & source_tag)) {
                 if (NULL != proct->revstdout) {
-                    prte_iof_base_static_dump_output(proct->revstdout);
                     PRTE_RELEASE(proct->revstdout);
                 }
                 proct->revstdout = NULL;
             }
             if (PRTE_IOF_STDERR & source_tag) {
                 if (NULL != proct->revstderr) {
-                    prte_iof_base_static_dump_output(proct->revstderr);
                     PRTE_RELEASE(proct->revstderr);
                 }
                 proct->revstderr = NULL;
@@ -396,79 +377,20 @@ static void hnp_complete(const prte_job_t *jdata)
         if (PMIX_CHECK_NSPACE(jdata->nspace, proct->name.nspace)) {
             prte_list_remove_item(&prte_iof_hnp_component.procs, &proct->super);
             if (NULL != proct->revstdout) {
-                prte_iof_base_static_dump_output(proct->revstdout);
                 PRTE_RELEASE(proct->revstdout);
             }
             proct->revstdout = NULL;
             if (NULL != proct->revstderr) {
-                prte_iof_base_static_dump_output(proct->revstderr);
                 PRTE_RELEASE(proct->revstderr);
             }
             proct->revstderr = NULL;
             PRTE_RELEASE(proct);
         }
     }
-    /* although there may be output from other jobs in these sinks,
-     * be sure to flush it all out to ensure we get anything from
-     * this job */
-    prte_iof_base_write_handler(0, 0, prte_iof_base.iof_write_stdout);
-    prte_iof_base_write_handler(0, 0, prte_iof_base.iof_write_stderr);
 }
 
 static int finalize(void)
 {
-    prte_iof_write_event_t *wev;
-    prte_iof_proc_t *proct;
-    bool dump;
-    prte_iof_write_output_t *output;
-    int num_written;
-
-    /* check if anything is still trying to be written out */
-    wev = prte_iof_base.iof_write_stdout->wev;
-    if (!prte_list_is_empty(&wev->outputs)) {
-        dump = false;
-        /* make one last attempt to write this out */
-        while (NULL
-               != (output = (prte_iof_write_output_t *) prte_list_remove_first(&wev->outputs))) {
-            if (!dump) {
-                num_written = write(wev->fd, output->data, output->numbytes);
-                if (num_written < output->numbytes) {
-                    /* don't retry - just cleanout the list and dump it */
-                    dump = true;
-                }
-            }
-            PRTE_RELEASE(output);
-        }
-    }
-    wev = prte_iof_base.iof_write_stderr->wev;
-    if (!prte_list_is_empty(&wev->outputs)) {
-        dump = false;
-        /* make one last attempt to write this out */
-        while (NULL
-               != (output = (prte_iof_write_output_t *) prte_list_remove_first(&wev->outputs))) {
-            if (!dump) {
-                num_written = write(wev->fd, output->data, output->numbytes);
-                if (num_written < output->numbytes) {
-                    /* don't retry - just cleanout the list and dump it */
-                    dump = true;
-                }
-            }
-            PRTE_RELEASE(output);
-        }
-    }
-
-    /* cycle thru the procs and ensure all their output was delivered
-     * if they were writing to files */
-    while (NULL
-           != (proct = (prte_iof_proc_t *) prte_list_remove_first(&prte_iof_hnp_component.procs))) {
-        if (NULL != proct->revstdout) {
-            prte_iof_base_static_dump_output(proct->revstdout);
-        }
-        if (NULL != proct->revstderr) {
-            prte_iof_base_static_dump_output(proct->revstderr);
-        }
-        PRTE_RELEASE(proct);
-    }
     PRTE_DESTRUCT(&prte_iof_hnp_component.procs);
     return PRTE_SUCCESS;
 }
@@ -587,46 +509,35 @@ static int hnp_output(const pmix_proc_t *peer, prte_iof_tag_t source_tag, const 
     pmix_status_t rc;
     int ret;
 
-    if (PRTE_PROC_IS_MASTER) {
-        pchan = 0;
-        if (PRTE_IOF_STDIN & source_tag) {
-            pchan |= PMIX_FWD_STDIN_CHANNEL;
-        }
-        if (PRTE_IOF_STDOUT & source_tag) {
-            pchan |= PMIX_FWD_STDOUT_CHANNEL;
-        }
-        if (PRTE_IOF_STDERR & source_tag) {
-            pchan |= PMIX_FWD_STDERR_CHANNEL;
-        }
-        if (PRTE_IOF_STDDIAG & source_tag) {
-            pchan |= PMIX_FWD_STDDIAG_CHANNEL;
-        }
-        /* setup the byte object */
-        PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-        if (NULL != msg) {
-            bo.bytes = (char *) msg;
-            bo.size = strlen(msg) + 1;
-        }
-        PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        rc = PMIx_server_IOF_deliver(peer, pchan, &bo, NULL, 0, lkcbfunc, (void *) &lock);
-        if (PMIX_SUCCESS != rc) {
-            ret = prte_pmix_convert_status(rc);
-        } else {
-            /* wait for completion */
-            PRTE_PMIX_WAIT_THREAD(&lock);
-            ret = lock.status;
-        }
-        PRTE_PMIX_DESTRUCT_LOCK(&lock);
-        return ret;
-    } else {
-        /* output this to our local output */
-        if (PRTE_IOF_STDOUT & source_tag) {
-            prte_iof_base_write_output(peer, source_tag, (const unsigned char *) msg, strlen(msg),
-                                       prte_iof_base.iof_write_stdout->wev);
-        } else {
-            prte_iof_base_write_output(peer, source_tag, (const unsigned char *) msg, strlen(msg),
-                                       prte_iof_base.iof_write_stderr->wev);
-        }
+    prte_output(0, "HNPOUTPUT");
+    pchan = 0;
+    if (PRTE_IOF_STDIN & source_tag) {
+        pchan |= PMIX_FWD_STDIN_CHANNEL;
     }
-    return PRTE_SUCCESS;
+    if (PRTE_IOF_STDOUT & source_tag) {
+        pchan |= PMIX_FWD_STDOUT_CHANNEL;
+    }
+    if (PRTE_IOF_STDERR & source_tag) {
+        pchan |= PMIX_FWD_STDERR_CHANNEL;
+    }
+    if (PRTE_IOF_STDDIAG & source_tag) {
+        pchan |= PMIX_FWD_STDDIAG_CHANNEL;
+    }
+    /* setup the byte object */
+    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
+    if (NULL != msg) {
+        bo.bytes = (char *) msg;
+        bo.size = strlen(msg) + 1;
+    }
+    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+    rc = PMIx_server_IOF_deliver(peer, pchan, &bo, NULL, 0, lkcbfunc, (void *) &lock);
+    if (PMIX_SUCCESS != rc) {
+        ret = prte_pmix_convert_status(rc);
+    } else {
+        /* wait for completion */
+        PRTE_PMIX_WAIT_THREAD(&lock);
+        ret = lock.status;
+    }
+    PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    return ret;
 }
