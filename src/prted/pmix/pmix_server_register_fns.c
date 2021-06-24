@@ -355,6 +355,55 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     free(tmp);
     prte_list_append(info, &kv->super);
 
+    /* check for output directives */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, NULL, PMIX_BOOL)) {
+       kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL)) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+    tmp = NULL;
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_TO_FILE, (void **) &tmp, PMIX_STRING)
+        && NULL != tmp) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_OUTPUT_TO_FILE, tmp, PMIX_STRING);
+        prte_list_append(info, &kv->super);
+        free(tmp);
+    }
+    tmp = NULL;
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_TO_DIRECTORY, (void **) &tmp, PMIX_STRING)
+        && NULL != tmp) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_OUTPUT_TO_DIRECTORY, tmp, PMIX_STRING);
+        prte_list_append(info, &kv->super);
+        free(tmp);
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY, NULL, PMIX_BOOL)) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+    /* if we are a non-persistent HNP, then write the output locally */
+    if (PRTE_PROC_IS_MASTER && !prte_persistent) {
+       kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+
     /* for each app in the job, create an app-array */
     for (n = 0; n < jdata->apps->size; n++) {
         if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n))) {

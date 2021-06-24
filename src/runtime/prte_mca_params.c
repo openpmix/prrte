@@ -40,10 +40,10 @@
 #include "src/util/argv.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
-#include "src/util/prte_environ.h"
-
-#include "src/mca/errmgr/errmgr.h"
 #include "src/util/proc_info.h"
+#include "src/util/prte_environ.h"
+#include "src/util/show_help.h"
+#include "src/mca/errmgr/errmgr.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
@@ -60,6 +60,8 @@ static char *prte_jobfam_session_dir = NULL;
 char *prte_signal_string = NULL;
 char *prte_stacktrace_output_filename = NULL;
 char *prte_net_private_ipv4 = NULL;
+char *prte_if_include = NULL;
+char *prte_if_exclude = NULL;
 char *prte_set_max_sys_limits = NULL;
 int prte_pmix_verbose_output = 0;
 
@@ -165,6 +167,44 @@ int prte_register_params(void)
         PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ, &prte_net_private_ipv4);
     if (0 > ret) {
         return ret;
+    }
+
+    prte_if_include = NULL;
+    ret = prte_mca_base_var_register("prte", "prte", NULL, "if_include",
+                                     "Comma-delimited list of devices and/or CIDR notation of TCP networks to use for PRTE "
+                                    "bootstrap communication (e.g., \"eth0,192.168.0.0/16\").  Mutually exclusive with "
+                                     "prte_if_exclude.",
+                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+                                     PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_if_include);
+    (void) prte_mca_base_var_register_synonym(ret, "prte", "oob", "tcp", "include",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
+                                              | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+    (void) prte_mca_base_var_register_synonym(ret, "prte", "oob", "tcp", "if_include",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
+                                              | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+
+    prte_if_exclude = NULL;
+    ret = prte_mca_base_var_register("prte", "prte", NULL, "if_exclude",
+                                     "Comma-delimited list of devices and/or CIDR notation of TCP networks to NOT use for PRTE "
+                                     "bootstrap communication -- all devices not matching these specifications will be used "
+                                     "(e.g., \"eth0,192.168.0.0/16\").  If set to a non-default value, it is mutually exclusive "
+                                        "with prte_if_include.",
+                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+                                     PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_if_exclude);
+    (void) prte_mca_base_var_register_synonym(ret, "prte", "oob", "tcp", "exclude",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
+                                              | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+    (void) prte_mca_base_var_register_synonym(ret, "prte", "oob", "tcp", "if_exclude",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
+                                              | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+
+    /* if_include and if_exclude need to be mutually exclusive */
+    if (NULL != prte_if_include && NULL != prte_if_exclude) {
+        /* Return ERR_NOT_AVAILABLE so that a warning message about
+         "open" failing is not printed */
+        prte_show_help("help-oob-tcp.txt", "include-exclude", true,
+                       prte_if_include, prte_if_exclude);
+        return PRTE_ERR_NOT_AVAILABLE;
     }
 
     prte_set_max_sys_limits = NULL;
@@ -414,11 +454,10 @@ int prte_register_params(void)
         PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_show_resolved_nodenames);
 
-    prte_do_not_resolve = false;
+    prte_do_not_resolve = true;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "do_not_resolve",
                                       "Do not attempt to resolve hostnames "
-                                      "[always true for managed allocations, "
-                                      "defaults to false otherwise]",
+                                      "[defaults to true]",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_do_not_resolve);

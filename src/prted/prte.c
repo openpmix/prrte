@@ -258,30 +258,26 @@ int prte(int argc, char *argv[])
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
-
-    /* because we have to use the schizo framework and init our hostname
-     * prior to parsing the incoming argv for cmd line options, do a hacky
-     * search to support passing of impacted options (e.g., verbosity for schizo) */
-    for (i = 1; NULL != argv[i]; i++) {
-        if (0 == strcmp(argv[i], "--prtemca") || 0 == strcmp(argv[i], "--mca")) {
-            if (0 == strncmp(argv[i + 1], "schizo", 6) ||
-                0 == strcmp(argv[i + 1], "prte_keep_fqdn_hostnames") ||
-                0 == strcmp(argv[i + 1], "prte_strip_prefix")) {
-                prte_asprintf(&param, "PRTE_MCA_%s", argv[i + 1]);
-                prte_setenv(param, argv[i + 2], true, &environ);
-                free(param);
-                i += 2;
-            }
-        }
-    }
-
-    /* init the tiny part of PRTE we use */
-    prte_init_util(PRTE_PROC_MASTER);
-
     fullpath = prte_find_absolute_path(argv[0]);
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
+
+    /* because we have to use the schizo framework and init our hostname
+     * prior to parsing the incoming argv for cmd line options, do a hacky
+     * search to support passing of impacted options (e.g., verbosity for schizo) */
+    rc = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    rc = prte_schizo_base_parse_pmix(pargc, 0, pargv, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    /* init the tiny part of PRTE we use */
+    prte_init_util(PRTE_PROC_MASTER);
 
     /** setup callbacks for abort signals - from this point
      * forward, we need to abort in a manner that allows us
@@ -948,7 +944,7 @@ int prte(int argc, char *argv[])
                 if (NULL != (cptr = strchr(ptr, ':'))) {
                     *cptr = '\0';
                     ++cptr;
-                    if (0 != strcasecmp(cptr, "nocopy")) {
+                    if (0 == strcasecmp(cptr, "nocopy")) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
                     }
                 }

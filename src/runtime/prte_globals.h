@@ -483,7 +483,7 @@ PRTE_EXPORT char *prte_get_proc_hostname(const pmix_proc_t *proc);
 PRTE_EXPORT prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc);
 
 /* check to see if two nodes match */
-PRTE_EXPORT bool prte_node_match(prte_node_t *n1, const char *name);
+PRTE_EXPORT prte_node_t* prte_node_match(prte_list_t *nodes, const char *name);
 PRTE_EXPORT bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2);
 
 /* global variables used by RTE - instanced in prte_globals.c */
@@ -609,6 +609,8 @@ extern char *prte_signal_string;
 extern char *prte_stacktrace_output_filename;
 extern char *prte_net_private_ipv4;
 extern char *prte_set_max_sys_limits;
+extern char *prte_if_include;
+extern char *prte_if_exclude;
 
 /* Enable/disable ft */
 PRTE_EXPORT extern bool prte_enable_ft;

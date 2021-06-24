@@ -154,17 +154,6 @@ static int tcp_component_open(void)
     prte_oob_tcp_component.ipv6ports = NULL;
     prte_oob_tcp_component.if_masks = NULL;
 
-    /* if_include and if_exclude need to be mutually exclusive */
-    if (PRTE_SUCCESS
-        != prte_mca_base_var_check_exclusive(
-            "prte", prte_oob_tcp_component.super.oob_base.mca_type_name,
-            prte_oob_tcp_component.super.oob_base.mca_component_name, "if_include",
-            prte_oob_tcp_component.super.oob_base.mca_type_name,
-            prte_oob_tcp_component.super.oob_base.mca_component_name, "if_exclude")) {
-        /* Return ERR_NOT_AVAILABLE so that a warning message about
-           "open" failing is not printed */
-        return PRTE_ERR_NOT_AVAILABLE;
-    }
     PRTE_CONSTRUCT(&prte_oob_tcp_component.local_ifs, prte_list_t);
     return PRTE_SUCCESS;
 }
@@ -195,7 +184,6 @@ static int tcp_component_close(void)
     if (NULL != prte_oob_tcp_component.if_masks) {
         prte_argv_free(prte_oob_tcp_component.if_masks);
     }
-
     return PRTE_SUCCESS;
 }
 static char *static_port_string;
@@ -211,7 +199,6 @@ static char *dyn_port_string6;
 static int tcp_component_register(void)
 {
     prte_mca_base_component_t *component = &prte_oob_tcp_component.super.oob_base;
-    int var_id;
 
     /* register oob module parameters */
     prte_oob_tcp_component.peer_limit = -1;
@@ -241,39 +228,6 @@ static int tcp_component_register(void)
         PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
         PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.tcp_rcvbuf);
 
-    prte_oob_tcp_component.if_include = NULL;
-    var_id = prte_mca_base_component_var_register(
-        component, "if_include",
-        "Comma-delimited list of devices and/or CIDR notation of TCP networks to use for PRTE "
-        "bootstrap communication (e.g., \"eth0,192.168.0.0/16\").  Mutually exclusive with "
-        "oob_tcp_if_exclude.",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
-        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.if_include);
-    (void) prte_mca_base_var_register_synonym(var_id, "prte", "oob", "tcp", "include",
-                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
-                                                  | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
-
-    prte_oob_tcp_component.if_exclude = NULL;
-    var_id = prte_mca_base_component_var_register(
-        component, "if_exclude",
-        "Comma-delimited list of devices and/or CIDR notation of TCP networks to NOT use for PRTE "
-        "bootstrap communication -- all devices not matching these specifications will be used "
-        "(e.g., \"eth0,192.168.0.0/16\").  If set to a non-default value, it is mutually exclusive "
-        "with oob_tcp_if_include.",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
-        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.if_exclude);
-    (void) prte_mca_base_var_register_synonym(var_id, "prte", "oob", "tcp", "exclude",
-                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
-                                                  | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
-
-    /* if_include and if_exclude need to be mutually exclusive */
-    if (NULL != prte_oob_tcp_component.if_include && NULL != prte_oob_tcp_component.if_exclude) {
-        /* Return ERR_NOT_AVAILABLE so that a warning message about
-           "open" failing is not printed */
-        prte_show_help("help-oob-tcp.txt", "include-exclude", true,
-                       prte_oob_tcp_component.if_include, prte_oob_tcp_component.if_exclude);
-        return PRTE_ERR_NOT_AVAILABLE;
-    }
 
     static_port_string = NULL;
     (void) prte_mca_base_component_var_register(component, "static_ipv4_ports",
@@ -446,37 +400,18 @@ static int tcp_component_register(void)
     return PRTE_SUCCESS;
 }
 
-static char **split_and_resolve(char **orig_str, char *name);
-
 static int component_available(void)
 {
     prte_if_t *copied_interface, *selected_interface;
-    bool including = false, excluding = false;
     struct sockaddr_storage my_ss;
     char name[PRTE_IF_NAMESIZE];
-    char **interfaces = NULL;
     /* Larger than necessary, used for copying mask */
     char string[50];
     int kindex;
-    int i, rc;
+    int i;
 
     prte_output_verbose(5, prte_oob_base_framework.framework_output,
                         "oob:tcp: component_available called");
-
-    /* if interface include was given, construct a list
-     * of those interfaces which match the specifications - remember,
-     * the includes could be given as named interfaces, IP addrs, or
-     * subnet+mask
-     */
-    if (NULL != prte_oob_tcp_component.if_include) {
-        interfaces = split_and_resolve(&prte_oob_tcp_component.if_include, "include");
-        including = true;
-        excluding = false;
-    } else if (NULL != prte_oob_tcp_component.if_exclude) {
-        interfaces = split_and_resolve(&prte_oob_tcp_component.if_exclude, "exclude");
-        including = false;
-        excluding = true;
-    }
 
     /* look at all available interfaces */
     PRTE_LIST_FOREACH(selected_interface, &prte_if_list, prte_if_t)
@@ -485,69 +420,9 @@ static int component_available(void)
         kindex = selected_interface->if_kernel_index;
         memcpy((struct sockaddr *) &my_ss, &selected_interface->if_addr,
                MIN(sizeof(struct sockaddr_storage), sizeof(selected_interface->if_addr)));
-        /* ignore non-ip4/6 interfaces */
-        if (AF_INET != my_ss.ss_family
-#if PRTE_ENABLE_IPV6
-            && AF_INET6 != my_ss.ss_family
-#endif
-        ) {
-            continue;
-        }
-        prte_output_verbose(10, prte_oob_base_framework.framework_output,
-                            "WORKING INTERFACE %d KERNEL INDEX %d FAMILY: %s", i, kindex,
-                            (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-
-        /* ignore any virtual interfaces */
-        if (0 == strncmp(selected_interface->if_name, "vir", 3)) {
-            continue;
-        }
-
-        /* handle include/exclude directives */
-        if (NULL != interfaces) {
-            /* check for match */
-            rc = prte_ifmatches(kindex, interfaces);
-            /* if one of the network specifications isn't parseable, then
-             * error out as we can't do what was requested
-             */
-            if (PRTE_ERR_NETWORK_NOT_PARSEABLE == rc) {
-                prte_show_help("help-oob-tcp.txt", "not-parseable", true);
-                prte_argv_free(interfaces);
-                return PRTE_ERR_BAD_PARAM;
-            }
-            /* if we are including, then ignore this if not present */
-            if (including) {
-                if (PRTE_SUCCESS != rc) {
-                    prte_output_verbose(
-                        20, prte_oob_base_framework.framework_output,
-                        "%s oob:tcp:init rejecting interface %s (not in include list)",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), selected_interface->if_name);
-                    continue;
-                }
-            } else {
-                /* we are excluding, so ignore if present */
-                if (PRTE_SUCCESS == rc) {
-                    prte_output_verbose(20, prte_oob_base_framework.framework_output,
-                                        "%s oob:tcp:init rejecting interface %s (in exclude list)",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                        selected_interface->if_name);
-                    continue;
-                }
-            }
-        } else {
-            /* if no specific interfaces were provided, we ignore the loopback
-             * interface unless nothing else is available
-             */
-            if (1 < prte_ifcount() && prte_ifisloopback(i)) {
-                prte_output_verbose(20, prte_oob_base_framework.framework_output,
-                                    "%s oob:tcp:init rejecting loopback interface %s",
-                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                    selected_interface->if_name);
-                continue;
-            }
-        }
 
         /* Refs ticket #3019
-         * it would probably be worthwhile to print out a warning if OMPI detects multiple
+         * it would probably be worthwhile to print out a warning if PRRTE detects multiple
          * IP interfaces that are "up" on the same subnet (because that's a Bad Idea). Note
          * that we should only check for this after applying the relevant include/exclude
          * list MCA params. If we detect redundant ports, we can also automatically ignore
@@ -578,10 +453,10 @@ static int component_available(void)
                                 "%s oob:tcp:init ignoring %s from out list of connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 prte_net_get_hostname((struct sockaddr *) &my_ss));
+            continue;
         }
         copied_interface = PRTE_NEW(prte_if_t);
         if (NULL == copied_interface) {
-            prte_argv_free(interfaces);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
         prte_string_copy(copied_interface->if_name, selected_interface->if_name, sizeof(name));
@@ -606,23 +481,11 @@ static int component_available(void)
         prte_list_append(&prte_oob_tcp_component.local_ifs, &(copied_interface->super));
     }
 
-    /* cleanup */
-    if (NULL != interfaces) {
-        prte_argv_free(interfaces);
-    }
-
     if (0 == prte_argv_count(prte_oob_tcp_component.ipv4conns)
 #if PRTE_ENABLE_IPV6
         && 0 == prte_argv_count(prte_oob_tcp_component.ipv6conns)
 #endif
     ) {
-        if (including) {
-            prte_show_help("help-oob-tcp.txt", "no-included-found", true,
-                           prte_oob_tcp_component.if_include);
-        } else if (excluding) {
-            prte_show_help("help-oob-tcp.txt", "excluded-all", true,
-                           prte_oob_tcp_component.if_exclude);
-        }
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
@@ -1152,101 +1015,6 @@ void prte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata)
     PRTE_RELEASE(pop);
 }
 
-/*
- * Go through a list of argv; if there are any subnet specifications
- * (a.b.c.d/e), resolve them to an interface name (Currently only
- * supporting IPv4).  If unresolvable, warn and remove.
- */
-static char **split_and_resolve(char **orig_str, char *name)
-{
-    int i, ret, save, if_index;
-    char **argv, *str, *tmp;
-    char if_name[PRTE_IF_NAMESIZE];
-    struct sockaddr_storage argv_inaddr, if_inaddr;
-    uint32_t argv_prefix;
-
-    /* Sanity check */
-    if (NULL == orig_str || NULL == *orig_str) {
-        return NULL;
-    }
-
-    argv = prte_argv_split(*orig_str, ',');
-    if (NULL == argv) {
-        return NULL;
-    }
-    for (save = i = 0; NULL != argv[i]; ++i) {
-        if (isalpha(argv[i][0])) {
-            argv[save++] = argv[i];
-            continue;
-        }
-
-        /* Found a subnet notation.  Convert it to an IP
-           address/netmask.  Get the prefix first. */
-        argv_prefix = 0;
-        tmp = strdup(argv[i]);
-        str = strchr(argv[i], '/');
-        if (NULL == str) {
-            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
-                           prte_process_info.nodename, tmp,
-                           "Invalid specification (missing \"/\")");
-            free(argv[i]);
-            free(tmp);
-            continue;
-        }
-        *str = '\0';
-        argv_prefix = atoi(str + 1);
-
-        /* Now convert the IPv4 address */
-        ((struct sockaddr *) &argv_inaddr)->sa_family = AF_INET;
-        ret = inet_pton(AF_INET, argv[i], &((struct sockaddr_in *) &argv_inaddr)->sin_addr);
-        free(argv[i]);
-
-        if (1 != ret) {
-            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
-                           prte_process_info.nodename, tmp,
-                           "Invalid specification (inet_pton() failed)");
-            free(tmp);
-            continue;
-        }
-        prte_output_verbose(20, prte_oob_base_framework.framework_output,
-                            "%s oob:tcp: Searching for %s address+prefix: %s / %u",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), name,
-                            prte_net_get_hostname((struct sockaddr *) &argv_inaddr), argv_prefix);
-
-        /* Go through all interfaces and see if we can find a match */
-        for (if_index = prte_ifbegin(); if_index >= 0; if_index = prte_ifnext(if_index)) {
-            prte_ifindextoaddr(if_index, (struct sockaddr *) &if_inaddr, sizeof(if_inaddr));
-            if (prte_net_samenetwork((struct sockaddr *) &argv_inaddr,
-                                     (struct sockaddr *) &if_inaddr, argv_prefix)) {
-                break;
-            }
-        }
-        /* If we didn't find a match, keep trying */
-        if (if_index < 0) {
-            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
-                           prte_process_info.nodename, tmp,
-                           "Did not find interface matching this subnet");
-            free(tmp);
-            continue;
-        }
-
-        /* We found a match; get the name and replace it in the
-           argv */
-        prte_ifindextoname(if_index, if_name, sizeof(if_name));
-        prte_output_verbose(20, prte_oob_base_framework.framework_output,
-                            "%s oob:tcp: Found match: %s (%s)", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            prte_net_get_hostname((struct sockaddr *) &if_inaddr), if_name);
-        argv[save++] = strdup(if_name);
-        free(tmp);
-    }
-
-    /* The list may have been compressed if there were invalid
-       entries, so ensure we end it with a NULL entry */
-    argv[save] = NULL;
-    free(*orig_str);
-    *orig_str = prte_argv_join(argv, ',');
-    return argv;
-}
 
 /* OOB TCP Class instances */
 

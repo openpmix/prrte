@@ -346,7 +346,6 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
     pmix_rank_t *vptr;
     int i, rc;
     char *serial_number;
-    pmix_proc_t requestor, *rptr;
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -364,27 +363,6 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
 
     /* convenience */
     jdata = caddy->jdata;
-
-    /* If this job is being started by me, then there is nothing
-     * further we need to do as any user directives (e.g., to tie
-     * off IO to /dev/null) will have been included in the launch
-     * message and the IOF knows how to handle any default situation.
-     * However, if this is a proxy spawn request, then the spawner
-     * might be a tool that wants IO forwarded to it. If that's the
-     * situation, then the job object will contain an attribute
-     * indicating that request */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FWDIO_TO_TOOL, NULL, PMIX_BOOL)) {
-        /* send a message to our IOF containing the requested pull */
-        rptr = &requestor;
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &rptr,
-                               PMIX_PROC)) {
-            PRTE_IOF_PROXY_PULL(jdata, rptr);
-        } else {
-            PRTE_IOF_PROXY_PULL(jdata, &jdata->originator);
-        }
-        /* the tool will PUSH its stdin, so nothing we need to do here
-         * about stdin */
-    }
 
     /* if coprocessors were detected, now is the time to
      * identify who is attached to what host - this info
@@ -1394,14 +1372,20 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         PRTE_FLAG_SET(daemon->node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
         daemon->node->state = PRTE_NODE_STATE_UP;
 
-        /* first, store the nodename itself as an alias. We do
-         * this in case the nodename isn't the same as what we
-         * were given by the allocation. For example, a hostfile
+        /* first, store the nodename itself. in case the nodename isn't
+         * the same as what we were given by the allocation, we replace
+         * the node's name with the returned value and store the allocation
+         * value as an alias. For example, a hostfile
          * might contain an IP address instead of the value returned
          * by gethostname, yet the daemon will have returned the latter
          * and apps may refer to the host by that name
          */
-        prte_argv_append_unique_nosize(&daemon->node->aliases, nodename);
+        if (0 != strcmp(nodename, daemon->node->name)) {
+            prte_argv_append_unique_nosize(&daemon->node->aliases, daemon->node->name);
+            free(daemon->node->name);
+            daemon->node->name = strdup(nodename);
+        }
+
         /* unpack and store the provided aliases */
         idx = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &naliases, &idx, PMIX_UINT8);
@@ -1420,6 +1404,15 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             }
             prte_argv_append_unique_nosize(&daemon->node->aliases, alias);
             free(alias);
+        }
+
+        if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
+            prte_output(0, "ALIASES FOR NODE %s (%s)", daemon->node->name, nodename);
+            if (NULL != daemon->node->aliases) {
+                for (ni=0; NULL != daemon->node->aliases[ni]; ni++) {
+                    prte_output(0, "\tALIAS: %s", daemon->node->aliases[ni]);
+                }
+            }
         }
 
         /* unpack the topology signature for that node */

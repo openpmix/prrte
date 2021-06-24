@@ -97,8 +97,6 @@ void prte_setup_hostname(void)
 
     /* get the nodename */
     gethostname(hostname, sizeof(hostname));
-    /* add the raw name to our list of aliases */
-    prte_argv_append_nosize(&prte_process_info.aliases, hostname);
 
     prte_strip_prefix = NULL;
     (void) prte_mca_base_var_register(
@@ -165,10 +163,14 @@ bool prte_check_host_is_local(const char *name)
 {
     int i;
 
+    if (0 == strcmp(name, prte_process_info.nodename) ||
+        0 == strcmp(name, "localhost") ||
+        0 == strcmp(name, "127.0.0.1")) {
+        return true;
+    }
+
     for (i = 0; NULL != prte_process_info.aliases[i]; i++) {
-        if (0 == strcmp(name, prte_process_info.aliases[i]) ||
-            0 == strcmp(name, "localhost") ||
-            0 == strcmp(name, "127.0.0.1")) {
+        if (0 == strcmp(name, prte_process_info.aliases[i])) {
             return true;
         }
     }

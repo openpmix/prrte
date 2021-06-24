@@ -411,19 +411,11 @@ static int define_cli(prte_cmd_line_t *cli)
 
 static int parse_cli(int argc, int start, char **argv, char ***target)
 {
-    pmix_status_t rc;
-
     prte_output_verbose(1, prte_schizo_base_framework.framework_output, "%s schizo:prte: parse_cli",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    rc = prte_schizo_base_parse_prte(argc, start, argv, target);
-    if (PRTE_SUCCESS != rc) {
-        return rc;
-    }
-
-    rc = prte_schizo_base_parse_pmix(argc, start, argv, target);
-
-    return rc;
+    /* we already did this in the tool */
+    return PRTE_SUCCESS;
 }
 
 static int convert_deprecated_cli(char *option, char ***argv, int i)

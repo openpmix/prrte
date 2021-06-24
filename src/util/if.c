@@ -65,6 +65,7 @@
 
 #include "constants.h"
 #include "src/class/prte_list.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/argv.h"
 #include "src/util/if.h"
 #include "src/util/net.h"

@@ -365,14 +365,25 @@ int prun(int argc, char *argv[])
         }
     }
 
-    /* init the tiny part of PRTE we use */
-    prte_init_util(PRTE_PROC_TOOL); // just so we pickup any PRTE params from sys/user files
-
     fullpath = prte_find_absolute_path(argv[0]);
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
     gethostname(hostname, sizeof(hostname));
+
+    /* we always need the prrte and pmix params */
+    rc = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    rc = prte_schizo_base_parse_pmix(pargc, 0, pargv, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    /* init the tiny part of PRTE we use */
+    prte_init_util(PRTE_PROC_TOOL); // just so we pickup any PRTE params from sys/user files
 
     /** setup callbacks for abort signals - from this point
      * forward, we need to abort in a manner that allows us
@@ -669,6 +680,9 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_URI, pval->value.data.string, PMIX_STRING);
     }
 
+    /* output all IOF */
+    PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
+
     /* convert to array of info */
     PMIX_INFO_LIST_CONVERT(ret, tinfo, &darray);
     iptr = (pmix_info_t *) darray.array;
@@ -781,7 +795,7 @@ int prun(int argc, char *argv[])
                 if (NULL != (cptr = strchr(ptr, ':'))) {
                     *cptr = '\0';
                     ++cptr;
-                    if (0 != strcasecmp(cptr, "nocopy")) {
+                    if (0 == strcasecmp(cptr, "nocopy")) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
                     }
                 }
@@ -817,7 +831,7 @@ int prun(int argc, char *argv[])
                 if (NULL != (cptr = strchr(ptr, ':'))) {
                     *cptr = '\0';
                     ++cptr;
-                    if (0 != strcasecmp(cptr, "nocopy")) {
+                    if (0 == strcasecmp(cptr, "nocopy")) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
                     }
                 }

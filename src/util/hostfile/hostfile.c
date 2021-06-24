@@ -102,18 +102,6 @@ static char *hostfile_parse_string(void)
     return strdup(prte_util_hostfile_value.sval);
 }
 
-static prte_node_t *hostfile_lookup(prte_list_t *nodes, const char *name)
-{
-    prte_node_t *node;
-
-    PRTE_LIST_FOREACH(node, nodes, prte_node_t) {
-        if (prte_node_match(node, name)) {
-            return node;
-        }
-    }
-    return NULL;
-}
-
 static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exclude, bool keep_all)
 {
     int rc;
@@ -185,7 +173,8 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
 
             /* Do we need to make a new node object?  First check to see
                if it's already in the exclude list */
-            if (NULL == (node = hostfile_lookup(exclude, node_name))) {
+            node = prte_node_match(exclude, node_name);
+            if (NULL == node) {
                 node = PRTE_NEW(prte_node_t);
                 if (prte_keep_fqdn_hostnames || NULL == alias) {
                     node->name = strdup(node_name);
@@ -228,7 +217,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
                              keep_all ? "TRUE" : "FALSE"));
 
         /* Do we need to make a new node object? */
-        if (keep_all || NULL == (node = hostfile_lookup(updates, node_name))) {
+        if (keep_all || NULL == (node = prte_node_match(updates, node_name))) {
             node = PRTE_NEW(prte_node_t);
             if (prte_keep_fqdn_hostnames || NULL == alias) {
                 node->name = strdup(node_name);
@@ -328,7 +317,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         }
 
         /* Do we need to make a new node object? */
-        if (NULL == (node = hostfile_lookup(updates, node_name))) {
+        if (NULL == (node = prte_node_match(updates, node_name))) {
             node = PRTE_NEW(prte_node_t);
             node->name = node_name;
             node->slots = 1;
