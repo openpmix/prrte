@@ -103,22 +103,21 @@ static void stdio_callback(size_t iofhdlr, pmix_iof_channel_t channel, pmix_proc
 }
 
 /* This is an event notification function that we explicitly request
- * be called when the PMIX_EVENT_JOB_END notification is issued.
+ * be called when the PMIX_ERR_LOST_CONNECTION notification is issued.
  * We could catch it in the general event notification function and test
- * the status to see if it was "job terminated", but it often is simpler
+ * the status to see if it was "lost connection", but it often is simpler
  * to declare a use-specific notification callback point. In this case,
  * we are asking to know whenever a job terminates, and we will then
  * know we can exit */
-static void release_fn(size_t evhdlr_registration_id, pmix_status_t status,
-                       const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
-                       pmix_info_t results[], size_t nresults,
-                       pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+static void launcher_done(size_t evhdlr_registration_id, pmix_status_t status,
+                          const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                          pmix_info_t results[], size_t nresults,
+                          pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     myrel_t *lock;
     bool found;
     int exit_code;
     size_t n;
-    pmix_proc_t *affected = NULL;
 
     printf("%s called as callback for event=%s\n", __FUNCTION__, PMIx_Error_string(status));
     /* Find our return object */
@@ -132,8 +131,6 @@ static void release_fn(size_t evhdlr_registration_id, pmix_status_t status,
         } else if (0 == strncmp(info[n].key, PMIX_EXIT_CODE, PMIX_MAX_KEYLEN)) {
             exit_code = info[n].value.data.integer;
             found = true;
-        } else if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
-            affected = info[n].value.data.proc;
         }
     }
     /* If the lock object wasn't returned, then that is an error */
@@ -146,8 +143,7 @@ static void release_fn(size_t evhdlr_registration_id, pmix_status_t status,
         return;
     }
 
-    printf("DEBUGGER NOTIFIED THAT JOB %s TERMINATED - AFFECTED %s\n", lock->nspace,
-           (NULL == affected) ? "NULL" : affected->nspace);
+    printf("DEBUGGER NOTIFIED THAT JOB %s TERMINATED\n", lock->nspace);
     if (found) {
         lock->exit_code = exit_code;
         lock->exit_code_given = true;
@@ -214,12 +210,6 @@ static void iof_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbd
     iof_registered = 1;
     lock->status = status;
     DEBUG_WAKEUP_THREAD(lock);
-}
-
-static void iof_dereg_callbk(pmix_status_t status, void *cbdata)
-{
-    printf("%s called as result of de-registering I/O forwarding\n", 
-           __FUNCTION__);
 }
 
 int parse_tool_options(int argc, char **argv)
@@ -313,8 +303,6 @@ int main(int argc, char **argv)
     if (PMIX_SUCCESS != (rc = attach_to_running_job(nspace))) {
         fprintf(stderr, "Failed to attach to nspace %s: error code %d\n", nspace, rc);
     }
-    rc = PMIx_IOF_deregister(iof_handler_id, NULL, 0, iof_dereg_callbk, NULL);
-    printf("PMIx_IOF_deregister completed with status %s\n", PMIx_Error_string(rc));
     PMIx_tool_finalize();
     if (NULL != iof_data) {
         printf("Forwarded stdio data:\n%s", iof_data);
@@ -327,10 +315,10 @@ static int attach_to_running_job(char *nspace)
 {
     void *dirs;
     pmix_status_t rc;
-    pmix_proc_t daemon_proc, target_proc;
+    pmix_proc_t daemon_proc, target_proc, launcher_proc;
     pmix_info_t *info;
     pmix_app_t *app;
-    pmix_status_t codes[] = {PMIX_EVENT_JOB_END, PMIX_ERR_LOST_CONNECTION};
+    pmix_status_t code = PMIX_ERR_LOST_CONNECTION;
     size_t ninfo;
     int n;
     mylock_t mylock, iof_lock;
@@ -436,17 +424,18 @@ static int attach_to_running_job(char *nspace)
     DEBUG_CONSTRUCT_LOCK(&myrel.lock);
     myrel.nspace = strdup(dspace);
 
+    PMIX_LOAD_PROCID(&launcher_proc, nspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LIST_START(dirs);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
-    /* Only call me back when this specific job terminates */
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_AFFECTED_PROC, &daemon_proc, PMIX_PROC);
+    /* Only call me back when the launcher process we attached to terminates */
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_AFFECTED_PROC, &launcher_proc, PMIX_PROC);
 
     PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
     PMIX_INFO_LIST_RELEASE(dirs);
     info = darray.array;
     ninfo = darray.size;
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(codes, 2, info, 2, release_fn, evhandler_reg_callbk,
+    PMIx_Register_event_handler(&code, 1, info, 2, launcher_done, evhandler_reg_callbk,
                                 (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     PMIX_DATA_ARRAY_DESTRUCT(&darray);

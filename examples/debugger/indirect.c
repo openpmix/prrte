@@ -60,8 +60,8 @@ static void notification_fn(size_t evhdlr_registration_id, pmix_status_t status,
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
     }
-    ilactive = false;
     printf("\tCOMPLETE\n");
+sleep(2);
 }
 
 /* this is the event notification function we pass down below
@@ -73,6 +73,7 @@ static void terminate_fn(size_t evhdlr_registration_id, pmix_status_t status,
                          pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     printf("%s called with status %s\n", __FUNCTION__, PMIx_Error_string(status));
+
     /* this example doesn't do anything further */
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
@@ -135,7 +136,7 @@ int main(int argc, char **argv)
     int timeout;
     size_t n;
     char cwd[1024];
-    pmix_status_t code = PMIX_EVENT_JOB_END;
+    pmix_status_t code = PMIX_ERR_LOST_CONNECTION;
     mylock_t mylock;
     pid_t pid;
     char *launchers[] = {"prun", "mpirun", "mpiexec", "prterun", NULL};
@@ -171,9 +172,6 @@ int main(int argc, char **argv)
 
     pid = getpid();
 
-    info = NULL;
-    ninfo = 0;
-
     /* do not connect to anyone */
     PMIX_INFO_LIST_START(dirs);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
@@ -205,9 +203,8 @@ int main(int argc, char **argv)
     printf("DEBUGGER URI: %s\n", myuri);
 
     /* register an event handler to pickup when the IL
-     * we spawned dies */
+     * we spawned dies, which is signalled by PMIX_ERR_LOST_CONNECTION */
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    code = PMIX_ERR_LOST_CONNECTION;
     PMIX_INFO_CREATE(info, 1);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_HDLR_NAME, "LOST-CONNECTION", PMIX_STRING);
     PMIx_Register_event_handler(&code, 1, info, 1, terminate_fn, evhandler_reg_callbk,
@@ -325,7 +322,7 @@ int main(int argc, char **argv)
     PMIX_INFO_LIST_RELEASE(dirs);
     info = darray.array;
     ninfo = darray.size;
-    PMIx_Register_event_handler(&code, 1, info, 2, spawn_cbfunc, evhandler_reg_callbk,
+    PMIx_Register_event_handler(&code, 1, info, ninfo, spawn_cbfunc, evhandler_reg_callbk,
                                 (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);

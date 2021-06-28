@@ -232,8 +232,13 @@ int main(int argc, char **argv)
 
     /* Register our default event handler */
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(NULL, 0, NULL, 0, notification_fn, evhandler_reg_callbk,
+    ninfo = 1;
+    PMIX_INFO_CREATE(info, ninfo);
+    /* Set name for this handler */
+    PMIX_INFO_LOAD(&info[0], PMIX_EVENT_HDLR_NAME, "DEFAULT-HANDLER", PMIX_STRING);
+    PMIx_Register_event_handler(NULL, 0, info, ninfo, notification_fn, evhandler_reg_callbk,
                                 (void *) &mylock);
+    PMIX_INFO_FREE(info, ninfo);
     DEBUG_WAIT_THREAD(&mylock);
     if (PMIX_SUCCESS != mylock.status) {
         rc = mylock.status;
@@ -328,6 +333,8 @@ int main(int argc, char **argv)
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
     /* Only call me back when this specific job terminates */
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
+    /* Set name for this handler */
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_HDLR_NAME, "ENDRUN-HANDLER", PMIX_STRING);
     PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
     PMIX_INFO_LIST_RELEASE(dirs);
     ninfo = darray.size;
@@ -463,15 +470,8 @@ done:
     /* Call PMIx_tool_finalize to shut down the PMIx runtime */
     printf("Debugger daemon ns %s rank %d pid %lu: Finalizing\n", myproc.nspace, myproc.rank,
            (unsigned long) pid);
-    if (PMIX_SUCCESS != (rc = PMIx_tool_finalize())) {
-        fprintf(stderr, "Debugger daemon ns %s rank %d:PMIx_Finalize failed: %s\n", myproc.nspace,
-                myproc.rank, PMIx_Error_string(rc));
-    } else {
-        printf("Debugger daemon ns %s rank %d pid %lu:PMIx_Finalize successfully completed\n",
-               myproc.nspace, myproc.rank, (unsigned long) pid);
-    }
     fclose(stdout);
     fclose(stderr);
     sleep(1);
-    return (0);
+    return PMIx_tool_finalize();
 }
