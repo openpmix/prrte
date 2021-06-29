@@ -343,9 +343,6 @@ int prte(int argc, char *argv[])
             break;
         }
     }
-    if (NULL == ptr) {
-        ptr = fullpath;
-    }
 
     /* detect if we are running as a proxy and select the active
      * schizo module for this tool */

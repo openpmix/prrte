@@ -1477,68 +1477,36 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
     return PRTE_SUCCESS;
 }
 
-static int detect_proxy(char *cmdpath)
+static int detect_proxy(char *personalities)
 {
     char *evar;
-    char *inipath = NULL;
 
     prte_output_verbose(2, prte_schizo_base_framework.framework_output,
-                        "%s[%s]: detect proxy with %s (%s)", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        __FILE__, cmdpath, prte_tool_basename);
+                        "%s[%s]: detect proxy with %s (%s)",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__,
+                        (NULL == personalities) ? "NULL" : personalities,
+                        prte_tool_basename);
 
-    if (NULL == cmdpath) {
+    /* if we were told the proxy, then use it */
+    if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy"))) {
+        if (0 == strcmp(evar, "ompi")) {
+            return 100;
+        } else {
+            return 0;
+        }
+    }
+
+    if (NULL == personalities) {
         return 0;
     }
-    /* if this isn't a full path, then it is a list
-     * of personalities we need to check */
-    if (!prte_path_is_absolute(cmdpath)) {
-        /* if it contains "ompi", then we are available */
-        if (NULL != strstr(cmdpath, "ompi")) {
-            return 100;
-        }
-        return 0;
+
+    /* this is a list of personalities we need to check -
+     * if it contains "ompi", then we are available */
+    if (NULL != strstr(personalities, "ompi")) {
+        return 100;
     }
 
-    /* look for the OMPIHOME envar to tell us where OMPI
-     * was installed */
-    evar = getenv("OMPIHOME");
-    if (NULL != evar) {
-        inipath = prte_os_path(false, evar, "ompi.ini", NULL);
-        if (prte_schizo_base_check_ini(cmdpath, inipath)) {
-            free(inipath);
-            return 100;
-        }
-        free(inipath);
-
-        inipath = prte_os_path(false, evar, "open-mpi.ini", NULL);
-        if (prte_schizo_base_check_ini(cmdpath, inipath)) {
-            free(inipath);
-            return 100;
-        }
-        free(inipath);
-
-        /* if the executable is in the OMPIHOME path, then
-         * it belongs to us - however, we exclude explicit
-         * calls to "prte" as that is intended to start
-         * the DVM */
-        if (NULL != strstr(cmdpath, evar) && 0 != strcmp(prte_tool_basename, "prte")) {
-            return 100;
-        }
-    }
-
-    /* we may not have an ini file, or perhaps they don't
-     * have OMPIHOME set - but it still could be an MPI
-     * proxy, so let's check */
-    /* if the basename of the cmd was "mpirun" or "mpiexec",
-     * we default to us */
-    if (prte_schizo_base.test_proxy_launch
-        || 0 == strcmp(prte_tool_basename, "mpirun")
-        || 0 == strcmp(prte_tool_basename, "mpiexec")
-        || 0 == strcmp(prte_tool_basename, "oshrun")) {
-        return prte_schizo_ompi_component.priority;
-    }
-
-    /* if none of those were true, then it cannot be us */
+    /* if neither of those were true, then it cannot be us */
     return 0;
 }
 
