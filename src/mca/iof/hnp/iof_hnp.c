@@ -509,7 +509,6 @@ static int hnp_output(const pmix_proc_t *peer, prte_iof_tag_t source_tag, const 
     pmix_status_t rc;
     int ret;
 
-    prte_output(0, "HNPOUTPUT");
     pchan = 0;
     if (PRTE_IOF_STDIN & source_tag) {
         pchan |= PMIX_FWD_STDIN_CHANNEL;
