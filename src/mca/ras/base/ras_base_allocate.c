@@ -540,13 +540,17 @@ DISPLAY:
 next_state:
     /* are we to report this event? */
     if (prte_report_events) {
-        if (PMIX_SUCCESS
-            != (ret = PMIx_Notify_event(PMIX_NOTIFY_ALLOC_COMPLETE, NULL, PMIX_GLOBAL, NULL, 0,
-                                        NULL, NULL))) {
+        pmix_info_t info;
+        PMIX_INFO_LOAD(&info, "prte.notify.donotloop", NULL, PMIX_BOOL);
+
+        ret = PMIx_Notify_event(PMIX_NOTIFY_ALLOC_COMPLETE, NULL, PMIX_GLOBAL,
+                                &info, 1, NULL, NULL);
+        if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
             PMIX_ERROR_LOG(ret);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
         }
+        PMIX_INFO_DESTRUCT(&info);
     }
 
     /* set total slots alloc */

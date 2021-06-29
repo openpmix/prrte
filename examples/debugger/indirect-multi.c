@@ -78,13 +78,26 @@ static void terminate_fn(size_t evhdlr_registration_id, pmix_status_t status,
                          pmix_info_t results[], size_t nresults,
                          pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
-    printf("%s called with status %s\n", __FUNCTION__, PMIx_Error_string(status));
+    printf("[%d]%s called with status %s\n", getpid(), __FUNCTION__, PMIx_Error_string(status));
     /* this example doesn't do anything further */
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
     }
     ilactive = false;
 }
+static void dbgr_complete_fn(size_t evhdlr_registration_id, pmix_status_t status,
+                         const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                         pmix_info_t results[], size_t nresults,
+                         pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+{
+    printf("[%d]%s called with status %s\n", getpid(), __FUNCTION__, PMIx_Error_string(status));
+    /* this example doesn't do anything further */
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+    ilactive = false;
+}
+
 
 /* event handler registration is done asynchronously because it
  * may involve the PMIx server registering with the host RM for
@@ -178,7 +191,7 @@ int parse_tool_options(int argc, char **argv)
     return i;
 }
 
-static pmix_status_t spawn_daemons()
+static pmix_status_t spawn_daemons(char **dbgrs)
 {
     void *dirs;
     pmix_info_t *info;
@@ -241,6 +254,7 @@ static pmix_status_t spawn_daemons()
         fprintf(stderr, "Debugger daemons failed to launch with error: %s\n",
                 PMIx_Error_string(rc));
     }
+    *dbgrs = strdup(dbnspace);
     return rc;
 }
 
@@ -332,12 +346,13 @@ int main(int argc, char **argv)
     pmix_status_t rc;
     int i, launcher_idx, icount;
     size_t n;
-    pmix_status_t code = PMIX_EVENT_JOB_END;
+    pmix_status_t code;
     bool found;
     pid_t pid;
     mylock_t mylock;
     pmix_proc_t proc;
     pmix_data_array_t darray;
+    char *dbgrs;
 
     /* need to provide args */
     if (2 > argc) {
@@ -507,7 +522,27 @@ int main(int argc, char **argv)
     printf("Application has launched: %s\n", (char *) appnspace);
 
     /* setup the debugger */
-    rc = spawn_daemons();
+    dbgrs = NULL;
+    rc = spawn_daemons(&dbgrs);
+    printf("Debugger nspace: %s\n", dbgrs);
+
+    /* wait for the debuggers to terminate */
+    printf("Registering handler for debugger termination\n");
+    DEBUG_CONSTRUCT_LOCK(&mylock);
+    code = PMIX_EVENT_JOB_END;
+    PMIX_INFO_LIST_START(dirs);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_HDLR_NAME, "DEBUGGGER-COMPLETE", PMIX_STRING);
+    PMIX_LOAD_PROCID(&proc, dbgrs, PMIX_RANK_WILDCARD);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
+    PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
+    PMIX_INFO_LIST_RELEASE(dirs);
+    info = (pmix_info_t*)darray.array;
+    ninfo = darray.size;
+    PMIx_Register_event_handler(&code, 1, info, ninfo, dbgr_complete_fn, evhandler_reg_callbk,
+                                (void *) &mylock);
+    DEBUG_WAIT_THREAD(&mylock);
+    DEBUG_DESTRUCT_LOCK(&mylock);
+    PMIX_DATA_ARRAY_DESTRUCT(&darray);
 
     /* wait for the IL to terminate */
     printf("Waiting for IL to terminate\n");

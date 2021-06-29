@@ -87,9 +87,7 @@ BEGIN_C_DECLS
 /* For FileM RSH Component */
 #define PRTE_RML_TAG_FILEM_RSH 23
 
-/* For SnapC Framework */
-#define PRTE_RML_TAG_SNAPC      24
-#define PRTE_RML_TAG_SNAPC_FULL 25
+#define PRTE_RML_TAG_JOBID_RESP      24
 
 /* For tools */
 #define PRTE_RML_TAG_TOOL 26

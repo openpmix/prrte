@@ -270,8 +270,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_APPEND_ENVAR";
         case PRTE_APP_ADD_ENVAR:
             return "PRTE_APP_ADD_ENVAR";
-        case PRTE_APP_DEBUGGER_DAEMON:
-            return "PRTE_APP_DEBUGGER_DAEMON";
         case PRTE_APP_PSET_NAME:
             return "PRTE_APP_PSET_NAME";
 

@@ -324,8 +324,6 @@ PRTE_EXPORT extern pmix_status_t pmix_server_group_fn(pmix_group_operation_t op,
                                                       const pmix_info_t directives[], size_t ndirs,
                                                       pmix_info_cbfunc_t cbfunc, void *cbdata);
 
-PRTE_EXPORT void prte_pmix_server_tool_conn_complete(prte_job_t *jdata, pmix_server_req_t *req);
-
 /* declare the RML recv functions for responses */
 PRTE_EXPORT extern void pmix_server_launch_resp(int status, pmix_proc_t *sender,
                                                 pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
@@ -336,6 +334,10 @@ PRTE_EXPORT extern void pmix_server_keyval_client(int status, pmix_proc_t *sende
                                                   void *cbdata);
 
 PRTE_EXPORT extern void pmix_server_notify(int status, pmix_proc_t *sender,
+                                           pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
+                                           void *cbdata);
+
+PRTE_EXPORT extern void pmix_server_jobid_return(int status, pmix_proc_t *sender,
                                            pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
                                            void *cbdata);
 

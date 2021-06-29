@@ -621,6 +621,7 @@ static int rte_finalize(void)
 
 static void rte_abort(int status, bool report)
 {
+    prte_output(0, "ABORT");
     /* do NOT do a normal finalize as this will very likely
      * hang the process. We are aborting due to an abnormal condition
      * that precludes normal cleanup

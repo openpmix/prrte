@@ -89,8 +89,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_job_map_t);
 /* directives given */
 #define PRTE_MAPPING_LOCAL_GIVEN 0x2000
 #define PRTE_MAPPING_GIVEN       0x4000
-/* mapping a debugger job */
-#define PRTE_MAPPING_DEBUGGER                     0x8000
+/* macros to set/get/unset mapping directive */
 #define PRTE_SET_MAPPING_DIRECTIVE(target, pol)   (target) |= (pol)
 #define PRTE_UNSET_MAPPING_DIRECTIVE(target, pol) (target) &= ~(pol)
 #define PRTE_GET_MAPPING_DIRECTIVE(pol)           ((pol) &0xff00)

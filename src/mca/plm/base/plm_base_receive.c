@@ -130,7 +130,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     bool running;
     int i, room;
     char **env;
-    char *prefix_dir;
+    char *prefix_dir, *tmp;
 
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:receive processing msg", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -154,14 +154,12 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
             PMIX_ERROR_LOG(rc);
             goto CLEANUP;
         }
-        /* get the new jobid */
+        /* the new nspace is our base nspace with an "@N" extension */
+        prte_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
+        PMIX_LOAD_NSPACE(job, tmp);
+        free(tmp);
+        prte_plm_globals.next_jobid++;
         PRTE_CONSTRUCT(&jb, prte_job_t);
-        rc = prte_plm_base_create_jobid(&jb);
-        if (PRTE_SUCCESS == rc) {
-            PMIX_LOAD_NSPACE(job, jb.nspace);
-        }
-        // The 'jb' object is now stored as reference in the prte_job_data array
-        // by the prte_plm_base_create_jobid function.
 
         /* setup the response */
         PMIX_DATA_BUFFER_CREATE(answer);
@@ -185,7 +183,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         }
 
         /* send the response back to the sender */
-        if (0 > (ret = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_LAUNCH_RESP,
+        if (0 > (ret = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_JOBID_RESP,
                                                prte_rml_send_callback, NULL))) {
             PRTE_ERROR_LOG(ret);
             PRTE_RELEASE(answer);
@@ -211,8 +209,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         /* get the name of the actual spawn parent - i.e., the proc that actually
          * requested the spawn */
         nptr = &name;
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr,
-                                PMIX_PROC)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY,
+                                (void **) &nptr, PMIX_PROC)) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             rc = PRTE_ERR_NOT_FOUND;
             goto ANSWER_LAUNCH;
