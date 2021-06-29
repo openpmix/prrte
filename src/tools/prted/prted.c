@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
     /* init the tiny part of PRTE we use */
     prte_init_util(PRTE_PROC_DAEMON);
 
-    /* setup the cmd line - this is specific to the proxy */
+    /* setup the base cmd line */
     prte_cmd_line = PRTE_NEW(prte_cmd_line_t);
     ret = prte_cmd_line_add(prte_cmd_line, prted_cmd_line_opts);
     if (PRTE_SUCCESS != ret) {
@@ -321,6 +321,7 @@ int main(int argc, char *argv[])
     }
 
     /* get our schizo module */
+    prte_unsetenv("PRTE_MCA_schizo_proxy", &environ);
     schizo = prte_schizo.detect_proxy(NULL);
     if (NULL == schizo || 0 != strcmp(schizo->name, "prte")) {
         prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "NONE");

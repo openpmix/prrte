@@ -114,3 +114,11 @@ Please correct your command line.
 ERROR: The "%s" command line option was listed more than once on the command line.
 Only one instance of this option is permitted.
 Please correct your command line.
+#
+[no-proxy]
+ERROR: %s was unable to identify the proxy for your command.
+
+  Option specified: %s
+
+Please specify a personality or ask the library developer's to address
+the problem.
