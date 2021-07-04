@@ -1008,8 +1008,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     }
 
     /* did the user request we display output in xterms? */
-    if (NULL != prte_xterm && !PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-        && !PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_TOOL)) {
+    if (NULL != prte_xterm) {
         prte_list_item_t *nmitem;
         prte_namelist_t *nm;
         /* see if this rank is one of those requested */
@@ -1065,8 +1064,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     }
 
     /* if we are indexing the argv by rank, do so now */
-    if (cd->index_argv && !PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-        && !PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_TOOL)) {
+    if (cd->index_argv) {
         char *param;
         prte_asprintf(&param, "%s-%u", cd->argv[0], child->name.rank);
         free(cd->argv[0]);
@@ -1414,7 +1412,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             /* is this child a candidate to start? it may not be alive
              * because it already executed
              */
-            if (PRTE_PROC_STATE_INIT != child->state && PRTE_PROC_STATE_RESTART != child->state) {
+            if (PRTE_PROC_STATE_INIT != child->state &&
+                PRTE_PROC_STATE_RESTART != child->state) {
                 continue;
             }
             /* do we have a child from the specified job. Because the
@@ -1431,9 +1430,10 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 continue;
             }
 
-            PRTE_OUTPUT_VERBOSE(
-                (5, prte_odls_base_framework.framework_output, "%s odls:launch working child %s",
-                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name)));
+            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                                 "%s odls:launch working child %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_NAME_PRINT(&child->name)));
 
             /* determine the thread that will handle this child */
             ++prte_odls_globals.next_base;
@@ -1622,14 +1622,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         goto MOVEON;
     }
 
-    /* if this is a debugger daemon or tool, then just report the state
-     * and return as we aren't monitoring it
-     */
-    if (PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-        || PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_TOOL)) {
-        goto MOVEON;
-    }
-
     /* if this child was ordered to die, then just pass that along
      * so we don't hang
      */
@@ -1659,8 +1651,9 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
 
         /* check to see if a sync was required and if it was received */
         if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_REG)) {
-            if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_HAS_DEREG) || prte_allowed_exit_without_sync
-                || 0 != proc->exit_code) {
+            if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_HAS_DEREG) ||
+                prte_allowed_exit_without_sync ||
+                0 != proc->exit_code) {
                 /* if we did recv a finalize sync, or one is not required,
                  * then declare it normally terminated
                  * unless it returned with a non-zero status indicating the code
@@ -1768,17 +1761,18 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
             int rc;
             pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
             pmix_info_t *pinfo;
-            PMIX_INFO_CREATE(pinfo, 1);
+            PMIX_INFO_CREATE(pinfo, 2);
             PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &proc->name, PMIX_PROC);
+            PMIX_INFO_LOAD(&pinfo[1], "prte.notify.donotloop", NULL, PMIX_BOOL);
 
-            if (PRTE_SUCCESS
-                != PMIx_Notify_event(pcode, PRTE_PROC_MY_NAME, PMIX_RANGE_LOCAL, pinfo, 1, NULL,
-                                     NULL)) {
+            rc = PMIx_Notify_event(pcode, PRTE_PROC_MY_NAME, PMIX_RANGE_LOCAL, pinfo, 2, NULL,  NULL);
+            if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
                 PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:notify failed, release pinfo",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-                PRTE_RELEASE(pinfo);
             }
+            PMIX_INFO_RELEASE(pinfo, 2);
+
             PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s odls:event notify in odls proc %s gone",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));

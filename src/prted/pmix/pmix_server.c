@@ -537,6 +537,19 @@ int pmix_server_init(void)
         kv = PRTE_NEW(prte_info_item_t);
         PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_GATEWAY, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
+        /* if we are also persistent, then we do not output IOF ourselves */
+        if (prte_persistent) {
+            bool flag = false;
+            kv = PRTE_NEW(prte_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
+            prte_list_append(&ilist, &kv->super);
+        }
+    } else {
+        /* prted's never locally output */
+        bool flag = false;
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
+        prte_list_append(&ilist, &kv->super);
     }
 
     /* PRTE always allows remote tool connections */
@@ -644,7 +657,11 @@ void pmix_server_start(void)
     prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_NOTIFICATION, PRTE_RML_PERSISTENT,
                             pmix_server_notify, NULL);
 
-    if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_MASTER) {
+    /* setup recv for jobid return */
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_JOBID_RESP, PRTE_RML_PERSISTENT,
+                            pmix_server_jobid_return, NULL);
+
+    if (PRTE_PROC_IS_MASTER) {
         /* setup recv for logging requests */
         prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING, PRTE_RML_PERSISTENT,
                                 pmix_server_log, NULL);
