@@ -32,7 +32,7 @@ void prte_rtc_base_assign(prte_job_t *jdata)
     }
 }
 
-void prte_rtc_base_set(prte_job_t *jdata, prte_proc_t *proc, char ***environ_copy, int error_fd)
+void prte_rtc_base_set(prte_odls_spawn_caddy_t *cd, int error_fd)
 {
     prte_rtc_base_selected_module_t *active;
 
@@ -40,7 +40,7 @@ void prte_rtc_base_set(prte_job_t *jdata, prte_proc_t *proc, char ***environ_cop
     {
         if (NULL != active->module->set) {
             /* give this module a chance to operate on it */
-            active->module->set(jdata, proc, environ_copy, error_fd);
+            active->module->set(cd, error_fd);
         }
     }
 }

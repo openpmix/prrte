@@ -81,7 +81,7 @@ static int prte_odls_base_register(prte_mca_base_register_flag_t flags)
         PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_odls_globals.timeout_before_sigkill);
 
-    prte_odls_globals.max_threads = 32;
+    prte_odls_globals.max_threads = 16;
     (void) prte_mca_base_var_register("prte", "odls", "base", "max_threads",
                                       "Maximum number of threads to use for spawning local procs",
                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
