@@ -47,6 +47,7 @@
 #include "src/util/prte_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/odls/base/odls_private.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/error_strings.h"
@@ -58,7 +59,7 @@
 static int init(void);
 static void finalize(void);
 static void assign(prte_job_t *jdata);
-static void set(prte_job_t *jdata, prte_proc_t *proc, char ***environ_copy, int write_fd);
+static void set(prte_odls_spawn_caddy_t *cd, int write_fd);
 static void report_binding(prte_job_t *jobdat, int rank);
 
 prte_rtc_base_module_t prte_rtc_hwloc_module = {.init = init,
@@ -80,12 +81,14 @@ static void assign(prte_job_t *jdata)
 {
 }
 
-static void set(prte_job_t *jobdat, prte_proc_t *child, char ***environ_copy, int write_fd)
+static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
 {
+    prte_job_t *jobdat = cd->jdata;
+    prte_proc_t *child = cd->child;
+    prte_app_context_t *context = cd->app;
     hwloc_cpuset_t cpuset;
     hwloc_obj_t root;
     prte_hwloc_topo_data_t *sum;
-    prte_app_context_t *context;
     int rc = PRTE_ERROR;
     char *msg;
     char *cpu_bitmap;
@@ -103,8 +106,6 @@ static void set(prte_job_t *jobdat, prte_proc_t *child, char ***environ_copy, in
                             (NULL == child) ? "NULL" : PRTE_NAME_PRINT(&child->name));
         return;
     }
-
-    context = (prte_app_context_t *) prte_pointer_array_get_item(jobdat->apps, child->app_idx);
 
     /* Set process affinity, if given */
     cpu_bitmap = NULL;
