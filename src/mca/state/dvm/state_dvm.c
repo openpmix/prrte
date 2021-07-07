@@ -385,8 +385,7 @@ static void job_started(int fd, short args, void *cbdata)
         /* dvm job => launch was requested by a TOOL, so we notify the launch proxy
          * and NOT the originator (as that would be us) */
         nptr = NULL;
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr,
-                                PMIX_PROC)
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)
             || NULL == nptr) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             return;
@@ -426,8 +425,7 @@ static void ready_for_debug(int fd, short args, void *cbdata)
     /* launch was requested by a TOOL, so we notify the launch proxy
      * and NOT the originator (as that would be us) */
     nptr = NULL;
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr,
-                            PMIX_PROC)
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)
         || NULL == nptr) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         goto DONE;
@@ -827,6 +825,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         if (PMIX_CHECK_NSPACE(proc->nspace, jdata->nspace)) {
             notify = false;
         }
+        PMIX_PROC_RELEASE(proc);
     }
 
     if (notify) {

@@ -444,8 +444,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     }
 
     /* get the parent job that spawned this one */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &parentproc,
-                           PMIX_PROC)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &parentproc, PMIX_PROC)) {
         parent = prte_get_job_data_object(parentproc->nspace);
         if (NULL != parent
             && (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)

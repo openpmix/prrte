@@ -209,23 +209,21 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
 
         /* get the name of the actual spawn parent - i.e., the proc that actually
          * requested the spawn */
-        nptr = &name;
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY,
-                                (void **) &nptr, PMIX_PROC)) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             rc = PRTE_ERR_NOT_FOUND;
             goto ANSWER_LAUNCH;
         }
 
         /* get the parent's job object */
-        if (NULL != (parent = prte_get_job_data_object(name.nspace))) {
+        if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
             /* link the spawned job to the spawner */
             PRTE_RETAIN(jdata);
             prte_list_append(&parent->children, &jdata->super);
             /* connect the launcher as well */
             if (PMIX_NSPACE_INVALID(parent->launcher)) {
                 /* we are an original spawn */
-                PMIX_LOAD_NSPACE(jdata->launcher, name.nspace);
+                PMIX_LOAD_NSPACE(jdata->launcher, nptr->nspace);
             } else {
                 PMIX_LOAD_NSPACE(jdata->launcher, parent->launcher);
             }
@@ -257,14 +255,15 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                 }
             }
         }
+        PMIX_PROC_RELEASE(nptr);
 
         /* if the user asked to forward any envars, cycle through the app contexts
          * in the comm_spawn request and add them
          */
         if (NULL != prte_forwarded_envars) {
             for (i = 0; i < jdata->apps->size; i++) {
-                if (NULL
-                    == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+                app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i);
+                if (NULL == app) {
                     continue;
                 }
                 env = prte_environ_merge(prte_forwarded_envars, app->env);
@@ -286,9 +285,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         if (NULL != parent && !PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
             if (NULL == parent->bookmark) {
                 /* find the sender's node in the job map */
-                if (NULL
-                    != (proc = (prte_proc_t *) prte_pointer_array_get_item(parent->procs,
-                                                                           sender->rank))) {
+                proc = (prte_proc_t *) prte_pointer_array_get_item(parent->procs, sender->rank);
+                if (NULL != proc) {
                     /* set the bookmark so the child starts from that place - this means
                      * that the first child process could be co-located with the proc
                      * that called comm_spawn, assuming slots remain on that node. Otherwise,
