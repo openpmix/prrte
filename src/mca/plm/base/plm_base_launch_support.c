@@ -595,9 +595,8 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
         /* dvm job => launch was requested by a TOOL, so we notify the launch proxy
          * and NOT the originator (as that would be us) */
         nptr = NULL;
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr,
-                                PMIX_PROC)
-            || NULL == nptr) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC) ||
+            NULL == nptr) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             return PRTE_ERR_NOT_FOUND;
         }

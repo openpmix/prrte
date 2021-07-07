@@ -388,8 +388,8 @@ static void eviction_cbfunc(struct prte_hotel_t *hotel, int room_num, void *occu
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->key);
         }
         /* not done yet - check us back in */
-        if (PRTE_SUCCESS
-            == (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+        rc = prte_hotel_recheck(&prte_pmix_server_globals.reqs, req, req->room_num);
+        if (PRTE_SUCCESS == rc) {
             prte_output_verbose(2, prte_pmix_server_globals.output,
                                 "%s server:evict checked back in to room %d",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->room_num);

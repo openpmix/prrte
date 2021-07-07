@@ -59,8 +59,8 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     prte_job_t *jdata;
 
     jdata = prte_get_job_data_object(jobid);
-    if (NULL != jdata
-        && prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, NULL, PMIX_BOOL)) {
+    if (NULL != jdata &&
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, NULL, PMIX_BOOL)) {
         /* already done */
         return;
     }

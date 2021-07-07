@@ -222,10 +222,12 @@ typedef int8_t prte_node_state_t;
  * PLM commands
  */
 typedef uint8_t prte_plm_cmd_flag_t;
-#define PRTE_PLM_LAUNCH_JOB_CMD    1
-#define PRTE_PLM_UPDATE_PROC_STATE 2
-#define PRTE_PLM_REGISTERED_CMD    3
-#define PRTE_PLM_ALLOC_JOBID_CMD   4
+#define PRTE_PLM_LAUNCH_JOB_CMD         1
+#define PRTE_PLM_UPDATE_PROC_STATE      2
+#define PRTE_PLM_REGISTERED_CMD         3
+#define PRTE_PLM_ALLOC_JOBID_CMD        4
+#define PRTE_PLM_READY_FOR_DEBUG_CMD    5
+#define PRTE_PLM_LOCAL_LAUNCH_COMP_CMD  6
 
 END_C_DECLS
 

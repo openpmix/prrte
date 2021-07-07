@@ -178,6 +178,7 @@ void prte_odls_base_start_threads(prte_job_t *jdata)
             }
         }
     }
+startup:
     if (0 == prte_odls_globals.num_threads) {
         if (NULL == prte_event_base_ptr) {
             prte_event_base_ptr = (prte_event_base_t **) malloc(sizeof(prte_event_base_t *));
@@ -186,7 +187,6 @@ void prte_odls_base_start_threads(prte_job_t *jdata)
         }
         prte_odls_globals.ev_bases = prte_event_base_ptr;
     } else {
-    startup:
         prte_odls_globals.ev_bases = (prte_event_base_t **) malloc(prte_odls_globals.num_threads
                                                                    * sizeof(prte_event_base_t *));
         for (i = 0; i < prte_odls_globals.num_threads; i++) {

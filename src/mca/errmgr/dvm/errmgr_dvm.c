@@ -365,7 +365,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     prte_proc_t *pptr, *proct;
     pmix_proc_t *proc = &caddy->name;
     prte_proc_state_t state = caddy->proc_state;
-    int i, rc;
+    int i;
     int32_t i32, *i32ptr;
 
     PRTE_ACQUIRE_OBJECT(caddy);
@@ -745,10 +745,5 @@ keep_going:
     }
 
 cleanup:
-    rc = prte_pmix_convert_proc_state_to_error(state);
-    rc = prte_plm_base_spawn_response(rc, jdata);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-    }
     PRTE_RELEASE(caddy);
 }
