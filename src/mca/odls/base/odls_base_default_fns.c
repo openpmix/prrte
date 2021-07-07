@@ -1223,8 +1223,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         /* if this app isn't being used on our node, skip it */
         if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_USED_ON_NODE)) {
             prte_output_verbose(5, prte_odls_base_framework.framework_output,
-                                "%s app %d not used on node", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                j);
+                                "%s app %d not used on node",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), j);
             continue;
         }
 
@@ -1244,9 +1244,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
              */
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
-                if (NULL
-                    == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                            idx))) {
+                child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+                if (NULL == child) {
                     continue;
                 }
                 if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
@@ -1273,9 +1272,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
              */
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
-                if (NULL
-                    == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                            idx))) {
+                child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+                if (NULL == child) {
                     continue;
                 }
                 if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
@@ -1290,9 +1288,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (PRTE_SUCCESS != (rc = prte_filem.link_local_files(jobdat, app))) {
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
-                if (NULL
-                    == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                            idx))) {
+                child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+                if (NULL == child) {
                     continue;
                 }
                 if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
@@ -1339,9 +1336,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (PRTE_SUCCESS != rc) {
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
-                if (NULL
-                    == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                            idx))) {
+                child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+                if (NULL == child) {
                     continue;
                 }
                 if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
@@ -1358,9 +1354,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                            prte_process_info.nodename, app, __FILE__, __LINE__, msg);
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
-                if (NULL
-                    == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                            idx))) {
+                child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+                if (NULL == child) {
                     continue;
                 }
                 if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
@@ -1386,9 +1381,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         /* okay, now let's launch all the local procs for this app using the provided fork_local fn
          */
         for (idx = 0; idx < prte_local_children->size; idx++) {
-            if (NULL
-                == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                        idx))) {
+            child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+            if (NULL == child) {
                 continue;
             }
             /* does this child belong to this app? */
@@ -1523,8 +1517,8 @@ int prte_odls_base_default_signal_local_procs(const pmix_proc_t *proc, int32_t s
     if (NULL == proc) {
         rc = PRTE_SUCCESS; /* pre-set this as an empty list causes us to drop to bottom */
         for (i = 0; i < prte_local_children->size; i++) {
-            if (NULL
-                == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+            child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+            if (NULL == child) {
                 continue;
             }
             if (0 == child->pid || !PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE)) {
@@ -1540,7 +1534,8 @@ int prte_odls_base_default_signal_local_procs(const pmix_proc_t *proc, int32_t s
 
     /* we want it sent to some specified process, so find it */
     for (i = 0; i < prte_local_children->size; i++) {
-        if (NULL == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+        child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+        if (NULL == child) {
             continue;
         }
         if (PMIX_CHECK_PROCID(&child->name, proc)) {
@@ -1687,9 +1682,8 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         } else {
             /* has any child in this job already registered? */
             for (i = 0; i < prte_local_children->size; i++) {
-                if (NULL
-                    == (cptr = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                           i))) {
+                cptr = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+                if (NULL == cptr) {
                     continue;
                 }
                 if (!PMIX_CHECK_NSPACE(cptr->name.nspace, proc->name.nspace)) {
@@ -1846,8 +1840,8 @@ int prte_odls_base_default_kill_local_procs(prte_pointer_array_t *procs,
             continue;
         }
         for (j = 0; j < prte_local_children->size; j++) {
-            if (NULL
-                == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, j))) {
+            child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, j);
+            if (NULL == child) {
                 continue;
             }
 

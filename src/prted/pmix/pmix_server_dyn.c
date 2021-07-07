@@ -70,7 +70,6 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     if (NULL == req) {
         /* we are hosed */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        prte_output(0, "UNABLE TO RETRIEVE SPWN_REQ FOR JOB %s [room=%d]", jobid, room);
         return;
     }
 
@@ -219,7 +218,7 @@ static void interim(int sd, short args, void *cbdata)
     /* create the job object */
     jdata = PRTE_NEW(prte_job_t);
     jdata->map = PRTE_NEW(prte_job_map_t);
-    PMIX_XFER_PROCID(&jdata->originator, requestor);
+    PMIX_LOAD_PROCID(&jdata->originator, requestor->nspace, requestor->rank);
 
     /* transfer the apps across */
     for (n = 0; n < cd->napps; n++) {
@@ -678,8 +677,8 @@ static void interim(int sd, short args, void *cbdata)
     }
 
     /* indicate the requestor so bookmarks can be correctly set */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, PRTE_ATTR_GLOBAL, requestor,
-                       PMIX_PROC);
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, PRTE_ATTR_GLOBAL,
+                       &jdata->originator, PMIX_PROC);
 
     /* indicate that IO is to be forwarded */
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_FORWARD_OUTPUT);
