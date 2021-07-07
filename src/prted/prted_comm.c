@@ -130,6 +130,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
     pmix_byte_object_t pbo;
     pmix_topology_t ptopo;
     char *tmp;
+    pmix_info_t info[4];
 
     /* unpack the command */
     n = 1;
@@ -402,41 +403,17 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         }
         /* kill the local procs */
         prte_odls.kill_local_procs(NULL);
-        /* cycle thru our known jobs to find any that are tools - these
-         * may not have been killed if, for example, we didn't start
-         * them */
-        for (i = 0; i < prte_job_data->size; i++) {
-            jdata = (prte_job_t *) prte_pointer_array_get_item(prte_job_data, i);
-            if (NULL == jdata) {
-                continue;
-            }
-            if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)
-                && 0 < prte_list_get_size(&jdata->children)) {
-                pmix_info_t info[3];
-                bool flag;
-                prte_job_t *jd;
-                pmix_status_t xrc = PMIX_ERR_JOB_TERMINATED;
-                /* we need to notify this job that its CHILD job terminated
-                 * as that is the job it is looking for */
-                jd = (prte_job_t *) prte_list_get_first(&jdata->children);
-                /* must notify this tool of termination so it can
-                 * cleanly exit - otherwise, it may hang waiting for
-                 * some kind of notification */
-                /* ensure this only goes to the job terminated event handler */
-                flag = true;
-                PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, &flag, PMIX_BOOL);
-                /* provide the status */
-                PMIX_INFO_LOAD(&info[1], PMIX_JOB_TERM_STATUS, &xrc, PMIX_STATUS);
-                /* tell the requestor which job */
-                PMIX_LOAD_PROCID(&pname, jd->nspace, PMIX_RANK_WILDCARD);
-                PMIX_INFO_LOAD(&info[2], PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
-                PRTE_PMIX_CONSTRUCT_LOCK(&lk);
-                PMIx_Notify_event(PMIX_ERR_JOB_TERMINATED, &pname, PMIX_RANGE_SESSION, info, 3,
-                                  _notify_release, &lk);
-                PRTE_PMIX_WAIT_THREAD(&lk);
-                PRTE_PMIX_DESTRUCT_LOCK(&lk);
-            }
-        }
+        /* any tools attached to us will have done so via PMIx, so
+         * let's provide them with a friendly "job end" notification */
+        PMIX_INFO_LOAD(&info[0], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+        PMIX_INFO_LOAD(&info[1], PMIX_EVENT_AFFECTED_PROC, &prte_process_info.myproc, PMIX_PROC);
+        PMIX_INFO_LOAD(&info[2], "prte.notify.donotloop", NULL, PMIX_BOOL);
+        PMIX_INFO_LOAD(&info[3], PMIX_EVENT_DO_NOT_CACHE, NULL, PMIX_BOOL);
+        PRTE_PMIX_CONSTRUCT_LOCK(&lk);
+        ret = PMIx_Notify_event(PMIX_EVENT_JOB_END, &prte_process_info.myproc,
+                                PMIX_RANGE_SESSION, info, 4, _notify_release, &lk);
+        PRTE_PMIX_WAIT_THREAD(&lk);
+        PRTE_PMIX_DESTRUCT_LOCK(&lk);
         /* flag that prteds were ordered to terminate */
         prte_prteds_term_ordered = true;
         if (PRTE_PROC_IS_MASTER) {
@@ -495,15 +472,15 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                     continue;
                 }
                 for (i = 0; i < node->procs->size; i++) {
-                    if (NULL
-                        == (proct = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i))) {
+                    proct = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i);
+                    if (NULL == proct) {
                         continue;
                     }
                     if (!PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
                         /* skip procs from another job */
                         continue;
                     }
-                    if (!PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_TOOL)) {
+                    if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                         node->slots_inuse--;
                         node->num_procs--;
                     }

@@ -390,7 +390,6 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list
     int *slots;
     bool found_range = false;
     bool more_to_come = false;
-    char *ptr;
 
     orig = base = strdup(regexp);
     if (NULL == base) {
@@ -551,12 +550,6 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list
 
     for (i = 0; NULL != names && NULL != names[i]; ++i) {
         prte_node_t *node;
-
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(names[i])) {
-            if (NULL != (ptr = strchr(names[i], '.'))) {
-                *ptr = '\0';
-            }
-        }
 
         PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s ras:slurm:allocate:discover: adding node %s (%d slot%s)",

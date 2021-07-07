@@ -110,7 +110,6 @@ static int rte_init(int argc, char **argv)
     prte_node_t *node;
     prte_proc_t *proc;
     prte_app_context_t *app;
-    char *aptr;
     char *coprocessors, **sns;
     uint32_t h;
     int idx;
@@ -369,14 +368,21 @@ static int rte_init(int argc, char **argv)
     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
     node->state = PRTE_NODE_STATE_UP;
     /* get our aliases - will include all the interface aliases captured in prte_init */
-    aptr = prte_argv_join(prte_process_info.aliases, ',');
-    prte_set_attribute(&node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, aptr, PMIX_STRING);
-    free(aptr);
+    node->aliases = prte_argv_copy(prte_process_info.aliases);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
     jdata->state = PRTE_JOB_STATE_RUNNING;
     /* obviously, we have "reported" */
     jdata->num_reported = 1;
+
+    if (0 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+        prte_output(0, "ALIASES FOR %s", node->name);
+        if (NULL != node->aliases) {
+            for (idx=0; NULL != node->aliases[idx]; idx++) {
+                prte_output(0, "\tALIAS: %s", node->aliases[idx]);
+            }
+        }
+    }
 
     /* Now provide a chance for the PLM
      * to perform any module-specific init functions. This
@@ -615,6 +621,7 @@ static int rte_finalize(void)
 
 static void rte_abort(int status, bool report)
 {
+    prte_output(0, "ABORT");
     /* do NOT do a normal finalize as this will very likely
      * hang the process. We are aborting due to an abnormal condition
      * that precludes normal cleanup

@@ -223,6 +223,7 @@ int main(int argc, char **argv)
 
     /* Initialize this daemon - since we were launched by the RM, our
      * connection info * will have been provided at startup. */
+    printf("INIT TOOL\n");
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, NULL, 0))) {
         fprintf(stderr, "Debugger daemon: PMIx_tool_init failed: %s\n", PMIx_Error_string(rc));
         exit(0);
@@ -240,6 +241,7 @@ int main(int argc, char **argv)
                                 (void *) &mylock);
     PMIX_INFO_FREE(info, ninfo);
     DEBUG_WAIT_THREAD(&mylock);
+    PMIX_INFO_FREE(info, 1);
     if (PMIX_SUCCESS != mylock.status) {
         rc = mylock.status;
         DEBUG_DESTRUCT_LOCK(&mylock);
@@ -328,6 +330,7 @@ int main(int argc, char **argv)
     PMIX_LOAD_PROCID(&proc, target_namespace, PMIX_RANK_WILDCARD);
 
     PMIX_INFO_LIST_START(dirs);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_HDLR_NAME, "APP-TERMINATION", PMIX_STRING);
     /* Pass the lock we will use to wait for notification of the
      * PMIX_EVENT_JOB_END event */
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);

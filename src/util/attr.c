@@ -270,8 +270,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_APPEND_ENVAR";
         case PRTE_APP_ADD_ENVAR:
             return "PRTE_APP_ADD_ENVAR";
-        case PRTE_APP_DEBUGGER_DAEMON:
-            return "PRTE_APP_DEBUGGER_DAEMON";
         case PRTE_APP_PSET_NAME:
             return "PRTE_APP_PSET_NAME";
 
@@ -283,8 +281,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "NODE-LAUNCHID";
         case PRTE_NODE_HOSTID:
             return "NODE-HOSTID";
-        case PRTE_NODE_ALIAS:
-            return "NODE-ALIAS";
         case PRTE_NODE_SERIAL_NUMBER:
             return "NODE-SERIAL-NUM";
 
@@ -460,6 +456,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "STOP-IN-APP";
         case PRTE_JOB_ENVARS_HARVESTED:
             return "ENVARS-HARVESTED";
+        case PRTE_JOB_OUTPUT_NOCOPY:
+            return "DO-NOT-COPY-OUTPUT";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

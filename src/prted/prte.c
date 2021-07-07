@@ -99,7 +99,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
 
-#include "prte.h"
+#include "include/prte.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/prted/prted.h"
 
@@ -115,7 +115,6 @@ static pmix_proc_t myproc;
 static bool signals_set = false;
 static bool forcibly_die = false;
 static prte_event_t term_handler;
-static prte_event_t die_handler;
 static prte_event_t epipe_handler;
 static int term_pipe[2];
 static prte_mutex_t prun_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
@@ -184,6 +183,24 @@ static void spcbfunc(pmix_status_t status, char nspace[], void *cbdata)
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
+static void parent_died_fn(size_t evhdlr_registration_id, pmix_status_t status,
+                           const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                           pmix_info_t results[], size_t nresults,
+                           pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+{
+    clean_abort(0, 0, NULL);
+    cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+}
+
+static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbdata)
+{
+    mylock_t *lock = (mylock_t *) cbdata;
+
+    lock->status = status;
+    PRTE_PMIX_WAKEUP_THREAD(&lock->lock);
+}
+
+
 static int wait_pipe[2];
 
 static int wait_dvm(pid_t pid)
@@ -225,7 +242,7 @@ static prte_cmd_line_init_t cmd_line_init[] = {
 int prte(int argc, char *argv[])
 {
     int rc = 1, i, j;
-    char *param, *ptr, *tpath, *fullpath;
+    char *param, *ptr, *tpath, *cptr;
     prte_pmix_lock_t lock;
     prte_list_t apps;
     prte_pmix_app_t *app;
@@ -253,16 +270,31 @@ int prte(int argc, char *argv[])
     prte_schizo_base_module_t *schizo;
     prte_ess_base_signal_t *sig;
     char **targv;
+    char *outdir = NULL;
+    char *outfile = NULL;
+    pmix_status_t code;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
-    /* init the tiny part of PRTE we use */
-    prte_init_util(PRTE_PROC_MASTER);
-
-    fullpath = prte_find_absolute_path(argv[0]);
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
+
+    /* because we have to use the schizo framework and init our hostname
+     * prior to parsing the incoming argv for cmd line options, do a hacky
+     * search to support passing of impacted options (e.g., verbosity for schizo) */
+    rc = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    rc = prte_schizo_base_parse_pmix(pargc, 0, pargv, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    /* init the tiny part of PRTE we use */
+    prte_init_util(PRTE_PROC_MASTER);
 
     /** setup callbacks for abort signals - from this point
      * forward, we need to abort in a manner that allows us
@@ -307,20 +339,6 @@ int prte(int argc, char *argv[])
     signal(SIGINT, abort_signal_callback);
     signal(SIGHUP, abort_signal_callback);
 
-    /* because we have to use the schizo framework prior to parsing the
-     * incoming argv for cmd line options, do a hacky search to support
-     * passing of options (e.g., verbosity) for schizo */
-    for (i = 1; NULL != argv[i]; i++) {
-        if (0 == strcmp(argv[i], "--prtemca") || 0 == strcmp(argv[i], "--mca")) {
-            if (0 == strncmp(argv[i + 1], "schizo", 6)) {
-                prte_asprintf(&param, "PRTE_MCA_%s", argv[i + 1]);
-                prte_setenv(param, argv[i + 2], true, &environ);
-                free(param);
-                i += 2;
-            }
-        }
-    }
-
     /* open the SCHIZO framework */
     if (PRTE_SUCCESS
         != (rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
@@ -341,9 +359,6 @@ int prte(int argc, char *argv[])
             ptr = argv[i + 1];
             break;
         }
-    }
-    if (NULL == ptr) {
-        ptr = fullpath;
     }
 
     /* detect if we are running as a proxy and select the active
@@ -407,10 +422,9 @@ int prte(int argc, char *argv[])
 
     /* if we were given a keepalive pipe, set up to monitor it now */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "keepalive", 0, 0))) {
-        prte_event_set(prte_event_base, &die_handler, pval->value.data.integer, PRTE_EV_READ,
-                       clean_abort, NULL);
-        prte_event_add(&die_handler, NULL);
-        prte_fd_set_cloexec(pval->value.data.integer); // don't let children inherit this
+        prte_asprintf(&param, "%d", pval->value.data.integer);
+        prte_setenv("PMIX_KEEPALIVE_PIPE", param, true, &environ);
+        free(param);
     }
 
     /* let the schizo components take a pass at it to get the MCA params */
@@ -427,10 +441,10 @@ int prte(int argc, char *argv[])
     if (PRTE_SUCCESS != rc) {
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
+            param = prte_argv_join(pargv, ' ');
+            fprintf(stderr, "\n******* Cmd line: %s\n\n\n", param);
+            free(param);
         }
-        param = prte_argv_join(pargv, ' ');
-        fprintf(stderr, "\n******* Cmd line: %s\n\n\n", param);
-        free(param);
         return rc;
     }
 
@@ -537,6 +551,38 @@ int prte(int argc, char *argv[])
      */
     prte_launch_environ = prte_argv_copy(environ);
 
+    /* default to a persistent DVM */
+    prte_persistent = true;
+
+    /* if we are told to daemonize, then we cannot have apps */
+    if (!prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
+        /* see if they want to run an application - let's parse
+         * the cmd line to get it */
+        rc = prte_parse_locals(prte_cmd_line, &apps, pargc, pargv, &hostfiles, &hosts);
+
+        /* did they provide an app? */
+        if (PMIX_SUCCESS != rc || 0 == prte_list_get_size(&apps)) {
+            if (proxyrun) {
+                prte_show_help("help-prun.txt", "prun:executable-not-specified", true,
+                               prte_tool_basename, prte_tool_basename);
+                PRTE_UPDATE_EXIT_STATUS(rc);
+                goto DONE;
+            }
+            /* nope - just need to wait for instructions */
+        } else {
+            /* they did provide an app - this is only allowed
+             * when running as a proxy! */
+            if (!proxyrun) {
+                prte_show_help("help-prun.txt", "prun:executable-incorrectly-given", true,
+                               prte_tool_basename, prte_tool_basename);
+                PRTE_UPDATE_EXIT_STATUS(rc);
+                goto DONE;
+            }
+            /* mark that we are not a persistent DVM */
+            prte_persistent = false;
+        }
+    }
+
     /* setup PRTE infrastructure */
     if (PRTE_SUCCESS != (ret = prte_init(&pargc, &pargv, PRTE_PROC_MASTER))) {
         PRTE_ERROR_LOG(ret);
@@ -586,6 +632,16 @@ int prte(int argc, char *argv[])
             goto DONE;
         }
     }
+
+    /* setup the keepalive event registration */
+    PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
+    code = PMIX_ERR_JOB_TERMINATED;
+    PMIX_LOAD_PROCID(&pname, "PMIX_KEEPALIVE_PIPE", PMIX_RANK_UNDEF);
+    PMIX_INFO_LOAD(&info, PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
+    PMIx_Register_event_handler(&code, 1, &info, 1, parent_died_fn, evhandler_reg_callbk,
+                                (void *) &mylock);
+    PRTE_PMIX_WAIT_THREAD(&mylock.lock);
+    PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
 
     /* check for launch directives in case we were launched by a
      * tool wanting to direct our operation - this needs to be
@@ -711,38 +767,6 @@ int prte(int argc, char *argv[])
         PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
     } else {
         PMIX_LOAD_PROCID(&parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
-    }
-
-    /* default to a persistent DVM */
-    prte_persistent = true;
-
-    /* if we are told to daemonize, then we cannot have apps */
-    if (!prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
-        /* see if they want to run an application - let's parse
-         * the cmd line to get it */
-        rc = prte_parse_locals(prte_cmd_line, &apps, pargc, pargv, &hostfiles, &hosts);
-
-        /* did they provide an app? */
-        if (PMIX_SUCCESS != rc || 0 == prte_list_get_size(&apps)) {
-            if (proxyrun) {
-                prte_show_help("help-prun.txt", "prun:executable-not-specified", true,
-                               prte_tool_basename, prte_tool_basename);
-                PRTE_UPDATE_EXIT_STATUS(rc);
-                goto DONE;
-            }
-            /* nope - just need to wait for instructions */
-        } else {
-            /* they did provide an app - this is only allowed
-             * when running as a proxy! */
-            if (!proxyrun) {
-                prte_show_help("help-prun.txt", "prun:executable-incorrectly-given", true,
-                               prte_tool_basename, prte_tool_basename);
-                PRTE_UPDATE_EXIT_STATUS(rc);
-                goto DONE;
-            }
-            /* mark that we are not a persistent DVM */
-            prte_persistent = false;
-        }
     }
 
     /* add any hostfile directives to the daemon job */
@@ -885,19 +909,19 @@ int prte(int argc, char *argv[])
         targv = prte_argv_split(pval->value.data.string, ',');
 
         for (int idx = 0; idx < prte_argv_count(targv); idx++) {
-            if (0 == strcmp(targv[idx], "allocation")) {
+            if (0 == strncasecmp(targv[idx], "allocation", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYALLOC", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "map")) {
+            if (0 == strcasecmp(targv[idx], "map")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "bind")) {
+            if (0 == strncasecmp(targv[idx], "bind", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":REPORT", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "map-devel")) {
+            if (0 == strcasecmp(targv[idx], "map-devel")) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDEVEL", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "topo")) {
+            if (0 == strncasecmp(targv[idx], "topo", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYTOPO", PMIX_STRING);
             }
         }
@@ -905,74 +929,108 @@ int prte(int argc, char *argv[])
     }
 
     /* cannot have both files and directory set for output */
-    ptr = NULL;
+    outdir = NULL;
+    outfile = NULL;
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output", 0, 0))) {
         targv = prte_argv_split(pval->value.data.string, ',');
 
         for (int idx = 0; idx < prte_argv_count(targv); idx++) {
-            if (0 == strcmp(targv[idx], "tag")) {
+            /* remove any '=' sign in the directive */
+            if (NULL != (ptr = strchr(targv[idx], '='))) {
+                *ptr = '\0';
+            }
+            if (0 == strncasecmp(targv[idx], "tag", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TAG_OUTPUT, &flag, PMIX_BOOL);
             }
-            if (0 == strcmp(targv[idx], "timestamp")) {
+            if (0 == strncasecmp(targv[idx], "timestamp", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
             }
-            if (0 == strcmp(targv[idx], "xml")) {
+            if (0 == strncasecmp(targv[idx], "xml", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":XMLOUTPUT", PMIX_STRING);
             }
-            if (0 == strcmp(targv[idx], "merge-stderr-to-stdout")) {
+            if (0 == strncasecmp(targv[idx], "merge-stderr-to-stdout", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
             }
-            if (NULL != (ptr = strchr(targv[idx], ':'))) {
+            if (0 == strncasecmp(targv[idx], "directory", strlen(targv[idx]))) {
+                if (NULL != outfile) {
+                    prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                    return PRTE_ERR_FATAL;
+                }
+                if (NULL == ptr) {
+                    prte_show_help("help-prte-rmaps-base.txt",
+                                   "missing-qualifier", true,
+                                   "output", "directory", "directory");
+                    return PRTE_ERR_FATAL;
+                }
                 ++ptr;
-                ptr = strdup(ptr);
+                /* check for qualifiers */
+                if (NULL != (cptr = strchr(ptr, ':'))) {
+                    *cptr = '\0';
+                    ++cptr;
+                    if (0 == strcasecmp(cptr, "nocopy")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+                    }
+                }
+                /* If the given filename isn't an absolute path, then
+                 * convert it to one so the name will be relative to
+                 * the directory where prun was given as that is what
+                 * the user will have seen */
+                if (!prte_path_is_absolute(ptr)) {
+                    char cwd[PRTE_PATH_MAX];
+                    if (NULL == getcwd(cwd, sizeof(cwd))) {
+                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                        goto DONE;
+                    }
+                    outdir = prte_os_path(false, cwd, ptr, NULL);
+                } else {
+                    outdir = strdup(ptr);
+                }
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
+            }
+            if (0 == strncasecmp(targv[idx], "file", strlen(targv[idx]))) {
+                if (NULL != outdir) {
+                    prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                    return PRTE_ERR_FATAL;
+                }
+                if (NULL == ptr) {
+                    prte_show_help("help-prte-rmaps-base.txt",
+                                   "missing-qualifier", true,
+                                   "output", "filename", "filename");
+                    return PRTE_ERR_FATAL;
+                }
+                ++ptr;
+                /* check for qualifiers */
+                if (NULL != (cptr = strchr(ptr, ':'))) {
+                    *cptr = '\0';
+                    ++cptr;
+                    if (0 != strcasecmp(cptr, "nocopy")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+                    }
+                }
+                /* If the given filename isn't an absolute path, then
+                 * convert it to one so the name will be relative to
+                 * the directory where prun was given as that is what
+                 * the user will have seen */
+                if (!prte_path_is_absolute(ptr)) {
+                    char cwd[PRTE_PATH_MAX];
+                    if (NULL == getcwd(cwd, sizeof(cwd))) {
+                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                        goto DONE;
+                    }
+                    outfile = prte_os_path(false, cwd, ptr, NULL);
+                } else {
+                    outfile = strdup(ptr);
+                }
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, outfile, PMIX_STRING);
             }
         }
         prte_argv_free(targv);
     }
-
-    param = NULL;
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output-filename", 0, 0))) {
-        param = pval->value.data.string;
+    if (NULL != outdir) {
+        free(outdir);
     }
-    if (NULL != param && NULL != ptr) {
-        prte_show_help("help-prted.txt", "both-file-and-dir-set", true, param, ptr);
-        return PRTE_ERR_FATAL;
-    } else if (NULL != param) {
-        /* if we were asked to output to files, pass it along. */
-        /* if the given filename isn't an absolute path, then
-         * convert it to one so the name will be relative to
-         * the directory where prun was given as that is what
-         * the user will have seen */
-        if (!prte_path_is_absolute(param)) {
-            char cwd[PRTE_PATH_MAX];
-            if (NULL == getcwd(cwd, sizeof(cwd))) {
-                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                goto DONE;
-            }
-            ptr = prte_os_path(false, cwd, param, NULL);
-        } else {
-            ptr = strdup(param);
-        }
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, ptr, PMIX_STRING);
-        free(ptr);
-    } else if (NULL != ptr) {
-        /* if we were asked to output to a directory, pass it along. */
-        /* If the given filename isn't an absolute path, then
-         * convert it to one so the name will be relative to
-         * the directory where prun was given as that is what
-         * the user will have seen */
-        if (!prte_path_is_absolute(ptr)) {
-            char cwd[PRTE_PATH_MAX];
-            if (NULL == getcwd(cwd, sizeof(cwd))) {
-                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                goto DONE;
-            }
-            param = prte_os_path(false, cwd, ptr, NULL);
-        } else {
-            param = strdup(ptr);
-        }
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, param, PMIX_STRING);
-        free(param);
+    if (NULL != outfile) {
+        free(outfile);
     }
 
     /* check what user wants us to do with stdin */
@@ -1212,6 +1270,7 @@ proceed:
     while (prte_event_base_active) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
     }
+
     PRTE_ACQUIRE_OBJECT(prte_event_base_active);
 
     /* close the push of our stdin */
@@ -1317,8 +1376,7 @@ static void surekill(void)
 static void abort_signal_callback(int fd)
 {
     uint8_t foo = 1;
-    char *msg
-        = "Abort is in progress...hit ctrl-c again to forcibly terminate\n\n";
+    char *msg = "Abort is in progress...hit ctrl-c again to forcibly terminate\n\n";
 
     /* if this is the first time thru, just get
      * the current time

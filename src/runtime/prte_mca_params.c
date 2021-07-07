@@ -40,10 +40,10 @@
 #include "src/util/argv.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
-#include "src/util/prte_environ.h"
-
-#include "src/mca/errmgr/errmgr.h"
 #include "src/util/proc_info.h"
+#include "src/util/prte_environ.h"
+#include "src/util/show_help.h"
+#include "src/mca/errmgr/errmgr.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
@@ -60,9 +60,9 @@ static char *prte_jobfam_session_dir = NULL;
 char *prte_signal_string = NULL;
 char *prte_stacktrace_output_filename = NULL;
 char *prte_net_private_ipv4 = NULL;
+char *prte_if_include = NULL;
+char *prte_if_exclude = NULL;
 char *prte_set_max_sys_limits = NULL;
-int prte_abort_delay = 0;
-bool prte_abort_print_stack = false;
 int prte_pmix_verbose_output = 0;
 
 int prte_max_thread_in_progress = 1;
@@ -169,6 +169,44 @@ int prte_register_params(void)
         return ret;
     }
 
+    prte_if_include = NULL;
+    ret = prte_mca_base_var_register("prte", "prte", NULL, "if_include",
+                                     "Comma-delimited list of devices and/or CIDR notation of TCP networks to use for PRTE "
+                                    "bootstrap communication (e.g., \"eth0,192.168.0.0/16\").  Mutually exclusive with "
+                                     "prte_if_exclude.",
+                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+                                     PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_if_include);
+    (void) prte_mca_base_var_register_synonym(ret, "prte", "oob", "tcp", "include",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
+                                              | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+    (void) prte_mca_base_var_register_synonym(ret, "prte", "oob", "tcp", "if_include",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
+                                              | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+
+    prte_if_exclude = NULL;
+    ret = prte_mca_base_var_register("prte", "prte", NULL, "if_exclude",
+                                     "Comma-delimited list of devices and/or CIDR notation of TCP networks to NOT use for PRTE "
+                                     "bootstrap communication -- all devices not matching these specifications will be used "
+                                     "(e.g., \"eth0,192.168.0.0/16\").  If set to a non-default value, it is mutually exclusive "
+                                        "with prte_if_include.",
+                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+                                     PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_if_exclude);
+    (void) prte_mca_base_var_register_synonym(ret, "prte", "oob", "tcp", "exclude",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
+                                              | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+    (void) prte_mca_base_var_register_synonym(ret, "prte", "oob", "tcp", "if_exclude",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED
+                                              | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+
+    /* if_include and if_exclude need to be mutually exclusive */
+    if (NULL != prte_if_include && NULL != prte_if_exclude) {
+        /* Return ERR_NOT_AVAILABLE so that a warning message about
+         "open" failing is not printed */
+        prte_show_help("help-oob-tcp.txt", "include-exclude", true,
+                       prte_if_include, prte_if_exclude);
+        return PRTE_ERR_NOT_AVAILABLE;
+    }
+
     prte_set_max_sys_limits = NULL;
     ret = prte_mca_base_var_register(
         "prte", "prte", NULL, "set_max_sys_limits",
@@ -176,38 +214,6 @@ int prte_register_params(void)
         "Supported params: core, filesize, maxmem, openfiles, stacksize, maxchildren",
         PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_3,
         PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ, &prte_set_max_sys_limits);
-    if (0 > ret) {
-        return ret;
-    }
-
-    prte_abort_delay = 0;
-    ret = prte_mca_base_var_register(
-        "prte", "prte", NULL, "abort_delay",
-        "If nonzero, print out an identifying message when abort operation is invoked (hostname, "
-        "PID of the process that called abort) and delay for that many seconds before exiting (a "
-        "negative delay value means to never abort).  This allows attaching of a debugger before "
-        "quitting the job.",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_abort_delay);
-    if (0 > ret) {
-        return ret;
-    }
-
-    prte_abort_print_stack = false;
-    ret = prte_mca_base_var_register("prte", "prte", NULL, "abort_print_stack",
-                                     "If nonzero, print out a stack trace when abort is invoked",
-                                     PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, PRTE_MCA_BASE_VAR_FLAG_NONE,
-    /* If we do not have stack trace
-       capability, make this a constant
-       MCA variable */
-#if PRTE_WANT_PRETTY_PRINT_STACKTRACE
-                                     PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
-                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-#else
-                                     PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY, PRTE_INFO_LVL_5,
-                                     PRTE_MCA_BASE_VAR_SCOPE_CONSTANT,
-#endif
-                                     &prte_abort_print_stack);
     if (0 > ret) {
         return ret;
     }
@@ -383,14 +389,14 @@ int prte_register_params(void)
     prted_debug_failure_delay = 0;
     (void) prte_mca_base_var_register(
         "prte", "prte", NULL, "daemon_fail_delay",
-        "Have the specified prted fail after specified number of seconds (default: 0 => no delay)",
+        "Have the specified prted fail after specified number of seconds [default: 0 => no delay]",
         PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prted_debug_failure_delay);
 
     prte_startup_timeout = 0;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "startup_timeout",
                                       "Seconds to wait for startup or job launch before declaring "
-                                      "failed_to_start (default: 0 => do not check)",
+                                      "failed_to_start [default: 0 => do not check]",
                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_startup_timeout);
@@ -441,33 +447,33 @@ int prte_register_params(void)
         PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hostname_cutoff);
 
-    /* which alias to use in MPIR_proctab */
-    prte_use_hostname_alias = 1;
-    (void) prte_mca_base_var_register(
-        "prte", "prte", NULL, "hostname_alias_index",
-        "Which alias to use for the debugger proc table [default: 1st alias]",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_use_hostname_alias);
-
     prte_show_resolved_nodenames = false;
     (void) prte_mca_base_var_register(
         "prte", "prte", NULL, "show_resolved_nodenames",
-        "Display any node names that are resolved to a different name (default: false)",
+        "Display any node names that are resolved to a different name [default: false]",
         PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_show_resolved_nodenames);
+
+    prte_do_not_resolve = true;
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "do_not_resolve",
+                                      "Do not attempt to resolve hostnames "
+                                      "[defaults to true]",
+                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_do_not_resolve);
 
     /* allow specification of the launch agent */
     prte_launch_agent = "prted";
     (void) prte_mca_base_var_register(
         "prte", "prte", NULL, "launch_agent",
-        "Command used to start processes on remote nodes (default: prted)",
+        "Command used to start processes on remote nodes [default: prted]",
         PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_launch_agent);
 
     prte_fork_agent_string = NULL;
     (void)
         prte_mca_base_var_register("prte", "prte", NULL, "fork_agent",
-                                   "Command used to fork processes on remote nodes (default: NULL)",
+                                   "Command used to fork processes on remote nodes [default: NULL]",
                                    PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                    PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                    PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_fork_agent_string);
@@ -538,7 +544,7 @@ int prte_register_params(void)
     /* tool communication controls */
     prte_report_events_uri = NULL;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "report_events",
-                                      "URI to which events are to be reported (default: NULL)",
+                                      "URI to which events are to be reported [default: NULL]",
                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_report_events_uri);

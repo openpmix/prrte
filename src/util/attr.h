@@ -32,7 +32,10 @@
 
 /*** ATTRIBUTE FLAGS - never sent anywwhere ***/
 typedef uint8_t prte_app_context_flags_t;
-#define PRTE_APP_FLAG_USED_ON_NODE 0x01 // is being used on the local node
+#define PRTE_APP_FLAG_USED_ON_NODE  0x01    // is being used on the local node
+#define PRTE_APP_DEBUGGER_DAEMON    0x02    // this app describes daemons to be co-launched
+                                            //    with the application procs in the other apps
+                                            //    and does not count against allocation
 
 /* APP_CONTEXT ATTRIBUTE KEYS */
 #define PRTE_APP_HOSTFILE            1  // string  - hostfile
@@ -56,8 +59,6 @@ typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_PREPEND_ENVAR      19 // prte_envar_t - prepend the specified value to the given envar
 #define PRTE_APP_APPEND_ENVAR       20 // prte_envar_t - append the specified value to the given envar
 #define PRTE_APP_ADD_ENVAR          21 // prte_envar_t - add envar, do not override pre-existing one
-#define PRTE_APP_DEBUGGER_DAEMON    22 // bool - flag that this app describes daemons to be co-launched
-                                       //        with the application procs in the other apps
 #define PRTE_APP_PSET_NAME          23 // string - user-assigned name for the process
                                        //          set containing the given process
 
@@ -80,7 +81,6 @@ typedef uint8_t prte_node_flags_t;
 #define PRTE_NODE_LAUNCH_ID     (PRTE_NODE_START_KEY + 2) // int32 - Launch id needed by some systems to launch a proc on this node
 #define PRTE_NODE_HOSTID        (PRTE_NODE_START_KEY + 3) // pmix_rank_t - if this "node" is a coprocessor being hosted on a different node, then
                                                           // we need to know the id of our "host" to help any procs on us to determine locality
-#define PRTE_NODE_ALIAS         (PRTE_NODE_START_KEY + 4) // comma-separate list of alternate names for the node
 #define PRTE_NODE_SERIAL_NUMBER (PRTE_NODE_START_KEY + 5) // string - serial number: used if node is a coprocessor
 #define PRTE_NODE_PORT          (PRTE_NODE_START_KEY + 6) // int32 - Alternate port to be passed to plm
 
@@ -92,7 +92,6 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_FLAG_UPDATED           0x0001 // job has been updated and needs to be included in the pidmap message
 #define PRTE_JOB_FLAG_RESTARTED         0x0004 // some procs in this job are being restarted
 #define PRTE_JOB_FLAG_ABORTED           0x0008 // did this job abort?
-#define PRTE_JOB_FLAG_DEBUGGER_DAEMON   0x0010 // job is launching debugger daemons
 #define PRTE_JOB_FLAG_FORWARD_OUTPUT    0x0020 // forward output from the apps
 #define PRTE_JOB_FLAG_DO_NOT_MONITOR    0x0040 // do not monitor apps for termination
 #define PRTE_JOB_FLAG_FORWARD_COMM      0x0080 //
@@ -100,7 +99,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_FLAG_RESTART           0x0200 //
 #define PRTE_JOB_FLAG_PROCS_MIGRATING   0x0400 // some procs in job are migrating from one node to another
 #define PRTE_JOB_FLAG_OVERSUBSCRIBED    0x0800 // at least one node in the job is oversubscribed
-#define PRTE_JOB_FLAG_TOOL              0x1000 // job is a tool
+#define PRTE_JOB_FLAG_TOOL              0x1000 // job is a tool and doesn't count against allocations
 #define PRTE_JOB_FLAG_LAUNCHER          0x2000 // job is also a launcher
 #define PRTE_JOB_FLAG_ERR_REPORTED      0x4000 // error report for job has been output
 
@@ -196,6 +195,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_STOP_IN_INIT               (PRTE_JOB_START_KEY + 88) // pmix_rank_t of procs to stop
 #define PRTE_JOB_STOP_IN_APP                (PRTE_JOB_START_KEY + 89) // pmix_rank_t of procs to stop
 #define PRTE_JOB_ENVARS_HARVESTED           (PRTE_JOB_START_KEY + 90) // envars have already been harvested
+#define PRTE_JOB_OUTPUT_NOCOPY              (PRTE_JOB_START_KEY + 91) // bool - do not copy output to stdout/err
 
 #define PRTE_JOB_MAX_KEY 300
 
@@ -215,7 +215,6 @@ typedef uint16_t prte_proc_flags_t;
 #define PRTE_PROC_FLAG_DATA_IN_SM   0x0800 // modex data has been stored in the local shared memory region
 #define PRTE_PROC_FLAG_DATA_RECVD   0x1000 // modex data for this proc has been received
 #define PRTE_PROC_FLAG_SM_ACCESS    0x2000 // indicate if process can read modex data from shared memory region
-#define PRTE_PROC_FLAG_TOOL         0x4000 // proc is a tool and doesn't count against allocations
 
 /***   PROCESS ATTRIBUTE KEYS   ***/
 #define PRTE_PROC_START_KEY PRTE_JOB_MAX_KEY

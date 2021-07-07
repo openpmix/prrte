@@ -21,6 +21,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -305,7 +306,7 @@ int prte_mca_base_var_init(void)
 
 #if PRTE_WANT_HOME_CONFIG_FILES
         /* do the user's home default param files */
-        tmp = prte_os_path(false, home, ".prte", "prte-mca-params.conf", NULL);
+        tmp = prte_os_path(false, home, ".prte", "mca-params.conf", NULL);
         ret = prte_util_keyval_parse(tmp, save_value);
         free(tmp);
         if (PRTE_SUCCESS != ret && PRTE_ERR_NOT_FOUND != ret) {
@@ -968,31 +969,31 @@ static int register_variable(const char *project_name, const char *framework_nam
     switch (type) {
     case PRTE_MCA_BASE_VAR_TYPE_INT:
     case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT:
-        align = PRTE_ALIGNMENT_INT;
+        align = ALIGNOF_INT;
         break;
     case PRTE_MCA_BASE_VAR_TYPE_INT32_T:
     case PRTE_MCA_BASE_VAR_TYPE_UINT32_T:
-        align = PRTE_ALIGNMENT_INT32;
+        align = ALIGNOF_INT32_T;
         break;
     case PRTE_MCA_BASE_VAR_TYPE_INT64_T:
     case PRTE_MCA_BASE_VAR_TYPE_UINT64_T:
-        align = PRTE_ALIGNMENT_INT64;
+        align = ALIGNOF_INT64_T;
         break;
     case PRTE_MCA_BASE_VAR_TYPE_LONG:
     case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG:
-        align = PRTE_ALIGNMENT_LONG;
+        align = ALIGNOF_LONG;
         break;
     case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG_LONG:
-        align = PRTE_ALIGNMENT_LONG_LONG;
+        align = ALIGNOF_LONG_LONG;
         break;
     case PRTE_MCA_BASE_VAR_TYPE_SIZE_T:
-        align = PRTE_ALIGNMENT_SIZE_T;
+        align = ALIGNOF_SIZE_T;
         break;
     case PRTE_MCA_BASE_VAR_TYPE_BOOL:
-        align = PRTE_ALIGNMENT_BOOL;
+        align = ALIGNOF_BOOL;
         break;
     case PRTE_MCA_BASE_VAR_TYPE_DOUBLE:
-        align = PRTE_ALIGNMENT_DOUBLE;
+        align = ALIGNOF_DOUBLE;
         break;
     case PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING:
     case PRTE_MCA_BASE_VAR_TYPE_STRING:

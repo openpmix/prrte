@@ -151,6 +151,13 @@ static void force_quit(int fd, short args, void *cbdata)
 }
 
 /************************
+ * Local variables
+ ************************/
+static bool terminate_dvm = false;
+static bool dvm_terminated = false;
+
+
+/************************
  * API Definitions
  ************************/
 static int init(void)
@@ -385,7 +392,7 @@ static void job_started(int fd, short args, void *cbdata)
             return;
         }
         timestamp = time(NULL);
-        PMIX_INFO_CREATE(iptr, 4);
+        PMIX_INFO_CREATE(iptr, 5);
         /* target this notification solely to that one tool */
         PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, nptr, PMIX_PROC);
         PMIX_PROC_RELEASE(nptr);
@@ -395,9 +402,10 @@ static void job_started(int fd, short args, void *cbdata)
         PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
         /* provide the timestamp */
         PMIX_INFO_LOAD(&iptr[3], PMIX_EVENT_TIMESTAMP, &timestamp, PMIX_TIME);
+        PMIX_INFO_LOAD(&iptr[4], "prte.notify.donotloop", NULL, PMIX_BOOL);
         PMIx_Notify_event(PMIX_EVENT_JOB_START, &prte_process_info.myproc, PMIX_RANGE_CUSTOM, iptr,
-                          4, NULL, NULL);
-        PMIX_INFO_FREE(iptr, 4);
+                          5, NULL, NULL);
+        PMIX_INFO_FREE(iptr, 5);
     }
 
     PRTE_RELEASE(caddy);
@@ -435,6 +443,7 @@ static void ready_for_debug(int fd, short args, void *cbdata)
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
     /* provide the timestamp */
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_TIMESTAMP, &timestamp, PMIX_TIME);
+    PMIX_INFO_LIST_ADD(rc, tinfo, "prte.notify.donotloop", NULL, PMIX_BOOL);
     PMIX_INFO_LIST_CONVERT(rc, tinfo, &darray);
     if (PMIX_ERR_EMPTY == rc) {
         iptr = NULL;
@@ -484,6 +493,7 @@ static void check_complete(int fd, short args, void *cbdata)
     char *tmp;
     prte_timer_t *timer;
     int num_tools_attached = 0;
+    prte_app_context_t *app;
 
     PRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -531,9 +541,19 @@ static void check_complete(int fd, short args, void *cbdata)
         jdata->state = PRTE_JOB_STATE_TERMINATED;
     }
 
+    /* see if there was any problem */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, NULL, PMIX_POINTER)) {
+        rc = prte_pmix_convert_rc(jdata->exit_code);
+        /* or whether we got cancelled by the user */
+    } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CANCELLED, NULL, PMIX_BOOL)) {
+        rc = prte_pmix_convert_rc(PRTE_ERR_JOB_CANCELLED);
+    } else {
+        rc = prte_pmix_convert_rc(jdata->exit_code);
+    }
+
     /* if would be rare, but a very fast terminating job could conceivably
      * reach here prior to the spawn requestor being notified of spawn */
-    rc = prte_plm_base_spawn_response(PMIX_SUCCESS, jdata);
+    rc = prte_plm_base_spawn_response(rc, jdata);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
@@ -593,10 +613,6 @@ static void check_complete(int fd, short args, void *cbdata)
                 ++num_tools_attached;
                 continue;
             }
-            /* if the job is flagged to not be monitored, skip it */
-            if (PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_DO_NOT_MONITOR)) {
-                continue;
-            }
             if (jptr->state < PRTE_JOB_STATE_TERMINATED) {
                 /* still alive - finish processing this job's termination */
                 goto release;
@@ -605,13 +621,12 @@ static void check_complete(int fd, short args, void *cbdata)
 
         /* Let the tools know that a job terminated before we shutdown */
         if (num_tools_attached > 0 && jdata->state != PRTE_JOB_STATE_NOTIFIED) {
-            PRTE_OUTPUT_VERBOSE(
-                (2, prte_state_base_framework.framework_output,
-                 "%s state:dvm:check_job_completed state is terminated - activating notify",
-                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+            PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                                 "%s state:dvm:check_job_completed state is terminated - activating notify",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+            terminate_dvm = true;  // flag that the DVM is to terminate
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NOTIFY_COMPLETED);
-            /* mark the job as notified */
-            jdata->state = PRTE_JOB_STATE_NOTIFIED;
+            return;
         }
 
         /* if we fell thru to this point, then nobody is still
@@ -681,8 +696,9 @@ release:
                     /* skip procs from another job */
                     continue;
                 }
-                if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-                    && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+                app = (prte_app_context_t*) prte_pointer_array_get_item(jdata->apps, proc->app_idx);
+                if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON) &&
+                    !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                     node->slots_inuse--;
                     node->num_procs--;
                     node->next_node_rank--;
@@ -743,10 +759,9 @@ release:
     }
 
     if (jdata->state != PRTE_JOB_STATE_NOTIFIED) {
-        PRTE_OUTPUT_VERBOSE(
-            (2, prte_state_base_framework.framework_output,
-             "%s state:dvm:check_job_completed state is terminated - activating notify",
-             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                             "%s state:dvm:check_job_completed state is terminated - activating notify",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NOTIFY_COMPLETED);
         /* mark the job as notified */
         jdata->state = PRTE_JOB_STATE_NOTIFIED;
@@ -760,6 +775,11 @@ static void cleanup_job(int sd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
 
     PRTE_ACQUIRE_OBJECT(caddy);
+
+    if (terminate_dvm && !dvm_terminated) {
+        dvm_terminated = true;
+        prte_plm.terminate_orteds();
+    }
 
     PRTE_RELEASE(caddy);
 }
@@ -784,7 +804,8 @@ static void dvm_notify(int sd, short args, void *cbdata)
     char *errmsg = NULL;
 
     PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
-                         "%s state:dvm:dvm_notify called", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s state:dvm:dvm_notify called",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* see if there was any problem */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, (void **) &pptr, PMIX_POINTER)
@@ -846,7 +867,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
 
         /* pack the status code */
-        code = PMIX_ERR_JOB_TERMINATED;
+        code = PMIX_EVENT_JOB_END;
         if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &code, 1, PMIX_STATUS))) {
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);

@@ -35,6 +35,7 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
+#include "src/util/net.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/ras/base/ras_private.h"
@@ -49,10 +50,8 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
     int32_t num_nodes;
     int rc, i;
     prte_node_t *node, *hnp_node, *nptr;
-    char *ptr;
-    bool hnp_alone = true, skiphnp = false;
+    bool skiphnp = false;
     prte_attribute_t *kv;
-    char **alias = NULL, **nalias;
     prte_proc_t *daemon;
     prte_job_t *djob;
 
@@ -136,8 +135,9 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
             /* copy across any attributes */
             PRTE_LIST_FOREACH(kv, &node->attributes, prte_attribute_t)
             {
-                prte_set_attribute(&node->attributes, kv->key, PRTE_ATTR_LOCAL, &kv->data,
-                                   kv->data.type);
+                prte_set_attribute(&node->attributes, kv->key,
+                                   PRTE_ATTR_LOCAL,
+                                   &kv->data, kv->data.type);
             }
             if (prte_managed_allocation || PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
                 /* the slots are always treated as sacred
@@ -147,42 +147,8 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
             } else {
                 PRTE_FLAG_UNSET(hnp_node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             }
-            /* use the local name for our node - don't trust what
-             * we got from an RM. If requested, store the resolved
-             * nodename info
-             */
-            if (prte_show_resolved_nodenames) {
-                /* if the node name is different, store it as an alias */
-                if (0 != strcmp(node->name, hnp_node->name)) {
-                    /* get any current list of aliases */
-                    ptr = NULL;
-                    prte_get_attribute(&hnp_node->attributes, PRTE_NODE_ALIAS, (void **) &ptr,
-                                       PMIX_STRING);
-                    if (NULL != ptr) {
-                        alias = prte_argv_split(ptr, ',');
-                        free(ptr);
-                    }
-                    /* add to list of aliases for this node - only add if unique */
-                    prte_argv_append_unique_nosize(&alias, node->name);
-                }
-                if (prte_get_attribute(&node->attributes, PRTE_NODE_ALIAS, (void **) &ptr,
-                                       PMIX_STRING)) {
-                    nalias = prte_argv_split(ptr, ',');
-                    /* now copy over any aliases that are unique */
-                    for (i = 0; NULL != nalias[i]; i++) {
-                        prte_argv_append_unique_nosize(&alias, nalias[i]);
-                    }
-                    prte_argv_free(nalias);
-                }
-                /* and store the result */
-                if (0 < prte_argv_count(alias)) {
-                    ptr = prte_argv_join(alias, ',');
-                    prte_set_attribute(&hnp_node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, ptr,
-                                       PMIX_STRING);
-                    free(ptr);
-                }
-                prte_argv_free(alias);
-            }
+            /* if the node name is different, store it as an alias */
+            prte_argv_append_unique_nosize(&hnp_node->aliases, node->name);
             /* don't keep duplicate copy */
             PRTE_RELEASE(node);
             /* create copies, if required */
@@ -229,11 +195,10 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
             /* update the total slots in the job */
             prte_ras_base.total_slots_alloc += node->slots;
             /* check if we have fqdn names in the allocation */
-            if (NULL != strchr(node->name, '.')) {
+            if (!prte_net_isaddr(node->name) && NULL != strchr(node->name, '.')) {
                 prte_have_fqdn_allocation = true;
             }
-            /* indicate the HNP is not alone */
-            hnp_alone = false;
+            /* duplicate the node if requested */
             for (i = 1; i < prte_ras_base.multiplier; i++) {
                 rc = prte_node_copy(&nptr, node);
                 if (PRTE_SUCCESS != rc) {
@@ -241,16 +206,6 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
                 }
                 nptr->index = prte_pointer_array_add(prte_node_pool, nptr);
             }
-        }
-    }
-
-    /* if we didn't find any fqdn names in the allocation, then
-     * ensure we don't have any domain info in the node record
-     * for the hnp
-     */
-    if (NULL != hnp_node && !prte_have_fqdn_allocation && !hnp_alone) {
-        if (NULL != (ptr = strchr(hnp_node->name, '.'))) {
-            *ptr = '\0';
         }
     }
 

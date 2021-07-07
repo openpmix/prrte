@@ -129,6 +129,8 @@ examples/debugger/indirect
 examples/debugger/attach
 examples/debugger/daemon
 examples/debugger/hello
+examples/debugger/direct-multi
+examples/debugger/indirect-multi
 
 src/sys/powerpc/atomic-32.s
 src/sys/powerpc/atomic-64.s
@@ -170,3 +172,4 @@ test/hello
 test/connect
 test/loop_child
 test/loop_spawn
+test/reinit

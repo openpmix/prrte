@@ -369,8 +369,7 @@ char *prte_net_get_hostname(const struct sockaddr *addr)
 #        if defined(__NetBSD__)
         /* hotfix for netbsd: on my netbsd machine, getnameinfo
            returns an unkown error code. */
-        if (NULL
-            == inet_ntop(AF_INET6, &((struct sockaddr_in6 *) addr)->sin6_addr, name, NI_MAXHOST)) {
+        if (NULL == inet_ntop(AF_INET6, &((struct sockaddr_in6 *) addr)->sin6_addr, name, NI_MAXHOST)) {
             prte_output(0, "prte_sockaddr2str failed with error code %d", errno);
             return NULL;
         }

@@ -362,4 +362,211 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete, char *option,
     return PRTE_SUCCESS;
 }
 
+static bool check_qualifiers(char *directive,
+                             char **valid,
+                             char *qual)
+{
+    size_t n, len, l1, l2;
+    char *v;
+
+    l1 = strlen(qual);
+    for (n=0; NULL != valid[n]; n++) {
+        l2 = strlen(valid[n]);
+        len = (l1 < l2) ? l1 : l2;
+        if (0 == strncasecmp(valid[n], qual, len)) {
+            return true;
+        }
+    }
+    v = prte_argv_join(valid, ',');
+    prte_show_help("help-prte-rmaps-base.txt",
+                   "unrecognized-qualifier", true,
+                   directive, qual, v);
+    free(v);
+    return false;
+}
+
+static bool check_directives(char *directive,
+                             char **valid,
+                             char **quals,
+                             char *dir)
+{
+    size_t n, m, len, l1, l2;
+    char **args, **qls, *v, *q;
+    char *pproptions[] = {"slot", "hwthread", "core", "l1cache",
+                          "l2cache",  "l3cache", "package", "node",
+                          NULL};
+    bool found;
+
+    /* if it starts with a ':', then these are just modifiers */
+    if (':' == dir[0]) {
+        return check_qualifiers(directive, quals, &dir[1]);
+    }
+
+    args = prte_argv_split(dir, ':');
+    /* remove any '=' in the directive */
+    if (NULL != (v = strchr(args[0], '='))) {
+        *v = '\0';
+    }
+    for (n = 0; NULL != valid[n]; n++) {
+        l1 = strlen(args[0]);
+        l2 = strlen(valid[n]);
+        len = (l1 < l2) ? l1 : l2;
+        if (0 == strncasecmp(args[0], valid[n], len)) {
+            /* valid directive - check any qualifiers */
+            if (NULL != args[1] && NULL != quals) {
+                if (0 == strcmp(directive, "map-by") &&
+                    0 == strcmp(args[0], "ppr")) {
+                    /* unfortunately, this is a special case that
+                     * must be checked separately due to the format
+                     * of the qualifier */
+                    v = NULL;
+                    m = strtoul(args[1], &v, 10);
+                    if (NULL != v && 0 < strlen(v)) {
+                        /* the first entry had to be a pure number */
+                        prte_asprintf(&v, "ppr:[Number of procs/object]:%s", args[2]);
+                        prte_show_help("help-prte-rmaps-base.txt",
+                                       "unrecognized-qualifier", true,
+                                       directive, dir, v);
+                        free(v);
+                        prte_argv_free(args);
+                        return false;
+                    }
+                    found = false;
+                    for (m=0; NULL != pproptions[m]; m++) {
+                        if (0 == strcasecmp(args[2], pproptions[m])) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        v = prte_argv_join(pproptions, ',');
+                        prte_asprintf(&q, "ppr:%s:[%s]", args[1], v);
+                        free(v);
+                        prte_show_help("help-prte-rmaps-base.txt",
+                                       "unrecognized-qualifier", true,
+                                       directive, dir, q);
+                        free(q);
+                        prte_argv_free(args);
+                        return false;
+                    }
+                    if (NULL != args[3]) {
+                        qls = prte_argv_split(args[3], ',');
+                    } else {
+                        prte_argv_free(args);
+                        return true;
+                    }
+                } else {
+                    qls = prte_argv_split(args[1], ',');
+                }
+               for (m=0; NULL != qls[m]; m++) {
+                    if (!check_qualifiers(directive, quals, qls[m])) {
+                        prte_argv_free(qls);
+                        prte_argv_free(args);
+                        return false;
+                    }
+                }
+                prte_argv_free(qls);
+                prte_argv_free(args);
+                return true;
+            }
+            prte_argv_free(args);
+            return true;
+        }
+    }
+    v = prte_argv_join(valid, ',');
+    prte_show_help("help-prte-rmaps-base.txt",
+                   "unrecognized-directive", true,
+                   directive, dir, v);
+    prte_argv_free(args);
+    return false;
+}
+
+int prte_schizo_base_sanity(prte_cmd_line_t *cmd_line)
+{
+    prte_value_t *pval;
+    char *mappers[] = {"slot", "hwthread", "core", "l1cache", "l2cache",  "l3cache", "package",
+                       "node", "seq",      "dist", "ppr",     "rankfile", NULL};
+    char *mapquals[] = {"pe=", "span", "oversubscribe", "nooversubscribe", "nolocal",
+                        "hwtcpus", "corecpus", "device=", "inherit", "noinherit", "pe-list=",
+                        "file=", "donotlaunch", NULL};
+
+    char *rankers[] = {"slot",    "hwthread", "core", "l1cache", "l2cache",
+                       "l3cache", "package",  "node", NULL};
+    char *rkquals[] = {"span", "fill", NULL};
+
+    char *binders[] = {"none",    "hwthread", "core",    "l1cache",
+                       "l2cache", "l3cache",  "package", NULL};
+    char *bndquals[] = {"overload-allowed", "if-supported", "ordered", "report", NULL};
+
+    char *outputs[] = {"tag", "timestamp", "xml", "merge-stderr-to-stdout", "directory", "filename", NULL};
+    char *outquals[] = {"nocopy", NULL};
+
+    char *displays[] = {"allocation", "map", "bind", "map-devel", "topo", NULL};
+
+    bool hwtcpus = false;
+
+    if (1 < prte_cmd_line_get_ninsts(cmd_line, "map-by")) {
+        prte_show_help("help-schizo-base.txt", "multi-instances", true, "map-by");
+        return PRTE_ERR_SILENT;
+    }
+    if (1 < prte_cmd_line_get_ninsts(cmd_line, "rank-by")) {
+        prte_show_help("help-schizo-base.txt", "multi-instances", true, "rank-by");
+        return PRTE_ERR_SILENT;
+    }
+    if (1 < prte_cmd_line_get_ninsts(cmd_line, "bind-to")) {
+        prte_show_help("help-schizo-base.txt", "multi-instances", true, "bind-to");
+        return PRTE_ERR_SILENT;
+    }
+    if (1 < prte_cmd_line_get_ninsts(cmd_line, "output")) {
+        prte_show_help("help-schizo-base.txt", "multi-instances", true, "output");
+        return PRTE_ERR_SILENT;
+    }
+    if (1 < prte_cmd_line_get_ninsts(cmd_line, "display")) {
+        prte_show_help("help-schizo-base.txt", "multi-instances", true, "display");
+        return PRTE_ERR_SILENT;
+    }
+
+    /* quick check that we have valid directives */
+    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "map-by", 0, 0))) {
+        if (NULL != strcasestr(pval->value.data.string, "HWTCPUS")) {
+            hwtcpus = true;
+        }
+        if (!check_directives("map-by", mappers, mapquals, pval->value.data.string)) {
+            return PRTE_ERR_SILENT;
+        }
+    }
+
+    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "rank-by", 0, 0))) {
+        if (!check_directives("rank-by", rankers, rkquals, pval->value.data.string)) {
+            return PRTE_ERR_SILENT;
+        }
+    }
+
+    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "bind-to", 0, 0))) {
+        if (!check_directives("bind-to", binders, bndquals, pval->value.data.string)) {
+            return PRTE_ERR_SILENT;
+        }
+        if (0 == strncasecmp(pval->value.data.string, "HWTHREAD", strlen("HWTHREAD")) && !hwtcpus) {
+            /* if we are told to bind-to hwt, then we have to be treating
+             * hwt's as the allocatable unit */
+            prte_show_help("help-prte-rmaps-base.txt", "invalid-combination", true);
+            return PRTE_ERR_SILENT;
+        }
+    }
+
+    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "output", 0, 0))) {
+        if (!check_directives("output", outputs, outquals, pval->value.data.string)) {
+            return PRTE_ERR_SILENT;
+        }
+    }
+
+    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "display", 0, 0))) {
+        if (!check_directives("display", displays, NULL, pval->value.data.string)) {
+            return PRTE_ERR_SILENT;
+        }
+    }
+
+    return PRTE_SUCCESS;
+}
+
 PRTE_CLASS_INSTANCE(prte_schizo_base_active_module_t, prte_list_item_t, NULL, NULL);

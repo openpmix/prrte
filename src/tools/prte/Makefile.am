@@ -52,9 +52,7 @@ man_MANS = $(man_pages_from_md)
 endif
 
 prte_SOURCES = \
-        main.c \
-        prte.c \
-        prte.h
+        main.c
 
 prte_LDADD = \
     $(PRTE_EXTRA_LTLIB) \

@@ -15,6 +15,7 @@
 # Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.  All rights reserved.
 # Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -36,7 +37,9 @@ EXTRA_DIST += \
         examples/Makefile \
         examples/client.c \
         examples/debugger/direct.c \
+	examples/debugger/direct-multi.c \
         examples/debugger/indirect.c \
+	examples/debugger/indirect-multi.c \
         examples/debugger/attach.c \
         examples/debugger/daemon.c \
         examples/debugger/hello.c \

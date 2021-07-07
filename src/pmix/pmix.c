@@ -50,6 +50,12 @@ pmix_status_t prte_pmix_convert_rc(int rc)
     case PRTE_ERR_NO_APP_SPECIFIED:
         return PMIX_ERR_JOB_NO_EXE_SPECIFIED;
 
+    case PRTE_ERR_SLOT_LIST_RANGE:
+    case PRTE_ERR_TOPO_SOCKET_NOT_SUPPORTED:
+    case PRTE_ERR_INVALID_PHYS_CPU:
+    case PRTE_ERR_TOPO_CORE_NOT_SUPPORTED:
+    case PRTE_ERR_TOPO_SLOT_LIST_NOT_SUPPORTED:
+    case PRTE_ERR_MULTIPLE_AFFINITIES:
     case PRTE_ERR_FAILED_TO_MAP:
         return PMIX_ERR_JOB_FAILED_TO_MAP;
 
@@ -78,7 +84,7 @@ pmix_status_t prte_pmix_convert_rc(int rc)
         return PMIX_ERR_NODE_OFFLINE;
 
     case PRTE_ERR_JOB_TERMINATED:
-        return PMIX_ERR_JOB_TERMINATED;
+        return PMIX_EVENT_JOB_END;
 
     case PRTE_ERR_PROC_RESTART:
         return PMIX_ERR_PROC_RESTART;
@@ -107,11 +113,28 @@ pmix_status_t prte_pmix_convert_rc(int rc)
     case PRTE_ERR_BAD_PARAM:
         return PMIX_ERR_BAD_PARAM;
 
+    case PRTE_ERR_SYS_LIMITS_PIPES:
+    case PRTE_ERR_SYS_LIMITS_CHILDREN:
+    case PRTE_ERR_SOCKET_NOT_AVAILABLE:
+    case PRTE_ERR_NOT_ENOUGH_CORES:
+    case PRTE_ERR_NOT_ENOUGH_SOCKETS:
+        return PMIX_ERR_JOB_INSUFFICIENT_RESOURCES;
+
+    case PRTE_ERR_PIPE_READ_FAILURE:
+        return PMIX_ERR_JOB_SYS_OP_FAILED;
+
     case PRTE_ERR_OUT_OF_RESOURCE:
         return PMIX_ERR_OUT_OF_RESOURCE;
 
     case PRTE_ERR_DATA_VALUE_NOT_FOUND:
         return PMIX_ERR_DATA_VALUE_NOT_FOUND;
+
+    case PRTE_ERR_WDIR_NOT_FOUND:
+        return PMIX_ERR_JOB_WDIR_NOT_FOUND;
+
+    case PRTE_ERR_EXE_NOT_FOUND:
+    case PRTE_ERR_EXE_NOT_ACCESSIBLE:
+        return PMIX_ERR_JOB_EXE_NOT_FOUND;
 
     case PRTE_ERR_TIMEOUT:
         return PMIX_ERR_TIMEOUT;
@@ -162,7 +185,7 @@ int prte_pmix_convert_status(pmix_status_t status)
     case PMIX_ERR_NODE_OFFLINE:
         return PRTE_ERR_NODE_OFFLINE;
 
-    case PMIX_ERR_JOB_TERMINATED:
+    case PMIX_EVENT_JOB_END:
         return PRTE_ERR_JOB_TERMINATED;
 
     case PMIX_ERR_PROC_RESTART:
@@ -325,45 +348,79 @@ int prte_pmix_convert_pstate(pmix_proc_state_t state)
 pmix_status_t prte_pmix_convert_job_state_to_error(int state)
 {
     switch (state) {
-    case PRTE_JOB_STATE_ALLOC_FAILED:
-        return PMIX_ERR_JOB_ALLOC_FAILED;
+        case PRTE_JOB_STATE_ALLOC_FAILED:
+            return PMIX_ERR_JOB_ALLOC_FAILED;
 
-    case PRTE_JOB_STATE_MAP_FAILED:
-        return PMIX_ERR_JOB_FAILED_TO_MAP;
+        case PRTE_JOB_STATE_MAP_FAILED:
+            return PMIX_ERR_JOB_FAILED_TO_MAP;
 
-    case PRTE_JOB_STATE_NEVER_LAUNCHED:
-    case PRTE_JOB_STATE_FAILED_TO_LAUNCH:
-    case PRTE_JOB_STATE_FAILED_TO_START:
-    case PRTE_JOB_STATE_CANNOT_LAUNCH:
-        return PMIX_ERR_JOB_FAILED_TO_LAUNCH;
+        case PRTE_JOB_STATE_NEVER_LAUNCHED:
+        case PRTE_JOB_STATE_FAILED_TO_LAUNCH:
+        case PRTE_JOB_STATE_FAILED_TO_START:
+        case PRTE_JOB_STATE_CANNOT_LAUNCH:
+            return PMIX_ERR_JOB_FAILED_TO_LAUNCH;
 
-    case PRTE_JOB_STATE_KILLED_BY_CMD:
-        return PMIX_ERR_JOB_CANCELED;
+        case PRTE_JOB_STATE_KILLED_BY_CMD:
+            return PMIX_ERR_JOB_CANCELED;
 
-    case PRTE_JOB_STATE_ABORTED:
-    case PRTE_JOB_STATE_CALLED_ABORT:
-    case PRTE_JOB_STATE_SILENT_ABORT:
-        return PMIX_ERR_JOB_ABORTED;
+        case PRTE_JOB_STATE_ABORTED:
+        case PRTE_JOB_STATE_CALLED_ABORT:
+        case PRTE_JOB_STATE_SILENT_ABORT:
+            return PMIX_ERR_JOB_ABORTED;
 
-    case PRTE_JOB_STATE_ABORTED_BY_SIG:
-        return PMIX_ERR_JOB_ABORTED_BY_SIG;
+        case PRTE_JOB_STATE_ABORTED_BY_SIG:
+            return PMIX_ERR_JOB_ABORTED_BY_SIG;
 
-    case PRTE_JOB_STATE_ABORTED_WO_SYNC:
-        return PMIX_ERR_JOB_TERM_WO_SYNC;
+        case PRTE_JOB_STATE_ABORTED_WO_SYNC:
+            return PMIX_ERR_JOB_TERM_WO_SYNC;
 
-    case PRTE_JOB_STATE_TERMINATED:
-        return PMIX_ERR_JOB_TERMINATED;
+        case PRTE_JOB_STATE_TERMINATED:
+            return PMIX_EVENT_JOB_END;
 
-    default:
-        return PMIX_ERROR;
+        default:
+            return PMIX_ERROR;
     }
 }
 
 pmix_status_t prte_pmix_convert_proc_state_to_error(int state)
 {
     switch (state) {
-    default:
-        return PMIX_ERROR;
+        case PRTE_PROC_STATE_KILLED_BY_CMD:
+            return PMIX_ERR_JOB_CANCELED;
+
+        case PRTE_PROC_STATE_ABORTED:
+        case PRTE_PROC_STATE_CALLED_ABORT:
+            return PMIX_ERR_JOB_ABORTED;
+
+        case PRTE_PROC_STATE_ABORTED_BY_SIG:
+            return PMIX_ERR_JOB_ABORTED_BY_SIG;
+
+        case PRTE_PROC_STATE_FAILED_TO_LAUNCH:
+        case PRTE_PROC_STATE_FAILED_TO_START:
+            return PMIX_ERR_JOB_FAILED_TO_LAUNCH;
+
+        case PRTE_PROC_STATE_TERM_WO_SYNC:
+            return PMIX_ERR_JOB_TERM_WO_SYNC;
+
+        case PRTE_PROC_STATE_COMM_FAILED:
+        case PRTE_PROC_STATE_UNABLE_TO_SEND_MSG:
+        case PRTE_PROC_STATE_LIFELINE_LOST:
+        case PRTE_PROC_STATE_NO_PATH_TO_TARGET:
+        case PRTE_PROC_STATE_FAILED_TO_CONNECT:
+        case PRTE_PROC_STATE_PEER_UNKNOWN:
+            return PMIX_ERR_COMM_FAILURE;
+
+        case PRTE_PROC_STATE_CANNOT_RESTART:
+            return PMIX_ERR_PROC_RESTART;
+
+        case PRTE_PROC_STATE_TERM_NON_ZERO:
+            return PMIX_ERR_JOB_NON_ZERO_TERM;
+
+        case PRTE_PROC_STATE_SENSOR_BOUND_EXCEEDED:
+            return PMIX_ERR_JOB_SENSOR_BOUND_EXCEEDED;
+
+        default:
+            return PMIX_ERROR;
     }
 }
 

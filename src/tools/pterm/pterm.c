@@ -247,6 +247,17 @@ int main(int argc, char *argv[])
     /* init the globals */
     PRTE_CONSTRUCT(&job_info, prte_list_t);
 
+    /* we always need the prrte and pmix params */
+    rc = prte_schizo_base_parse_prte(argc, 0, argv, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+    rc = prte_schizo_base_parse_pmix(argc, 0, argv, NULL);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
     /* init the tiny part of PRTE we use */
     prte_init_util(PRTE_PROC_MASTER);
 

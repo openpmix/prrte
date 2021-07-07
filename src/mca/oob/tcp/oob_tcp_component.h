@@ -55,8 +55,6 @@ typedef struct {
     prte_list_t peers;               // connection addresses for peers
 
     /* Port specifications */
-    char *if_include; /**< list of ip interfaces to include */
-    char *if_exclude; /**< list of ip interfaces to exclude */
     int tcp_sndbuf;   /**< socket send buffer size */
     int tcp_rcvbuf;   /**< socket recv buffer size */
 

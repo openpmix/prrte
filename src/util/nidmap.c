@@ -37,9 +37,10 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool, pmix_data_buffer_t *buff
     char *raw = NULL;
     pmix_rank_t *vpids = NULL;
     uint8_t u8;
-    int n, ndaemons, nbytes;
+    int n, m, ndaemons, nbytes;
     bool compressed;
     char **names = NULL;
+    char **aliases = NULL, **als;
     prte_node_t *nptr;
     pmix_byte_object_t bo;
     size_t sz;
@@ -87,6 +88,18 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool, pmix_data_buffer_t *buff
         }
         /* add the hostname to the argv */
         prte_argv_append_nosize(&names, nptr->name);
+        als = NULL;
+        if (NULL != nptr->aliases) {
+            for (m=0; NULL != nptr->aliases[m]; m++) {
+                prte_argv_append_nosize(&als, nptr->aliases[m]);
+            }
+            raw = prte_argv_join(als, ',');
+            prte_argv_free(als);
+            prte_argv_append_nosize(&aliases, raw);
+            free(raw);
+        } else {
+            prte_argv_append_nosize(&aliases, "PRTENONE");
+        }
         /* store the vpid */
         if (NULL == nptr->daemon) {
             vpids[ndaemons] = PMIX_RANK_INVALID;
@@ -96,9 +109,48 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool, pmix_data_buffer_t *buff
         ++ndaemons;
     }
 
+    /* little protection */
+    if (NULL == names || NULL == aliases) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        free(vpids);
+        return PRTE_ERR_NOT_FOUND;
+    }
+
     /* construct the string of node names for compression */
     raw = prte_argv_join(names, ',');
     prte_argv_free(names);
+    if (PMIx_Data_compress((uint8_t *) raw, strlen(raw) + 1, (uint8_t **) &bo.bytes, &sz)) {
+        /* mark that this was compressed */
+        compressed = true;
+        bo.size = sz;
+        free(raw);
+    } else {
+        /* mark that this was not compressed */
+        compressed = false;
+        bo.bytes = (char *) raw;
+        bo.size = strlen(raw) + 1;
+    }
+    /* indicate compression */
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &compressed, 1, PMIX_BOOL);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        free(bo.bytes);
+        free(vpids);
+        return rc;
+    }
+    /* add the object */
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &bo, 1, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        free(bo.bytes);
+        free(vpids);
+        return rc;
+    }
+    free(bo.bytes);
+
+    /* construct the string of aliases for compression */
+    raw = prte_argv_join(aliases, ';');
+    prte_argv_free(aliases);
     if (PMIx_Data_compress((uint8_t *) raw, strlen(raw) + 1, (uint8_t **) &bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
@@ -167,7 +219,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
     bool compressed;
     size_t sz;
     pmix_byte_object_t pbo;
-    char *raw = NULL, **names = NULL;
+    char *raw = NULL, **names = NULL, **aliases = NULL;
     prte_node_t *nd;
     prte_job_t *daemons;
     prte_proc_t *proc;
@@ -218,7 +270,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
 
     /* if compressed, decompress */
     if (compressed) {
-        if (!PMIx_Data_decompress((uint8_t **) &raw, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+        if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &raw, &sz)) {
             PRTE_ERROR_LOG(PRTE_ERROR);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             rc = PRTE_ERROR;
@@ -231,6 +283,39 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
     names = prte_argv_split(raw, ',');
+    free(raw);
+
+    /* unpack compression flag for node aliases */
+    cnt = 1;
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buf, &compressed, &cnt, PMIX_BOOL);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto cleanup;
+    }
+
+    /* unpack the aliases object */
+    cnt = 1;
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buf, &pbo, &cnt, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto cleanup;
+    }
+
+    /* if compressed, decompress */
+    if (compressed) {
+        if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &raw, &sz)) {
+            PRTE_ERROR_LOG(PRTE_ERROR);
+            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+            rc = PRTE_ERROR;
+            goto cleanup;
+        }
+    } else {
+        raw = (char *) pbo.bytes;
+        pbo.bytes = NULL; // protect the data
+        pbo.size = 0;
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+    aliases = prte_argv_split(raw, ';');
     free(raw);
 
     /* unpack compression flag for daemon vpids */
@@ -251,7 +336,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
 
     /* if compressed, decompress */
     if (compressed) {
-        if (!PMIx_Data_decompress((uint8_t **) &vpid, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+        if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &vpid, &sz)) {
             PRTE_ERROR_LOG(PRTE_ERROR);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             rc = PRTE_ERROR;
@@ -286,7 +371,19 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
      * _all_ nodes known to the allocation */
     for (n = 0; NULL != names[n]; n++) {
         /* do we already have this node? */
-        if (NULL != prte_pointer_array_get_item(prte_node_pool, n)) {
+        nd = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, n);
+        if (NULL != nd) {
+            /* check the name */
+            if (0 != strcmp(nd->name, names[n])) {
+                free(nd->name);
+                nd->name = strdup(names[n]);
+            }
+            if (0 != strcmp(aliases[n], "PRTENONE")) {
+                if (NULL != nd->aliases) {
+                    prte_argv_free(nd->aliases);
+                }
+                nd->aliases = prte_argv_split(aliases[n], ',');
+            }
             continue;
         }
         /* add this name to the pool */
@@ -294,21 +391,17 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         nd->name = strdup(names[n]);
         nd->index = n;
         prte_pointer_array_set_item(prte_node_pool, n, nd);
-        /* see if this is our node */
-        if (prte_check_host_is_local(names[n])) {
-            /* add our aliases as an attribute - will include all the interface aliases captured in
-             * prte_init */
-            raw = prte_argv_join(prte_process_info.aliases, ',');
-            prte_set_attribute(&nd->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, raw, PMIX_STRING);
-            free(raw);
+        /* add any aliases */
+        if (0 != strcmp(aliases[n], "PRTENONE")) {
+            nd->aliases = prte_argv_split(aliases[n], ',');
         }
         /* set the topology - always default to homogeneous
          * as that is the most common scenario */
         nd->topology = t;
         /* see if it has a daemon on it */
         if (PMIX_RANK_INVALID != vpid[n]) {
-            if (NULL
-                == (proc = (prte_proc_t *) prte_pointer_array_get_item(daemons->procs, vpid[n]))) {
+            proc = (prte_proc_t *) prte_pointer_array_get_item(daemons->procs, vpid[n]);
+            if (NULL == proc) {
                 proc = PRTE_NEW(prte_proc_t);
                 PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, vpid[n]);
                 proc->state = PRTE_PROC_STATE_RUNNING;
@@ -699,7 +792,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
 
         /* if compressed, decompress */
         if (compressed) {
-            if (!PMIx_Data_decompress((uint8_t **) &bytes, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &bytes, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -787,7 +880,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         }
         /* if compressed, decompress */
         if (compressed) {
-            if (!PMIx_Data_decompress((uint8_t **) &bytes, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &bytes, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -874,7 +967,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         }
         /* if compressed, decompress */
         if (1 == i16) {
-            if (!PMIx_Data_decompress((uint8_t **) &slots, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &slots, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -926,7 +1019,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         }
         /* if compressed, decompress */
         if (2 == i8) {
-            if (!PMIx_Data_decompress((uint8_t **) &flags, &sz, (uint8_t *) pbo.bytes, pbo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size, (uint8_t **) &flags, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 rc = PRTE_ERROR;
@@ -1102,7 +1195,7 @@ int prte_util_decode_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf)
 
         /* decompress if required */
         if (compressed) {
-            if (!PMIx_Data_decompress(&bytes, &sz, (uint8_t *) bo.bytes, bo.size)) {
+            if (!PMIx_Data_decompress((uint8_t *) bo.bytes, bo.size, &bytes, &sz)) {
                 PRTE_ERROR_LOG(PRTE_ERROR);
                 PMIX_BYTE_OBJECT_DESTRUCT(&bo);
                 return PRTE_ERROR;

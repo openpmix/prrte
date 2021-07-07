@@ -113,7 +113,7 @@ int main(int argc, char **argv)
     pmix_info_t *info;
     mylock_t mylock;
     myrel_t myrel;
-    pmix_status_t code[2] = {PMIX_ERR_PROC_ABORTED, PMIX_ERR_JOB_TERMINATED};
+    pmix_status_t code[2] = {PMIX_ERR_PROC_ABORTED, PMIX_EVENT_JOB_END};
 
     /* init us */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {

@@ -35,9 +35,6 @@
 #include "src/mca/mca.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
-#include "src/util/output.h"
-#include "src/util/printf.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -46,10 +43,14 @@
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
 #include "src/threads/threads.h"
+#include "src/util/argv.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/error_strings.h"
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
+#include "src/util/net.h"
+#include "src/util/output.h"
+#include "src/util/printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 
@@ -110,7 +111,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     char *tmp = NULL, *tmp2, *tmp3;
     int i, istart;
     prte_node_t *alloc;
-    char *flgs;
+    char *flgs, *aliases;
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
         prte_asprintf(&tmp, "<allocation>\n");
@@ -136,11 +137,21 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
         } else {
             /* build the flags string */
             flgs = prte_ras_base_flag_string(alloc);
-            prte_asprintf(&tmp2, "\t%s: slots=%d max_slots=%d slots_inuse=%d state=%s\n\t%s\n",
+            /* build the aliases string */
+            if (NULL != alloc->aliases) {
+                aliases = prte_argv_join(alloc->aliases, ',');
+            } else {
+                aliases = NULL;
+            }
+            prte_asprintf(&tmp2, "    %s: slots=%d max_slots=%d slots_inuse=%d state=%s\n\t%s\n\taliases: %s\n",
                           (NULL == alloc->name) ? "UNKNOWN" : alloc->name, (int) alloc->slots,
                           (int) alloc->slots_max, (int) alloc->slots_inuse,
-                          prte_node_state_to_str(alloc->state), flgs);
+                          prte_node_state_to_str(alloc->state), flgs,
+                          (NULL == aliases) ? "NONE" : aliases);
             free(flgs);
+            if (NULL != aliases) {
+                free(aliases);
+            }
         }
         if (NULL == tmp) {
             tmp = tmp2;
@@ -174,6 +185,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     prte_app_context_t *app;
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     char *hosts = NULL;
+    char *ptr;
     pmix_status_t ret;
 
     PRTE_ACQUIRE_OBJECT(caddy);
@@ -258,6 +270,26 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     if (!prte_list_is_empty(&nodes)) {
         /* flag that the allocation is managed */
         prte_managed_allocation = true;
+        /* since this is a managed allocation, we do not resolve */
+        prte_do_not_resolve = true;
+        /* if we are not retaining FQDN hostnames, then record
+         * aliases where appropriate */
+        PRTE_LIST_FOREACH(node, &nodes, prte_node_t) {
+            if (!prte_net_isaddr(node->name) &&
+                NULL != (ptr = strchr(node->name, '.'))) {
+                if (prte_keep_fqdn_hostnames) {
+                    /* retain the non-fqdn name as an alias */
+                    *ptr = '\0';
+                    prte_argv_append_unique_nosize(&node->aliases, node->name);
+                    *ptr = '.';
+                } else {
+                    /* add the fqdn name as an alias */
+                    prte_argv_append_unique_nosize(&node->aliases, node->name);
+                    /* retain the non-fqdn name as the node's name */
+                    *ptr = '\0';
+                }
+            }
+        }
         /* store the results in the global resource pool - this removes the
          * list items
          */
@@ -508,13 +540,17 @@ DISPLAY:
 next_state:
     /* are we to report this event? */
     if (prte_report_events) {
-        if (PMIX_SUCCESS
-            != (ret = PMIx_Notify_event(PMIX_NOTIFY_ALLOC_COMPLETE, NULL, PMIX_GLOBAL, NULL, 0,
-                                        NULL, NULL))) {
+        pmix_info_t info;
+        PMIX_INFO_LOAD(&info, "prte.notify.donotloop", NULL, PMIX_BOOL);
+
+        ret = PMIx_Notify_event(PMIX_NOTIFY_ALLOC_COMPLETE, NULL, PMIX_GLOBAL,
+                                &info, 1, NULL, NULL);
+        if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
             PMIX_ERROR_LOG(ret);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
             PRTE_RELEASE(caddy);
         }
+        PMIX_INFO_DESTRUCT(&info);
     }
 
     /* set total slots alloc */

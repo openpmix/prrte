@@ -26,6 +26,7 @@
 # Copyright (c) 2018-2021 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # Copyright (c) 2021      Nanook Consulting  All rights reserved.
+# Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -417,37 +418,38 @@ AC_CHECK_SIZEOF(atomic_llong,[],[[#include <stdatomic.h>]])
 # Check for type alignments
 #
 
-PRTE_C_GET_ALIGNMENT(bool, PRTE_ALIGNMENT_BOOL)
-PRTE_C_GET_ALIGNMENT(int8_t, PRTE_ALIGNMENT_INT8)
-PRTE_C_GET_ALIGNMENT(int16_t, PRTE_ALIGNMENT_INT16)
-PRTE_C_GET_ALIGNMENT(int32_t, PRTE_ALIGNMENT_INT32)
-PRTE_C_GET_ALIGNMENT(int64_t, PRTE_ALIGNMENT_INT64)
+AC_CHECK_ALIGNOF(bool, [AC_INCLUDES_DEFAULT
+                        #include <stdbool.h>])
+AC_CHECK_ALIGNOF(int8_t)
+AC_CHECK_ALIGNOF(int16_t)
+AC_CHECK_ALIGNOF(int32_t)
+AC_CHECK_ALIGNOF(int64_t)
 
 if test "$ac_cv_type_int128_t" = yes ; then
-  PRTE_C_GET_ALIGNMENT(int128_t, PRTE_ALIGNMENT_INT128)
+  AC_CHECK_ALIGNOF(int128_t)
 fi
 
-PRTE_C_GET_ALIGNMENT(char, PRTE_ALIGNMENT_CHAR)
-PRTE_C_GET_ALIGNMENT(short, PRTE_ALIGNMENT_SHORT)
-PRTE_C_GET_ALIGNMENT(wchar_t, PRTE_ALIGNMENT_WCHAR)
-PRTE_C_GET_ALIGNMENT(int, PRTE_ALIGNMENT_INT)
-PRTE_C_GET_ALIGNMENT(long, PRTE_ALIGNMENT_LONG)
-PRTE_C_GET_ALIGNMENT(long long, PRTE_ALIGNMENT_LONG_LONG)
-PRTE_C_GET_ALIGNMENT(float, PRTE_ALIGNMENT_FLOAT)
-PRTE_C_GET_ALIGNMENT(double, PRTE_ALIGNMENT_DOUBLE)
-PRTE_C_GET_ALIGNMENT(long double, PRTE_ALIGNMENT_LONG_DOUBLE)
+AC_CHECK_ALIGNOF(char)
+AC_CHECK_ALIGNOF(short)
+AC_CHECK_ALIGNOF(wchar_t)
+AC_CHECK_ALIGNOF(int)
+AC_CHECK_ALIGNOF(long)
+AC_CHECK_ALIGNOF(long long)
+AC_CHECK_ALIGNOF(float)
+AC_CHECK_ALIGNOF(double)
+AC_CHECK_ALIGNOF(long double)
 if test "$ac_cv_type___float128" = yes; then
-    PRTE_C_GET_ALIGNMENT(__float128, PRTE_ALIGNMENT___FLOAT128)
+    AC_CHECK_ALIGNOF(__float128)
 fi
 
 # We only need these types if we're building the OMPI project, but
 # PRTE currently doesn't protect for their lack of presence well.
-PRTE_C_GET_ALIGNMENT(float _Complex, PRTE_ALIGNMENT_FLOAT_COMPLEX)
-PRTE_C_GET_ALIGNMENT(double _Complex, PRTE_ALIGNMENT_DOUBLE_COMPLEX)
-PRTE_C_GET_ALIGNMENT(long double _Complex, PRTE_ALIGNMENT_LONG_DOUBLE_COMPLEX)
+AC_CHECK_ALIGNOF(float _Complex)
+AC_CHECK_ALIGNOF(double _Complex)
+AC_CHECK_ALIGNOF(long double _Complex)
 
-PRTE_C_GET_ALIGNMENT(void *, PRTE_ALIGNMENT_VOID_P)
-PRTE_C_GET_ALIGNMENT(size_t, PRTE_ALIGNMENT_SIZE_T)
+AC_CHECK_ALIGNOF(void *)
+AC_CHECK_ALIGNOF(size_t)
 
 #
 # Check for other compiler characteristics
@@ -1143,7 +1145,7 @@ if test "$PRTE_TOP_BUILDDIR" != "$PRTE_TOP_SRCDIR"; then
     # rather than have successive assignments to these shell
     # variables, lest the $(foo) names try to get evaluated here.
     # Yuck!
-    cpp_includes="$PRTE_TOP_SRCDIR $PRTE_TOP_BUILDDIR $PRTE_TOP_SRCDIR/src/include $PRTE_TOP_BUILDDIR/src/include"
+    cpp_includes="$PRTE_TOP_SRCDIR $PRTE_TOP_BUILDDIR $PRTE_TOP_SRCDIR/src/include $PRTE_TOP_BUILDDIR/src/include $PRTE_TOP_BUILDDIR/include"
 else
     cpp_includes="$PRTE_TOP_SRCDIR $PRTE_TOP_SRCDIR/src/include"
 fi

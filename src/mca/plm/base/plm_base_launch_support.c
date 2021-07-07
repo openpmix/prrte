@@ -42,9 +42,6 @@
 #include "src/include/hash_string.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
-#include "src/util/argv.h"
-#include "src/util/printf.h"
-#include "src/util/prte_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -71,9 +68,13 @@
 #include "src/threads/threads.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
+#include "src/util/argv.h"
 #include "src/util/name_fns.h"
+#include "src/util/net.h"
 #include "src/util/nidmap.h"
+#include "src/util/printf.h"
 #include "src/util/proc_info.h"
+#include "src/util/prte_environ.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
@@ -345,7 +346,6 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
     pmix_rank_t *vptr;
     int i, rc;
     char *serial_number;
-    pmix_proc_t requestor, *rptr;
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -363,27 +363,6 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
 
     /* convenience */
     jdata = caddy->jdata;
-
-    /* If this job is being started by me, then there is nothing
-     * further we need to do as any user directives (e.g., to tie
-     * off IO to /dev/null) will have been included in the launch
-     * message and the IOF knows how to handle any default situation.
-     * However, if this is a proxy spawn request, then the spawner
-     * might be a tool that wants IO forwarded to it. If that's the
-     * situation, then the job object will contain an attribute
-     * indicating that request */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FWDIO_TO_TOOL, NULL, PMIX_BOOL)) {
-        /* send a message to our IOF containing the requested pull */
-        rptr = &requestor;
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &rptr,
-                               PMIX_PROC)) {
-            PRTE_IOF_PROXY_PULL(jdata, rptr);
-        } else {
-            PRTE_IOF_PROXY_PULL(jdata, &jdata->originator);
-        }
-        /* the tool will PUSH its stdin, so nothing we need to do here
-         * about stdin */
-    }
 
     /* if coprocessors were detected, now is the time to
      * identify who is attached to what host - this info
@@ -625,7 +604,7 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
 
         /* direct an event back to our controller */
         timestamp = time(NULL);
-        PMIX_INFO_CREATE(iptr, 4);
+        PMIX_INFO_CREATE(iptr, 5);
         /* target this notification solely to that one tool */
         PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, nptr, PMIX_PROC);
         PMIX_PROC_RELEASE(nptr);
@@ -635,8 +614,10 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
         PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
         /* provide the timestamp */
         PMIX_INFO_LOAD(&iptr[3], PMIX_EVENT_TIMESTAMP, &timestamp, PMIX_TIME);
-        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &prte_process_info.myproc, PMIX_RANGE_CUSTOM, iptr,
-                          4, NULL, NULL);
+        /* protect against loops */
+        PMIX_INFO_LOAD(&iptr[4], "prte.notify.donotloop", NULL, PMIX_BOOL);
+        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &prte_process_info.myproc, PMIX_RANGE_CUSTOM,
+                          iptr, 5, NULL, NULL);
         PMIX_INFO_FREE(iptr, 4);
     }
 
@@ -648,7 +629,7 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
 
     /* if the originator is me, then just do the notification */
     if (PMIX_CHECK_PROCID(&jdata->originator, PRTE_PROC_MY_NAME)) {
-        pmix_server_notify_spawn(jdata->nspace, room, PMIX_SUCCESS);
+        pmix_server_notify_spawn(jdata->nspace, room, status);
         return PRTE_SUCCESS;
     }
 
@@ -1073,8 +1054,8 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     /* if compressed, decompress it */
     if (flag) {
         /* decompress the data */
-        if (PMIx_Data_decompress((uint8_t **) &bo.bytes, &bo.size, (uint8_t *) pbo.bytes,
-                                 pbo.size)) {
+        if (PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size,
+                                 (uint8_t **) &bo.bytes, &bo.size)) {
             /* the data has been uncompressed */
             rc = PMIx_Data_load(&datbuf, &bo);
             PMIX_BYTE_OBJECT_DESTRUCT(&bo);
@@ -1258,7 +1239,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     bool found;
     prte_daemon_cmd_flag_t cmd;
     char *myendian;
-    char *alias, **atmp;
+    char *alias;
     uint8_t naliases, ni;
     hwloc_obj_t root;
     prte_hwloc_topo_data_t *sum;
@@ -1295,11 +1276,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                              "%s plm:base:orted_report_launch from daemon %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&dname)));
 
-        atmp = NULL;
         /* update state and record for this daemon contact info */
-        if (NULL
-            == (daemon = (prte_proc_t *) prte_pointer_array_get_item(jdatorted->procs,
-                                                                     dname.rank))) {
+        daemon = (prte_proc_t *) prte_pointer_array_get_item(jdatorted->procs, dname.rank);
+        if (NULL == daemon) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             prted_failed_launch = true;
             goto CLEANUP;
@@ -1358,8 +1337,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
 
             for (n = 0; n < ninfo; n++) {
                 /* store this in a daemon wireup buffer for later distribution */
-                if (PMIX_SUCCESS
-                    != (ret = PMIx_Store_internal(&dname, info[n].key, &info[n].value))) {
+                ret = PMIx_Store_internal(&dname, info[n].key, &info[n].value);
+                if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_INFO_FREE(info, ninfo);
                     prted_failed_launch = true;
@@ -1377,14 +1356,13 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             prted_failed_launch = true;
             goto CLEANUP;
         }
-        if (!prte_have_fqdn_allocation) {
-            /* remove any domain info */
-            if (NULL != (ptr = strchr(nodename, '.'))) {
-                *ptr = '\0';
-                ptr = strdup(nodename);
-                free(nodename);
-                nodename = ptr;
-            }
+
+        if (!prte_net_isaddr(nodename) &&
+            NULL != (ptr = strchr(nodename, '.'))) {
+            /* retain the non-fqdn name as an alias */
+            *ptr = '\0';
+            prte_argv_append_unique_nosize(&daemon->node->aliases, nodename);
+            *ptr = '.';
         }
 
         PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
@@ -1396,14 +1374,20 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         PRTE_FLAG_SET(daemon->node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
         daemon->node->state = PRTE_NODE_STATE_UP;
 
-        /* first, store the nodename itself as an alias. We do
-         * this in case the nodename isn't the same as what we
-         * were given by the allocation. For example, a hostfile
+        /* first, store the nodename itself. in case the nodename isn't
+         * the same as what we were given by the allocation, we replace
+         * the node's name with the returned value and store the allocation
+         * value as an alias. For example, a hostfile
          * might contain an IP address instead of the value returned
          * by gethostname, yet the daemon will have returned the latter
          * and apps may refer to the host by that name
          */
-        prte_argv_append_nosize(&atmp, nodename);
+        if (0 != strcmp(nodename, daemon->node->name)) {
+            prte_argv_append_unique_nosize(&daemon->node->aliases, daemon->node->name);
+            free(daemon->node->name);
+            daemon->node->name = strdup(nodename);
+        }
+
         /* unpack and store the provided aliases */
         idx = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &naliases, &idx, PMIX_UINT8);
@@ -1420,16 +1404,18 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
-            prte_argv_append_nosize(&atmp, alias);
+            prte_argv_append_unique_nosize(&daemon->node->aliases, alias);
             free(alias);
         }
-        if (0 < naliases) {
-            alias = prte_argv_join(atmp, ',');
-            prte_set_attribute(&daemon->node->attributes, PRTE_NODE_ALIAS, PRTE_ATTR_LOCAL, alias,
-                               PMIX_STRING);
-            free(alias);
+
+        if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
+            prte_output(0, "ALIASES FOR NODE %s (%s)", daemon->node->name, nodename);
+            if (NULL != daemon->node->aliases) {
+                for (ni=0; NULL != daemon->node->aliases[ni]; ni++) {
+                    prte_output(0, "\tALIAS: %s", daemon->node->aliases[ni]);
+                }
+            }
         }
-        prte_argv_free(atmp);
 
         /* unpack the topology signature for that node */
         idx = 1;
@@ -1481,8 +1467,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             } else {
                 if (compressed) {
                     /* decompress the data */
-                    if (PMIx_Data_decompress((uint8_t **) &bo.bytes, &bo.size,
-                                             (uint8_t *) pbo.bytes, pbo.size)) {
+                    if (PMIx_Data_decompress((uint8_t *) pbo.bytes, pbo.size,
+                                             (uint8_t **) &bo.bytes, &bo.size)) {
                         /* the data has been uncompressed */
                         ret = PMIx_Data_load(&datbuf, &bo);
                         PMIX_BYTE_OBJECT_DESTRUCT(&bo);
@@ -1596,8 +1582,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         /* do we already have this topology from some other node? */
         found = false;
         for (i = 0; i < prte_node_topologies->size; i++) {
-            if (NULL
-                == (t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, i))) {
+            t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, i);
+            if (NULL == t) {
                 continue;
             }
             /* just check the signature */

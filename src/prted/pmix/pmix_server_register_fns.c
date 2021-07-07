@@ -166,8 +166,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                             /* go ahead and register this client - since we are going to wait
                              * for register_nspace to complete and the PMIx library serializes
                              * the registration requests, we don't need to wait here */
-                            ret = PMIx_server_register_client(&pptr->name, uid, gid, (void *) pptr,
-                                                              NULL, NULL);
+                            ret = PMIx_server_register_client(&pptr->name, uid, gid,
+                                                              (void*)pptr, NULL, NULL);
                             if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
                                 PMIX_ERROR_LOG(ret);
                             }
@@ -188,9 +188,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME, node->name, PMIX_STRING);
             prte_list_append(&iarray->infolist, &kv->super);
             /* add any aliases */
-            if (prte_get_attribute(&node->attributes, PRTE_NODE_ALIAS, (void **) &regex,
-                                   PMIX_STRING)
-                && NULL != regex) {
+            if (NULL != node->aliases) {
+                regex = pmix_argv_join(node->aliases, ',');
                 kv = PRTE_NEW(prte_info_item_t);
                 PMIX_INFO_LOAD(&kv->info, PMIX_HOSTNAME_ALIASES, regex, PMIX_STRING);
                 prte_list_append(&iarray->infolist, &kv->super);
@@ -218,6 +217,12 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_LOCAL_PEERS, tmp, PMIX_STRING);
                 prte_list_append(&iarray->infolist, &kv->super);
                 free(tmp);
+            }
+            /* if oversubscribed, mark it */
+            if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_OVERSUBSCRIBED)) {
+                kv = PRTE_NEW(prte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_NODE_OVERSUBSCRIBED, NULL, PMIX_BOOL);
+                prte_list_append(&iarray->infolist, &kv->super);
             }
             /* add to the overall payload */
             prte_list_append(&nodeinfo, &iarray->super);
@@ -350,6 +355,49 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     free(tmp);
     prte_list_append(info, &kv->super);
 
+    /* check for output directives */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, NULL, PMIX_BOOL)) {
+       kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL)) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+    tmp = NULL;
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_TO_FILE, (void **) &tmp, PMIX_STRING)
+        && NULL != tmp) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_OUTPUT_TO_FILE, tmp, PMIX_STRING);
+        prte_list_append(info, &kv->super);
+        free(tmp);
+    }
+    tmp = NULL;
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_TO_DIRECTORY, (void **) &tmp, PMIX_STRING)
+        && NULL != tmp) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_OUTPUT_TO_DIRECTORY, tmp, PMIX_STRING);
+        prte_list_append(info, &kv->super);
+        free(tmp);
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY, NULL, PMIX_BOOL)) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+
     /* for each app in the job, create an app-array */
     for (n = 0; n < jdata->apps->size; n++) {
         if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n))) {
@@ -470,24 +518,20 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                     PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, NULL, PMIX_STRING);
                     prte_list_append(pmap, &kv->super);
                 }
-                /* debugger daemons and tools don't get session directories */
-                if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-                    && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
-                    /* create and pass a proc-level session directory */
-                    if (0 > prte_asprintf(&tmp, "%s/%u/%u", prte_process_info.jobfam_session_dir,
-                                          PRTE_LOCAL_JOBID(jdata->nspace), pptr->name.rank)) {
-                        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-                        return PRTE_ERR_OUT_OF_RESOURCE;
-                    }
-                    if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(tmp, S_IRWXU))) {
-                        PRTE_ERROR_LOG(rc);
-                        return rc;
-                    }
-                    kv = PRTE_NEW(prte_info_item_t);
-                    PMIX_INFO_LOAD(&kv->info, PMIX_PROCDIR, tmp, PMIX_STRING);
-                    free(tmp);
-                    prte_list_append(pmap, &kv->super);
+                /* create and pass a proc-level session directory */
+                if (0 > prte_asprintf(&tmp, "%s/%u/%u", prte_process_info.jobfam_session_dir,
+                                      PRTE_LOCAL_JOBID(jdata->nspace), pptr->name.rank)) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                    return PRTE_ERR_OUT_OF_RESOURCE;
                 }
+                if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(tmp, S_IRWXU))) {
+                    PRTE_ERROR_LOG(rc);
+                    return rc;
+                }
+                kv = PRTE_NEW(prte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_PROCDIR, tmp, PMIX_STRING);
+                free(tmp);
+                prte_list_append(pmap, &kv->super);
             }
 
             /* global/univ rank */

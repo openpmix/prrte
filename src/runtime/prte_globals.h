@@ -256,6 +256,8 @@ typedef struct {
     int32_t index;
     /** String node name */
     char *name;
+    /** aliases */
+    char **aliases;
     /* daemon on this node */
     struct prte_proc_t *daemon;
     /** number of procs on this node */
@@ -481,7 +483,8 @@ PRTE_EXPORT char *prte_get_proc_hostname(const pmix_proc_t *proc);
 PRTE_EXPORT prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc);
 
 /* check to see if two nodes match */
-PRTE_EXPORT bool prte_node_match(prte_node_t *n1, char *name);
+PRTE_EXPORT prte_node_t* prte_node_match(prte_list_t *nodes, const char *name);
+PRTE_EXPORT bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2);
 
 /* global variables used by RTE - instanced in prte_globals.c */
 PRTE_EXPORT extern bool prte_debug_daemons_flag;
@@ -503,8 +506,8 @@ PRTE_EXPORT extern char *prte_oob_static_ports;
 PRTE_EXPORT extern bool prte_keep_fqdn_hostnames;
 PRTE_EXPORT extern bool prte_have_fqdn_allocation;
 PRTE_EXPORT extern bool prte_show_resolved_nodenames;
-PRTE_EXPORT extern int prte_use_hostname_alias;
 PRTE_EXPORT extern int prte_hostname_cutoff;
+PRTE_EXPORT extern bool prte_do_not_resolve;
 
 /* debug flags */
 PRTE_EXPORT extern int prted_debug_failure;
@@ -606,6 +609,8 @@ extern char *prte_signal_string;
 extern char *prte_stacktrace_output_filename;
 extern char *prte_net_private_ipv4;
 extern char *prte_set_max_sys_limits;
+extern char *prte_if_include;
+extern char *prte_if_exclude;
 
 /* Enable/disable ft */
 PRTE_EXPORT extern bool prte_enable_ft;

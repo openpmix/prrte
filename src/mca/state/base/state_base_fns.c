@@ -567,6 +567,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
     pmix_proc_t parent, target;
     prte_pmix_lock_t lock;
     pmix_rank_t threshold;
+    prte_app_context_t *app;
 
     PRTE_ACQUIRE_OBJECT(caddy);
     proc = &caddy->name;
@@ -615,6 +616,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
     if (NULL == pdata) {
         goto cleanup;
     }
+    app = (prte_app_context_t*) prte_pointer_array_get_item(jdata->apps, pdata->app_idx);
 
     if (PRTE_PROC_STATE_RUNNING == state) {
         /* update the proc state */
@@ -684,8 +686,8 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
              * itself.  This covers the case where the process died abnormally
              * and didn't cleanup its own session directory.
              */
-            if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-                && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+            if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON)  &&
+                !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                 prte_session_dir_finalize(proc);
             }
         }
@@ -755,6 +757,7 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
     pmix_rank_t lowest = 0;
     int32_t i32, *i32ptr;
     prte_pmix_lock_t lock;
+    prte_app_context_t *app;
 
     PRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -865,7 +868,8 @@ CHECK_DAEMONS:
     if (NULL != jdata->map && jdata->state == PRTE_JOB_STATE_TERMINATED) {
         map = jdata->map;
         for (index = 0; index < map->nodes->size; index++) {
-            if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, index))) {
+            node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, index);
+            if (NULL == node) {
                 continue;
             }
             PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
@@ -873,15 +877,17 @@ CHECK_DAEMONS:
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_JOBID_PRINT(jdata->nspace), node->name));
             for (i = 0; i < node->procs->size; i++) {
-                if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i))) {
+                proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i);
+                if (NULL == proc) {
                     continue;
                 }
+                app = (prte_app_context_t*) prte_pointer_array_get_item(jdata->apps, proc->app_idx);
                 if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
                     /* skip procs from another job */
                     continue;
                 }
-                if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-                    && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+                if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON) &&
+                    !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                     node->slots_inuse--;
                     node->num_procs--;
                 }

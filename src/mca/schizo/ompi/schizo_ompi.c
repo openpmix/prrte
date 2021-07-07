@@ -65,7 +65,6 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
 static int detect_proxy(char *argv);
 static void allow_run_as_root(prte_cmd_line_t *cmd_line);
 static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
-static int check_sanity(prte_cmd_line_t *cmd_line);
 
 prte_schizo_base_module_t prte_schizo_ompi_module = {.name = "ompi",
                                                      .define_cli = define_cli,
@@ -75,7 +74,7 @@ prte_schizo_base_module_t prte_schizo_ompi_module = {.name = "ompi",
                                                      .detect_proxy = detect_proxy,
                                                      .allow_run_as_root = allow_run_as_root,
                                                      .job_info = job_info,
-                                                     .check_sanity = check_sanity};
+                                                     .check_sanity = prte_schizo_base_sanity};
 
 static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     /* basic options */
@@ -187,9 +186,13 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
 
     /* output options */
     {'\0', "output", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Comma-delimited list of options that control the output generated."
-     "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir:DIRNAME",
-     PRTE_CMD_LINE_OTYPE_OUTPUT},
+        "Comma-delimited list of options that control how output is generated."
+        "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir=DIRNAME, file=filename."
+        " The dir option redirects output from application processes into DIRNAME/job/rank/std[out,err,diag]."
+        " The file option redirects output from application processes into filename.rank. In both cases, "
+        "the provided name will be converted to an absolute path. Supported qualifiers include NOCOPY"
+        " (do not copy the output to the stdout/err streams).",
+        PRTE_CMD_LINE_OTYPE_OUTPUT},
     /* exit status reporting */
     {'\0', "report-child-jobs-separately", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Return the exit status of the primary job only", PRTE_CMD_LINE_OTYPE_OUTPUT},
@@ -1066,7 +1069,6 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
 {
     char *p1, *p2;
     int i;
-    pmix_status_t rc;
     bool takeus;
     char *param = NULL;
 
@@ -1185,14 +1187,7 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
 #endif
     }
 
-    rc = prte_schizo_base_parse_prte(argc, start, argv, target);
-    if (PRTE_SUCCESS != rc) {
-        return rc;
-    }
-
-    rc = prte_schizo_base_parse_pmix(argc, start, argv, target);
-
-    return rc;
+    return PRTE_SUCCESS;
 }
 
 static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, bool cmdline)
@@ -1482,68 +1477,36 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
     return PRTE_SUCCESS;
 }
 
-static int detect_proxy(char *cmdpath)
+static int detect_proxy(char *personalities)
 {
     char *evar;
-    char *inipath = NULL;
 
     prte_output_verbose(2, prte_schizo_base_framework.framework_output,
-                        "%s[%s]: detect proxy with %s (%s)", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        __FILE__, cmdpath, prte_tool_basename);
+                        "%s[%s]: detect proxy with %s (%s)",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__,
+                        (NULL == personalities) ? "NULL" : personalities,
+                        prte_tool_basename);
 
-    if (NULL == cmdpath) {
+    /* if we were told the proxy, then use it */
+    if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy"))) {
+        if (0 == strcmp(evar, "ompi")) {
+            return 100;
+        } else {
+            return 0;
+        }
+    }
+
+    if (NULL == personalities) {
         return 0;
     }
-    /* if this isn't a full path, then it is a list
-     * of personalities we need to check */
-    if (!prte_path_is_absolute(cmdpath)) {
-        /* if it contains "ompi", then we are available */
-        if (NULL != strstr(cmdpath, "ompi")) {
-            return 100;
-        }
-        return 0;
+
+    /* this is a list of personalities we need to check -
+     * if it contains "ompi", then we are available */
+    if (NULL != strstr(personalities, "ompi")) {
+        return 100;
     }
 
-    /* look for the OMPIHOME envar to tell us where OMPI
-     * was installed */
-    evar = getenv("OMPIHOME");
-    if (NULL != evar) {
-        inipath = prte_os_path(false, evar, "ompi.ini", NULL);
-        if (prte_schizo_base_check_ini(cmdpath, inipath)) {
-            free(inipath);
-            return 100;
-        }
-        free(inipath);
-
-        inipath = prte_os_path(false, evar, "open-mpi.ini", NULL);
-        if (prte_schizo_base_check_ini(cmdpath, inipath)) {
-            free(inipath);
-            return 100;
-        }
-        free(inipath);
-
-        /* if the executable is in the OMPIHOME path, then
-         * it belongs to us - however, we exclude explicit
-         * calls to "prte" as that is intended to start
-         * the DVM */
-        if (NULL != strstr(cmdpath, evar) && 0 != strcmp(prte_tool_basename, "prte")) {
-            return 100;
-        }
-    }
-
-    /* we may not have an ini file, or perhaps they don't
-     * have OMPIHOME set - but it still could be an MPI
-     * proxy, so let's check */
-    /* if the basename of the cmd was "mpirun" or "mpiexec",
-     * we default to us */
-    if (prte_schizo_base.test_proxy_launch
-        || 0 == strcmp(prte_tool_basename, "mpirun")
-        || 0 == strcmp(prte_tool_basename, "mpiexec")
-        || 0 == strcmp(prte_tool_basename, "oshrun")) {
-        return prte_schizo_ompi_component.priority;
-    }
-
-    /* if none of those were true, then it cannot be us */
+    /* if neither of those were true, then it cannot be us */
     return 0;
 }
 
@@ -1585,9 +1548,4 @@ static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
             PMIX_ERROR_LOG(rc);
         }
     }
-}
-
-static int check_sanity(prte_cmd_line_t *cmd_line)
-{
-    return PRTE_SUCCESS;
 }

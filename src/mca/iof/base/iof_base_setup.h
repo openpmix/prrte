@@ -51,8 +51,4 @@ PRTE_EXPORT int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts, char **
 
 PRTE_EXPORT int prte_iof_base_setup_parent(const pmix_proc_t *name, prte_iof_base_io_conf_t *opts);
 
-/* setup output files */
-PRTE_EXPORT int prte_iof_base_setup_output_files(const pmix_proc_t *dst_name, prte_job_t *jobdat,
-                                                 prte_iof_proc_t *proct);
-
 #endif

@@ -62,7 +62,6 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
 static int setup_fork(prte_job_t *jdata, prte_app_context_t *context);
 static int detect_proxy(char *argv);
 static void allow_run_as_root(prte_cmd_line_t *cmd_line);
-static int check_sanity(prte_cmd_line_t *cmd_line);
 static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
 
 prte_schizo_base_module_t prte_schizo_prte_module = {.name = "prte",
@@ -73,7 +72,7 @@ prte_schizo_base_module_t prte_schizo_prte_module = {.name = "prte",
                                                      .setup_fork = setup_fork,
                                                      .detect_proxy = detect_proxy,
                                                      .allow_run_as_root = allow_run_as_root,
-                                                     .check_sanity = check_sanity,
+                                                     .check_sanity = prte_schizo_base_sanity,
                                                      .job_info = job_info};
 
 static prte_cmd_line_init_t prte_cmd_line_init[] = {
@@ -175,8 +174,12 @@ static prte_cmd_line_init_t prte_cmd_line_init[] = {
 
     /* output options */
     {'\0', "output", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Comma-delimited list of options that control the output generated."
-     "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir:DIRNAME",
+     "Comma-delimited list of options that control how output is generated."
+     "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir=DIRNAME, file=filename."
+     " The dir option redirects output from application processes into DIRNAME/job/rank/std[out,err,diag]."
+     " The file option redirects output from application processes into filename.rank. In both cases, "
+     "the provided name will be converted to an absolute path. Supported qualifiers include NOCOPY"
+     " (do not copy the output to the stdout/err streams).",
      PRTE_CMD_LINE_OTYPE_OUTPUT},
     /* exit status reporting */
     {'\0', "report-child-jobs-separately", 0, PRTE_CMD_LINE_TYPE_BOOL,
@@ -408,19 +411,11 @@ static int define_cli(prte_cmd_line_t *cli)
 
 static int parse_cli(int argc, int start, char **argv, char ***target)
 {
-    pmix_status_t rc;
-
     prte_output_verbose(1, prte_schizo_base_framework.framework_output, "%s schizo:prte: parse_cli",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    rc = prte_schizo_base_parse_prte(argc, start, argv, target);
-    if (PRTE_SUCCESS != rc) {
-        return rc;
-    }
-
-    rc = prte_schizo_base_parse_pmix(argc, start, argv, target);
-
-    return rc;
+    /* we already did this in the tool */
+    return PRTE_SUCCESS;
 }
 
 static int convert_deprecated_cli(char *option, char ***argv, int i)
@@ -937,40 +932,39 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     return PRTE_SUCCESS;
 }
 
-static int detect_proxy(char *cmdpath)
+static int detect_proxy(char *personalities)
 {
-    char *mybasename;
+    char *evar;
 
     prte_output_verbose(2, prte_schizo_base_framework.framework_output,
-                        "%s[%s]: detect proxy with %s (%s)", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        __FILE__, cmdpath, prte_tool_basename);
+                        "%s[%s]: detect proxy with %s (%s)",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__,
+                        (NULL == personalities) ? "NULL" : personalities,
+                        prte_tool_basename);
 
-    /* we are lowest priority, so we will be checked last */
-    if (NULL == cmdpath) {
-        /* must use us */
-        return 100;
-    }
-
-    /* if this isn't a full path, then it is a list
-     * of personalities we need to check */
-    if (!prte_path_is_absolute(cmdpath)) {
-        /* if it contains "prte", then we are available */
-        if (NULL != strstr(cmdpath, "prte") || NULL != strstr(cmdpath, "prrte")) {
+    /* if we were told the proxy, then use it */
+    if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy"))) {
+        if (0 == strcmp(evar, "prte")) {
+            /* they asked exclusively for us */
             return 100;
+        } else {
+            /* they asked for somebody else */
+            return 0;
         }
     }
 
-    /* if it is not a symlink and is in our install path,
-     * then it belongs to us */
-    mybasename = prte_basename(cmdpath);
-    if (0 == strcmp(mybasename, prte_tool_basename)
-        && NULL != strstr(cmdpath, prte_install_dirs.prefix)) {
-        free(mybasename);
-        return 100;
+    if (NULL == personalities) {
+        return prte_schizo_prte_component.priority;
     }
-    free(mybasename);
 
-    /* we are always the lowest priority */
+    /* this is a list of personalities we need to check -
+     * if it contains "prte", then we are available but
+     * at a low priority */
+    if (NULL != strstr(personalities, "prte")) {
+        return prte_schizo_prte_component.priority;
+    }
+
+    /* if neither of those were true, then just use our default */
     return prte_schizo_prte_component.priority;
 }
 
@@ -995,113 +989,4 @@ static void allow_run_as_root(prte_cmd_line_t *cmd_line)
 static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
 {
     return;
-}
-
-static int check_sanity(prte_cmd_line_t *cmd_line)
-{
-    prte_value_t *pval;
-    int n;
-    char **args;
-    char *mappers[] = {"slot", "hwthread", "core", "l1cache", "l2cache",  "l3cache", "package",
-                       "node", "seq",      "dist", "ppr",     "rankfile", NULL};
-    char *rankers[] = {"slot",    "hwthread", "core", "l1cache", "l2cache",
-                       "l3cache", "package",  "node", NULL};
-    char *binders[] = {"none",    "hwthread", "core",    "l1cache",
-                       "l2cache", "l3cache",  "package", NULL};
-    bool good = false;
-    bool hwtcpus = false;
-
-    if (1 < prte_cmd_line_get_ninsts(cmd_line, "map-by")) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, "map-by");
-        return PRTE_ERR_SILENT;
-    }
-    if (1 < prte_cmd_line_get_ninsts(cmd_line, "rank-by")) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, "rank-by");
-        return PRTE_ERR_SILENT;
-    }
-    if (1 < prte_cmd_line_get_ninsts(cmd_line, "bind-to")) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, "bind-to");
-        return PRTE_ERR_SILENT;
-    }
-
-    /* quick check that we have valid directives */
-    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "map-by", 0, 0))) {
-        if (NULL != strcasestr(pval->value.data.string, "HWTCPUS")) {
-            hwtcpus = true;
-        }
-        /* if it starts with a ':', then these are just modifiers */
-        if (':' == pval->value.data.string[0]) {
-            goto rnk;
-        }
-        args = prte_argv_split(pval->value.data.string, ':');
-        good = false;
-        for (n = 0; NULL != mappers[n]; n++) {
-            if (0 == strcasecmp(args[0], mappers[n])) {
-                good = true;
-                break;
-            }
-        }
-        if (!good) {
-            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "mapping",
-                           args[0]);
-            prte_argv_free(args);
-            return PRTE_ERR_SILENT;
-        }
-        prte_argv_free(args);
-    }
-
-rnk:
-    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "rank-by", 0, 0))) {
-        /* if it starts with a ':', then these are just modifiers */
-        if (':' == pval->value.data.string[0]) {
-            goto bnd;
-        }
-        args = prte_argv_split(pval->value.data.string, ':');
-        good = false;
-        for (n = 0; NULL != rankers[n]; n++) {
-            if (0 == strcasecmp(args[0], rankers[n])) {
-                good = true;
-                break;
-            }
-        }
-        if (!good) {
-            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "ranking",
-                           args[0]);
-            prte_argv_free(args);
-            return PRTE_ERR_SILENT;
-        }
-        prte_argv_free(args);
-    }
-
-bnd:
-    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "bind-to", 0, 0))) {
-        /* if it starts with a ':', then these are just modifiers */
-        if (':' == pval->value.data.string[0]) {
-            return PRTE_SUCCESS;
-        }
-        args = prte_argv_split(pval->value.data.string, ':');
-        good = false;
-        for (n = 0; NULL != binders[n]; n++) {
-            if (0 == strcasecmp(args[0], binders[n])) {
-                good = true;
-                break;
-            }
-        }
-        if (!good) {
-            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "binding",
-                           args[0]);
-            prte_argv_free(args);
-            return PRTE_ERR_SILENT;
-        }
-        if (0 == strcasecmp(args[0], "HWTHREAD") && !hwtcpus) {
-            /* if we are told to bind-to hwt, then we have to be treating
-             * hwt's as the allocatable unit */
-            prte_show_help("help-prte-rmaps-base.txt", "invalid-combination", true);
-            prte_argv_free(args);
-            return PRTE_ERR_SILENT;
-        }
-        prte_argv_free(args);
-    }
-
-    return PRTE_SUCCESS;
 }

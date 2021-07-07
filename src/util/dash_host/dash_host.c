@@ -43,6 +43,23 @@
 
 #include "dash_host.h"
 
+static bool quickmatch(prte_node_t *nd, char *name)
+{
+    int n;
+
+    if (0 == strcmp(nd->name, name)) {
+        return true;
+    }
+    if (NULL != nd->aliases) {
+        for (n=0; NULL != nd->aliases[n]; n++) {
+            if (0 == strcmp(nd->aliases[n], name)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
 {
     char **specs, *cptr;
@@ -60,7 +77,7 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
         } else {
             cptr = NULL;
         }
-        if (prte_node_match(node, specs[n])) {
+        if (quickmatch(node, specs[n])) {
             if (NULL != cptr) {
                 if ('*' == *cptr || 0 == strcmp(cptr, "auto")) {
                     slots += node->slots - node->slots_inuse;
@@ -82,17 +99,18 @@ int prte_util_dash_host_compute_slots(prte_node_t *node, char *hosts)
  */
 int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocating)
 {
-    prte_list_item_t *item, *itm;
+    prte_list_item_t *item;
     int32_t i, j, k;
     int rc, nodeidx;
     char **host_argv = NULL;
     char **mapped_nodes = NULL, **mini_map, *ndname;
     prte_node_t *node, *nd;
     prte_list_t adds;
-    bool found;
+    bool needcheck;
     int slots = 0;
     bool slots_given;
-    char *cptr, *ptr;
+    char *cptr;
+    char *shortname;
 
     PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s dashhost: parsing args %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -100,6 +118,11 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
 
     PRTE_CONSTRUCT(&adds, prte_list_t);
     host_argv = prte_argv_split(hosts, ',');
+    if (0 < prte_list_get_size(nodes)) {
+        needcheck = true;
+    } else {
+        needcheck = false;
+    }
 
     /* Accumulate all of the host name mappings */
     for (j = 0; j < prte_argv_count(host_argv); ++j) {
@@ -150,8 +173,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                     }
                     for (k = 0; 0 < j && k < prte_node_pool->size; k++) {
                         if (NULL
-                            != (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool,
-                                                                                   k))) {
+                            != (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, k))) {
                             if (0 == node->num_procs) {
                                 prte_argv_append_nosize(&mini_map, node->name);
                                 --j;
@@ -187,10 +209,8 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                         nodeidx++;
                     }
                     /* see if that location is filled */
-
-                    if (NULL
-                        == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool,
-                                                                               nodeidx))) {
+                    node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, nodeidx);
+                    if (NULL == node) {
                         /* this is an error */
                         prte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
                                        true, nodeidx, mapped_nodes[i]);
@@ -222,7 +242,8 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
         bump the slots count for each duplicate */
     for (i = 0; NULL != mini_map[i]; i++) {
         PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                             "%s dashhost: working node %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             "%s dashhost: working node %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              mini_map[i]));
 
         /* see if the node contains the number of slots */
@@ -240,49 +261,54 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
             }
         }
 
-        /* check for local name */
+        /* check for local name and compute non-fqdn name */
+        shortname = NULL;
         if (prte_check_host_is_local(mini_map[i])) {
             ndname = prte_process_info.nodename;
         } else {
             ndname = mini_map[i];
-
-            // Strip off the FQDN if present, ignore IP addresses
-            if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(ndname)) {
-                if (NULL != (ptr = strchr(ndname, '.'))) {
-                    *ptr = '\0';
+            /* compute the non-fqdn version */
+            if (!prte_keep_fqdn_hostnames &&
+                !prte_net_isaddr(ndname)) {
+                cptr = strchr(ndname, '.');
+                if (NULL != cptr) {
+                    *cptr = '\0';
+                    shortname = strdup(ndname);
+                    *cptr = '.';
                 }
             }
         }
-        /* see if the node is already on the list */
-        found = false;
-        PRTE_LIST_FOREACH(node, &adds, prte_node_t)
-        {
-            if (0 == strcmp(node->name, ndname)) {
-                found = true;
-                if (slots_given) {
-                    node->slots += slots;
-                    if (0 < slots) {
-                        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
-                    }
-                } else {
-                    ++node->slots;
+        /* see if a node of this name is already on the list */
+        node = prte_node_match(&adds, ndname);
+        if (NULL == node && NULL != shortname) {
+            node = prte_node_match(&adds, shortname);
+        }
+        if (NULL != node) {
+            if (slots_given) {
+                node->slots += slots;
+                if (0 < slots) {
                     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 }
-                PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                                     "%s dashhost: node %s already on list - slots %d",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->slots));
-                break;
+            } else {
+                ++node->slots;
+                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             }
-        }
-
-        /* If we didn't find it, add it to the list */
-        if (!found) {
+            PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+                                 "%s dashhost: node %s already on list - slots %d",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->slots));
+            break;
+        } else {
+            /* if we didn't find it, add it to the list */
             node = PRTE_NEW(prte_node_t);
             if (NULL == node) {
                 prte_argv_free(mapped_nodes);
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
-            node->name = strdup(ndname);
+            if (prte_keep_fqdn_hostnames || NULL == shortname) {
+                node->name = strdup(ndname);
+            } else {
+                node->name = strdup(shortname);
+            }
             PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: added node %s to list - slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, slots));
@@ -303,20 +329,25 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
             }
             prte_list_append(&adds, &node->super);
         }
+        if (0 != strcmp(node->name, mini_map[i])) {
+            // add the mini_map name to the list of aliases
+            prte_argv_append_unique_nosize(&node->aliases, mini_map[i]);
+        }
+        // ensure the non-fqdn version is saved
+        if (NULL != shortname && 0 != strcmp(shortname, node->name)) {
+            prte_argv_append_unique_nosize(&node->aliases, shortname);
+            free(shortname);
+        }
     }
     prte_argv_free(mini_map);
 
     /* transfer across all unique nodes */
     while (NULL != (item = prte_list_remove_first(&adds))) {
         nd = (prte_node_t *) item;
-        found = false;
-        for (itm = prte_list_get_first(nodes); itm != prte_list_get_end(nodes);
-             itm = prte_list_get_next(itm)) {
-            node = (prte_node_t *) itm;
-            if (0 == strcmp(nd->name, node->name)) {
-                found = true;
-                PRTE_OUTPUT_VERBOSE(
-                    (1, prte_ras_base_framework.framework_output,
+        if (needcheck) {
+            node = prte_node_match(nodes, nd->name);
+            if (NULL != node) {
+                PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                      "%s dashhost: found existing node %s on input list - adding slots",
                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
                 if (PRTE_FLAG_TEST(nd, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
@@ -324,38 +355,44 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                     node->slots += nd->slots;
                     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 }
-                break;
+                PRTE_RELEASE(item);
+           } else {
+                PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+                                     "%s dashhost: adding node %s with %d slots to final list",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nd->name, nd->slots));
+                prte_list_append(nodes, &nd->super);
             }
-        }
-        if (!found) {
+        } else {
             PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: adding node %s with %d slots to final list",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nd->name, nd->slots));
             prte_list_append(nodes, &nd->super);
-        } else {
-            PRTE_RELEASE(item);
         }
     }
 
     if (prte_managed_allocation) {
         prte_node_t *node_from_pool = NULL;
-        for (i = 0; i < prte_node_pool->size; i++) {
-            if (NULL
-                == (node_from_pool = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool,
-                                                                                 i))) {
-                continue;
-            }
-            for (itm = prte_list_get_first(nodes); itm != prte_list_get_end(nodes);
-                 itm = prte_list_get_next(itm)) {
-                node = (prte_node_t *) itm;
-                if (0 == strcmp(node_from_pool->name, node->name)) {
+        PRTE_LIST_FOREACH(node, nodes, prte_node_t) {
+            needcheck = true;
+            for (i = 0; i < prte_node_pool->size; i++) {
+                node_from_pool = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i);
+                if (NULL == node_from_pool) {
+                    continue;
+                }
+                if (prte_nptr_match(node_from_pool, node)) {
+                    needcheck = false;
                     if (node->slots < node_from_pool->slots) {
                         node_from_pool->slots = node->slots;
                     }
                     break;
                 }
-                // There's no need to check that this host exists in the pool. That
-                // should have already been checked at this point.
+            }
+            if (!needcheck) {
+                // node in -host was not in allocation - this is not allowed
+                prte_show_help("help-dash-host.txt", "not-all-mapped-alloc",
+                               true, node->name);
+                rc = PRTE_ERR_SILENT;
+                goto cleanup;
             }
         }
     }
@@ -425,10 +462,8 @@ static int parse_dash_host(char ***mapped_nodes, char *hosts)
                         nodeidx++;
                     }
                     /* see if that location is filled */
-
-                    if (NULL
-                        == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool,
-                                                                               nodeidx))) {
+                    node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, nodeidx);
+                    if (NULL == node) {
                         /* this is an error */
                         prte_show_help("help-dash-host.txt", "dash-host:relative-node-not-found",
                                        true, nodeidx, mini_map[k]);
@@ -564,9 +599,7 @@ int prte_util_filter_dash_host_nodes(prte_list_t *nodes, char *hosts, bool remov
             if (NULL != (cptr = strchr(mapped_nodes[i], ':'))) {
                 *cptr = '\0';
             }
-            /* we are looking for a specific node on the list. The
-             * parser will have substituted our local name for any
-             * alias, so we only have to do a strcmp here. */
+            /* we are looking for a specific node on the list. */
             cptr = NULL;
             lmn = strtoul(mapped_nodes[i], &cptr, 10);
             item = prte_list_get_first(nodes);
@@ -592,7 +625,7 @@ int prte_util_filter_dash_host_nodes(prte_list_t *nodes, char *hosts, bool remov
                         test = (lmn == lst) ? 0 : 1;
                     }
                 } else {
-                    test = strcmp(node->name, mapped_nodes[i]);
+                    test = (quickmatch(node, mapped_nodes[i])) ? 0 : 1;
                 }
                 if (0 == test) {
                     if (remove) {

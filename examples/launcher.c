@@ -100,7 +100,7 @@ int main(int argc, char **argv)
     pmix_status_t code[6] = {PMIX_ERR_PROC_ABORTING,
                              PMIX_ERR_PROC_ABORTED,
                              PMIX_ERR_PROC_REQUESTED_ABORT,
-                             PMIX_ERR_JOB_TERMINATED,
+                             PMIX_EVENT_JOB_END,
                              PMIX_ERR_UNREACH,
                              PMIX_ERR_LOST_CONNECTION};
     pmix_nspace_t appspace;

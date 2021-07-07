@@ -122,7 +122,6 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
     char *tmp, *tmp2, *tmp3;
     int32_t i;
     prte_proc_t *proc;
-    char **alias;
 
     /* set default result */
     *output = NULL;
@@ -134,14 +133,12 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
                       (int) src->slots_max);
         /* does this node have any aliases? */
         tmp3 = NULL;
-        if (prte_get_attribute(&src->attributes, PRTE_NODE_ALIAS, (void **) &tmp3, PMIX_STRING)) {
-            alias = prte_argv_split(tmp3, ',');
-            for (i = 0; NULL != alias[i]; i++) {
-                prte_asprintf(&tmp2, "%s\t<noderesolve resolved=\"%s\"/>\n", tmp, alias[i]);
+        if (NULL != src->aliases) {
+            for (i = 0; NULL != src->aliases[i]; i++) {
+                prte_asprintf(&tmp2, "%s\t<noderesolve resolved=\"%s\"/>\n", tmp, src->aliases[i]);
                 free(tmp);
                 tmp = tmp2;
             }
-            prte_argv_free(alias);
         }
         if (NULL != tmp3) {
             free(tmp3);
@@ -168,14 +165,12 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
     free(tmp3);
     /* does this node have any aliases? */
     tmp3 = NULL;
-    if (prte_get_attribute(&src->attributes, PRTE_NODE_ALIAS, (void **) &tmp3, PMIX_STRING)) {
-        alias = prte_argv_split(tmp3, ',');
-        for (i = 0; NULL != alias[i]; i++) {
-            prte_asprintf(&tmp2, "%s\n                resolved from %s", tmp, alias[i]);
+    if (NULL != src->aliases) {
+        for (i = 0; NULL != src->aliases[i]; i++) {
+            prte_asprintf(&tmp2, "%s\n                resolved from %s", tmp, src->aliases[i]);
             free(tmp);
             tmp = tmp2;
         }
-        prte_argv_free(alias);
     }
     if (NULL != tmp3) {
         free(tmp3);

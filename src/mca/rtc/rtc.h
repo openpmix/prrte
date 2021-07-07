@@ -25,7 +25,7 @@
 
 #include "src/class/prte_list.h"
 #include "src/mca/mca.h"
-
+#include "src/mca/odls/base/odls_private.h"
 #include "src/runtime/prte_globals.h"
 
 BEGIN_C_DECLS
@@ -56,7 +56,7 @@ typedef void (*prte_rtc_base_module_assign_fn_t)(prte_job_t *jdata);
  * Each module is responsible for reporting errors via the state machine. Thus,
  * no error code is returned. However, warnings and error messages for the user
  * can be output via the provided error_fd */
-typedef void (*prte_rtc_base_module_set_fn_t)(prte_job_t *jdata, prte_proc_t *proc, char ***env,
+typedef void (*prte_rtc_base_module_set_fn_t)(prte_odls_spawn_caddy_t *cd,
                                               int error_fd);
 
 /* Return a list of valid controls values for this component.

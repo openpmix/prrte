@@ -309,11 +309,11 @@ process:
              */
             match = false;
             for (j = 0; j < prte_node_pool->size; j++) {
-                if (NULL
-                    == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, j))) {
+                node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, j);
+                if (NULL == node) {
                     continue;
                 }
-                if (prte_node_match(node, sq->hostname)) {
+                if (0 == strcmp(node->name, sq->hostname)) {
                     match = true;
                     break;
                 }
@@ -489,7 +489,6 @@ static int process_file(char *path, prte_list_t *list)
     FILE *fp;
     seq_node_t *sq;
     char *sep, *eptr;
-    char *ptr;
 
     /* open the file */
     fp = fopen(path, "r");
@@ -519,13 +518,6 @@ static int process_file(char *path, prte_list_t *list)
             }
             *(eptr + 1) = 0;
             sq->cpuset = strdup(sep);
-        }
-
-        // Strip off the FQDN if present, ignore IP addresses
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(hstname)) {
-            if (NULL != (ptr = strchr(hstname, '.'))) {
-                *ptr = '\0';
-            }
         }
 
         sq->hostname = hstname;
