@@ -1765,7 +1765,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                                      "%s odls:notify failed, release pinfo",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             }
-            PMIX_INFO_RELEASE(pinfo, 2);
+            PMIX_INFO_FREE(pinfo, 2);
 
             PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s odls:event notify in odls proc %s gone",
