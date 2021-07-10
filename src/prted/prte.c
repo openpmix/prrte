@@ -163,14 +163,6 @@ static void setupcbfunc(pmix_status_t status, pmix_info_t info[], size_t ninfo,
     PRTE_PMIX_WAKEUP_THREAD(&mylock->lock);
 }
 
-static void toolcbfunc(pmix_status_t status, pmix_proc_t *name, void *cbdata)
-{
-    mylock_t *mylock = (mylock_t *) cbdata;
-
-    mylock->status = status;
-    PRTE_PMIX_WAKEUP_THREAD(&mylock->lock);
-}
-
 static void spcbfunc(pmix_status_t status, char nspace[], void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
@@ -751,20 +743,8 @@ int prte(int argc, char *argv[])
         PMIX_LOAD_PROCID(&parent, val->data.proc->nspace, val->data.proc->rank);
         PMIX_VALUE_RELEASE(val);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
-        /* record that this tool is connected to us */
-        PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
-        PMIX_INFO_CREATE(iptr, 2);
-        PMIX_INFO_LOAD(&iptr[0], PMIX_NSPACE, parent.nspace, PMIX_STRING);
-        PMIX_INFO_LOAD(&iptr[1], PMIX_RANK, &parent.rank, PMIX_PROC_RANK);
-        pmix_tool_connected_fn(iptr, 2, toolcbfunc, &mylock);
-        /* we have to cycle the event library here so we can process
-         * this request */
-        while (prte_event_base_active && mylock.lock.active) {
-            prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
-        }
-        PRTE_ACQUIRE_OBJECT(&mylock.lock);
-        PMIX_INFO_FREE(iptr, 2);
-        PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
+        /* indicate that we are launching on behalf of a parent */
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PARENT_ID, &parent, PMIX_PROC);
     } else {
         PMIX_LOAD_PROCID(&parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
     }
@@ -1215,8 +1195,10 @@ int prte(int argc, char *argv[])
         prte_output(0, "Spawning job");
     }
 
+    /* let the PMIx server handle it for us so that all the job infos
+     * get properly recorded - e.g., forwarding IOF */
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    ret = pmix_server_spawn_fn(&parent, iptr, ninfo, papps, napps, spcbfunc, &lock);
+    ret = PMIx_Spawn_nb(iptr, ninfo, papps, napps, spcbfunc, &lock);
     if (PRTE_SUCCESS != ret) {
         prte_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
         rc = ret;
@@ -1238,17 +1220,6 @@ int prte(int argc, char *argv[])
 
     if (verbose) {
         prte_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(spawnednspace));
-    }
-    /* need to "pull" the IOF from the spawned job since we didn't
-     * go thru PMIx_Spawn to start it - and thus, PMIx didn't
-     * "pull" it for us */
-    PMIX_LOAD_PROCID(&pname, spawnednspace, PMIX_RANK_WILDCARD);
-    ret = PMIx_IOF_pull(&pname, 1, NULL, 0,
-                        PMIX_FWD_STDOUT_CHANNEL | PMIX_FWD_STDERR_CHANNEL
-                            | PMIX_FWD_STDDIAG_CHANNEL,
-                        NULL, NULL, NULL);
-    if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
-        prte_output(0, "IOF pull failed: %s", PMIx_Error_string(ret));
     }
 
     /* push our stdin to the apps */
