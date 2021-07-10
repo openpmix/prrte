@@ -296,21 +296,19 @@ static pmix_status_t spawn_app(char *myuri, int argc, char **argv,
         return rc;
     }
 
-    /* provide job-level directives so the launcher does what we want
-     * when it spawns the actual job - note that requesting the stdout
-     * and stderr of the launcher will automatically get us the output
-     * from the application as the launcher will have had it forwarded
-     * to itself */
+    /* provide launch directives so the launcher does what we want
+     * when it spawns the actual job */
     PMIX_INFO_LIST_START(jinfo);
-    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_NOTIFY_JOB_EVENTS, NULL, PMIX_BOOL);
-    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
-    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
-    PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_SPAWN_TOOL, NULL, PMIX_BOOL); // we are spawning a tool
+
     /* create the launch directives to tell the launcher what
      * to do with the app it is going to spawn for us */
     PMIX_INFO_LIST_START(linfo);
     rank = PMIX_RANK_WILDCARD;
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);  // stop all procs in init
+    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_NOTIFY_JOB_EVENTS, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
+    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
+    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_SPAWN_TOOL, NULL, PMIX_BOOL); // we are spawning a tool
     PMIX_INFO_LIST_CONVERT(rc, linfo, &darray);
     PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_LAUNCH_DIRECTIVES, &darray, PMIX_DATA_ARRAY);
     PMIX_INFO_LIST_RELEASE(linfo);
@@ -390,6 +388,7 @@ int main(int argc, char **argv)
     PMIX_INFO_LIST_START(dirs);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_LAUNCHER, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
     PMIX_INFO_LIST_RELEASE(dirs);
     info = (pmix_info_t *) darray.array;
@@ -465,16 +464,15 @@ int main(int argc, char **argv)
         goto done;
     }
 
-    /* register to receive the launch complete event telling us the
+    /* register to receive the ready-for-debug event telling us the
      * nspace of the child job and alerting us that things are ready
      * for us to spawn the debugger daemons - this will be registered
      * with the IL we started */
-    printf("Registering READY-FOR-DEBUG handler for %s@%d\n", proc.nspace, proc.rank);
+    printf("Registering READY-FOR-DEBUG handler\n");
     DEBUG_CONSTRUCT_LOCK(&mylock);
     code = PMIX_READY_FOR_DEBUG;
     PMIX_INFO_LIST_START(dirs);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_HDLR_NAME, "READY-FOR-DEBUG", PMIX_STRING);
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_AFFECTED_PROC, &proc, PMIX_PROC);
     PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
     PMIX_INFO_LIST_RELEASE(dirs);
     info = (pmix_info_t*)darray.array;
@@ -490,7 +488,7 @@ int main(int argc, char **argv)
     }
 
     /* release the IL to spawn its job */
-    printf("Releasing %s [%s:%d]\n", argv[launcher_idx], proc.nspace, proc.rank);
+    printf("Releasing %s [%s,%d]\n", argv[launcher_idx], proc.nspace, proc.rank);
     PMIX_INFO_LIST_START(dirs);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_CUSTOM_RANGE, &proc, PMIX_PROC);

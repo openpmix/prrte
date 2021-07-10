@@ -223,7 +223,6 @@ int main(int argc, char **argv)
 
     /* Initialize this daemon - since we were launched by the RM, our
      * connection info * will have been provided at startup. */
-    printf("INIT TOOL\n");
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, NULL, 0))) {
         fprintf(stderr, "Debugger daemon: PMIx_tool_init failed: %s\n", PMIx_Error_string(rc));
         exit(0);
