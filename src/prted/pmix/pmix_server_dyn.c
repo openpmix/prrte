@@ -218,6 +218,7 @@ static void interim(int sd, short args, void *cbdata)
     /* create the job object */
     jdata = PRTE_NEW(prte_job_t);
     jdata->map = PRTE_NEW(prte_job_map_t);
+    /* default to the requestor as the originator */
     PMIX_LOAD_PROCID(&jdata->originator, requestor->nspace, requestor->rank);
 
     /* transfer the apps across */
@@ -456,6 +457,9 @@ static void interim(int sd, short args, void *cbdata)
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_NON_PRTE_JOB, PRTE_ATTR_GLOBAL, &flag,
                                PMIX_BOOL);
+
+        } else if (PMIX_CHECK_KEY(info, PMIX_PARENT_ID)) {
+            PMIX_XFER_PROCID(&jdata->originator, info->value.data.proc);
 
             /***   SPAWN REQUESTOR IS TOOL   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_REQUESTOR_IS_TOOL)) {
