@@ -285,7 +285,7 @@ static void send_error_show_help(int fd, int exit_status, const char *file, cons
     write_help_msg(fd, &msg, file, topic, ap);
     va_end(ap);
 
-    exit(exit_status);
+    _exit(exit_status);
 }
 
 static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
@@ -327,7 +327,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
         }
 
         /* now set any child-level controls such as binding */
-        prte_rtc.set(cd->jdata, cd->child, &cd->env, write_fd);
+        prte_rtc.set(cd, write_fd);
 
     } else if (!PRTE_FLAG_TEST(cd->jdata, PRTE_JOB_FLAG_FORWARD_OUTPUT)) {
         /* tie stdin/out/err/internal to /dev/null */
@@ -416,7 +416,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     }
     send_error_show_help(write_fd, 1, "help-prte-odls-default.txt", "execve error",
                          prte_process_info.nodename, dir, cd->app->app, msg);
-    free(msg);
+    // does not return
 }
 
 static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)

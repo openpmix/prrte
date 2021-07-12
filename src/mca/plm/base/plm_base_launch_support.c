@@ -595,16 +595,15 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
         /* dvm job => launch was requested by a TOOL, so we notify the launch proxy
          * and NOT the originator (as that would be us) */
         nptr = NULL;
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr,
-                                PMIX_PROC)
-            || NULL == nptr) {
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC) ||
+            NULL == nptr) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             return PRTE_ERR_NOT_FOUND;
         }
 
         /* direct an event back to our controller */
         timestamp = time(NULL);
-        PMIX_INFO_CREATE(iptr, 4);
+        PMIX_INFO_CREATE(iptr, 5);
         /* target this notification solely to that one tool */
         PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, nptr, PMIX_PROC);
         PMIX_PROC_RELEASE(nptr);
@@ -614,8 +613,10 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
         PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
         /* provide the timestamp */
         PMIX_INFO_LOAD(&iptr[3], PMIX_EVENT_TIMESTAMP, &timestamp, PMIX_TIME);
-        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &prte_process_info.myproc, PMIX_RANGE_CUSTOM, iptr,
-                          4, NULL, NULL);
+        /* protect against loops */
+        PMIX_INFO_LOAD(&iptr[4], "prte.notify.donotloop", NULL, PMIX_BOOL);
+        PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &prte_process_info.myproc, PMIX_RANGE_CUSTOM,
+                          iptr, 5, NULL, NULL);
         PMIX_INFO_FREE(iptr, 4);
     }
 

@@ -138,11 +138,11 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                           [AC_MSG_RESULT([not found])])
 
         AS_IF([test "$prte_external_pmix_version_found" = "4"],
-              [AC_MSG_CHECKING([version 4.0.1 or greater])
+              [AC_MSG_CHECKING([version 4.1 or greater])
                 AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
                                                     #include <pmix_version.h>
-                                                    #if (PMIX_VERSION_MAJOR == 4L && PMIX_VERSION_MINOR == 0L && PMIX_VERSION_RELEASE < 1L)
-                                                    #error "not version 4.0.1 or above"
+                                                    #if (PMIX_VERSION_MAJOR == 4L && PMIX_VERSION_MINOR < 1L)
+                                                    #error "not version 4.1 or above"
                                                     #endif
                                                    ], [])],
                                   [AC_MSG_RESULT([found])],
@@ -156,7 +156,7 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
         AS_IF([test "$prte_external_pmix_version_found" = "0"],
               [AC_MSG_WARN([PRTE does not support PMIx versions])
-               AC_MSG_WARN([less than v4.01 as only PMIx-based tools can])
+               AC_MSG_WARN([less than v4.1 as only PMIx-based tools can])
                AC_MSG_WARN([can connect to the server.])
                AC_MSG_ERROR([Please select a newer version and configure again])])
 

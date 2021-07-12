@@ -39,13 +39,7 @@ Master (not on release branches yet)
 ------------------------------------
 
 * Change the default component build behavior to prefer building components
-  as part of libpmix.so instead of individual DSOs.
-
-2.0.0: TBD
---------------------
-This is the first public release intended for production use. It
-includes support for all of the PMIx v4.1 Standard and is compatible
-with v4.0.1 and above releases of the OpenPMIx implementation.
+  as part of libprrte.so instead of individual DSOs.
 
 1.0.0: 17 July, 2019
 --------------------

@@ -383,7 +383,7 @@ int prun(int argc, char *argv[])
     }
 
     /* init the tiny part of PRTE we use */
-    prte_init_util(PRTE_PROC_TOOL); // just so we pickup any PRTE params from sys/user files
+    prte_init_util(PRTE_PROC_TYPE_NONE);
 
     /** setup callbacks for abort signals - from this point
      * forward, we need to abort in a manner that allows us

@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2016      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2016-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021      Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
@@ -412,14 +412,23 @@ addknown:
                          (int) prte_list_get_size(allocated_nodes)));
 
 complete:
-    num_slots = 0;
-    /* remove all nodes that are already at max usage, and
-     * compute the total number of allocated slots while
-     * we do so - can ignore this if we are mapping debugger
-     * daemons as they do not count against the allocation */
-    if (PRTE_MAPPING_DEBUGGER & PRTE_GET_MAPPING_DIRECTIVE(policy)) {
-        num_slots = prte_list_get_size(allocated_nodes); // tell the mapper there is one slot/node for debuggers
+    /* if we are mapping debuggers, then they don't count against
+     * the allocation */
+    if (PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON)) {
+        num_slots = INT32_MAX;
+        if (!prte_hnp_is_allocated
+            || (PRTE_GET_MAPPING_DIRECTIVE(policy) & PRTE_MAPPING_NO_USE_LOCAL)) {
+            PRTE_LIST_FOREACH_SAFE(node, next, allocated_nodes, prte_node_t)
+            {
+                if (0 == node->index) {
+                    prte_list_remove_item(allocated_nodes, &node->super);
+                    PRTE_RELEASE(node); /* "un-retain" it */
+                    break;
+                }
+            }
+        }
     } else {
+        num_slots = 0;
         PRTE_LIST_FOREACH_SAFE(node, next, allocated_nodes, prte_node_t)
         {
             /* if the hnp was not allocated, or flagged not to be used,
@@ -433,7 +442,7 @@ complete:
                 }
             }
             /** check to see if this node is fully used - remove if so */
-            if (0 != node->slots_max && node->slots_inuse > node->slots_max) {
+            if (0 != node->slots_max && node->slots_inuse >= node->slots_max) {
                 PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s Removing node %s: max %d inuse %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name,
@@ -521,6 +530,7 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata, prte_node_t *node, pr
 {
     prte_proc_t *proc;
     int rc;
+    prte_app_context_t *app;
 
     proc = PRTE_NEW(prte_proc_t);
     /* set the jobid */
@@ -529,6 +539,7 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata, prte_node_t *node, pr
     /* flag the proc as ready for launch */
     proc->state = PRTE_PROC_STATE_INIT;
     proc->app_idx = idx;
+    app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, idx);
     /* mark the proc as UPDATED so it will be included in the launch */
     PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_UPDATED);
     if (NULL == node->daemon) {
@@ -541,8 +552,7 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata, prte_node_t *node, pr
     proc->node = node;
     /* if this is a debugger job, then it doesn't count against
      * available slots - otherwise, it does */
-    if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-        && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+    if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON)) {
         node->num_procs++;
         ++node->slots_inuse;
     }

@@ -385,14 +385,13 @@ static void job_started(int fd, short args, void *cbdata)
         /* dvm job => launch was requested by a TOOL, so we notify the launch proxy
          * and NOT the originator (as that would be us) */
         nptr = NULL;
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr,
-                                PMIX_PROC)
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)
             || NULL == nptr) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             return;
         }
         timestamp = time(NULL);
-        PMIX_INFO_CREATE(iptr, 4);
+        PMIX_INFO_CREATE(iptr, 5);
         /* target this notification solely to that one tool */
         PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, nptr, PMIX_PROC);
         PMIX_PROC_RELEASE(nptr);
@@ -402,9 +401,10 @@ static void job_started(int fd, short args, void *cbdata)
         PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
         /* provide the timestamp */
         PMIX_INFO_LOAD(&iptr[3], PMIX_EVENT_TIMESTAMP, &timestamp, PMIX_TIME);
+        PMIX_INFO_LOAD(&iptr[4], "prte.notify.donotloop", NULL, PMIX_BOOL);
         PMIx_Notify_event(PMIX_EVENT_JOB_START, &prte_process_info.myproc, PMIX_RANGE_CUSTOM, iptr,
-                          4, NULL, NULL);
-        PMIX_INFO_FREE(iptr, 4);
+                          5, NULL, NULL);
+        PMIX_INFO_FREE(iptr, 5);
     }
 
     PRTE_RELEASE(caddy);
@@ -425,8 +425,7 @@ static void ready_for_debug(int fd, short args, void *cbdata)
     /* launch was requested by a TOOL, so we notify the launch proxy
      * and NOT the originator (as that would be us) */
     nptr = NULL;
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr,
-                            PMIX_PROC)
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)
         || NULL == nptr) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         goto DONE;
@@ -442,6 +441,7 @@ static void ready_for_debug(int fd, short args, void *cbdata)
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
     /* provide the timestamp */
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_TIMESTAMP, &timestamp, PMIX_TIME);
+    PMIX_INFO_LIST_ADD(rc, tinfo, "prte.notify.donotloop", NULL, PMIX_BOOL);
     PMIX_INFO_LIST_CONVERT(rc, tinfo, &darray);
     if (PMIX_ERR_EMPTY == rc) {
         iptr = NULL;
@@ -491,6 +491,7 @@ static void check_complete(int fd, short args, void *cbdata)
     char *tmp;
     prte_timer_t *timer;
     int num_tools_attached = 0;
+    prte_app_context_t *app;
 
     PRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -693,8 +694,9 @@ release:
                     /* skip procs from another job */
                     continue;
                 }
-                if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-                    && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+                app = (prte_app_context_t*) prte_pointer_array_get_item(jdata->apps, proc->app_idx);
+                if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON) &&
+                    !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                     node->slots_inuse--;
                     node->num_procs--;
                     node->next_node_rank--;
@@ -800,7 +802,8 @@ static void dvm_notify(int sd, short args, void *cbdata)
     char *errmsg = NULL;
 
     PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
-                         "%s state:dvm:dvm_notify called", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s state:dvm:dvm_notify called",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* see if there was any problem */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, (void **) &pptr, PMIX_POINTER)
@@ -822,6 +825,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         if (PMIX_CHECK_NSPACE(proc->nspace, jdata->nspace)) {
             notify = false;
         }
+        PMIX_PROC_RELEASE(proc);
     }
 
     if (notify) {

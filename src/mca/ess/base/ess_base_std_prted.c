@@ -169,20 +169,6 @@ int prte_ess_base_prted_setup(void)
             break;
         }
     }
-    if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
-        char *output = NULL;
-        pmix_topology_t topo;
-        prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        topo.source = "hwloc";
-        topo.topology = prte_hwloc_topology;
-        ret = PMIx_Data_print(&output, NULL, &topo, PMIX_TOPO);
-        if (PMIX_SUCCESS == ret) {
-            fprintf(stderr, "%s\n", output);
-            free(output);
-        } else {
-            PMIX_ERROR_LOG(ret);
-        }
-    }
 
     /* define the HNP name */
     PMIX_LOAD_PROCID(PRTE_PROC_MY_HNP, PRTE_PROC_MY_NAME->nspace, 0);

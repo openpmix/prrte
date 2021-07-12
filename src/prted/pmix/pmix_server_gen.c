@@ -44,6 +44,7 @@
 #include "src/mca/iof/iof.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
+#include "src/mca/plm/base/plm_private.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/schizo/schizo.h"
@@ -61,38 +62,17 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata);
 static void _client_conn(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
-    prte_job_t *jdata;
-    prte_proc_t *p, *ptr;
-    int i;
+    prte_proc_t *p;
 
     PRTE_ACQUIRE_OBJECT(cd);
 
     if (NULL != cd->server_object) {
         /* we were passed back the prte_proc_t */
         p = (prte_proc_t *) cd->server_object;
-    } else {
-        /* find the named process */
-        p = NULL;
-        if (NULL == (jdata = prte_get_job_data_object(cd->proc.nspace))) {
-            return;
-        }
-        for (i = 0; i < jdata->procs->size; i++) {
-            if (NULL == (ptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, i))) {
-                continue;
-            }
-            if (!PMIX_CHECK_NSPACE(cd->proc.nspace, ptr->name.nspace)) {
-                continue;
-            }
-            if (cd->proc.rank == ptr->name.rank) {
-                p = ptr;
-                break;
-            }
-        }
-    }
-    if (NULL != p) {
         PRTE_FLAG_SET(p, PRTE_PROC_FLAG_REG);
         PRTE_ACTIVATE_PROC_STATE(&p->name, PRTE_PROC_STATE_REGISTERED);
     }
+
     if (NULL != cd->cbfunc) {
         cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
     }
@@ -104,62 +84,25 @@ pmix_status_t pmix_server_client_connected_fn(const pmix_proc_t *proc, void *ser
 {
     /* need to thread-shift this request as we are going
      * to access our global list of registered events */
-    PRTE_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS, NULL, NULL, 0, _client_conn, cbfunc,
-                          cbdata);
+    PRTE_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
+                          NULL, NULL, 0, _client_conn,
+                          cbfunc, cbdata);
     return PRTE_SUCCESS;
 }
 
 static void _client_finalized(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
-    prte_job_t *jdata;
-    prte_proc_t *p, *ptr;
-    int i;
+    prte_proc_t *p;
 
     PRTE_ACQUIRE_OBJECT(cd);
 
     if (NULL != cd->server_object) {
         /* we were passed back the prte_proc_t */
         p = (prte_proc_t *) cd->server_object;
-    } else {
-        /* find the named process */
-        p = NULL;
-        if (NULL == (jdata = prte_get_job_data_object(cd->proc.nspace))) {
-            /* this tool was not started by us and we have
-             * no job record for it - this shouldn't happen,
-             * so let's error log it */
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            /* ensure they don't hang */
-            goto release;
-        }
-        for (i = 0; i < jdata->procs->size; i++) {
-            if (NULL == (ptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, i))) {
-                continue;
-            }
-            if (!PMIX_CHECK_NSPACE(cd->proc.nspace, ptr->name.nspace)) {
-                continue;
-            }
-            if (cd->proc.rank == ptr->name.rank) {
-                p = ptr;
-                break;
-            }
-        }
-        if (NULL != p) {
-            /* if we came thru this code path, then this client must be an
-             * independent tool that connected to us - i.e., it wasn't
-             * something we spawned. For accounting purposes, we have to
-             * ensure the job complete procedure is run - otherwise, slots
-             * and other resources won't correctly be released */
-            PRTE_FLAG_SET(p, PRTE_PROC_FLAG_IOF_COMPLETE);
-            PRTE_FLAG_SET(p, PRTE_PROC_FLAG_WAITPID);
-        }
-        PRTE_ACTIVATE_PROC_STATE(&cd->proc, PRTE_PROC_STATE_TERMINATED);
-    }
-    if (NULL != p) {
         PRTE_FLAG_SET(p, PRTE_PROC_FLAG_HAS_DEREG);
     }
 
-release:
     /* release the caller */
     if (NULL != cd->cbfunc) {
         cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
@@ -172,7 +115,8 @@ pmix_status_t pmix_server_client_finalized_fn(const pmix_proc_t *proc, void *ser
 {
     /* need to thread-shift this request as we are going
      * to access our global list of registered events */
-    PRTE_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS, NULL, NULL, 0, _client_finalized,
+    PRTE_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
+                          NULL, NULL, 0, _client_finalized,
                           cbfunc, cbdata);
     return PRTE_SUCCESS;
 }
@@ -180,44 +124,19 @@ pmix_status_t pmix_server_client_finalized_fn(const pmix_proc_t *proc, void *ser
 static void _client_abort(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
-    prte_job_t *jdata;
-    prte_proc_t *p, *ptr;
-    int i;
-    int rc = PRTE_SUCCESS;
+    prte_proc_t *p;
 
     PRTE_ACQUIRE_OBJECT(cd);
 
     if (NULL != cd->server_object) {
         p = (prte_proc_t *) cd->server_object;
-    } else {
-        /* find the named process */
-        p = NULL;
-        if (NULL == (jdata = prte_get_job_data_object(cd->proc.nspace))) {
-            rc = PRTE_ERR_NOT_FOUND;
-            goto release;
-        }
-        for (i = 0; i < jdata->procs->size; i++) {
-            if (NULL == (ptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, i))) {
-                continue;
-            }
-            if (!PMIX_CHECK_NSPACE(cd->proc.nspace, ptr->name.nspace)) {
-                continue;
-            }
-            if (cd->proc.rank == ptr->name.rank) {
-                p = ptr;
-                break;
-            }
-        }
-    }
-    if (NULL != p) {
         p->exit_code = cd->status;
         PRTE_ACTIVATE_PROC_STATE(&p->name, PRTE_PROC_STATE_CALLED_ABORT);
     }
 
-release:
     /* release the caller */
     if (NULL != cd->cbfunc) {
-        cd->cbfunc(rc, cd->cbdata);
+        cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
     }
     PRTE_RELEASE(cd);
 }
@@ -328,11 +247,12 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     pmix_data_range_t range = PMIX_RANGE_SESSION;
     pmix_status_t code, ret;
     size_t ninfo;
-    prte_job_t *jdata;
     pmix_rank_t vpid;
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s PRTE Notification received from %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender));
+    prte_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s PRTE Notification received from %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_NAME_PRINT(sender));
 
     /* unpack the daemon who broadcast the event */
     cnt = 1;
@@ -411,11 +331,6 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
             PMIX_INFO_FREE(cd->info, cd->ninfo);
         }
         PRTE_RELEASE(cd);
-    }
-
-    if (PMIX_EVENT_JOB_END == code) {
-        jdata = prte_get_job_data_object(source.nspace);
-        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
     }
 }
 
@@ -533,11 +448,64 @@ done:
     return PMIX_OPERATION_SUCCEEDED;
 }
 
+void pmix_server_jobid_return(int status, pmix_proc_t *sender,
+                              pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
+                              void *cbdata)
+{
+    pmix_server_req_t *req;
+    int rc, room;
+    int32_t ret, cnt;
+    pmix_nspace_t jobid;
+    pmix_proc_t proc;
+
+    /* unpack the status - this is already a PMIx value */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &ret, &cnt, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        ret = prte_pmix_convert_rc(rc);
+    }
+
+    /* unpack the jobid */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &jobid, &cnt, PMIX_PROC_NSPACE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        ret = prte_pmix_convert_rc(rc);
+    }
+    /* we let the above errors fall thru in the vain hope that the room number can
+     * be successfully unpacked, thus allowing us to respond to the requestor */
+
+    /* unpack our tracking room number */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &room, &cnt, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        /* we are hosed */
+        return;
+    }
+
+    /* retrieve the request */
+    prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
+    if (NULL == req) {
+        /* we are hosed */
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        prte_output(0, "UNABLE TO RETRIEVE SPWN_REQ FOR JOB %s [room=%d]", jobid, room);
+        return;
+    }
+
+    PMIX_LOAD_PROCID(&proc, jobid, 0);
+    req->toolcbfunc(ret, &proc, req->cbdata);
+
+    /* cleanup */
+    PRTE_RELEASE(req);
+}
+
 static void _toolconn(int sd, short args, void *cbdata)
 {
     pmix_server_req_t *cd = (pmix_server_req_t *) cbdata;
-    prte_job_t *jdata = NULL;
     int rc;
+    char *tmp;
     size_t n;
     pmix_data_buffer_t *buf;
     prte_plm_cmd_flag_t command = PRTE_PLM_ALLOC_JOBID_CMD;
@@ -545,7 +513,8 @@ static void _toolconn(int sd, short args, void *cbdata)
 
     PRTE_ACQUIRE_OBJECT(cd);
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s TOOL CONNECTION PROCESSING",
+    prte_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s PROCESSING TOOL CONNECTION",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* check for directives */
@@ -598,32 +567,23 @@ static void _toolconn(int sd, short args, void *cbdata)
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
                         "%s TOOL CONNECTION FROM UID %d GID %d NSPACE %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cd->uid, cd->gid, cd->target.nspace);
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        cd->uid, cd->gid, cd->target.nspace);
 
     /* if we are not the HNP or master, and the tool doesn't
-     * already have a name (i.e., we didn't spawn it), then
-     * there is nothing we can currently do.
-     * Eventually, when we switch to nspace instead of an
-     * integer jobid, we'll just locally assign this value */
+     * already have a self-assigned name, then
+     * we need to ask the master for one */
     if (PMIX_NSPACE_INVALID(cd->target.nspace) || PMIX_RANK_INVALID == cd->target.rank) {
         /* if we are the HNP, we can directly assign the jobid */
         if (PRTE_PROC_IS_MASTER) {
-            jdata = PRTE_NEW(prte_job_t);
-            rc = prte_plm_base_create_jobid(jdata);
-            if (PRTE_SUCCESS != rc) {
-                PRTE_RELEASE(jdata);
-                xrc = prte_pmix_convert_rc(rc);
-                if (NULL != cd->toolcbfunc) {
-                    cd->toolcbfunc(xrc, NULL, cd->cbdata);
-                }
-                PRTE_RELEASE(cd);
-                return;
-            }
-            PMIX_LOAD_PROCID(&cd->target, jdata->nspace, 0);
-            prte_pmix_server_tool_conn_complete(jdata, cd);
+            /* the new nspace is our base nspace with an "@N" extension */
+            prte_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
+            PMIX_LOAD_PROCID(&cd->target, tmp, 0);
+            free(tmp);
+            prte_plm_globals.next_jobid++;
         } else {
-            if (PRTE_SUCCESS
-                != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, cd, &cd->room_num))) {
+            rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, cd, &cd->room_num);
+            if (PRTE_SUCCESS != rc) {
                 prte_show_help("help-prted.txt", "noroom", true, cd->operation,
                                prte_pmix_server_globals.num_rooms);
                 if (NULL != cd->toolcbfunc) {
@@ -643,9 +603,9 @@ static void _toolconn(int sd, short args, void *cbdata)
                 PMIX_ERROR_LOG(rc);
             }
             /* send it to the HNP for processing - might be myself! */
-            if (PRTE_SUCCESS
-                != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_PLM,
-                                                 prte_rml_send_callback, NULL))) {
+            rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_PLM,
+                                         prte_rml_send_callback, NULL);
+            if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 xrc = prte_pmix_convert_rc(rc);
                 prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs,
@@ -658,134 +618,12 @@ static void _toolconn(int sd, short args, void *cbdata)
             }
             return;
         }
-    } else {
-        /* we may have spawned this job, so check to see if we
-         * already have a job object for it */
-        jdata = prte_get_job_data_object(cd->target.nspace);
-        if (NULL == jdata) {
-            jdata = PRTE_NEW(prte_job_t);
-            PMIX_LOAD_NSPACE(jdata->nspace, cd->target.nspace);
-            rc = prte_set_job_data_object(jdata);
-            if (PRTE_SUCCESS != rc) {
-                PRTE_ERROR_LOG(rc);
-                if (NULL != cd->toolcbfunc) {
-                    xrc = prte_pmix_convert_rc(rc);
-                    cd->toolcbfunc(xrc, &cd->target, cd->cbdata);
-                }
-                PRTE_RELEASE(cd);
-                return;
-            }
-            prte_pmix_server_tool_conn_complete(jdata, cd);
-        } else {
-            PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
-        }
     }
 
     if (NULL != cd->toolcbfunc) {
         cd->toolcbfunc(PMIX_SUCCESS, &cd->target, cd->cbdata);
     }
     PRTE_RELEASE(cd);
-}
-
-void prte_pmix_server_tool_conn_complete(prte_job_t *jdata, pmix_server_req_t *req)
-{
-    prte_app_context_t *app;
-    prte_proc_t *proc;
-    prte_node_t *node, *nptr;
-    int i;
-
-    /* flag that this job is a tool */
-    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
-    if (req->launcher) {
-        /* flag that it is also a launcher */
-        PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_LAUNCHER);
-    }
-    /* flag that it is not to be monitored */
-    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_DO_NOT_MONITOR);
-
-    /* must create a map for it (even though it has no
-     * info in it) so that the job info will be picked
-     * up in subsequent pidmaps or other daemons won't
-     * know how to route
-     */
-    jdata->map = PRTE_NEW(prte_job_map_t);
-
-    /* setup an app_context for the singleton */
-    app = PRTE_NEW(prte_app_context_t);
-    if (NULL == req->cmdline) {
-        app->app = strdup("tool");
-        prte_argv_append_nosize(&app->argv, "tool");
-    } else {
-        app->argv = prte_argv_split(req->cmdline, ' ');
-        app->app = strdup(app->argv[0]);
-    }
-    app->num_procs = 1;
-    prte_pointer_array_add(jdata->apps, app);
-    jdata->num_apps = 1;
-
-    /* setup a proc object for the singleton - since we
-     * -must- be the HNP, and therefore we stored our
-     * node on the global node pool, and since the singleton
-     * -must- be on the same node as us, indicate that
-     */
-    proc = PRTE_NEW(prte_proc_t);
-    PMIX_LOAD_PROCID(&proc->name, jdata->nspace, req->target.rank);
-    proc->pid = req->pid;
-    proc->parent = PRTE_PROC_MY_NAME->rank;
-    PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_ALIVE);
-    PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_TOOL);
-    proc->state = PRTE_PROC_STATE_RUNNING;
-    /* set the trivial */
-    proc->local_rank = 0;
-    proc->node_rank = 0;
-    proc->app_rank = 0;
-    if (NULL == req->operation) {
-        /* it is on my node */
-        node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, 0);
-        PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_LOCAL);
-    } else {
-        /* we need to locate it */
-        node = NULL;
-        for (i = 0; i < prte_node_pool->size; i++) {
-            if (NULL == (nptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i))) {
-                continue;
-            }
-            if (0 == strcmp(req->operation, nptr->name)) {
-                node = nptr;
-                break;
-            }
-        }
-        if (NULL == node) {
-            /* not in our allocation - which is still okay */
-            node = PRTE_NEW(prte_node_t);
-            node->name = strdup(req->operation);
-            PRTE_FLAG_SET(node, PRTE_NODE_NON_USABLE);
-            prte_pointer_array_add(prte_node_pool, node);
-        }
-    }
-    if (NULL == node) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-    } else {
-        proc->node = node;
-        PRTE_RETAIN(node); /* keep accounting straight */
-        /* add the node to the job map */
-        PRTE_RETAIN(node);
-        prte_pointer_array_add(jdata->map->nodes, node);
-        jdata->map->num_nodes++;
-        /* and it obviously is on the node - note that
-         * we do _not_ increment the #procs on the node
-         * as the tool doesn't count against the slot
-         * allocation */
-        PRTE_RETAIN(proc);
-        prte_pointer_array_add(node->procs, proc);
-    }
-    prte_pointer_array_add(jdata->procs, proc);
-    jdata->num_procs = 1;
-    /* if they indicated a preference for termination, set it */
-    if (req->flag) {
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_SILENT_TERMINATION, PRTE_ATTR_GLOBAL, NULL,
-                           PMIX_BOOL);
-    }
 }
 
 void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo, pmix_tool_connection_cbfunc_t cbfunc,

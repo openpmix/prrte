@@ -932,40 +932,39 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     return PRTE_SUCCESS;
 }
 
-static int detect_proxy(char *cmdpath)
+static int detect_proxy(char *personalities)
 {
-    char *mybasename;
+    char *evar;
 
     prte_output_verbose(2, prte_schizo_base_framework.framework_output,
-                        "%s[%s]: detect proxy with %s (%s)", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        __FILE__, cmdpath, prte_tool_basename);
+                        "%s[%s]: detect proxy with %s (%s)",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__,
+                        (NULL == personalities) ? "NULL" : personalities,
+                        prte_tool_basename);
 
-    /* we are lowest priority, so we will be checked last */
-    if (NULL == cmdpath) {
-        /* must use us */
-        return 100;
-    }
-
-    /* if this isn't a full path, then it is a list
-     * of personalities we need to check */
-    if (!prte_path_is_absolute(cmdpath)) {
-        /* if it contains "prte", then we are available */
-        if (NULL != strstr(cmdpath, "prte") || NULL != strstr(cmdpath, "prrte")) {
+    /* if we were told the proxy, then use it */
+    if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy"))) {
+        if (0 == strcmp(evar, "prte")) {
+            /* they asked exclusively for us */
             return 100;
+        } else {
+            /* they asked for somebody else */
+            return 0;
         }
     }
 
-    /* if it is not a symlink and is in our install path,
-     * then it belongs to us */
-    mybasename = prte_basename(cmdpath);
-    if (0 == strcmp(mybasename, prte_tool_basename)
-        && NULL != strstr(cmdpath, prte_install_dirs.prefix)) {
-        free(mybasename);
-        return 100;
+    if (NULL == personalities) {
+        return prte_schizo_prte_component.priority;
     }
-    free(mybasename);
 
-    /* we are always the lowest priority */
+    /* this is a list of personalities we need to check -
+     * if it contains "prte", then we are available but
+     * at a low priority */
+    if (NULL != strstr(personalities, "prte")) {
+        return prte_schizo_prte_component.priority;
+    }
+
+    /* if neither of those were true, then just use our default */
     return prte_schizo_prte_component.priority;
 }
 

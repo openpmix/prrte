@@ -270,8 +270,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_APP_APPEND_ENVAR";
         case PRTE_APP_ADD_ENVAR:
             return "PRTE_APP_ADD_ENVAR";
-        case PRTE_APP_DEBUGGER_DAEMON:
-            return "PRTE_APP_DEBUGGER_DAEMON";
         case PRTE_APP_PSET_NAME:
             return "PRTE_APP_PSET_NAME";
 
@@ -674,8 +672,14 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
 {
     pmix_byte_object_t *boptr;
     pmix_envar_t *envar;
-    pmix_data_type_t pointers[] = {PMIX_STRING, PMIX_BYTE_OBJECT, PMIX_POINTER, PMIX_PROC_NSPACE,
-                                   PMIX_PROC,   PMIX_ENVAR,       PMIX_UNDEF};
+    pmix_data_type_t pointers[] = {
+        PMIX_STRING,
+        PMIX_BYTE_OBJECT,
+        PMIX_POINTER,
+        PMIX_PROC_NSPACE,
+        PMIX_PROC,
+        PMIX_ENVAR,
+        PMIX_UNDEF};
     int n;
     bool found = false;
 
