@@ -115,7 +115,6 @@ static pmix_proc_t myproc;
 static bool signals_set = false;
 static bool forcibly_die = false;
 static prte_event_t term_handler;
-static prte_event_t die_handler;
 static prte_event_t epipe_handler;
 static int term_pipe[2];
 static prte_mutex_t prun_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
@@ -164,14 +163,6 @@ static void setupcbfunc(pmix_status_t status, pmix_info_t info[], size_t ninfo,
     PRTE_PMIX_WAKEUP_THREAD(&mylock->lock);
 }
 
-static void toolcbfunc(pmix_status_t status, pmix_proc_t *name, void *cbdata)
-{
-    mylock_t *mylock = (mylock_t *) cbdata;
-
-    mylock->status = status;
-    PRTE_PMIX_WAKEUP_THREAD(&mylock->lock);
-}
-
 static void spcbfunc(pmix_status_t status, char nspace[], void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
@@ -183,6 +174,24 @@ static void spcbfunc(pmix_status_t status, char nspace[], void *cbdata)
     }
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
+
+static void parent_died_fn(size_t evhdlr_registration_id, pmix_status_t status,
+                           const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                           pmix_info_t results[], size_t nresults,
+                           pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+{
+    clean_abort(0, 0, NULL);
+    cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+}
+
+static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbdata)
+{
+    mylock_t *lock = (mylock_t *) cbdata;
+
+    lock->status = status;
+    PRTE_PMIX_WAKEUP_THREAD(&lock->lock);
+}
+
 
 static int wait_pipe[2];
 
@@ -225,7 +234,7 @@ static prte_cmd_line_init_t cmd_line_init[] = {
 int prte(int argc, char *argv[])
 {
     int rc = 1, i, j;
-    char *param, *ptr, *tpath, *fullpath, *cptr;
+    char *param, *ptr, *tpath, *cptr;
     prte_pmix_lock_t lock;
     prte_list_t apps;
     prte_pmix_app_t *app;
@@ -255,10 +264,10 @@ int prte(int argc, char *argv[])
     char **targv;
     char *outdir = NULL;
     char *outfile = NULL;
+    pmix_status_t code;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
-    fullpath = prte_find_absolute_path(argv[0]);
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
@@ -343,9 +352,6 @@ int prte(int argc, char *argv[])
             break;
         }
     }
-    if (NULL == ptr) {
-        ptr = fullpath;
-    }
 
     /* detect if we are running as a proxy and select the active
      * schizo module for this tool */
@@ -408,10 +414,9 @@ int prte(int argc, char *argv[])
 
     /* if we were given a keepalive pipe, set up to monitor it now */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "keepalive", 0, 0))) {
-        prte_event_set(prte_event_base, &die_handler, pval->value.data.integer, PRTE_EV_READ,
-                       clean_abort, NULL);
-        prte_event_add(&die_handler, NULL);
-        prte_fd_set_cloexec(pval->value.data.integer); // don't let children inherit this
+        prte_asprintf(&param, "%d", pval->value.data.integer);
+        prte_setenv("PMIX_KEEPALIVE_PIPE", param, true, &environ);
+        free(param);
     }
 
     /* let the schizo components take a pass at it to get the MCA params */
@@ -538,6 +543,38 @@ int prte(int argc, char *argv[])
      */
     prte_launch_environ = prte_argv_copy(environ);
 
+    /* default to a persistent DVM */
+    prte_persistent = true;
+
+    /* if we are told to daemonize, then we cannot have apps */
+    if (!prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
+        /* see if they want to run an application - let's parse
+         * the cmd line to get it */
+        rc = prte_parse_locals(prte_cmd_line, &apps, pargc, pargv, &hostfiles, &hosts);
+
+        /* did they provide an app? */
+        if (PMIX_SUCCESS != rc || 0 == prte_list_get_size(&apps)) {
+            if (proxyrun) {
+                prte_show_help("help-prun.txt", "prun:executable-not-specified", true,
+                               prte_tool_basename, prte_tool_basename);
+                PRTE_UPDATE_EXIT_STATUS(rc);
+                goto DONE;
+            }
+            /* nope - just need to wait for instructions */
+        } else {
+            /* they did provide an app - this is only allowed
+             * when running as a proxy! */
+            if (!proxyrun) {
+                prte_show_help("help-prun.txt", "prun:executable-incorrectly-given", true,
+                               prte_tool_basename, prte_tool_basename);
+                PRTE_UPDATE_EXIT_STATUS(rc);
+                goto DONE;
+            }
+            /* mark that we are not a persistent DVM */
+            prte_persistent = false;
+        }
+    }
+
     /* setup PRTE infrastructure */
     if (PRTE_SUCCESS != (ret = prte_init(&pargc, &pargv, PRTE_PROC_MASTER))) {
         PRTE_ERROR_LOG(ret);
@@ -587,6 +624,16 @@ int prte(int argc, char *argv[])
             goto DONE;
         }
     }
+
+    /* setup the keepalive event registration */
+    PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
+    code = PMIX_ERR_JOB_TERMINATED;
+    PMIX_LOAD_PROCID(&pname, "PMIX_KEEPALIVE_PIPE", PMIX_RANK_UNDEF);
+    PMIX_INFO_LOAD(&info, PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
+    PMIx_Register_event_handler(&code, 1, &info, 1, parent_died_fn, evhandler_reg_callbk,
+                                (void *) &mylock);
+    PRTE_PMIX_WAIT_THREAD(&mylock.lock);
+    PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
 
     /* check for launch directives in case we were launched by a
      * tool wanting to direct our operation - this needs to be
@@ -696,54 +743,10 @@ int prte(int argc, char *argv[])
         PMIX_LOAD_PROCID(&parent, val->data.proc->nspace, val->data.proc->rank);
         PMIX_VALUE_RELEASE(val);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
-        /* record that this tool is connected to us */
-        PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
-        PMIX_INFO_CREATE(iptr, 2);
-        PMIX_INFO_LOAD(&iptr[0], PMIX_NSPACE, parent.nspace, PMIX_STRING);
-        PMIX_INFO_LOAD(&iptr[1], PMIX_RANK, &parent.rank, PMIX_PROC_RANK);
-        pmix_tool_connected_fn(iptr, 2, toolcbfunc, &mylock);
-        /* we have to cycle the event library here so we can process
-         * this request */
-        while (prte_event_base_active && mylock.lock.active) {
-            prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
-        }
-        PRTE_ACQUIRE_OBJECT(&mylock.lock);
-        PMIX_INFO_FREE(iptr, 2);
-        PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
+        /* indicate that we are launching on behalf of a parent */
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PARENT_ID, &parent, PMIX_PROC);
     } else {
         PMIX_LOAD_PROCID(&parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
-    }
-
-    /* default to a persistent DVM */
-    prte_persistent = true;
-
-    /* if we are told to daemonize, then we cannot have apps */
-    if (!prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
-        /* see if they want to run an application - let's parse
-         * the cmd line to get it */
-        rc = prte_parse_locals(prte_cmd_line, &apps, pargc, pargv, &hostfiles, &hosts);
-
-        /* did they provide an app? */
-        if (PMIX_SUCCESS != rc || 0 == prte_list_get_size(&apps)) {
-            if (proxyrun) {
-                prte_show_help("help-prun.txt", "prun:executable-not-specified", true,
-                               prte_tool_basename, prte_tool_basename);
-                PRTE_UPDATE_EXIT_STATUS(rc);
-                goto DONE;
-            }
-            /* nope - just need to wait for instructions */
-        } else {
-            /* they did provide an app - this is only allowed
-             * when running as a proxy! */
-            if (!proxyrun) {
-                prte_show_help("help-prun.txt", "prun:executable-incorrectly-given", true,
-                               prte_tool_basename, prte_tool_basename);
-                PRTE_UPDATE_EXIT_STATUS(rc);
-                goto DONE;
-            }
-            /* mark that we are not a persistent DVM */
-            prte_persistent = false;
-        }
     }
 
     /* add any hostfile directives to the daemon job */
@@ -1192,8 +1195,10 @@ int prte(int argc, char *argv[])
         prte_output(0, "Spawning job");
     }
 
+    /* let the PMIx server handle it for us so that all the job infos
+     * get properly recorded - e.g., forwarding IOF */
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    ret = pmix_server_spawn_fn(&parent, iptr, ninfo, papps, napps, spcbfunc, &lock);
+    ret = PMIx_Spawn_nb(iptr, ninfo, papps, napps, spcbfunc, &lock);
     if (PRTE_SUCCESS != ret) {
         prte_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
         rc = ret;
@@ -1216,17 +1221,6 @@ int prte(int argc, char *argv[])
     if (verbose) {
         prte_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(spawnednspace));
     }
-    /* need to "pull" the IOF from the spawned job since we didn't
-     * go thru PMIx_Spawn to start it - and thus, PMIx didn't
-     * "pull" it for us */
-    PMIX_LOAD_PROCID(&pname, spawnednspace, PMIX_RANK_WILDCARD);
-    ret = PMIx_IOF_pull(&pname, 1, NULL, 0,
-                        PMIX_FWD_STDOUT_CHANNEL | PMIX_FWD_STDERR_CHANNEL
-                            | PMIX_FWD_STDDIAG_CHANNEL,
-                        NULL, NULL, NULL);
-    if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
-        prte_output(0, "IOF pull failed: %s", PMIx_Error_string(ret));
-    }
 
     /* push our stdin to the apps */
     PMIX_LOAD_PROCID(&pname, spawnednspace, 0); // forward stdin to rank=0
@@ -1247,6 +1241,7 @@ proceed:
     while (prte_event_base_active) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
     }
+
     PRTE_ACQUIRE_OBJECT(prte_event_base_active);
 
     /* close the push of our stdin */
@@ -1352,8 +1347,7 @@ static void surekill(void)
 static void abort_signal_callback(int fd)
 {
     uint8_t foo = 1;
-    char *msg
-        = "Abort is in progress...hit ctrl-c again to forcibly terminate\n\n";
+    char *msg = "Abort is in progress...hit ctrl-c again to forcibly terminate\n\n";
 
     /* if this is the first time thru, just get
      * the current time

@@ -221,6 +221,21 @@ static inline int prte_hotel_checkin(prte_hotel_t *hotel, void *occupant, int *r
     return PRTE_SUCCESS;
 }
 
+static inline int prte_hotel_recheck(prte_hotel_t *hotel, void *occupant, int room_num)
+{
+    prte_hotel_room_t *room;
+
+    room = &(hotel->rooms[room_num]);
+    if (PRTE_UNLIKELY(NULL != room->occupant)) {
+        return PRTE_ERR_NOT_AVAILABLE;
+    }
+    room->occupant = occupant;
+    /* Assign the event and make it pending */
+    if (NULL != hotel->evbase) {
+        prte_event_add(&(room->eviction_timer_event), &(hotel->eviction_timeout));
+    }
+    return PRTE_SUCCESS;
+}
 /**
  * Check the specified occupant out of the hotel.
  *

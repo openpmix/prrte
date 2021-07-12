@@ -23,6 +23,7 @@
 
 #include "src/class/prte_list.h"
 #include "src/mca/mca.h"
+#include "src/mca/odls/base/odls_private.h"
 #include "src/util/printf.h"
 
 #include "src/mca/rtc/rtc.h"
@@ -65,7 +66,7 @@ typedef struct {
 PRTE_CLASS_DECLARATION(prte_rtc_base_selected_module_t);
 
 PRTE_EXPORT void prte_rtc_base_assign(prte_job_t *jdata);
-PRTE_EXPORT void prte_rtc_base_set(prte_job_t *jdata, prte_proc_t *proc, char ***env, int error_fd);
+PRTE_EXPORT void prte_rtc_base_set(prte_odls_spawn_caddy_t *cd, int error_fd);
 PRTE_EXPORT void prte_rtc_base_get_avail_vals(prte_list_t *vals);
 
 /* Called from the child to send a warning show_help message up the

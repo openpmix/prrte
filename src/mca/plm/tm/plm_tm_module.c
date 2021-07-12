@@ -191,16 +191,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     jdata = state->jdata;
 
-    /* if we are launching debugger daemons, then just go
-     * do it - no new daemons will be launched
-     */
-    if (PRTE_FLAG_TEST(state->jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON)) {
-        jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
-        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
-        return;
-    }
-
     /* setup the virtual machine */
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     if (PRTE_SUCCESS != (rc = prte_plm_base_setup_virtual_machine(jdata))) {

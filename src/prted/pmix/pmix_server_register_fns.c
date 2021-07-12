@@ -166,8 +166,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                             /* go ahead and register this client - since we are going to wait
                              * for register_nspace to complete and the PMIx library serializes
                              * the registration requests, we don't need to wait here */
-                            ret = PMIx_server_register_client(&pptr->name, uid, gid, (void *) pptr,
-                                                              NULL, NULL);
+                            ret = PMIx_server_register_client(&pptr->name, uid, gid,
+                                                              (void*)pptr, NULL, NULL);
                             if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
                                 PMIX_ERROR_LOG(ret);
                             }
@@ -397,12 +397,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         PMIX_INFO_LOAD(&kv->info, PMIX_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL);
         prte_list_append(info, &kv->super);
     }
-    /* if we are a non-persistent HNP, then write the output locally */
-    if (PRTE_PROC_IS_MASTER && !prte_persistent) {
-       kv = PRTE_NEW(prte_info_item_t);
-        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
-        prte_list_append(info, &kv->super);
-    }
 
     /* for each app in the job, create an app-array */
     for (n = 0; n < jdata->apps->size; n++) {
@@ -450,8 +444,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     }
 
     /* get the parent job that spawned this one */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &parentproc,
-                           PMIX_PROC)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &parentproc, PMIX_PROC)) {
         parent = prte_get_job_data_object(parentproc->nspace);
         if (NULL != parent
             && (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)
@@ -524,24 +517,20 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                     PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, NULL, PMIX_STRING);
                     prte_list_append(pmap, &kv->super);
                 }
-                /* debugger daemons and tools don't get session directories */
-                if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-                    && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
-                    /* create and pass a proc-level session directory */
-                    if (0 > prte_asprintf(&tmp, "%s/%u/%u", prte_process_info.jobfam_session_dir,
-                                          PRTE_LOCAL_JOBID(jdata->nspace), pptr->name.rank)) {
-                        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-                        return PRTE_ERR_OUT_OF_RESOURCE;
-                    }
-                    if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(tmp, S_IRWXU))) {
-                        PRTE_ERROR_LOG(rc);
-                        return rc;
-                    }
-                    kv = PRTE_NEW(prte_info_item_t);
-                    PMIX_INFO_LOAD(&kv->info, PMIX_PROCDIR, tmp, PMIX_STRING);
-                    free(tmp);
-                    prte_list_append(pmap, &kv->super);
+                /* create and pass a proc-level session directory */
+                if (0 > prte_asprintf(&tmp, "%s/%u/%u", prte_process_info.jobfam_session_dir,
+                                      PRTE_LOCAL_JOBID(jdata->nspace), pptr->name.rank)) {
+                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                    return PRTE_ERR_OUT_OF_RESOURCE;
                 }
+                if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(tmp, S_IRWXU))) {
+                    PRTE_ERROR_LOG(rc);
+                    return rc;
+                }
+                kv = PRTE_NEW(prte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_PROCDIR, tmp, PMIX_STRING);
+                free(tmp);
+                prte_list_append(pmap, &kv->super);
             }
 
             /* global/univ rank */

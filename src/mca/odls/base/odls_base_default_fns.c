@@ -1008,8 +1008,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     }
 
     /* did the user request we display output in xterms? */
-    if (NULL != prte_xterm && !PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-        && !PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_TOOL)) {
+    if (NULL != prte_xterm) {
         prte_list_item_t *nmitem;
         prte_namelist_t *nm;
         /* see if this rank is one of those requested */
@@ -1065,8 +1064,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     }
 
     /* if we are indexing the argv by rank, do so now */
-    if (cd->index_argv && !PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-        && !PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_TOOL)) {
+    if (cd->index_argv) {
         char *param;
         prte_asprintf(&param, "%s-%u", cd->argv[0], child->name.rank);
         free(cd->argv[0]);
@@ -1225,8 +1223,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         /* if this app isn't being used on our node, skip it */
         if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_USED_ON_NODE)) {
             prte_output_verbose(5, prte_odls_base_framework.framework_output,
-                                "%s app %d not used on node", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                j);
+                                "%s app %d not used on node",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), j);
             continue;
         }
 
@@ -1246,9 +1244,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
              */
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
-                if (NULL
-                    == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                            idx))) {
+                child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+                if (NULL == child) {
                     continue;
                 }
                 if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
@@ -1275,9 +1272,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
              */
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
-                if (NULL
-                    == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                            idx))) {
+                child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+                if (NULL == child) {
                     continue;
                 }
                 if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
@@ -1292,9 +1288,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (PRTE_SUCCESS != (rc = prte_filem.link_local_files(jobdat, app))) {
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
-                if (NULL
-                    == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                            idx))) {
+                child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+                if (NULL == child) {
                     continue;
                 }
                 if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
@@ -1341,9 +1336,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (PRTE_SUCCESS != rc) {
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
-                if (NULL
-                    == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                            idx))) {
+                child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+                if (NULL == child) {
                     continue;
                 }
                 if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
@@ -1360,9 +1354,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                            prte_process_info.nodename, app, __FILE__, __LINE__, msg);
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
-                if (NULL
-                    == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                            idx))) {
+                child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+                if (NULL == child) {
                     continue;
                 }
                 if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
@@ -1388,9 +1381,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         /* okay, now let's launch all the local procs for this app using the provided fork_local fn
          */
         for (idx = 0; idx < prte_local_children->size; idx++) {
-            if (NULL
-                == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                        idx))) {
+            child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+            if (NULL == child) {
                 continue;
             }
             /* does this child belong to this app? */
@@ -1414,7 +1406,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             /* is this child a candidate to start? it may not be alive
              * because it already executed
              */
-            if (PRTE_PROC_STATE_INIT != child->state && PRTE_PROC_STATE_RESTART != child->state) {
+            if (PRTE_PROC_STATE_INIT != child->state &&
+                PRTE_PROC_STATE_RESTART != child->state) {
                 continue;
             }
             /* do we have a child from the specified job. Because the
@@ -1431,9 +1424,10 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 continue;
             }
 
-            PRTE_OUTPUT_VERBOSE(
-                (5, prte_odls_base_framework.framework_output, "%s odls:launch working child %s",
-                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name)));
+            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                                 "%s odls:launch working child %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 PRTE_NAME_PRINT(&child->name)));
 
             /* determine the thread that will handle this child */
             ++prte_odls_globals.next_base;
@@ -1523,8 +1517,8 @@ int prte_odls_base_default_signal_local_procs(const pmix_proc_t *proc, int32_t s
     if (NULL == proc) {
         rc = PRTE_SUCCESS; /* pre-set this as an empty list causes us to drop to bottom */
         for (i = 0; i < prte_local_children->size; i++) {
-            if (NULL
-                == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+            child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+            if (NULL == child) {
                 continue;
             }
             if (0 == child->pid || !PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE)) {
@@ -1540,7 +1534,8 @@ int prte_odls_base_default_signal_local_procs(const pmix_proc_t *proc, int32_t s
 
     /* we want it sent to some specified process, so find it */
     for (i = 0; i < prte_local_children->size; i++) {
-        if (NULL == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+        child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+        if (NULL == child) {
             continue;
         }
         if (PMIX_CHECK_PROCID(&child->name, proc)) {
@@ -1622,14 +1617,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         goto MOVEON;
     }
 
-    /* if this is a debugger daemon or tool, then just report the state
-     * and return as we aren't monitoring it
-     */
-    if (PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-        || PRTE_FLAG_TEST(jobdat, PRTE_JOB_FLAG_TOOL)) {
-        goto MOVEON;
-    }
-
     /* if this child was ordered to die, then just pass that along
      * so we don't hang
      */
@@ -1659,8 +1646,9 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
 
         /* check to see if a sync was required and if it was received */
         if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_REG)) {
-            if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_HAS_DEREG) || prte_allowed_exit_without_sync
-                || 0 != proc->exit_code) {
+            if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_HAS_DEREG) ||
+                prte_allowed_exit_without_sync ||
+                0 != proc->exit_code) {
                 /* if we did recv a finalize sync, or one is not required,
                  * then declare it normally terminated
                  * unless it returned with a non-zero status indicating the code
@@ -1694,9 +1682,8 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         } else {
             /* has any child in this job already registered? */
             for (i = 0; i < prte_local_children->size; i++) {
-                if (NULL
-                    == (cptr = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                           i))) {
+                cptr = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+                if (NULL == cptr) {
                     continue;
                 }
                 if (!PMIX_CHECK_NSPACE(cptr->name.nspace, proc->name.nspace)) {
@@ -1768,17 +1755,18 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
             int rc;
             pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
             pmix_info_t *pinfo;
-            PMIX_INFO_CREATE(pinfo, 1);
+            PMIX_INFO_CREATE(pinfo, 2);
             PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &proc->name, PMIX_PROC);
+            PMIX_INFO_LOAD(&pinfo[1], "prte.notify.donotloop", NULL, PMIX_BOOL);
 
-            if (PRTE_SUCCESS
-                != PMIx_Notify_event(pcode, PRTE_PROC_MY_NAME, PMIX_RANGE_LOCAL, pinfo, 1, NULL,
-                                     NULL)) {
+            rc = PMIx_Notify_event(pcode, PRTE_PROC_MY_NAME, PMIX_RANGE_LOCAL, pinfo, 2, NULL,  NULL);
+            if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
                 PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:notify failed, release pinfo",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-                PRTE_RELEASE(pinfo);
             }
+            PMIX_INFO_FREE(pinfo, 2);
+
             PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s odls:event notify in odls proc %s gone",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
@@ -1852,8 +1840,8 @@ int prte_odls_base_default_kill_local_procs(prte_pointer_array_t *procs,
             continue;
         }
         for (j = 0; j < prte_local_children->size; j++) {
-            if (NULL
-                == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, j))) {
+            child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, j);
+            if (NULL == child) {
                 continue;
             }
 

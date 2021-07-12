@@ -59,8 +59,8 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     prte_job_t *jdata;
 
     jdata = prte_get_job_data_object(jobid);
-    if (NULL != jdata
-        && prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, NULL, PMIX_BOOL)) {
+    if (NULL != jdata &&
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED, NULL, PMIX_BOOL)) {
         /* already done */
         return;
     }
@@ -70,7 +70,6 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     if (NULL == req) {
         /* we are hosed */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        prte_output(0, "UNABLE TO RETRIEVE SPWN_REQ FOR JOB %s [room=%d]", jobid, room);
         return;
     }
 
@@ -78,12 +77,8 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     if (NULL != req->spcbfunc) {
         req->spcbfunc(ret, jobid, req->cbdata);
     } else if (NULL != req->toolcbfunc) {
-        /* if success, then add to our job info */
-        if (PRTE_SUCCESS == ret) {
-            jdata = PRTE_NEW(prte_job_t);
-            PMIX_LOAD_NSPACE(jdata->nspace, jobid);
+        if (PMIX_SUCCESS == ret) {
             PMIX_LOAD_PROCID(&req->target, jobid, 0);
-            prte_pmix_server_tool_conn_complete(jdata, req);
         }
         req->toolcbfunc(ret, &req->target, req->cbdata);
     }
@@ -223,7 +218,8 @@ static void interim(int sd, short args, void *cbdata)
     /* create the job object */
     jdata = PRTE_NEW(prte_job_t);
     jdata->map = PRTE_NEW(prte_job_map_t);
-    PMIX_XFER_PROCID(&jdata->originator, requestor);
+    /* default to the requestor as the originator */
+    PMIX_LOAD_PROCID(&jdata->originator, requestor->nspace, requestor->rank);
 
     /* transfer the apps across */
     for (n = 0; n < cd->napps; n++) {
@@ -292,9 +288,8 @@ static void interim(int sd, short args, void *cbdata)
                                        info->value.data.string, PMIX_STRING);
 
                 } else if (PMIX_CHECK_KEY(info, PMIX_COSPAWN_APP)) {
-                    flag = PMIX_INFO_TRUE(info);
-                    prte_set_attribute(&app->attributes, PRTE_APP_DEBUGGER_DAEMON, PRTE_ATTR_GLOBAL,
-                                       &flag, PMIX_BOOL);
+                    PRTE_FLAG_SET(app, PRTE_APP_DEBUGGER_DAEMON);
+
                     /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                     /* there can be multiple of these, so we add them to the attribute list */
                 } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
@@ -463,6 +458,9 @@ static void interim(int sd, short args, void *cbdata)
             prte_set_attribute(&jdata->attributes, PRTE_JOB_NON_PRTE_JOB, PRTE_ATTR_GLOBAL, &flag,
                                PMIX_BOOL);
 
+        } else if (PMIX_CHECK_KEY(info, PMIX_PARENT_ID)) {
+            PMIX_XFER_PROCID(&jdata->originator, info->value.data.proc);
+
             /***   SPAWN REQUESTOR IS TOOL   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_REQUESTOR_IS_TOOL)) {
             flag = PMIX_INFO_TRUE(info);
@@ -600,8 +598,13 @@ static void interim(int sd, short args, void *cbdata)
 
             /***   DEBUGGER DAEMONS   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUGGER_DAEMONS)) {
-            PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON);
-            PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_DEBUGGER);
+            PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
+            for (n=0; n < (size_t)jdata->apps->size; n++) {
+                app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, n);
+                if (NULL != app) {
+                    PRTE_FLAG_SET(app, PRTE_APP_DEBUGGER_DAEMON);
+                }
+            }
 
             /***   CO-LOCATE TARGET FOR DEBUGGER DAEMONS    ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_TARGET)) {
@@ -678,8 +681,8 @@ static void interim(int sd, short args, void *cbdata)
     }
 
     /* indicate the requestor so bookmarks can be correctly set */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, PRTE_ATTR_GLOBAL, requestor,
-                       PMIX_PROC);
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, PRTE_ATTR_GLOBAL,
+                       &jdata->originator, PMIX_PROC);
 
     /* indicate that IO is to be forwarded */
     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_FORWARD_OUTPUT);

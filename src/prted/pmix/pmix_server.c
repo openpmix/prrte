@@ -388,8 +388,8 @@ static void eviction_cbfunc(struct prte_hotel_t *hotel, int room_num, void *occu
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->key);
         }
         /* not done yet - check us back in */
-        if (PRTE_SUCCESS
-            == (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+        rc = prte_hotel_recheck(&prte_pmix_server_globals.reqs, req, req->room_num);
+        if (PRTE_SUCCESS == rc) {
             prte_output_verbose(2, prte_pmix_server_globals.output,
                                 "%s server:evict checked back in to room %d",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->room_num);
@@ -537,6 +537,19 @@ int pmix_server_init(void)
         kv = PRTE_NEW(prte_info_item_t);
         PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_GATEWAY, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
+        /* if we are also persistent, then we do not output IOF ourselves */
+        if (prte_persistent) {
+            bool flag = false;
+            kv = PRTE_NEW(prte_info_item_t);
+            PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
+            prte_list_append(&ilist, &kv->super);
+        }
+    } else {
+        /* prted's never locally output */
+        bool flag = false;
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
+        prte_list_append(&ilist, &kv->super);
     }
 
     /* PRTE always allows remote tool connections */
@@ -644,7 +657,11 @@ void pmix_server_start(void)
     prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_NOTIFICATION, PRTE_RML_PERSISTENT,
                             pmix_server_notify, NULL);
 
-    if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_MASTER) {
+    /* setup recv for jobid return */
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_JOBID_RESP, PRTE_RML_PERSISTENT,
+                            pmix_server_jobid_return, NULL);
+
+    if (PRTE_PROC_IS_MASTER) {
         /* setup recv for logging requests */
         prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING, PRTE_RML_PERSISTENT,
                                 pmix_server_log, NULL);

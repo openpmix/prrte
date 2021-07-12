@@ -160,7 +160,6 @@ static void track_jobs(int fd, short argc, void *cbdata)
     int rc, i;
     prte_proc_state_t running = PRTE_PROC_STATE_RUNNING;
     prte_proc_t *child;
-    pmix_rank_t null = PMIX_RANK_INVALID;
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -173,7 +172,7 @@ static void track_jobs(int fd, short argc, void *cbdata)
         /* update the HNP with all proc states for this job */
         PMIX_DATA_BUFFER_CREATE(alert);
         /* pack update state command */
-        cmd = PRTE_PLM_UPDATE_PROC_STATE;
+        cmd = PRTE_PLM_LOCAL_LAUNCH_COMP_CMD;
         rc = PMIx_Data_pack(NULL, alert, &cmd, 1, PMIX_UINT8);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -188,21 +187,14 @@ static void track_jobs(int fd, short argc, void *cbdata)
             goto cleanup;
         }
         for (i = 0; i < prte_local_children->size; i++) {
-            if (NULL
-                == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+            child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+            if (NULL == child) {
                 continue;
             }
             /* if this child is part of the job... */
             if (PMIX_CHECK_NSPACE(child->name.nspace, caddy->jdata->nspace)) {
                 /* pack the child's vpid */
                 rc = PMIx_Data_pack(NULL, alert, &child->name.rank, 1, PMIX_PROC_RANK);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    PMIX_DATA_BUFFER_RELEASE(alert);
-                    goto cleanup;
-                }
-                /* pack the pid */
-                rc = PMIx_Data_pack(NULL, alert, &child->pid, 1, PMIX_PID);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(alert);
@@ -221,6 +213,13 @@ static void track_jobs(int fd, short argc, void *cbdata)
                         PMIX_DATA_BUFFER_RELEASE(alert);
                         goto cleanup;
                     }
+                    /* pack its exit code */
+                    rc = PMIx_Data_pack(NULL, alert, &child->exit_code, 1, PMIX_INT32);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_DATA_BUFFER_RELEASE(alert);
+                        goto cleanup;
+                    }
                 } else {
                     /* pack the RUNNING state to avoid any race conditions */
                     rc = PMIx_Data_pack(NULL, alert, &running, 1, PMIX_UINT32);
@@ -230,22 +229,7 @@ static void track_jobs(int fd, short argc, void *cbdata)
                         goto cleanup;
                     }
                 }
-                /* pack its exit code */
-                rc = PMIx_Data_pack(NULL, alert, &child->exit_code, 1, PMIX_INT32);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    PMIX_DATA_BUFFER_RELEASE(alert);
-                    goto cleanup;
-                }
             }
-        }
-
-        /* flag that this job is complete so the receiver can know */
-        rc = PMIx_Data_pack(NULL, alert, &null, 1, PMIX_PROC_RANK);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(alert);
-            goto cleanup;
         }
         break;
 
@@ -258,7 +242,7 @@ static void track_jobs(int fd, short argc, void *cbdata)
         PMIX_DATA_BUFFER_CREATE(alert);
         running = PRTE_PROC_STATE_READY_FOR_DEBUG;
         /* pack update state command */
-        cmd = PRTE_PLM_UPDATE_PROC_STATE;
+        cmd = PRTE_PLM_READY_FOR_DEBUG_CMD;
         rc = PMIx_Data_pack(NULL, alert, &cmd, 1, PMIX_UINT8);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -273,35 +257,14 @@ static void track_jobs(int fd, short argc, void *cbdata)
             goto cleanup;
         }
         for (i = 0; i < prte_local_children->size; i++) {
-            if (NULL
-                == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+            child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+            if (NULL == child) {
                 continue;
             }
             /* if this child is part of the job... */
             if (PMIX_CHECK_NSPACE(child->name.nspace, caddy->jdata->nspace)) {
                 /* pack the child's vpid */
                 rc = PMIx_Data_pack(NULL, alert, &child->name.rank, 1, PMIX_PROC_RANK);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    PMIX_DATA_BUFFER_RELEASE(alert);
-                    goto cleanup;
-                }
-                /* pack the pid */
-                rc = PMIx_Data_pack(NULL, alert, &child->pid, 1, PMIX_PID);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    PMIX_DATA_BUFFER_RELEASE(alert);
-                    goto cleanup;
-                }
-                /* pack the READY-FOR-DEBUG state to avoid any race conditions */
-                rc = PMIx_Data_pack(NULL, alert, &running, 1, PMIX_UINT32);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    PMIX_DATA_BUFFER_RELEASE(alert);
-                    goto cleanup;
-                }
-                /* pack its exit code */
-                rc = PMIx_Data_pack(NULL, alert, &child->exit_code, 1, PMIX_INT32);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(alert);
@@ -352,6 +315,7 @@ static void track_procs(int fd, short argc, void *cbdata)
     prte_node_t *node;
     pmix_proc_t target;
     prte_pmix_lock_t lock;
+    prte_app_context_t *app;
 
     PRTE_ACQUIRE_OBJECT(caddy);
     proc = &caddy->name;
@@ -440,9 +404,8 @@ static void track_procs(int fd, short argc, void *cbdata)
 
             /* pack all the local child vpids */
             for (i = 0; i < prte_local_children->size; i++) {
-                if (NULL
-                    == (pptr = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                           i))) {
+                pptr = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+                if (NULL == pptr) {
                     continue;
                 }
                 if (PMIX_CHECK_NSPACE(pptr->name.nspace, proc->nspace)) {
@@ -507,10 +470,7 @@ static void track_procs(int fd, short argc, void *cbdata)
          * itself.  This covers the case where the process died abnormally
          * and didn't cleanup its own session directory.
          */
-        if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-            && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
-            prte_session_dir_finalize(proc);
-        }
+        prte_session_dir_finalize(proc);
         /* if we are trying to terminate and our routes are
          * gone, then terminate ourselves IF no local procs
          * remain (might be some from another job)
@@ -595,26 +555,25 @@ static void track_procs(int fd, short argc, void *cbdata)
             if (NULL != jdata->map) {
                 map = jdata->map;
                 for (index = 0; index < map->nodes->size; index++) {
-                    if (NULL
-                        == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes,
-                                                                               index))) {
+                    node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, index);
+                    if (NULL == node) {
                         continue;
                     }
                     PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                          "%s state:prted releasing procs from node %s",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
                     for (i = 0; i < node->procs->size; i++) {
-                        if (NULL
-                            == (pptr = (prte_proc_t *) prte_pointer_array_get_item(node->procs,
-                                                                                   i))) {
+                        pptr = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i);
+                        if (NULL == pptr) {
                             continue;
                         }
                         if (!PMIX_CHECK_NSPACE(pptr->name.nspace, jdata->nspace)) {
                             /* skip procs from another job */
                             continue;
                         }
-                        if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_DEBUGGER_DAEMON)
-                            && !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+                        app = (prte_app_context_t*) prte_pointer_array_get_item(jdata->apps, pptr->app_idx);
+                        if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON) &&
+                            !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                             node->slots_inuse--;
                             node->num_procs--;
                         }

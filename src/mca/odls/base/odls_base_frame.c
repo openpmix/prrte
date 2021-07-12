@@ -81,7 +81,7 @@ static int prte_odls_base_register(prte_mca_base_register_flag_t flags)
         PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_odls_globals.timeout_before_sigkill);
 
-    prte_odls_globals.max_threads = 32;
+    prte_odls_globals.max_threads = 16;
     (void) prte_mca_base_var_register("prte", "odls", "base", "max_threads",
                                       "Maximum number of threads to use for spawning local procs",
                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
@@ -178,6 +178,7 @@ void prte_odls_base_start_threads(prte_job_t *jdata)
             }
         }
     }
+startup:
     if (0 == prte_odls_globals.num_threads) {
         if (NULL == prte_event_base_ptr) {
             prte_event_base_ptr = (prte_event_base_t **) malloc(sizeof(prte_event_base_t *));
@@ -186,7 +187,6 @@ void prte_odls_base_start_threads(prte_job_t *jdata)
         }
         prte_odls_globals.ev_bases = prte_event_base_ptr;
     } else {
-    startup:
         prte_odls_globals.ev_bases = (prte_event_base_t **) malloc(prte_odls_globals.num_threads
                                                                    * sizeof(prte_event_base_t *));
         for (i = 0; i < prte_odls_globals.num_threads; i++) {

@@ -53,11 +53,9 @@ typedef uint8_t prte_proc_type_t;
 #define PRTE_PROC_TYPE_NONE 0x0000
 #define PRTE_PROC_DAEMON    0x0002
 #define PRTE_PROC_MASTER    0x0004
-#define PRTE_PROC_TOOL      0x0008
 
 #define PRTE_PROC_IS_DAEMON (PRTE_PROC_DAEMON & prte_process_info.proc_type)
 #define PRTE_PROC_IS_MASTER (PRTE_PROC_MASTER & prte_process_info.proc_type)
-#define PRTE_PROC_IS_TOOL   (PRTE_PROC_TOOL & prte_process_info.proc_type)
 
 /**
  * Process information structure
