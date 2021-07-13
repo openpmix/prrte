@@ -2,7 +2,7 @@
  * Copyright (c) 2011-2017 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2020-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
@@ -265,6 +265,13 @@ static void track_jobs(int fd, short argc, void *cbdata)
             if (PMIX_CHECK_NSPACE(child->name.nspace, caddy->jdata->nspace)) {
                 /* pack the child's vpid */
                 rc = PMIx_Data_pack(NULL, alert, &child->name.rank, 1, PMIX_PROC_RANK);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
+                    goto cleanup;
+                }
+                /* pack the child's PID */
+                rc = PMIx_Data_pack(NULL, alert, &child->pid, 1, PMIX_PID);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(alert);
