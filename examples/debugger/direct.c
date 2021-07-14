@@ -675,6 +675,7 @@ int main(int argc, char **argv)
     /* Use the system connection first, if available */
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_LAUNCHER, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
     PMIX_INFO_LIST_RELEASE(dirs);
     info = darray.array;
