@@ -711,6 +711,7 @@ int main(int argc, char **argv)
     PMIX_INFO_LIST_START(tinfo);
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_LAUNCHER, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_CONVERT(rc, tinfo, &darray);
     info = (pmix_info_t*)darray.array;
     ninfo = darray.size;

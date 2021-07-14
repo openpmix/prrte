@@ -467,15 +467,9 @@ done:
     /* Call PMIx_tool_finalize to shut down the PMIx runtime */
     printf("Debugger daemon ns %s rank %d pid %lu: Finalizing\n", myproc.nspace, myproc.rank,
            (unsigned long) pid);
-    if (PMIX_SUCCESS != (rc = PMIx_tool_finalize())) {
-        fprintf(stderr, "Debugger daemon ns %s rank %d:PMIx_Finalize failed: %s\n", myproc.nspace,
-                myproc.rank, PMIx_Error_string(rc));
-    } else {
-        printf("Debugger daemon ns %s rank %d pid %lu:PMIx_Finalize successfully completed\n",
-               myproc.nspace, myproc.rank, (unsigned long) pid);
-    }
+    rc = PMIx_tool_finalize();
     fclose(stdout);
     fclose(stderr);
     sleep(1);
-    return (0);
+    return (rc);
 }
