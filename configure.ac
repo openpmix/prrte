@@ -881,7 +881,7 @@ AC_PROG_EGREP
 #
 
 AM_PROG_AS
-AC_PROG_LEX(yywrap)
+AC_PROG_LEX(noyywrap)
 
 # If we don't have Flex and we don't have a generated .c file
 # (distribution tarballs will have the .c file included, but git
@@ -893,7 +893,7 @@ AC_PROG_LEX(yywrap)
 if test -z "$LEX" || \
    test -n "`echo $LEX | $GREP missing`" || \
    test "`basename $LEX`" != "flex"; then
-    if test ! -f "$srcdir/prte/util/show_help_lex.c"; then
+    if test ! -f "$srcdir/src/util/show_help_lex.c"; then
         AC_MSG_WARN([*** Could not find Flex on your system.])
         AC_MSG_WARN([*** Flex is required for developer builds of PRTE.])
         AC_MSG_WARN([*** Other versions of Lex are not supported.])
