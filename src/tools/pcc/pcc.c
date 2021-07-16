@@ -388,14 +388,10 @@ static void load_env_data(const char *project, const char *flag, char **data)
     if (NULL == project || NULL == flag)
         return;
 
-    prte_asprintf(&envname, "%s_MPI%s", project, flag);
+    prte_asprintf(&envname, "%s_%s", project, flag);
     if (NULL == (envvalue = getenv(envname))) {
         free(envname);
-        prte_asprintf(&envname, "%s_%s", project, flag);
-        if (NULL == (envvalue = getenv(envname))) {
-            free(envname);
-            return;
-        }
+        return;
     }
     free(envname);
 
@@ -412,14 +408,10 @@ static void load_env_data_argv(const char *project, const char *flag, char ***da
     if (NULL == project || NULL == flag)
         return;
 
-    prte_asprintf(&envname, "%s_MPI%s", project, flag);
+    prte_asprintf(&envname, "%s_%s", project, flag);
     if (NULL == (envvalue = getenv(envname))) {
         free(envname);
-        prte_asprintf(&envname, "%s_%s", project, flag);
-        if (NULL == (envvalue = getenv(envname))) {
-            free(envname);
-            return;
-        }
+        return;
     }
     free(envname);
 
@@ -561,9 +553,7 @@ int main(int argc, char *argv[])
                 /* we know what we want, so don't process any more args */
                 done_now = true;
             } else if (0 == strncmp(user_argv[i], "-showme:compile", strlen("-showme:compile"))
-                       || 0
-                              == strncmp(user_argv[i], "--showme:compile",
-                                         strlen("--showme:compile"))) {
+                       || 0 == strncmp(user_argv[i], "--showme:compile", strlen("--showme:compile"))) {
                 flags = COMP_WANT_PREPROC | COMP_WANT_COMPILE;
                 /* we know what we want, so don't process any more args */
                 done_now = true;
@@ -573,15 +563,11 @@ int main(int argc, char *argv[])
                 /* we know what we want, so don't process any more args */
                 done_now = true;
             } else if (0 == strncmp(user_argv[i], "-showme:incdirs", strlen("-showme:incdirs"))
-                       || 0
-                              == strncmp(user_argv[i], "--showme:incdirs",
-                                         strlen("--showme:incdirs"))) {
+                       || 0 == strncmp(user_argv[i], "--showme:incdirs", strlen("--showme:incdirs"))) {
                 print_flags(options_data[user_data_idx].preproc_flags, PRTE_INCLUDE_FLAG);
                 goto cleanup;
             } else if (0 == strncmp(user_argv[i], "-showme:libdirs", strlen("-showme:libdirs"))
-                       || 0
-                              == strncmp(user_argv[i], "--showme:libdirs",
-                                         strlen("--showme:libdirs"))) {
+                       || 0 == strncmp(user_argv[i], "--showme:libdirs", strlen("--showme:libdirs"))) {
                 print_flags(options_data[user_data_idx].link_flags, PRTE_LIBDIR_FLAG);
                 goto cleanup;
             } else if (0 == strncmp(user_argv[i], "-showme:libs", strlen("-showme:libs"))
@@ -589,9 +575,7 @@ int main(int argc, char *argv[])
                 print_flags(options_data[user_data_idx].libs, "-l");
                 goto cleanup;
             } else if (0 == strncmp(user_argv[i], "-showme:version", strlen("-showme:version"))
-                       || 0
-                              == strncmp(user_argv[i], "--showme:version",
-                                         strlen("--showme:version"))) {
+                       || 0  == strncmp(user_argv[i], "--showme:version", strlen("--showme:version"))) {
                 char *str;
                 str = prte_show_help_string("help-pcc.txt", "version", false, argv[0],
                                             options_data[user_data_idx].project,
@@ -641,12 +625,6 @@ int main(int argc, char *argv[])
         } else if (0 == strcmp(user_argv[i], "-S")) {
             flags &= ~COMP_WANT_LINK;
             real_flag = true;
-        } else if (0 == strcmp(user_argv[i], "-lpmpi")) {
-            flags |= COMP_WANT_PMPI;
-
-            /* remove element from user_argv */
-            prte_argv_delete(&user_argc, &user_argv, i, 1);
-            --i;
         } else if (0 == strcmp(user_argv[i], "-static") || 0 == strcmp(user_argv[i], "--static")
                    || 0 == strcmp(user_argv[i], "-Bstatic")
                    || 0 == strcmp(user_argv[i], "-Wl,-static")
@@ -659,29 +637,6 @@ int main(int argc, char *argv[])
                    || 0 == strcmp(user_argv[i], "-Wl,--dynamic")
                    || 0 == strcmp(user_argv[i], "-Wl,-Bdynamic")) {
             flags &= ~COMP_WANT_STATIC;
-        } else if (0 == strcmp(user_argv[i], "--openmpi:linkall")) {
-            /* This is an intentionally undocummented wrapper compiler
-               switch.  It should only be used by PRTE developers
-               -- not end users.  It will cause mpicc to use the
-               static library list, even if we're compiling
-               dynamically (i.e., it'll specifically -lopen-rte and
-               -lopen-pal (and all their dependent libs)).  We provide
-               this flag for test MPI applications that also invoke
-               PRTE and/or PRTE function calls.
-
-               On some systems (e.g., OS X), if the top-level
-               application calls PRTE functions and you don't -l
-               PRTE and PRTE, then the functions won't be resolved at
-               link time (i.e., the implicit library dependencies of
-               libmpi won't be pulled in at link time), and therefore
-               the link will fail.  This flag will cause the wrapper
-               to explicitly list the PRTE and PRTE libs on the
-               underlying compiler command line, so the application
-               will therefore link properly. */
-            flags |= COMP_WANT_LINKALL;
-
-            /* remove element from user_argv */
-            prte_argv_delete(&user_argc, &user_argv, i, 1);
         } else if ('-' != user_argv[i][0]) {
             disable_flags = false;
             flags |= COMP_SHOW_ERROR;
