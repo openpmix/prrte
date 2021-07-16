@@ -463,7 +463,7 @@ void pmix_server_jobid_return(int status, pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, buffer, &ret, &cnt, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        ret = prte_pmix_convert_rc(rc);
+        return;
     }
 
     /* unpack the jobid */
@@ -471,10 +471,8 @@ void pmix_server_jobid_return(int status, pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, buffer, &jobid, &cnt, PMIX_PROC_NSPACE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        ret = prte_pmix_convert_rc(rc);
+        return;
     }
-    /* we let the above errors fall thru in the vain hope that the room number can
-     * be successfully unpacked, thus allowing us to respond to the requestor */
 
     /* unpack our tracking room number */
     cnt = 1;
@@ -495,6 +493,13 @@ void pmix_server_jobid_return(int status, pmix_proc_t *sender,
     }
 
     PMIX_LOAD_PROCID(&proc, jobid, 0);
+    /* the tool is not a client of ours, but we can provide at least some information */
+    rc = prte_pmix_server_register_tool(jobid);
+    if (PRTE_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        // we can live without it
+    }
+
     req->toolcbfunc(ret, &proc, req->cbdata);
 
     /* cleanup */
@@ -620,8 +625,13 @@ static void _toolconn(int sd, short args, void *cbdata)
         }
     }
 
+    /* the tool is not a client of ours, but we can provide at least some information */
+    rc = prte_pmix_server_register_tool(cd->target.nspace);
+    if (PMIX_SUCCESS != rc) {
+        rc = prte_pmix_convert_rc(rc);
+    }
     if (NULL != cd->toolcbfunc) {
-        cd->toolcbfunc(PMIX_SUCCESS, &cd->target, cd->cbdata);
+        cd->toolcbfunc(rc, &cd->target, cd->cbdata);
     }
     PRTE_RELEASE(cd);
 }
