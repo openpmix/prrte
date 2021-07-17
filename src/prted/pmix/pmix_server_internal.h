@@ -159,6 +159,13 @@ typedef struct {
 } prte_pmix_mdx_caddy_t;
 PRTE_CLASS_DECLARATION(prte_pmix_mdx_caddy_t);
 
+typedef struct {
+    prte_list_item_t super;
+    pmix_proc_t name;
+    char *nsdir;
+} prte_pmix_tool_t;
+PRTE_CLASS_DECLARATION(prte_pmix_tool_t);
+
 #define PRTE_IO_OP(t, nt, b, fn, cfn, cbd)                                         \
     do {                                                                           \
         prte_pmix_server_op_caddy_t *_cd;                                          \
@@ -366,6 +373,7 @@ typedef struct {
     bool session_server;
     bool system_server;
     bool legacy;
+    prte_list_t tools;
     prte_list_t psets;
 } pmix_server_globals_t;
 

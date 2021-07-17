@@ -805,6 +805,7 @@ int prte_pmix_server_register_tool(pmix_nspace_t nspace)
     size_t ninfo;
     prte_pmix_lock_t lock;
     int rc;
+    prte_pmix_tool_t *tl;
 
     PMIX_INFO_LIST_START(ilist);
 
@@ -837,13 +838,19 @@ int prte_pmix_server_register_tool(pmix_nspace_t nspace)
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
-    rc = prte_os_dirpath_create(prte_process_info.jobfam_session_dir, S_IRWXU);
+    rc = prte_os_dirpath_create(tmp, S_IRWXU);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
+        free(tmp);
         return rc;
     }
     PMIX_INFO_LIST_ADD(ret, ilist, PMIX_NSDIR, tmp, PMIX_STRING);
-    free(tmp);
+
+    /* record this tool */
+    tl = PRTE_NEW(prte_pmix_tool_t);
+    PMIX_LOAD_PROCID(&tl->name, nspace, 0);
+    tl->nsdir = tmp;
+    prte_list_append(&prte_pmix_server_globals.tools, &tl->super);
 
     /* pass it down */
     PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
