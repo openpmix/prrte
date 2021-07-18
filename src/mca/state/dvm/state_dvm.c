@@ -23,6 +23,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
+#include "src/util/argv.h"
 #include "src/util/nidmap.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/output.h"
@@ -421,6 +422,9 @@ static void ready_for_debug(int fd, short args, void *cbdata)
     pmix_data_array_t darray;
     void *tinfo;
     pmix_status_t rc;
+    int n;
+    char *name;
+    prte_app_context_t *app;
 
     /* launch was requested by a TOOL, so we notify the launch proxy
      * and NOT the originator (as that would be us) */
@@ -437,6 +441,22 @@ static void ready_for_debug(int fd, short args, void *cbdata)
     PMIX_PROC_RELEASE(nptr);
     /* pass the nspace of the job */
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_NSPACE, jdata->nspace, PMIX_STRING);
+    for (n=0; n < jdata->apps->size; n++) {
+        app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n);
+        if (NULL == app) {
+            continue;
+        }
+        /* if pset name was assigned, pass it */
+       if (prte_get_attribute(&app->attributes, PRTE_APP_PSET_NAME, (void**) &name, PMIX_STRING)) {
+           PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_PSET_NAME, name, PMIX_STRING);
+           free(name);
+        }
+        /* pass the argv from each app */
+        name = prte_argv_join(app->argv, ' ');
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_APP_ARGV, name, PMIX_STRING);
+        free(name);
+    }
+
     /* not to be delivered to a default event handler */
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
     /* provide the timestamp */
