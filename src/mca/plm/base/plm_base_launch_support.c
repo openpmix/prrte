@@ -573,6 +573,15 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
     int rc;
     pmix_data_buffer_t *answer;
     int room, *rmptr;
+    pmix_info_t *iptr;
+    size_t ninfo;
+    time_t timestamp;
+    pmix_proc_t *nptr;
+    void *tinfo;
+    int n;
+    char *name;
+    pmix_data_array_t darray;
+    prte_app_context_t *app;
 
     /* if the requestor simply told us to terminate, they won't
      * be waiting for a response */
@@ -588,9 +597,6 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
     /* if the requestor was a tool, use PMIx to notify them of
      * launch complete as they won't be listening on PRRTE oob */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, NULL, PMIX_BOOL)) {
-        pmix_info_t *iptr;
-        time_t timestamp;
-        pmix_proc_t *nptr;
 
         /* dvm job => launch was requested by a TOOL, so we notify the launch proxy
          * and NOT the originator (as that would be us) */
@@ -603,21 +609,52 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
 
         /* direct an event back to our controller */
         timestamp = time(NULL);
-        PMIX_INFO_CREATE(iptr, 5);
+        PMIX_INFO_LIST_START(tinfo);
         /* target this notification solely to that one tool */
-        PMIX_INFO_LOAD(&iptr[0], PMIX_EVENT_CUSTOM_RANGE, nptr, PMIX_PROC);
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_CUSTOM_RANGE, nptr, PMIX_PROC);
         PMIX_PROC_RELEASE(nptr);
         /* pass the nspace of the spawned job */
-        PMIX_INFO_LOAD(&iptr[1], PMIX_NSPACE, jdata->nspace, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_NSPACE, jdata->nspace, PMIX_STRING);
+        for (n=0; n < jdata->apps->size; n++) {
+            app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n);
+            if (NULL == app) {
+                continue;
+            }
+            /* if pset name was assigned, pass it */
+            if (prte_get_attribute(&app->attributes, PRTE_APP_PSET_NAME, (void**) &name, PMIX_STRING)) {
+                PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_PSET_NAME, name, PMIX_STRING);
+                free(name);
+            }
+            /* pass the argv from each app */
+            name = prte_argv_join(app->argv, ' ');
+            PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_APP_ARGV, name, PMIX_STRING);
+            free(name);
+        }
+
         /* not to be delivered to a default event handler */
-        PMIX_INFO_LOAD(&iptr[2], PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_NON_DEFAULT, NULL, PMIX_BOOL);
         /* provide the timestamp */
-        PMIX_INFO_LOAD(&iptr[3], PMIX_EVENT_TIMESTAMP, &timestamp, PMIX_TIME);
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_EVENT_TIMESTAMP, &timestamp, PMIX_TIME);
         /* protect against loops */
-        PMIX_INFO_LOAD(&iptr[4], "prte.notify.donotloop", NULL, PMIX_BOOL);
+        PMIX_INFO_LIST_ADD(rc, tinfo, "prte.notify.donotloop", NULL, PMIX_BOOL);
+        PMIX_INFO_LIST_CONVERT(rc, tinfo, &darray);
+        if (PMIX_ERR_EMPTY == rc) {
+            iptr = NULL;
+            ninfo = 0;
+        } else if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PRTE_UPDATE_EXIT_STATUS(rc);
+            PMIX_INFO_LIST_RELEASE(tinfo);
+            PMIX_PROC_RELEASE(nptr);
+            return rc;
+        } else {
+            iptr = (pmix_info_t *) darray.array;
+            ninfo = darray.size;
+        }
+        PMIX_INFO_LIST_RELEASE(tinfo);
         PMIx_Notify_event(PMIX_LAUNCH_COMPLETE, &prte_process_info.myproc, PMIX_RANGE_CUSTOM,
-                          iptr, 5, NULL, NULL);
-        PMIX_INFO_FREE(iptr, 4);
+                          iptr, ninfo, NULL, NULL);
+        PMIX_INFO_FREE(iptr, ninfo);
     }
 
     rmptr = &room;
