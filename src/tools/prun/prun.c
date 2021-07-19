@@ -333,7 +333,6 @@ int prun(int argc, char *argv[])
     pid_t pid;
     char **pargv, **targv;
     int pargc;
-    char *fullpath;
     prte_ess_base_signal_t *sig;
     prte_event_list_item_t *evitm;
     pmix_value_t *val;
@@ -344,39 +343,24 @@ int prun(int argc, char *argv[])
     pmix_status_t code;
     char *outdir = NULL;
     char *outfile = NULL;
+    char *personality;
+    pmix_proc_t parent;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
     PRTE_CONSTRUCT(&forwarded_signals, prte_list_t);
-
-    /* because we have to use the schizo framework and init our hostname
-     * prior to parsing the incoming argv for cmd line options, do a hacky
-     * search to support passing of impacted options (e.g., verbosity for schizo) */
-    for (i = 1; NULL != argv[i]; i++) {
-        if (0 == strcmp(argv[i], "--prtemca") || 0 == strcmp(argv[i], "--mca")) {
-            if (0 == strncmp(argv[i + 1], "schizo", 6) ||
-                0 == strcmp(argv[i + 1], "prte_keep_fqdn_hostnames") ||
-                0 == strcmp(argv[i + 1], "prte_strip_prefix")) {
-                prte_asprintf(&param, "PRTE_MCA_%s", argv[i + 1]);
-                prte_setenv(param, argv[i + 2], true, &environ);
-                free(param);
-                i += 2;
-            }
-        }
-    }
-
-    fullpath = prte_find_absolute_path(argv[0]);
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
     gethostname(hostname, sizeof(hostname));
 
-    /* we always need the prrte and pmix params */
+    /* because we have to use the schizo framework and init our hostname
+     * prior to parsing the incoming argv for cmd line options, do a hacky
+     * search to support passing of impacted options (e.g., verbosity for schizo) */
     rc = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
-
     rc = prte_schizo_base_parse_pmix(pargc, 0, pargv, NULL);
     if (PRTE_SUCCESS != rc) {
         return rc;
@@ -404,7 +388,11 @@ int prun(int argc, char *argv[])
         exit(1);
     }
     /* setup an event to attempt normal termination on signal */
-    prte_event_base = prte_progress_thread_init(NULL);
+    rc = prte_event_base_open();
+    if (PRTE_SUCCESS != rc) {
+        fprintf(stderr, "Unable to initialize event library\n");
+        exit(1);
+    }
     prte_event_set(prte_event_base, &term_handler, term_pipe[0], PRTE_EV_READ, clean_abort, NULL);
     prte_event_add(&term_handler, NULL);
 
@@ -439,23 +427,23 @@ int prun(int argc, char *argv[])
     }
 
     /* look for any personality specification */
-    ptr = NULL;
+    personality = NULL;
     for (i = 0; NULL != argv[i]; i++) {
         if (0 == strcmp(argv[i], "--personality")) {
-            ptr = argv[i + 1];
+            personality = argv[i + 1];
             break;
         }
-    }
-    if (NULL == ptr) {
-        ptr = fullpath;
     }
 
     /* detect if we are running as a proxy and select the active
      * schizo module for this tool */
-    schizo = prte_schizo.detect_proxy(ptr);
+    schizo = prte_schizo.detect_proxy(personality);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, fullpath);
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
+    }
+    if (NULL == personality) {
+        personality = schizo->name;
     }
 
     /* setup the cmd line - this is specific to the proxy */
@@ -712,6 +700,18 @@ int prun(int argc, char *argv[])
     /***** CONSTRUCT THE APP'S JOB-INFO ****/
     PMIX_INFO_LIST_START(jinfo);
 
+    /* see if we ourselves were spawned by someone */
+    ret = PMIx_Get(&prte_process_info.myproc, PMIX_PARENT_ID, NULL, 0, &val);
+    if (PMIX_SUCCESS == ret) {
+        PMIX_LOAD_PROCID(&parent, val->data.proc->nspace, val->data.proc->rank);
+        PMIX_VALUE_RELEASE(val);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
+        /* indicate that we are launching on behalf of a parent */
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PARENT_ID, &parent, PMIX_PROC);
+    } else {
+        PMIX_LOAD_PROCID(&parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
+    }
+
     /***** CHECK FOR LAUNCH DIRECTIVES - ADD THEM TO JOB INFO IF FOUND ****/
     PMIX_LOAD_PROCID(&pname, myproc.nspace, PMIX_RANK_WILDCARD);
     PMIX_INFO_LOAD(&info, PMIX_OPTIONAL, NULL, PMIX_BOOL);
@@ -730,7 +730,7 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_NOTIFY_COMPLETION, &flag, PMIX_BOOL);
 
     /* pass the personality */
-    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, schizo->name, PMIX_STRING);
+    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, personality, PMIX_STRING);
 
     /* get display options */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "display", 0, 0))) {
@@ -946,7 +946,7 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LOAD(&iptr[1], PMIX_USERID, &ui32, PMIX_UINT32);
     ui32 = getegid();
     PMIX_INFO_LOAD(&iptr[2], PMIX_GRPID, &ui32, PMIX_UINT32);
-    PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, schizo->name, PMIX_STRING);
+    PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, personality, PMIX_STRING);
 
     PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
     ret = PMIx_server_setup_application(prte_process_info.myproc.nspace, iptr, ninfo, setupcbfunc,
