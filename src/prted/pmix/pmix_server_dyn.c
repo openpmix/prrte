@@ -541,15 +541,21 @@ static void interim(int sd, short args, void *cbdata)
             pmix_server_cache_job_info(jdata, info);
 
             /***   TAG STDOUT   ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_TAG_OUTPUT)
-                   || PMIX_CHECK_KEY(info, PMIX_IOF_TAG_OUTPUT)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_TAG_OUTPUT) ||
+                   PMIX_CHECK_KEY(info, PMIX_TAG_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, PRTE_ATTR_GLOBAL, &flag,
                                PMIX_BOOL);
 
+            /***   RANK STDOUT   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_RANK_OUTPUT)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_RANK_OUTPUT, PRTE_ATTR_GLOBAL, &flag,
+                               PMIX_BOOL);
+
             /***   TIMESTAMP OUTPUT   ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_TIMESTAMP_OUTPUT)
-                   || PMIX_CHECK_KEY(info, PMIX_IOF_TIMESTAMP_OUTPUT)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_TIMESTAMP_OUTPUT)
+                   || PMIX_CHECK_KEY(info, PMIX_TIMESTAMP_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
@@ -561,21 +567,25 @@ static void interim(int sd, short args, void *cbdata)
                                PMIX_BOOL);
 
             /***   OUTPUT TO FILES   ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_OUTPUT_TO_FILE)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_OUTPUT_TO_FILE) ||
+                   PMIX_CHECK_KEY(info, PMIX_OUTPUT_TO_FILE)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_TO_FILE, PRTE_ATTR_GLOBAL,
                                info->value.data.string, PMIX_STRING);
 
-        } else if (PMIX_CHECK_KEY(info, PMIX_OUTPUT_TO_DIRECTORY)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_OUTPUT_TO_DIRECTORY) ||
+                   PMIX_CHECK_KEY(info, PMIX_OUTPUT_TO_DIRECTORY)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_TO_DIRECTORY, PRTE_ATTR_GLOBAL,
                                info->value.data.string, PMIX_STRING);
 
-        } else if (PMIX_CHECK_KEY(info, PMIX_OUTPUT_NOCOPY)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_FILE_ONLY) ||
+                   PMIX_CHECK_KEY(info, PMIX_OUTPUT_NOCOPY)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
 
             /***   MERGE STDERR TO STDOUT   ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_MERGE_STDERR_STDOUT)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_MERGE_STDERR_STDOUT) ||
+                   PMIX_CHECK_KEY(info, PMIX_MERGE_STDERR_STDOUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);

@@ -372,6 +372,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE-JOB-MERGE-STDERR-STDOUT";
         case PRTE_JOB_TAG_OUTPUT:
             return "PRTE-JOB-TAG-OUTPUT";
+        case PRTE_JOB_RANK_OUTPUT:
+            return "PRTE-JOB-RANK-OUTPUT";
         case PRTE_JOB_TIMESTAMP_OUTPUT:
             return "PRTE-JOB-TIMESTAMP-OUTPUT";
         case PRTE_JOB_MULTI_DAEMON_SIM:

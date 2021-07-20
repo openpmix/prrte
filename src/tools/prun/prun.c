@@ -523,19 +523,9 @@ int prun(int argc, char *argv[])
     }
 
     /* Check for help request */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "help")) {
-        char *str, *args = NULL;
-        args = prte_cmd_line_get_usage_msg(prte_cmd_line, false);
-        str = prte_show_help_string("help-prun.txt", "prun:usage", false, prte_tool_basename,
-                                    "PRTE", PRTE_VERSION, prte_tool_basename, args,
-                                    PACKAGE_BUGREPORT);
-        if (NULL != str) {
-            printf("%s", str);
-            free(str);
-        }
-        free(args);
-
-        /* If someone asks for help, that should be all we do */
+    rc = schizo->check_help(prte_cmd_line, pargv);
+    if (PRTE_ERR_SILENT == rc) {
+        /* help was printed */
         exit(0);
     }
 
@@ -768,16 +758,16 @@ int prun(int argc, char *argv[])
                 *ptr = '\0';
             }
             if (0 == strncasecmp(targv[idx], "tag", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TAG_OUTPUT, &flag, PMIX_BOOL);
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, &flag, PMIX_BOOL);
             }
             if (0 == strncasecmp(targv[idx], "timestamp", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
             }
             if (0 == strncasecmp(targv[idx], "xml", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":XMLOUTPUT", PMIX_STRING);
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
             }
             if (0 == strncasecmp(targv[idx], "merge-stderr-to-stdout", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
             }
             if (0 == strncasecmp(targv[idx], "directory", strlen(targv[idx]))) {
                 if (NULL != outfile) {
@@ -796,7 +786,7 @@ int prun(int argc, char *argv[])
                     *cptr = '\0';
                     ++cptr;
                     if (0 == strcasecmp(cptr, "nocopy")) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
                     }
                 }
                 /* If the given filename isn't an absolute path, then
@@ -813,7 +803,7 @@ int prun(int argc, char *argv[])
                 } else {
                     outdir = strdup(ptr);
                 }
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
             }
             if (0 == strncasecmp(targv[idx], "file", strlen(targv[idx]))) {
                 if (NULL != outdir) {
@@ -832,7 +822,7 @@ int prun(int argc, char *argv[])
                     *cptr = '\0';
                     ++cptr;
                     if (0 == strcasecmp(cptr, "nocopy")) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
                     }
                 }
                 /* If the given filename isn't an absolute path, then
@@ -849,7 +839,7 @@ int prun(int argc, char *argv[])
                 } else {
                     outfile = strdup(ptr);
                 }
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, outfile, PMIX_STRING);
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
             }
         }
         prte_argv_free(targv);
