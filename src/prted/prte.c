@@ -885,6 +885,11 @@ int prte(int argc, char *argv[])
         PMIX_VALUE_RELEASE(val);
     }
 
+    /* if we don't have a parent, then we need to output this job's IOF */
+    if (PMIX_CHECK_PROCID(&parent, &prte_process_info.myproc)) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
+    }
+
     /* pass the personality */
     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, personality, PMIX_STRING);
 
