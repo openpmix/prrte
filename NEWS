@@ -35,11 +35,20 @@ This file contains the main features as well as overviews of specific
 bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
-Master (not on release branches yet)
+2.0.0: TBD
 ------------------------------------
+This is the initial production release of the PRRTE software system. It
+contains full support of the PMIx v4.1 Standard plus extensions as provided
+by OpenPMIx v4.1. It therefore requires support from that release or above.
 
-* Change the default component build behavior to prefer building components
-  as part of libprrte.so instead of individual DSOs.
+Delineating all the changes from the original v1.0.0 tarball would be
+overwhelming. The original tarball was provided solely as a means for
+packagers to prepare for the eventual production version and was not
+intended for general use. As expected, the code base has been extensively
+revised/rewritten since that time.
+
+Further changes shall be tracked here in follow-on releases.
+
 
 1.0.0: 17 July, 2019
 --------------------

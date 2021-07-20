@@ -216,12 +216,6 @@ static void iof_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbd
     DEBUG_WAKEUP_THREAD(lock);
 }
 
-static void iof_dereg_callbk(pmix_status_t status, void *cbdata)
-{
-    printf("%s called as result of de-registering I/O forwarding\n", 
-           __FUNCTION__);
-}
-
 int parse_tool_options(int argc, char **argv)
 {
     char *endp;
@@ -266,11 +260,13 @@ int main(int argc, char **argv)
 {
     pmix_status_t rc;
     pmix_info_t *info;
+    void *attr_list;
     size_t ninfo;
     char *nspace = NULL;
     mylock_t mylock;
     pid_t pid;
     int ns_index;
+    pmix_data_array_t attr_array;
 
     pid = getpid();
 
@@ -291,15 +287,19 @@ int main(int argc, char **argv)
     info = NULL;
     ninfo = 1;
 
-    PMIX_INFO_CREATE(info, ninfo);
-    PMIX_INFO_LOAD(&info[0], PMIX_LAUNCHER, NULL, PMIX_BOOL);
-
     /* Initialize as a tool */
+    PMIX_INFO_LIST_START(attr_list);
+    PMIX_INFO_LIST_ADD(rc, attr_list, PMIX_LAUNCHER, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_ADD(rc, attr_list, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
+    PMIX_INFO_LIST_CONVERT(rc, attr_list, &attr_array);
+    PMIX_INFO_LIST_RELEASE(attr_list);
+    info = attr_array.array;
+    ninfo = attr_array.size;
     if (PMIX_SUCCESS != (rc = PMIx_tool_init(&myproc, info, ninfo))) {
         fprintf(stderr, "PMIx_tool_init failed: %s(%d)\n", PMIx_Error_string(rc), rc);
         exit(rc);
     }
-    PMIX_INFO_FREE(info, ninfo);
+    PMIX_DATA_ARRAY_DESTRUCT(&attr_array);
 
     printf("Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank,
            (unsigned long) pid);
@@ -313,8 +313,6 @@ int main(int argc, char **argv)
     if (PMIX_SUCCESS != (rc = attach_to_running_job(nspace))) {
         fprintf(stderr, "Failed to attach to nspace %s: error code %d\n", nspace, rc);
     }
-    rc = PMIx_IOF_deregister(iof_handler_id, NULL, 0, iof_dereg_callbk, NULL);
-    printf("PMIx_IOF_deregister completed with status %s\n", PMIx_Error_string(rc));
     PMIx_tool_finalize();
     if (NULL != iof_data) {
         printf("Forwarded stdio data:\n%s", iof_data);
@@ -330,7 +328,7 @@ static int attach_to_running_job(char *nspace)
     pmix_proc_t daemon_proc, target_proc;
     pmix_info_t *info;
     pmix_app_t *app;
-    pmix_status_t codes[] = {PMIX_EVENT_JOB_END, PMIX_ERR_LOST_CONNECTION};
+    pmix_status_t code = PMIX_ERR_LOST_CONNECTION;
     size_t ninfo;
     int n;
     mylock_t mylock, iof_lock;
@@ -436,17 +434,16 @@ static int attach_to_running_job(char *nspace)
     DEBUG_CONSTRUCT_LOCK(&myrel.lock);
     myrel.nspace = strdup(dspace);
 
+    /* Register a handler for PMIX_ERR_LOST_CONNECTION, which will occur when the
+     * daemon terminates. */
     PMIX_INFO_LIST_START(dirs);
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_RETURN_OBJECT, &myrel, PMIX_POINTER);
-    /* Only call me back when this specific job terminates */
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_EVENT_AFFECTED_PROC, &daemon_proc, PMIX_PROC);
-
     PMIX_INFO_LIST_CONVERT(rc, dirs, &darray);
     PMIX_INFO_LIST_RELEASE(dirs);
     info = darray.array;
     ninfo = darray.size;
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(codes, 2, info, 2, release_fn, evhandler_reg_callbk,
+    PMIx_Register_event_handler(&code, 1, info, ninfo, release_fn, evhandler_reg_callbk,
                                 (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     PMIX_DATA_ARRAY_DESTRUCT(&darray);

@@ -792,3 +792,95 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
     lock->status = prte_pmix_convert_status(status);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
+
+/* add any info that the tool couldn't self-assign */
+int prte_pmix_server_register_tool(pmix_nspace_t nspace)
+{
+    void *ilist;
+    pmix_status_t ret;
+    hwloc_obj_t machine;
+    char *tmp;
+    pmix_data_array_t darray;
+    pmix_info_t *iptr;
+    size_t ninfo;
+    prte_pmix_lock_t lock;
+    int rc;
+    prte_pmix_tool_t *tl;
+
+    PMIX_INFO_LIST_START(ilist);
+
+#if HWLOC_API_VERSION < 0x20000
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_HWLOC_XML_V1,
+                       prte_topo_signature, PMIX_STRING);
+#else
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_HWLOC_XML_V2,
+                       prte_topo_signature, PMIX_STRING);
+#endif
+
+    /* total available physical memory */
+    machine = hwloc_get_next_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_MACHINE, NULL);
+    if (NULL != machine) {
+#if HWLOC_API_VERSION < 0x20000
+        PMIX_INFO_LIST_ADD(ret, ilist, PMIX_AVAIL_PHYS_MEMORY,
+                           &machine->memory.total_memory, PMIX_UINT64);
+#else
+        PMIX_INFO_LIST_ADD(ret, ilist, PMIX_AVAIL_PHYS_MEMORY,
+                           &machine->total_memory, PMIX_UINT64);
+#endif
+    }
+
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_TMPDIR,
+                       prte_process_info.jobfam_session_dir, PMIX_STRING);
+
+    /* create and pass a job-level session directory */
+    if (0 > prte_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
+                          PRTE_LOCAL_JOBID(nspace))) {
+        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    rc = prte_os_dirpath_create(tmp, S_IRWXU);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        free(tmp);
+        return rc;
+    }
+    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_NSDIR, tmp, PMIX_STRING);
+
+    /* record this tool */
+    tl = PRTE_NEW(prte_pmix_tool_t);
+    PMIX_LOAD_PROCID(&tl->name, nspace, 0);
+    tl->nsdir = tmp;
+    prte_list_append(&prte_pmix_server_globals.tools, &tl->super);
+
+    /* pass it down */
+    PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
+    if (PMIX_ERR_EMPTY == ret) {
+        iptr = NULL;
+        ninfo = 0;
+    } else if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        rc = prte_pmix_convert_status(ret);
+        PMIX_INFO_LIST_RELEASE(ilist);
+        return rc;
+    } else {
+        iptr = (pmix_info_t *) darray.array;
+        ninfo = darray.size;
+    }
+    PMIX_INFO_LIST_RELEASE(ilist);
+
+    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+    ret = PMIx_server_register_nspace(nspace, 1, iptr, ninfo,
+                                      opcbfunc, &lock);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        rc = prte_pmix_convert_status(ret);
+        PMIX_INFO_FREE(iptr, ninfo);
+        PRTE_PMIX_DESTRUCT_LOCK(&lock);
+        return rc;
+    }
+    PRTE_PMIX_WAIT_THREAD(&lock);
+    rc = lock.status;
+    PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    PMIX_INFO_FREE(iptr, ninfo);
+    return rc;
+}

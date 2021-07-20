@@ -55,6 +55,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/argv.h"
 #include "src/util/error.h"
+#include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
@@ -432,6 +433,46 @@ void prte_pmix_server_clear(pmix_proc_t *pname)
         }
     }
 }
+
+/* provide a callback function for lost connections to allow us
+ * to cleanup after any tools once they depart */
+static void lost_connection_hdlr(size_t evhdlr_registration_id, pmix_status_t status,
+                                 const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                                 pmix_info_t *results, size_t nresults,
+                                 pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+{
+    prte_pmix_tool_t *tl;
+
+    /* scan the list of attached tools to see if this one is there */
+    PRTE_LIST_FOREACH(tl, &prte_pmix_server_globals.tools, prte_pmix_tool_t)
+    {
+        if (PMIX_CHECK_PROCID(&tl->name, source)) {
+            /* remove the session directory we created for it */
+            if (NULL != tl->nsdir) {
+                prte_os_dirpath_destroy(tl->nsdir, true, NULL);
+            }
+            /* take this tool off the list */
+            prte_list_remove_item(&prte_pmix_server_globals.tools, &tl->super);
+            /* release it */
+            PRTE_RELEASE(tl);
+            break;
+        }
+    }
+
+    /* we _always_ have to execute the evhandler callback or
+     * else the event progress engine will hang */
+    if (NULL != cbfunc) {
+        cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+    }
+}
+
+static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
+{
+    prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
+    PRTE_ACQUIRE_OBJECT(lock);
+    PRTE_PMIX_WAKEUP_THREAD(lock);
+}
+
 /*
  * Initialize global variables used w/in the server.
  */
@@ -444,6 +485,7 @@ int pmix_server_init(void)
     size_t n, ninfo;
     char *tmp;
     pmix_status_t prc;
+    prte_pmix_lock_t lock;
 
     if (prte_pmix_server_globals.initialized) {
         return PRTE_SUCCESS;
@@ -453,6 +495,7 @@ int pmix_server_init(void)
     /* setup the server's state variables */
     PRTE_CONSTRUCT(&prte_pmix_server_globals.reqs, prte_hotel_t);
     PRTE_CONSTRUCT(&prte_pmix_server_globals.psets, prte_list_t);
+    PRTE_CONSTRUCT(&prte_pmix_server_globals.tools, prte_list_t);
 
     /* by the time we init the server, we should know how many nodes we
      * have in our environment - with the exception of mpirun. If the
@@ -628,6 +671,13 @@ int pmix_server_init(void)
     prc = PMIx_server_register_resources(info, ninfo, NULL, NULL);
     PMIX_INFO_FREE(info, ninfo);
     rc = prte_pmix_convert_status(prc);
+
+    /* register the "lost-connection" event handler */
+    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+    prc = PMIX_ERR_LOST_CONNECTION;
+    PMIx_Register_event_handler(&prc, 1, NULL, 0, lost_connection_hdlr, regcbfunc, &lock);
+    PRTE_PMIX_WAIT_THREAD(&lock);
+    PRTE_PMIX_DESTRUCT_LOCK(&lock);
 
     return rc;
 }
@@ -1266,3 +1316,17 @@ static void psdes(pmix_server_pset_t *p)
     }
 }
 PRTE_CLASS_INSTANCE(pmix_server_pset_t, prte_list_item_t, pscon, psdes);
+
+static void tlcon(prte_pmix_tool_t *p)
+{
+    p->nsdir = NULL;
+}
+static void tldes(prte_pmix_tool_t *p)
+{
+    if (NULL != p->nsdir) {
+        free(p->nsdir);
+    }
+}
+PRTE_CLASS_INSTANCE(prte_pmix_tool_t,
+                    prte_list_item_t,
+                    tlcon, tldes);

@@ -265,6 +265,7 @@ int prte(int argc, char *argv[])
     char *outdir = NULL;
     char *outfile = NULL;
     pmix_status_t code;
+    char *personality;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
@@ -345,19 +346,19 @@ int prte(int argc, char *argv[])
     }
 
     /* look for any personality specification */
-    ptr = NULL;
+    personality = NULL;
     for (i = 0; NULL != argv[i]; i++) {
         if (0 == strcmp(argv[i], "--personality")) {
-            ptr = argv[i + 1];
+            personality = argv[i + 1];
             break;
         }
     }
 
     /* detect if we are running as a proxy and select the active
      * schizo module for this tool */
-    schizo = prte_schizo.detect_proxy(ptr);
+    schizo = prte_schizo.detect_proxy(personality);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, ptr);
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
     if (0 != strcmp(schizo->name, "prte")) {
@@ -370,6 +371,9 @@ int prte(int argc, char *argv[])
         if (0 != strcmp(prte_tool_basename, "prte") || prte_schizo_base.test_proxy_launch) {
             proxyrun = true;
         }
+    }
+    if (NULL == personality) {
+        personality = schizo->name;
     }
 
     /* setup the cmd line - this is specific to the proxy */
@@ -881,8 +885,13 @@ int prte(int argc, char *argv[])
         PMIX_VALUE_RELEASE(val);
     }
 
+    /* if we don't have a parent, then we need to output this job's IOF */
+    if (PMIX_CHECK_PROCID(&parent, &prte_process_info.myproc)) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
+    }
+
     /* pass the personality */
-    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, schizo->name, PMIX_STRING);
+    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, personality, PMIX_STRING);
 
     /* get display options */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "display", 0, 0))) {
@@ -1102,12 +1111,7 @@ int prte(int argc, char *argv[])
     PMIX_INFO_LOAD(&iptr[1], PMIX_USERID, &ui32, PMIX_UINT32);
     ui32 = getegid();
     PMIX_INFO_LOAD(&iptr[2], PMIX_GRPID, &ui32, PMIX_UINT32);
-    if (0 == strcasecmp(schizo->name, "prte")) {
-        param = strdup("prte");
-    } else {
-        prte_asprintf(&param, "%s,prte", schizo->name);
-    }
-    PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, param, PMIX_STRING);
+    PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, personality, PMIX_STRING);
     free(param);
 
     PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
