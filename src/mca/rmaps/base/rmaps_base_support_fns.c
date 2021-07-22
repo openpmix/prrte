@@ -414,7 +414,7 @@ addknown:
 complete:
     /* if we are mapping debuggers, then they don't count against
      * the allocation */
-    if (PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON)) {
+    if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
         num_slots = INT32_MAX;
         if (!prte_hnp_is_allocated
             || (PRTE_GET_MAPPING_DIRECTIVE(policy) & PRTE_MAPPING_NO_USE_LOCAL)) {
@@ -552,7 +552,7 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata, prte_node_t *node, pr
     proc->node = node;
     /* if this is a debugger job, then it doesn't count against
      * available slots - otherwise, it does */
-    if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON)) {
+    if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
         node->num_procs++;
         ++node->slots_inuse;
     }

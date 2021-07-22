@@ -567,7 +567,6 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
     pmix_proc_t parent, target;
     prte_pmix_lock_t lock;
     pmix_rank_t threshold;
-    prte_app_context_t *app;
 
     PRTE_ACQUIRE_OBJECT(caddy);
     proc = &caddy->name;
@@ -616,7 +615,6 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
     if (NULL == pdata) {
         goto cleanup;
     }
-    app = (prte_app_context_t*) prte_pointer_array_get_item(jdata->apps, pdata->app_idx);
 
     if (PRTE_PROC_STATE_RUNNING == state) {
         /* update the proc state */
@@ -686,10 +684,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
              * itself.  This covers the case where the process died abnormally
              * and didn't cleanup its own session directory.
              */
-            if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON)  &&
-                !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
-                prte_session_dir_finalize(proc);
-            }
+            prte_session_dir_finalize(proc);
         }
         /* if we are trying to terminate and our routes are
          * gone, then terminate ourselves IF no local procs
@@ -886,7 +881,7 @@ CHECK_DAEMONS:
                     /* skip procs from another job */
                     continue;
                 }
-                if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON) &&
+                if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
                     !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                     node->slots_inuse--;
                     node->num_procs--;

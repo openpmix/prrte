@@ -227,31 +227,26 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
             } else {
                 PMIX_LOAD_NSPACE(jdata->launcher, parent->launcher);
             }
-            if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
-                /* don't use the parent for anything more */
-                parent = NULL;
-            } else {
-                /* if the prefix was set in the parent's job, we need to transfer
-                 * that prefix to the child's app_context so any further launch of
-                 * orteds can find the correct binary. There always has to be at
-                 * least one app_context in both parent and child, so we don't
-                 * need to check that here. However, be sure not to overwrite
-                 * the prefix if the user already provided it!
-                 */
-                app = (prte_app_context_t *) prte_pointer_array_get_item(parent->apps, 0);
-                child_app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, 0);
-                if (NULL != app && NULL != child_app) {
-                    prefix_dir = NULL;
-                    if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR,
-                                           (void **) &prefix_dir, PMIX_STRING)
-                        && !prte_get_attribute(&child_app->attributes, PRTE_APP_PREFIX_DIR, NULL,
-                                               PMIX_STRING)) {
-                        prte_set_attribute(&child_app->attributes, PRTE_APP_PREFIX_DIR,
-                                           PRTE_ATTR_GLOBAL, prefix_dir, PMIX_STRING);
-                    }
-                    if (NULL != prefix_dir) {
-                        free(prefix_dir);
-                    }
+            /* if the prefix was set in the parent's job, we need to transfer
+             * that prefix to the child's app_context so any further launch of
+             * orteds can find the correct binary. There always has to be at
+             * least one app_context in both parent and child, so we don't
+             * need to check that here. However, be sure not to overwrite
+             * the prefix if the user already provided it!
+             */
+            app = (prte_app_context_t *) prte_pointer_array_get_item(parent->apps, 0);
+            child_app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, 0);
+            if (NULL != app && NULL != child_app) {
+                prefix_dir = NULL;
+                if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR,
+                                       (void **) &prefix_dir, PMIX_STRING)
+                    && !prte_get_attribute(&child_app->attributes, PRTE_APP_PREFIX_DIR, NULL,
+                                           PMIX_STRING)) {
+                    prte_set_attribute(&child_app->attributes, PRTE_APP_PREFIX_DIR,
+                                       PRTE_ATTR_GLOBAL, prefix_dir, PMIX_STRING);
+                }
+                if (NULL != prefix_dir) {
+                    free(prefix_dir);
                 }
             }
         }

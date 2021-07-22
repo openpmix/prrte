@@ -336,7 +336,7 @@ static int ppr_mapper(prte_job_t *jdata)
                 }
             }
 
-            if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON)) {
+            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
                 /* set the total slots used */
                 if ((int) node->num_procs <= node->slots) {
                     node->slots_inuse = (int) node->num_procs;

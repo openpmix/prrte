@@ -131,6 +131,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
     pmix_topology_t ptopo;
     char *tmp;
     pmix_info_t info[4];
+    prte_app_context_t *app;
 
     /* unpack the command */
     n = 1;
@@ -480,7 +481,9 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                         /* skip procs from another job */
                         continue;
                     }
-                    if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+                    app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, proct->app_idx);
+                    if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) &&
+                        !(PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL))) {
                         node->slots_inuse--;
                         node->num_procs--;
                     }
