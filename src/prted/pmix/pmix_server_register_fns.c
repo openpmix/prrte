@@ -451,9 +451,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     /* get the parent job that spawned this one */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &parentproc, PMIX_PROC)) {
         parent = prte_get_job_data_object(parentproc->nspace);
-        if (NULL != parent
-            && (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)
-                || PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, parent->nspace))) {
+        if (NULL != parent && PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, parent->nspace)) {
             PMIX_PROC_RELEASE(parentproc);
             parent = NULL;
         }
@@ -491,8 +489,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             /* location, for local procs */
             if (PRTE_PROC_MY_NAME->rank == node->daemon->name.rank) {
                 tmp = NULL;
-                if (prte_get_attribute(&pptr->attributes, PRTE_PROC_CPU_BITMAP, (void **) &tmp,
-                                       PMIX_STRING)
+                if (prte_get_attribute(&pptr->attributes, PRTE_PROC_CPU_BITMAP,
+                                       (void **) &tmp, PMIX_STRING)
                     && NULL != tmp) {
                     /* provide the cpuset string for this proc */
                     kv = PRTE_NEW(prte_info_item_t);

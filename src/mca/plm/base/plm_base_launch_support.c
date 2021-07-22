@@ -1237,11 +1237,9 @@ CLEANUP:
                 if (NULL == jdata) {
                     continue;
                 }
-                if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
-                    dvm = false;
-                    if (PRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
-                        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-                    }
+                dvm = false;
+                if (PRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
+                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
                 }
             }
             if (dvm) {
@@ -1710,11 +1708,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                     if (NULL == jdata) {
                         continue;
                     }
-                    if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
-                        dvm = false;
-                        if (PRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
-                            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-                        }
+                    dvm = false;
+                    if (PRTE_JOB_STATE_DAEMONS_LAUNCHED == jdata->state) {
+                        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
                     }
                 }
                 if (dvm) {

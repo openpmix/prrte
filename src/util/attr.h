@@ -33,7 +33,7 @@
 /*** ATTRIBUTE FLAGS - never sent anywwhere ***/
 typedef uint8_t prte_app_context_flags_t;
 #define PRTE_APP_FLAG_USED_ON_NODE  0x01    // is being used on the local node
-#define PRTE_APP_DEBUGGER_DAEMON    0x02    // this app describes daemons to be co-launched
+#define PRTE_APP_FLAG_TOOL          0x02    // this app describes daemons to be co-launched
                                             //    with the application procs in the other apps
                                             //    and does not count against allocation
 

@@ -254,21 +254,14 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                                           PMIX_BOOL)) {
                 inherit = false;
                 parent = NULL;
-            } else if (PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL)) {
-                /* ensure we inherit the defaults as this is equivalent to an initial launch */
-                inherit = true;
-                parent = NULL;
             } else {
                 inherit = prte_rmaps_base.inherit;
             }
             prte_output_verbose(
                 5, prte_rmaps_base_framework.framework_output,
-                "mca:rmaps: dynamic job %s %s inherit launch directives - parent %s is %s",
+                "mca:rmaps: dynamic job %s %s inherit launch directives - parent %s",
                 PRTE_JOBID_PRINT(jdata->nspace), inherit ? "will" : "will not",
-                (NULL == parent) ? "N/A" : PRTE_JOBID_PRINT((parent->nspace)),
-                (NULL == parent)
-                    ? "NULL"
-                    : ((PRTE_FLAG_TEST(parent, PRTE_JOB_FLAG_TOOL) ? "TOOL" : "NON-TOOL")));
+                (NULL == parent) ? "N/A" : PRTE_JOBID_PRINT((parent->nspace)));
         } else {
             inherit = true;
         }

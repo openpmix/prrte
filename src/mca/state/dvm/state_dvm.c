@@ -510,7 +510,6 @@ static void check_complete(int fd, short args, void *cbdata)
     prte_pointer_array_t procs;
     char *tmp;
     prte_timer_t *timer;
-    int num_tools_attached = 0;
     prte_app_context_t *app;
 
     PRTE_ACQUIRE_OBJECT(caddy);
@@ -626,11 +625,6 @@ static void check_complete(int fd, short args, void *cbdata)
             if (PMIX_CHECK_NSPACE(jptr->nspace, PRTE_PROC_MY_NAME->nspace)) {
                 continue;
             }
-            /* if this is a tool it might be interested in the terminated event */
-            if (PRTE_FLAG_TEST(jptr, PRTE_JOB_FLAG_TOOL)) {
-                ++num_tools_attached;
-                continue;
-            }
             if (jptr->state < PRTE_JOB_STATE_TERMINATED) {
                 /* still alive - finish processing this job's termination */
                 goto release;
@@ -638,7 +632,7 @@ static void check_complete(int fd, short args, void *cbdata)
         }
 
         /* Let the tools know that a job terminated before we shutdown */
-        if (num_tools_attached > 0 && jdata->state != PRTE_JOB_STATE_NOTIFIED) {
+        if (jdata->state != PRTE_JOB_STATE_NOTIFIED) {
             PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                  "%s state:dvm:check_job_completed state is terminated - activating notify",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -715,7 +709,7 @@ release:
                     continue;
                 }
                 app = (prte_app_context_t*) prte_pointer_array_get_item(jdata->apps, proc->app_idx);
-                if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON) &&
+                if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
                     !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                     node->slots_inuse--;
                     node->num_procs--;
