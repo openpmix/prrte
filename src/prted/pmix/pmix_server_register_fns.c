@@ -357,8 +357,13 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
 
     /* check for output directives */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, NULL, PMIX_BOOL)) {
-       kv = PRTE_NEW(prte_info_item_t);
+        kv = PRTE_NEW(prte_info_item_t);
         PMIX_INFO_LOAD(&kv->info, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
+        prte_list_append(info, &kv->super);
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_RANK_OUTPUT, NULL, PMIX_BOOL)) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_RANK_OUTPUT, NULL, PMIX_BOOL);
         prte_list_append(info, &kv->super);
     }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL)) {
