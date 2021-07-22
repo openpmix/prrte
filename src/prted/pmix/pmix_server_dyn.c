@@ -288,7 +288,7 @@ static void interim(int sd, short args, void *cbdata)
                                        info->value.data.string, PMIX_STRING);
 
                 } else if (PMIX_CHECK_KEY(info, PMIX_COSPAWN_APP)) {
-                    PRTE_FLAG_SET(app, PRTE_APP_DEBUGGER_DAEMON);
+                    PRTE_FLAG_SET(app, PRTE_APP_FLAG_TOOL);
 
                     /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                     /* there can be multiple of these, so we add them to the attribute list */
@@ -602,7 +602,7 @@ static void interim(int sd, short args, void *cbdata)
             for (n=0; n < (size_t)jdata->apps->size; n++) {
                 app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, n);
                 if (NULL != app) {
-                    PRTE_FLAG_SET(app, PRTE_APP_DEBUGGER_DAEMON);
+                    PRTE_FLAG_SET(app, PRTE_APP_FLAG_TOOL);
                 }
             }
 
@@ -656,6 +656,12 @@ static void interim(int sd, short args, void *cbdata)
                                PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
+            for (n=0; n < (size_t)jdata->apps->size; n++) {
+                app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, n);
+                if (NULL != app) {
+                    PRTE_FLAG_SET(app, PRTE_APP_FLAG_TOOL);
+                }
+            }
 
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT)) {
             prte_add_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT, PRTE_ATTR_GLOBAL,
