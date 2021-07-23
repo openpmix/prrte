@@ -161,10 +161,8 @@ static void _query(int sd, short args, void *cbdata)
                     if (NULL == jdata) {
                         continue;
                     }
-                    /* don't show the requestor's job or non-launcher tools */
-                    if (!PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace)
-                        && (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)
-                            || PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_LAUNCHER))) {
+                    /* don't show the requestor's job */
+                    if (!PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace)) {
                         prte_argv_append_nosize(&nspaces, jdata->nspace);
                     }
                 }
@@ -183,9 +181,8 @@ static void _query(int sd, short args, void *cbdata)
                     if (NULL == jdata) {
                         continue;
                     }
-                    /* don't show the requestor's job or non-launcher tools */
-                    if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)
-                        || PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_LAUNCHER)) {
+                    /* don't show the requestor's job */
+                    if (!PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace)) {
                         kv = PRTE_NEW(prte_info_item_t);
                         (void) strncpy(kv->info.key, PMIX_QUERY_NAMESPACE_INFO, PMIX_MAX_KEYLEN);
                         prte_list_append(&stack, &kv->super);
@@ -432,8 +429,8 @@ static void _query(int sd, short args, void *cbdata)
                 procinfo = (pmix_proc_info_t *) darray->array;
                 p = 0;
                 for (k = 0; k < jdata->procs->size; k++) {
-                    if (NULL
-                        == (proct = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, k))) {
+                    proct = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, k);
+                    if (NULL == proct) {
                         continue;
                     }
                     if (PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_LOCAL)) {

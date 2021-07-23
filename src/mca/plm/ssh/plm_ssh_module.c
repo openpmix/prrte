@@ -345,9 +345,10 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     int orted_index;
     int rc;
     int i;
-    char *lib_base = NULL, *bin_base = NULL;
     char *prte_prefix = getenv("PRTE_PREFIX");
     char *full_orted_cmd = NULL;
+    char **final_argv = NULL;
+    char *tmp;
 
     /* Figure out the basenames for the libdir and bindir.  This
        requires some explanation:
@@ -397,6 +398,21 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     if (PRTE_SUCCESS != (rc = setup_shell(&remote_shell, &local_shell, nodename, &argc, &argv))) {
         PRTE_ERROR_LOG(rc);
         return rc;
+    }
+
+    if (NULL != prte_plm_ssh_component.pass_libpath ||
+        NULL != prefix_dir) {
+        if (PRTE_PLM_SSH_SHELL_SH != remote_shell &&
+            PRTE_PLM_SSH_SHELL_KSH != remote_shell &&
+            PRTE_PLM_SSH_SHELL_ZSH != remote_shell &&
+            PRTE_PLM_SSH_SHELL_BASH != remote_shell &&
+            PRTE_PLM_SSH_SHELL_TCSH != remote_shell &&
+            PRTE_PLM_SSH_SHELL_CSH != remote_shell) {
+            prte_show_help("help-plm-ssh.txt", "cannot-resolve-shell-with-prefix", true,
+                           (NULL == prte_prefix) ? "NULL" : prte_prefix, prefix_dir);
+            prte_argv_free(argv);
+            return PRTE_ERR_SILENT;
+        }
     }
 
     /* now get the orted cmd - as specified by user - into our tmp array.
@@ -449,37 +465,82 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     }
     prte_argv_free(orted_argv); /* done with this */
 
-    /* if the user specified a library path to pass, set it up now */
-    param = prte_basename(prte_install_dirs.libdir);
-    if (NULL != prte_plm_ssh_component.pass_libpath) {
-        if (NULL != prefix_dir) {
-            prte_asprintf(&lib_base, "%s:%s/%s", prte_plm_ssh_component.pass_libpath, prefix_dir,
-                          param);
-        } else {
-            prte_asprintf(&lib_base, "%s:%s", prte_plm_ssh_component.pass_libpath, param);
-        }
-    } else if (NULL != prefix_dir) {
-        prte_asprintf(&lib_base, "%s/%s", prefix_dir, param);
+    /* if they asked us to change directory, do so */
+    if (NULL != prte_plm_ssh_component.chdir) {
+        prte_asprintf(&tmp, "cd %s", prte_plm_ssh_component.chdir);
+        prte_argv_append_nosize(&final_argv, tmp);
+        free(tmp);
     }
-    free(param);
+
+    if (NULL != prte_prefix) {
+        if (PRTE_PLM_SSH_SHELL_SH == remote_shell ||
+            PRTE_PLM_SSH_SHELL_KSH == remote_shell ||
+            PRTE_PLM_SSH_SHELL_ZSH == remote_shell ||
+            PRTE_PLM_SSH_SHELL_BASH == remote_shell) {
+            prte_asprintf(&tmp, "PRTE_PREFIX=%s", prte_prefix);
+            prte_argv_append_nosize(&final_argv, tmp);
+            free(tmp);
+            prte_argv_append_nosize(&final_argv, "export PRTE_PREFIX");
+        } else {
+            prte_asprintf(&tmp, "setenv PRTE_PREFIX %s", prte_prefix);
+            prte_argv_append_nosize(&final_argv, tmp);
+            free(tmp);
+        }
+    }
+
+    /* if the user specified a library path to pass, set it up now */
+    if (NULL != prte_plm_ssh_component.pass_libpath) {
+        if (PRTE_PLM_SSH_SHELL_SH == remote_shell ||
+            PRTE_PLM_SSH_SHELL_KSH == remote_shell ||
+            PRTE_PLM_SSH_SHELL_ZSH == remote_shell ||
+            PRTE_PLM_SSH_SHELL_BASH == remote_shell) {
+            prte_asprintf(&tmp, "LD_LIBRARY_PATH=%s:$LD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
+            prte_argv_append_nosize(&final_argv, tmp);
+            prte_argv_append_nosize(&final_argv, "export LD_LIBRARY_PATH");
+            free(tmp);
+            prte_asprintf(&tmp, "DYLD_LIBRARY_PATH=%s:$DYLD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
+            prte_argv_append_nosize(&final_argv, tmp);
+            prte_argv_append_nosize(&final_argv, "export DYLD_LIBRARY_PATH");
+            free(tmp);
+        } else {
+            /* [t]csh is a bit more challenging -- we
+             have to check whether LD_LIBRARY_PATH
+             is already set before we try to set it.
+             Must be very careful about obeying
+             [t]csh's order of evaluation and not
+             using a variable before it is defined.
+             See this thread for more details:
+             https://www.open-mpi.org/community/lists/users/2006/01/0517.php. */
+            /* if there is nothing preceding orted, then we can just
+             * assemble the cmd with the orted_cmd at the end. Otherwise,
+             * we have to insert the orted_prefix in the right place
+             */
+            prte_argv_append_nosize(&final_argv, "if ( $?LD_LIBRARY_PATH == 1 ) set OMPI_have_llp");
+            prte_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s", prte_plm_ssh_component.pass_libpath);
+            prte_argv_append_nosize(&final_argv, tmp);
+            free(tmp);
+            prte_asprintf(&tmp, "if ( $?OMPI_have_llp == 1 ) setenv LD_LIBRARY_PATH %s:$LD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
+            prte_argv_append_nosize(&final_argv, tmp);
+            free(tmp);
+        }
+    }
+
 
     /* we now need to assemble the actual cmd that will be executed - this depends
      * upon whether or not a prefix directory is being used
      */
     if (NULL != prefix_dir) {
-        /* if we have a prefix directory, we need to set the PATH and
-         * LD_LIBRARY_PATH on the remote node, and prepend just the orted_cmd
+        /* if we have a prefix directory, we need to prepend just the orted_cmd
          * with the prefix directory
          */
-
-        value = prte_basename(prte_install_dirs.bindir);
-        prte_asprintf(&bin_base, "%s/%s", prefix_dir, value);
-        free(value);
-
         if (NULL != orted_cmd) {
             if (0 == strcmp(orted_cmd, "prted")) {
                 /* if the cmd is our standard one, then add the prefix */
-                prte_asprintf(&full_orted_cmd, "%s/%s", bin_base, orted_cmd);
+                value = prte_basename(prte_install_dirs.bindir);
+                prte_asprintf(&tmp, "%s/%s", prefix_dir, value);
+                free(value);
+                prte_asprintf(&full_orted_cmd, "%s/%s", tmp, orted_cmd);
+                free(tmp);
             } else {
                 /* someone specified something different, so don't prefix it */
                 full_orted_cmd = strdup(orted_cmd);
@@ -489,122 +550,33 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     } else {
         full_orted_cmd = orted_cmd;
     }
-
-    if (NULL != lib_base || NULL != bin_base) {
-        if (PRTE_PLM_SSH_SHELL_SH == remote_shell || PRTE_PLM_SSH_SHELL_KSH == remote_shell
-            || PRTE_PLM_SSH_SHELL_ZSH == remote_shell || PRTE_PLM_SSH_SHELL_BASH == remote_shell) {
-            /* if there is nothing preceding orted, then we can just
-             * assemble the cmd with the orted_cmd at the end. Otherwise,
-             * we have to insert the orted_prefix in the right place
-             */
-            prte_asprintf(&final_cmd,
-                          "%s%s%s%s%s%s PATH=%s%s$PATH ; export PATH ; "
-                          "LD_LIBRARY_PATH=%s%s$LD_LIBRARY_PATH ; export LD_LIBRARY_PATH ; "
-                          "DYLD_LIBRARY_PATH=%s%s$DYLD_LIBRARY_PATH ; export DYLD_LIBRARY_PATH ; "
-                          "%s %s",
-                          (NULL != prte_plm_ssh_component.chdir ? "cd " : " "),
-                          (NULL != prte_plm_ssh_component.chdir ? prte_plm_ssh_component.chdir
-                                                                : " "),
-                          (NULL != prte_plm_ssh_component.chdir ? " ; " : " "),
-                          (prte_prefix != NULL ? "PRTE_PREFIX=" : " "),
-                          (prte_prefix != NULL ? prte_prefix : " "),
-                          (prte_prefix != NULL ? " ; export PRTE_PREFIX;" : " "),
-                          (NULL != bin_base ? bin_base : " "), (NULL != bin_base ? ":" : " "),
-                          (NULL != lib_base ? lib_base : " "), (NULL != lib_base ? ":" : " "),
-                          (NULL != lib_base ? lib_base : " "), (NULL != lib_base ? ":" : " "),
-                          (orted_prefix != NULL ? orted_prefix : " "),
-                          (full_orted_cmd != NULL ? full_orted_cmd : " "));
-        } else if (PRTE_PLM_SSH_SHELL_TCSH == remote_shell
-                   || PRTE_PLM_SSH_SHELL_CSH == remote_shell) {
-            /* [t]csh is a bit more challenging -- we
-               have to check whether LD_LIBRARY_PATH
-               is already set before we try to set it.
-               Must be very careful about obeying
-               [t]csh's order of evaluation and not
-               using a variable before it is defined.
-               See this thread for more details:
-               https://www.open-mpi.org/community/lists/users/2006/01/0517.php. */
-            /* if there is nothing preceding orted, then we can just
-             * assemble the cmd with the orted_cmd at the end. Otherwise,
-             * we have to insert the orted_prefix in the right place
-             */
-            prte_asprintf(&final_cmd,
-                          "%s%s%s%s%s%s set path = ( %s $path ) ; "
-                          "if ( $?LD_LIBRARY_PATH == 1 ) "
-                          "set OMPI_have_llp ; "
-                          "if ( $?LD_LIBRARY_PATH == 0 ) "
-                          "setenv LD_LIBRARY_PATH %s ; "
-                          "if ( $?OMPI_have_llp == 1 ) "
-                          "setenv LD_LIBRARY_PATH %s%s$LD_LIBRARY_PATH ; "
-                          "if ( $?DYLD_LIBRARY_PATH == 1 ) "
-                          "set OMPI_have_dllp ; "
-                          "if ( $?DYLD_LIBRARY_PATH == 0 ) "
-                          "setenv DYLD_LIBRARY_PATH %s ; "
-                          "if ( $?OMPI_have_dllp == 1 ) "
-                          "setenv DYLD_LIBRARY_PATH %s%s$DYLD_LIBRARY_PATH ; "
-                          "%s %s",
-                          (NULL != prte_plm_ssh_component.chdir ? "cd " : " "),
-                          (NULL != prte_plm_ssh_component.chdir ? prte_plm_ssh_component.chdir
-                                                                : " "),
-                          (NULL != prte_plm_ssh_component.chdir ? " ; " : " "),
-                          (prte_prefix != NULL ? "setenv PRTE_PREFIX " : " "),
-                          (prte_prefix != NULL ? prte_prefix : " "),
-                          (prte_prefix != NULL ? " ;" : " "), (NULL != bin_base ? bin_base : " "),
-                          (NULL != lib_base ? lib_base : " "), (NULL != lib_base ? lib_base : " "),
-                          (NULL != lib_base ? ":" : " "), (NULL != lib_base ? lib_base : " "),
-                          (NULL != lib_base ? lib_base : " "), (NULL != lib_base ? ":" : " "),
-                          (orted_prefix != NULL ? orted_prefix : " "),
-                          (full_orted_cmd != NULL ? full_orted_cmd : " "));
-        } else {
-            prte_show_help("help-plm-ssh.txt", "cannot-resolve-shell-with-prefix", true,
-                           (NULL == prte_prefix) ? "NULL" : prte_prefix, prefix_dir);
-            if (NULL != bin_base) {
-                free(bin_base);
-            }
-            if (NULL != lib_base) {
-                free(lib_base);
-            }
-            if (NULL != orted_prefix)
-                free(orted_prefix);
-            if (NULL != full_orted_cmd)
-                free(full_orted_cmd);
-            return PRTE_ERR_SILENT;
-        }
-        if (NULL != bin_base) {
-            free(bin_base);
-        }
-        if (NULL != lib_base) {
-            free(lib_base);
-        }
-        if (NULL != full_orted_cmd) {
-            free(full_orted_cmd);
-        }
+    if (NULL != orted_prefix) {
+        prte_asprintf(&tmp, "%s %s", orted_prefix, full_orted_cmd);
+        free(orted_prefix);
     } else {
-        /* no prefix directory, so just aggregate the result */
-        prte_asprintf(&final_cmd, "%s %s", (orted_prefix != NULL ? orted_prefix : ""),
-                      (full_orted_cmd != NULL ? full_orted_cmd : ""));
-        if (NULL != full_orted_cmd) {
-            free(full_orted_cmd);
-        }
+        tmp = strdup(full_orted_cmd);
     }
+    prte_argv_append_nosize(&final_argv, tmp);
+    free(full_orted_cmd);
+
     /* now add the final cmd to the argv array */
+    final_cmd = prte_argv_join(final_argv, ';');
+    prte_argv_free(final_argv);
     prte_argv_append(&argc, &argv, final_cmd);
     free(final_cmd); /* done with this */
-    if (NULL != orted_prefix)
-        free(orted_prefix);
 
     /* if we are not tree launching or debugging, tell the daemon
      * to daemonize so we can launch the next group
      */
-    if (prte_plm_ssh_component.no_tree_spawn && !prte_debug_flag && !prte_debug_daemons_flag
-        && !prte_debug_daemons_file_flag && !prte_leave_session_attached &&
+    if (prte_plm_ssh_component.no_tree_spawn &&
+        !prte_debug_flag && !prte_debug_daemons_flag &&
+        !prte_debug_daemons_file_flag && !prte_leave_session_attached &&
         /* Daemonize when not using qrsh.  Or, if using qrsh, only
          * daemonize if told to by user with daemonize_qrsh flag. */
-        ((!prte_plm_ssh_component.using_qrsh)
-         || (prte_plm_ssh_component.using_qrsh && prte_plm_ssh_component.daemonize_qrsh))
-        && ((!prte_plm_ssh_component.using_llspawn)
-            || (prte_plm_ssh_component.using_llspawn
-                && prte_plm_ssh_component.daemonize_llspawn))) {
+        ((!prte_plm_ssh_component.using_qrsh) ||
+         (prte_plm_ssh_component.using_qrsh && prte_plm_ssh_component.daemonize_qrsh)) &&
+         ((!prte_plm_ssh_component.using_llspawn) ||
+          (prte_plm_ssh_component.using_llspawn && prte_plm_ssh_component.daemonize_llspawn))) {
         prte_argv_append(&argc, &argv, "--daemonize");
     }
 

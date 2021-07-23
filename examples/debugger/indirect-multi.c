@@ -308,7 +308,6 @@ static pmix_status_t spawn_app(char *myuri, int argc, char **argv,
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_NOTIFY_JOB_EVENTS, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
-    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_SPAWN_TOOL, NULL, PMIX_BOOL); // we are spawning a tool
     PMIX_INFO_LIST_CONVERT(rc, linfo, &darray);
     PMIX_INFO_LIST_ADD(rc, jinfo, PMIX_LAUNCH_DIRECTIVES, &darray, PMIX_DATA_ARRAY);
     PMIX_INFO_LIST_RELEASE(linfo);

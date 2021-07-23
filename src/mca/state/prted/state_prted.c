@@ -579,7 +579,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                             continue;
                         }
                         app = (prte_app_context_t*) prte_pointer_array_get_item(jdata->apps, pptr->app_idx);
-                        if (!PRTE_FLAG_TEST(app, PRTE_APP_DEBUGGER_DAEMON) &&
+                        if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
                             !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                             node->slots_inuse--;
                             node->num_procs--;
