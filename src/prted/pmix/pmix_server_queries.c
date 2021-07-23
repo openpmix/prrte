@@ -410,13 +410,11 @@ static void _query(int sd, short args, void *cbdata)
                  * entries for each LOCAL proc in the indicated job */
                 jdata = prte_get_job_data_object(jobid);
                 if (NULL == jdata) {
-                    prte_output(0, "JOB %s NOT FOUND", jobid);
                     ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }
                 /* Check if there are any entries in local proctable */
                 if (0 == jdata->num_local_procs) {
-                    prte_output(0, "JOB %s HAS NO LOCAL PROCS", jobid);
                     ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }
@@ -436,7 +434,6 @@ static void _query(int sd, short args, void *cbdata)
                         continue;
                     }
                     if (PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_LOCAL)) {
-                        prte_output(0, "PROC %s IS LOCAL", PRTE_NAME_PRINT(&proct->name));
                         PMIX_LOAD_PROCID(&procinfo[p].proc, proct->name.nspace, proct->name.rank);
                         if (NULL != proct->node && NULL != proct->node->name) {
                             procinfo[p].hostname = strdup(proct->node->name);
@@ -450,8 +447,6 @@ static void _query(int sd, short args, void *cbdata)
                         procinfo[p].exit_code = proct->exit_code;
                         procinfo[p].state = prte_pmix_convert_state(proct->state);
                         ++p;
-                    } else {
-                        prte_output(0, "PROC %s IS NOT LOCAL", PRTE_NAME_PRINT(&proct->name));
                     }
                 }
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NUM_PSETS)) {
