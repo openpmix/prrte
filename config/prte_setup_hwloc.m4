@@ -46,7 +46,12 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
         prte_hwloc_source="external header"
         prte_have_topology_dup=1
 
-    elif test "$with_hwloc" != "no"; then
+    elif test "$with_hwloc" == "no"; then
+        AC_MSG_WARN([PRRTE requires HWLOC topology library support.])
+        AC_MSG_WARN([Please reconfigure so we can find the library.])
+        AC_MSG_ERROR([Cannot continue.])
+
+    else
         AC_MSG_CHECKING([for hwloc in])
         if test ! -z "$with_hwloc" && test "$with_hwloc" != "yes"; then
             prte_hwloc_dir=$with_hwloc
@@ -58,24 +63,24 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
                    elif test -d $with_hwloc/lib64; then
                        prte_hwloc_libdir=$with_hwloc/lib64
                    else
-                       AC_MSG_RESULT([Could not find $with_hwloc/lib or $with_hwloc/lib64])
+                       AC_MSG_RESULT([$with_hwloc])
+                       AC_MSG_WARN([Could not find $with_hwloc/lib or $with_hwloc/lib64])
                        AC_MSG_ERROR([Can not continue])
                    fi
                    AC_MSG_RESULT([$prte_hwloc_dir and $prte_hwloc_libdir])],
                   [AC_MSG_RESULT([$with_hwloc_libdir])])
         else
+            AC_MSG_RESULT([(default search paths)])
             prte_hwloc_dir=/usr
             if test -d /usr/lib; then
                 prte_hwloc_libdir=/usr/lib
             elif test -d /usr/lib64; then
                 prte_hwloc_libdir=/usr/lib64
             else
-                AC_MSG_RESULT([not found])
                 AC_MSG_WARN([Could not find /usr/lib or /usr/lib64 - you may])
                 AC_MSG_WARN([need to specify --with-hwloc_libdir=<path>])
                 AC_MSG_ERROR([Can not continue])
             fi
-            AC_MSG_RESULT([(default search paths)])
             prte_hwloc_standard_header_location=yes
             prte_hwloc_standard_lib_location=yes
         fi
@@ -93,9 +98,12 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
                            [prte_hwloc_support=1],
                            [prte_hwloc_support=0])
 
-        if test ! -z "$with_hwloc" && test "$with_hwloc" != "no" && test "$prte_hwloc_support" != "1"; then
-            AC_MSG_WARN([HWLOC SUPPORT REQUESTED AND NOT FOUND])
-            AC_MSG_ERROR([CANNOT CONTINUE])
+        if test "$prte_hwloc_support" != "1"; then
+            AC_MSG_WARN([PRRTE requires HWLOC topology library support, but])
+            AC_MSG_WARN([an adequate version of that library was not found.])
+            AC_MSG_WARN([Please reconfigure and point to a location where])
+            AC_MSG_WARN([the HWLOC library can be found.])
+            AC_MSG_ERROR([Cannot continue.])
         fi
 
         # update global flags to test for HWLOC version
@@ -150,6 +158,12 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_hwloc_LIBS)
         PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_hwloc_LIBS)
         PRTE_HWLOC_HEADER="<hwloc.h>"
+    else
+        AC_MSG_WARN([PRRTE requires HWLOC topology library support, but])
+        AC_MSG_WARN([an adequate version of that library was not found.])
+        AC_MSG_WARN([Please reconfigure and point to a location where])
+        AC_MSG_WARN([the HWLOC library can be found.])
+        AC_MSG_ERROR([Cannot continue.])
     fi
 
     AC_MSG_CHECKING([hwloc header])
@@ -166,16 +180,8 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
     AC_DEFINE_UNQUOTED([PRTE_HAVE_HWLOC_TOPOLOGY_DUP], [$prte_have_topology_dup],
                        [Whether or not hwloc_topology_dup is available])
 
-    AC_MSG_CHECKING([will hwloc support be built])
-    if test "$prte_hwloc_support" != "1"; then
-        AC_MSG_RESULT([no])
-        prte_hwloc_source=none
-        prte_hwloc_support_will_build=no
-    else
-        AC_MSG_RESULT([yes])
-        prte_hwloc_support_will_build=yes
-        prte_hwloc_source=$prte_hwloc_dir
-    fi
+    prte_hwloc_support_will_build=yes
+    prte_hwloc_source=$prte_hwloc_dir
 
     PRTE_SUMMARY_ADD([[Required Packages]],[[HWLOC]], [prte_hwloc], [$prte_hwloc_support_will_build ($prte_hwloc_source)])
 
