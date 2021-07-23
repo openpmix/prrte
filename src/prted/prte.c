@@ -272,6 +272,19 @@ int prte(int argc, char *argv[])
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
+    /* save a pristine copy of the environment for launch purposes.
+     * This MUST be done so that we can pass it to any local procs we
+     * spawn - otherwise, those local procs will get a bunch of
+     * params only relevant to PRRTE. Skip all PMIx and PRRTE params
+     * as those are only targeting us
+     */
+    prte_launch_environ = NULL;
+    for (i=0; NULL != environ[i]; i++) {
+        if (0 != strncmp(environ[i], "PMIX_", 5) &&
+            0 != strncmp(environ[i], "PRTE_", 5)) {
+            prte_argv_append_nosize(&prte_launch_environ, environ[i]);
+        }
+    }
 
     /* because we have to use the schizo framework and init our hostname
      * prior to parsing the incoming argv for cmd line options, do a hacky
@@ -538,14 +551,6 @@ int prte(int argc, char *argv[])
 
     /* Setup MCA params */
     prte_register_params();
-
-    /* save the environment for launch purposes. This MUST be
-     * done so that we can pass it to any local procs we
-     * spawn - otherwise, those local procs won't see any
-     * non-MCA envars were set in the enviro prior to calling
-     * prun
-     */
-    prte_launch_environ = prte_argv_copy(environ);
 
     /* default to a persistent DVM */
     prte_persistent = true;
