@@ -269,6 +269,19 @@ int main(int argc, char *argv[])
     prte_tool_basename = prte_basename(argv[0]);
     pargc = argc;
     pargv = prte_argv_copy(argv);
+    /* save a pristine copy of the environment for launch purposes.
+     * This MUST be done so that we can pass it to any local procs we
+     * spawn - otherwise, those local procs will get a bunch of
+     * params only relevant to PRRTE. Skip all PMIx and PRRTE params
+     * as those are only targeting us
+     */
+    prte_launch_environ = NULL;
+    for (i=0; NULL != environ[i]; i++) {
+        if (0 != strncmp(environ[i], "PMIX_", 5) &&
+            0 != strncmp(environ[i], "PRTE_", 5)) {
+            prte_argv_append_nosize(&prte_launch_environ, environ[i]);
+        }
+    }
 
     /* we always need the prrte and pmix params */
     ret = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
@@ -298,14 +311,6 @@ int main(int argc, char *argv[])
         }
         return ret;
     }
-
-    /* save the environment for launch purposes. This MUST be
-     * done so that we can pass it to any local procs we
-     * spawn - otherwise, those local procs won't see any
-     * non-MCA envars that were set in the enviro when the
-     * orted was executed - e.g., by .csh
-     */
-    prte_launch_environ = prte_argv_copy(environ);
 
     /* open the SCHIZO framework */
     if (PRTE_SUCCESS
