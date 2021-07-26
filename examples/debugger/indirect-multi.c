@@ -90,7 +90,7 @@ static void dbgr_complete_fn(size_t evhdlr_registration_id, pmix_status_t status
                          pmix_info_t results[], size_t nresults,
                          pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
-    printf("[%d]%s called with status %s\n", getpid(), __FUNCTION__, PMIx_Error_string(status));
+    printf("%s called with status %s\n", __FUNCTION__, PMIx_Error_string(status));
     /* this example doesn't do anything further */
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
