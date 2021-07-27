@@ -287,9 +287,6 @@ static void interim(int sd, short args, void *cbdata)
                     prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, PRTE_ATTR_GLOBAL,
                                        info->value.data.string, PMIX_STRING);
 
-                } else if (PMIX_CHECK_KEY(info, PMIX_COSPAWN_APP)) {
-                    PRTE_FLAG_SET(app, PRTE_APP_FLAG_TOOL);
-
                     /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                     /* there can be multiple of these, so we add them to the attribute list */
                 } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
