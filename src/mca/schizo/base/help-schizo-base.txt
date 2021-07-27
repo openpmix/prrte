@@ -122,3 +122,16 @@ ERROR: %s was unable to identify the proxy for your command.
 
 Please specify a personality or ask the library developer's to address
 the problem.
+#
+[unrecog-generic-param]
+The command line contains a generic MCA param that is not
+recognized by either the default or active personalities:
+
+  Param name:   %s
+  Param value:  %s
+
+Please modify the command line to either specify the personality
+this parameter belongs to (e.g., "--prtemca" for a PRRTE param,
+"--pmixmca" for a PMIx param, "--omca" for an OMPI param) or
+ensure that the generic param is correct and known to the active
+personality.
