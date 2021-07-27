@@ -1042,6 +1042,7 @@ static char *ompi_frameworks[] = {
     "pstat",
     "rcache",
     "reachable",
+    "smsc",
     "shmem",
     "threads",
     "timer",
