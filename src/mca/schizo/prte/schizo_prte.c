@@ -411,10 +411,20 @@ static int define_cli(prte_cmd_line_t *cli)
 
 static int parse_cli(int argc, int start, char **argv, char ***target)
 {
+    int i;
+    
     prte_output_verbose(1, prte_schizo_base_framework.framework_output, "%s schizo:prte: parse_cli",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    /* we already did this in the tool */
+    for (i = 0; i < (argc - start); ++i) {
+        if (0 == strcmp("--mca", argv[i])) {
+            /* this is an unrecognized generic param */
+            prte_show_help("help-schizo-base.txt", "unrecog-generic-param",
+                           true, argv[i+1], argv[i+2]);
+            return PRTE_ERR_SILENT;
+        }
+    }
+
     return PRTE_SUCCESS;
 }
 

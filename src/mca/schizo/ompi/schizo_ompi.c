@@ -1129,6 +1129,13 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
                 free(p2);
                 i += 2;
                 continue;
+            } else {
+                /* this is an unrecognized generic param */
+                prte_show_help("help-schizo-base.txt", "unrecog-generic-param",
+                               true, p1, p2);
+                free(p1);
+                free(p2);
+                return PRTE_ERR_SILENT;
             }
         }
         if (0 == strcmp("--map-by", argv[i])) {
