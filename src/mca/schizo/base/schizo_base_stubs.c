@@ -443,6 +443,10 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                 }
             }
             if (!ignore) {
+                /* replace the generic directive with a PRRTE specific
+                 * one so we know this has been processed */
+                free(argv[i]);
+                argv[i] = strdup("--prtemca");
                 if (NULL == target) {
                     /* push it into our environment */
                     asprintf(&param, "PRTE_MCA_%s", p1);
@@ -526,6 +530,10 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
                 }
             }
             if (!ignore) {
+                /* replace the generic directive with a PRRTE specific
+                 * one so we know this has been processed */
+                free(argv[i]);
+                argv[i] = strdup("--pmixmca");
                 if (NULL == target) {
                     /* push it into our environment */
                     asprintf(&param, "PMIX_MCA_%s", p1);
