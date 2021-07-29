@@ -392,7 +392,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                     break;
                 }
             }
-            if (!needcheck) {
+            if (needcheck) {
                 // node in -host was not in allocation - this is not allowed
                 prte_show_help("help-dash-host.txt", "not-all-mapped-alloc",
                                true, node->name);
