@@ -35,7 +35,7 @@ This file contains the main features as well as overviews of specific
 bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
-2.0.0: TBD
+2.0.0: 29 July 2021
 ------------------------------------
 This is the initial production release of the PRRTE software system. It
 contains full support of the PMIx v4.1 Standard plus extensions as provided
