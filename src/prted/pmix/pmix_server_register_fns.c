@@ -86,6 +86,9 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     pmix_cpuset_t cpuset;
     uint32_t ui32;
     prte_job_t *parent = NULL;
+    pmix_device_distance_t *distances;
+    size_t ndist;
+    pmix_topology_t topo;
 
     prte_output_verbose(2, prte_pmix_server_globals.output, "%s register nspace for %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace));
@@ -96,6 +99,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     PRTE_CONSTRUCT(&appinfo, prte_list_t);
     uid = geteuid();
     gid = getegid();
+    topo.source = "hwloc";
 
     /* pass our nspace/rank */
     kv = PRTE_NEW(prte_info_item_t);
@@ -487,39 +491,62 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             prte_list_append(pmap, &kv->super);
 
             /* location, for local procs */
-            if (PRTE_PROC_MY_NAME->rank == node->daemon->name.rank) {
-                tmp = NULL;
-                if (prte_get_attribute(&pptr->attributes, PRTE_PROC_CPU_BITMAP,
-                                       (void **) &tmp, PMIX_STRING)
-                    && NULL != tmp) {
-                    /* provide the cpuset string for this proc */
-                    kv = PRTE_NEW(prte_info_item_t);
-                    PMIX_INFO_LOAD(&kv->info, PMIX_CPUSET, tmp, PMIX_STRING);
-                    prte_list_append(pmap, &kv->super);
-                    /* let PMIx generate the locality string */
-                    PMIX_CPUSET_CONSTRUCT(&cpuset);
-                    cpuset.source = "hwloc";
-                    cpuset.bitmap = hwloc_bitmap_alloc();
-                    hwloc_bitmap_list_sscanf(cpuset.bitmap, tmp);
-                    free(tmp);
-                    ret = PMIx_server_generate_locality_string(&cpuset, &tmp);
-                    if (PMIX_SUCCESS != ret) {
-                        PMIX_ERROR_LOG(ret);
-                        PRTE_LIST_RELEASE(pmap);
-                        PRTE_LIST_DESTRUCT(&appinfo);
-                        PRTE_LIST_RELEASE(info);
-                        return prte_pmix_convert_status(ret);
+            tmp = NULL;
+            if (prte_get_attribute(&pptr->attributes, PRTE_PROC_CPU_BITMAP,
+                                   (void **) &tmp, PMIX_STRING)
+                && NULL != tmp) {
+                /* provide the cpuset string for this proc */
+                kv = PRTE_NEW(prte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_CPUSET, tmp, PMIX_STRING);
+                prte_list_append(pmap, &kv->super);
+                /* let PMIx generate the locality string */
+                PMIX_CPUSET_CONSTRUCT(&cpuset);
+                cpuset.source = "hwloc";
+                cpuset.bitmap = hwloc_bitmap_alloc();
+                hwloc_bitmap_list_sscanf(cpuset.bitmap, tmp);
+                free(tmp);
+                ret = PMIx_server_generate_locality_string(&cpuset, &tmp);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    PRTE_LIST_RELEASE(pmap);
+                    PRTE_LIST_DESTRUCT(&appinfo);
+                    PRTE_LIST_RELEASE(info);
+                    hwloc_bitmap_free(cpuset.bitmap);
+                    return prte_pmix_convert_status(ret);
+                }
+                kv = PRTE_NEW(prte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, tmp, PMIX_STRING);
+                prte_list_append(pmap, &kv->super);
+                free(tmp);
+                /* compute the device distances for this proc */
+                topo.topology = node->topology->topo;
+                ret = PMIx_Compute_distances(&topo, &cpuset,
+                                             NULL, 0, &distances, &ndist);
+                if (PMIX_SUCCESS == ret) {
+                    if (4 < prte_output_get_verbosity(prte_pmix_server_globals.output)) {
+                        size_t f;
+                        for (f=0; f < ndist; f++) {
+                            prte_output(0, "UUID: %s OSNAME: %s TYPE: %s MIND: %u MAXD: %u",
+                                        distances[f].uuid, distances[f].osname,
+                                        PMIx_Device_type_string(distances[f].type),
+                                        distances[f].mindist, distances[f].maxdist);
+                        }
                     }
                     kv = PRTE_NEW(prte_info_item_t);
-                    PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, tmp, PMIX_STRING);
-                    prte_list_append(pmap, &kv->super);
-                    free(tmp);
-                } else {
-                    /* the proc is not bound */
-                    kv = PRTE_NEW(prte_info_item_t);
-                    PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, NULL, PMIX_STRING);
+                    PMIX_LOAD_KEY(kv->info.key, PMIX_DEVICE_DISTANCES);
+                    kv->info.value.type = PMIX_DATA_ARRAY;
+                    PMIX_DATA_ARRAY_CREATE(kv->info.value.data.darray, ndist, PMIX_DEVICE_DIST);
+                    kv->info.value.data.darray->array = distances;
                     prte_list_append(pmap, &kv->super);
                 }
+                hwloc_bitmap_free(cpuset.bitmap);
+            } else {
+                /* the proc is not bound */
+                kv = PRTE_NEW(prte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, NULL, PMIX_STRING);
+                prte_list_append(pmap, &kv->super);
+            }
+            if (PRTE_PROC_MY_NAME->rank == node->daemon->name.rank) {
                 /* create and pass a proc-level session directory */
                 if (0 > prte_asprintf(&tmp, "%s/%u/%u", prte_process_info.jobfam_session_dir,
                                       PRTE_LOCAL_JOBID(jdata->nspace), pptr->name.rank)) {
