@@ -185,12 +185,13 @@ int prte_hwloc_base_register(void)
     }
 
     prte_hwloc_base_topo_file = NULL;
-    (void)
-        prte_mca_base_var_register("prte", "hwloc", "use", "topo_file",
-                                   "Read local topology from file instead of directly sensing it",
-                                   PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                   PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                   PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_topo_file);
+    ret = prte_mca_base_var_register("prte", "hwloc", "use", "topo_file",
+                                     "Read local topology from file instead of directly sensing it",
+                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                     PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_topo_file);
+    (void) prte_mca_base_var_register_synonym(ret, "prte", "ras", "simulator", "topo_files",
+                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
 
     /* register parameters */
     return PRTE_SUCCESS;

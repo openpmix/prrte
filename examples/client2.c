@@ -81,6 +81,8 @@ int main(int argc, char **argv)
     bool flag;
     mylock_t mylock;
     pmix_data_array_t da, *dptr;
+    size_t q;
+    pmix_device_distance_t *dist;
 
     /* init us - note that the call to "init" includes the return of
      * any job-related info provided by the RM. This includes any
@@ -217,6 +219,45 @@ int main(int argc, char **argv)
                 goto done;
             }
         }
+        PMIX_VALUE_RELEASE(val);
+    }
+
+    /* get our device distances, if available */
+    rc = PMIx_Get(&myproc, PMIX_DEVICE_DISTANCES, NULL, 0, &val);
+    if (PMIX_SUCCESS != rc) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get for device distances failed: %s\n", myproc.nspace,
+                myproc.rank, PMIx_Error_string(rc));
+        goto done;
+    }
+    if (PMIX_DATA_ARRAY != val->type) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get device distances returned wrong type: %s\n",
+                myproc.nspace, myproc.rank, PMIx_Data_type_string(val->type));
+        PMIX_VALUE_RELEASE(val);
+        goto done;
+    }
+    dptr = val->data.darray;
+    if (NULL == dptr) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get device distances returned NULL array\n",
+                myproc.nspace, myproc.rank);
+        PMIX_VALUE_RELEASE(val);
+        goto done;
+    }
+    if (PMIX_DEVICE_DIST != dptr->type) {
+        fprintf(stderr,
+                "Client ns %s rank %d: PMIx_Get device distances returned wrong array value type %s\n",
+                myproc.nspace, myproc.rank, PMIx_Data_type_string(dptr->type));
+        PMIX_VALUE_RELEASE(val);
+        goto done;
+    }
+    fprintf(stderr,
+            "Client ns %s rank %d: PMIx_Get device distances succeeded\n",
+            myproc.nspace, myproc.rank);
+    dist = (pmix_device_distance_t*)dptr->array;
+    for (q=0; q < dptr->size; q++) {
+        fprintf(stderr, "UUID: %s OSNAME: %s TYPE: %s MIND: %u MAXD: %u\n",
+                dist[q].uuid, dist[q].osname,
+                PMIx_Device_type_string(dist[q].type),
+                dist[q].mindist, dist[q].maxdist);
     }
 
 done:

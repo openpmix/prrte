@@ -102,11 +102,6 @@ static int prte_ras_base_close(void)
  *    */
 static int prte_ras_base_open(prte_mca_base_open_flag_t flags)
 {
-    /* set default flags */
-    prte_ras_base.active_module = NULL;
-    prte_ras_base.allocation_read = false;
-    prte_ras_base.total_slots_alloc = 0;
-
     /* Open up all available components */
     return prte_mca_base_framework_components_open(&prte_ras_base_framework, flags);
 }

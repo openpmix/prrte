@@ -514,6 +514,11 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
         } else {
             prte_output(0, "LAUNCH MSG RAW SIZE: %d", (int) jdata->launch_msg.bytes_used);
         }
+        /* go ahead and register the job */
+        rc = prte_pmix_server_register_nspace(jdata);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+        }
         prte_never_launched = true;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALL_JOBS_COMPLETE);
         PRTE_RELEASE(caddy);
