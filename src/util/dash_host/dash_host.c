@@ -291,9 +291,10 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
         if (NULL != node) {
             if (slots_given) {
                 node->slots += slots;
-                if (0 < slots) {
-                    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
-                }
+                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+            } else if (slots < 0) {
+                node->slots = 0;
+                PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             } else {
                 ++node->slots;
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
@@ -322,9 +323,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
             node->slots_max = 0;
             if (slots_given) {
                 node->slots = slots;
-                if (0 < slots) {
-                    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
-                }
+                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             } else if (slots < 0) {
                 node->slots = 0;
                 PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
