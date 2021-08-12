@@ -97,7 +97,6 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     prte_list_item_t *item;
     prte_node_t *node, *nd;
     seq_node_t *sq, *save = NULL, *seq;
-    ;
     pmix_rank_t vpid;
     int32_t num_nodes;
     int rc;
@@ -488,7 +487,7 @@ static int process_file(char *path, prte_list_t *list)
     char *hstname = NULL;
     FILE *fp;
     seq_node_t *sq;
-    char *sep, *eptr;
+    char *sep, *eptr, *membind_opt;
 
     /* open the file */
     fp = fopen(path, "r");
@@ -517,6 +516,23 @@ static int process_file(char *path, prte_list_t *list)
                 eptr--;
             }
             *(eptr + 1) = 0;
+            /*
+             * If the submitted LSF job has memory binding related resource requirement, after
+             * the cpu id list there are memory binding options.
+             *
+             * The following is the format of LSB_AFFINITY_HOSTFILE file:
+             *
+             * Host1 0,1,2,3 0 2
+             * Host1 4,5,6,7 1 2
+             *
+             * Each line includes: host_name, cpu_id_list, NUMA_node_id_list, and memory_policy.
+             * In this fix we will drop the last two sections (NUMA_node_id_list and memory_policy)
+             * of each line and keep them in 'membind_opt' for future use.
+             */
+            if (NULL != (membind_opt = strchr(sep, ' '))) {
+                *membind_opt = '\0';
+                membind_opt++;
+            }
             sq->cpuset = strdup(sep);
         }
 
