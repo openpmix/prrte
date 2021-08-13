@@ -330,6 +330,8 @@ int prte_hwloc_base_get_topology(void)
 int prte_hwloc_base_set_topology(char *topofile)
 {
     struct hwloc_topology_support *support;
+    hwloc_obj_t obj;
+    unsigned j, k;
 
     PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology %s", topofile));
 
@@ -347,9 +349,8 @@ int prte_hwloc_base_set_topology(char *topofile)
     /* since we are loading this from an external source, we have to
      * explicitly set a flag so hwloc sets things up correctly
      */
-    if (0
-        != prte_hwloc_base_topology_set_flags(prte_hwloc_topology,
-                                              HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM, true)) {
+    if (0 != prte_hwloc_base_topology_set_flags(prte_hwloc_topology,
+                                                HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM, true)) {
         hwloc_topology_destroy(prte_hwloc_topology);
         return PRTE_ERR_NOT_SUPPORTED;
     }
@@ -357,6 +358,30 @@ int prte_hwloc_base_set_topology(char *topofile)
         hwloc_topology_destroy(prte_hwloc_topology);
         PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology failed to load"));
         return PRTE_ERR_NOT_SUPPORTED;
+    }
+
+    /* remove the hostname from the topology. Unfortunately, hwloc
+     * decided to add the source hostname to the "topology", thus
+     * rendering it unusable as a pure topological description. So
+     * we remove that information here.
+     */
+    obj = hwloc_get_root_obj(prte_hwloc_topology);
+    for (k = 0; k < obj->infos_count; k++) {
+        if (NULL == obj->infos[k].name || NULL == obj->infos[k].value) {
+            continue;
+        }
+        if (0 == strncmp(obj->infos[k].name, "HostName", strlen("HostName"))) {
+            free(obj->infos[k].name);
+            free(obj->infos[k].value);
+            /* left justify the array */
+            for (j = k; j < obj->infos_count - 1; j++) {
+                obj->infos[j] = obj->infos[j + 1];
+            }
+            obj->infos[obj->infos_count - 1].name = NULL;
+            obj->infos[obj->infos_count - 1].value = NULL;
+            obj->infos_count--;
+            break;
+        }
     }
 
     /* unfortunately, hwloc does not include support info in its

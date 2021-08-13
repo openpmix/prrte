@@ -234,7 +234,7 @@ static prte_cmd_line_init_t cmd_line_init[] = {
 int prte(int argc, char *argv[])
 {
     int rc = 1, i, j;
-    char *param, *ptr, *tpath, *cptr;
+    char *param, *timeoutenv, *ptr, *tpath, *cptr;
     prte_pmix_lock_t lock;
     prte_list_t apps;
     prte_pmix_app_t *app;
@@ -1080,15 +1080,15 @@ int prte(int argc, char *argv[])
     /* check for a job timeout specification, to be provided in seconds
      * as that is what MPICH used
      */
-    param = NULL;
+    timeoutenv = NULL;
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "timeout", 0, 0))
-        || NULL != (param = getenv("MPIEXEC_TIMEOUT"))) {
-        if (NULL != param) {
-            i = strtol(param, NULL, 10);
+        || NULL != (timeoutenv = getenv("MPIEXEC_TIMEOUT"))) {
+        if (NULL != timeoutenv) {
+            i = strtol(timeoutenv, NULL, 10);
             /* both cannot be present, or they must agree */
             if (NULL != pval && i != pval->value.data.integer) {
                 prte_show_help("help-prun.txt", "prun:timeoutconflict", false, prte_tool_basename,
-                               pval->value.data.integer, param);
+                               pval->value.data.integer, timeoutenv);
                 PRTE_UPDATE_EXIT_STATUS(1);
                 goto DONE;
             }
@@ -1117,7 +1117,6 @@ int prte(int argc, char *argv[])
     ui32 = getegid();
     PMIX_INFO_LOAD(&iptr[2], PMIX_GRPID, &ui32, PMIX_UINT32);
     PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, personality, PMIX_STRING);
-    free(param);
 
     PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
     ret = PMIx_server_setup_application(prte_process_info.myproc.nspace, iptr, ninfo, setupcbfunc,

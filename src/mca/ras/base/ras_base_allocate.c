@@ -195,6 +195,10 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
 
     /* convenience */
     jdata = caddy->jdata;
+    if (prte_ras_base.simulated) {
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH,
+                           PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+    }
 
     /* if we already did this, don't do it again - the pool of
      * global resources is set.
