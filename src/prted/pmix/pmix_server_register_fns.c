@@ -76,7 +76,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     hwloc_obj_t machine;
     pmix_proc_t pproc, *parentproc;
     pmix_status_t ret;
-    pmix_info_t *pinfo, *iptr;
+    pmix_info_t *pinfo, *iptr, devinfo[2];
     size_t ninfo;
     prte_pmix_lock_t lock;
     prte_list_t local_procs;
@@ -467,6 +467,10 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
      * any further info exchange, assuming the underlying transports
      * support it. We also pass all the proc-specific data here so
      * that each proc can lookup info about every other proc in the job */
+    if (0 != prte_pmix_server_globals.generate_dist) {
+        PMIX_INFO_LOAD(&devinfo[0], PMIX_DEVICE_TYPE, &prte_pmix_server_globals.generate_dist, PMIX_DEVTYPE);
+        PMIX_INFO_LOAD(&devinfo[1], PMIX_HOSTNAME, NULL, PMIX_STRING);
+    }
 
     for (n = 0; n < map->nodes->size; n++) {
         if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, n))) {
@@ -518,26 +522,30 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_LOCALITY_STRING, tmp, PMIX_STRING);
                 prte_list_append(pmap, &kv->super);
                 free(tmp);
-                /* compute the device distances for this proc */
-                topo.topology = node->topology->topo;
-                ret = PMIx_Compute_distances(&topo, &cpuset,
-                                             NULL, 0, &distances, &ndist);
-                if (PMIX_SUCCESS == ret) {
-                    if (4 < prte_output_get_verbosity(prte_pmix_server_globals.output)) {
-                        size_t f;
-                        for (f=0; f < ndist; f++) {
-                            prte_output(0, "UUID: %s OSNAME: %s TYPE: %s MIND: %u MAXD: %u",
-                                        distances[f].uuid, distances[f].osname,
-                                        PMIx_Device_type_string(distances[f].type),
-                                        distances[f].mindist, distances[f].maxdist);
+                if (0 != prte_pmix_server_globals.generate_dist) {
+                    /* compute the device distances for this proc */
+                    topo.topology = node->topology->topo;
+                    devinfo[1].value.data.string = node->name;
+                    ret = PMIx_Compute_distances(&topo, &cpuset,
+                                                 devinfo, 2, &distances, &ndist);
+                    devinfo[1].value.data.string = NULL;
+                    if (PMIX_SUCCESS == ret) {
+                        if (4 < prte_output_get_verbosity(prte_pmix_server_globals.output)) {
+                            size_t f;
+                            for (f=0; f < ndist; f++) {
+                                prte_output(0, "UUID: %s OSNAME: %s TYPE: %s MIND: %u MAXD: %u",
+                                            distances[f].uuid, distances[f].osname,
+                                            PMIx_Device_type_string(distances[f].type),
+                                            distances[f].mindist, distances[f].maxdist);
+                            }
                         }
+                        kv = PRTE_NEW(prte_info_item_t);
+                        PMIX_LOAD_KEY(kv->info.key, PMIX_DEVICE_DISTANCES);
+                        kv->info.value.type = PMIX_DATA_ARRAY;
+                        PMIX_DATA_ARRAY_CREATE(kv->info.value.data.darray, ndist, PMIX_DEVICE_DIST);
+                        kv->info.value.data.darray->array = distances;
+                        prte_list_append(pmap, &kv->super);
                     }
-                    kv = PRTE_NEW(prte_info_item_t);
-                    PMIX_LOAD_KEY(kv->info.key, PMIX_DEVICE_DISTANCES);
-                    kv->info.value.type = PMIX_DATA_ARRAY;
-                    PMIX_DATA_ARRAY_CREATE(kv->info.value.data.darray, ndist, PMIX_DEVICE_DIST);
-                    kv->info.value.data.darray->array = distances;
-                    prte_list_append(pmap, &kv->super);
                 }
                 hwloc_bitmap_free(cpuset.bitmap);
             } else {
@@ -636,6 +644,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     if (NULL != parent) {
         PMIX_PROC_RELEASE(parentproc);
     }
+    PMIX_INFO_DESTRUCT(&devinfo[0]);
+    PMIX_INFO_DESTRUCT(&devinfo[1]);
 
     /* mark the job as registered */
     prte_set_attribute(&jdata->attributes, PRTE_JOB_NSPACE_REGISTERED, PRTE_ATTR_LOCAL, NULL,

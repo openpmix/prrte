@@ -372,7 +372,7 @@ typedef struct {
     bool pubsub_init;
     bool session_server;
     bool system_server;
-    bool legacy;
+    pmix_device_type_t generate_dist;
     prte_list_t tools;
     prte_list_t psets;
 } pmix_server_globals_t;
