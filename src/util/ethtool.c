@@ -61,7 +61,7 @@ unsigned int prte_ethtool_get_speed(const char *if_name)
 
     sockfd = socket(PF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
-        goto out;
+        return 0;
     }
 
     memset(&ifr, 0, sizeof(struct ifreq));

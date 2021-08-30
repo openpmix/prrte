@@ -447,6 +447,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 if (NULL == jdata) {
                     prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                    "binding policy", quals[i]);
+                    free(myspec);
                     return PRTE_ERR_SILENT;
                 }
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS, PRTE_ATTR_GLOBAL,

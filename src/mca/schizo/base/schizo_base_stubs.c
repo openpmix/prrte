@@ -459,11 +459,10 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                     prte_argv_append_nosize(target, p1);
                     prte_argv_append_nosize(target, p2);
                 }
-                free(p1);
-                free(p2);
                 i += 2;
-                continue;
             }
+            free(p1);
+            free(p2);
         }
     }
     return PRTE_SUCCESS;
