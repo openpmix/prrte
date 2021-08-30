@@ -89,24 +89,23 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
         return;
     }
 
-    if (numbytes < 0) {
-        /* either we have a connection error or it was a non-blocking read */
+    if (numbytes <= 0) {
+        if (0 > numbytes) {
+            /* either we have a connection error or it was a non-blocking read */
 
-        /* non-blocking, retry */
-        if (EAGAIN == errno || EINTR == errno) {
-            PRTE_IOF_READ_ACTIVATE(rev);
-            return;
+            /* non-blocking, retry */
+            if (EAGAIN == errno || EINTR == errno) {
+                PRTE_IOF_READ_ACTIVATE(rev);
+                return;
+            }
+
+            PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                                 "%s iof:hnp:read handler %s Error on connection:%d",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proct->name),
+                                 fd));
         }
-
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                             "%s iof:hnp:read handler %s Error on connection:%d",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proct->name),
-                             fd));
-        /* Un-recoverable error. Allow the code to flow as usual in order to
-         * to send the zero bytes message up the stream, and then close the
-         * file descriptor and delete the event.
-         */
-        numbytes = 0;
+        /* numbytes must have been zero, so go down and close the fd etc */
+        goto CLEAN_RETURN;
     }
 
    /* this must be output from one of my local procs */
@@ -141,29 +140,28 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                                       : ((PRTE_IOF_STDERR & rev->tag) ? "stderr" : "stddiag"),
                          PRTE_NAME_PRINT(&proct->name)));
 
-    if (0 == numbytes) {
-        /* if we read 0 bytes from the stdout/err/diag, there is
-         * nothing to output - release the appropriate event.
-         * This will delete the read event and close the file descriptor */
-        /* make sure we don't do recursive delete on the proct */
-        PRTE_RETAIN(proct);
-        if (rev->tag & PRTE_IOF_STDOUT) {
-            PRTE_RELEASE(proct->revstdout);
-            proct->revstdout = NULL;
-        } else if (rev->tag & PRTE_IOF_STDERR) {
-            PRTE_RELEASE(proct->revstderr);
-            proct->revstderr = NULL;
-        }
-        /* check to see if they are all done */
-        if (NULL == proct->revstdout && NULL == proct->revstderr) {
-            /* this proc's iof is complete */
-            PRTE_ACTIVATE_PROC_STATE(&proct->name, PRTE_PROC_STATE_IOF_COMPLETE);
-        }
-        PRTE_RELEASE(proct);
-        return;
-    }
-
     /* re-add the event */
     PRTE_IOF_READ_ACTIVATE(rev);
+    return;
+
+CLEAN_RETURN:
+    /* if we read 0 bytes from the stdout/err/diag, there is
+     * nothing to output - release the appropriate event.
+     * This will delete the read event and close the file descriptor */
+    /* make sure we don't do recursive delete on the proct */
+    PRTE_RETAIN(proct);
+    if (rev->tag & PRTE_IOF_STDOUT) {
+        PRTE_RELEASE(proct->revstdout);
+        proct->revstdout = NULL;
+    } else if (rev->tag & PRTE_IOF_STDERR) {
+        PRTE_RELEASE(proct->revstderr);
+        proct->revstderr = NULL;
+    }
+    /* check to see if they are all done */
+    if (NULL == proct->revstdout && NULL == proct->revstderr) {
+        /* this proc's iof is complete */
+        PRTE_ACTIVATE_PROC_STATE(&proct->name, PRTE_PROC_STATE_IOF_COMPLETE);
+    }
+    PRTE_RELEASE(proct);
     return;
 }
