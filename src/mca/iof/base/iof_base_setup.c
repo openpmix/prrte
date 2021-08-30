@@ -190,14 +190,15 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
         fd = open("/dev/null", O_RDONLY, 0);
         if (fd != fileno(stdin)) {
             dup2(fd, fileno(stdin));
-            close(fd);
         }
+        close(fd);
     }
 
     if (opts->p_stderr[1] != fileno(stderr)) {
         ret = dup2(opts->p_stderr[1], fileno(stderr));
-        if (ret < 0)
+        if (ret < 0) {
             return PRTE_ERR_PIPE_SETUP_FAILURE;
+        }
         close(opts->p_stderr[1]);
     }
 

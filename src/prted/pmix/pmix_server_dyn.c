@@ -1073,8 +1073,6 @@ static void _cnct(int sd, short args, void *cbdata)
     memcpy(md->sig->signature, cd->procs, md->sig->sz * sizeof(pmix_proc_t));
     md->opcbfunc = cd->cbfunc;
     md->cbdata = cd->cbdata;
-    PRTE_RELEASE(cd);
-    cd = NULL;
 
     /* pass it to the global collective algorithm */
     /* pass along any data that was collected locally */
@@ -1085,6 +1083,7 @@ static void _cnct(int sd, short args, void *cbdata)
         PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
         goto release;
     }
+    PRTE_RELEASE(cd);
     return;
 
 release:
@@ -1092,9 +1091,7 @@ release:
     if (NULL != cd->cbfunc) {
         cd->cbfunc(rc, cd->cbdata);
     }
-    if (NULL != cd) {
-        PRTE_RELEASE(cd);
-    }
+    PRTE_RELEASE(cd);
 }
 
 pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
