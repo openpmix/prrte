@@ -129,7 +129,8 @@ static int check_modifiers(char *modifier, char **checks, prte_schizo_conflicts_
     return PRTE_SUCCESS;
 }
 
-int prte_schizo_base_convert(char ***argv, int idx, int ntodelete, char *option, char *directive,
+int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
+                             char *option, char *directive,
                              char *modifier, bool report)
 {
     bool found;
@@ -164,8 +165,9 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete, char *option,
             found = true;
             /* if it is a --tune, --output, or --display option, then we need to simply
              * append the comma-delimited list of files they gave to the existing one */
-            if (0 == strcasecmp(option, "--tune") || 0 == strcasecmp(option, "--output")
-                || 0 == strcasecmp(option, "--display")) {
+            if (0 == strcasecmp(option, "--tune") ||
+                0 == strcasecmp(option, "--output") ||
+                0 == strcasecmp(option, "--display")) {
                 /* it is possible someone gave this option more than once - avoid that here
                  * while preserving ordering of files */
                 if (j < idx) {
@@ -188,10 +190,10 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete, char *option,
             /* were we given a directive? */
             if (NULL != directive) {
                 /* does it conflict? */
-                if (':' != pargs[j + 1][0]
-                    && 0 != strncasecmp(pargs[j + 1], directive, strlen(directive))) {
-                    prte_asprintf(&help_str, "Conflicting directives \"%s %s\"", pargs[j + 1],
-                                  directive);
+                if (':' != pargs[j + 1][0] &&
+                    0 != strncasecmp(pargs[j + 1], directive, strlen(directive))) {
+                    prte_asprintf(&help_str, "Conflicting directives \"%s %s\"",
+                                  pargs[j + 1], directive);
                     /* can't just call show_help as we want every instance to be reported */
                     output = prte_show_help_string("help-schizo-base.txt", "deprecated-fail", true,
                                                    pargs[j], help_str);
@@ -229,7 +231,15 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete, char *option,
                         goto modify;
                     }
                 } else if (NULL == (p2 = strchr(pargs[j + 1], ':'))) {
-                    prte_asprintf(&p2, "%s:%s", pargs[j + 1], modifier);
+                    /* if this is the output option and the directive is
+                     * either "dir" or "file", then treat it differently */
+                    if (0 == strcasecmp(option, "--output") &&
+                        (0 == strcasecmp(directive, "dir") ||
+                         0 == strcasecmp(directive, "file"))) {
+                        prte_asprintf(&p2, "%s=%s", directive, modifier);
+                    } else {
+                        prte_asprintf(&p2, "%s:%s", pargs[j + 1], modifier);
+                    }
                 } else {
                 modify:
                     /* we already have modifiers - need to check for conflict with
@@ -300,53 +310,71 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete, char *option,
         pargs[idx + 1] = strdup(directive);
         *argv = pargs;
         return PRTE_ERR_SILENT;
-    } else {
-        /* add the option */
-        old_arg = strdup(pargs[idx]);
-        free(pargs[idx]);
-        pargs[idx] = strdup(option);
-        /* if the argument is --am or --amca, then we got
-         * here because there wasn't already a --tune argument.
-         * In this case, we don't want to delete anything as
-         * we are just substituting --tune for the original arg */
-        if (0 != strcmp(old_arg, "--am") && 0 != strcasecmp(old_arg, "--amca") && 1 < ntodelete) {
-            prte_argv_delete(NULL, argv, idx + 1, ntodelete - 1);
-        }
-        if (0 == strcasecmp(option, "--tune")) {
-            p2 = NULL;
-            prte_asprintf(&help_str, "%s %s", pargs[idx], pargs[idx + 1]);
-        } else if (0 == strcasecmp(option, "--output") || 0 == strcasecmp(option, "--display")) {
-            if (NULL != directive) {
-                prte_asprintf(&p2, "%s:%s", directive, modifier);
+    }
+
+    /* add the option */
+    old_arg = strdup(pargs[idx]);
+    free(pargs[idx]);
+    pargs[idx] = strdup(option);
+    help_str = NULL;
+    /* if the argument is --am or --amca, then we got
+     * here because there wasn't already a --tune argument.
+     * In this case, we don't want to delete anything as
+     * we are just substituting --tune for the original arg */
+    if (0 != strcmp(old_arg, "--am") && 0 != strcasecmp(old_arg, "--amca") && 1 < ntodelete) {
+        prte_argv_delete(NULL, argv, idx + 1, ntodelete - 1);
+    }
+    if (0 == strcasecmp(option, "--tune")) {
+        p2 = NULL;
+        prte_asprintf(&help_str, "%s %s", pargs[idx], pargs[idx + 1]);
+    } else if (0 == strcasecmp(option, "--output")) {
+        if (NULL != directive) {
+            if (0 == strcasecmp(directive, "dir") ||
+                0 == strcasecmp(directive, "file")) {
+                prte_asprintf(&p2, "%s=%s", directive, modifier);
+                free(pargs[idx+1]);
+                pargs[idx+1] = p2;
+                prte_asprintf(&help_str, "%s %s", pargs[idx], p2);
+                p2 = NULL;
             } else {
-                p2 = strdup(modifier);
+                prte_asprintf(&p2, "%s:%s", directive, modifier);
             }
-        } else if (NULL == directive) {
-            prte_asprintf(&p2, ":%s", modifier);
-        } else if (NULL == modifier) {
-            p2 = strdup(directive);
         } else {
-            prte_asprintf(&p2, "%s:%s", directive, modifier);
+            p2 = strdup(modifier);
         }
+    } else if (0 == strcasecmp(option, "--display")) {
+        if (NULL != directive) {
+            prte_asprintf(&p2, "%s:%s", directive, modifier);
+        } else {
+            p2 = strdup(modifier);
+        }
+    } else if (NULL == directive) {
+        prte_asprintf(&p2, ":%s", modifier);
+    } else if (NULL == modifier) {
+        p2 = strdup(directive);
+    } else {
+        prte_asprintf(&p2, "%s:%s", directive, modifier);
+    }
+    if (NULL == help_str) {
         if (NULL != p2) {
             prte_argv_insert_element(&pargs, idx + 1, p2);
             prte_asprintf(&help_str, "%s %s", pargs[idx], p2);
         } else {
             help_str = strdup(pargs[idx]);
         }
-        if (report) {
-            /* can't just call show_help as we want every instance to be reported */
-            output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
-                                           old_arg, help_str);
-            fprintf(stderr, "%s\n", output);
-            free(output);
-        }
-        if (NULL != p2) {
-            free(p2);
-        }
-        free(help_str);
-        free(old_arg);
     }
+    if (report) {
+        /* can't just call show_help as we want every instance to be reported */
+        output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true,
+                                       old_arg, help_str);
+        fprintf(stderr, "%s\n", output);
+        free(output);
+    }
+    if (NULL != p2) {
+        free(p2);
+    }
+    free(help_str);
+    free(old_arg);
     *argv = pargs; // will have been reallocated
 
     return PRTE_SUCCESS;
