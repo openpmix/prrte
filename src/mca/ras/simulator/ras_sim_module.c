@@ -92,6 +92,9 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 
     /* use our topology */
     t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, 0);
+    if (NULL == t) {
+        return PRTE_ERR_NOT_FOUND;
+    }
     topo = t->topo;
 
     /* process the request */

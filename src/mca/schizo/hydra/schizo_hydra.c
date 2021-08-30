@@ -554,7 +554,7 @@ static void check_and_replace(char **argv, int idx,
 
 static int convert_deprecated_cli(char *option, char ***argv, int i)
 {
-    char **pargs, *p2, *modifier;
+    char **pargs, *p2;
     int rc = PRTE_SUCCESS;
 
     pargs = *argv;

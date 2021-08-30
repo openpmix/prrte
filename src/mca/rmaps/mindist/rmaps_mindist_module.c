@@ -161,7 +161,7 @@ static int mindist_map(prte_job_t *jdata)
     device = NULL;
     if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DIST_DEVICE, (void **) device, PMIX_STRING)
         || NULL == device) {
-        if (NULL == job_cpuset) {
+        if (NULL != job_cpuset) {
             free(job_cpuset);
         }
         return PRTE_ERR_BAD_PARAM;

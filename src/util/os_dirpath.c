@@ -59,6 +59,7 @@ int prte_os_dirpath_create(const char *path, const mode_t mode)
         return (PRTE_ERR_BAD_PARAM);
     }
 
+    /* coverity[toctou] */
     if (0 == (ret = stat(path, &buf))) {    /* already exists */
         if (mode == (mode & buf.st_mode)) { /* has correct mode */
             return (PRTE_SUCCESS);
@@ -115,6 +116,7 @@ int prte_os_dirpath_create(const char *path, const mode_t mode)
         /* Now that we have the name, try to create it */
         mkdir(tmp, mode);
         ret = errno; // save the errno for an error msg, if needed
+        /* coverity[toctou] */
         if (0 != stat(tmp, &buf)) {
             prte_show_help("help-prte-util.txt", "mkdir-failed", true, tmp, strerror(ret));
             prte_argv_free(parts);
@@ -189,6 +191,7 @@ int prte_os_dirpath_destroy(const char *path, bool recursive,
          */
         filenm = prte_os_path(false, path, ep->d_name, NULL);
 
+        /* coverity[toctou] */
         rc = stat(filenm, &buf);
         if (0 > rc) {
             /* Handle a race condition. filenm might have been deleted by an

@@ -183,16 +183,6 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete, char *option,
                 prte_argv_free(tmp);
                 free(pargs[j + 1]);
                 pargs[j + 1] = p2;
-                if (0 != strcmp(pargs[j], "--tune") || 0 != strcmp(pargs[j], "--output")
-                    || 0 != strcmp(pargs[j], "--display")) {
-                    prte_asprintf(&help_str, "%s %s", option, p2);
-                    /* can't just call show_help as we want every instance to be reported */
-                    output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted",
-                                                   true, pargs[idx], help_str);
-                    fprintf(stderr, "%s\n", output);
-                    free(output);
-                    free(help_str);
-                }
                 break;
             }
             /* were we given a directive? */
