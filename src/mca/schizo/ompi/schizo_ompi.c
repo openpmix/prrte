@@ -1082,7 +1082,8 @@ static bool check_generic(char *p1)
 
     /* this is a generic MCA designation, so see if the parameter it
      * refers to belongs to a project base or one of our frameworks */
-    if (0 == strncmp("opal_", p1, strlen("opal_")) || 0 == strncmp("ompi_", p1, strlen("ompi_"))) {
+    if (0 == strncmp("opal_", p1, strlen("opal_")) ||
+        0 == strncmp("ompi_", p1, strlen("ompi_"))) {
         return true;
     } else if (0 == strcmp(p1, "mca_base_env_list")) {
         return true;
@@ -1160,13 +1161,6 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
                 free(p2);
                 i += 2;
                 continue;
-            } else {
-                /* this is an unrecognized generic param */
-                prte_show_help("help-schizo-base.txt", "unrecog-generic-param",
-                               true, p1, p2);
-                free(p1);
-                free(p2);
-                return PRTE_ERR_SILENT;
             }
         }
         if (0 == strcmp("--map-by", argv[i])) {
