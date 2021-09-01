@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
 
     /* get our schizo module */
     prte_unsetenv("PRTE_MCA_schizo_proxy", &environ);
-    schizo = prte_schizo.detect_proxy(NULL);
+    schizo = prte_schizo.detect_proxy("prte");
     if (NULL == schizo || 0 != strcmp(schizo->name, "prte")) {
         prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "NONE");
         return 1;
@@ -341,9 +341,6 @@ int main(int argc, char *argv[])
         }
         return ret;
     }
-
-    /* purge any ess/prte flags set in the environ when we were launched */
-    prte_unsetenv("PRTE_MCA_ess", &prte_launch_environ);
 
     /* set debug flags */
     prte_debug_flag = prte_cmd_line_is_taken(prte_cmd_line, "debug");
