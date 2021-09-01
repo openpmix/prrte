@@ -567,6 +567,7 @@ int pmix_server_init(void)
     char *tmp;
     pmix_status_t prc;
     prte_pmix_lock_t lock;
+    bool flag;
 
     if (prte_pmix_server_globals.initialized) {
         return PRTE_SUCCESS;
@@ -657,14 +658,16 @@ int pmix_server_init(void)
         prte_list_append(&ilist, &kv->super);
         /* if we are also persistent, then we do not output IOF ourselves */
         if (prte_persistent) {
-            bool flag = false;
-            kv = PRTE_NEW(prte_info_item_t);
-            PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
-            prte_list_append(&ilist, &kv->super);
+            flag = false;
+        } else {
+            flag = true;
         }
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
+        prte_list_append(&ilist, &kv->super);
     } else {
         /* prted's never locally output */
-        bool flag = false;
+        flag = false;
         kv = PRTE_NEW(prte_info_item_t);
         PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);

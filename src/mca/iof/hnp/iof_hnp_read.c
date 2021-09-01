@@ -53,7 +53,7 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
 
-    PRTE_POST_OBJECT(lk);
+    PRTE_ACQUIRE_OBJECT(lk);
     lk->status = prte_pmix_convert_status(status);
     PRTE_PMIX_WAKEUP_THREAD(lk);
 }
@@ -98,13 +98,8 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
                 PRTE_IOF_READ_ACTIVATE(rev);
                 return;
             }
-
-            PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                                 "%s iof:hnp:read handler %s Error on connection:%d",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proct->name),
-                                 fd));
         }
-        /* numbytes must have been zero, so go down and close the fd etc */
+        /* go down and close the fd etc */
         goto CLEAN_RETURN;
     }
 
