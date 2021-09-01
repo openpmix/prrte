@@ -47,11 +47,11 @@
 
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
-    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
-
-    PRTE_ACQUIRE_OBJECT(lk);
-    lk->status = prte_pmix_convert_status(status);
-    PRTE_PMIX_WAKEUP_THREAD(lk);
+    /* nothing to do here - we use this solely to
+     * ensure that IOF_deliver doesn't block */
+    if (PMIX_SUCCESS != status) {
+        PMIX_ERROR_LOG(status);
+    }
 }
 
 void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
@@ -64,7 +64,6 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     prte_iof_proc_t *proct = (prte_iof_proc_t *) rev->proc;
     pmix_byte_object_t bo;
     pmix_iof_channel_t pchan;
-    prte_pmix_lock_t lock;
     pmix_status_t prc;
 
     PRTE_ACQUIRE_OBJECT(rev);
@@ -116,17 +115,10 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
     bo.bytes = (char *) data;
     bo.size = numbytes;
-    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    prc = PMIx_server_IOF_deliver(&proct->name, pchan, &bo, NULL, 0, lkcbfunc,
-                                  (void *) &lock);
+    prc = PMIx_server_IOF_deliver(&proct->name, pchan, &bo, NULL, 0, lkcbfunc, NULL);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-    } else {
-        /* wait for completion */
-        PRTE_PMIX_WAIT_THREAD(&lock);
     }
-    PRTE_PMIX_DESTRUCT_LOCK(&lock);
-
 
     /* prep the buffer */
     PMIX_DATA_BUFFER_CREATE(buf);
