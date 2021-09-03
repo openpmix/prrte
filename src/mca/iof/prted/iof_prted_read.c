@@ -47,11 +47,14 @@
 
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
+    prte_iof_deliver_t *p = (prte_iof_deliver_t*)cbdata;
+
     /* nothing to do here - we use this solely to
      * ensure that IOF_deliver doesn't block */
     if (PMIX_SUCCESS != status) {
         PMIX_ERROR_LOG(status);
     }
+    PRTE_RELEASE(p);
 }
 
 void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
@@ -62,7 +65,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     int rc;
     int32_t numbytes;
     prte_iof_proc_t *proct = (prte_iof_proc_t *) rev->proc;
-    pmix_byte_object_t bo;
+    prte_iof_deliver_t *p;
     pmix_iof_channel_t pchan;
     pmix_status_t prc;
 
@@ -76,16 +79,18 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     /* read up to the fragment size */
     numbytes = read(fd, data, sizeof(data));
 
+    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                         "%s read %d bytes from %s of %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
+                         (PRTE_IOF_STDOUT & rev->tag) ? "stdout"
+                         : ((PRTE_IOF_STDERR & rev->tag) ? "stderr" : "stddiag"),
+                         PRTE_NAME_PRINT(&proct->name)));
+
     if (NULL == proct) {
         /* nothing we can do */
         PRTE_ERROR_LOG(PRTE_ERR_ADDRESSEE_UNKNOWN);
         return;
     }
-
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                         "%s iof:prted:read handler read %d bytes from %s, fd %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
-                         PRTE_NAME_PRINT(&proct->name), fd));
 
     if (numbytes <= 0) {
         if (0 > numbytes) {
@@ -112,12 +117,15 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
         pchan |= PMIX_FWD_STDDIAG_CHANNEL;
     }
     /* setup the byte object */
-    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-    bo.bytes = (char *) data;
-    bo.size = numbytes;
-    prc = PMIx_server_IOF_deliver(&proct->name, pchan, &bo, NULL, 0, lkcbfunc, NULL);
+    p = PRTE_NEW(prte_iof_deliver_t);
+    PMIX_XFER_PROCID(&p->source, &proct->name);
+    p->bo.bytes = (char*)malloc(numbytes);
+    memcpy(p->bo.bytes, data, numbytes);
+    p->bo.size = numbytes;
+    prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
+        PRTE_RELEASE(p);
     }
 
     /* prep the buffer */
@@ -139,8 +147,15 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
         goto CLEAN_RETURN;
     }
 
+    /* pack the #bytes we read */
+    rc = PMIx_Data_pack(NULL, buf, &numbytes, 1, PMIX_INT32);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto CLEAN_RETURN;
+    }
+
     /* pack the data - only pack the #bytes we read! */
-    rc = PMIx_Data_pack(NULL, buf, &data, numbytes, PMIX_BYTE);
+    rc = PMIx_Data_pack(NULL, buf, data, numbytes, PMIX_BYTE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         goto CLEAN_RETURN;

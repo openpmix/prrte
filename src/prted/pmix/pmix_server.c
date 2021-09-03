@@ -671,12 +671,12 @@ int pmix_server_init(void)
         PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_GATEWAY, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
         /* if we are also persistent, then we do not output IOF ourselves */
+        kv = PRTE_NEW(prte_info_item_t);
         if (prte_persistent) {
             flag = false;
         } else {
             flag = true;
         }
-        kv = PRTE_NEW(prte_info_item_t);
         PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
     } else {
