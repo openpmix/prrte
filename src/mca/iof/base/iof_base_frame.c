@@ -212,3 +212,17 @@ PRTE_CLASS_INSTANCE(prte_iof_write_event_t, prte_list_item_t,
                     prte_iof_base_write_event_destruct);
 
 PRTE_CLASS_INSTANCE(prte_iof_write_output_t, prte_list_item_t, NULL, NULL);
+
+static void pdcon(prte_iof_deliver_t *p)
+{
+    p->bo.bytes = NULL;
+    p->bo.size = 0;
+}
+static void pddes(prte_iof_deliver_t *p)
+{
+    if (NULL != p->bo.bytes) {
+        free(p->bo.bytes);
+    }
+}
+PRTE_CLASS_INSTANCE(prte_iof_deliver_t, prte_object_t,
+                    pdcon, pddes);
