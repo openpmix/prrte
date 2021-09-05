@@ -528,7 +528,7 @@ int prte(int argc, char *argv[])
     prte_setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
     /* if we were asked to report a uri, set the MCA param to do so */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "report-uri", 0, 0))) {
-        prte_setenv("PMIX_MCA_ptl_base_report_uri", pval->value.data.string, true, &environ);
+        prte_pmix_server_globals.report_uri = strdup(pval->value.data.string);
     }
     /* don't aggregate help messages as that will apply job-to-job */
     prte_setenv("PRTE_MCA_prte_base_help_aggregate", "0", true, &environ);
@@ -536,7 +536,7 @@ int prte(int argc, char *argv[])
     /* if we are supporting a singleton, push its ID into the environ
      * so it can get picked up and registered by server init */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "singleton", 0, 0))) {
-        prte_setenv("PMIX_MCA_singleton", pval->value.data.string, true, &environ);
+        prte_pmix_server_globals.singleton = strdup(pval->value.data.string);
     }
 
     /* Setup MCA params */
