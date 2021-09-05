@@ -647,6 +647,20 @@ int pmix_server_init(void)
         prte_list_append(&ilist, &kv->super);
     }
 
+    /* if requested, tell the server library to output our PMIx URI */
+    if (NULL != prte_pmix_server_globals.report_uri) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_TCP_REPORT_URI, prte_pmix_server_globals.report_uri, PMIX_STRING);
+        prte_list_append(&ilist, &kv->super);
+    }
+
+    /* if we were started to support a singleton, then let the server library know */
+    if (NULL != prte_pmix_server_globals.singleton) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_SINGLETON, prte_pmix_server_globals.singleton, PMIX_STRING);
+        prte_list_append(&ilist, &kv->super);
+    }
+
     /* if we are the MASTER, then we are the scheduler
      * as well as a gateway */
     if (PRTE_PROC_IS_MASTER) {
