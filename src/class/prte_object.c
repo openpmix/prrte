@@ -130,6 +130,7 @@ void prte_class_initialize(prte_class_t *cls)
         (cls_construct_array_count + cls_destruct_array_count + 2) * sizeof(prte_construct_t));
     if (NULL == cls->cls_construct_array) {
         perror("Out of memory");
+        prte_mutex_unlock(&class_lock);
         exit(-1);
     }
     cls->cls_destruct_array = cls->cls_construct_array + cls_construct_array_count + 1;
