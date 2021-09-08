@@ -212,7 +212,7 @@ bool prte_output_init(void)
 
     /* Set some defaults */
 
-    prte_asprintf(&output_prefix, "output-pid%d-", getpid());
+    prte_asprintf(&output_prefix, "prte-output-pid%d-", getpid());
     output_dir = strdup(prte_tmp_directory());
 
     /* Open the default verbose stream */

@@ -51,11 +51,14 @@
 
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
-    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
+    prte_iof_deliver_t *p = (prte_iof_deliver_t*)cbdata;
 
-    PRTE_ACQUIRE_OBJECT(lk);
-    lk->status = prte_pmix_convert_status(status);
-    PRTE_PMIX_WAKEUP_THREAD(lk);
+    /* nothing to do here - we use this solely to
+     * ensure that IOF_deliver doesn't block */
+    if (PMIX_SUCCESS != status) {
+        PMIX_ERROR_LOG(status);
+    }
+    PRTE_RELEASE(p);
 }
 
 /* this is the read handler for my own child procs. In this case,
@@ -67,9 +70,8 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     unsigned char data[PRTE_IOF_BASE_MSG_MAX];
     int32_t numbytes;
     prte_iof_proc_t *proct = (prte_iof_proc_t *) rev->proc;
-    pmix_byte_object_t bo;
+    prte_iof_deliver_t *p;
     pmix_iof_channel_t pchan;
-    prte_pmix_lock_t lock;
     pmix_status_t prc;
 
     PRTE_ACQUIRE_OBJECT(rev);
@@ -82,6 +84,13 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     /* read up to the fragment size */
     memset(data, 0, PRTE_IOF_BASE_MSG_MAX);
     numbytes = read(fd, data, sizeof(data));
+
+     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                "%s read %d bytes from %s of %s",
+                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
+                (PRTE_IOF_STDOUT & rev->tag) ? "stdout"
+                : ((PRTE_IOF_STDERR & rev->tag) ? "stderr" : "stddiag"),
+                PRTE_NAME_PRINT(&proct->name)));
 
     if (NULL == proct) {
         /* this is an error - nothing we can do */
@@ -115,25 +124,16 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
         pchan |= PMIX_FWD_STDDIAG_CHANNEL;
     }
     /* setup the byte object */
-    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-    bo.bytes = (char *) data;
-    bo.size = numbytes;
-    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    prc = PMIx_server_IOF_deliver(&proct->name, pchan, &bo, NULL, 0, lkcbfunc,
-                                  (void *) &lock);
+    p = PRTE_NEW(prte_iof_deliver_t);
+    PMIX_XFER_PROCID(&p->source, &proct->name);
+    p->bo.bytes = (char*)malloc(numbytes);
+    memcpy(p->bo.bytes, data, numbytes);
+    p->bo.size = numbytes;
+    prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-    } else {
-        /* wait for completion */
-        PRTE_PMIX_WAIT_THREAD(&lock);
+        PRTE_RELEASE(p);
     }
-    PRTE_PMIX_DESTRUCT_LOCK(&lock);
-
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output, "%s read %d bytes from %s of %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
-                         (PRTE_IOF_STDOUT & rev->tag) ? "stdout"
-                                      : ((PRTE_IOF_STDERR & rev->tag) ? "stderr" : "stddiag"),
-                         PRTE_NAME_PRINT(&proct->name)));
 
     /* re-add the event */
     PRTE_IOF_READ_ACTIVATE(rev);
