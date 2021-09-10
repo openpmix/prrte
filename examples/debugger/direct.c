@@ -412,8 +412,8 @@ static int cospawn_launch(myrel_t *myrel)
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
     PMIX_DATA_ARRAY_DESTRUCT(&daemon_darray);
     if (PMIX_SUCCESS != rc) {
-        fprintf(stderr, "Application failed to launch with error: %s(%d)\n", PMIx_Error_string(rc),
-                rc);
+        fprintf(stderr, "Application failed to launch with error: %s(%d)\n",
+                PMIx_Error_string(rc), rc);
         return rc;
     }
     /* Daemon and application are in same namespace */
@@ -439,7 +439,7 @@ static int cospawn_launch(myrel_t *myrel)
     ninfo = darray.size;
 
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(&code, 1, info, 2, release_fn, evhandler_reg_callbk,
+    PMIx_Register_event_handler(&code, 1, info, ninfo, release_fn, evhandler_reg_callbk,
                                 (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);

@@ -324,7 +324,7 @@ int main(int argc, char **argv)
     PMIX_INFO_LIST_RELEASE(dirs);
     info = darray.array;
     ninfo = darray.size;
-    PMIx_Register_event_handler(&code, 1, info, 2, spawn_cbfunc, evhandler_reg_callbk,
+    PMIx_Register_event_handler(&code, 1, info, ninfo, spawn_cbfunc, evhandler_reg_callbk,
                                 (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     DEBUG_DESTRUCT_LOCK(&mylock);
@@ -344,7 +344,7 @@ int main(int argc, char **argv)
     PMIX_INFO_LIST_RELEASE(dirs);
     info = darray.array;
     ninfo = darray.size;
-    PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, &myproc, PMIX_RANGE_CUSTOM, info, 2, NULL, NULL);
+    PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, &myproc, PMIX_RANGE_CUSTOM, info, ninfo, NULL, NULL);
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
     printf("WAITING FOR APPLICATION LAUNCH\n");
     /* wait for the IL to have launched its application */
