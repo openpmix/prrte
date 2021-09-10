@@ -495,7 +495,7 @@ int main(int argc, char **argv)
     PMIX_INFO_LIST_RELEASE(dirs);
     info = (pmix_info_t*)darray.array;
     ninfo = darray.size;
-    PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, &myproc, PMIX_RANGE_CUSTOM, info, 2, NULL, NULL);
+    PMIx_Notify_event(PMIX_DEBUGGER_RELEASE, &myproc, PMIX_RANGE_CUSTOM, info, ninfo, NULL, NULL);
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
 
     printf("Waiting for application launch\n");

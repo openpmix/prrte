@@ -675,7 +675,12 @@ int pmix_server_init(void)
         if (prte_persistent) {
             flag = false;
         } else {
-            flag = true;
+            /* if we have a parent, then we don't write out ourselves */
+            if (NULL != getenv("PMIX_LAUNCHER_RNDZ_URI")) {
+                flag = false;
+            } else {
+                flag = true;
+            }
         }
         PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
