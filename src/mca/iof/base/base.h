@@ -134,6 +134,13 @@ typedef struct {
 } prte_iof_write_output_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_write_output_t);
 
+typedef struct{
+    prte_object_t super;
+    pmix_proc_t source;
+    pmix_byte_object_t bo;
+} prte_iof_deliver_t;
+PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_deliver_t);
+
 /* Write event macro's */
 
 static inline bool prte_iof_base_fd_always_ready(int fd)

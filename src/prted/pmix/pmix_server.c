@@ -92,28 +92,30 @@ static void pmix_server_log(int status, pmix_proc_t *sender, pmix_data_buffer_t 
 pmix_server_globals_t prte_pmix_server_globals = {0};
 static pmix_topology_t mytopology = {0};
 
-static pmix_server_module_t pmix_server = {.client_connected = pmix_server_client_connected_fn,
-                                           .client_finalized = pmix_server_client_finalized_fn,
-                                           .abort = pmix_server_abort_fn,
-                                           .fence_nb = pmix_server_fencenb_fn,
-                                           .direct_modex = pmix_server_dmodex_req_fn,
-                                           .publish = pmix_server_publish_fn,
-                                           .lookup = pmix_server_lookup_fn,
-                                           .unpublish = pmix_server_unpublish_fn,
-                                           .spawn = pmix_server_spawn_fn,
-                                           .connect = pmix_server_connect_fn,
-                                           .disconnect = pmix_server_disconnect_fn,
-                                           .register_events = pmix_server_register_events_fn,
-                                           .deregister_events = pmix_server_deregister_events_fn,
-                                           .notify_event = pmix_server_notify_event,
-                                           .query = pmix_server_query_fn,
-                                           .tool_connected = pmix_tool_connected_fn,
-                                           .log = pmix_server_log_fn,
-                                           .allocate = pmix_server_alloc_fn,
-                                           .job_control = pmix_server_job_ctrl_fn,
-                                           .iof_pull = pmix_server_iof_pull_fn,
-                                           .push_stdin = pmix_server_stdin_fn,
-                                           .group = pmix_server_group_fn};
+static pmix_server_module_t pmix_server = {
+    .client_connected = pmix_server_client_connected_fn,
+    .client_finalized = pmix_server_client_finalized_fn,
+    .abort = pmix_server_abort_fn,
+    .fence_nb = pmix_server_fencenb_fn,
+    .direct_modex = pmix_server_dmodex_req_fn,
+    .publish = pmix_server_publish_fn,
+    .lookup = pmix_server_lookup_fn,
+    .unpublish = pmix_server_unpublish_fn,
+    .spawn = pmix_server_spawn_fn,
+    .connect = pmix_server_connect_fn,
+    .disconnect = pmix_server_disconnect_fn,
+    .register_events = pmix_server_register_events_fn,
+    .deregister_events = pmix_server_deregister_events_fn,
+    .notify_event = pmix_server_notify_event,
+    .query = pmix_server_query_fn,
+    .tool_connected = pmix_tool_connected_fn,
+    .log = pmix_server_log_fn,
+    .allocate = pmix_server_alloc_fn,
+    .job_control = pmix_server_job_ctrl_fn,
+    .iof_pull = pmix_server_iof_pull_fn,
+    .push_stdin = pmix_server_stdin_fn,
+    .group = pmix_server_group_fn
+};
 
 typedef struct {
     char *function;
@@ -332,8 +334,12 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
 static void _mdxresp(int sd, short args, void *cbdata);
 static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata);
 
+static char *generate_dist = NULL;
 void pmix_server_register_params(void)
 {
+    char **tmp;
+    int i;
+
     /* register a verbosity */
     prte_pmix_server_globals.verbosity = -1;
     (void) prte_mca_base_var_register("prte", "pmix", NULL, "server_verbose",
@@ -372,15 +378,6 @@ void pmix_server_register_params(void)
                                    PRTE_MCA_BASE_VAR_SCOPE_ALL,
                                    &prte_pmix_server_globals.wait_for_server);
 
-    /* whether or not to support legacy usock connections as well as tcp */
-    prte_pmix_server_globals.legacy = false;
-    (void) prte_mca_base_var_register("prte", "pmix", NULL, "server_usock_connections",
-                                      "Whether or not to support legacy usock connections",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_ALL,
-                                      &prte_pmix_server_globals.legacy);
-
     /* whether or not to drop a session-level tool rendezvous point */
     prte_pmix_server_globals.session_server = false;
     (void)
@@ -399,6 +396,28 @@ void pmix_server_register_params(void)
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_ALL,
                                       &prte_pmix_server_globals.system_server);
+
+    /* whether or not to drop a system-level tool rendezvous point */
+    (void) prte_mca_base_var_register("prte", "pmix", NULL, "generate_distances",
+                                      "Device types whose distances are to be provided (default=none, options=fabric,gpu,network",
+                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_ALL,
+                                      &generate_dist);
+    prte_pmix_server_globals.generate_dist = 0;
+    if (NULL != generate_dist) {
+        tmp = prte_argv_split(generate_dist, ',');
+        for (i=0; NULL != tmp[i]; i++) {
+            if (0 == strcasecmp(tmp[i], "fabric")) {
+                prte_pmix_server_globals.generate_dist |= PMIX_DEVTYPE_OPENFABRICS;
+            } else if (0 == strcasecmp(tmp[i], "gpu")) {
+                prte_pmix_server_globals.generate_dist |= PMIX_DEVTYPE_GPU;
+            } else if (0 == strcasecmp(tmp[i], "network")) {
+                prte_pmix_server_globals.generate_dist |= PMIX_DEVTYPE_NETWORK;
+            }
+        }
+    }
+
 }
 
 static void eviction_cbfunc(struct prte_hotel_t *hotel, int room_num, void *occupant)
@@ -548,6 +567,7 @@ int pmix_server_init(void)
     char *tmp;
     pmix_status_t prc;
     prte_pmix_lock_t lock;
+    bool flag;
 
     if (prte_pmix_server_globals.initialized) {
         return PRTE_SUCCESS;
@@ -605,12 +625,6 @@ int pmix_server_init(void)
     PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_TMPDIR, prte_process_info.jobfam_session_dir,
                    PMIX_STRING);
     prte_list_append(&ilist, &kv->super);
-    if (!prte_pmix_server_globals.legacy) {
-        /* use only one listener */
-        kv = PRTE_NEW(prte_info_item_t);
-        PMIX_INFO_LOAD(&kv->info, PMIX_SINGLE_LISTENER, NULL, PMIX_BOOL);
-        prte_list_append(&ilist, &kv->super);
-    }
     /* tell the server to use its own internal monitoring */
     kv = PRTE_NEW(prte_info_item_t);
     PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_ENABLE_MONITORING, NULL, PMIX_BOOL);
@@ -633,6 +647,20 @@ int pmix_server_init(void)
         prte_list_append(&ilist, &kv->super);
     }
 
+    /* if requested, tell the server library to output our PMIx URI */
+    if (NULL != prte_pmix_server_globals.report_uri) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_TCP_REPORT_URI, prte_pmix_server_globals.report_uri, PMIX_STRING);
+        prte_list_append(&ilist, &kv->super);
+    }
+
+    /* if we were started to support a singleton, then let the server library know */
+    if (NULL != prte_pmix_server_globals.singleton) {
+        kv = PRTE_NEW(prte_info_item_t);
+        PMIX_INFO_LOAD(&kv->info, PMIX_SINGLETON, prte_pmix_server_globals.singleton, PMIX_STRING);
+        prte_list_append(&ilist, &kv->super);
+    }
+
     /* if we are the MASTER, then we are the scheduler
      * as well as a gateway */
     if (PRTE_PROC_IS_MASTER) {
@@ -643,15 +671,22 @@ int pmix_server_init(void)
         PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_GATEWAY, NULL, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);
         /* if we are also persistent, then we do not output IOF ourselves */
+        kv = PRTE_NEW(prte_info_item_t);
         if (prte_persistent) {
-            bool flag = false;
-            kv = PRTE_NEW(prte_info_item_t);
-            PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
-            prte_list_append(&ilist, &kv->super);
+            flag = false;
+        } else {
+            /* if we have a parent, then we don't write out ourselves */
+            if (NULL != getenv("PMIX_LAUNCHER_RNDZ_URI")) {
+                flag = false;
+            } else {
+                flag = true;
+            }
         }
+        PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
+        prte_list_append(&ilist, &kv->super);
     } else {
         /* prted's never locally output */
-        bool flag = false;
+        flag = false;
         kv = PRTE_NEW(prte_info_item_t);
         PMIX_INFO_LOAD(&kv->info, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
         prte_list_append(&ilist, &kv->super);

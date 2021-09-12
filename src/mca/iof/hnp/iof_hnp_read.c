@@ -51,11 +51,14 @@
 
 static void lkcbfunc(pmix_status_t status, void *cbdata)
 {
-    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
+    prte_iof_deliver_t *p = (prte_iof_deliver_t*)cbdata;
 
-    PRTE_POST_OBJECT(lk);
-    lk->status = prte_pmix_convert_status(status);
-    PRTE_PMIX_WAKEUP_THREAD(lk);
+    /* nothing to do here - we use this solely to
+     * ensure that IOF_deliver doesn't block */
+    if (PMIX_SUCCESS != status) {
+        PMIX_ERROR_LOG(status);
+    }
+    PRTE_RELEASE(p);
 }
 
 /* this is the read handler for my own child procs. In this case,
@@ -67,9 +70,8 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     unsigned char data[PRTE_IOF_BASE_MSG_MAX];
     int32_t numbytes;
     prte_iof_proc_t *proct = (prte_iof_proc_t *) rev->proc;
-    pmix_byte_object_t bo;
+    prte_iof_deliver_t *p;
     pmix_iof_channel_t pchan;
-    prte_pmix_lock_t lock;
     pmix_status_t prc;
 
     PRTE_ACQUIRE_OBJECT(rev);
@@ -83,30 +85,31 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     memset(data, 0, PRTE_IOF_BASE_MSG_MAX);
     numbytes = read(fd, data, sizeof(data));
 
+     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                "%s read %d bytes from %s of %s",
+                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
+                (PRTE_IOF_STDOUT & rev->tag) ? "stdout"
+                : ((PRTE_IOF_STDERR & rev->tag) ? "stderr" : "stddiag"),
+                PRTE_NAME_PRINT(&proct->name)));
+
     if (NULL == proct) {
         /* this is an error - nothing we can do */
         PRTE_ERROR_LOG(PRTE_ERR_ADDRESSEE_UNKNOWN);
         return;
     }
 
-    if (numbytes < 0) {
-        /* either we have a connection error or it was a non-blocking read */
+    if (numbytes <= 0) {
+        if (0 > numbytes) {
+            /* either we have a connection error or it was a non-blocking read */
 
-        /* non-blocking, retry */
-        if (EAGAIN == errno || EINTR == errno) {
-            PRTE_IOF_READ_ACTIVATE(rev);
-            return;
+            /* non-blocking, retry */
+            if (EAGAIN == errno || EINTR == errno) {
+                PRTE_IOF_READ_ACTIVATE(rev);
+                return;
+            }
         }
-
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                             "%s iof:hnp:read handler %s Error on connection:%d",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proct->name),
-                             fd));
-        /* Un-recoverable error. Allow the code to flow as usual in order to
-         * to send the zero bytes message up the stream, and then close the
-         * file descriptor and delete the event.
-         */
-        numbytes = 0;
+        /* go down and close the fd etc */
+        goto CLEAN_RETURN;
     }
 
    /* this must be output from one of my local procs */
@@ -121,49 +124,39 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
         pchan |= PMIX_FWD_STDDIAG_CHANNEL;
     }
     /* setup the byte object */
-    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-    bo.bytes = (char *) data;
-    bo.size = numbytes;
-    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    prc = PMIx_server_IOF_deliver(&proct->name, pchan, &bo, NULL, 0, lkcbfunc,
-                                  (void *) &lock);
+    p = PRTE_NEW(prte_iof_deliver_t);
+    PMIX_XFER_PROCID(&p->source, &proct->name);
+    p->bo.bytes = (char*)malloc(numbytes);
+    memcpy(p->bo.bytes, data, numbytes);
+    p->bo.size = numbytes;
+    prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-    } else {
-        /* wait for completion */
-        PRTE_PMIX_WAIT_THREAD(&lock);
-    }
-    PRTE_PMIX_DESTRUCT_LOCK(&lock);
-
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output, "%s read %d bytes from %s of %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
-                         (PRTE_IOF_STDOUT & rev->tag) ? "stdout"
-                                      : ((PRTE_IOF_STDERR & rev->tag) ? "stderr" : "stddiag"),
-                         PRTE_NAME_PRINT(&proct->name)));
-
-    if (0 == numbytes) {
-        /* if we read 0 bytes from the stdout/err/diag, there is
-         * nothing to output - release the appropriate event.
-         * This will delete the read event and close the file descriptor */
-        /* make sure we don't do recursive delete on the proct */
-        PRTE_RETAIN(proct);
-        if (rev->tag & PRTE_IOF_STDOUT) {
-            PRTE_RELEASE(proct->revstdout);
-            proct->revstdout = NULL;
-        } else if (rev->tag & PRTE_IOF_STDERR) {
-            PRTE_RELEASE(proct->revstderr);
-            proct->revstderr = NULL;
-        }
-        /* check to see if they are all done */
-        if (NULL == proct->revstdout && NULL == proct->revstderr) {
-            /* this proc's iof is complete */
-            PRTE_ACTIVATE_PROC_STATE(&proct->name, PRTE_PROC_STATE_IOF_COMPLETE);
-        }
-        PRTE_RELEASE(proct);
-        return;
+        PRTE_RELEASE(p);
     }
 
     /* re-add the event */
     PRTE_IOF_READ_ACTIVATE(rev);
+    return;
+
+CLEAN_RETURN:
+    /* if we read 0 bytes from the stdout/err/diag, there is
+     * nothing to output - release the appropriate event.
+     * This will delete the read event and close the file descriptor */
+    /* make sure we don't do recursive delete on the proct */
+    PRTE_RETAIN(proct);
+    if (rev->tag & PRTE_IOF_STDOUT) {
+        PRTE_RELEASE(proct->revstdout);
+        proct->revstdout = NULL;
+    } else if (rev->tag & PRTE_IOF_STDERR) {
+        PRTE_RELEASE(proct->revstderr);
+        proct->revstderr = NULL;
+    }
+    /* check to see if they are all done */
+    if (NULL == proct->revstdout && NULL == proct->revstderr) {
+        /* this proc's iof is complete */
+        PRTE_ACTIVATE_PROC_STATE(&proct->name, PRTE_PROC_STATE_IOF_COMPLETE);
+    }
+    PRTE_RELEASE(proct);
     return;
 }

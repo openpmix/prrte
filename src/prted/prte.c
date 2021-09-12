@@ -253,7 +253,7 @@ int prte(int argc, char *argv[])
     prte_app_context_t *dapp;
     bool proxyrun = false;
     void *jinfo;
-    pmix_proc_t pname, parent;
+    pmix_proc_t pname;
     pmix_value_t *val;
     pmix_data_array_t darray;
     char **hostfiles = NULL;
@@ -538,7 +538,7 @@ int prte(int argc, char *argv[])
     prte_setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
     /* if we were asked to report a uri, set the MCA param to do so */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "report-uri", 0, 0))) {
-        prte_setenv("PMIX_MCA_ptl_base_report_uri", pval->value.data.string, true, &environ);
+        prte_pmix_server_globals.report_uri = strdup(pval->value.data.string);
     }
     /* don't aggregate help messages as that will apply job-to-job */
     prte_setenv("PRTE_MCA_prte_base_help_aggregate", "0", true, &environ);
@@ -546,7 +546,7 @@ int prte(int argc, char *argv[])
     /* if we are supporting a singleton, push its ID into the environ
      * so it can get picked up and registered by server init */
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "singleton", 0, 0))) {
-        prte_setenv("PMIX_MCA_singleton", pval->value.data.string, true, &environ);
+        prte_pmix_server_globals.singleton = strdup(pval->value.data.string);
     }
 
     /* Setup MCA params */
@@ -749,13 +749,13 @@ int prte(int argc, char *argv[])
     /* see if we ourselves were spawned by someone */
     ret = PMIx_Get(&prte_process_info.myproc, PMIX_PARENT_ID, NULL, 0, &val);
     if (PMIX_SUCCESS == ret) {
-        PMIX_LOAD_PROCID(&parent, val->data.proc->nspace, val->data.proc->rank);
+        PMIX_LOAD_PROCID(&prte_process_info.my_parent, val->data.proc->nspace, val->data.proc->rank);
         PMIX_VALUE_RELEASE(val);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
         /* indicate that we are launching on behalf of a parent */
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PARENT_ID, &parent, PMIX_PROC);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PARENT_ID, &prte_process_info.my_parent, PMIX_PROC);
     } else {
-        PMIX_LOAD_PROCID(&parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
+        PMIX_LOAD_PROCID(&prte_process_info.my_parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
     }
 
     /* add any hostfile directives to the daemon job */
@@ -888,11 +888,6 @@ int prte(int argc, char *argv[])
             PMIX_INFO_LIST_XFER(ret, jinfo, &iptr[n]);
         }
         PMIX_VALUE_RELEASE(val);
-    }
-
-    /* if we don't have a parent, then we need to output this job's IOF */
-    if (PMIX_CHECK_PROCID(&parent, &prte_process_info.myproc)) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_LOCAL_OUTPUT, NULL, PMIX_BOOL);
     }
 
     /* pass the personality */

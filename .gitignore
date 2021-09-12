@@ -6,6 +6,7 @@
 .cdt*
 .project
 .gdb*
+cov-int
 
 .hgrc
 .hgignore

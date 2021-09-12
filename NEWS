@@ -35,6 +35,24 @@ This file contains the main features as well as overviews of specific
 bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
+2.0.1: TBD
+------------------------------------
+PR #1083:
+ - Add MCA param to control device distance computation
+ - Correctly report --output-directory and --output-filename as deprecated
+ - Check for libevent minimum 2.0.21
+ - Properly handle generic "orte" MCA params
+ - Cleanups associated with IOF operations
+ - Avoid use of MCA params for singleton and report-uri
+ - autogen.pl: ignore all excluded components
+ - Don't allow PRRTE IOF to block during delivery
+ - Update ignores to include Coverity working directory
+ - Ensure we hold the IOF data until the PMIx library is done with it
+ - Add an "unlock" call to balance the code
+ - Use correct ninfo when passing into APIs
+ - Don't locally output stdout/err if prterun has a parent
+
+
 2.0.0: 29 July 2021
 ------------------------------------
 This is the initial production release of the PRRTE software system. It

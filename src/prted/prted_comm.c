@@ -102,7 +102,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                       prte_rml_tag_t tag, void *cbdata)
 {
     prte_daemon_cmd_flag_t command;
-    pmix_data_buffer_t *relay_msg;
     int ret;
     int32_t n;
     int32_t signal;
@@ -680,7 +679,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 memset(path, 0, sizeof(path));
                 while (fgets(path, sizeof(path) - 1, fp) != NULL) {
                     if (PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &pathptr, 1, PMIX_STRING)) {
-                        PMIX_DATA_BUFFER_RELEASE(relay_msg);
+                        PMIX_DATA_BUFFER_DESTRUCT(&data);
                         break;
                     }
                     memset(path, 0, sizeof(path));

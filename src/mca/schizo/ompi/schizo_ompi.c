@@ -509,9 +509,13 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     else if (0 == strcmp(option, "--timestamp-output")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--output", NULL, "timestamp", true);
     }
-    /* --output-directory DIR  ->  --output dir:DIR */
+    /* --output-directory DIR  ->  --output dir=DIR */
     else if (0 == strcmp(option, "--output-directory")) {
         rc = prte_schizo_base_convert(argv, i, 1, "--output", "dir", pargs[i + 1], true);
+    }
+    /* --output-filename DIR  ->  --output file=file */
+    else if (0 == strcmp(option, "--output-filename")) {
+        rc = prte_schizo_base_convert(argv, i, 1, "--output", "file", pargs[i + 1], true);
     }
     /* --xml  ->  --output xml */
     else if (0 == strcmp(option, "--xml")) {
@@ -587,6 +591,8 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***arg
                        "--timestamp-output",
                        "--xml",
                        "--output-proctable",
+                       "--output-filename",
+                       "--output-directory",
                        "--debug",
                        NULL};
 
@@ -1051,7 +1057,8 @@ static bool check_generic(char *p1)
 
     /* this is a generic MCA designation, so see if the parameter it
      * refers to belongs to a project base or one of our frameworks */
-    if (0 == strncmp("opal_", p1, strlen("opal_")) || 0 == strncmp("ompi_", p1, strlen("ompi_"))) {
+    if (0 == strncmp("opal_", p1, strlen("opal_")) ||
+        0 == strncmp("ompi_", p1, strlen("ompi_"))) {
         return true;
     } else if (0 == strcmp(p1, "mca_base_env_list")) {
         return true;
@@ -1129,13 +1136,6 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
                 free(p2);
                 i += 2;
                 continue;
-            } else {
-                /* this is an unrecognized generic param */
-                prte_show_help("help-schizo-base.txt", "unrecog-generic-param",
-                               true, p1, p2);
-                free(p1);
-                free(p2);
-                return PRTE_ERR_SILENT;
             }
         }
         if (0 == strcmp("--map-by", argv[i])) {
