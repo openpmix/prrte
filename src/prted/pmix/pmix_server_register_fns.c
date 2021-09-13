@@ -102,12 +102,14 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     /* pass our nspace/rank */
     PMIX_INFO_LIST_ADD(ret, info, PMIX_SERVER_NSPACE, prte_process_info.myproc.nspace, PMIX_STRING);
     if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(info);
         rc = prte_pmix_convert_status(ret);
         return rc;
     }
     PMIX_INFO_LIST_ADD(ret, info, PMIX_SERVER_RANK, &prte_process_info.myproc.rank, PMIX_PROC_RANK);
     if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(info);
         rc = prte_pmix_convert_status(ret);
         return rc;
@@ -116,8 +118,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     /* jobid */
     PMIX_INFO_LIST_ADD(ret, info, PMIX_JOBID, jdata->nspace, PMIX_STRING);
     if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(info);
-
         rc = prte_pmix_convert_status(ret);
         return rc;
     }
@@ -125,6 +127,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     /* offset */
     PMIX_INFO_LIST_ADD(ret, info, PMIX_NPROC_OFFSET, &jdata->offset, PMIX_PROC_RANK);
     if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(info);
         rc = prte_pmix_convert_status(ret);
         return rc;
@@ -137,6 +140,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         while (NULL != (kv = (prte_info_item_t *) prte_list_remove_first(cache))) {
             PMIX_INFO_LIST_XFER(ret, info, &kv->info);
             if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
                 PMIX_INFO_LIST_RELEASE(info);
                 rc = prte_pmix_convert_status(ret);
                 return rc;
@@ -224,6 +228,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             PMIX_INFO_LIST_CONVERT(ret, iarray, &darray);
             PMIX_INFO_LIST_ADD(ret, info, PMIX_NODE_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
             PMIX_DATA_ARRAY_DESTRUCT(&darray);
+            PMIX_INFO_LIST_RELEASE(iarray);
         }
     }
     /* let the PMIx server generate the nodemap regex */
@@ -234,7 +239,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         if (PRTE_SUCCESS != (rc = PMIx_generate_regex(tmp, &regex))) {
             PRTE_ERROR_LOG(rc);
             free(tmp);
-            PRTE_LIST_RELEASE(info);
+            PMIX_INFO_LIST_RELEASE(info);
             return rc;
         }
         free(tmp);
@@ -250,7 +255,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         if (PRTE_SUCCESS != (rc = PMIx_generate_ppn(tmp, &regex))) {
             PRTE_ERROR_LOG(rc);
             free(tmp);
-            PRTE_LIST_RELEASE(info);
+            PMIX_INFO_LIST_RELEASE(info);
             return rc;
         }
         free(tmp);
@@ -309,11 +314,13 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     if (0 > prte_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
                           PRTE_LOCAL_JOBID(jdata->nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+        PMIX_INFO_LIST_RELEASE(info);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     rc = prte_os_dirpath_create(prte_process_info.jobfam_session_dir, S_IRWXU);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
+        PMIX_INFO_LIST_RELEASE(info);
         return rc;
     }
     PMIX_INFO_LIST_ADD(ret, info, PMIX_NSDIR, tmp, PMIX_STRING);
@@ -383,6 +390,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         /* add to the main payload */
         PMIX_INFO_LIST_CONVERT(ret, iarray, &darray);
         PMIX_INFO_LIST_ADD(ret, info, PMIX_APP_INFO_ARRAY, &darray, PMIX_DATA_ARRAY);
+        PMIX_DATA_ARRAY_DESTRUCT(&darray);
         PMIX_INFO_LIST_RELEASE(iarray);
     }
 
@@ -443,6 +451,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     hwloc_bitmap_free(cpuset.bitmap);
+                    PMIX_INFO_LIST_RELEASE(info);
+                    PMIX_INFO_LIST_RELEASE(pmap);
                     return prte_pmix_convert_status(ret);
                 }
                 PMIX_INFO_LIST_ADD(ret, pmap, PMIX_LOCALITY_STRING, tmp, PMIX_STRING);
@@ -480,10 +490,14 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                 if (0 > prte_asprintf(&tmp, "%s/%u/%u", prte_process_info.jobfam_session_dir,
                                       PRTE_LOCAL_JOBID(jdata->nspace), pptr->name.rank)) {
                     PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+                    PMIX_INFO_LIST_RELEASE(info);
+                    PMIX_INFO_LIST_RELEASE(pmap);
                     return PRTE_ERR_OUT_OF_RESOURCE;
                 }
                 if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(tmp, S_IRWXU))) {
                     PRTE_ERROR_LOG(rc);
+                    PMIX_INFO_LIST_RELEASE(info);
+                    PMIX_INFO_LIST_RELEASE(pmap);
                     return rc;
                 }
                 PMIX_INFO_LIST_ADD(ret, pmap, PMIX_PROCDIR, tmp, PMIX_STRING);
@@ -527,6 +541,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             }
             PMIX_INFO_LIST_CONVERT(ret, pmap, &darray);
             PMIX_INFO_LIST_ADD(ret, info, PMIX_PROC_DATA, &darray, PMIX_DATA_ARRAY);
+            PMIX_DATA_ARRAY_DESTRUCT(&darray);
             PMIX_INFO_LIST_RELEASE(pmap);
         }
     }
@@ -568,7 +583,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         PMIX_ERROR_LOG(ret);
         rc = prte_pmix_convert_status(ret);
         PMIX_INFO_FREE(pinfo, ninfo);
-        PRTE_LIST_RELEASE(info);
         PRTE_PMIX_DESTRUCT_LOCK(&lock);
         return rc;
     }
