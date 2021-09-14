@@ -261,7 +261,7 @@ int prte(int argc, char *argv[])
     bool donotlaunch = false;
     prte_schizo_base_module_t *schizo;
     prte_ess_base_signal_t *sig;
-    char **targv;
+    char **targv, **options;
     char *outdir = NULL;
     char *outfile = NULL;
     pmix_status_t code;
@@ -346,9 +346,9 @@ int prte(int argc, char *argv[])
     signal(SIGHUP, abort_signal_callback);
 
     /* open the SCHIZO framework */
-    if (PRTE_SUCCESS
-        != (rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                              PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
+                                      PRTE_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -476,19 +476,9 @@ int prte(int argc, char *argv[])
     }
 
     /* Check for help request */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "help")) {
-        char *str, *args = NULL;
-        args = prte_cmd_line_get_usage_msg(prte_cmd_line, false);
-        str = prte_show_help_string("help-prun.txt", "prun:usage", false, prte_tool_basename,
-                                    "PRTE", PRTE_VERSION, prte_tool_basename, args,
-                                    PACKAGE_BUGREPORT);
-        if (NULL != str) {
-            printf("%s", str);
-            free(str);
-        }
-        free(args);
-
-        /* If someone asks for help, that should be all we do */
+    rc = schizo->check_help(prte_cmd_line, pargv);
+    if (PRTE_ERR_SILENT == rc) {
+        /* help was printed */
         exit(0);
     }
 
@@ -922,25 +912,22 @@ int prte(int argc, char *argv[])
     outfile = NULL;
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output", 0, 0))) {
         targv = prte_argv_split(pval->value.data.string, ',');
-
         for (int idx = 0; idx < prte_argv_count(targv); idx++) {
             /* remove any '=' sign in the directive */
             if (NULL != (ptr = strchr(targv[idx], '='))) {
                 *ptr = '\0';
             }
             if (0 == strncasecmp(targv[idx], "tag", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TAG_OUTPUT, &flag, PMIX_BOOL);
-            }
-            if (0 == strncasecmp(targv[idx], "timestamp", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
-            }
-            if (0 == strncasecmp(targv[idx], "xml", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":XMLOUTPUT", PMIX_STRING);
-            }
-            if (0 == strncasecmp(targv[idx], "merge-stderr-to-stdout", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
-            }
-            if (0 == strncasecmp(targv[idx], "directory", strlen(targv[idx]))) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, &flag, PMIX_BOOL);
+            } else if (0 == strncasecmp(targv[idx], "rank", strlen(targv[idx]))) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_RANK_OUTPUT, &flag, PMIX_BOOL);
+            } else if (0 == strncasecmp(targv[idx], "timestamp", strlen(targv[idx]))) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
+            } else if (0 == strncasecmp(targv[idx], "xml", strlen(targv[idx]))) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
+            } else if (0 == strncasecmp(targv[idx], "merge-stderr-to-stdout", strlen(targv[idx]))) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
+            } else if (0 == strncasecmp(targv[idx], "directory", strlen(targv[idx]))) {
                 if (NULL != outfile) {
                     prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
                     return PRTE_ERR_FATAL;
@@ -957,7 +944,7 @@ int prte(int argc, char *argv[])
                     *cptr = '\0';
                     ++cptr;
                     if (0 == strcasecmp(cptr, "nocopy")) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
                     }
                 }
                 /* If the given filename isn't an absolute path, then
@@ -974,9 +961,8 @@ int prte(int argc, char *argv[])
                 } else {
                     outdir = strdup(ptr);
                 }
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
-            }
-            if (0 == strncasecmp(targv[idx], "file", strlen(targv[idx]))) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
+            } else if (0 == strncasecmp(targv[idx], "file", strlen(targv[idx]))) {
                 if (NULL != outdir) {
                     prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
                     return PRTE_ERR_FATAL;
@@ -992,8 +978,13 @@ int prte(int argc, char *argv[])
                 if (NULL != (cptr = strchr(ptr, ':'))) {
                     *cptr = '\0';
                     ++cptr;
-                    if (0 != strcasecmp(cptr, "nocopy")) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+                    options = prte_argv_split(cptr, ',');
+                    for (int m=0; NULL != options[m]; m++) {
+                        if (0 == strcasecmp(options[m], "nocopy")) {
+                            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
+                        } else if (0 == strcasecmp(options[m], "pattern")) {
+                            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
+                        }
                     }
                 }
                 /* If the given filename isn't an absolute path, then
@@ -1010,7 +1001,7 @@ int prte(int argc, char *argv[])
                 } else {
                     outfile = strdup(ptr);
                 }
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_OUTPUT_TO_FILE, outfile, PMIX_STRING);
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
             }
         }
         prte_argv_free(targv);

@@ -196,6 +196,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_STOP_IN_APP                (PRTE_JOB_START_KEY + 89) // pmix_rank_t of procs to stop
 #define PRTE_JOB_ENVARS_HARVESTED           (PRTE_JOB_START_KEY + 90) // envars have already been harvested
 #define PRTE_JOB_OUTPUT_NOCOPY              (PRTE_JOB_START_KEY + 91) // bool - do not copy output to stdout/err
+#define PRTE_JOB_RANK_OUTPUT                (PRTE_JOB_START_KEY + 92) // bool - tag stdout/stderr with rank
 
 #define PRTE_JOB_MAX_KEY 300
 
