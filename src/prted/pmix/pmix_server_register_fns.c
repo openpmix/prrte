@@ -548,8 +548,10 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     if (NULL != parent) {
         PMIX_PROC_RELEASE(parentproc);
     }
-    PMIX_INFO_DESTRUCT(&devinfo[0]);
-    PMIX_INFO_DESTRUCT(&devinfo[1]);
+    if (0 != prte_pmix_server_globals.generate_dist) {
+        PMIX_INFO_DESTRUCT(&devinfo[0]);
+        PMIX_INFO_DESTRUCT(&devinfo[1]);
+    }
 
     /* mark the job as registered */
     prte_set_attribute(&jdata->attributes, PRTE_JOB_NSPACE_REGISTERED, PRTE_ATTR_LOCAL, NULL,
