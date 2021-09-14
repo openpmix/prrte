@@ -380,9 +380,9 @@ int prte_schizo_base_convert(char ***argv, int idx, int ntodelete,
     return PRTE_SUCCESS;
 }
 
-static bool check_qualifiers(char *directive,
-                             char **valid,
-                             char *qual)
+bool prte_schizo_base_check_qualifiers(char *directive,
+                                       char **valid,
+                                       char *qual)
 {
     size_t n, len, l1, l2;
     char *v;
@@ -403,10 +403,10 @@ static bool check_qualifiers(char *directive,
     return false;
 }
 
-static bool check_directives(char *directive,
-                             char **valid,
-                             char **quals,
-                             char *dir)
+bool prte_schizo_base_check_directives(char *directive,
+                                       char **valid,
+                                       char **quals,
+                                       char *dir)
 {
     size_t n, m, len, l1, l2;
     char **args, **qls, *v, *q;
@@ -417,7 +417,13 @@ static bool check_directives(char *directive,
 
     /* if it starts with a ':', then these are just modifiers */
     if (':' == dir[0]) {
-        return check_qualifiers(directive, quals, &dir[1]);
+        return prte_schizo_base_check_qualifiers(directive, quals, &dir[1]);
+    }
+    /* always accept the "help" directive */
+    if (0 == strcasecmp(dir, "help") ||
+        0 == strcasecmp(dir, "-help") ||
+        0 == strcasecmp(dir, "--help")) {
+        return true;
     }
 
     args = prte_argv_split(dir, ':');
@@ -477,7 +483,7 @@ static bool check_directives(char *directive,
                     qls = prte_argv_split(args[1], ',');
                 }
                for (m=0; NULL != qls[m]; m++) {
-                    if (!check_qualifiers(directive, quals, qls[m])) {
+                    if (!prte_schizo_base_check_qualifiers(directive, quals, qls[m])) {
                         prte_argv_free(qls);
                         prte_argv_free(args);
                         return false;
@@ -549,19 +555,19 @@ int prte_schizo_base_sanity(prte_cmd_line_t *cmd_line)
         if (NULL != strcasestr(pval->value.data.string, "HWTCPUS")) {
             hwtcpus = true;
         }
-        if (!check_directives("map-by", mappers, mapquals, pval->value.data.string)) {
+        if (!prte_schizo_base_check_directives("map-by", mappers, mapquals, pval->value.data.string)) {
             return PRTE_ERR_SILENT;
         }
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "rank-by", 0, 0))) {
-        if (!check_directives("rank-by", rankers, rkquals, pval->value.data.string)) {
+        if (!prte_schizo_base_check_directives("rank-by", rankers, rkquals, pval->value.data.string)) {
             return PRTE_ERR_SILENT;
         }
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "bind-to", 0, 0))) {
-        if (!check_directives("bind-to", binders, bndquals, pval->value.data.string)) {
+        if (!prte_schizo_base_check_directives("bind-to", binders, bndquals, pval->value.data.string)) {
             return PRTE_ERR_SILENT;
         }
         if (0 == strncasecmp(pval->value.data.string, "HWTHREAD", strlen("HWTHREAD")) && !hwtcpus) {
@@ -573,13 +579,13 @@ int prte_schizo_base_sanity(prte_cmd_line_t *cmd_line)
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "output", 0, 0))) {
-        if (!check_directives("output", outputs, outquals, pval->value.data.string)) {
+        if (!prte_schizo_base_check_directives("output", outputs, outquals, pval->value.data.string)) {
             return PRTE_ERR_SILENT;
         }
     }
 
     if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "display", 0, 0))) {
-        if (!check_directives("display", displays, NULL, pval->value.data.string)) {
+        if (!prte_schizo_base_check_directives("display", displays, NULL, pval->value.data.string)) {
             return PRTE_ERR_SILENT;
         }
     }

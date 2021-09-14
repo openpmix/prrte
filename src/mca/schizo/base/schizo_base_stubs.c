@@ -177,7 +177,8 @@ void prte_schizo_base_finalize(void)
 }
 
 int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***argv,
-                                            char **options, prte_schizo_convertor_fn_t convert)
+                                            char **options, bool single_dash_okay,
+                                            prte_schizo_convertor_fn_t convert)
 {
     int pargc;
     char **pargs, *p2;
@@ -214,7 +215,7 @@ int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline, int *argc,
              * change it and don't emit an error */
             if (0 == strcmp(p2, "-np")) {
                 free(p2);
-            } else {
+            } else if (!single_dash_okay) {
                 prte_show_help("help-schizo-base.txt", "single-dash-error", true, p2, pargs[i]);
                 free(p2);
                 ret = PRTE_OPERATION_SUCCEEDED;

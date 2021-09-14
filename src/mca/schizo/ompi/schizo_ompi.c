@@ -59,6 +59,7 @@
 #include "src/mca/schizo/base/base.h"
 
 static int define_cli(prte_cmd_line_t *cli);
+static int check_help(prte_cmd_line_t *cli, char **argv);
 static int parse_cli(int argc, int start, char **argv, char ***target);
 static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***argv);
 static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, bool cmdline);
@@ -66,15 +67,18 @@ static int detect_proxy(char *argv);
 static void allow_run_as_root(prte_cmd_line_t *cmd_line);
 static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
 
-prte_schizo_base_module_t prte_schizo_ompi_module = {.name = "ompi",
-                                                     .define_cli = define_cli,
-                                                     .parse_cli = parse_cli,
-                                                     .parse_deprecated_cli = parse_deprecated_cli,
-                                                     .parse_env = parse_env,
-                                                     .detect_proxy = detect_proxy,
-                                                     .allow_run_as_root = allow_run_as_root,
-                                                     .job_info = job_info,
-                                                     .check_sanity = prte_schizo_base_sanity};
+prte_schizo_base_module_t prte_schizo_ompi_module = {
+    .name = "ompi",
+    .define_cli = define_cli,
+    .check_help = check_help,
+    .parse_cli = parse_cli,
+    .parse_deprecated_cli = parse_deprecated_cli,
+    .parse_env = parse_env,
+    .detect_proxy = detect_proxy,
+    .allow_run_as_root = allow_run_as_root,
+    .job_info = job_info,
+    .check_sanity = prte_schizo_base_sanity
+};
 
 static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     /* basic options */
@@ -389,6 +393,27 @@ static int define_cli(prte_cmd_line_t *cli)
     return rc;
 }
 
+static int check_help(prte_cmd_line_t *cli, char **argv)
+{
+    if (prte_cmd_line_is_taken(cli, "help")) {
+        char *str, *args = NULL;
+        args = prte_cmd_line_get_usage_msg(cli, false);
+        str = prte_show_help_string("help-prun.txt", "prun:usage", false, prte_tool_basename,
+                                    "PRTE", PRTE_VERSION, prte_tool_basename, args,
+                                    PACKAGE_BUGREPORT);
+        if (NULL != str) {
+            printf("%s", str);
+            free(str);
+        }
+        free(args);
+
+        /* If someone asks for help, that should be all we do */
+        return PRTE_ERR_SILENT;
+    }
+
+    return PRTE_SUCCESS;
+}
+
 static int convert_deprecated_cli(char *option, char ***argv, int i)
 {
     char **pargs, *p2, *modifier;
@@ -597,7 +622,7 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***arg
                        NULL};
 
     rc = prte_schizo_base_process_deprecated_cli(cmdline, argc, argv, options,
-                                                 convert_deprecated_cli);
+                                                 false, convert_deprecated_cli);
 
     return rc;
 }
@@ -1495,6 +1520,16 @@ static int detect_proxy(char *personalities)
                         (NULL == personalities) ? "NULL" : personalities,
                         prte_tool_basename);
 
+    /* COMMAND-LINE OVERRIDES ALL */
+    if (NULL != personalities) {
+        /* this is a list of personalities we need to check -
+         * if it contains "ompi", then we are available */
+        if (NULL != strstr(personalities, "ompi")) {
+            return 100;
+        }
+        return 0;
+    }
+
     /* if we were told the proxy, then use it */
     if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy"))) {
         if (0 == strcmp(evar, "ompi")) {
@@ -1502,16 +1537,6 @@ static int detect_proxy(char *personalities)
         } else {
             return 0;
         }
-    }
-
-    if (NULL == personalities) {
-        return 0;
-    }
-
-    /* this is a list of personalities we need to check -
-     * if it contains "ompi", then we are available */
-    if (NULL != strstr(personalities, "ompi")) {
-        return 100;
     }
 
     /* if neither of those were true, then it cannot be us */

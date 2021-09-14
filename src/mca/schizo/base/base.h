@@ -88,11 +88,18 @@ PRTE_EXPORT char *prte_schizo_base_getline(FILE *fp);
 PRTE_EXPORT bool prte_schizo_base_check_ini(char *cmdpath, char *file);
 PRTE_EXPORT char *prte_schizo_base_strip_quotes(char *p);
 PRTE_EXPORT int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline, int *argc,
-                                                        char ***argv, char **options,
+                                                        char ***argv, char **options, bool single_dash_okay,
                                                         prte_schizo_convertor_fn_t convert);
 PRTE_EXPORT int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target);
 PRTE_EXPORT int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target);
 PRTE_EXPORT int prte_schizo_base_sanity(prte_cmd_line_t *cmd_line);
+PRTE_EXPORT bool prte_schizo_base_check_directives(char *directive,
+                                                   char **valid,
+                                                   char **quals,
+                                                   char *dir);
+PRTE_EXPORT bool prte_schizo_base_check_qualifiers(char *directive,
+                                                   char **valid,
+                                                   char *qual);
 
 END_C_DECLS
 
