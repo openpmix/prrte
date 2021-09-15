@@ -110,7 +110,6 @@ bool prte_job_term_ordered = false;
 bool prte_prteds_term_ordered = false;
 bool prte_allowed_exit_without_sync = false;
 
-int prte_startup_timeout = -1;
 int prte_timeout_usec_per_proc = -1;
 float prte_max_timeout = -1.0;
 prte_timer_t *prte_mpiexec_timeout = NULL;
@@ -490,6 +489,8 @@ static void prte_job_construct(prte_job_t *job)
     PMIX_DATA_BUFFER_CONSTRUCT(&job->launch_msg);
     PRTE_CONSTRUCT(&job->children, prte_list_t);
     PMIX_LOAD_NSPACE(job->launcher, NULL);
+    job->ntraces = 0;
+    job->traces = NULL;
 }
 
 static void prte_job_destruct(prte_job_t *job)
@@ -523,15 +524,21 @@ static void prte_job_destruct(prte_job_t *job)
 
     /* release any pointers in the attributes */
     evtimer = NULL;
-    if (prte_get_attribute(&job->attributes, PRTE_JOB_FAILURE_TIMER_EVENT, (void **) &evtimer,
-                           PMIX_POINTER)) {
-        prte_remove_attribute(&job->attributes, PRTE_JOB_FAILURE_TIMER_EVENT);
+    if (prte_get_attribute(&job->attributes, PRTE_JOB_TIMEOUT_EVENT, (void **) &evtimer, PMIX_POINTER)) {
+        prte_event_evtimer_del(evtimer->ev);
+        prte_remove_attribute(&job->attributes, PRTE_JOB_TIMEOUT_EVENT);
+        /* the timer is a pointer to prte_timer_t */
+        PRTE_RELEASE(evtimer);
+    }
+    evtimer = NULL;
+    if (prte_get_attribute(&job->attributes, PRTE_SPAWN_TIMEOUT_EVENT, (void **) &evtimer, PMIX_POINTER)) {
+        prte_event_evtimer_del(evtimer->ev);
+        prte_remove_attribute(&job->attributes, PRTE_SPAWN_TIMEOUT_EVENT);
         /* the timer is a pointer to prte_timer_t */
         PRTE_RELEASE(evtimer);
     }
     proc = NULL;
-    if (prte_get_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC, (void **) &proc,
-                           PMIX_POINTER)) {
+    if (prte_get_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC, (void **) &proc, PMIX_POINTER)) {
         prte_remove_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC);
         /* points to an prte_proc_t */
         PRTE_RELEASE(proc);
@@ -567,9 +574,15 @@ static void prte_job_destruct(prte_job_t *job)
         /* remove the job from the global array */
         prte_pointer_array_set_item(prte_job_data, job->index, NULL);
     }
+    if (NULL != job->traces) {
+        prte_argv_free(job->traces);
+    }
 }
 
-PRTE_CLASS_INSTANCE(prte_job_t, prte_list_item_t, prte_job_construct, prte_job_destruct);
+PRTE_CLASS_INSTANCE(prte_job_t,
+                    prte_list_item_t,
+                    prte_job_construct,
+                    prte_job_destruct);
 
 static void prte_node_construct(prte_node_t *node)
 {

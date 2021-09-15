@@ -670,9 +670,22 @@ static void interim(int sd, short args, void *cbdata)
                 }
             }
 
+#ifdef PMIX_SPAWN_TIMEOUT
+        } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TIMEOUT) ||
+                   PMIX_CHECK_KEY(info, PMIX_TIMEOUT)) {
+            prte_add_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT, PRTE_ATTR_GLOBAL,
+                               &info->value.data.integer, PMIX_INT);
+#else
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT)) {
+            prte_add_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT, PRTE_ATTR_GLOBAL,
+                               &info->value.data.integer, PMIX_INT);
+#endif
+
+#ifdef PMIX_JOB_TIMEOUT
+        } else if (PMIX_CHECK_KEY(info, PMIX_JOB_TIMEOUT)) {
             prte_add_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT, PRTE_ATTR_GLOBAL,
                                &info->value.data.integer, PMIX_INT);
+#endif
 
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT_STACKTRACES)) {
             flag = PMIX_INFO_TRUE(info);

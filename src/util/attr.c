@@ -302,8 +302,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB-SNAPC-FINI-BARRIER-ID";
         case PRTE_JOB_NUM_NONZERO_EXIT:
             return "JOB-NUM-NONZERO-EXIT";
-        case PRTE_JOB_FAILURE_TIMER_EVENT:
-            return "JOB-FAILURE-TIMER-EVENT";
+        case PRTE_SPAWN_TIMEOUT_EVENT:
+            return "SPAWN-TIMEOUT-EVENT";
         case PRTE_JOB_ABORTED_PROC:
             return "JOB-ABORTED-PROC";
         case PRTE_JOB_MAPPER:
@@ -460,6 +460,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "ENVARS-HARVESTED";
         case PRTE_JOB_OUTPUT_NOCOPY:
             return "DO-NOT-COPY-OUTPUT";
+        case PRTE_SPAWN_TIMEOUT:
+            return "SPAWN-TIMEOUT";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
