@@ -364,6 +364,9 @@ typedef struct {
     prte_list_t children;
     /* track the launcher of these jobs */
     pmix_nspace_t launcher;
+    /* track the number of stack traces recv'd */
+    uint32_t ntraces;
+    char **traces;
 } prte_job_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_job_t);
 
@@ -538,7 +541,6 @@ PRTE_EXPORT extern bool prte_routing_is_enabled;
 PRTE_EXPORT extern bool prte_job_term_ordered;
 PRTE_EXPORT extern bool prte_prteds_term_ordered;
 PRTE_EXPORT extern bool prte_allowed_exit_without_sync;
-PRTE_EXPORT extern int prte_startup_timeout;
 
 PRTE_EXPORT extern int prte_timeout_usec_per_proc;
 PRTE_EXPORT extern float prte_max_timeout;

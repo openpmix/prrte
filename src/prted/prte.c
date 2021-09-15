@@ -1067,8 +1067,8 @@ int prte(int argc, char *argv[])
      * as that is what MPICH used
      */
     timeoutenv = NULL;
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "timeout", 0, 0))
-        || NULL != (timeoutenv = getenv("MPIEXEC_TIMEOUT"))) {
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "timeout", 0, 0)) ||
+        NULL != (timeoutenv = getenv("MPIEXEC_TIMEOUT"))) {
         if (NULL != timeoutenv) {
             i = strtol(timeoutenv, NULL, 10);
             /* both cannot be present, or they must agree */
@@ -1081,7 +1081,11 @@ int prte(int argc, char *argv[])
         } else {
             i = pval->value.data.integer;
         }
+#ifdef PMIX_JOB_TIMEOUT
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_TIMEOUT, &i, PMIX_INT);
+#else
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT, &i, PMIX_INT);
+#endif
     }
     if (prte_cmd_line_is_taken(prte_cmd_line, "get-stack-traces")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_STACKTRACES, NULL, PMIX_BOOL);
@@ -1089,6 +1093,12 @@ int prte(int argc, char *argv[])
     if (prte_cmd_line_is_taken(prte_cmd_line, "report-state-on-timeout")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_REPORT_STATE, NULL, PMIX_BOOL);
     }
+#ifdef PMIX_SPAWN_TIMEOUT
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "spawn-timeout", 0, 0))) {
+        i = pval->value.data.integer;
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_SPAWN_TIMEOUT, &i, PMIX_INT);
+    }
+#endif
 
     /* give the schizo components a chance to add to the job info */
     prte_schizo.job_info(prte_cmd_line, jinfo);

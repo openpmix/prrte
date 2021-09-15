@@ -167,6 +167,10 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
      "Report all job and process states upon timeout", PRTE_CMD_LINE_OTYPE_DEBUG},
     {'\0', "get-stack-traces", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Get stack traces of all application procs on timeout", PRTE_CMD_LINE_OTYPE_DEBUG},
+#ifdef PMIX_SPAWN_TIMEOUT
+    {'\0', "spawn-timeout", 1, PRTE_CMD_LINE_TYPE_INT,
+     "Timeout the job if spawn takes more than the specified number of seconds", PRTE_CMD_LINE_OTYPE_DEBUG},
+#endif
 
     {'\0', "allow-run-as-root", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Allow execution as root (STRONGLY DISCOURAGED)", PRTE_CMD_LINE_OTYPE_DVM}, /* End of list */
