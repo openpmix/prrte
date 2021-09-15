@@ -520,10 +520,10 @@ static void check_complete(int fd, short args, void *cbdata)
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         (NULL == jdata) ? "NULL" : PRTE_JOBID_PRINT(jdata->nspace));
 
-    if (NULL != jdata
-        && prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT, (void **) &timer,
-                              PMIX_POINTER)) {
+    if (NULL != jdata &&
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT, (void **) &timer, PMIX_POINTER)) {
         /* timer is an prte_timer_t object */
+        prte_event_evtimer_del(timer->ev);
         PRTE_RELEASE(timer);
         prte_remove_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT);
     }

@@ -115,8 +115,8 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_SNAPC_INIT_BAR             (PRTE_JOB_START_KEY + 8) // prte_grpcomm_coll_id_t - collective id
 #define PRTE_JOB_SNAPC_FINI_BAR             (PRTE_JOB_START_KEY + 9) // prte_grpcomm_coll_id_t - collective id
 #define PRTE_JOB_NUM_NONZERO_EXIT           (PRTE_JOB_START_KEY + 10) // int32 - number of procs with non-zero exit codes
-#define PRTE_JOB_FAILURE_TIMER_EVENT        (PRTE_JOB_START_KEY + 11) // prte_ptr (prte_timer_t*) - timer event for failure detect/response
-                                                                  // if fails to launch
+#define PRTE_SPAWN_TIMEOUT_EVENT            (PRTE_JOB_START_KEY + 11) // prte_ptr (prte_timer_t*) - timer event for failure detect/response
+                                                                      // if fails to launch
 #define PRTE_JOB_ABORTED_PROC               (PRTE_JOB_START_KEY + 12) // prte_ptr (prte_proc_t*) - proc that caused abort to happen
 #define PRTE_JOB_MAPPER                     (PRTE_JOB_START_KEY + 13) // bool - job consists of MapReduce mappers
 #define PRTE_JOB_REDUCER                    (PRTE_JOB_START_KEY + 14) // bool - job consists of MapReduce reducers
@@ -197,6 +197,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_ENVARS_HARVESTED           (PRTE_JOB_START_KEY + 90) // envars have already been harvested
 #define PRTE_JOB_OUTPUT_NOCOPY              (PRTE_JOB_START_KEY + 91) // bool - do not copy output to stdout/err
 #define PRTE_JOB_RANK_OUTPUT                (PRTE_JOB_START_KEY + 92) // bool - tag stdout/stderr with rank
+#define PRTE_SPAWN_TIMEOUT                  (PRTE_JOB_START_KEY + 93) // int32 - number of seconds to spawn before terminating it as timed out
 
 #define PRTE_JOB_MAX_KEY 300
 

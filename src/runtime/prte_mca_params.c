@@ -393,14 +393,6 @@ int prte_register_params(void)
         PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prted_debug_failure_delay);
 
-    prte_startup_timeout = 0;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "startup_timeout",
-                                      "Seconds to wait for startup or job launch before declaring "
-                                      "failed_to_start [default: 0 => do not check]",
-                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_startup_timeout);
-
     /* default hostfile */
     prte_default_hostfile = NULL;
     (void)
