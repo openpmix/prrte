@@ -289,10 +289,13 @@ static void spawn_timeout_cb(int fd, short event, void *cbdata)
         PRTE_RELEASE(timer);
         prte_remove_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT);
     }
-    prte_asprintf(&st, "The user-provided time limit for job launch has been reached:\n\n"
-                        "  Timeout: %d seconds\n\n"
-                        "The job will now be aborted.  Please check your environment to\n"
-                        "identify the source of the delay and try again.\n", timeout);
+    prte_asprintf(&st, "--------------------------------------------------------------------------\n"
+                       "The user-provided time limit for job launch has been reached:\n\n"
+                       "  Timeout: %d seconds\n\n"
+                       "The job will now be aborted.  Please check your environment to\n"
+                       "identify the source of the delay and try again.\n"
+                       "--------------------------------------------------------------------------\n",
+                  timeout);
     bo.bytes = st;
     bo.size = strlen(st);
     PMIX_LOAD_PROCID(&proc, jdata->nspace, PMIX_RANK_WILDCARD);
@@ -455,11 +458,14 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
          *something* if it does */
         timeout = -1;
     }
-    prte_asprintf(&st, "The user-provided time limit for job execution has been reached:\n\n"
-                        "  Timeout: %d seconds\n\n"
-                        "The job will now be aborted.  Please check your code and/or\n"
-                        "adjust/remove the job execution time limit (as specified by --timeout\n"
-                        "command line option or MPIEXEC_TIMEOUT environment variable).\n", timeout);
+    prte_asprintf(&st, "--------------------------------------------------------------------------\n"
+                       "The user-provided time limit for job execution has been reached:\n\n"
+                       "  Timeout: %d seconds\n\n"
+                       "The job will now be aborted.  Please check your code and/or\n"
+                       "adjust/remove the job execution time limit (as specified by --timeout\n"
+                       "command line option or MPIEXEC_TIMEOUT environment variable).\n"
+                       "--------------------------------------------------------------------------\n",
+                  timeout);
     bo.bytes = st;
     bo.size = strlen(st);
     PMIX_LOAD_PROCID(&pc, jdata->nspace, PMIX_RANK_WILDCARD);
