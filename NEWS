@@ -37,6 +37,8 @@ version 1.0.
 
 2.0.1: TBD
 ------------------------------------
+PR #1089:
+ - Cleanup timeout support to differentiate spawn vs execution time limits
 PR #1086:
  - Use the info list array feature to construct registration data
  - Fix path check for pandoc
