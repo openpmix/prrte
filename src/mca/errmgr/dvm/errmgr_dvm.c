@@ -73,12 +73,14 @@ static int finalize(void);
 /******************
  * dvm module
  ******************/
-prte_errmgr_base_module_t prte_errmgr_dvm_module = {.init = init,
-                                                    .finalize = finalize,
-                                                    .logfn = prte_errmgr_base_log,
-                                                    .abort = prte_errmgr_base_abort,
-                                                    .abort_peers = prte_errmgr_base_abort_peers,
-                                                    .enable_detector = NULL};
+prte_errmgr_base_module_t prte_errmgr_dvm_module = {
+    .init = init,
+    .finalize = finalize,
+    .logfn = prte_errmgr_base_log,
+    .abort = prte_errmgr_base_abort,
+    .abort_peers = prte_errmgr_base_abort_peers,
+    .enable_detector = NULL
+};
 
 /*
  * Local functions

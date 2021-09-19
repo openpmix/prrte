@@ -86,6 +86,7 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
     prte_pmix_mdx_caddy_t *cd = NULL;
     int rc;
     pmix_data_buffer_t buf;
+    pmix_status_t ret = PMIX_SUCCESS;
 
     cd = PRTE_NEW(prte_pmix_mdx_caddy_t);
     cd->cbfunc = cbfunc;
@@ -98,6 +99,12 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
         cd->sig->signature = (pmix_proc_t *) malloc(cd->sig->sz * sizeof(pmix_proc_t));
         memcpy(cd->sig->signature, procs, cd->sig->sz * sizeof(pmix_proc_t));
     }
+    if (NULL != info) {
+        if (PMIX_CHECK_KEY(&info[ninfo-1], PMIX_LOCAL_COLLECTIVE_STATUS)) {
+            ret = info[ninfo-1].value.data.status;
+        }
+    }
+
     PMIX_DATA_BUFFER_CONSTRUCT(&buf);
 
     if (NULL != data) {
@@ -112,7 +119,8 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
 
     /* pass it to the global collective algorithm */
     /* pass along any data that was collected locally */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.allgather(cd->sig, &buf, 0, pmix_server_release, cd))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm.allgather(cd->sig, &buf, 0,ret,
+                                                     pmix_server_release, cd))) {
         PRTE_ERROR_LOG(rc);
         PRTE_RELEASE(cd);
         return PMIX_ERROR;

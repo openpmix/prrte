@@ -44,13 +44,15 @@ static int register_cb_type(prte_grpcomm_rbcast_cb_t callback);
 static int unregister_cb_type(int type);
 
 /* Module def */
-prte_grpcomm_base_module_t prte_grpcomm_bmg_module = {.init = bmg_init,
-                                                      .finalize = bmg_finalize,
-                                                      .xcast = NULL,
-                                                      .allgather = NULL,
-                                                      .rbcast = rbcast,
-                                                      .register_cb = register_cb_type,
-                                                      .unregister_cb = unregister_cb_type};
+prte_grpcomm_base_module_t prte_grpcomm_bmg_module = {
+    .init = bmg_init,
+    .finalize = bmg_finalize,
+    .xcast = NULL,
+    .allgather = NULL,
+    .rbcast = rbcast,
+    .register_cb = register_cb_type,
+    .unregister_cb = unregister_cb_type
+};
 
 /* Internal functions */
 static void rbcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
