@@ -58,6 +58,7 @@ typedef struct {
     prte_grpcomm_signature_t *sig;
     pmix_data_buffer_t buf;
     int mode;
+    pmix_status_t local_status;
     prte_grpcomm_cbfunc_t cbfunc;
     void *cbdata;
 } prte_grpcomm_caddy_t;
@@ -66,6 +67,7 @@ static void gccon(prte_grpcomm_caddy_t *p)
     p->sig = NULL;
     PMIX_DATA_BUFFER_CONSTRUCT(&p->buf);
     p->mode = 0;
+    p->local_status = PMIX_SUCCESS;
     p->cbfunc = NULL;
     p->cbdata = NULL;
 }
@@ -236,7 +238,7 @@ static void allgather_stub(int fd, short args, void *cbdata)
     PRTE_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t)
     {
         if (NULL != active->module->allgather) {
-            if (PRTE_SUCCESS == active->module->allgather(coll, &cd->buf, cd->mode)) {
+            if (PRTE_SUCCESS == active->module->allgather(coll, &cd->buf, cd->mode, cd->local_status)) {
                 break;
             }
         }
@@ -244,7 +246,8 @@ static void allgather_stub(int fd, short args, void *cbdata)
     PRTE_RELEASE(cd);
 }
 
-int prte_grpcomm_API_allgather(prte_grpcomm_signature_t *sig, pmix_data_buffer_t *buf, int mode,
+int prte_grpcomm_API_allgather(prte_grpcomm_signature_t *sig, pmix_data_buffer_t *buf,
+                               int mode, pmix_status_t local_status,
                                prte_grpcomm_cbfunc_t cbfunc, void *cbdata)
 {
     prte_grpcomm_caddy_t *cd;
@@ -268,6 +271,7 @@ int prte_grpcomm_API_allgather(prte_grpcomm_signature_t *sig, pmix_data_buffer_t
         return rc;
     }
     cd->mode = mode;
+    cd->local_status = local_status;
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
     prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, allgather_stub, cd);

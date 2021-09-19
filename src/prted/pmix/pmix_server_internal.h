@@ -118,7 +118,7 @@ PRTE_CLASS_DECLARATION(pmix_server_req_t);
 typedef struct {
     prte_object_t super;
     prte_event_t ev;
-    int status;
+    pmix_status_t status;
     pmix_status_t *codes;
     size_t ncodes;
     pmix_proc_t proc;
