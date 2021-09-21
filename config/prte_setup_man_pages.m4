@@ -39,7 +39,7 @@ AC_DEFUN([PRTE_SETUP_MAN_PAGES],[
 
     AS_IF([test $PRTE_ENABLE_MAN_PAGES -eq 1],
           [PRTE_SUMMARY_ADD([[Options]],[[Manpages built]], [prte_manpages], [yes])],
-          [PRTE_SUMMARY_ADD([[Options]],[[Manpages built]], [prte_manpages], [yes])])
+          [PRTE_SUMMARY_ADD([[Options]],[[Manpages built]], [prte_manpages], [no])])
 
 ])
 
