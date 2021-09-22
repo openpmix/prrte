@@ -236,10 +236,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         tmp = prte_argv_join(list, ',');
         prte_argv_free(list);
         list = NULL;
-        if (PRTE_SUCCESS != (rc = PMIx_generate_regex(tmp, &regex))) {
-            PRTE_ERROR_LOG(rc);
+        if (PMIX_SUCCESS != (ret = PMIx_generate_regex(tmp, &regex))) {
+            PMIX_ERROR_LOG(ret);
             free(tmp);
             PMIX_INFO_LIST_RELEASE(info);
+            rc = prte_pmix_convert_status(ret);
             return rc;
         }
         free(tmp);
@@ -252,10 +253,11 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         tmp = prte_argv_join(procs, ';');
         prte_argv_free(procs);
         procs = NULL;
-        if (PRTE_SUCCESS != (rc = PMIx_generate_ppn(tmp, &regex))) {
-            PRTE_ERROR_LOG(rc);
+        if (PMIX_SUCCESS != (ret = PMIx_generate_ppn(tmp, &regex))) {
+            PMIX_ERROR_LOG(ret);
             free(tmp);
             PMIX_INFO_LIST_RELEASE(info);
+            rc = prte_pmix_convert_status(ret);
             return rc;
         }
         free(tmp);
@@ -277,13 +279,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
 
     /* max procs */
     PMIX_INFO_LIST_ADD(ret, info, PMIX_MAX_PROCS, &jdata->total_slots_alloc, PMIX_UINT32);
-
-    /* topology signature */
-#if HWLOC_API_VERSION < 0x20000
-    PMIX_INFO_LIST_ADD(ret, info, PMIX_HWLOC_XML_V1, prte_topo_signature, PMIX_STRING);
-#else
-    PMIX_INFO_LIST_ADD(ret, info, PMIX_HWLOC_XML_V2, prte_topo_signature, PMIX_STRING);
-#endif
 
     /* total available physical memory */
     machine = hwloc_get_next_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_MACHINE, NULL);
