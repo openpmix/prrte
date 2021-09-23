@@ -337,6 +337,15 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 PMIX_PROC_FREE(sig.signature, sig.sz);
                 return;
             }
+            /* pack the local_status */
+            rc = PMIx_Data_pack(NULL, reply, &coll->status, 1, PMIX_STATUS);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
+                PMIX_PROC_FREE(sig.signature, sig.sz);
+                return rc;
+            }
+
             /* transfer the collected bucket */
             rc = PMIx_Data_copy_payload(reply, &coll->bucket);
             if (PMIX_SUCCESS != rc) {
