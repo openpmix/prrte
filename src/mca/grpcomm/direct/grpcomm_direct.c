@@ -42,16 +42,20 @@
 static int init(void);
 static void finalize(void);
 static int xcast(pmix_rank_t *vpids, size_t nprocs, pmix_data_buffer_t *buf);
-static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf, int mode);
+static int allgather(prte_grpcomm_coll_t *coll,
+                     pmix_data_buffer_t *buf,
+                     int mode, pmix_status_t local_status);
 
 /* Module def */
-prte_grpcomm_base_module_t prte_grpcomm_direct_module = {.init = init,
-                                                         .finalize = finalize,
-                                                         .xcast = xcast,
-                                                         .allgather = allgather,
-                                                         .rbcast = NULL,
-                                                         .register_cb = NULL,
-                                                         .unregister_cb = NULL};
+prte_grpcomm_base_module_t prte_grpcomm_direct_module = {
+    .init = init,
+    .finalize = finalize,
+    .xcast = xcast,
+    .allgather = allgather,
+    .rbcast = NULL,
+    .register_cb = NULL,
+    .unregister_cb = NULL
+};
 
 /* internal functions */
 static void xcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
@@ -72,13 +76,13 @@ static int init(void)
     PRTE_CONSTRUCT(&tracker, prte_list_t);
 
     /* post the receives */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST, PRTE_RML_PERSISTENT, xcast_recv,
-                            NULL);
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_ALLGATHER_DIRECT, PRTE_RML_PERSISTENT,
-                            allgather_recv, NULL);
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST,
+                            PRTE_RML_PERSISTENT, xcast_recv, NULL);
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_ALLGATHER_DIRECT,
+                            PRTE_RML_PERSISTENT, allgather_recv, NULL);
     /* setup recv for barrier release */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_COLL_RELEASE, PRTE_RML_PERSISTENT,
-                            barrier_release, NULL);
+    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_COLL_RELEASE,
+                            PRTE_RML_PERSISTENT, barrier_release, NULL);
 
     return PRTE_SUCCESS;
 }
@@ -106,13 +110,15 @@ static int xcast(pmix_rank_t *vpids, size_t nprocs, pmix_data_buffer_t *buf)
     return PRTE_SUCCESS;
 }
 
-static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf, int mode)
+static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf,
+                     int mode, pmix_status_t local_status)
 {
     int rc;
     pmix_data_buffer_t *relay;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                         "%s grpcomm:direct: allgather", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s grpcomm:direct: allgather",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* the base functions pushed us into the event library
      * before calling us, so we can safely access global data
@@ -141,6 +147,14 @@ static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf, int mod
         return rc;
     }
 
+    /* pack the local_status */
+    rc = PMIx_Data_pack(NULL, relay, &local_status, 1, PMIX_STATUS);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(relay);
+        return rc;
+    }
+
     /* pass along the payload */
     rc = PMIx_Data_copy_payload(relay, buf);
     if (PMIX_SUCCESS != rc) {
@@ -155,19 +169,22 @@ static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf, int mod
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* send the info to ourselves for tracking */
-    rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_NAME, relay, PRTE_RML_TAG_ALLGATHER_DIRECT,
+    rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_NAME, relay,
+                                 PRTE_RML_TAG_ALLGATHER_DIRECT,
                                  prte_rml_send_callback, NULL);
     return rc;
 }
 
-static void allgather_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+static void allgather_recv(int status, pmix_proc_t *sender,
+                           pmix_data_buffer_t *buffer,
                            prte_rml_tag_t tag, void *cbdata)
 {
     int32_t cnt;
-    int rc, ret, mode;
+    int rc, mode;
     prte_grpcomm_signature_t sig;
     pmix_data_buffer_t *reply;
     prte_grpcomm_coll_t *coll;
+    pmix_status_t local_status;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct allgather recvd from %s",
@@ -202,6 +219,18 @@ static void allgather_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *
         PMIX_ERROR_LOG(rc);
         return;
     }
+
+    /* unpack their local status */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &local_status, &cnt, PMIX_STATUS);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    if (PMIX_SUCCESS != local_status) {
+        coll->status = local_status;
+    }
+
     /* increment nprocs reported for collective */
     coll->nreported++;
     /* capture any provided content */
@@ -239,10 +268,8 @@ static void allgather_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *
                 PMIX_PROC_FREE(sig.signature, sig.sz);
                 return;
             }
-            /* pack the status - success since the allgather completed. This
-             * would be an error if we timeout instead */
-            ret = PRTE_SUCCESS;
-            rc = PMIx_Data_pack(NULL, reply, &ret, 1, PMIX_INT32);
+            /* pack the status */
+            rc = PMIx_Data_pack(NULL, reply, &coll->status, 1, PMIX_INT32);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
@@ -310,6 +337,15 @@ static void allgather_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *
                 PMIX_PROC_FREE(sig.signature, sig.sz);
                 return;
             }
+            /* pack the local_status */
+            rc = PMIx_Data_pack(NULL, reply, &coll->status, 1, PMIX_STATUS);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
+                PMIX_PROC_FREE(sig.signature, sig.sz);
+                return;
+            }
+
             /* transfer the collected bucket */
             rc = PMIx_Data_copy_payload(reply, &coll->bucket);
             if (PMIX_SUCCESS != rc) {
@@ -319,7 +355,8 @@ static void allgather_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *
                 return;
             }
             /* send the info to our parent */
-            rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_PARENT, reply, PRTE_RML_TAG_ALLGATHER_DIRECT,
+            rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_PARENT, reply,
+                                         PRTE_RML_TAG_ALLGATHER_DIRECT,
                                          prte_rml_send_callback, NULL);
         }
     }

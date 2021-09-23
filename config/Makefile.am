@@ -32,7 +32,5 @@ EXTRA_DIST = \
         prte_mca_priority_sort.pl \
         find_common_syms \
         getdate.sh \
-        make_manpage.pl \
-        md2nroff.pl \
         from-savannah/upstream-config.guess \
         from-savannah/upstream-config.sub

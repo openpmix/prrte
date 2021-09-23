@@ -83,7 +83,8 @@ PRTE_EXPORT int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig, prte_rml_t
                                        pmix_data_buffer_t *buf);
 
 PRTE_EXPORT int prte_grpcomm_API_allgather(prte_grpcomm_signature_t *sig, pmix_data_buffer_t *buf,
-                                           int mode, prte_grpcomm_cbfunc_t cbfunc, void *cbdata);
+                                           int mode, pmix_status_t local_status,
+                                           prte_grpcomm_cbfunc_t cbfunc, void *cbdata);
 /* reliable broadcast API */
 PRTE_EXPORT int prte_grpcomm_API_rbcast(prte_grpcomm_signature_t *sig, prte_rml_tag_t tag,
                                         pmix_data_buffer_t *buf);

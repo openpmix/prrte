@@ -132,6 +132,7 @@ PRTE_CLASS_INSTANCE(prte_grpcomm_signature_t, prte_object_t, scon, sdes);
 static void ccon(prte_grpcomm_coll_t *p)
 {
     p->sig = NULL;
+    p->status = PMIX_SUCCESS;
     PMIX_DATA_BUFFER_CONSTRUCT(&p->bucket);
     PRTE_CONSTRUCT(&p->distance_mask_recv, prte_bitmap_t);
     p->dmns = NULL;

@@ -42,9 +42,6 @@ cov-int
 *~
 *\\#
 
-*.1
-*.7
-
 Makefile
 Makefile.in
 static-components.h

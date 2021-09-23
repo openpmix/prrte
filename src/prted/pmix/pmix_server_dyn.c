@@ -1099,7 +1099,7 @@ static void _cnct(int sd, short args, void *cbdata)
 
     /* pass it to the global collective algorithm */
     /* pass along any data that was collected locally */
-    rc = prte_grpcomm.allgather(md->sig, &dbuf, 1, connect_release, md);
+    rc = prte_grpcomm.allgather(md->sig, &dbuf, 1, cd->status, connect_release, md);
     if (PMIX_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PRTE_RELEASE(md);
@@ -1136,6 +1136,17 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     op->nprocs = nprocs;
     op->info = (pmix_info_t *) info;
     op->ninfo = ninfo;
+#ifdef PMIX_LOCAL_COLLECTIVE_STATUS
+    if (NULL != info) {
+        if (PMIX_CHECK_KEY(&info[ninfo-1], PMIX_LOCAL_COLLECTIVE_STATUS)) {
+            op->status = info[ninfo-1].value.data.status;
+        }
+    } else {
+        op->status = PMIX_SUCCESS;
+    }
+#else
+    op->status = PMIX_SUCCESS;
+#endif
     op->cbfunc = cbfunc;
     op->cbdata = cbdata;
     prte_event_set(prte_event_base, &(op->ev), -1, PRTE_EV_WRITE, _cnct, op);
@@ -1178,8 +1189,8 @@ pmix_status_t pmix_server_disconnect_fn(const pmix_proc_t procs[], size_t nprocs
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
 
-    if (PMIX_SUCCESS
-        != (rc = pmix_server_fencenb_fn(procs, nprocs, info, ninfo, NULL, 0, mdxcbfunc, cd))) {
+    rc = pmix_server_fencenb_fn(procs, nprocs, info, ninfo, NULL, 0, mdxcbfunc, cd);
+    if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PRTE_RELEASE(cd);
     }
