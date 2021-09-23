@@ -14,14 +14,13 @@
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
 #
 # $HEADER$
 #
-
-include $(top_srcdir)/Makefile.prte-rules
 
 AM_LDFLAGS = $(PRTE_EXTRA_LIB_LDFLAGS) $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
 AM_CFLAGS = \
@@ -40,15 +39,7 @@ AM_CFLAGS = \
             -DPRTE_REPO_REV="\"@PRTE_REPO_REV@\"" \
             -DPRTE_RELEASE_DATE="\"@PRTE_RELEASE_DATE@\""
 
-MD_FILES = pterm.1.md
-man_pages_from_md = $(MD_FILES:.1.md=.1)
-EXTRA_DIST = $(MD_FILES) $(man_pages_from_md)
-
 bin_PROGRAMS = pterm
-
-if PRTE_ENABLE_MAN_PAGES
-man_MANS = $(man_pages_from_md)
-endif
 
 dist_prtedata_DATA = help-pterm.txt
 
