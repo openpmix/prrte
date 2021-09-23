@@ -343,7 +343,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
                 PMIX_PROC_FREE(sig.signature, sig.sz);
-                return rc;
+                return;
             }
 
             /* transfer the collected bucket */
