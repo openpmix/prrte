@@ -20,14 +20,6 @@
 # $HEADER$
 #
 
-include $(top_srcdir)/Makefile.prte-rules
-
-MD_FILES = \
-	prte.1.md \
-	prte-map.1.md
-	prterun.1.md
-man_pages_from_md = $(MD_FILES:.1.md=.1)
-EXTRA_DIST = $(MD_FILES) $(man_pages_from_md)
 AM_LDFLAGS = $(PRTE_EXTRA_LIB_LDFLAGS) $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
 AM_CFLAGS = \
             -DPRTE_CONFIGURE_USER="\"@PRTE_CONFIGURE_USER@\"" \
@@ -47,10 +39,6 @@ AM_CFLAGS = \
 
 bin_PROGRAMS = prte
 
-if PRTE_ENABLE_MAN_PAGES
-man_MANS = $(man_pages_from_md)
-endif
-
 prte_SOURCES = \
         main.c
 
@@ -63,8 +51,6 @@ prte_LDADD = \
 
 install-exec-hook:
 	(cd $(DESTDIR)$(bindir); rm -f prterun$(EXEEXT); $(LN_S) prte$(EXEEXT) prterun$(EXEEXT))
-	(cd $(DESTDIR)$(mandir)/man1; rm -f prte-rank.1 ; $(LN_S) prte-map.1 prte-rank.1)
-	(cd $(DESTDIR)$(mandir)/man1; rm -f prte-bind.1 ; $(LN_S) prte-map.1 prte-bind.1)
 
 uninstall-local:
 	rm -f $(DESTDIR)$(bindir)/prterun$(EXEEXT)

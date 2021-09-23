@@ -99,11 +99,13 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
         cd->sig->signature = (pmix_proc_t *) malloc(cd->sig->sz * sizeof(pmix_proc_t));
         memcpy(cd->sig->signature, procs, cd->sig->sz * sizeof(pmix_proc_t));
     }
+#ifdef PMIX_LOCAL_COLLECTIVE_STATUS
     if (NULL != info) {
         if (PMIX_CHECK_KEY(&info[ninfo-1], PMIX_LOCAL_COLLECTIVE_STATUS)) {
             ret = info[ninfo-1].value.data.status;
         }
     }
+#endif
 
     PMIX_DATA_BUFFER_CONSTRUCT(&buf);
 

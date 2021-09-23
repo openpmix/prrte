@@ -355,7 +355,7 @@ void prte_info_do_config(bool want_all)
     have_dl = PRTE_HAVE_DL_SUPPORT ? "yes" : "no";
     prun_prefix_by_default = PRTE_WANT_PRTE_PREFIX_BY_DEFAULT ? "yes" : "no";
     symbol_visibility = PRTE_C_HAVE_VISIBILITY ? "yes" : "no";
-    manpages = PRTE_ENABLE_MAN_PAGES ? "yes" : "no";
+    manpages = "yes";
     resilience = PRTE_ENABLE_FT ? "yes" : "no";
 
     /* output values */

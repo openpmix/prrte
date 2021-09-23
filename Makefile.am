@@ -27,6 +27,7 @@ DIST_SUBDIRS = config contrib src include
 EXTRA_DIST = README INSTALL VERSION Doxyfile LICENSE autogen.pl
 
 include examples/Makefile.include
+include man/Makefile.include
 
 # dist-hook:
 #	env LS_COLORS= sh "$(top_srcdir)/config/distscript.sh" "$(top_srcdir)" "$(distdir)" "$(PRTE_REPO_REV)"
@@ -45,6 +46,8 @@ install-exec-hook:
 	        --top_srcdir=$(top_srcdir) \
 	        --objext=$(OBJEXT); \
 	fi
+	(cd $(DESTDIR)$(mandir)/man1; rm -f prte-rank.1 ; $(LN_S) prte-map.1 prte-rank.1)
+	(cd $(DESTDIR)$(mandir)/man1; rm -f prte-bind.1 ; $(LN_S) prte-map.1 prte-bind.1)
 
 ACLOCAL_AMFLAGS = -I config
 

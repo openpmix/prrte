@@ -1136,6 +1136,7 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     op->nprocs = nprocs;
     op->info = (pmix_info_t *) info;
     op->ninfo = ninfo;
+#ifdef PMIX_LOCAL_COLLECTIVE_STATUS
     if (NULL != info) {
         if (PMIX_CHECK_KEY(&info[ninfo-1], PMIX_LOCAL_COLLECTIVE_STATUS)) {
             op->status = info[ninfo-1].value.data.status;
@@ -1143,6 +1144,9 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     } else {
         op->status = PMIX_SUCCESS;
     }
+#else
+    op->status = PMIX_SUCCESS;
+#endif
     op->cbfunc = cbfunc;
     op->cbdata = cbdata;
     prte_event_set(prte_event_base, &(op->ev), -1, PRTE_EV_WRITE, _cnct, op);
