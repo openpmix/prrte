@@ -539,83 +539,81 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         }
     }
 
-    if (NULL != spec) {
-        len = strlen(spec);
-        if (0 < len) {
-            if (0 == strncasecmp(spec, "slot", len)) {
-                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYSLOT);
-            } else if (0 == strncasecmp(spec, "node", len)) {
-                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYNODE);
-            } else if (0 == strncasecmp(spec, "seq", len)) {
-                /* there are several mechanisms by which the file specifying
-                 * the sequence can be passed, so not really feasible to check
-                 * it here */
-                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_SEQ);
-            } else if (0 == strncasecmp(spec, "core", len)) {
-                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYCORE);
-            } else if (0 == strncasecmp(spec, "l1cache", len)) {
-                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL1CACHE);
-            } else if (0 == strncasecmp(spec, "l2cache", len)) {
-                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL2CACHE);
-            } else if (0 == strncasecmp(spec, "l3cache", len)) {
-                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL3CACHE);
-            } else if (0 == strncasecmp(spec, "package", len)) {
-                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYPACKAGE);
-            } else if (0 == strcasecmp(spec, "rankfile")) {
-                /* check that the file was given */
-                if ((NULL == jdata && NULL == prte_rmaps_base.file)
-                    || !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING)) {
-                    prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
-                    return PRTE_ERR_BAD_PARAM;
-                }
-                /* if they asked for rankfile and didn't specify one, but did
-                 * provide one via MCA param, then use it */
-                if (NULL != jdata) {
-                    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING)) {
-                        if (NULL == prte_rmaps_base.file) {
-                            /* also not allowed */
-                            prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename",
-                                           true);
-                            return PRTE_ERR_BAD_PARAM;
-                        }
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,
-                                           prte_rmaps_base.file, PMIX_STRING);
+    len = strlen(spec);
+    if (0 < len) {
+        if (0 == strncasecmp(spec, "slot", len)) {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYSLOT);
+        } else if (0 == strncasecmp(spec, "node", len)) {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYNODE);
+        } else if (0 == strncasecmp(spec, "seq", len)) {
+            /* there are several mechanisms by which the file specifying
+             * the sequence can be passed, so not really feasible to check
+             * it here */
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_SEQ);
+        } else if (0 == strncasecmp(spec, "core", len)) {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYCORE);
+        } else if (0 == strncasecmp(spec, "l1cache", len)) {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL1CACHE);
+        } else if (0 == strncasecmp(spec, "l2cache", len)) {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL2CACHE);
+        } else if (0 == strncasecmp(spec, "l3cache", len)) {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL3CACHE);
+        } else if (0 == strncasecmp(spec, "package", len)) {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYPACKAGE);
+        } else if (0 == strcasecmp(spec, "rankfile")) {
+            /* check that the file was given */
+            if ((NULL == jdata && NULL == prte_rmaps_base.file) ||
+                (NULL != jdata && !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING))) {
+                prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
+                return PRTE_ERR_BAD_PARAM;
+            }
+            /* if they asked for rankfile and didn't specify one, but did
+             * provide one via MCA param, then use it */
+            if (NULL != jdata) {
+                if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING)) {
+                    if (NULL == prte_rmaps_base.file) {
+                        /* also not allowed */
+                        prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename",
+                                       true);
+                        return PRTE_ERR_BAD_PARAM;
                     }
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,
+                                       prte_rmaps_base.file, PMIX_STRING);
                 }
-                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYUSER);
-            } else if (0 == strncasecmp(spec, "hwthread", len)) {
-                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
-                /* if we are mapping processes to individual hwthreads, then
-                 * we need to treat those hwthreads as separate cpus
-                 */
-                if (NULL == jdata) {
-                    prte_rmaps_base.hwthread_cpus = true;
-                } else {
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL,
-                                       NULL, PMIX_BOOL);
-                }
-            } else if (0 == strncasecmp(spec, "dist", len)) {
-                if (NULL == jdata) {
-                    if (NULL == prte_rmaps_base.device) {
-                        prte_show_help("help-prte-rmaps-base.txt", "device-not-specified", true);
-                        free(spec);
-                        return PRTE_ERR_SILENT;
-                    }
-                } else if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DIST_DEVICE, NULL,
-                                               PMIX_STRING)) {
+            }
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYUSER);
+        } else if (0 == strncasecmp(spec, "hwthread", len)) {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
+            /* if we are mapping processes to individual hwthreads, then
+             * we need to treat those hwthreads as separate cpus
+             */
+            if (NULL == jdata) {
+                prte_rmaps_base.hwthread_cpus = true;
+            } else {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL,
+                                   NULL, PMIX_BOOL);
+            }
+        } else if (0 == strncasecmp(spec, "dist", len)) {
+            if (NULL == jdata) {
+                if (NULL == prte_rmaps_base.device) {
                     prte_show_help("help-prte-rmaps-base.txt", "device-not-specified", true);
                     free(spec);
                     return PRTE_ERR_SILENT;
                 }
-                PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYDIST);
-            } else {
-                prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "mapping",
-                               spec);
+            } else if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DIST_DEVICE, NULL,
+                                           PMIX_STRING)) {
+                prte_show_help("help-prte-rmaps-base.txt", "device-not-specified", true);
                 free(spec);
                 return PRTE_ERR_SILENT;
             }
-            PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYDIST);
+        } else {
+            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "mapping",
+                           spec);
+            free(spec);
+            return PRTE_ERR_SILENT;
         }
+        PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
     }
 
 setpolicy:

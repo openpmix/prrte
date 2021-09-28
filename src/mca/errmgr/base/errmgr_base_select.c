@@ -57,7 +57,7 @@ int prte_errmgr_base_select(void)
     prte_errmgr = *best_module;
 
     /* Initialize the winner */
-    if (NULL != best_module) {
+    if (NULL != prte_errmgr.init) {
         if (PRTE_SUCCESS != prte_errmgr.init()) {
             exit_status = PRTE_ERROR;
             goto cleanup;
