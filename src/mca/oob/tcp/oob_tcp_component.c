@@ -517,7 +517,7 @@ static int component_startup(void)
 
 static void component_shutdown(void)
 {
-    int i = 0;
+    int i = 0, rc;
 
     prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP SHUTDOWN",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -525,8 +525,10 @@ static void component_shutdown(void)
     if (PRTE_PROC_IS_MASTER && prte_oob_tcp_component.listen_thread_active) {
         prte_oob_tcp_component.listen_thread_active = false;
         /* tell the thread to exit */
-        write(prte_oob_tcp_component.stop_thread[1], &i, sizeof(int));
-        prte_thread_join(&prte_oob_tcp_component.listen_thread, NULL);
+        rc = write(prte_oob_tcp_component.stop_thread[1], &i, sizeof(int));
+        if (0 < rc) {
+            prte_thread_join(&prte_oob_tcp_component.listen_thread, NULL);
+        }
 
         close(prte_oob_tcp_component.stop_thread[0]);
         close(prte_oob_tcp_component.stop_thread[1]);

@@ -475,8 +475,8 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
         pt.source = strdup("hwloc");
         ntopos = 0;
         for (n = 0; n < prte_node_topologies->size; n++) {
-            if (NULL
-                == (t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, n))) {
+            t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, n);
+            if (NULL == t) {
                 continue;
             }
             /* pack the topology string */
@@ -561,7 +561,7 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
                 goto cleanup;
             }
             /* find this signature in the topos */
-            for (m = 0; NULL != topos[m]; m++) {
+            for (m = 0; NULL != topos && NULL != topos[m]; m++) {
                 if (0 == strcmp(topos[m], nptr->topology->sig)) {
                     rc = PMIx_Data_pack(NULL, &bucket, &m, 1, PMIX_INT);
                     if (PMIX_SUCCESS != rc) {

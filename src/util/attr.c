@@ -645,24 +645,32 @@ int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
 
     case PMIX_PROC_NSPACE:
         PMIX_PROC_CREATE(kv->data.data.proc, 1);
+        if (NULL == kv->data.data.proc) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
         PMIX_LOAD_NSPACE(kv->data.data.proc->nspace, (char *) data);
         break;
 
     case PMIX_PROC:
         PMIX_PROC_CREATE(kv->data.data.proc, 1);
+        if (NULL == kv->data.data.proc) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
         PMIX_XFER_PROCID(kv->data.data.proc, (pmix_proc_t *) data);
         break;
 
     case PMIX_ENVAR:
         PMIX_ENVAR_CONSTRUCT(&kv->data.data.envar);
         envar = (pmix_envar_t *) data;
-        if (NULL != envar->envar) {
-            kv->data.data.envar.envar = strdup(envar->envar);
+        if (NULL != envar) {
+            if (NULL != envar->envar) {
+                kv->data.data.envar.envar = strdup(envar->envar);
+            }
+            if (NULL != envar->value) {
+                kv->data.data.envar.value = strdup(envar->value);
+            }
+            kv->data.data.envar.separator = envar->separator;
         }
-        if (NULL != envar->value) {
-            kv->data.data.envar.value = strdup(envar->value);
-        }
-        kv->data.data.envar.separator = envar->separator;
         break;
 
     default:
@@ -763,6 +771,9 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
 
     case PMIX_BYTE_OBJECT:
         boptr = (pmix_byte_object_t *) malloc(sizeof(pmix_byte_object_t));
+        if (NULL == boptr) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
         if (NULL != kv->data.data.bo.bytes && 0 < kv->data.data.bo.size) {
             boptr->bytes = (char *) malloc(kv->data.data.bo.size);
             memcpy(boptr->bytes, kv->data.data.bo.bytes, kv->data.data.bo.size);
@@ -792,16 +803,25 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
 
     case PMIX_PROC_NSPACE:
         PMIX_PROC_CREATE(*data, 1);
+        if (NULL == *data) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
         memcpy(*data, kv->data.data.proc->nspace, sizeof(pmix_nspace_t));
         break;
 
     case PMIX_PROC:
         PMIX_PROC_CREATE(*data, 1);
+        if (NULL == *data) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
         memcpy(*data, kv->data.data.proc, sizeof(pmix_proc_t));
         break;
 
     case PMIX_ENVAR:
         PMIX_ENVAR_CREATE(envar, 1);
+        if (NULL == envar) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
+        }
         if (NULL != kv->data.data.envar.envar) {
             envar->envar = strdup(kv->data.data.envar.envar);
         }

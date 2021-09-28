@@ -526,8 +526,9 @@ static int assign_locations(prte_job_t *jdata)
     }
 
     /* see if this job has a "soft" cgroup assignment */
-    job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void **) &job_cpuset, PMIX_STRING);
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void **) &job_cpuset, PMIX_STRING)) {
+        job_cpuset = NULL;
+    }
 
     /* start assigning procs to objects, filling each object as we go until
      * all procs are assigned. If one pass doesn't catch all the required procs,
