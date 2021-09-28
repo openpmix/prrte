@@ -36,7 +36,7 @@
 
 #include "src/util/name_fns.h"
 
-#define PRTE_PRINT_NAME_ARGS_MAX_SIZE 127
+#define PRTE_PRINT_NAME_ARGS_MAX_SIZE 1024
 #define PRTE_PRINT_NAME_ARG_NUM_BUFS  16
 
 /* constructor - used to initialize namelist instance */

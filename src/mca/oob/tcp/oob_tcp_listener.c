@@ -192,40 +192,21 @@ static int create_listen(void)
      * port in the range.  Otherwise, tcp_port_min will be 0, which
      * means "pick any port"
      */
-    if (PRTE_PROC_IS_DAEMON) {
-        if (NULL != prte_oob_tcp_component.tcp_static_ports) {
-            /* if static ports were provided, take the
-             * first entry in the list
-             */
-            prte_argv_append_nosize(&ports, prte_oob_tcp_component.tcp_static_ports[0]);
-            /* flag that we are using static ports */
-            prte_static_ports = true;
-        } else if (NULL != prte_oob_tcp_component.tcp_dyn_ports) {
-            /* take the entire range */
-            ports = prte_argv_copy(prte_oob_tcp_component.tcp_dyn_ports);
-            prte_static_ports = false;
-        } else {
-            /* flag the system to dynamically take any available port */
-            prte_argv_append_nosize(&ports, "0");
-            prte_static_ports = false;
-        }
+    if (NULL != prte_oob_tcp_component.tcp_static_ports) {
+        /* if static ports were provided, take the
+         * first entry in the list
+         */
+        prte_argv_append_nosize(&ports, prte_oob_tcp_component.tcp_static_ports[0]);
+        /* flag that we are using static ports */
+        prte_static_ports = true;
+    } else if (NULL != prte_oob_tcp_component.tcp_dyn_ports) {
+        /* take the entire range */
+        ports = prte_argv_copy(prte_oob_tcp_component.tcp_dyn_ports);
+        prte_static_ports = false;
     } else {
-        if (NULL != prte_oob_tcp_component.tcp_static_ports) {
-            /* if static ports were provided, take the
-             * first entry in the list
-             */
-            prte_argv_append_nosize(&ports, prte_oob_tcp_component.tcp_static_ports[0]);
-            /* flag that we are using static ports */
-            prte_static_ports = true;
-        } else if (NULL != prte_oob_tcp_component.tcp_dyn_ports) {
-            /* take the entire range */
-            ports = prte_argv_copy(prte_oob_tcp_component.tcp_dyn_ports);
-            prte_static_ports = false;
-        } else {
-            /* flag the system to dynamically take any available port */
-            prte_argv_append_nosize(&ports, "0");
-            prte_static_ports = false;
-        }
+        /* flag the system to dynamically take any available port */
+        prte_argv_append_nosize(&ports, "0");
+        prte_static_ports = false;
     }
 
     /* bozo check - this should be impossible, but... */

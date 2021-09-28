@@ -383,6 +383,10 @@ static void proc_errors(int fd, short args, void *cbdata)
         return;
     }
     pptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank);
+    if (NULL == pptr) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        goto cleanup;
+    }
 
     /* we MUST handle a communication failure before doing anything else
      * as it requires some special care to avoid normal termination issues
