@@ -89,7 +89,7 @@
 
 static void tcp_peer_event_init(prte_oob_tcp_peer_t *peer);
 static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer);
-static int tcp_peer_send_connect_nack(int sd, pmix_proc_t name);
+static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name);
 static int tcp_peer_send_blocking(int sd, void *data, size_t size);
 static bool tcp_peer_recv_blocking(prte_oob_tcp_peer_t *peer, int sd, void *data, size_t size);
 static void tcp_peer_connected(prte_oob_tcp_peer_t *peer);
@@ -550,7 +550,7 @@ static int tcp_peer_send_connect_ack(prte_oob_tcp_peer_t *peer)
  * version string, and a security token to ensure we are talking
  * to another OMPI process
  */
-static int tcp_peer_send_connect_nack(int sd, pmix_proc_t name)
+static int tcp_peer_send_connect_nack(int sd, pmix_proc_t *name)
 {
     char *msg;
     prte_oob_tcp_hdr_t hdr;
@@ -563,7 +563,7 @@ static int tcp_peer_send_connect_nack(int sd, pmix_proc_t name)
 
     /* load the header */
     hdr.origin = *PRTE_PROC_MY_NAME;
-    hdr.dst = name;
+    hdr.dst = *name;
     hdr.type = MCA_OOB_TCP_IDENT;
     hdr.tag = 0;
     hdr.seq_num = 0;
@@ -786,7 +786,7 @@ static bool retry(prte_oob_tcp_peer_t *peer, int sd, bool fatal)
             return false;
         } else {
             /* The connection will be retried */
-            tcp_peer_send_connect_nack(sd, peer->name);
+            tcp_peer_send_connect_nack(sd, &peer->name);
             CLOSE_THE_SOCKET(sd);
             return true;
         }
@@ -797,7 +797,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
 {
     char *msg;
     char *version;
-    size_t offset = 0;
+    size_t offset = 0, cnt;
     prte_oob_tcp_hdr_t hdr;
     prte_oob_tcp_peer_t *peer;
     uint16_t ack_flag;
@@ -968,7 +968,15 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
 
     /* check that this is from a matching version */
     version = (char *) ((char *) msg + offset);
-    offset += strlen(version) + 1;
+    cnt = 0;
+    while ('\0' != version[cnt] && cnt < (hdr.nbytes - offset)) {
+        ++cnt;
+    }
+    if (cnt == (hdr.nbytes - offset)) {
+        version[cnt-1] = '\0';
+        --cnt;
+    }
+    offset += cnt + 1;
     if (0 != strcmp(version, prte_version_string)) {
         prte_show_help("help-oob-tcp.txt", "version mismatch", true, prte_process_info.nodename,
                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_version_string,
@@ -1202,14 +1210,16 @@ void prte_oob_tcp_peer_dump(prte_oob_tcp_peer_t *peer, const char *msg)
     prte_socklen_t optlen;
 
     if (getsockname(peer->sd, (struct sockaddr *) &inaddr, &addrlen) < 0) {
-        prte_output(0, "tcp_peer_dump: getsockname: %s (%d)\n", strerror(prte_socket_errno),
-                    prte_socket_errno);
+        prte_output(0, "tcp_peer_dump: getsockname error: %s (%d)\n",
+                    strerror(prte_socket_errno), prte_socket_errno);
+        snprintf(src, sizeof(src), "%s", "unknown");
     } else {
         snprintf(src, sizeof(src), "%s", prte_net_get_hostname((struct sockaddr *) &inaddr));
     }
     if (getpeername(peer->sd, (struct sockaddr *) &inaddr, &addrlen) < 0) {
-        prte_output(0, "tcp_peer_dump: getpeername: %s (%d)\n", strerror(prte_socket_errno),
-                    prte_socket_errno);
+        prte_output(0, "tcp_peer_dump: getpeername error: %s (%d)\n",
+                    strerror(prte_socket_errno), prte_socket_errno);
+        snprintf(dst, sizeof(dst), "%s", "unknown");
     } else {
         snprintf(dst, sizeof(dst), "%s", prte_net_get_hostname((struct sockaddr *) &inaddr));
     }

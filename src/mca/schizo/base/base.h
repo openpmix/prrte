@@ -85,7 +85,6 @@ PRTE_EXPORT int prte_schizo_base_check_sanity(prte_cmd_line_t *cmdline);
 PRTE_EXPORT void prte_schizo_base_finalize(void);
 PRTE_EXPORT void prte_schizo_base_root_error_msg(void);
 PRTE_EXPORT char *prte_schizo_base_getline(FILE *fp);
-PRTE_EXPORT bool prte_schizo_base_check_ini(char *cmdpath, char *file);
 PRTE_EXPORT char *prte_schizo_base_strip_quotes(char *p);
 PRTE_EXPORT int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline, int *argc,
                                                         char ***argv, char **options, bool single_dash_okay,

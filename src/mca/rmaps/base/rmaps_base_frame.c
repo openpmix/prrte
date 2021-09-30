@@ -565,6 +565,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             if ((NULL == jdata && NULL == prte_rmaps_base.file) ||
                 (NULL != jdata && !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING))) {
                 prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
+                free(spec);
                 return PRTE_ERR_BAD_PARAM;
             }
             /* if they asked for rankfile and didn't specify one, but did
@@ -573,8 +574,8 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING)) {
                     if (NULL == prte_rmaps_base.file) {
                         /* also not allowed */
-                        prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename",
-                                       true);
+                        prte_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
+                        free(spec);
                         return PRTE_ERR_BAD_PARAM;
                     }
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,

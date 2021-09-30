@@ -847,6 +847,7 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
             prte_output(0, "LAUNCH MSG RAW SIZE: %d COMPRESSED SIZE: %d",
                         (int) jdata->launch_msg.bytes_used, (int) cmplen);
             free(cmpdata);
+            cmpdata = NULL;
         } else {
             prte_output(0, "LAUNCH MSG RAW SIZE: %d", (int) jdata->launch_msg.bytes_used);
         }
@@ -1366,12 +1367,17 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     /* get my endianness */
     mytopo = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, 0);
     if (NULL == mytopo) {
-        /* should never happen */
-        myendian = "unknown";
-    } else {
-        myendian = strrchr(mytopo->sig, ':');
-        ++myendian;
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        prted_failed_launch = true;
+        goto CLEANUP;
     }
+    myendian = strrchr(mytopo->sig, ':');
+    if (NULL == myendian) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        prted_failed_launch = true;
+        goto CLEANUP;
+    }
+    ++myendian;
 
     /* multiple daemons could be in this buffer, so unpack until we exhaust the data */
     idx = 1;

@@ -301,7 +301,13 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
 #endif
 
     /* Setup the pipe to be close-on-exec */
-    prte_fd_set_cloexec(write_fd);
+    i = prte_fd_set_cloexec(write_fd);
+    if (0 != i) {
+        PRTE_ERROR_LOG(i);
+        send_error_show_help(write_fd, 1, "help-prte-odls-default.txt", "iof setup failed",
+                             prte_process_info.nodename, cd->app->app);
+        /* Does not return */
+    }
 
     if (NULL != cd->child) {
         /* setup stdout/stderr so that any error messages that we

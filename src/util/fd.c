@@ -156,10 +156,14 @@ const char *prte_fd_get_peer_name(int fd)
     const char *ret = NULL;
     struct sockaddr sa;
     socklen_t slt = (socklen_t) sizeof(sa);
+    int rc;
 
-    int rc = getpeername(fd, &sa, &slt);
+    memset(str, 0, sizeof(str));
+
+    rc = getpeername(fd, &sa, &slt);
     if (0 != rc) {
-        ret = strdup("Unknown");
+        prte_string_copy(str, "Unknown", sizeof(str) - 1);
+        ret = str;
         return ret;
     }
 
