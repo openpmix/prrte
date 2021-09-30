@@ -57,7 +57,9 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, prte_list_t *nodes, bo
     char *hosts;
 
     /* did the app_context contain a hostfile? */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) {
+    hosts = NULL;
+    if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING) &&
+        NULL != hosts) {
         /* yes - filter the node list through the file, removing
          * any nodes not found in the file
          */
@@ -76,8 +78,9 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, prte_list_t *nodes, bo
         free(hosts);
     }
     /* did the app_context contain an add-hostfile? */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, (void **) &hosts,
-                           PMIX_STRING)) {
+    hosts = NULL;
+    if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, (void **) &hosts, PMIX_STRING) &&
+        NULL != hosts) {
         /* yes - filter the node list through the file, removing
          * any nodes not found in the file
          */
@@ -96,7 +99,9 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, prte_list_t *nodes, bo
         free(hosts);
     }
     /* now filter the list through any -host specification */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING)) {
+    hosts = NULL;
+    if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING) &&
+        NULL != hosts) {
         if (PRTE_SUCCESS != (rc = prte_util_filter_dash_host_nodes(nodes, hosts, remove))) {
             PRTE_ERROR_LOG(rc);
             free(hosts);
@@ -112,7 +117,9 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, prte_list_t *nodes, bo
         free(hosts);
     }
     /* now filter the list through any add-host specification */
-    if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, (void **) &hosts, PMIX_STRING)) {
+    hosts = NULL;
+    if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, (void **) &hosts, PMIX_STRING) &&
+        NULL != hosts) {
         if (PRTE_SUCCESS != (rc = prte_util_filter_dash_host_nodes(nodes, hosts, remove))) {
             PRTE_ERROR_LOG(rc);
             free(hosts);
@@ -540,6 +547,11 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata, prte_node_t *node, pr
     proc->state = PRTE_PROC_STATE_INIT;
     proc->app_idx = idx;
     app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, idx);
+    if (NULL == app) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_RELEASE(proc);
+        return NULL;
+    }
     /* mark the proc as UPDATED so it will be included in the launch */
     PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_UPDATED);
     if (NULL == node->daemon) {

@@ -81,7 +81,9 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void **) &job_cpuset, PMIX_STRING);
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void **) &job_cpuset, PMIX_STRING)) {
+        job_cpuset = NULL;
+    }
 
     /* see if they want are using hwthreads as cpus */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {

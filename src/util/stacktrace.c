@@ -634,6 +634,11 @@ int prte_util_register_stackhandlers(void)
     } else if (0 == strncasecmp(prte_stacktrace_output_filename, "file:", 5)) {
         char *filename_cpy = NULL;
         next = strchr(prte_stacktrace_output_filename, ':');
+        if (NULL == next) {
+            free(prte_stacktrace_output_filename);
+            free(filename_cpy);
+            return PRTE_ERR_NOT_FOUND;
+        }
         next++; // move past the ':' to the filename specified
 
         prte_stacktrace_output_filename_base = strdup(next);

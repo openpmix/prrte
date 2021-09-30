@@ -213,13 +213,11 @@ int prte_schizo_base_process_deprecated_cli(prte_cmd_line_t *cmdline, int *argc,
             prte_asprintf(&pargs[i], "-%s", p2);
             /* if it is the special "-np" option, we silently
              * change it and don't emit an error */
-            if (0 == strcmp(p2, "-np")) {
-                free(p2);
-            } else if (!single_dash_okay) {
+            if (0 != strcmp(p2, "-np") && !single_dash_okay) {
                 prte_show_help("help-schizo-base.txt", "single-dash-error", true, p2, pargs[i]);
-                free(p2);
                 ret = PRTE_OPERATION_SUCCEEDED;
             }
+            free(p2);
         }
 
         /* is this an argument someone needs to convert? */
@@ -308,45 +306,6 @@ char *prte_schizo_base_getline(FILE *fp)
     }
 
     return NULL;
-}
-
-bool prte_schizo_base_check_ini(char *cmdpath, char *file)
-{
-    FILE *fp;
-    char *line;
-    size_t n;
-
-    if (NULL == cmdpath || NULL == file) {
-        return false;
-    }
-
-    /* look for an open-mpi.ini or ompi.ini file */
-    fp = fopen(file, "r");
-    if (NULL == fp) {
-        return false;
-    }
-    /* read the file to find the proxy defnitions */
-    while (NULL != (line = prte_schizo_base_getline(fp))) {
-        if ('\0' == line[0]) {
-            continue; /* skip empty lines */
-        }
-        /* find the start of text in the line */
-        n = 0;
-        while ('\0' != line[n] && isspace(line[n])) {
-            ++n;
-        }
-        /* if the text starts with a '#' or the line
-         * is empty, then ignore it */
-        if ('\0' == line[n] || '#' == line[n]) {
-            /* empty line or comment */
-            continue;
-        }
-        if (0 == strcmp(cmdpath, &line[n])) {
-            /* this is us! */
-            return true;
-        }
-    }
-    return false;
 }
 
 char *prte_schizo_base_strip_quotes(char *p)

@@ -477,11 +477,12 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
 
     /* see if this job has a "soft" cgroup assignment */
     job_cpuset = NULL;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void **) &job_cpuset, PMIX_STRING);
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void **) &job_cpuset, PMIX_STRING)) {
+        job_cpuset = NULL;
+    }
 
     /* see if they want multiple cpus/rank */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr,
-                           PMIX_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr, PMIX_UINT16)) {
         cpus_per_rank = u16;
     } else {
         cpus_per_rank = 1;
