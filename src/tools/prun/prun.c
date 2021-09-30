@@ -623,6 +623,7 @@ int prun(int argc, char *argv[])
                  * require, then error out */
                 prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
                                "--pid", pval->value.data.string, param);
+                fclose(fp);
                 return PRTE_ERR_BAD_PARAM;
             }
             fclose(fp);
@@ -900,20 +901,13 @@ int prun(int argc, char *argv[])
     /* check for a job timeout specification, to be provided in seconds
      * as that is what MPICH used
      */
-    param = NULL;
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "timeout", 0, 0)) ||
-        NULL != (param = getenv("MPIEXEC_TIMEOUT"))) {
-        if (NULL != param) {
-            i = strtol(param, NULL, 10);
-            /* both cannot be present, or they must agree */
-            if (NULL != pval && i != pval->value.data.integer) {
-                prte_show_help("help-prun.txt", "prun:timeoutconflict", false, prte_tool_basename,
-                               pval->value.data.integer, param);
-                exit(1);
-            }
-        } else {
-            i = pval->value.data.integer;
-        }
+    i = 0;
+    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "timeout", 0, 0))) {
+        i = pval->value.data.integer;
+    } else if (NULL != (param = getenv("MPIEXEC_TIMEOUT"))) {
+        i = strtol(param, NULL, 10);
+    }
+    if (0 != i) {
 #ifdef PMIX_JOB_TIMEOUT
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_TIMEOUT, &i, PMIX_INT);
 #else

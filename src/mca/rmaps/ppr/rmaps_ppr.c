@@ -642,7 +642,11 @@ static int assign_locations(prte_job_t *jdata)
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &jobppr, PMIX_STRING);
+    jobppr = NULL;
+    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &jobppr, PMIX_STRING) ||
+        NULL == jobppr) {
+        return PRTE_ERR_BAD_PARAM;
+    }
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:ppr: assigning locations for job %s with ppr %s policy %s",
