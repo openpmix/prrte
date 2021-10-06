@@ -39,6 +39,12 @@ version 1.0.
 ------------------------------------
 +**** NOTE: As of v2.0.1, PRRTE no longer has a dependency on "pandoc"
 +**** for building and installing man pages.
+PR #1104: Update v2.0.1 for rc3
+ - Silence Coverity warnings
+ - Update portable platform file
+ - Only order DVM termination once
+ - Abort configure if gcc is <= 4.8.1
+ - Fix segmentation fault caused by wrong size for vpids buffer
 PR #1097: Update v2.0.1 for rc2
  - Update NEWS and VERSION
  - Circulate and report local completion status for collectives
