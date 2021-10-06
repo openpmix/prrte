@@ -74,10 +74,15 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
     prte_grpcomm_signature_t *sig;
 
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                         "%s plm:base:orted_cmd sending orted_exit commands",
+                         "%s plm:base:prted_cmd sending prted_exit commands",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    /* flag that orteds are being terminated */
+    /* don't call this more than once */
+    if (prte_prteds_term_ordered) {
+        return PRTE_SUCCESS;
+    }
+
+    /* flag that prteds are being terminated */
     prte_prteds_term_ordered = true;
     cmmnd = command;
 
