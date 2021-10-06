@@ -190,7 +190,7 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool, pmix_data_buffer_t *buff
         /* mark that this was not compressed */
         compressed = false;
         bo.bytes = (char *) vpids;
-        bo.size = nbytes * ndaemons;
+        bo.size = ndaemons * sizeof(pmix_rank_t);
     }
     /* indicate compression */
     rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buffer, &compressed, 1, PMIX_BOOL);
