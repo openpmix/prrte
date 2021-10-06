@@ -106,13 +106,21 @@ struct prte_bp_graph_t {
     ((prte_bp_graph_vertex_t *) prte_pointer_array_get_item((prte_pointer_array_t *) &g->vertices, \
                                                             v_id))
 
-#define FOREACH_OUT_EDGE(g, v_id, e_ptr)                                                    \
-    LIST_FOREACH_CONTAINED(e_ptr, &(V_ID_TO_PTR(g, v_id)->out_edges), prte_bp_graph_edge_t, \
-                           outbound_li)
+#define FOREACH_OUT_EDGE(g, v_id, e_ptr, _err)                                              \
+    prte_bp_graph_vertex_t *_v;                                                             \
+    _v = V_ID_TO_PTR((g), (v_id));                                                          \
+    if (NULL == _v) {                                                                       \
+        return (_err);                                                                      \
+    }                                                                                       \
+    LIST_FOREACH_CONTAINED(e_ptr, &(_v->out_edges), prte_bp_graph_edge_t, outbound_li)
 
-#define FOREACH_IN_EDGE(g, v_id, e_ptr)                                                    \
-    LIST_FOREACH_CONTAINED(e_ptr, &(V_ID_TO_PTR(g, v_id)->in_edges), prte_bp_graph_edge_t, \
-                           inbound_li)
+#define FOREACH_IN_EDGE(g, v_id, e_ptr, _err)                                               \
+    prte_bp_graph_vertex_t *_v;                                                             \
+    _v = V_ID_TO_PTR((g), (v_id));                                                          \
+    if (NULL == _v) {                                                                       \
+        return (_err);                                                                      \
+    }                                                                                       \
+    LIST_FOREACH_CONTAINED(e_ptr, &(_v->in_edges), prte_bp_graph_edge_t, inbound_li)
 
 /* Iterate over (u,v) edge pairs along the given path, where path is defined
  * by the predecessor array "pred".  Stops when a -1 predecessor is

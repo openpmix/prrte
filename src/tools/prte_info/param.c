@@ -371,9 +371,9 @@ void prte_info_do_config(bool want_all)
     prte_info_out("C compiler", "compiler:c:command", PRTE_CC);
     prte_info_out("C compiler absolute", "compiler:c:absolute", PRTE_CC_ABSOLUTE);
     prte_info_out("C compiler family name", "compiler:c:familyname",
-                  _STRINGIFY(PLATFORM_COMPILER_FAMILYNAME));
+                  PLATFORM_STRINGIFY(PLATFORM_COMPILER_FAMILYNAME));
     prte_info_out("C compiler version", "compiler:c:version",
-                  _STRINGIFY(PLATFORM_COMPILER_VERSION_STR));
+                  PLATFORM_STRINGIFY(PLATFORM_COMPILER_VERSION_STR));
 
     if (want_all) {
         prte_info_out_int("C char size", "compiler:c:sizeof:char", sizeof(char));

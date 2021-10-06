@@ -357,8 +357,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         }
         /* kill the local procs */
         prte_odls.kill_local_procs(NULL);
-        /* flag that prteds were ordered to terminate */
-        prte_prteds_term_ordered = true;
         /* if all my routes and local children are gone, then terminate ourselves */
         if (0 == (ret = prte_routed.num_routes())) {
             for (i = 0; i < prte_local_children->size; i++) {
@@ -414,8 +412,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                                 PMIX_RANGE_SESSION, info, 4, _notify_release, &lk);
         PRTE_PMIX_WAIT_THREAD(&lk);
         PRTE_PMIX_DESTRUCT_LOCK(&lk);
-        /* flag that prteds were ordered to terminate */
-        prte_prteds_term_ordered = true;
         if (PRTE_PROC_IS_MASTER) {
             /* if all my routes and local children are gone, then terminate ourselves */
             if (0 == prte_routed.num_routes()) {
@@ -627,21 +623,22 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
          * job we are talking about */
         tmp = (char *) job;
         if (PMIX_SUCCESS != PMIx_Data_pack(NULL, answer, &tmp, 1, PMIX_STRING)) {
-            PMIX_DATA_BUFFER_DESTRUCT(&data);
+            if (NULL != gstack_exec) {
+                free(gstack_exec);
+            }
             break;
         }
 
         /* hit each local process with a gstack command */
         for (i = 0; i < prte_local_children->size; i++) {
-            if (NULL
-                    != (proct = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))
-                && PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)
-                && PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
+            proct = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+            if (NULL != proct &&
+                PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE) &&
+                PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
                 PMIX_DATA_BUFFER_CONSTRUCT(&data);
-                if (PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->name, 1, PMIX_PROC)
-                    || PMIX_SUCCESS
-                           != PMIx_Data_pack(NULL, &data, &proct->node->name, 1, PMIX_STRING)
-                    || PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->pid, 1, PMIX_PID)) {
+                if (PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->name, 1, PMIX_PROC) ||
+                    PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->node->name, 1, PMIX_STRING) ||
+                    PMIX_SUCCESS != PMIx_Data_pack(NULL, &data, &proct->pid, 1, PMIX_PID)) {
                     PMIX_DATA_BUFFER_DESTRUCT(&data);
                     break;
                 }

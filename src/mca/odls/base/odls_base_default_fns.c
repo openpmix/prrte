@@ -962,6 +962,12 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
              */
             char *tmp = strdup(app->env[i]);
             ptr = strchr(tmp, '=');
+            if (NULL == ptr) {
+                PMIX_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+                rc = PRTE_ERR_BAD_PARAM;
+                state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
+                goto errorout;
+            }
             *ptr = '\0';
             ++ptr;
             prte_setenv(tmp, ptr, true, &cd->env);

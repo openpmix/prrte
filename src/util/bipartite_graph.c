@@ -122,7 +122,7 @@ static int get_capacity(prte_bp_graph_t *g, int source, int target)
     CHECK_VERTEX_RANGE(g, source);
     CHECK_VERTEX_RANGE(g, target);
 
-    FOREACH_OUT_EDGE(g, source, e)
+    FOREACH_OUT_EDGE(g, source, e, 0)
     {
         assert(e->source == source);
         if (e->target == target) {
@@ -140,7 +140,7 @@ static int set_capacity(prte_bp_graph_t *g, int source, int target, int cap)
     CHECK_VERTEX_RANGE(g, source);
     CHECK_VERTEX_RANGE(g, target);
 
-    FOREACH_OUT_EDGE(g, source, e)
+    FOREACH_OUT_EDGE(g, source, e, PRTE_ERR_NOT_FOUND)
     {
         assert(e->source == source);
         if (e->target == target) {
@@ -280,7 +280,13 @@ int prte_bp_graph_clone(const prte_bp_graph_t *g, bool copy_user_data,
     /* now reconstruct all the edges (iterate by source vertex only to avoid
      * double-adding) */
     for (i = 0; i < NUM_VERTICES(g); ++i) {
-        FOREACH_OUT_EDGE(g, i, e)
+        prte_bp_graph_vertex_t *_v;
+        _v = V_ID_TO_PTR(g, i);
+        if (NULL == _v) {
+            err = PRTE_ERR_NOT_FOUND;
+            goto out_free_gx;
+        }
+        LIST_FOREACH_CONTAINED(e, &(_v->out_edges), prte_bp_graph_edge_t, outbound_li)
         {
             assert(i == e->source);
             err = prte_bp_graph_add_edge(gx, e->source, e->target, e->cost, e->capacity, NULL);
@@ -305,6 +311,10 @@ int prte_bp_graph_indegree(const prte_bp_graph_t *g, int vertex)
     prte_bp_graph_vertex_t *v;
 
     v = V_ID_TO_PTR(g, vertex);
+    if (NULL == v) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
     return prte_list_get_size(&v->in_edges);
 }
 
@@ -336,7 +346,7 @@ int prte_bp_graph_add_edge(prte_bp_graph_t *g, int from, int to, int64_t cost, i
          * handled appropriately */
         return PRTE_ERR_BAD_PARAM;
     }
-    FOREACH_OUT_EDGE(g, from, e)
+    FOREACH_OUT_EDGE(g, from, e, PRTE_ERR_NOT_FOUND)
     {
         assert(e->source == from);
         if (e->target == to) {
@@ -358,6 +368,10 @@ int prte_bp_graph_add_edge(prte_bp_graph_t *g, int from, int to, int64_t cost, i
     e->e_data = e_data;
 
     v_from = V_ID_TO_PTR(g, from);
+    if (NULL == v_from) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
     prte_list_append(&v_from->out_edges, &e->outbound_li);
 
     PRTE_RETAIN(e); /* ref owned by in_edges list */
@@ -516,7 +530,7 @@ bool prte_bp_graph_bellman_ford(prte_bp_graph_t *gx, int source, int target, int
         for (u = 0; u < NUM_VERTICES(gx); ++u) {
             prte_bp_graph_edge_t *e_ptr;
 
-            FOREACH_OUT_EDGE(gx, u, e_ptr)
+            FOREACH_OUT_EDGE(gx, u, e_ptr, false)
             {
                 v = e_ptr->target;
 
@@ -544,8 +558,12 @@ bool prte_bp_graph_bellman_ford(prte_bp_graph_t *gx, int source, int target, int
     /* check for negative-cost cycles */
     for (u = 0; u < NUM_VERTICES(gx); ++u) {
         prte_bp_graph_edge_t *e_ptr;
-
-        FOREACH_OUT_EDGE(gx, u, e_ptr)
+        prte_bp_graph_vertex_t *_v;
+        _v = V_ID_TO_PTR(gx, u);
+        if (NULL == _v) {
+            goto out;
+        }
+        LIST_FOREACH_CONTAINED(e_ptr, &(_v->out_edges), prte_bp_graph_edge_t, outbound_li)
         {
             v = e_ptr->target;
             if (e_ptr->capacity > 0 && dist[u] != MAX_COST && /* avoid signed overflow */
@@ -664,7 +682,7 @@ int prte_bp_graph_bipartite_to_flow(prte_bp_graph_t *g)
                                           source/sink edges too */
     for (u = 0; u < order; ++u) {
         prte_bp_graph_edge_t *e_ptr;
-        FOREACH_OUT_EDGE(g, u, e_ptr)
+        FOREACH_OUT_EDGE(g, u, e_ptr, PRTE_ERR_NOT_FOUND)
         {
             v = e_ptr->target;
 

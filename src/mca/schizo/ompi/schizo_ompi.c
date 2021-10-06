@@ -702,6 +702,11 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
                     value = strdup(environ[k]);
                     /* find the '=' sign */
                     p2 = strchr(value, '=');
+                    if (NULL == p2) {
+                        free(p1);
+                        free(value);
+                        return PRTE_ERR_BAD_PARAM;
+                    }
                     *p2 = '\0';
                     ++p2;
                     rc = check_cache(cache, cachevals, value, p2);
@@ -815,29 +820,21 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         fp = fopen(tmp[i], "r");
         if (NULL == fp) {
             /* if the file given wasn't absolute, check in the default location */
-            if (prte_path_is_absolute(tmp[i])) {
-                prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i], p1);
-                prte_argv_free(tmp);
-                prte_argv_free(cache);
-                prte_argv_free(cachevals);
-                prte_argv_free(xparams);
-                prte_argv_free(xvals);
-                return PRTE_ERR_NOT_FOUND;
-            }
-            p1 = prte_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
-            fp = fopen(p1, "r");
-            if (NULL == fp) {
-                prte_show_help("help-schizo-base.txt", "missing-param-file-def", true, tmp[i],
-                               DEFAULT_PARAM_FILE_PATH);
-                prte_argv_free(tmp);
-                prte_argv_free(cache);
-                prte_argv_free(cachevals);
-                prte_argv_free(xparams);
-                prte_argv_free(xvals);
+            if (!prte_path_is_absolute(tmp[i])) {
+                p1 = prte_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
+                fp = fopen(p1, "r");
+                if (NULL == fp) {
+                    prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i], p1);;
+                    prte_argv_free(tmp);
+                    prte_argv_free(cache);
+                    prte_argv_free(cachevals);
+                    prte_argv_free(xparams);
+                    prte_argv_free(xvals);
+                    free(p1);
+                    return PRTE_ERR_NOT_FOUND;
+                }
                 free(p1);
-                return PRTE_ERR_NOT_FOUND;
             }
-            free(p1);
         }
         while (NULL != (line = prte_schizo_base_getline(fp))) {
             if ('\0' == line[0])
@@ -1161,11 +1158,11 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
                     prte_argv_append_nosize(target, p1);
                     prte_argv_append_nosize(target, p2);
                 }
-                free(p1);
-                free(p2);
-                i += 2;
-                continue;
             }
+            free(p1);
+            free(p2);
+            i += 2;
+            continue;
         }
         if (0 == strcmp("--map-by", argv[i])) {
             /* if they set "inherit", then make this the default for prte */
