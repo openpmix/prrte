@@ -12,6 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -27,6 +28,7 @@ headers = constants.h \
 		  prte_config_top.h \
 		  prte_config_bottom.h \
 		  prte_portable_platform.h \
+		  prte_portable_platform_real.h \
 		  prte_stdint.h \
 		  prte_stdatomic.h \
 		  prte_socket_errno.h \
