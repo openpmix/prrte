@@ -357,8 +357,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         }
         /* kill the local procs */
         prte_odls.kill_local_procs(NULL);
-        /* flag that prteds were ordered to terminate */
-        prte_prteds_term_ordered = true;
         /* if all my routes and local children are gone, then terminate ourselves */
         if (0 == (ret = prte_routed.num_routes())) {
             for (i = 0; i < prte_local_children->size; i++) {
@@ -414,8 +412,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                                 PMIX_RANGE_SESSION, info, 4, _notify_release, &lk);
         PRTE_PMIX_WAIT_THREAD(&lk);
         PRTE_PMIX_DESTRUCT_LOCK(&lk);
-        /* flag that prteds were ordered to terminate */
-        prte_prteds_term_ordered = true;
         if (PRTE_PROC_IS_MASTER) {
             /* if all my routes and local children are gone, then terminate ourselves */
             if (0 == prte_routed.num_routes()) {
