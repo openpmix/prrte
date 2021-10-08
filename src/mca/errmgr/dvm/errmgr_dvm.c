@@ -304,6 +304,15 @@ static void job_errors(int fd, short args, void *cbdata)
                          prte_job_state_to_str(jobstate)));
 
     if (PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
+        if (PRTE_JOB_STATE_FAILED_TO_START == jdata->state
+            || PRTE_JOB_STATE_NEVER_LAUNCHED == jdata->state
+            || PRTE_JOB_STATE_FAILED_TO_LAUNCH == jdata->state
+            || PRTE_JOB_STATE_CANNOT_LAUNCH == jdata->state) {
+            prte_routing_is_enabled = false;
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+            PRTE_RELEASE(caddy);
+            return;
+        }
         /* if the daemon job aborted and we haven't heard from everyone yet,
          * then this could well have been caused by a daemon not finding
          * a way back to us. In this case, output a message indicating a daemon

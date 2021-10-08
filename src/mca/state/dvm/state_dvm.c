@@ -547,6 +547,7 @@ static void check_complete(int fd, short args, void *cbdata)
             prte_dvm_ready = false;
             return;
         }
+        prte_plm.terminate_orteds();
         PRTE_RELEASE(caddy);
         return;
     }
