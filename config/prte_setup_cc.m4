@@ -285,21 +285,6 @@ AC_DEFUN([PRTE_SETUP_CC],[
     # gcc-impersonating compilers won't accept them.
     PRTE_CFLAGS_BEFORE_PICKY="$CFLAGS"
 
-    if test $WANT_PICKY_COMPILER -eq 1; then
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wundef, Wundef)
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wno-long-long, Wno_long_long, int main() { long long x; })
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wsign-compare, Wsign_compare)
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wmissing-prototypes, Wmissing_prototypes)
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wstrict-prototypes, Wstrict_prototypes)
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wcomment, Wcomment)
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wshadow, Wshadow)
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-Werror-implicit-function-declaration, Werror_implicit_function_declaration)
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wno-long-double, Wno_long_double, int main() { long double x; })
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-fno-strict-aliasing, fno_strict_aliasing, int main () { int x; })
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-pedantic, pedantic)
-        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wall, Wall)
-    fi
-
     # Note: Some versions of clang (at least >= 3.5 -- perhaps
     # older versions, too?) and xlc with -g (v16.1, perhaps older)
     # will *warn* about -finline-functions, but still allow it.
@@ -429,4 +414,28 @@ AC_DEFUN([_PRTE_PROG_CC],[
     PRTE_WHICH([$prte_cc_argv0], [PRTE_CC_ABSOLUTE])
     AC_SUBST(PRTE_CC_ABSOLUTE)
     PRTE_VAR_SCOPE_POP
+])
+
+AC_DEFUN([PRTE_SETUP_PICKY_COMPILERS],[
+    if test $WANT_PICKY_COMPILER -eq 1 && test "$prte_c_vendor" != "pgi"; then
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wundef, Wundef)
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wno-long-long, Wno_long_long, int main() { long long x; })
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wsign-compare, Wsign_compare)
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wmissing-prototypes, Wmissing_prototypes)
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wstrict-prototypes, Wstrict_prototypes)
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wcomment, Wcomment)
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wshadow, Wshadow)
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Werror-implicit-function-declaration, Werror_implicit_function_declaration)
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wno-long-double, Wno_long_double, int main() { long double x; })
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-fno-strict-aliasing, fno_strict_aliasing, int main () { int x; })
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-pedantic, pedantic)
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wall, Wall)
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Wextra, Wextra)
+        _PRTE_CHECK_SPECIFIC_CFLAGS(-Werror, Werror)
+        if test $WANT_MEMORY_SANITIZERS -eq 1 && test "$prte_c_vendor" != "pgi"; then
+            _PRTE_CHECK_SPECIFIC_CFLAGS(-fsanitize=address, fsanaddress)
+            _PRTE_CHECK_SPECIFIC_CFLAGS(-fsanitize=undefined, fsanundefined)
+        fi
+    fi
+
 ])

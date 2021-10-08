@@ -506,51 +506,88 @@ PRTE_CONFIG_ASM
 
 prte_show_title "Header file tests"
 
+PRTE_VAR_SCOPE_PUSH(PRTE_CFLAGS_save_for_headers)
+PRTE_CFLAGS_save_for_headers=$CFLAGS
+_PRTE_CHECK_SPECIFIC_CFLAGS(-Werror, Werror)
+
 AC_CHECK_HEADERS([alloca.h aio.h arpa/inet.h dirent.h \
-    dlfcn.h endian.h execinfo.h err.h fcntl.h grp.h libgen.h \
-    libutil.h memory.h netdb.h netinet/in.h netinet/tcp.h \
-    poll.h pthread.h pty.h pwd.h sched.h \
-    strings.h stropts.h linux/ethtool.h linux/sockios.h \
-    sys/fcntl.h sys/ipc.h sys/shm.h \
-    sys/ioctl.h sys/mman.h sys/param.h sys/queue.h \
-    sys/resource.h sys/select.h sys/socket.h sys/sockio.h \
-    sys/stat.h sys/statfs.h sys/statvfs.h sys/time.h sys/tree.h \
-    sys/types.h sys/uio.h sys/un.h net/uio.h sys/utsname.h sys/vfs.h sys/wait.h syslog.h \
-    termios.h ulimit.h unistd.h util.h utmp.h malloc.h \
-    ifaddrs.h crt_externs.h regex.h mntent.h paths.h \
-    ioLib.h sockLib.h hostLib.h shlwapi.h sys/synch.h db.h ndbm.h ieee754.h])
+                  dlfcn.h endian.h execinfo.h err.h fcntl.h grp.h libgen.h \
+                  libutil.h memory.h netdb.h netinet/in.h netinet/tcp.h \
+                  poll.h pthread.h pty.h pwd.h sched.h \
+                  strings.h stropts.h linux/ethtool.h linux/sockios.h \
+                  sys/fcntl.h sys/ipc.h sys/shm.h \
+                  sys/ioctl.h sys/mman.h sys/param.h sys/queue.h \
+                  sys/resource.h sys/select.h sys/socket.h sys/sockio.h \
+                  sys/stat.h sys/statfs.h sys/statvfs.h sys/time.h sys/tree.h \
+                  sys/types.h sys/uio.h sys/un.h net/uio.h sys/utsname.h sys/vfs.h sys/wait.h syslog.h \
+                  termios.h ulimit.h unistd.h util.h utmp.h malloc.h \
+                  ifaddrs.h crt_externs.h regex.h mntent.h paths.h \
+                  ioLib.h sockLib.h hostLib.h shlwapi.h sys/synch.h db.h ndbm.h ieee754.h])
 
 AC_CHECK_HEADERS([sys/mount.h], [], [],
-[AC_INCLUDES_DEFAULT
-#if HAVE_SYS_PARAM_H
-#include <sys/param.h>
-#endif
-])
+                 [AC_INCLUDES_DEFAULT
+                  #if HAVE_SYS_PARAM_H
+                  #include <sys/param.h>
+                  #endif
+                 ])
 
 AC_CHECK_HEADERS([sys/sysctl.h], [], [],
-[AC_INCLUDES_DEFAULT
-#if HAVE_SYS_PARAM_H
-#include <sys/param.h>
-#endif
-])
+                 [AC_INCLUDES_DEFAULT
+                  #if HAVE_SYS_PARAM_H
+                  #include <sys/param.h>
+                  #endif
+                 ])
 
 # Needed to work around Darwin requiring sys/socket.h for
 # net/if.h
 
 AC_CHECK_HEADERS([net/if.h], [], [],
-    [#include <stdio.h>
-#if STDC_HEADERS
-# include <stdlib.h>
-# include <stddef.h>
-#else
-# if HAVE_STDLIB_H
-#  include <stdlib.h>
-# endif
-#endif
-#if HAVE_SYS_SOCKET_H
-# include <sys/socket.h>
-#endif
-])
+                 [#include <stdio.h>
+                  #if STDC_HEADERS
+                  # include <stdlib.h>
+                  # include <stddef.h>
+                  #else
+                  # if HAVE_STDLIB_H
+                  #  include <stdlib.h>
+                  # endif
+                  #endif
+                  #if HAVE_SYS_SOCKET_H
+                  # include <sys/socket.h>
+                  #endif
+                 ])
+
+# Note that sometimes we have <stdbool.h>, but it doesn't work (e.g.,
+# have both Portland and GNU installed; using pgcc will find GNU's
+# <stdbool.h>, which all it does -- by standard -- is define "bool" to
+# "_Bool" [see
+# http://pmixw.opengroup.org/onlinepubs/009695399/basedefs/stdbool.h.html],
+# and Portland has no idea what to do with _Bool).
+
+# So first figure out if we have <stdbool.h> (i.e., check the value of
+# the macro HAVE_STDBOOL_H from the result of AC_CHECK_HEADERS,
+# above).  If we do have it, then check to see if it actually works.
+# Define PMIX_USE_STDBOOL_H as approrpaite.
+PRTE_VAR_SCOPE_PUSH([MSG])
+AC_CHECK_HEADERS([stdbool.h], [have_stdbool_h=1], [have_stdbool_h=0])
+AC_MSG_CHECKING([if <stdbool.h> works])
+if test "$have_stdbool_h" = "1"; then
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([AC_INCLUDES_DEFAULT[
+                                               #if HAVE_STDBOOL_H
+                                               #include <stdbool.h>
+                                               #endif
+                                           ]],
+                                       [[bool bar, foo = true; bar = foo;]])],
+                      [PRTE_USE_STDBOOL_H=1 MSG=yes],[PRTE_USE_STDBOOL_H=0 MSG=no])
+else
+    PRTE_USE_STDBOOL_H=0
+    MSG="no (don't have <stdbool.h>)"
+fi
+AC_DEFINE_UNQUOTED(PRTE_USE_STDBOOL_H, $PRTE_USE_STDBOOL_H,
+                   [Whether to use <stdbool.h> or not])
+AC_MSG_RESULT([$MSG])
+
+CFLAGS=$PRTE_CFLAGS_save_for_headers
+PRTE_VAR_SCOPE_POP
 
 # checkpoint results
 AC_CACHE_SAVE
@@ -1174,11 +1211,8 @@ LIBS="$LIBS $PRTE_FINAL_LIBS"
 # restore any user-provided Werror flags
 AS_IF([test ! -z "$PRTE_CFLAGS_cache"], [CFLAGS="$CFLAGS $PRTE_CFLAGS_cache"])
 
-# Delay setting pickyness until here so we
-# don't break configure code tests
-#if test "$WANT_PICKY_COMPILER" = "1"; then
-#    CFLAGS="$CFLAGS -Wall -Wextra -Werror"
-#fi
+# setup "picky" compiler options if enabled
+PRTE_SETUP_PICKY_COMPILERS
 
 # Cleanup duplicate flags
 PRTE_FLAGS_UNIQ(CFLAGS)
