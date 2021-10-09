@@ -352,6 +352,14 @@ int prte_register_params(void)
                                       NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_ALL, &prte_create_session_dirs);
 
+    prte_add_pid_to_session_dirname = false;
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "add_pid_to_session_dirname",
+                                      "Add pid to the DVM top-level session directory name",
+                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      &prte_add_pid_to_session_dirname);
+
     prte_execute_quiet = false;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "execute_quiet",
                                       "Do not output error and help messages",

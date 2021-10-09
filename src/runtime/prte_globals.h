@@ -500,6 +500,7 @@ PRTE_EXPORT extern char *prte_data_server_uri;
 PRTE_EXPORT extern bool prte_dvm_ready;
 PRTE_EXPORT extern prte_pointer_array_t *prte_cache;
 PRTE_EXPORT extern bool prte_persistent;
+PRTE_EXPORT extern bool prte_add_pid_to_session_dirname;
 
 /* PRTE OOB port flags */
 PRTE_EXPORT extern bool prte_static_ports;

@@ -136,6 +136,7 @@ int prte_setup_top_session_dir(void)
     int rc = PRTE_SUCCESS;
     /* get the effective uid */
     uid_t uid = geteuid();
+    pid_t pid = getpid();
 
     /* construct the top_session_dir if we need */
     if (NULL == prte_process_info.top_session_dir) {
@@ -147,13 +148,22 @@ int prte_setup_top_session_dir(void)
             rc = PRTE_ERR_BAD_PARAM;
             goto exit;
         }
-
-        if (0 > prte_asprintf(&prte_process_info.top_session_dir, "%s/prte.%s.%lu",
-                              prte_process_info.tmpdir_base, prte_process_info.nodename,
-                              (unsigned long) uid)) {
-            prte_process_info.top_session_dir = NULL;
-            rc = PRTE_ERR_OUT_OF_RESOURCE;
-            goto exit;
+        if (prte_add_pid_to_session_dirname) {
+            if (0 > prte_asprintf(&prte_process_info.top_session_dir, "%s/prte.%s.%lu.%lu",
+                                  prte_process_info.tmpdir_base, prte_process_info.nodename,
+                                  (unsigned long)pid, (unsigned long) uid)) {
+                prte_process_info.top_session_dir = NULL;
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto exit;
+            }
+        } else {
+            if (0 > prte_asprintf(&prte_process_info.top_session_dir, "%s/prte.%s.%lu",
+                                  prte_process_info.tmpdir_base, prte_process_info.nodename,
+                                  (unsigned long) uid)) {
+                prte_process_info.top_session_dir = NULL;
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto exit;
+            }
         }
     }
 exit:
