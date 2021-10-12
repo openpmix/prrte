@@ -107,16 +107,16 @@ static int remote_spawn(void);
 static int ssh_terminate_prteds(void);
 static int ssh_finalize(void);
 
-prte_plm_base_module_t prte_plm_ssh_module
-    = {.init = ssh_init,
-       .set_hnp_name = prte_plm_base_set_hnp_name,
-       .spawn = ssh_launch,
-       .remote_spawn = remote_spawn,
-       .terminate_job = prte_plm_base_prted_terminate_job,
-       .terminate_orteds = ssh_terminate_prteds,
-       .terminate_procs = prte_plm_base_prted_kill_local_procs,
-       .signal_job = prte_plm_base_prted_signal_local_procs,
-       .finalize = ssh_finalize};
+prte_plm_base_module_t prte_plm_ssh_module = {
+    .init = ssh_init,
+    .set_hnp_name = prte_plm_base_set_hnp_name,
+    .spawn = ssh_launch,
+    .remote_spawn = remote_spawn,
+    .terminate_job = prte_plm_base_prted_terminate_job,
+    .terminate_orteds = ssh_terminate_prteds,
+    .terminate_procs = prte_plm_base_prted_kill_local_procs,
+    .signal_job = prte_plm_base_prted_signal_local_procs,
+    .finalize = ssh_finalize};
 
 typedef struct {
     prte_list_item_t super;
