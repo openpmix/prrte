@@ -94,15 +94,16 @@ static int plm_slurm_start_proc(int argc, char **argv, char **env, char *prefix)
 /*
  * Global variable
  */
-prte_plm_base_module_1_0_0_t prte_plm_slurm_module = {plm_slurm_init,
-                                                      prte_plm_base_set_hnp_name,
-                                                      plm_slurm_launch_job,
-                                                      NULL,
-                                                      prte_plm_base_prted_terminate_job,
-                                                      plm_slurm_terminate_prteds,
-                                                      prte_plm_base_prted_kill_local_procs,
-                                                      plm_slurm_signal_job,
-                                                      plm_slurm_finalize};
+prte_plm_base_module_1_0_0_t prte_plm_slurm_module = {
+    .init = plm_slurm_init,
+    .set_hnp_name = prte_plm_base_set_hnp_name,
+    .spawn = plm_slurm_launch_job,
+    .terminate_job = prte_plm_base_prted_terminate_job,
+    .terminate_orteds = plm_slurm_terminate_prteds,
+    .terminate_procs = prte_plm_base_prted_kill_local_procs,
+    .signal_job = plm_slurm_signal_job,
+    .finalize = plm_slurm_finalize
+};
 
 /*
  * Local variables
@@ -393,13 +394,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
     cur_prefix = NULL;
     for (n = 0; n < state->jdata->apps->size; n++) {
         char *app_prefix_dir;
-        if (NULL
-            == (app = (prte_app_context_t *) prte_pointer_array_get_item(state->jdata->apps, n))) {
+        app = (prte_app_context_t *) prte_pointer_array_get_item(state->jdata->apps, n);
+        if (NULL == app) {
             continue;
         }
         app_prefix_dir = NULL;
-        prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &app_prefix_dir,
-                           PMIX_STRING);
+        prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &app_prefix_dir, PMIX_STRING);
         /* Check for already set cur_prefix_dir -- if different,
            complain */
         if (NULL != app_prefix_dir) {
@@ -419,6 +419,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cur_prefix));
             }
             free(app_prefix_dir);
+        }
+    }
+    if (NULL == cur_prefix) {
+        // see if it is in the environment
+        if (NULL != (param = getenv("PRTE_PREFIX"))) {
+            cur_prefix = strdup(param);
         }
     }
 

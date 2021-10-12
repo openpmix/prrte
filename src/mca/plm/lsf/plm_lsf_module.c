@@ -90,15 +90,16 @@ static int plm_lsf_finalize(void);
 /*
  * Global variable
  */
-prte_plm_base_module_t prte_plm_lsf_module = {plm_lsf_init,
-                                              prte_plm_base_set_hnp_name,
-                                              plm_lsf_launch_job,
-                                              NULL,
-                                              prte_plm_base_prted_terminate_job,
-                                              plm_lsf_terminate_orteds,
-                                              prte_plm_base_prted_kill_local_procs,
-                                              plm_lsf_signal_job,
-                                              plm_lsf_finalize};
+prte_plm_base_module_t prte_plm_lsf_module = {
+    .init = plm_lsf_init,
+    .set_hnp_name = prte_plm_base_set_hnp_name,
+    .spawn = plm_lsf_launch_job,
+    .terminate_job = prte_plm_base_prted_terminate_job,
+    .terminate_orteds = plm_lsf_terminate_orteds,
+    .terminate_procs = prte_plm_base_prted_kill_local_procs,
+    .signal_job = plm_lsf_signal_job,
+    .finalize = plm_lsf_finalize
+};
 
 static void launch_daemons(int fd, short args, void *cbdata);
 
@@ -330,6 +331,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cur_prefix));
             }
             free(app_prefix_dir);
+        }
+    }
+    if (NULL == cur_prefix) {
+        // see if it is in the environment
+        if (NULL != (param = getenv("PRTE_PREFIX"))) {
+            cur_prefix = strdup(param);
         }
     }
 

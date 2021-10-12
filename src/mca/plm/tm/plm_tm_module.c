@@ -98,15 +98,16 @@ static bool connected = false;
 /*
  * Global variable
  */
-prte_plm_base_module_t prte_plm_tm_module = {plm_tm_init,
-                                             prte_plm_base_set_hnp_name,
-                                             plm_tm_launch_job,
-                                             NULL,
-                                             prte_plm_base_prted_terminate_job,
-                                             plm_tm_terminate_orteds,
-                                             prte_plm_base_prted_kill_local_procs,
-                                             plm_tm_signal_job,
-                                             plm_tm_finalize};
+prte_plm_base_module_t prte_plm_tm_module = {
+    .init = plm_tm_init,
+    .set_hnp_name = prte_plm_base_set_hnp_name,
+    .spawn = plm_tm_launch_job,
+    .terminate_job = prte_plm_base_prted_terminate_job,
+    .terminate_orteds = plm_tm_terminate_orteds,
+    .terminate_procs = prte_plm_base_prted_kill_local_procs,
+    .signal_job = plm_tm_signal_job,
+    .finalize = plm_tm_finalize
+};
 
 /* Local functions */
 static int plm_tm_connect(void);
@@ -306,7 +307,13 @@ static void launch_daemons(int fd, short args, void *cbdata)
        there
     */
     app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, 0);
-    prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &prefix_dir, PMIX_STRING);
+    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &prefix_dir, PMIX_STRING) ||
+        NULL == prefix_dir) {
+        // see if it is in the environment
+        if (NULL != (var = getenv("PRTE_PREFIX"))) {
+            prefix_dir = strdup(var);
+        }
+    }
     if (NULL != prefix_dir) {
         char *newenv;
 
