@@ -346,6 +346,10 @@ static char *prte_frameworks[] = {
     "rtc",
     "schizo",
     "state",
+    // inherited from OPAL
+    "hwloc",
+    "if",
+    "reachable",
     NULL,
 };
 
@@ -406,6 +410,16 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                  * one so we know this has been processed */
                 free(argv[i]);
                 argv[i] = strdup("--prtemca");
+                /* if this refers to the "if" framework, convert to "pif" */
+                if (0 == strncasecmp(p1, "if", 2)) {
+                    prte_asprintf(&param, "pif_%s", &p1[3]);
+                    free(p1);
+                    p1 = param;
+                } else if (0 == strncasecmp(p1, "reachable", strlen("reachable"))) {
+                    prte_asprintf(&param, "preachable_%s", &p1[strlen("reachable_")]);
+                    free(p1);
+                    p1 = param;
+                }
                 if (NULL == target) {
                     /* push it into our environment */
                     asprintf(&param, "PRTE_MCA_%s", p1);
@@ -414,6 +428,9 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
                     prte_setenv(param, p2, true, &environ);
                 } else {
+                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                                        "%s schizo:prte:parse_cli adding %s to target",
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
                     prte_argv_append_nosize(target, "--prtemca");
                     prte_argv_append_nosize(target, p1);
                     prte_argv_append_nosize(target, p2);
@@ -428,9 +445,27 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
 }
 
 static char *pmix_frameworks[] = {
-    "bfrops",  "gds",    "pcompress", "pdl",   "pfexec", "pif", "pinstalldirs",
-    "ploc",    "plog",   "pmdl",      "pnet",  "preg",   "prm", "psec",
-    "psensor", "pshmem", "psquash",   "pstat", "pstrg",  "ptl", NULL,
+    "bfrops",
+    "gds",
+    "pcompress",
+    "pdl",
+    "pfexec",
+    "pif",
+    "pinstalldirs",
+    "ploc",
+    "plog",
+    "pmdl",
+    "pnet",
+    "preg",
+    "prm",
+    "psec",
+    "psensor",
+    "pshmem",
+    "psquash",
+    "pstat",
+    "pstrg",
+    "ptl",
+    NULL
 };
 
 int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target)
