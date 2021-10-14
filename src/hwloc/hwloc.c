@@ -84,22 +84,25 @@ int prte_hwloc_base_register(void)
     (void) prte_mca_base_var_register("opal", "hwloc", "base", "use_hwthreads_as_cpus",
                                       "Use hardware threads as independent cpus",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL,
-                                      NULL, 0, 0, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
+                                      NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
+                                      PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                       &prte_hwloc_default_use_hwthread_cpus);
 
     (void) prte_mca_base_var_register("opal", "hwloc", "base", "bind_to_core",
                                       "Bind processes to cores",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL,
-                                      NULL, 0, 0, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
+                                      NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
+                                      PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                       &bind_to_core);
 
     (void) prte_mca_base_var_register("opal", "hwloc", "base", "bind_to_socket",
                                       "Bind processes to sockets",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL,
-                                      NULL, 0, 0, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
+                                      NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
+                                      PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                       &bind_to_socket);
 
     /* hwloc_base_mbind_policy */
@@ -114,7 +117,8 @@ int prte_hwloc_base_register(void)
                                      "Note that operating system paging policies are unaffected by this setting. For "
                                      "example, if \"local_only\" is used and local NUMA domain memory is exhausted, a new "
                                      "memory allocation may cause paging.",
-                                     PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                     PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0,
+                                     PRTE_MCA_BASE_VAR_FLAG_DEPRECATED, PRTE_INFO_LVL_9,
                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_map);
     PRTE_RELEASE(new_enum);
     if (0 > ret) {
@@ -135,7 +139,8 @@ int prte_hwloc_base_register(void)
                                      "PRTE will warn the first time this happens, but allow the job to continue "
                                      "(possibly with degraded performance).  A value of \"error\" means that PRTE "
                                      "will abort the job if this happens.",
-                                     PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                     PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0,
+                                     PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_mbfa);
     PRTE_RELEASE(new_enum);
     if (0 > ret) {
@@ -160,7 +165,8 @@ int prte_hwloc_base_register(void)
                                      "the default when np<=2, and \"package\" is the default when np>2). Allowed "
                                      "colon-delimited qualifiers: "
                                      "overload-allowed, if-supported",
-                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                     PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_binding_policy);
     prte_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "binding_policy",
                                        PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
