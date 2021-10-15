@@ -1,7 +1,7 @@
 enable_sensors=no
 enable_debug_symbols=yes
 enable_binaries=yes
-enable_picky=yes
+enable_picky=no
 enable_debug=yes
 enable_shared=yes
 enable_static=no

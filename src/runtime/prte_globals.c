@@ -71,6 +71,7 @@ char *prte_tool_basename = NULL;
 bool prte_dvm_ready = false;
 prte_pointer_array_t *prte_cache = NULL;
 bool prte_persistent = true;
+bool prte_add_pid_to_session_dirname = false;
 
 /* PRTE OOB port flags */
 bool prte_static_ports = false;

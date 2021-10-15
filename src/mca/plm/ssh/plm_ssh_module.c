@@ -107,16 +107,16 @@ static int remote_spawn(void);
 static int ssh_terminate_prteds(void);
 static int ssh_finalize(void);
 
-prte_plm_base_module_t prte_plm_ssh_module
-    = {.init = ssh_init,
-       .set_hnp_name = prte_plm_base_set_hnp_name,
-       .spawn = ssh_launch,
-       .remote_spawn = remote_spawn,
-       .terminate_job = prte_plm_base_prted_terminate_job,
-       .terminate_orteds = ssh_terminate_prteds,
-       .terminate_procs = prte_plm_base_prted_kill_local_procs,
-       .signal_job = prte_plm_base_prted_signal_local_procs,
-       .finalize = ssh_finalize};
+prte_plm_base_module_t prte_plm_ssh_module = {
+    .init = ssh_init,
+    .set_hnp_name = prte_plm_base_set_hnp_name,
+    .spawn = ssh_launch,
+    .remote_spawn = remote_spawn,
+    .terminate_job = prte_plm_base_prted_terminate_job,
+    .terminate_orteds = ssh_terminate_prteds,
+    .terminate_procs = prte_plm_base_prted_kill_local_procs,
+    .signal_job = prte_plm_base_prted_signal_local_procs,
+    .finalize = ssh_finalize};
 
 typedef struct {
     prte_list_item_t super;
@@ -345,7 +345,6 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     int orted_index;
     int rc;
     int i;
-    char *prte_prefix = getenv("PRTE_PREFIX");
     char *full_orted_cmd = NULL;
     char **final_argv = NULL;
     char *tmp;
@@ -400,27 +399,12 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
         return rc;
     }
 
-    if (NULL != prte_plm_ssh_component.pass_libpath ||
-        NULL != prefix_dir) {
-        if (PRTE_PLM_SSH_SHELL_SH != remote_shell &&
-            PRTE_PLM_SSH_SHELL_KSH != remote_shell &&
-            PRTE_PLM_SSH_SHELL_ZSH != remote_shell &&
-            PRTE_PLM_SSH_SHELL_BASH != remote_shell &&
-            PRTE_PLM_SSH_SHELL_TCSH != remote_shell &&
-            PRTE_PLM_SSH_SHELL_CSH != remote_shell) {
-            prte_show_help("help-plm-ssh.txt", "cannot-resolve-shell-with-prefix", true,
-                           (NULL == prte_prefix) ? "NULL" : prte_prefix, prefix_dir);
-            prte_argv_free(argv);
-            return PRTE_ERR_SILENT;
-        }
-    }
-
-    /* now get the orted cmd - as specified by user - into our tmp array.
-     * The function returns the location where the actual orted command is
+    /* now get the prted cmd - as specified by user - into our tmp array.
+     * The function returns the location where the actual prted command is
      * located - usually in the final spot, but someone could
      * have added options. For example, it should be legal for them to use
-     * "orted --debug-devel" so they get debug output from the orteds, but
-     * not from mpirun. Also, they may have a customized version of orted
+     * "prted --debug-devel" so they get debug output from the prteds, but
+     * not from prterun. Also, they may have a customized version of prted
      * that takes arguments in addition to the std ones we already support
      */
     orted_argc = 0;
@@ -472,21 +456,63 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
         free(tmp);
     }
 
-    if (NULL != prte_prefix) {
+    if (NULL != prefix_dir) {
+        value = prte_basename(prte_install_dirs.libdir);
         if (PRTE_PLM_SSH_SHELL_SH == remote_shell ||
             PRTE_PLM_SSH_SHELL_KSH == remote_shell ||
             PRTE_PLM_SSH_SHELL_ZSH == remote_shell ||
             PRTE_PLM_SSH_SHELL_BASH == remote_shell) {
-            prte_asprintf(&tmp, "PRTE_PREFIX=%s", prte_prefix);
+            prte_asprintf(&tmp, "PRTE_PREFIX=%s", prefix_dir);
+            prte_argv_append_nosize(&final_argv, tmp);
+            prte_argv_append_nosize(&final_argv, "export PRTE_PREFIX");
+            free(tmp);
+            if (NULL != (param = getenv("PMIX_PREFIX"))) {
+                prte_asprintf(&tmp, "PMIX_PREFIX=%s", param);
+                prte_argv_append_nosize(&final_argv, tmp);
+                prte_argv_append_nosize(&final_argv, "export PMIX_PREFIX");
+                free(tmp);
+            }
+            prte_asprintf(&tmp, "LD_LIBRARY_PATH=%s/%s:$LD_LIBRARY_PATH", prefix_dir, value);
+            prte_argv_append_nosize(&final_argv, tmp);
+            prte_argv_append_nosize(&final_argv, "export LD_LIBRARY_PATH");
+            free(tmp);
+            prte_asprintf(&tmp, "DYLD_LIBRARY_PATH=%s/%s:$DYLD_LIBRARY_PATH", prefix_dir, value);
+            prte_argv_append_nosize(&final_argv, tmp);
+            prte_argv_append_nosize(&final_argv, "export DYLD_LIBRARY_PATH");
+            free(tmp);
+        } else {
+            /* [t]csh is a bit more challenging -- we
+             have to check whether LD_LIBRARY_PATH
+             is already set before we try to set it.
+             Must be very careful about obeying
+             [t]csh's order of evaluation and not
+             using a variable before it is defined.
+             See this thread for more details:
+             https://www.open-mpi.org/community/lists/users/2006/01/0517.php. */
+            /* if there is nothing preceding orted, then we can just
+             * assemble the cmd with the orted_cmd at the end. Otherwise,
+             * we have to insert the orted_prefix in the right place
+             */
+            prte_asprintf(&tmp, "setenv PRTE_PREFIX %s", prefix_dir);
             prte_argv_append_nosize(&final_argv, tmp);
             free(tmp);
-            prte_argv_append_nosize(&final_argv, "export PRTE_PREFIX");
-        } else {
-            prte_asprintf(&tmp, "setenv PRTE_PREFIX %s", prte_prefix);
+            if (NULL != (param = getenv("PMIX_PREFIX"))) {
+                prte_asprintf(&tmp, "setenv PMIX_PREFIX %s", param);
+                prte_argv_append_nosize(&final_argv, tmp);
+                free(tmp);
+            }
+            prte_argv_append_nosize(&final_argv, "if ( $?LD_LIBRARY_PATH == 1 ) set PRTE_have_llp");
+            prte_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s/%s", prefix_dir, value);
+            prte_argv_append_nosize(&final_argv, tmp);
+            free(tmp);
+            prte_asprintf(&tmp, "if ( $?PRTE_have_llp == 1 ) setenv LD_LIBRARY_PATH %s/%s:$LD_LIBRARY_PATH", prefix_dir, value);
             prte_argv_append_nosize(&final_argv, tmp);
             free(tmp);
         }
+        free(value);
     }
+
+
 
     /* if the user specified a library path to pass, set it up now */
     if (NULL != prte_plm_ssh_component.pass_libpath) {
@@ -515,11 +541,11 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
              * assemble the cmd with the orted_cmd at the end. Otherwise,
              * we have to insert the orted_prefix in the right place
              */
-            prte_argv_append_nosize(&final_argv, "if ( $?LD_LIBRARY_PATH == 1 ) set OMPI_have_llp");
+            prte_argv_append_nosize(&final_argv, "if ( $?LD_LIBRARY_PATH == 1 ) set PRTE_have_llp");
             prte_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s", prte_plm_ssh_component.pass_libpath);
             prte_argv_append_nosize(&final_argv, tmp);
             free(tmp);
-            prte_asprintf(&tmp, "if ( $?OMPI_have_llp == 1 ) setenv LD_LIBRARY_PATH %s:$LD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
+            prte_asprintf(&tmp, "if ( $?PRTE_have_llp == 1 ) setenv LD_LIBRARY_PATH %s:$LD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
             prte_argv_append_nosize(&final_argv, tmp);
             free(tmp);
         }
@@ -766,9 +792,9 @@ static int remote_spawn(void)
     }
 
     /* setup the launch */
-    if (PRTE_SUCCESS
-        != (rc = setup_launch(&argc, &argv, prte_process_info.nodename, &node_name_index1,
-                              &proc_vpid_index, prefix))) {
+    rc = setup_launch(&argc, &argv, prte_process_info.nodename, &node_name_index1,
+                      &proc_vpid_index, prefix);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PRTE_DESTRUCT(&coll);
         goto cleanup;
@@ -1067,13 +1093,17 @@ static void launch_daemons(int fd, short args, void *cbdata)
         rc = PRTE_ERR_NOT_FOUND;
         goto cleanup;
     }
-    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &prefix_dir,
-                            PMIX_STRING)) {
+    if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &prefix_dir, PMIX_STRING)) {
         /* check to see if enable-prun-prefix-by-default was given - if
          * this is being done by a singleton, then prun will not be there
          * to put the prefix in the app. So make sure we check to find it */
         if ((bool) PRTE_WANT_PRTE_PREFIX_BY_DEFAULT) {
             prefix_dir = strdup(prte_install_dirs.prefix);
+        } else {
+            // see if it is in the environment
+            if (NULL != (var = getenv("PRTE_PREFIX"))) {
+                prefix_dir = strdup(var);
+            }
         }
     }
     /* we also need at least one node name so we can check what shell is
@@ -1108,9 +1138,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* setup the launch */
-    if (PRTE_SUCCESS
-        != (rc = setup_launch(&argc, &argv, node->name, &node_name_index1, &proc_vpid_index,
-                              prefix_dir))) {
+    rc = setup_launch(&argc, &argv, node->name, &node_name_index1, &proc_vpid_index, prefix_dir);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         goto cleanup;
     }

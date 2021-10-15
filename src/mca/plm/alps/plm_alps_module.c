@@ -91,15 +91,16 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix);
 /*
  * Global variable
  */
-prte_plm_base_module_t prte_plm_alps_module = {plm_alps_init,
-                                               prte_plm_base_set_hnp_name,
-                                               plm_alps_launch_job,
-                                               NULL,
-                                               prte_plm_base_prted_terminate_job,
-                                               plm_alps_terminate_orteds,
-                                               prte_plm_base_prted_kill_local_procs,
-                                               plm_alps_signal_job,
-                                               plm_alps_finalize};
+prte_plm_base_module_t prte_plm_alps_module = {
+    .init = plm_alps_init,
+    .set_hnp_name = prte_plm_base_set_hnp_name,
+    .spawn = plm_alps_launch_job,
+    .terminate_job = prte_plm_base_prted_terminate_job,
+    .terminate_orteds = plm_alps_terminate_orteds,
+    .terminate_procs = prte_plm_base_prted_kill_local_procs,
+    .signal_job = plm_alps_signal_job,
+    .finalize = plm_alps_finalize
+};
 
 /*
  * Local variables
