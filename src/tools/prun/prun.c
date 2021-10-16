@@ -325,7 +325,7 @@ int prun(int argc, char *argv[])
     pmix_status_t ret;
     bool flag;
     size_t n, ninfo;
-    pmix_app_t *papps;
+    pmix_app_t *papps = NULL;
     size_t napps;
     mylock_t mylock;
     prte_value_t *pval;
@@ -1117,7 +1117,9 @@ DONE:
         prte_event_signal_del(&evitm->ev);
     }
     PRTE_LIST_DESTRUCT(&forwarded_signals);
-
+    if (NULL != papps) {
+        PMIX_APP_FREE(papps, napps);
+    }
     /* cleanup and leave */
     ret = PMIx_tool_finalize();
     if (PMIX_SUCCESS != ret) {
