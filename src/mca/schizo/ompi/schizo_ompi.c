@@ -824,7 +824,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 p1 = prte_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
                 fp = fopen(p1, "r");
                 if (NULL == fp) {
-                    prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i], p1);;
+                    prte_show_help("help-schizo-base.txt", "missing-param-file-def", true, tmp[i], p1);;
                     prte_argv_free(tmp);
                     prte_argv_free(cache);
                     prte_argv_free(cachevals);
@@ -835,7 +835,15 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 }
                 free(p1);
             }
-        }
+        } else {
+            prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);;
+            prte_argv_free(tmp);
+            prte_argv_free(cache);
+            prte_argv_free(cachevals);
+            prte_argv_free(xparams);
+            prte_argv_free(xvals);
+            return PRTE_ERR_NOT_FOUND;
+       }
         while (NULL != (line = prte_schizo_base_getline(fp))) {
             if ('\0' == line[0])
                 continue; /* skip empty lines */
