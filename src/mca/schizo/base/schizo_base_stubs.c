@@ -425,12 +425,12 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                     asprintf(&param, "PRTE_MCA_%s", p1);
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:prte:parse_cli pushing %s into environment",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1);
                     prte_setenv(param, p2, true, &environ);
                 } else {
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:prte:parse_cli adding %s to target",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1);
                     prte_argv_append_nosize(target, "--prtemca");
                     prte_argv_append_nosize(target, p1);
                     prte_argv_append_nosize(target, p2);
