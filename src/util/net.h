@@ -90,7 +90,8 @@ PRTE_EXPORT bool prte_net_islocalhost(const struct sockaddr *addr);
  * @return                  true if \c addr1 and \c addr2 are on the
  *                          same net, false otherwise.
  */
-PRTE_EXPORT bool prte_net_samenetwork(const struct sockaddr *addr1, const struct sockaddr *addr2,
+PRTE_EXPORT bool prte_net_samenetwork(const struct sockaddr_storage *addr1,
+                                      const struct sockaddr_storage *addr2,
                                       uint32_t prefixlen);
 
 /**
