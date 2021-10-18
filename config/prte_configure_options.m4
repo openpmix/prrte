@@ -63,22 +63,16 @@ fi
 #
 
 AC_MSG_CHECKING([if want developer-level compiler pickyness])
-AC_ARG_ENABLE(picky,
-    AS_HELP_STRING([--enable-picky],
-                   [enable developer-level compiler pickyness when building Open MPI (default: disabled, unless a .git directory is found in the build tree)]))
-if test "$enable_picky" = "yes"; then
+AC_ARG_ENABLE(devel-check,
+    AS_HELP_STRING([--enable-devel-check],
+                   [enable developer-level compiler pickyness when building Open MPI (default: disabled)]))
+if test "$enable_devel_check" = "yes"; then
     AC_MSG_RESULT([yes])
     WANT_PICKY_COMPILER=1
 else
     AC_MSG_RESULT([no])
     WANT_PICKY_COMPILER=0
 fi
-#################### Developer default override ####################
-#if test "$WANT_PICKY_COMPILER" = "0" && test -z "$enable_picky" && test "$PRTE_DEVEL" = 1; then
-#    WANT_PICKY_COMPILER=1
-#    echo "--> developer override: enable picky compiler by default"
-#fi
-#################### Developer default override ####################
 
 AC_DEFINE_UNQUOTED(PRTE_PICKY_COMPILERS, $WANT_PICKY_COMPILER,
                    [Whether or not we are using picky compiler settings])

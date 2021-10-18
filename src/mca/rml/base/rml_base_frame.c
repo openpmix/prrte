@@ -41,10 +41,16 @@
 /* Initialising stub fns in the global var used by other modules */
 prte_rml_base_module_t prte_rml = {0};
 
-prte_rml_base_t prte_rml_base = {{{0}}};
+prte_rml_base_t prte_rml_base = {
+    .posted_recvs = PRTE_LIST_STATIC_INIT,
+    .unmatched_msgs = PRTE_LIST_STATIC_INIT,
+    .max_retries = 0
+};
 
 static int prte_rml_base_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
+
     prte_rml_base.max_retries = 3;
     prte_mca_base_var_register("prte", "rml", "base", "max_retries",
                                "Max #times to retry sending a message", PRTE_MCA_BASE_VAR_TYPE_INT,
@@ -107,6 +113,8 @@ void prte_rml_send_callback(int status, pmix_proc_t *peer, pmix_data_buffer_t *b
                             prte_rml_tag_t tag, void *cbdata)
 
 {
+    PRTE_HIDE_UNUSED_PARAMS(buffer, cbdata);
+
     if (PRTE_SUCCESS != status) {
         prte_output_verbose(2, prte_rml_base_framework.framework_output,
                             "%s UNABLE TO SEND MESSAGE TO %s TAG %d: %s",
@@ -127,6 +135,7 @@ void prte_rml_recv_callback(int status, pmix_proc_t *sender, pmix_data_buffer_t 
 {
     prte_rml_recv_cb_t *blob = (prte_rml_recv_cb_t *) cbdata;
     pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag);
 
     PRTE_ACQUIRE_OBJECT(blob);
     /* transfer the sender */

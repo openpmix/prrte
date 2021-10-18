@@ -237,6 +237,7 @@ static void *listen_thread_fn(prte_object_t *obj)
     struct timeval timeout;
     fd_set readfds;
     prte_listener_t *listener;
+    PRTE_HIDE_UNUSED_PARAMS(obj);
 
     while (listen_thread_active) {
         FD_ZERO(&readfds);

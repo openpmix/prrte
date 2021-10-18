@@ -26,7 +26,7 @@
 
 #include <stdlib.h>
 
-#include "src/runtime/runtime.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/malloc.h"
 #include "src/util/output.h"
 
@@ -185,6 +185,7 @@ void *prte_realloc(void *ptr, size_t size, const char *file, int line)
  */
 void prte_free(void *addr, const char *file, int line)
 {
+    PRTE_HIDE_UNUSED_PARAMS(file, line);
     free(addr);
 }
 

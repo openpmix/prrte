@@ -46,16 +46,26 @@
 /*
  * Global variables
  */
-prte_grpcomm_base_t prte_grpcomm_base = {{{0}}};
+prte_grpcomm_base_t prte_grpcomm_base = {
+    .actives = PRTE_LIST_STATIC_INIT,
+    .ongoing = PRTE_LIST_STATIC_INIT,
+    .sig_table = PRTE_HASH_TABLE_STATIC_INIT,
+    .transports = NULL,
+    .context_id = 0
+};
 
-prte_grpcomm_API_module_t prte_grpcomm = {.xcast = prte_grpcomm_API_xcast,
-                                          .allgather = prte_grpcomm_API_allgather,
-                                          .rbcast = prte_grpcomm_API_rbcast,
-                                          .register_cb = prte_grpcomm_API_register_cb,
-                                          .unregister_cb = NULL};
+prte_grpcomm_API_module_t prte_grpcomm = {
+    .xcast = prte_grpcomm_API_xcast,
+    .allgather = prte_grpcomm_API_allgather,
+    .rbcast = prte_grpcomm_API_rbcast,
+    .register_cb = prte_grpcomm_API_register_cb,
+    .unregister_cb = NULL
+};
 
 static int base_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
+
     prte_grpcomm_base.context_id = 1;
     prte_mca_base_var_register("prte", "grpcomm", "base", "starting_context_id",
                                "Starting value for assigning context id\'s",

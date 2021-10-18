@@ -161,47 +161,57 @@ int prte_filem_base_module_finalize(void)
 
 int prte_filem_base_none_put(prte_filem_base_request_t *request)
 {
+    PRTE_HIDE_UNUSED_PARAMS(request);
     return PRTE_SUCCESS;
 }
 
 int prte_filem_base_none_put_nb(prte_filem_base_request_t *request)
 {
+    PRTE_HIDE_UNUSED_PARAMS(request);
     return PRTE_SUCCESS;
 }
 
 int prte_filem_base_none_get(prte_filem_base_request_t *request)
 {
+    PRTE_HIDE_UNUSED_PARAMS(request);
     return PRTE_SUCCESS;
 }
 
 int prte_filem_base_none_get_nb(prte_filem_base_request_t *request)
 {
+    PRTE_HIDE_UNUSED_PARAMS(request);
     return PRTE_SUCCESS;
 }
 
 int prte_filem_base_none_rm(prte_filem_base_request_t *request)
 {
+    PRTE_HIDE_UNUSED_PARAMS(request);
     return PRTE_SUCCESS;
 }
 
 int prte_filem_base_none_rm_nb(prte_filem_base_request_t *request)
 {
+    PRTE_HIDE_UNUSED_PARAMS(request);
     return PRTE_SUCCESS;
 }
 
 int prte_filem_base_none_wait(prte_filem_base_request_t *request)
 {
+    PRTE_HIDE_UNUSED_PARAMS(request);
     return PRTE_SUCCESS;
 }
 
 int prte_filem_base_none_wait_all(prte_list_t *request_list)
 {
+    PRTE_HIDE_UNUSED_PARAMS(request_list);
     return PRTE_SUCCESS;
 }
 
-int prte_filem_base_none_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
+int prte_filem_base_none_preposition_files(prte_job_t *jdata,
+                                           prte_filem_completion_cbfunc_t cbfunc,
                                            void *cbdata)
 {
+    PRTE_HIDE_UNUSED_PARAMS(jdata);
     if (NULL != cbfunc) {
         cbfunc(PRTE_SUCCESS, cbdata);
     }
@@ -210,5 +220,6 @@ int prte_filem_base_none_preposition_files(prte_job_t *jdata, prte_filem_complet
 
 int prte_filem_base_none_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
 {
+    PRTE_HIDE_UNUSED_PARAMS(jdata, app);
     return PRTE_SUCCESS;
 }

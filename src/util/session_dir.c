@@ -176,6 +176,7 @@ exit:
 static int _setup_jobfam_session_dir(pmix_proc_t *proc)
 {
     int rc = PRTE_SUCCESS;
+    PRTE_HIDE_UNUSED_PARAMS(proc);
 
     /* construct the top_session_dir if we need */
     if (NULL == prte_process_info.jobfam_session_dir) {
@@ -342,6 +343,8 @@ cleanup:
  */
 int prte_session_dir_cleanup(pmix_nspace_t jobid)
 {
+    PRTE_HIDE_UNUSED_PARAMS(jobid);
+
     /* special case - if a daemon is colocated with mpirun,
      * then we let mpirun do the rest to avoid a race
      * condition. this scenario always results in the rank=1

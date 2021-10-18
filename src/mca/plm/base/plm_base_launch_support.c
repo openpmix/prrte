@@ -123,6 +123,7 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
     prte_topology_t *t;
     prte_node_t *node;
     int i;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -187,6 +188,7 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
 void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -208,6 +210,7 @@ void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
 void prte_plm_base_daemons_launched(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -233,6 +236,7 @@ static void files_ready(int status, void *cbdata)
 void prte_plm_base_vm_ready(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -251,6 +255,7 @@ void prte_plm_base_vm_ready(int fd, short args, void *cbdata)
 void prte_plm_base_mapping_complete(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -271,6 +276,7 @@ static void spawn_timeout_cb(int fd, short event, void *cbdata)
     int timeout, *tp;
     char *st;
     pmix_byte_object_t bo;
+    PRTE_HIDE_UNUSED_PARAMS(fd, event);
 
     PRTE_ACQUIRE_OBJECT(jdata);
 
@@ -327,6 +333,7 @@ static void stack_trace_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
     prte_pointer_array_t parray;
     int rc;
     pmix_byte_object_t bo;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     prte_output_verbose(5, prte_plm_base_framework.framework_output,
                         "%s: stacktrace recvd from %s",
@@ -419,6 +426,7 @@ static void stack_trace_timeout(int sd, short args, void *cbdata)
     prte_proc_t proc;
     prte_pointer_array_t parray;
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     /* clear the timer */
     timer = NULL;
@@ -451,6 +459,7 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
     prte_pointer_array_t parray;
     pmix_byte_object_t bo;
     char *st;
+    PRTE_HIDE_UNUSED_PARAMS(fd, event);
 
     PRTE_ACQUIRE_OBJECT(jdata);
 
@@ -599,6 +608,7 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_timer_t *timer = NULL;
     int time, *tp;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -690,6 +700,7 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
 void prte_plm_base_setup_job_complete(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -707,6 +718,7 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
     pmix_rank_t *vptr;
     int i, rc;
     char *serial_number;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -779,6 +791,7 @@ void prte_plm_base_launch_apps(int fd, short args, void *cbdata)
     prte_job_t *jdata;
     prte_daemon_cmd_flag_t command;
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -827,6 +840,7 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
     prte_grpcomm_signature_t *sig;
     prte_job_t *jdata;
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     /* convenience */
     jdata = caddy->jdata;
@@ -1037,6 +1051,7 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
     prte_job_t *jdata;
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_timer_t *timer;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -1080,6 +1095,7 @@ void prte_plm_base_registered(int fd, short args, void *cbdata)
 {
     prte_job_t *jdata;
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -1127,6 +1143,7 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     pmix_data_buffer_t datbuf, *data;
     pmix_byte_object_t bo, pbo;
     pmix_topology_t ptopo;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:daemon_topology recvd for daemon %s",
@@ -1325,6 +1342,7 @@ CLEANUP:
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
@@ -1358,6 +1376,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     bool compressed;
     pmix_data_buffer_t datbuf, *data;
     pmix_topology_t ptopo;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     /* get the daemon job, if necessary */
     if (NULL == jdatorted) {
@@ -1811,6 +1830,7 @@ void prte_plm_base_daemon_failed(int st, pmix_proc_t *sender, pmix_data_buffer_t
     int32_t n;
     pmix_rank_t vpid;
     prte_proc_t *daemon = NULL;
+    PRTE_HIDE_UNUSED_PARAMS(st, sender, tag, cbdata);
 
     /* get the daemon job, if necessary */
     if (NULL == jdatorted) {

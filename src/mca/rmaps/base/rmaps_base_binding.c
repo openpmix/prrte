@@ -460,6 +460,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
     hwloc_obj_t root;
     prte_hwloc_topo_data_t *rdata;
     uint16_t u16, *u16ptr = &u16;
+    PRTE_HIDE_UNUSED_PARAMS(target, cache_level);
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind in place for job %s with bindings %s",
