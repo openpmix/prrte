@@ -47,7 +47,14 @@
 /*
  * Global variables for use within PLM frameworks
  */
-prte_plm_globals_t prte_plm_globals = {0};
+prte_plm_globals_t prte_plm_globals = {
+    .base_nspace = NULL,
+    .next_jobid = 0,
+    .daemonlaunchstart = {0, 0},
+    .tree_spawn_cmd = PMIX_DATA_BUFFER_STATIC_INIT,
+    .daemon_nodes_assigned_at_launch = true,
+    .node_regex_threshold = 0
+};
 
 /*
  * The default module
@@ -56,6 +63,8 @@ prte_plm_base_module_t prte_plm = {0};
 
 static int mca_plm_base_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
+
     prte_plm_globals.node_regex_threshold = 1024;
     (void) prte_mca_base_framework_var_register(
         &prte_plm_base_framework, "node_regex_threshold",

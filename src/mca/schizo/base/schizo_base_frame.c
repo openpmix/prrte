@@ -37,18 +37,25 @@
 /*
  * Global variables
  */
-prte_schizo_base_t prte_schizo_base = {{{0}}};
-prte_schizo_API_module_t prte_schizo = {.parse_env = prte_schizo_base_parse_env,
-                                        .detect_proxy = prte_schizo_base_detect_proxy,
-                                        .setup_app = prte_schizo_base_setup_app,
-                                        .setup_fork = prte_schizo_base_setup_fork,
-                                        .setup_child = prte_schizo_base_setup_child,
-                                        .job_info = prte_schizo_base_job_info,
-                                        .check_sanity = prte_schizo_base_check_sanity,
-                                        .finalize = prte_schizo_base_finalize};
+prte_schizo_base_t prte_schizo_base = {
+    .active_modules = PRTE_LIST_STATIC_INIT,
+    .test_proxy_launch = false
+};
+prte_schizo_API_module_t prte_schizo = {
+    .parse_env = prte_schizo_base_parse_env,
+    .detect_proxy = prte_schizo_base_detect_proxy,
+    .setup_app = prte_schizo_base_setup_app,
+    .setup_fork = prte_schizo_base_setup_fork,
+    .setup_child = prte_schizo_base_setup_child,
+    .job_info = prte_schizo_base_job_info,
+    .check_sanity = prte_schizo_base_check_sanity,
+    .finalize = prte_schizo_base_finalize
+};
 
 static int prte_schizo_base_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
+
     /* test proxy launch */
     prte_schizo_base.test_proxy_launch = false;
     prte_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch", "Test proxy launches",

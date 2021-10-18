@@ -28,7 +28,7 @@
 #include "src/util/show_help.h"
 
 /* instantiate the global list of interfaces */
-prte_list_t prte_if_list = {{0}};
+prte_list_t prte_if_list = PRTE_LIST_STATIC_INIT;
 bool prte_if_retain_loopback = false;
 
 static int prte_if_base_open(prte_mca_base_open_flag_t flags);

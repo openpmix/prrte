@@ -137,5 +137,6 @@ void prte_errmgr_base_abort(int error_code, char *fmt, ...)
 
 int prte_errmgr_base_abort_peers(pmix_proc_t *procs, int32_t num_procs, int error_code)
 {
+    PRTE_HIDE_UNUSED_PARAMS(procs, num_procs, error_code);
     return PRTE_ERR_NOT_IMPLEMENTED;
 }

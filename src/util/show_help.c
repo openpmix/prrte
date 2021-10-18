@@ -450,13 +450,14 @@ int prte_show_help_add_dir(const char *directory)
     return PRTE_SUCCESS;
 }
 
-int prte_show_help_norender(const char *filename, const char *topic, int want_error_header,
-                            const char *output)
+int prte_show_help_norender(const char *filename, const char *topic,
+                            int want_error_header, const char *output)
 {
     int rc = PRTE_SUCCESS;
     int8_t have_output = 1;
     pmix_data_buffer_t *buf;
     bool am_inside = false;
+    PRTE_HIDE_UNUSED_PARAMS(want_error_header);
 
     /* if we are the HNP, or the RML has not yet been setup,
      * or ROUTED has not been setup,
@@ -688,6 +689,7 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
 {
     time_t now = time(NULL);
     tuple_list_item_t *tli;
+    PRTE_HIDE_UNUSED_PARAMS(fd, event, context);
 
     /* Loop through all the messages we've displayed and see if any
        processes have sent duplicates that have not yet been displayed
@@ -816,6 +818,7 @@ void prte_show_help_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
     int32_t n;
     int8_t have_output;
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PRTE_OUTPUT_VERBOSE((5, prte_debug_output, "%s got show_help from %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender)));

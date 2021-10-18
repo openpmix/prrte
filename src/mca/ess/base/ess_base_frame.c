@@ -29,6 +29,7 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/argv.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
@@ -44,21 +45,23 @@
 #include "src/mca/ess/base/static-components.h"
 
 prte_ess_base_module_t prte_ess = {
-    NULL, /* init */
-    NULL, /* finalize */
-    NULL, /* abort */
+    .init = NULL,
+    .finalize = NULL,
+    .abort = NULL,
 };
 int prte_ess_base_std_buffering = -1;
 int prte_ess_base_num_procs = -1;
 char *prte_ess_base_nspace = NULL;
 char *prte_ess_base_vpid = NULL;
-prte_list_t prte_ess_base_signals = {{0}};
+prte_list_t prte_ess_base_signals = PRTE_LIST_STATIC_INIT;
 
-static prte_mca_base_var_enum_value_t stream_buffering_values[] = {{-1, "default"},
-                                                                   {0, "unbuffered"},
-                                                                   {1, "line_buffered"},
-                                                                   {2, "fully_buffered"},
-                                                                   {0, NULL}};
+static prte_mca_base_var_enum_value_t stream_buffering_values[] = {
+    {-1, "default"},
+    {0, "unbuffered"},
+    {1, "line_buffered"},
+    {2, "fully_buffered"},
+    {0, NULL}
+};
 
 static char *forwarded_signals = NULL;
 
@@ -66,6 +69,7 @@ static int prte_ess_base_register(prte_mca_base_register_flag_t flags)
 {
     prte_mca_base_var_enum_t *new_enum;
     int ret;
+    PRTE_HIDE_UNUSED_PARAMS(flags);
 
     prte_ess_base_std_buffering = -1;
     (void) prte_mca_base_var_enum_create("ess_base_stream_buffering", stream_buffering_values,
@@ -209,7 +213,7 @@ static struct known_signal known_signals[] = {
 #ifdef SIGUSR2
     {SIGUSR2, "SIGUSR2", true},
 #endif
-    {0, NULL},
+    {0, NULL, false},
 };
 
 #define ESS_ADDSIGNAL(x, s)                                     \

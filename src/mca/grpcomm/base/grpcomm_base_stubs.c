@@ -190,6 +190,7 @@ static void allgather_stub(int fd, short args, void *cbdata)
     prte_grpcomm_base_active_t *active;
     prte_grpcomm_coll_t *coll;
     uint32_t *seq_number;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(cd);
 

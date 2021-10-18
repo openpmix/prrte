@@ -35,6 +35,7 @@
 #    include <sys/types.h>
 #endif
 
+#include "src/class/prte_list.h"
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 
@@ -50,7 +51,9 @@
 /*
  * Globals
  */
-prte_errmgr_base_t prte_errmgr_base = {{{0}}};
+prte_errmgr_base_t prte_errmgr_base = {
+    .error_cbacks = PRTE_LIST_STATIC_INIT
+};
 
 /* Public module provides a wrapper around previous functions */
 prte_errmgr_base_module_t prte_errmgr_default_fns = {.init = NULL,     /* init     */

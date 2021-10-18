@@ -136,6 +136,7 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
                               char ***env)
 {
     int ret;
+    PRTE_HIDE_UNUSED_PARAMS(env);
 
     if (opts->connect_stdin) {
         close(opts->p_stdin[1]);

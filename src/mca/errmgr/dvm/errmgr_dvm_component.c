@@ -60,7 +60,8 @@ prte_errmgr_base_component_t prte_errmgr_dvm_component = {
     },
     .base_data = {
         /* The component is checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT,
+        .reserved = {0}
     },
 };
 

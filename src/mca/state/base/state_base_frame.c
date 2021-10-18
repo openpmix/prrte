@@ -49,6 +49,7 @@ bool prte_state_base_ready_msg = true;
 
 static int prte_state_base_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
     prte_state_base_run_fdcheck = false;
     prte_mca_base_var_register("prte", "state", "base", "check_fds",
                                "Daemons should check fds for leaks after each job completes",

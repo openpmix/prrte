@@ -32,9 +32,14 @@
 /*
  * Global variables
  */
-prte_rtc_API_module_t prte_rtc = {prte_rtc_base_assign, prte_rtc_base_set,
-                                  prte_rtc_base_get_avail_vals};
-prte_rtc_base_t prte_rtc_base = {{{0}}};
+prte_rtc_API_module_t prte_rtc = {
+    .assign = prte_rtc_base_assign,
+    .set = prte_rtc_base_set,
+    .get_available_values = prte_rtc_base_get_avail_vals
+};
+prte_rtc_base_t prte_rtc_base = {
+    .actives = PRTE_LIST_STATIC_INIT
+};
 
 static int prte_rtc_base_close(void)
 {

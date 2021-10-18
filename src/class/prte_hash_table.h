@@ -60,6 +60,19 @@ struct prte_hash_table_t {
 };
 typedef struct prte_hash_table_t prte_hash_table_t;
 
+#define PRTE_HASH_TABLE_STATIC_INIT                 \
+{                                                   \
+    .super = PRTE_OBJ_STATIC_INIT(prte_object_t),   \
+    .ht_table = NULL,                               \
+    .ht_capacity = 0,                               \
+    .ht_size = 0,                                   \
+    .ht_growth_trigger = 0,                         \
+    .ht_density_numer = 0,                          \
+    .ht_density_denom = 0,                          \
+    .ht_growth_numer = 0,                           \
+    .ht_growth_denom = 0,                           \
+    .ht_type_methods = NULL                         \
+}
 /**
  *  Initializes the table size, must be called before using
  *  the table.

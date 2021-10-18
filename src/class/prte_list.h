@@ -121,6 +121,14 @@ struct prte_list_item_t {
  * Base type for items that are put in a list (prte_list_t) containers.
  */
 typedef struct prte_list_item_t prte_list_item_t;
+/* static initializer for pmix_list_t */
+#define PRTE_LIST_ITEM_STATIC_INIT                  \
+{                                                   \
+    .super = PRTE_OBJ_STATIC_INIT(prte_object_t),   \
+    .prte_list_next = NULL,                         \
+    .prte_list_prev = NULL,                         \
+    .item_free = 0                                  \
+}
 
 /**
  * Get the next item in a list.
@@ -159,6 +167,13 @@ struct prte_list_t {
  * List container type.
  */
 typedef struct prte_list_t prte_list_t;
+#define PRTE_LIST_STATIC_INIT                           \
+{                                                       \
+    .super = PRTE_OBJ_STATIC_INIT(prte_object_t),       \
+    .prte_list_sentinel = PRTE_LIST_ITEM_STATIC_INIT,   \
+    .prte_list_length = 0                               \
+}
+
 
 /** Cleanly destruct a list
  *
