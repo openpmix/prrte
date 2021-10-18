@@ -48,7 +48,7 @@
 #include "src/mca/base/prte_mca_base_vari.h"
 #include "src/mca/mca.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/runtime/runtime.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/argv.h"
 #include "src/util/error.h"
 #include "src/util/keyval_parse.h"
@@ -575,6 +575,7 @@ int prte_mca_base_var_set_value(int vari, const void *value, size_t size,
 {
     prte_mca_base_var_t *var;
     int ret;
+    PRTE_HIDE_UNUSED_PARAMS(size);
 
     ret = var_get(vari, &var, true);
     if (PRTE_SUCCESS != ret) {
@@ -734,6 +735,7 @@ static int var_find(const char *project_name, const char *framework_name,
 {
     char *full_name;
     int ret, vari;
+    PRTE_HIDE_UNUSED_PARAMS(project_name);
 
     ret = prte_mca_base_var_generate_full_name4(NULL, framework_name, component_name, variable_name,
                                                 &full_name);
@@ -1304,11 +1306,13 @@ static int var_get_env(prte_mca_base_var_t *var, const char *name, char **source
     const char source_prefix[] = "SOURCE_";
     const int max_len = strlen(prte_mca_prefix) + strlen(source_prefix) + strlen(name) + 1;
     char *envvar = alloca(max_len);
+    int ret;
+    PRTE_HIDE_UNUSED_PARAMS(var);
+
     if (NULL == envvar) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    int ret;
     ret = snprintf(envvar, max_len, "%s%s", prte_mca_prefix, name);
     if (0 > ret) {
         return PRTE_ERROR;

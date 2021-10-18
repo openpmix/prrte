@@ -28,15 +28,16 @@
 
 #include "prte_config.h"
 
-#include "src/mca/base/base.h"
-#include "src/mca/base/prte_mca_base_var_enum.h"
-#include "src/mca/base/prte_mca_base_vari.h"
-#include "src/util/argv.h"
-#include "src/util/printf.h"
-
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "src/mca/base/base.h"
+#include "src/mca/base/prte_mca_base_var_enum.h"
+#include "src/mca/base/prte_mca_base_vari.h"
+#include "src/runtime/prte_globals.h"
+#include "src/util/argv.h"
+#include "src/util/printf.h"
 
 static void mca_base_var_enum_constructor(prte_mca_base_var_enum_t *enumerator);
 static void mca_base_var_enum_destructor(prte_mca_base_var_enum_t *enumerator);
@@ -55,6 +56,7 @@ static int enum_get_value(prte_mca_base_var_enum_t *self, int index, int *value,
 
 static int mca_base_var_enum_bool_get_count(prte_mca_base_var_enum_t *enumerator, int *count)
 {
+    PRTE_HIDE_UNUSED_PARAMS(enumerator);
     *count = 2;
     return PRTE_SUCCESS;
 }
@@ -62,6 +64,8 @@ static int mca_base_var_enum_bool_get_count(prte_mca_base_var_enum_t *enumerator
 static int mca_base_var_enum_bool_get_value(prte_mca_base_var_enum_t *self, int index, int *value,
                                             const char **string_value)
 {
+    PRTE_HIDE_UNUSED_PARAMS(self);
+
     if (1 < index) {
         return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
     }
@@ -77,6 +81,7 @@ static int mca_base_var_enum_bool_vfs(prte_mca_base_var_enum_t *self, const char
 {
     char *tmp;
     long v;
+    PRTE_HIDE_UNUSED_PARAMS(self);
 
     /* skip whitespace */
     string_value += strspn(string_value, " \t\n\v\f\r");
@@ -104,6 +109,8 @@ static int mca_base_var_enum_bool_vfs(prte_mca_base_var_enum_t *self, const char
 static int mca_base_var_enum_bool_sfv(prte_mca_base_var_enum_t *self, const int value,
                                       char **string_value)
 {
+    PRTE_HIDE_UNUSED_PARAMS(self);
+
     if (string_value) {
         *string_value = strdup(value ? "true" : "false");
     }
@@ -113,6 +120,7 @@ static int mca_base_var_enum_bool_sfv(prte_mca_base_var_enum_t *self, const int 
 
 static int mca_base_var_enum_bool_dump(prte_mca_base_var_enum_t *self, char **out)
 {
+    PRTE_HIDE_UNUSED_PARAMS(self);
     *out = strdup("0: f|false|disabled|no|n, 1: t|true|enabled|yes|y");
     return *out ? PRTE_SUCCESS : PRTE_ERR_OUT_OF_RESOURCE;
 }
@@ -129,6 +137,7 @@ prte_mca_base_var_enum_t prte_mca_base_var_enum_bool
 
 static int mca_base_var_enum_auto_bool_get_count(prte_mca_base_var_enum_t *enumerator, int *count)
 {
+    PRTE_HIDE_UNUSED_PARAMS(enumerator);
     *count = 3;
     return PRTE_SUCCESS;
 }
@@ -138,6 +147,7 @@ static int mca_base_var_enum_auto_bool_get_value(prte_mca_base_var_enum_t *self,
 {
     const int values[3] = {0, 1, -1};
     const char *strings[3] = {"false", "true", "auto"};
+    PRTE_HIDE_UNUSED_PARAMS(self);
 
     if (2 < index) {
         return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
@@ -154,6 +164,7 @@ static int mca_base_var_enum_auto_bool_vfs(prte_mca_base_var_enum_t *self, const
 {
     char *tmp;
     long v;
+    PRTE_HIDE_UNUSED_PARAMS(self);
 
     /* skip whitespace */
     string_value += strspn(string_value, " \t\n\v\f\r");
@@ -189,6 +200,8 @@ static int mca_base_var_enum_auto_bool_vfs(prte_mca_base_var_enum_t *self, const
 static int mca_base_var_enum_auto_bool_sfv(prte_mca_base_var_enum_t *self, const int value,
                                            char **string_value)
 {
+    PRTE_HIDE_UNUSED_PARAMS(self);
+
     if (string_value) {
         if (value < 0) {
             *string_value = strdup("auto");
@@ -204,6 +217,7 @@ static int mca_base_var_enum_auto_bool_sfv(prte_mca_base_var_enum_t *self, const
 
 static int mca_base_var_enum_auto_bool_dump(prte_mca_base_var_enum_t *self, char **out)
 {
+    PRTE_HIDE_UNUSED_PARAMS(self);
     *out = strdup("-1: auto, 0: f|false|disabled|no|n, 1: t|true|enabled|yes|y");
     return *out ? PRTE_SUCCESS : PRTE_ERR_OUT_OF_RESOURCE;
 }
@@ -235,6 +249,7 @@ static int mca_base_var_enum_verbose_vfs(prte_mca_base_var_enum_t *self, const c
 {
     char *tmp;
     int v;
+    PRTE_HIDE_UNUSED_PARAMS(self);
 
     /* skip whitespace */
     string_value += strspn(string_value, " \t\n\v\f\r");
@@ -264,6 +279,7 @@ static int mca_base_var_enum_verbose_sfv(prte_mca_base_var_enum_t *self, const i
                                          char **string_value)
 {
     int ret;
+    PRTE_HIDE_UNUSED_PARAMS(self);
 
     if (value < 0 || value > 100) {
         return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
@@ -292,6 +308,7 @@ static int mca_base_var_enum_verbose_dump(prte_mca_base_var_enum_t *self, char *
 {
     char *tmp;
     int ret;
+    PRTE_HIDE_UNUSED_PARAMS(self);
 
     ret = enum_dump(self, out);
     if (PRTE_SUCCESS != ret) {
@@ -757,6 +774,7 @@ int prte_mca_base_var_enum_register(const char *project_name, const char *framew
                                     void *storage)
 {
     int group_index;
+    PRTE_HIDE_UNUSED_PARAMS(enum_name);
 
     /* Developer error. Storage can not be NULL */
     assert(NULL != storage);

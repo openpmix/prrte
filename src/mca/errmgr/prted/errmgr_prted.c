@@ -110,6 +110,7 @@ static int finalize(void)
 
 static void wakeup(int sd, short args, void *cbdata)
 {
+    PRTE_HIDE_UNUSED_PARAMS(sd, args, cbdata);
     /* nothing more we can do */
     PRTE_ACQUIRE_OBJECT(cbdata);
     prte_quit(0, 0, NULL);
@@ -244,6 +245,7 @@ static void job_errors(int fd, short args, void *cbdata)
     int rc;
     prte_plm_cmd_flag_t cmd;
     pmix_data_buffer_t *alert;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -326,6 +328,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     int rc = PRTE_SUCCESS;
     int i;
     prte_wait_tracker_t *t2;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 

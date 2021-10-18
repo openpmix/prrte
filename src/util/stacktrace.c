@@ -104,6 +104,7 @@ static void show_stackframe(int signo, siginfo_t *info, void *p)
     int size = sizeof(print_buffer);
     int ret;
     char *si_code_str = "";
+    PRTE_HIDE_UNUSED_PARAMS(p);
 
     /* Do not print the stack trace */
     if (0 > prte_stacktrace_output_fileno && 0 == prte_stacktrace_output_filename_max_len) {

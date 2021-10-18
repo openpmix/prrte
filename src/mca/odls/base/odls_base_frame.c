@@ -68,12 +68,27 @@ prte_odls_base_module_t prte_odls = {0};
 /*
  * Framework global variables
  */
-prte_odls_globals_t prte_odls_globals = {0};
+prte_odls_globals_t prte_odls_globals = {
+    .output = 0,
+    .timeout_before_sigkill = 0,
+    .xterm_ranks = PRTE_LIST_STATIC_INIT,
+    .xtermcmd = NULL,
+    .max_threads = 0,
+    .num_threads = 0,
+    .cutoff = 0,
+    .ev_bases = NULL,
+    .ev_threads = NULL,
+    .next_base = 0,
+    .signal_direct_children_only = false,
+    .lock = PRTE_LOCK_STATIC_INIT
+};
 
 static prte_event_base_t **prte_event_base_ptr = NULL;
 
 static int prte_odls_base_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
+
     prte_odls_globals.timeout_before_sigkill = 1;
     (void) prte_mca_base_var_register(
         "prte", "odls", "base", "sigkill_timeout",

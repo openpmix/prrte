@@ -120,6 +120,7 @@ void prte_filem_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *b
     prte_filem_cmd_flag_t command;
     int32_t count;
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PRTE_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
                          "%s filem:base: Receive a command message.",

@@ -16,6 +16,7 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/output.h"
 
 #include "src/mca/prtereachable/base/base.h"
@@ -32,6 +33,7 @@ prte_reachable_base_module_t prte_reachable = {0};
 
 static int prte_reachable_base_frame_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
     return PRTE_SUCCESS;
 }
 
