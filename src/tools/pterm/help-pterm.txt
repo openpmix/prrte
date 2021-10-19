@@ -13,6 +13,7 @@
 # Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,16 +22,13 @@
 #
 # This is the US/English general help file for PRTE's pterm.
 #
-[usage]
-%s (%s) %s
+#
+[no-args]
+The %s command does not accept arguments other than those
+specifically defined by the command. The following were
+not recognized:
 
-Usage: %s [OPTION]...
-Terminate an instance of the PMIx Reference RTE (PRTE)
+  Args: %s
 
-%s
-
-Report bugs to %s
-[version]
-%s (%s) %s
-
-Report bugs to %s
+Please see "%s --help" for a description of all accepted
+command options.

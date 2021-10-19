@@ -17,7 +17,7 @@
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -54,6 +54,7 @@
 #include "src/mca/rml/rml_types.h"
 #include "src/runtime/runtime.h"
 #include "src/util/attr.h"
+#include "src/util/cmd_line.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 
@@ -70,6 +71,7 @@ PRTE_EXPORT extern bool prte_event_base_active;    /* instantiated in src/runtim
 PRTE_EXPORT extern bool prte_proc_is_bound;        /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern int prte_progress_thread_debug; /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern char *prte_tool_basename;       // argv[0] of prun or one of its symlinks
+PRTE_EXPORT extern char *prte_tool_actual;         // actual tool executable
 
 /**
  * Global indicating where this process was bound to at launch (will
@@ -199,6 +201,8 @@ typedef uint16_t prte_job_controls_t;
  */
 struct prte_proc_t;
 struct prte_job_map_t;
+struct prte_schizo_base_module_t;
+
 /************/
 
 /* define an object for storing node topologies */
@@ -245,6 +249,8 @@ typedef struct {
      * every time we want some new (rarely used) option
      */
     prte_list_t attributes;
+    // store the result of parsing this app's cmd line
+    prte_cli_result_t cli;
 } prte_app_context_t;
 
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_app_context_t);
@@ -307,6 +313,7 @@ typedef struct {
     int exit_code;
     /* personality for this job */
     char **personality;
+    struct prte_schizo_base_module_t *schizo;
     /* jobid for this job */
     pmix_nspace_t nspace;
     int index; // index in the job array where this is stored
@@ -367,6 +374,8 @@ typedef struct {
     /* track the number of stack traces recv'd */
     uint32_t ntraces;
     char **traces;
+    // store the result of parsing this app's cmd line
+    prte_cli_result_t cli;
 } prte_job_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_job_t);
 

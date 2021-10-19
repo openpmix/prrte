@@ -11,9 +11,9 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2011-2016 Los Alamos National Security, LLC.
+# Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
-# Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -22,22 +22,20 @@
 # $HEADER$
 #
 
-# MCA_plm_slurm_CONFIG([action-if-found], [action-if-not-found])
+# MCA_schizo_ompi_CONFIG([action-if-found], [action-if-not-found])
 # -----------------------------------------------------------
-AC_DEFUN([MCA_prte_plm_slurm_CONFIG],[
-    AC_CONFIG_FILES([src/mca/plm/slurm/Makefile])
+AC_DEFUN([MCA_prte_schizo_ompi_CONFIG],[
+    AC_CONFIG_FILES([src/mca/schizo/ompi/Makefile])
 
-    PRTE_CHECK_SLURM([plm_slurm], [plm_slurm_good=1], [plm_slurm_good=0])
+    AC_ARG_ENABLE([ompi-support],
+                  [AS_HELP_STRING([--disable-ompi-support],
+                                  [Disable support for Open MPI (default: no)])],
+                  [],
+                  [enable_ompi_support=yes])
 
-    # if check worked, set wrapper flags if so.
-    # Evaluate succeed / fail
-    AS_IF([test "$plm_slurm_good" = "1"],
-          [$1],
-          [$2])
+    AS_IF([test "$enable_ompi_support" = "yes"],
+          [$1], [$2])
 
-    # set build flags to use in makefile
-    AC_SUBST([plm_slurm_CPPFLAGS])
-    AC_SUBST([plm_slurm_LDFLAGS])
-    AC_SUBST([plm_slurm_LIBS])
+    PRTE_SUMMARY_ADD([[Personalities]],[[OMPI]],[$1],[$enable_ompi_support])
 
 ])dnl

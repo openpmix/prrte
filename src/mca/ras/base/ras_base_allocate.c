@@ -15,7 +15,7 @@
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -181,10 +181,10 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     prte_job_t *jdata;
     prte_list_t nodes;
     prte_node_t *node;
-    int32_t i;
+    int32_t i, j;
     prte_app_context_t *app;
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
-    char *hosts = NULL;
+    char *hosts = NULL, **hostlist;
     char *ptr;
     pmix_status_t ret;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
@@ -373,8 +373,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts,
-                               PMIX_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding dash_hosts",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -426,22 +425,25 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
-        if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts,
-                               PMIX_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding hostfile %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
 
             /* hostfile was specified - parse it and add it to the list */
-            if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, hosts))) {
-                free(hosts);
-                PRTE_DESTRUCT(&nodes);
-                /* set an error event */
-                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-                PRTE_RELEASE(caddy);
-                return;
-            }
+            hostlist = prte_argv_split(hosts, ',');
             free(hosts);
+            for (j=0; NULL != hostlist[j]; j++) {
+                if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, hostlist[j]))) {
+                    prte_argv_free(hostlist);
+                    PRTE_DESTRUCT(&nodes);
+                    /* set an error event */
+                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
+                    PRTE_RELEASE(caddy);
+                    return;
+                }
+            }
+            prte_argv_free(hostlist);
         }
     }
 

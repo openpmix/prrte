@@ -12,6 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,11 +22,50 @@
 # This is the US/English help file for PRTE pinfo error
 # messages.
 #
-[usage]
+[help]
 The prte_info command can be used to provide detailed information on
 your PRTE installation.  Syntax:
 
 %s
+#
+[version]
+Output PRRTE version
+#
+[verbose]
+Set typical debugging verbosity options, with level
+determined by number of times this option is given
+(e.g., -vvv equates to debugging level of 3)
+#
+[parseable]
+Output information (e.g., help messages) in machine-parseable
+friendly format
+#
+[parsable]
+Output information (e.g., help messages) in machine-parseable
+friendly format
+#
+[param]
+Show MCA parameters.  The first parameter is the framework (or the keyword "all");
+the second parameter is the specific component name (or the keyword "all").
+#
+[internal]
+Show internal MCA parameters (not meant to be modified by users)
+#
+[path]
+Show paths that PRRTE was configured with.  Accepts the following parameters:
+    prefix, bindir, libdir, incdir, mandir, pkglibdir, sysconfdir
+#
+[arch]
+Show architecture PRRTE was compiled on
+#
+[config]
+Show configuration options
+#
+[hostname]
+Show the hostname that PRTE was configured and built on
+#
+[all]
+Show all configuration options and MCA parameters
 #
 [lib-call-fail]
 A library call unexpectedly failed.  This is a terminal error; please
