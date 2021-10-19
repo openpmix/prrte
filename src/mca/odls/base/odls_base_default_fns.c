@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -71,7 +71,7 @@
 #include "src/mca/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/rtc/rtc.h"
-#include "src/mca/schizo/schizo.h"
+#include "src/mca/schizo/base/base.h"
 #include "src/mca/state/state.h"
 
 #include "src/prted/pmix/pmix_server.h"
@@ -425,6 +425,7 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
     pmix_byte_object_t bo, pbo;
     size_t m;
     pmix_envar_t envt;
+    char *tmp;
 
     PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                          "%s odls:constructing child list", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -580,6 +581,24 @@ next:
         if (NULL == jdata->map) {
             jdata->map = PRTE_NEW(prte_job_map_t);
         }
+    }
+    /* get the associated schizo module */
+    if (NULL != jdata->personality) {
+        tmp = prte_argv_join(jdata->personality, ',');
+    } else {
+        tmp = NULL;
+    }
+    jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
+    if (NULL == jdata->schizo) {
+        prte_show_help("help-schizo-base.txt", "no-proxy", true,
+                       prte_tool_basename, (NULL == tmp) ? "NULL" : tmp);
+        if (NULL != tmp) {
+            free(tmp);
+        }
+        return 1;
+    }
+    if (NULL != tmp) {
+        free(tmp);
     }
 
     /* if the job is fully described, then mpirun will have computed
@@ -952,6 +971,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     pmix_proc_t pproc;
     pmix_status_t ret;
     char *ptr;
+
     PRTE_HIDE_UNUSED_PARAMS(fd, sd);
 
     PRTE_ACQUIRE_OBJECT(cd);
@@ -967,7 +987,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
             char *tmp = strdup(app->env[i]);
             ptr = strchr(tmp, '=');
             if (NULL == ptr) {
-                PMIX_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                 rc = PRTE_ERR_BAD_PARAM;
                 state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
                 free(tmp);
@@ -1007,15 +1027,6 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     if (NULL != child->rml_uri) {
         free(child->rml_uri);
         child->rml_uri = NULL;
-    }
-
-    /* setup the rest of the environment with the proc-specific items - these
-     * will be overwritten for each child
-     */
-    if (PRTE_SUCCESS != (rc = prte_schizo.setup_child(jobdat, child, app, &cd->env))) {
-        PRTE_ERROR_LOG(rc);
-        state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
-        goto errorout;
     }
 
     /* did the user request we display output in xterms? */
@@ -1130,6 +1141,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     char **argvptr;
     char *pathenv = NULL, *mpiexec_pathenv = NULL;
     char *full_search;
+    prte_schizo_base_module_t *schizo;
+
     PRTE_HIDE_UNUSED_PARAMS(fd, sd);
 
     PRTE_ACQUIRE_OBJECT(caddy);
@@ -1154,6 +1167,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
          * and was removed. This isn't an error so just move along */
         goto ERROR_OUT;
     }
+    schizo = (prte_schizo_base_module_t*)jobdat->schizo;
 
     /* do we have any local procs to launch? */
     if (0 == jobdat->num_local_procs) {
@@ -1269,7 +1283,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         }
 
         /* setup the environment for this app */
-        if (PRTE_SUCCESS != (rc = prte_schizo.setup_fork(jobdat, app))) {
+        if (PRTE_SUCCESS != (rc = schizo->setup_fork(jobdat, app))) {
 
             PRTE_OUTPUT_VERBOSE((10, prte_odls_base_framework.framework_output,
                                  "%s odls:launch:setup_fork failed with error %s",
@@ -2077,12 +2091,6 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
         child->rml_uri = NULL;
     }
     app = (prte_app_context_t *) prte_pointer_array_get_item(jobdat->apps, child->app_idx);
-
-    /* reset envars to match this child */
-    if (PRTE_SUCCESS != (rc = prte_schizo.setup_child(jobdat, child, app, &app->env))) {
-        PRTE_ERROR_LOG(rc);
-        goto CLEANUP;
-    }
 
     /* setup the path */
     if (PRTE_SUCCESS != (rc = setup_path(app, &wdir))) {

@@ -19,7 +19,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -129,55 +129,7 @@ static int ncollected = 0;
 static bool node_regex_waiting = false;
 static bool prted_abort = false;
 static char *prte_parent_uri = NULL;
-static prte_cmd_line_t *prte_cmd_line = NULL;
-
-/*
- * define the prted context table for obtaining parameters
- */
-prte_cmd_line_init_t prted_cmd_line_opts[] = {
-    /* DVM-specific options */
-    /* uri of PMIx publish/lookup server, or at least where to get it */
-    {'\0', "prte-server", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Specify the URI of the publish/lookup server, or the name of the file (specified as "
-     "file:filename) that contains that info",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    {'\0', "dvm-master-uri", 1, PRTE_CMD_LINE_TYPE_STRING, "URI for the DVM master",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    {'\0', "parent-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "URI for the parent if tree launch is enabled.", PRTE_CMD_LINE_OTYPE_DVM},
-    {'\0', "tree-spawn", 0, PRTE_CMD_LINE_TYPE_BOOL, "Tree-based spawn in progress",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    {'\0', "daemonize", 0, PRTE_CMD_LINE_TYPE_BOOL, "Daemonize the DVM daemons into the background",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    {'\0', "set-sid", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Direct the DVM daemons to separate from the current session", PRTE_CMD_LINE_OTYPE_DVM},
-    {'\0', "prtemca", 2, PRTE_CMD_LINE_TYPE_STRING,
-     "Pass context-specific PRTE MCA parameters; they are considered global if --gmca is not used "
-     "and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "pmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
-     "Pass context-specific PMIx MCA parameters; they are considered global if --gmca is not used "
-     "and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-
-    /* Debug options */
-    {'\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL, "Top-level PRTE debug switch (default: false)",
-     PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "debug-daemons", 0, PRTE_CMD_LINE_TYPE_BOOL, "Debug daemons", PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "debug-verbose", 1, PRTE_CMD_LINE_TYPE_INT,
-     "Verbosity level for PRTE debug messages (default: 1)", PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'d', "debug-devel", 0, PRTE_CMD_LINE_TYPE_BOOL, "Enable debugging of PRTE",
-     PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "debug-daemons-file", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Enable debugging of any PRTE daemons used by this application, storing output in files",
-     PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "leave-session-attached", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Do not discard stdout/stderr of remote PRTE daemons", PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "test-suicide", 1, PRTE_CMD_LINE_TYPE_BOOL, "Suicide instead of clean abort after delay",
-     PRTE_CMD_LINE_OTYPE_DEBUG},
-
-    /* End of list */
-    {'\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL}};
+static prte_cli_result_t results;
 
 typedef struct {
     prte_pmix_lock_t lock;
@@ -245,7 +197,7 @@ int main(int argc, char *argv[])
     prte_value_t *pval;
     int8_t flag;
     uint8_t naliases, ni;
-    char **nonlocal = NULL;
+    char **nonlocal = NULL, *personality;
     int n;
     pmix_info_t info;
     size_t z1 = 1;
@@ -254,6 +206,7 @@ int main(int argc, char *argv[])
     char **pargv;
     int pargc;
     prte_schizo_base_module_t *schizo;
+    prte_cli_item_t *opt;
 
     char *umask_str = getenv("PRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -267,8 +220,10 @@ int main(int argc, char *argv[])
     /* initialize the globals */
     PMIX_DATA_BUFFER_CREATE(bucket);
     prte_tool_basename = prte_basename(argv[0]);
+    prte_tool_actual = "prted";
     pargc = argc;
-    pargv = prte_argv_copy(argv);
+    pargv = prte_argv_copy_strip(argv);  // strip any quoted arguments
+
     /* save a pristine copy of the environment for launch purposes.
      * This MUST be done so that we can pass it to any local procs we
      * spawn - otherwise, those local procs will get a bunch of
@@ -294,23 +249,8 @@ int main(int argc, char *argv[])
         return ret;
     }
 
-    /* init the tiny part of PRTE we use */
+    /* init the tiny part of PRTE we initially use */
     prte_init_util(PRTE_PROC_DAEMON);
-
-    /* setup the base cmd line */
-    prte_cmd_line = PRTE_NEW(prte_cmd_line_t);
-    ret = prte_cmd_line_add(prte_cmd_line, prted_cmd_line_opts);
-    if (PRTE_SUCCESS != ret) {
-        return ret;
-    }
-
-    /* parse the result to get values - this will not include MCA params */
-    if (PRTE_SUCCESS != (ret = prte_cmd_line_parse(prte_cmd_line, true, false, argc, argv))) {
-        if (PRTE_ERR_SILENT != ret) {
-            fprintf(stderr, "%s: command line error (%s)\n", argv[0], prte_strerror(ret));
-        }
-        return ret;
-    }
 
     /* open the SCHIZO framework */
     if (PRTE_SUCCESS
@@ -325,38 +265,43 @@ int main(int argc, char *argv[])
         return ret;
     }
 
+    /* look for any personality specification */
+    personality = NULL;
+    for (i = 0; NULL != pargv[i]; i++) {
+        if (0 == strcmp(pargv[i], "--personality")) {
+            personality = pargv[i + 1];
+            break;
+        }
+    }
+
     /* get our schizo module */
-    prte_unsetenv("PRTE_MCA_schizo_proxy", &environ);
-    schizo = prte_schizo.detect_proxy("prte");
-    if (NULL == schizo || 0 != strcmp(schizo->name, "prte")) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "NONE");
+    schizo = prte_schizo_base_detect_proxy(personality);
+    if (NULL == schizo) {
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
 
     /* parse the CLI to load the MCA params */
-    if (PRTE_SUCCESS != (ret = schizo->parse_cli(pargc, 0, pargv, NULL))) {
+    PRTE_CONSTRUCT(&results, prte_cli_result_t);
+    ret = schizo->parse_cli(pargv, &results);
+    if (PRTE_SUCCESS != ret) {
         if (PRTE_ERR_SILENT != ret) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename,
                     prte_strerror(ret));
+        } else {
+            ret = PRTE_SUCCESS;  // printed version or help
         }
         return ret;
     }
 
-    /* set debug flags */
-    prte_debug_flag = prte_cmd_line_is_taken(prte_cmd_line, "debug");
-    prte_debug_daemons_flag = prte_cmd_line_is_taken(prte_cmd_line, "debug-daemons");
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "debug-verbose", 0, 0))) {
-        prte_debug_verbosity = pval->value.data.integer;
+    /* check if we are running as root - if we are, then only allow
+     * us to proceed if the allow-run-as-root flag was given. Otherwise,
+     * exit with a giant warning message
+     */
+    if (0 == geteuid()) {
+        schizo->allow_run_as_root(&results); // will exit us if not allowed
     }
-    prte_debug_daemons_file_flag = prte_cmd_line_is_taken(prte_cmd_line, "debug-daemons-file");
-    if (prte_debug_daemons_file_flag) {
-        prte_debug_daemons_flag = true;
-    }
-    prte_leave_session_attached = prte_cmd_line_is_taken(prte_cmd_line, "leave-session-attached");
-    /* if any debug level is set, ensure we output debug level dumps */
-    if (prte_debug_flag || prte_debug_daemons_flag || prte_leave_session_attached) {
-        prte_devel_level_output = true;
-    }
+
     /* if prte_daemon_debug is set, let someone know we are alive right
      * away just in case we have a problem along the way
      */
@@ -368,8 +313,7 @@ int main(int argc, char *argv[])
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
-    if (!prte_debug_flag && !prte_debug_daemons_flag
-        && prte_cmd_line_is_taken(prte_cmd_line, "daemonize")) {
+    if (!prte_debug_flag && !prte_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         pipe(wait_pipe);
         prte_state_base_parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
@@ -377,7 +321,7 @@ int main(int argc, char *argv[])
     }
 #if defined(HAVE_SETSID)
     /* see if we were directed to separate from current session */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "set-sid")) {
+    if (prte_cmd_line_is_taken(&results, PRTE_CLI_SET_SID)) {
         setsid();
     }
 #endif
@@ -487,8 +431,8 @@ int main(int argc, char *argv[])
     }
     PMIX_VALUE_LOAD(&val, myuri, PMIX_STRING);
     free(myuri);
-    if (PMIX_SUCCESS
-        != (prc = PMIx_Store_internal(&prte_process_info.myproc, PMIX_PROC_URI, &val))) {
+    prc = PMIx_Store_internal(&prte_process_info.myproc, PMIX_PROC_URI, &val);
+    if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_VALUE_DESTRUCT(&val);
         ret = PRTE_ERROR;
@@ -503,7 +447,7 @@ int main(int argc, char *argv[])
     /* output a message indicating we are alive, our name, and our pid
      * for debugging purposes
      */
-    if (prte_debug_daemons_flag) {
+    if (prte_debug_flag) {
         fprintf(stderr, "Daemon %s checking in as pid %ld on host %s\n",
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (long) prte_process_info.pid,
                 prte_process_info.nodename);
@@ -513,7 +457,8 @@ int main(int argc, char *argv[])
     PMIX_VALUE_LOAD(&val, prte_process_info.my_hnp_uri, PMIX_STRING);
     PMIX_LOAD_NSPACE(proc.nspace, prte_process_info.myproc.nspace);
     proc.rank = PRTE_PROC_MY_HNP->rank;
-    if (PMIX_SUCCESS != (prc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val))) {
+    prc = PMIx_Store_internal(&proc, PMIX_PROC_URI, &val);
+    if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_VALUE_DESTRUCT(&val);
         ret = PRTE_ERROR;
@@ -551,21 +496,22 @@ int main(int argc, char *argv[])
         /* tell the routed module that we have a path
          * back to the HNP
          */
-        if (PRTE_SUCCESS
-            != (ret = prte_routed.update_route(PRTE_PROC_MY_HNP, PRTE_PROC_MY_PARENT))) {
+        ret = prte_routed.update_route(PRTE_PROC_MY_HNP, PRTE_PROC_MY_PARENT);
+        if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             goto DONE;
         }
         /* and a path to our parent */
-        if (PRTE_SUCCESS
-            != (ret = prte_routed.update_route(PRTE_PROC_MY_PARENT, PRTE_PROC_MY_PARENT))) {
+        ret = prte_routed.update_route(PRTE_PROC_MY_PARENT, PRTE_PROC_MY_PARENT);
+        if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             goto DONE;
         }
         /* set the lifeline to point to our parent so that we
          * can handle the situation if that lifeline goes away
          */
-        if (PRTE_SUCCESS != (ret = prte_routed.set_lifeline(PRTE_PROC_MY_PARENT))) {
+        ret = prte_routed.set_lifeline(PRTE_PROC_MY_PARENT);
+        if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             goto DONE;
         }
@@ -824,52 +770,59 @@ int main(int argc, char *argv[])
      * from our cmd line so we can pass them along to the daemons we spawn -
      * otherwise, only the first layer of daemons will ever see them
      */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "tree-spawn")) {
+    if (prte_cmd_line_is_taken(&results, PRTE_CLI_TREE_SPAWN)) {
         int j, k;
         bool ignore;
-        char *no_keep[] = {"prte_hnp_uri",
-                           "prte_ess_jobid",
-                           "prte_ess_vpid",
-                           "prte_ess_num_procs",
-                           "prte_parent_uri",
-                           "mca_base_env_list",
-                           NULL};
-        for (i = 0; i < argc; i++) {
-            if (0 == strcmp("-" PRTE_MCA_CMD_LINE_ID, argv[i])
-                || 0 == strcmp("--" PRTE_MCA_CMD_LINE_ID, argv[i])) {
+        char *no_keep[] = {
+            "prte_hnp_uri",
+            "prte_ess_jobid",
+            "prte_ess_vpid",
+            "prte_ess_num_procs",
+            "prte_parent_uri",
+            "mca_base_env_list",
+            NULL
+        };
+        opt = prte_cmd_line_get_param(&results, PRTE_CLI_PRTEMCA);
+        if (NULL != opt) {
+            // cycle across found values
+            for (i=0; NULL != opt->values[i]; i++) {
+                char *t = strchr(opt->values[i], '=');
+                *t = '\0';
+                ++t;
                 ignore = false;
                 /* see if this is something we cannot pass along */
                 for (k = 0; NULL != no_keep[k]; k++) {
-                    if (0 == strcmp(no_keep[k], argv[i + 1])) {
+                    if (0 == strcmp(no_keep[k], opt->values[i])) {
                         ignore = true;
                         break;
                     }
                 }
                 if (!ignore) {
-                    /* see if this is already present so we at least can
-                     * avoid growing the cmd line with duplicates
-                     */
-                    if (NULL != prted_cmd_line) {
-                        for (j = 0; NULL != prted_cmd_line[j]; j++) {
-                            if (0 == strcmp(argv[i + 1], prted_cmd_line[j])) {
-                                /* already here - ignore it */
-                                ignore = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!ignore) {
-                        prte_argv_append_nosize(&prted_cmd_line, argv[i]);
-                        prte_argv_append_nosize(&prted_cmd_line, argv[i + 1]);
-                        prte_argv_append_nosize(&prted_cmd_line, argv[i + 2]);
-                    }
+                    prte_argv_append_nosize(&prted_cmd_line, "--"PRTE_CLI_PRTEMCA);
+                    prte_argv_append_nosize(&prted_cmd_line, opt->values[i]);
+                    prte_argv_append_nosize(&prted_cmd_line, t);
                 }
-                i += 2;
+                --t;
+                *t = '=';
+            }
+        }
+        opt = prte_cmd_line_get_param(&results, PRTE_CLI_PMIXMCA);
+        if (NULL != opt) {
+            // cycle across found values - we always pass PMIx values
+            for (i=0; NULL != opt->values[i]; i++) {
+                char *t = strchr(opt->values[i], '=');
+                *t = '\0';
+                ++t;
+                prte_argv_append_nosize(&prted_cmd_line, "--"PRTE_CLI_PMIXMCA);
+                prte_argv_append_nosize(&prted_cmd_line, opt->values[i]);
+                prte_argv_append_nosize(&prted_cmd_line, t);
+                --t;
+                *t = '=';
             }
         }
     }
 
-    if (prte_debug_daemons_flag) {
+    if (prte_debug_flag) {
         prte_output(0, "%s prted: up and running - waiting for commands!",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     }
@@ -904,7 +857,7 @@ DONE:
 static void shutdown_callback(int fd, short flags, void *arg)
 {
     prte_timer_t *tm = (prte_timer_t *) arg;
-    bool suicide;
+    bool suicide = false;
 
     if (NULL != tm) {
         /* release the timer */
@@ -913,7 +866,9 @@ static void shutdown_callback(int fd, short flags, void *arg)
 
     /* if we were ordered to abort, do so */
     if (prted_abort) {
-        suicide = prte_cmd_line_is_taken(prte_cmd_line, "test-suicide");
+        if (prte_cmd_line_is_taken(&results, PRTE_CLI_TEST_SUICIDE)) {
+            suicide = true;
+        }
         prte_output(0, "%s is executing %s abort", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     suicide ? "suicide" : "clean");
         /* do -not- call finalize as this will send a message to the HNP

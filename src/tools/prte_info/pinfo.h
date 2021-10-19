@@ -14,7 +14,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,7 +39,7 @@ BEGIN_C_DECLS
  */
 
 extern bool prte_info_pretty;
-extern prte_cmd_line_t *prte_info_cmd_line;
+extern prte_cli_result_t prte_info_cmd_line;
 
 extern const char *prte_info_type_all;
 extern const char *prte_info_type_prte;
@@ -58,7 +58,7 @@ extern const char *prte_info_ver_release;
 extern const char *prte_info_ver_greek;
 extern const char *prte_info_ver_svn;
 
-void prte_info_do_version(bool want_all, prte_cmd_line_t *cmd_line);
+void prte_info_do_version(bool want_all);
 void prte_info_show_prte_version(const char *scope);
 void prte_info_show_component_version(const char *type_name, const char *component_name,
                                       const char *scope, const char *ver_type);
@@ -91,7 +91,7 @@ extern const char *prte_info_path_pkgincludedir;
 void prte_info_do_params(bool want_all, bool want_internal);
 void prte_info_show_mca_params(const char *type, const char *component, bool want_internal);
 
-void prte_info_do_path(bool want_all, prte_cmd_line_t *cmd_line);
+void prte_info_do_path(bool want_all);
 void prte_info_show_path(const char *type, const char *value);
 
 void prte_info_do_arch(void);

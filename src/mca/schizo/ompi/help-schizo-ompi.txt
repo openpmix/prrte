@@ -1,0 +1,588 @@
+# -*- text -*-
+#
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+#
+[usage]
+%s (%s) %s
+
+Usage: %s [OPTION]...
+Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
+
+/*****      General Options      *****/
+
+-h|--help                            This help message
+-h|--help <arg0>                     Help for the specified option
+-v|--verbose                         Enable typical debug options
+-V|--version                         Print version and exit
+
+
+/*****       Debug Options       *****/
+
+   --debug-daemons                   Debug daemons - if not set, the "verbose" setting will be limited to
+                                     the DVM controller to reduce clutter
+   --debug-daemons-file              Enable debugging of any PRTE daemons used by this application, storing
+                                     their verbose output in files
+   --display <arg0>                  Comma-delimited list of options for displaying information about the
+                                     allocation and job. Allowed values: allocation, bind, map, map-devel,
+                                     topo
+   --get-stack-traces                Get stack traces of all application procs on timeout
+   --leave-session-attached          Do not discard stdout/stderr of remote PRTE daemons
+   --report-state-on-timeout         Report all job and process states upon timeout
+   --spawn-timeout <arg0>            Timeout the job if spawn takes more than the specified number of seconds
+   --stop-on-exec                    If supported, stop each specified process at start of execution
+   --stop-in-init                    Direct the specified processes to stop in PMIx_Init
+   --stop-in-app                     Direct the specified processes to stop at an application-controlled location
+   --test-suicide <arg0>             Suicide instead of clean abort after delay
+   --timeout <arg0>                  Timeout the job after the specified number of seconds
+   --output-proctable <arg0>         Print the complete proctable to stdout [-], stderr [+], or a file
+                                     [anything else] after launch
+
+
+/*****      Output Options       *****/
+
+   --output <arg0>                   Comma-delimited list of options that control how output is
+                                     generated.Allowed values: tag, timestamp, xml, merge-stderr-to-stdout,
+                                     dir=DIRNAME, file=filename. The dir option redirects output from
+                                     application processes into DIRNAME/job/rank/std[out,err,diag]. The file
+                                     option redirects output from application processes into filename.rank. In
+                                     both cases, the provided name will be converted to an absolute path.
+                                     Supported qualifiers include NOCOPY (do not copy the output to the
+                                     stdout/err streams).
+   --report-child-jobs-separately    Return the exit status of the primary job only
+   --xterm <arg0>                    Create a new xterm window and display output from the specified ranks
+                                     there
+
+
+
+/*****       Input Options       *****/
+
+   --stdin <arg0>                    Specify procs to receive stdin [rank, all, none] (default: 0, indicating
+                                     rank 0)
+
+
+
+/*****      Mapping Options      *****/
+
+   --map-by <arg0>                   Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache
+                                     | l2cache | l3cache | numa (default:np>2) | package | node | seq | dist |
+                                     ppr |,rankfile] with supported colon-delimited modifiers: PE=y (for
+                                     multiple cpus/proc), SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL,
+                                     HWTCPUS, CORECPUS, DEVICE(for dist policy), INHERIT, NOINHERIT,
+                                     PE-LIST=a,b (comma-delimited ranges of cpus to use for this job),
+                                     FILE=<path> for seq and rankfile options
+
+
+
+/*****      Ranking Options      *****/
+
+   --rank-by <arg0>                  Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache
+                                     | l2cache | l3cache | numa (default:np>2) | package | node], with
+                                     modifier :SPAN or :FILL
+
+
+
+/*****      Binding Options      *****/
+
+   --bind-to <arg0>                  Binding policy for job. Allowed values: none, hwthread, core, l1cache,
+                                     l2cache, l3cache, numa, package, ("none" is the default when
+                                     oversubscribed, "core" is the default when np<=2, and "numa" is the
+                                     default when np>2). Allowed colon-delimited qualifiers: overload-allowed,
+                                     if-supported
+
+
+
+/*****     Developer Options     *****/
+
+   --do-not-launch                   Perform all necessary operations to prepare to launch the application,
+                                     but do not actually launch it (usually used to test mapping patterns)
+
+
+
+/*****      Launch Options       *****/
+
+   --default-hostfile <arg0>         Provide a default hostfile
+-H|--host <arg0>                     List of hosts to invoke processes on
+   --hostfile <arg0>                 Provide a hostfile
+   --initial-errhandler <arg0>       Specify the initial error handler that is attached to predefined
+                                     communicators during the first MPI call.
+   --machinefile <arg0>              Provide a hostfile
+   --mca <arg0> <arg1>               Pass context-specific MCA parameters; they are considered global if
+                                     --gmca is not used and only one context is specified (arg0 is the
+                                     parameter name; arg1 is the parameter value)
+   --path <arg0>                     PATH to be used to look for executables to start processes
+   --pmixmca <arg0> <arg1>           Pass context-specific PMIx MCA parameters; they are considered global if
+                                     only one context is specified (arg0 is the parameter name; arg1 is the parameter value)
+   --gpmixmca <arg0> <arg1>          Pass global PMIx MCA parameters that are applicable to all contexts (arg0
+                                     is the parameter name; arg1 is the parameter value)
+   --preload-files <arg0>            Preload the comma separated list of files to the remote machines current
+                                     working directory before starting the remote process.
+   --prtemca <arg0> <arg1>           Pass context-specific PRTE MCA parameters to the DVM
+   --pset <arg0>                     User-specified name assigned to the processes in their given application
+   --rankfile <arg0>                 Name of file to specify explicit task mapping
+-s|--preload-binary                  Preload the binary on the remote machine before starting the remote
+                                     process.
+   --set-cwd-to-session-dir          Set the working directory of the started processes to their session
+                                     directory
+   --show-progress                   Output a brief periodic report on launch progress
+   --stream-buffering <arg0>         Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2
+                                     fully buffered]
+   --wd <arg0>                       Synonym for --wdir
+   --wdir <arg0>                     Set the working directory of the started processes
+-x <arg0>                            Export an environment variable, optionally specifying a value (e.g., "-x
+                                     foo" exports the environment variable foo and takes its value from the
+                                     current environment; "-x foo=bar" exports the environment variable name
+                                     foo and sets its value to "bar" in the started processes; "-x foo*"
+                                     exports all current environmental variables starting with "foo")
+
+
+
+/*****    Specific Options   *****/
+
+   --allow-run-as-root               Allow execution as root (STRONGLY DISCOURAGED)
+   --daemonize                       Daemonize the DVM daemons into the background
+   --forward-signals <arg0>          Comma-delimited list of additional signals (names or integers) to forward
+                                     to application processes ["none" => forward nothing]. Signals provided by
+                                     default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT
+   --keepalive <arg0>                Pipe to monitor - DVM will terminate upon closure
+   --launch-agent <arg0>             Name of daemon executable used to start processes on remote nodes
+                                     (default: prted)
+   --max-vm-size <arg0>              Number of daemons to start
+   --no-ready-msg                    Do not print a DVM ready message
+   --noprefix                        Disable automatic --prefix behavior
+   --personality <arg0>              Specify the personality to be used
+   --prefix <arg0>                   Prefix to be used to look for RTE executables
+   --report-pid <arg0>               Printout pid on stdout [-], stderr [+], or a file [anything else]
+   --report-uri <arg0>               Printout URI on stdout [-], stderr [+], or a file [anything else]
+   --set-sid                         Direct the DVM daemons to separate from the current session
+   --singleton <arg0>                ID of the singleton process that started us
+   --system-server                   Start the DVM as the system server
+   --tmpdir <arg0>                   Set the root for the session directory tree
+   --tune <arg0>                     File(s) containing MCA params for tuning DVM operations
+
+
+
+/*****    Fault Tolerance Options (if enabled)    *****/
+   --enable-recovery                 Enable recovery from process failure [Default = disabled]
+   --max-restarts                    Max number of times to restart a failed process
+   --disable-recovery                Disable recovery (resets all recovery options to off)
+   --continuous                      Job is to run until explicitly terminated
+   --with-ft                         Specify the type(s) of error handling that the application will use.
+
+
+/*****    MPI Options    *****/
+   --initial-errhandler              Specify the initial error handler that is attached to predefined
+                                     communicators during the first MPI call.
+   --display-comm                    Display table of communication methods between ranks during MPI_Init
+   --display-comm-finalize           "Display table of communication methods between ranks during MPI_Finalize
+   --soft                            This option is unsupported, but mandated by the MPI standard
+   --arch <arg0>                     This option is unsupported, but mandated by the MPI standard
+   --file <arg0>                     This option is unsupported, but mandated by the MPI standard
+
+
+Report bugs to %s
+#
+[prtemca]
+Syntax: --prtemca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value
+
+Pass a PRRTE MCA parameter
+#
+[pmixmca]
+Syntax: --pmixmca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value
+
+Pass a PMIx MCA parameter
+#
+[gpmixmca]
+Syntax: --gpmixmca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value. The "g" prefix
+indicates that this PMIx parameter is to be applied to _all_ application contexts and
+not just the one in which the directive appears.
+#
+[tune]
+File(s) containing PRRTE and PMIx MCA params for tuning DVM and/or application operations.
+Parameters in the file will be treated as _generic_ parameters and subject to the
+translation rules/uncertainties. See "--help mca" for more information.
+
+Syntax in the file is:
+
+param = value
+
+with one parameter and its associated value per line. Empty lines and lines beginning
+with the '#' character are ignored.
+#
+[no-ready-msg]
+Do not print a DVM ready message
+#
+[daemonize]
+Daemonize the DVM daemons into the background
+#
+[system-server]
+Start the DVM as the system server
+#
+[set-sid]
+Direct the DVM daemons to separate from the current session
+#
+[report-pid]
+Printout PID on stdout [-], stderr [+], or a file [anything else]
+#
+[report-uri]
+Printout URI on stdout [-], stderr [+], or a file [anything else]
+#
+[test-suicide]
+Suicide instead of clean abort after delay
+#
+[default-hostfile]
+Provide a default hostfile
+#
+[singleton]
+ID of the singleton process that started us
+#
+[keepalive]
+Pipe to monitor - DVM will terminate upon closure
+#
+[launch-agent]
+Name of daemon executable used to start processes on remote nodes (default: prted)
+#
+[max-vm-size]
+Maximum number of daemons to start
+#
+[debug-daemons]
+Debug daemon output enabled
+#
+[debug-daemons-file]
+Enable debugging of any PRTE daemons used by this application, storing output in files
+#
+[leave-session-attached]
+Do not discard stdout/stderr of remote PRTE daemons
+#
+[tmpdir]
+Set the root for the session directory tree
+#
+[prefix]
+Prefix to be used to look for RTE executables
+#
+[noprefix]
+Disable automatic --prefix behavior
+#
+[forward-signals]
+Comma-delimited list of additional signals (names or integers) to forward to application
+processes ["none" => forward nothing]. Signals provided by default include SIGTSTP,
+SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT
+#
+[allow-run-as-root]
+Allow execution as root (STRONGLY DISCOURAGED)
+#
+[report-child-jobs-separately]
+Return the exit status of the primary job only
+#
+[timeout]
+Timeout the job if execution time exceeds the specified number of seconds
+#
+[report-state-on-timeout]
+Report all job and process states upon timeout
+#
+[get-stack-traces]
+Get stack traces of all application procs on timeout
+#
+[spawn-timeout]
+Timeout the job if spawn takes more than the specified number of seconds
+#
+[np]
+Specify number of application processes to be started
+#
+[n]
+Specify number of application processes to be started
+#
+[N]
+Specify number of application processes per node to be started
+#
+[app]
+Provide an appfile; ignore all other command line options
+#
+[xterm]
+Create a new xterm window and display output from the specified ranks there.
+Ranks are specified as a comma-delimited list of ranges - e.g., "1,3-6,9",
+or as "all"."
+#
+[stop-on-exec]
+If supported, stop each process at start of execution
+#
+[stop-in-init]
+Include the PMIX_DEBUG_STOP_IN_INIT attribute in the application's
+job info directing that the specified ranks stop in PMIx_Init pending
+release. Ranks are specified as a comma-delimited list of ranges - e.g., "1,3-6,9",
+or as "all".
+#
+[stop-in-app]
+Include the PMIX_DEBUG_STOP_IN_APP attribute in the application's
+job info directing that the specified ranks stop at an application-determined
+point pending release. Ranks are specified as a comma-delimited list of
+ranges - e.g., "1,3-6,9", or as "all".
+#
+[x]
+Export an environment variable, optionally specifying a value (e.g., "-x foo" exports the
+environment variable foo and takes its value from the current environment; "-x foo=bar"
+exports the environment variable name foo and sets its value to "bar" in the started
+processes; "-x foo*" exports all current environmental variables starting with "foo")
+#
+[wdir]
+Set the working directory of the started processes
+#
+[wd]
+Synonym for --wdir
+#
+[set-cwd-to-session-dir]
+Set the working directory of the started processes to their session directory
+#
+[path]
+PATH to be used to look for executables to start processes
+#
+[show-progress]
+Output a brief periodic report on launch progress
+#
+[pset]
+User-specified name assigned to the processes in their given application
+#
+[hostfile]
+Provide a hostfile
+#
+[machinefile]
+Provide a hostfile (synonym for "hostfile")
+#
+[host]
+Comma-separated list of hosts to invoke processes on
+#
+[personality]
+Specify the personality to be used
+#
+[preload-files]
+Syntax: --preload-files <arg0>
+
+Preload the comma separated list of files to the remote machines current
+working directory before starting the remote process.
+#
+[preload-binary]
+Syntax: --preload-binary
+
+Preload the binary on the remote machine before starting the
+remote process.
+#
+[output]
+Comma-delimited list of options that control how output is generated.
+Allowed values:
+    tag                         Mark each output line with the [job,rank] of the
+                                process that generated it
+    timestamp                   Prefix each output line with a datetime stamp. Note
+                                that the timestamp will be the time when the line
+                                is output by the DVM - not the time when the source
+                                output it
+    xml                         Format all output in XML
+    merge[-stderr-to-stdout]    Merge stderr into stdout
+    dir=DIRNAME                 Redirect output from application processes into files of
+                                the form DIRNAME/job/rank/std[out,err,diag].
+    file=filename               Redirect output from application processes into files of
+                                the form filename.rank.
+
+In both the "dir" and "file" cases, the provided name will be converted to an absolute path.
+Supported qualifiers include NOCOPY (i.e., output shall go only into the files - do not copy
+the output to the stdout/err streams).
+#
+[stream-buffering]
+Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]
+#
+[stdin]
+Specify procs to receive stdin [rank, "all", "none"] (default: 0, indicating rank 0)
+#
+[map-by]
+Mapping Policy for job:
+    slot
+    hwthread
+    core (default: np <= 2)
+    l1cache
+    l2cache
+    l3cache
+    numa (default: np > 2)
+    package
+    node
+    seq
+    dist
+    ppr
+    rankfile
+with supported colon-delimited qualifiers:
+    PE=y (for multiple cpus/proc)
+    SPAN
+    OVERSUBSCRIBE
+    NOOVERSUBSCRIBE
+    NOLOCAL
+    HWTCPUS
+    CORECPUS
+    DEVICE(for dist policy)
+    INHERIT
+    NOINHERIT
+    PE-LIST=a,b (comma-delimited ranges of cpus to use for this job)
+    FILE=<path> for seq and rankfile options
+#
+[rank-by]
+Ranking Policy for job:
+    slot (default: np <= 2)
+    hwthread
+    core
+    l1cache
+    l2cache
+    l3cache
+    numa (default: np > 2)
+    package
+    node
+with supported colon-delimited qualifiers:
+    SPAN
+    FILL
+#
+[bind-to]
+Binding Policy for job:
+    none (default: oversubscribed)
+    hwthread
+    core (default: np <= 2)
+    l1cache
+    l2cache
+    l3cache
+    numa (default: np > 2)
+    package
+with supported colon-delimited qualifiers:
+    overload-allowed
+    if-supported
+#
+[rankfile]
+Name of file to specify explicit task mapping
+#
+[display]
+Comma-delimited list of options for displaying information about the allocation and job.
+Allowed values:
+    allocation
+    bind
+    map
+    map-devel
+    topo
+#
+[do-not-launch]
+Perform all necessary operations to prepare to launch the application, but do not actually
+launch it (usually used to test mapping patterns)
+#
+[enable-recovery]
+Enable recovery from process failure [Default = disabled]
+#
+[max-restarts]
+Max number of times to restart a failed process
+#
+[disable-recovery]
+Disable recovery (resets all recovery options to off)
+#
+[continuous]
+Job is to run until explicitly terminated
+#
+#
+#  DEPRECATED OPTIONS
+#
+[mca]
+Syntax: --mca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value
+
+Pass generic MCA parameters - i.e., parameters whose project affiliation
+must be determined by PRRTE based on matching the name of the parameter with defined values
+from various projects that PRRTE knows about.
+
+DEPRECATED: This translation can be incomplete (e.g., if  known project adds or changes
+parameters) - thus, it is strongly recommended that users use project-specific parameters
+such as "prtemca" or "pmixmca".
+#
+[gmca]
+Syntax: --gmca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value. The "g" prefix
+indicates that this parameter is to be applied to _all_ application contexts and
+not just the one in which the directive appears.
+
+Pass generic MCA parameters - i.e., parameters whose project affiliation
+must be determined by PRRTE based on matching the name of the parameter with defined values
+from various projects that PRRTE knows about. This translation can be incomplete (e.g., if
+a known project adds or changes parameters) - thus, it is strongly recommended that users
+use project-specific parameters such as "prtemca" or "pmixmca".
+
+DEPRECATED: This translation can be incomplete (e.g., if  known project adds or changes
+parameters) - thus, it is strongly recommended that users use project-specific parameters
+such as "gprtemca" or "gpmixmca".
+#
+[xml]
+Provide all output in XML format
+
+DEPRECATED: please see "--help output" for details
+#
+[tag-output]
+Tag all output with [job,rank]
+
+DEPRECATED: please see "--help output" for details
+#
+[timestamp-output]
+Timestamp all application process output
+
+DEPRECATED: please see "--help output" for details
+#
+[output-directory]
+Redirect output from application processes into filename/job/rank/std[out,err,diag]. A
+relative path value will be converted to an absolute path. The directory name may include a
+colon followed by a comma-delimited list of optional case-insensitive directives. Supported
+directives currently include NOJOBID (do not include a job-id directory level) and NOCOPY
+(do not copy the output to the stdout/err streams)
+
+DEPRECATED: please see "--help output" for details
+#
+[output-filename]
+Redirect output from application processes into filename.rank. A relative path value will be
+converted to an absolute path. The directory name may include a colon followed by a
+comma-delimited list of optional case-insensitive directives. Supported directives currently
+include NOCOPY (do not copy the output to the stdout/err streams)
+
+DEPRECATED: please see "--help output" for details
+#
+[merge-stderr-to-stdout]
+Merge stderr to stdout for each process
+
+DEPRECATED: please see "--help output" for details
+#
+[display-devel-map]
+Display a detailed process map (mostly intended for developers)
+just before launch
+
+DEPRECATED: please see "--help display" for details
+#
+[display-topo]
+Display the topology as part of the process map (mostly intended
+for developers) just before launch
+
+DEPRECATED: please see "--help display" for details
+#
+[report-bindings]
+Display process bindings to stderr
+
+DEPRECATED: please see "--help display" for details
+#
+[display-devel-allocation]
+Display a detailed list (mostly intended for developers) of the
+allocation being used by this job
+
+DEPRECATED: please see "--help display" for details
+#
+[display-map]
+Display the process map just before launch
+
+DEPRECATED: please see "--help display" for details
+#
+[display-allocation]
+Display the allocation being used by this job
+
+DEPRECATED: please see "--help display" for details

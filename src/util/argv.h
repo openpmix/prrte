@@ -16,7 +16,7 @@
  *
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -227,6 +227,9 @@ PRTE_EXPORT size_t prte_argv_len(char **argv);
  */
 PRTE_EXPORT char **
 prte_argv_copy(char **argv) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
+
+PRTE_EXPORT
+char **prte_argv_copy_strip(char **argv) __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 /**
  * Delete one or more tokens from the middle of an argv.
