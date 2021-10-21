@@ -42,7 +42,8 @@ AC_DEFUN([_PRTE_CHECK_PACKAGE_HEADER], [
     # get rid of the trailing slash(es)
     dir_prefix=$(echo $3 | sed -e 'sX/*$XXg')
     prte_check_package_header_happy="no"
-    AS_IF([test "$dir_prefix" = "/usr" || \
+    AS_IF([test "$dir_prefix" = "" || \
+           test "$dir_prefix" = "/usr" || \
            test "$dir_prefix" = "/usr/local"],
            [ # try as is...
             AC_MSG_NOTICE([looking for header without includes])
@@ -51,12 +52,12 @@ AC_DEFUN([_PRTE_CHECK_PACKAGE_HEADER], [
                   [# no go on the as is - reset the cache and try again
                    unset prte_Header])])
 
-    AS_IF([test "$prte_check_package_header_happy" = "no"],
-          [AS_IF([test "$dir_prefix" != ""],
-                 [$1_CPPFLAGS="$$1_CPPFLAGS -I$dir_prefix/include"
-                  CPPFLAGS="$CPPFLAGS -I$dir_prefix/include"])
-          AC_CHECK_HEADERS([$2], [prte_check_package_header_happy="yes"], [], [$6])
-	  AS_IF([test "$prte_check_package_header_happy" = "yes"], [$4], [$5])],
+    AS_IF([test "$prte_check_package_header_happy" = "no" && \
+           test ! -z "$dir_prefix"],
+          [$1_CPPFLAGS="$$1_CPPFLAGS -I$dir_prefix/include"
+           CPPFLAGS="$CPPFLAGS -I$dir_prefix/include"
+           AC_CHECK_HEADERS([$2], [prte_check_package_header_happy="yes"], [], [$6])
+	       AS_IF([test "$prte_check_package_header_happy" = "yes"], [$4], [$5])],
           [$4])
     unset prte_check_package_header_happy
 
