@@ -45,6 +45,8 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                   [AS_HELP_STRING([--enable-pmix-devel-support],
                                   [Add necessary wrapper flags to enable access to PMIx devel headers])])
 
+    prte_pmix_support=0
+
     if test "x$with_pmix_header" != "x"; then
         AS_IF([test "$with_pmix_header" = "yes"],
               [PRTE_PMIX_HEADER="<pmix.h>"
@@ -52,6 +54,7 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
               [PRTE_PMIX_HEADER="\"$with_pmix_header\""
                prte_pmix_header_given=1])
         pmix_ext_install_dir="external header"
+        prte_pmix_support=1
 
     elif test "$with_pmix" = "no"; then
         AC_MSG_WARN([PRTE requires PMIx support using])
@@ -59,69 +62,84 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
         AC_MSG_ERROR([Cannot continue])
 
     else
+        # get rid of any trailing slash(es)
+        pmix_prefix=$(echo $with_pmix | sed -e 'sX/*$XXg')
+        pmixdir_prefix=$(echo $with_pmix_libdir | sed -e 'sX/*$XXg')
+
         prte_pmix_header_given=0
         PRTE_PMIX_HEADER="<pmix.h>"
-        # check for external pmix lib */
-        AS_IF([test -z "$with_pmix"],
-              [pmix_ext_install_dir=/usr],
-              [pmix_ext_install_dir=$with_pmix])
+        # check for external pmix header */
+        AS_IF([test ! -z "$with_pmix" && test "$with_pmix" != "yes"],
+                     [pmix_ext_install_dir="$with_pmix"],
+                     [pmix_ext_install_dir=""])
+        _PRTE_CHECK_PACKAGE_HEADER([prte_pmix], [pmix.h], [$pmix_ext_install_dir],
+                                   [prte_pmix_support=1],
+                                   [prte_pmix_support=0])
 
-        # Make sure we have the headers and libs in the correct location
-        PRTE_CHECK_WITHDIR([pmix], [$pmix_ext_install_dir/include], [pmix.h])
+        if test $prte_pmix_support -eq 0 && test -z "$pmix_ext_install_dir"; then
+            # try default locations
+            if test -d /usr/include; then
+                pmix_ext_install_dir=/usr
+                _PRTE_CHECK_PACKAGE_HEADER([prte_pmix], [pmix.h], [$pmix_ext_install_dir],
+                                           [prte_pmix_support=1],
+                                           [prte_pmix_support=0])
+            fi
+            if test $prte_pmix_support -eq 0 && test -d /usr/local/include; then
+                pmix_ext_install_dir=/usr/local
+                _PRTE_CHECK_PACKAGE_HEADER([prte_pmix], [pmix.h], [$pmix_ext_install_dir],
+                                           [prte_pmix_support=1],
+                                           [prte_pmix_support=0])
+            fi
+        fi
 
-        AS_IF([test -n "$with_pmix_libdir"],
-              [AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir])
-               files=`ls $with_pmix_libdir/libpmix.* 2> /dev/null | wc -l`
-               AS_IF([test "$files" -gt 0],
-                     [AC_MSG_RESULT([found])
-                      pmix_ext_install_libdir=$with_pmix_libdir],
-                     [AC_MSG_RESULT([not found])
-                      AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir/lib64])
-                      files=`ls $with_pmix_libdir/lib64/libpmix.* 2> /dev/null | wc -l`
-                      AS_IF([test "$files" -gt 0],
-                            [AC_MSG_RESULT([found])
-                             pmix_ext_install_libdir=$with_pmix_libdir/lib64],
-                            [AC_MSG_RESULT([not found])
-                             AC_MSG_CHECKING([libpmix.* in $with_pmix_libdir/lib])
-                             files=`ls $with_pmix_libdir/lib/libpmix.* 2> /dev/null | wc -l`
-                             AS_IF([test "$files" -gt 0],
-                                   [AC_MSG_RESULT([found])
-                                    pmix_ext_install_libdir=$with_pmix_libdir/lib],
-                                    [AC_MSG_RESULT([not found])
-                                     AC_MSG_ERROR([Cannot continue])])])])],
-              [# check for presence of lib64 directory - if found, see if the
-               # desired library is present and matches our build requirements
-               AC_MSG_CHECKING([libpmix.* in $pmix_ext_install_dir/lib64])
-               files=`ls $pmix_ext_install_dir/lib64/libpmix.* 2> /dev/null | wc -l`
-               AS_IF([test "$files" -gt 0],
-               [AC_MSG_RESULT([found])
-                pmix_ext_install_libdir=$pmix_ext_install_dir/lib64],
-               [AC_MSG_RESULT([not found])
-                AC_MSG_CHECKING([libpmix.* in $pmix_ext_install_dir/lib])
-                files=`ls $pmix_ext_install_dir/lib/libpmix.* 2> /dev/null | wc -l`
-                AS_IF([test "$files" -gt 0],
-                      [AC_MSG_RESULT([found])
-                       pmix_ext_install_libdir=$pmix_ext_install_dir/lib],
-                      [AC_MSG_RESULT([not found])
-                       AC_MSG_ERROR([Cannot continue])])])])
+        if test $prte_pmix_support -eq 0; then
+            AC_MSG_WARN([PRTE requires PMIx support using])
+            AC_MSG_WARN([an external copy that you supply.])
+            AC_MSG_WARN([A copy could not be found in $pmix_ext_install_dir.])
+            AC_MSG_ERROR([Cannot continue])
+        fi
 
-        # check the version
+        # check for external pmix library - the lib search already includes
+        # default locations, so no need to separately check there
+        AS_IF([test ! -z "$with_pmix_libdir" && test "$with_pmix_libdir" != "yes"],
+                     [pmix_ext_install_libdir="$with_pmix_libdir"],
+                     [AS_IF([test ! -z "$with_pmix" && test "$with_pmix" != "yes"],
+                            [pmix_ext_install_libdir="$with_pmix"/lib],
+                            [pmix_ext_install_libdir=""])])
+        _PRTE_CHECK_PACKAGE_LIB([prte_pmix], [pmix], [PMIx_Init],
+                                [], [$pmix_ext_install_dir],
+                                [$pmix_ext_install_libdir],
+                                [],
+                                [AC_MSG_WARN([PRTE requires PMIx support using])
+                                 AC_MSG_WARN([an external copy that you supply.])
+                                 AC_MSG_WARN([The library was not found in $pmix_ext_install_libdir.])
+                                 AC_MSG_ERROR([Cannot continue])])
+
         prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
         prte_external_pmix_save_LDFLAGS=$LDFLAGS
         prte_external_pmix_save_LIBS=$LIBS
 
+        # need to add resulting flags to global ones so we can
+        # test the version
+        if test ! -z "$prte_pmix_CPPFLAGS"; then
+            PRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prte_pmix_CPPFLAGS)
+        fi
+        if test ! -z "$prte_pmix_LDFLAGS"; then
+            PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prte_pmix_LDFLAGS)
+        fi
+        if test ! -z "$prte_pmix_LIBS"; then
+            PRTE_FLAGS_APPEND_UNIQ(LIBS, $prte_pmix_LIBS)
+        fi
+
         # if the pmix_version.h file does not exist, then
         # this must be from a pre-1.1.5 version
-        AC_MSG_CHECKING([for PMIx version file])
-        CPPFLAGS="-I$pmix_ext_install_dir/include $CPPFLAGS"
-        AS_IF([test "x`ls $pmix_ext_install_dir/include/pmix_version.h 2> /dev/null`" = "x"],
-               [AC_MSG_RESULT([not found - assuming pre-v2.0])
-                AC_MSG_WARN([PRTE does not support PMIx versions])
-                AC_MSG_WARN([less than v4.01 as only PMIx-based tools can])
-                AC_MSG_WARN([can connect to the server.])
-                AC_MSG_ERROR([Please select a newer version and configure again])],
-               [AC_MSG_RESULT([found])
-                prte_external_pmix_version_found=0])
+        _PRTE_CHECK_PACKAGE_HEADER([prte_pmix], [pmix_version.h], [$pmix_ext_install_dir],
+                                   [],
+                                   [AC_MSG_WARN([PRTE does not support PMIx versions])
+                                    AC_MSG_WARN([less than v4.1 as only PMIx-based tools])
+                                    AC_MSG_WARN([can connect to the server.])
+                                    AC_MSG_ERROR([Please select a newer version and configure again])])
+
 
         # if it does exist, then we need to parse it to find
         # the actual release series
@@ -165,22 +183,19 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                AC_MSG_WARN([be detected])
                AC_MSG_ERROR([cannot continue])])
 
-        AS_IF([test "$pmix_ext_install_dir" != "/usr"],
-              [prte_pmix_CPPFLAGS="-I$pmix_ext_install_dir/include"
-               prte_pmix_LDFLAGS="-L$pmix_ext_install_libdir"])
+        if test ! -z "$prte_pmix_CPPFLAGS"; then
+            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_pmix_CPPFLAGS)
+            PRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prte_pmix_CPPFLAGS)
+        fi
+        if test ! -z "$prte_pmix_LDFLAGS"; then
+            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_pmix_LDFLAGS)
+            PRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prte_pmix_LDFLAGS)
+        fi
+        if test ! -z "$prte_pmix_LIBS"; then
+            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_pmix_LIBS)
+            PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_pmix_LIBS)
+        fi
 
-        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_pmix_CPPFLAGS)
-        PRTE_WRAPPER_FLAGS_ADD([CPPFLAGS], [$prte_pmix_CPPFLAGS])
-
-        AS_IF([test "$enable_pmix_devel_support" = "yes"],
-              [PRTE_WRAPPER_FLAGS_ADD([CPPFLAGS], [-I$pmix_ext_install_dir/include/pmix -I$pmix_ext_install_dir/include/pmix/src -I$pmix_ext_install_dir/include/pmix/src/include])])
-
-        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_pmix_LDFLAGS)
-        PRTE_WRAPPER_FLAGS_ADD([LDFLAGS], [$prte_pmix_LDFLAGS])
-
-        prte_pmix_LIBS=-lpmix
-        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_pmix_LIBS)
-        PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_pmix_LIBS)
     fi
 
     AC_DEFINE_UNQUOTED([PRTE_PMIX_HEADER], [$PRTE_PMIX_HEADER], [PMIx header to use])
