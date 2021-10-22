@@ -84,49 +84,54 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
                          fi
                         ],
                         [prte_hwloc_libdir=""])])
-    _PRTE_CHECK_PACKAGE_LIB([prte_hwloc], [hwloc], [hwloc_topology_init],
-                            [], [$prte_hwloc_dir],
-                            [$prte_hwloc_libdir],
-                            [],
-                            [AC_MSG_WARN([PRTE requires HWLOC support using])
-                             AC_MSG_WARN([an external copy that you supply.])
-                             AC_MSG_WARN([The library was not found in $prte_hwloc_libdir.])
-                             AC_MSG_ERROR([Cannot continue])])
 
-    # update global flags to test for HWLOC version
-    if test ! -z "$prte_hwloc_CPPFLAGS"; then
-        PRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prte_hwloc_CPPFLAGS)
-    fi
-    if test ! -z "$prte_hwloc_LDFLAGS"; then
-        PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prte_hwloc_LDFLAGS)
-    fi
-    if test ! -z "$prte_hwloc_LIBS"; then
-        PRTE_FLAGS_APPEND_UNIQ(LIBS, $prte_hwloc_LIBS)
-    fi
+    if test $PRTE_DISABLE_PACKAGE_CHECKS -eq 0; then
+        _PRTE_CHECK_PACKAGE_LIB([prte_hwloc], [hwloc], [hwloc_topology_init],
+                                [], [$prte_hwloc_dir],
+                                [$prte_hwloc_libdir],
+                                [],
+                                [AC_MSG_WARN([PRTE requires HWLOC support using])
+                                 AC_MSG_WARN([an external copy that you supply.])
+                                 AC_MSG_WARN([The library was not found in $prte_hwloc_libdir.])
+                                 AC_MSG_ERROR([Cannot continue])])
 
-    AC_MSG_CHECKING([if external hwloc version is 1.5 or greater])
-    AC_COMPILE_IFELSE(
-          [AC_LANG_PROGRAM([[#include <hwloc.h>]],
-          [[
-    #if HWLOC_API_VERSION < 0x00010500
-    #error "hwloc API version is less than 0x00010500"
-    #endif
-          ]])],
-          [AC_MSG_RESULT([yes])],
-          [AC_MSG_RESULT([no])
-           AC_MSG_ERROR([Cannot continue])])
+        # update global flags to test for HWLOC version
+        if test ! -z "$prte_hwloc_CPPFLAGS"; then
+            PRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prte_hwloc_CPPFLAGS)
+        fi
+        if test ! -z "$prte_hwloc_LDFLAGS"; then
+            PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prte_hwloc_LDFLAGS)
+        fi
+        if test ! -z "$prte_hwloc_LIBS"; then
+            PRTE_FLAGS_APPEND_UNIQ(LIBS, $prte_hwloc_LIBS)
+        fi
 
-    AC_MSG_CHECKING([if external hwloc version is 1.8 or greater])
-    AC_COMPILE_IFELSE(
-          [AC_LANG_PROGRAM([[#include <hwloc.h>]],
-          [[
-    #if HWLOC_API_VERSION < 0x00010800
-    #error "hwloc API version is less than 0x00010800"
-    #endif
-          ]])],
-          [AC_MSG_RESULT([yes])
-           prte_have_topology_dup=1],
-          [AC_MSG_RESULT([no])])
+        AC_MSG_CHECKING([if external hwloc version is 1.5 or greater])
+        AC_COMPILE_IFELSE(
+              [AC_LANG_PROGRAM([[#include <hwloc.h>]],
+              [[
+        #if HWLOC_API_VERSION < 0x00010500
+        #error "hwloc API version is less than 0x00010500"
+        #endif
+              ]])],
+              [AC_MSG_RESULT([yes])],
+              [AC_MSG_RESULT([no])
+               AC_MSG_ERROR([Cannot continue])])
+
+        AC_MSG_CHECKING([if external hwloc version is 1.8 or greater])
+        AC_COMPILE_IFELSE(
+              [AC_LANG_PROGRAM([[#include <hwloc.h>]],
+              [[
+        #if HWLOC_API_VERSION < 0x00010800
+        #error "hwloc API version is less than 0x00010800"
+        #endif
+              ]])],
+              [AC_MSG_RESULT([yes])
+               prte_have_topology_dup=1],
+              [AC_MSG_RESULT([no])])
+    else
+        prte_have_topology_dup=1
+    fi
 
     # set the header
     PRTE_HWLOC_HEADER="<hwloc.h>"

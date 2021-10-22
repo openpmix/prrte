@@ -72,34 +72,36 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
                              fi
                             ],
                             [prte_event_libdir=""])])
-        _PRTE_CHECK_PACKAGE_LIB([prte_libevent], [event_core], [event_config_new],
-                                [-levent_pthreads], [$prte_event_dir],
-                                [$prte_event_libdir],
-                                [prte_libevent_support=1],
-                                [prte_libevent_support=0])
+        if test $PRTE_DISABLE_PACKAGE_CHECKS -eq 0; then
+            _PRTE_CHECK_PACKAGE_LIB([prte_libevent], [event_core], [event_config_new],
+                                    [-levent_pthreads], [$prte_event_dir],
+                                    [$prte_event_libdir],
+                                    [prte_libevent_support=1],
+                                    [prte_libevent_support=0])
 
-        # Check to see if the above check failed because it conflicted with LSF's libevent.so
-        # This can happen if LSF's library is in the LDFLAGS envar or default search
-        # path. The 'event_getcode4name' function is only defined in LSF's libevent.so and not
-        # in Libevent's libevent.so
-        if test $prte_libevent_support -eq 0; then
-            AC_CHECK_LIB([event], [event_getcode4name],
-                         [AC_MSG_WARN([===================================================================])
-                          AC_MSG_WARN([Possible conflicting libevent.so libraries detected on the system.])
-                          AC_MSG_WARN([])
-                          AC_MSG_WARN([LSF provides a libevent.so that is not from Libevent in its])
-                          AC_MSG_WARN([library path. It is possible that you have installed Libevent])
-                          AC_MSG_WARN([on the system, but the linker is picking up the wrong version.])
-                          AC_MSG_WARN([])
-                          AC_MSG_WARN([You will need to address this linker path issue. One way to do so is])
-                          AC_MSG_WARN([to make sure the libevent system library path occurs before the])
-                          AC_MSG_WARN([LSF library path.])
-                          AC_MSG_WARN([===================================================================])
-                          ])
+            # Check to see if the above check failed because it conflicted with LSF's libevent.so
+            # This can happen if LSF's library is in the LDFLAGS envar or default search
+            # path. The 'event_getcode4name' function is only defined in LSF's libevent.so and not
+            # in Libevent's libevent.so
+            if test $prte_libevent_support -eq 0; then
+                AC_CHECK_LIB([event], [event_getcode4name],
+                             [AC_MSG_WARN([===================================================================])
+                              AC_MSG_WARN([Possible conflicting libevent.so libraries detected on the system.])
+                              AC_MSG_WARN([])
+                              AC_MSG_WARN([LSF provides a libevent.so that is not from Libevent in its])
+                              AC_MSG_WARN([library path. It is possible that you have installed Libevent])
+                              AC_MSG_WARN([on the system, but the linker is picking up the wrong version.])
+                              AC_MSG_WARN([])
+                              AC_MSG_WARN([You will need to address this linker path issue. One way to do so is])
+                              AC_MSG_WARN([to make sure the libevent system library path occurs before the])
+                              AC_MSG_WARN([LSF library path.])
+                              AC_MSG_WARN([===================================================================])
+                              ])
+            fi
         fi
     fi
 
-    if test $prte_libevent_support -eq 1; then
+    if test $prte_libevent_support -eq 1 && test $PRTE_DISABLE_PACKAGE_CHECKS -eq 0; then
         # need to add resulting flags to global ones so we can
         # test for thread support
         if test ! -z "$prte_libevent_CPPFLAGS"; then
@@ -123,7 +125,7 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
                       prte_libevent_support=0])
     fi
 
-    if test $prte_libevent_support -eq 1; then
+    if test $prte_libevent_support -eq 1 && test $PRTE_DISABLE_PACKAGE_CHECKS -eq 0; then
         AC_CHECK_LIB([event_pthreads], [evthread_use_pthreads],
                      [],
                      [AC_MSG_WARN([libevent does not have thread support])
@@ -132,7 +134,7 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
                       prte_libevent_support=0])
     fi
 
-    if test $prte_libevent_support -eq 1; then
+    if test $prte_libevent_support -eq 1 && test $PRTE_DISABLE_PACKAGE_CHECKS -eq 0; then
         # Pin the "oldest supported" version to 2.0.21
         AC_MSG_CHECKING([if libevent version is 2.0.21 or greater])
         AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <event2/event.h>]],
