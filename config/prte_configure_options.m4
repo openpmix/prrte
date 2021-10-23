@@ -139,26 +139,6 @@ else
 fi
 AM_CONDITIONAL(WANT_INSTALL_HEADERS, test "$WANT_INSTALL_HEADERS" = 1)
 
-# Sometimes we are in situations where we cannot check the dependent
-# libraries for presence or correctness. Allow the user to ask us to
-# take it all on faith that it will eventually build correctly.
-
-AC_MSG_CHECKING([disable package checks])
-AC_ARG_ENABLE([package-checks],
-              [AS_HELP_STRING([--disable-package-checks],
-                              [Do not check dependent libraries for presence or correctness.
-                               Take it on faith that they will be present when needed. This
-                               is not advisable, but necessary in some circumstances])])
-if test "$enable_package_checks" = "no" ; then
-    PRTE_DISABLE_PACKAGE_CHECKS=1
-    AC_MSG_RESULT([disabled])
-else
-    PRTE_DISABLE_PACKAGE_CHECKS=0
-    AC_MSG_RESULT([enabled by default])
-fi
-AC_DEFINE_UNQUOTED(PRTE_DISABLE_PACKAGE_CHECKS, $PRTE_DISABLE_PACKAGE_CHECKS,
-                   [Disable package checks])
-
 #
 # Do we want the pretty-print stack trace feature?
 #
@@ -342,67 +322,12 @@ AC_DEFINE_UNQUOTED([PRTE_ENABLE_IPV6], [$prte_want_ipv6],
                    [Enable IPv6 support, but only if the underlying system supports it])
 
 
-# Add any extra lib?
-AC_ARG_WITH([prte-extra-lib],
-            AS_HELP_STRING([--with-prte-extra-lib=LIB],
-                           [Link the output PRTE library to this extra lib (used in embedded mode)]))
-AC_MSG_CHECKING([for extra lib])
-AS_IF([test ! -z "$with_prte_extra_lib"],
-      [AS_IF([test "$with_prte_extra_lib" = "yes" || test "$with_prte_extra_lib" = "no"],
-             [AC_MSG_RESULT([ERROR])
-              AC_MSG_WARN([Invalid value for --with-extra-prte-lib:])
-              AC_MSG_WARN([    $with_prte_extra_lib])
-              AC_MSG_WARN([Must be path name of the library to add])
-              AC_MSG_ERROR([Cannot continue])],
-             [AC_MSG_RESULT([$with_prte_extra_lib])
-              PRTE_EXTRA_LIB=$with_prte_extra_lib])],
-      [AC_MSG_RESULT([no])
-       PRTE_EXTRA_LIB=])
-AC_SUBST(PRTE_EXTRA_LIB)
-
-# Add any extra libtool lib?
-AC_ARG_WITH([prte-extra-ltlib],
-            AS_HELP_STRING([--with-prte-extra-ltlib=LIB],
-                           [Link any embedded components/tools that require it to the provided libtool lib (used in embedded mode)]))
-AC_MSG_CHECKING([for extra ltlib])
-AS_IF([test ! -z "$with_prte_extra_ltlib"],
-      [AS_IF([test "$with_prte_extra_ltlib" = "yes" || test "$with_prte_extra_ltlib" = "no"],
-             [AC_MSG_RESULT([ERROR])
-              AC_MSG_WARN([Invalid value for --with-prte-extra-ltlib:])
-              AC_MSG_WARN([    $with_prte_extra_ltlib])
-              AC_MSG_WARN([Must be path name of the library to add])
-              AC_MSG_ERROR([Cannot continue])],
-             [AC_MSG_RESULT([$with_prte_extra_ltlib])
-              PRTE_EXTRA_LTLIB=$with_prte_extra_ltlib])],
-      [AC_MSG_RESULT([no])
-       PRTE_EXTRA_LTLIB=])
-AC_SUBST(PRTE_EXTRA_LTLIB)
-
-# Add any extra LDFLAGS for the extra libs?
-AC_ARG_WITH([prte-extra-lib-ldflags],
-            AS_HELP_STRING([--with-prte-extra-lib-ldflags=flags],
-                           [Where to find the extra libs]))
-AC_MSG_CHECKING([for extra lib LDFLAGS])
-AS_IF([test ! -z "$with_prte_extra_lib_ldflags"],
-      [AS_IF([test "$with_prte_extra_lib_ldflags" = "yes" || test "$with_prte_extra_lib_ldflags" = "no"],
-             [AC_MSG_RESULT([ERROR])
-              AC_MSG_WARN([Invalid value for --with-prte-extra-lib-ldflags:])
-              AC_MSG_WARN([    $with_prte_extra_lib_ldflags])
-              AC_MSG_WARN([Must be path name pointing to the libs to add])
-              AC_MSG_ERROR([Cannot continue])],
-             [AC_MSG_RESULT([$with_prte_extra_lib_ldflags])
-              PRTE_EXTRA_LIB_LDFLAGS=$with_prte_extra_lib_ldflags])],
-      [AC_MSG_RESULT([no])
-       PRTE_EXTRA_LIB_LDFLAGS=])
-AC_SUBST(PRTE_EXTRA_LIB_LDFLAGS)
-
-#
 # Package/brand string
 #
 AC_MSG_CHECKING([if want package/brand string])
 AC_ARG_WITH([package-string],
      [AS_HELP_STRING([--with-package-string=STRING],
-                     [Use a branding string throughout Open MPI])])
+                     [Use a branding string throughout PRRTE])])
 if test "$with_package_string" = "" || test "$with_package_string" = "no"; then
     with_package_string="Open MPI $PRTE_CONFIGURE_USER@$PRTE_CONFIGURE_HOST Distribution"
 fi

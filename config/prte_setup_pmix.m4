@@ -94,84 +94,82 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                         [pmix_ext_install_libdir="$with_pmix"/lib],
                         [pmix_ext_install_libdir=""])])
 
-    if test $PRTE_DISABLE_PACKAGE_CHECKS -eq 0; then
-        _PRTE_CHECK_PACKAGE_LIB([prte_pmix], [pmix], [PMIx_Init],
-                                [], [$pmix_ext_install_dir],
-                                [$pmix_ext_install_libdir],
-                                [],
-                                [AC_MSG_WARN([PRTE requires PMIx support using])
-                                 AC_MSG_WARN([an external copy that you supply.])
-                                 AC_MSG_WARN([The library was not found in $pmix_ext_install_libdir.])
-                                 AC_MSG_ERROR([Cannot continue])])
+    _PRTE_CHECK_PACKAGE_LIB([prte_pmix], [pmix], [PMIx_Init],
+                            [], [$pmix_ext_install_dir],
+                            [$pmix_ext_install_libdir],
+                            [],
+                            [AC_MSG_WARN([PRTE requires PMIx support using])
+                             AC_MSG_WARN([an external copy that you supply.])
+                             AC_MSG_WARN([The library was not found in $pmix_ext_install_libdir.])
+                             AC_MSG_ERROR([Cannot continue])])
 
-        prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
-        prte_external_pmix_save_LDFLAGS=$LDFLAGS
-        prte_external_pmix_save_LIBS=$LIBS
+    prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
+    prte_external_pmix_save_LDFLAGS=$LDFLAGS
+    prte_external_pmix_save_LIBS=$LIBS
 
-        # need to add resulting flags to global ones so we can
-        # test the version
-        if test ! -z "$prte_pmix_CPPFLAGS"; then
-            PRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prte_pmix_CPPFLAGS)
-        fi
-        if test ! -z "$prte_pmix_LDFLAGS"; then
-            PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prte_pmix_LDFLAGS)
-        fi
-        if test ! -z "$prte_pmix_LIBS"; then
-            PRTE_FLAGS_APPEND_UNIQ(LIBS, $prte_pmix_LIBS)
-        fi
-
-        # if the pmix_version.h file does not exist, then
-        # this must be from a pre-1.1.5 version
-        _PRTE_CHECK_PACKAGE_HEADER([prte_pmix], [pmix_version.h], [$pmix_ext_install_dir],
-                                   [],
-                                   [AC_MSG_WARN([PRTE does not support PMIx versions])
-                                    AC_MSG_WARN([less than v4.1 as only PMIx-based tools])
-                                    AC_MSG_WARN([can connect to the server.])
-                                    AC_MSG_ERROR([Please select a newer version and configure again])])
-
-
-        # if it does exist, then we need to parse it to find
-        # the actual release series
-        AC_MSG_CHECKING([version 4x])
-        AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
-                                            #include <pmix_version.h>
-                                            #if (PMIX_VERSION_MAJOR < 4L)
-                                            #error "not version 4 or above"
-                                            #endif
-                                           ], [])],
-                          [AC_MSG_RESULT([found])
-                           prte_external_pmix_version=4x
-                           prte_external_pmix_version_found=4],
-                          [AC_MSG_RESULT([not found])])
-
-        AS_IF([test "$prte_external_pmix_version_found" = "4"],
-              [AC_MSG_CHECKING([version 4.1 or greater])
-                AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
-                                                    #include <pmix_version.h>
-                                                    #if (PMIX_VERSION_MAJOR == 4L && PMIX_VERSION_MINOR < 1L)
-                                                    #error "not version 4.1 or above"
-                                                    #endif
-                                                   ], [])],
-                                  [AC_MSG_RESULT([found])],
-                                  [AC_MSG_RESULT([not found])
-                                   prte_external_pmix_version_found=0])])
-
-        # restore the global flags
-        CPPFLAGS=$prte_external_pmix_save_CPPFLAGS
-        LDFLAGS=$prte_external_pmix_save_LDFLAGS
-        LIBS=$prte_external_pmix_save_LIBS
-
-        AS_IF([test "$prte_external_pmix_version_found" = "0"],
-              [AC_MSG_WARN([PRTE does not support PMIx versions])
-               AC_MSG_WARN([less than v4.1 as only PMIx-based tools can])
-               AC_MSG_WARN([can connect to the server.])
-               AC_MSG_ERROR([Please select a newer version and configure again])])
-
-        AS_IF([test "x$prte_external_pmix_version" = "x"],
-              [AC_MSG_WARN([PMIx version information could not])
-               AC_MSG_WARN([be detected])
-               AC_MSG_ERROR([cannot continue])])
+    # need to add resulting flags to global ones so we can
+    # test the version
+    if test ! -z "$prte_pmix_CPPFLAGS"; then
+        PRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prte_pmix_CPPFLAGS)
     fi
+    if test ! -z "$prte_pmix_LDFLAGS"; then
+        PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prte_pmix_LDFLAGS)
+    fi
+    if test ! -z "$prte_pmix_LIBS"; then
+        PRTE_FLAGS_APPEND_UNIQ(LIBS, $prte_pmix_LIBS)
+    fi
+
+    # if the pmix_version.h file does not exist, then
+    # this must be from a pre-1.1.5 version
+    _PRTE_CHECK_PACKAGE_HEADER([prte_pmix], [pmix_version.h], [$pmix_ext_install_dir],
+                               [],
+                               [AC_MSG_WARN([PRTE does not support PMIx versions])
+                                AC_MSG_WARN([less than v4.1 as only PMIx-based tools])
+                                AC_MSG_WARN([can connect to the server.])
+                                AC_MSG_ERROR([Please select a newer version and configure again])])
+
+
+    # if it does exist, then we need to parse it to find
+    # the actual release series
+    AC_MSG_CHECKING([version 4x])
+    AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                        #include <pmix_version.h>
+                                        #if (PMIX_VERSION_MAJOR < 4L)
+                                        #error "not version 4 or above"
+                                        #endif
+                                       ], [])],
+                      [AC_MSG_RESULT([found])
+                       prte_external_pmix_version=4x
+                       prte_external_pmix_version_found=4],
+                      [AC_MSG_RESULT([not found])])
+
+    AS_IF([test "$prte_external_pmix_version_found" = "4"],
+          [AC_MSG_CHECKING([version 4.1 or greater])
+            AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                                #include <pmix_version.h>
+                                                #if (PMIX_VERSION_MAJOR == 4L && PMIX_VERSION_MINOR < 1L)
+                                                #error "not version 4.1 or above"
+                                                #endif
+                                               ], [])],
+                              [AC_MSG_RESULT([found])],
+                              [AC_MSG_RESULT([not found])
+                               prte_external_pmix_version_found=0])])
+
+    # restore the global flags
+    CPPFLAGS=$prte_external_pmix_save_CPPFLAGS
+    LDFLAGS=$prte_external_pmix_save_LDFLAGS
+    LIBS=$prte_external_pmix_save_LIBS
+
+    AS_IF([test "$prte_external_pmix_version_found" = "0"],
+          [AC_MSG_WARN([PRTE does not support PMIx versions])
+           AC_MSG_WARN([less than v4.1 as only PMIx-based tools can])
+           AC_MSG_WARN([can connect to the server.])
+           AC_MSG_ERROR([Please select a newer version and configure again])])
+
+    AS_IF([test "x$prte_external_pmix_version" = "x"],
+          [AC_MSG_WARN([PMIx version information could not])
+           AC_MSG_WARN([be detected])
+           AC_MSG_ERROR([cannot continue])])
 
     if test ! -z "$prte_pmix_CPPFLAGS"; then
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_pmix_CPPFLAGS)

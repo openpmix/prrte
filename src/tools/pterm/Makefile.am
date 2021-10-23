@@ -22,7 +22,7 @@
 # $HEADER$
 #
 
-AM_LDFLAGS = $(PRTE_EXTRA_LIB_LDFLAGS) $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
+AM_LDFLAGS = $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
 AM_CFLAGS = \
             -DPRTE_CONFIGURE_USER="\"@PRTE_CONFIGURE_USER@\"" \
             -DPRTE_CONFIGURE_HOST="\"@PRTE_CONFIGURE_HOST@\"" \
@@ -47,7 +47,6 @@ pterm_SOURCES = \
         pterm.c
 
 pterm_LDADD = \
-    $(PRTE_EXTRA_LTLIB) \
     $(prte_libevent_LIBS) \
     $(prte_hwloc_LIBS) \
     $(prte_pmix_LIBS) \
