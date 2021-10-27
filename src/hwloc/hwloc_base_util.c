@@ -659,6 +659,24 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
     }
 
 #if HWLOC_API_VERSION >= 0x20000
+    /* if the type is NUMA, then we need to only count the
+     * CPU NUMAs and ignore the GPU NUMAs as we only deal
+     * with CPUs at this time */
+    if (HWLOC_OBJ_NUMANODE == target) {
+        unsigned width, w;
+        hwloc_obj_t obj;
+
+        width = hwloc_get_nbobjs_by_type(topo, target);
+        rc = 0;
+        for (w=0; w < width; w++) {
+            obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, w);
+            if (200 > obj->os_index) {
+                // this is a CPU NUMA
+                ++rc;
+            }
+        }
+        return rc;
+    }
     if (0 > (rc = hwloc_get_nbobjs_by_type(topo, target))) {
         prte_output(0, "UNKNOWN HWLOC ERROR");
         return 0;
@@ -734,6 +752,25 @@ hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo, hwloc_obj_typ
     }
 
 #if HWLOC_API_VERSION >= 0x20000
+    /* if we are looking for NUMA, then ignore all the
+     * GPU NUMAs */
+    if (HWLOC_OBJ_NUMANODE == target) {
+        unsigned width, w, cnt;
+        hwloc_obj_t obj;
+
+        width = hwloc_get_nbobjs_by_type(topo, target);
+        cnt = 0;
+        for (w=0; w < width; w++) {
+            obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, w);
+            if (200 > obj->os_index) {
+                if (cnt == instance) {
+                    return obj;
+                }
+                ++cnt;
+            }
+        }
+        return NULL;
+    }
     return hwloc_get_obj_by_type(topo, target, instance);
 #else
     hwloc_obj_t obj;
@@ -1079,6 +1116,9 @@ static void prte_hwloc_base_get_relative_locality_by_depth(hwloc_topology_t topo
             case HWLOC_OBJ_PACKAGE:
                 *locality |= PRTE_PROC_ON_PACKAGE;
                 break;
+            case HWLOC_OBJ_NODE:
+                *locality |= PRTE_PROC_ON_NUMA;
+                break;
 #if HWLOC_API_VERSION < 0x20000
             case HWLOC_OBJ_CACHE:
                 if (3 == obj->attr->cache.depth) {
@@ -1325,6 +1365,9 @@ char *prte_hwloc_base_print_binding(prte_binding_policy_t binding)
         break;
     case PRTE_BIND_TO_PACKAGE:
         bind = "PACKAGE";
+        break;
+    case PRTE_BIND_TO_NUMA:
+        bind = "NUMA";
         break;
     case PRTE_BIND_TO_L3CACHE:
         bind = "L3CACHE";
@@ -2051,6 +2094,8 @@ prte_hwloc_locality_t prte_hwloc_compute_relative_locality(char *loc1, char *loc
                     /* set the corresponding locality bit */
                     if (0 == strncmp(set1[n1], "SK", 2)) {
                         locality |= PRTE_PROC_ON_PACKAGE;
+                    } else if (0 == strncmp(set1[n1], "NM", 2)) {
+                        locality |= PRTE_PROC_ON_NUMA;
                     } else if (0 == strncmp(set1[n1], "L3", 2)) {
                         locality |= PRTE_PROC_ON_L3CACHE;
                     } else if (0 == strncmp(set1[n1], "L2", 2)) {

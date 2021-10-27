@@ -207,6 +207,17 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
                 rc = prte_rmaps_rr_byslot(jdata, app, &node_list, num_slots, app->num_procs);
             }
+        } else if (PRTE_MAPPING_BYNUMA == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+            rc = prte_rmaps_rr_byobj(jdata, app, &node_list, num_slots, app->num_procs,
+                                     HWLOC_OBJ_NODE, 0);
+            if (PRTE_ERR_NOT_FOUND == rc) {
+                /* if the mapper couldn't map by this object because
+                 * it isn't available, but the error allows us to try
+                 * byslot, then do so
+                 */
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
+                rc = prte_rmaps_rr_byslot(jdata, app, &node_list, num_slots, app->num_procs);
+            }
         } else if (PRTE_MAPPING_BYPACKAGE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
             rc = prte_rmaps_rr_byobj(jdata, app, &node_list, num_slots, app->num_procs,
                                      HWLOC_OBJ_PACKAGE, 0);
@@ -263,8 +274,8 @@ static int prte_rmaps_rr_assign_locations(prte_job_t *jdata)
     unsigned cache_level;
     int rc;
 
-    if (NULL == jdata->map->last_mapper
-        || 0 != strcasecmp(jdata->map->last_mapper, c->mca_component_name)) {
+    if (NULL == jdata->map->last_mapper ||
+        0 != strcasecmp(jdata->map->last_mapper, c->mca_component_name)) {
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: job %s not using rr mapper",
@@ -278,8 +289,8 @@ static int prte_rmaps_rr_assign_locations(prte_job_t *jdata)
 
     /* if the mapping directive was byslot or bynode, then we
      * assign locations to the root object level */
-    if (PRTE_MAPPING_BYNODE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)
-        || PRTE_MAPPING_BYSLOT == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+    if (PRTE_MAPPING_BYNODE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping) ||
+        PRTE_MAPPING_BYSLOT == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         return prte_rmaps_rr_assign_root_level(jdata);
     }
 
@@ -329,6 +340,16 @@ static int prte_rmaps_rr_assign_locations(prte_job_t *jdata)
     } else if (PRTE_MAPPING_BYL3CACHE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         PRTE_HWLOC_MAKE_OBJ_CACHE(3, target, cache_level);
         rc = prte_rmaps_rr_assign_byobj(jdata, target, cache_level);
+        if (PRTE_ERR_NOT_FOUND == rc) {
+            /* if the mapper couldn't map by this object because
+             * it isn't available, but the error allows us to try
+             * byslot, then do so
+             */
+            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
+            rc = prte_rmaps_rr_assign_root_level(jdata);
+        }
+    } else if (PRTE_MAPPING_BYNUMA == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        rc = prte_rmaps_rr_assign_byobj(jdata, HWLOC_OBJ_NODE, 0);
         if (PRTE_ERR_NOT_FOUND == rc) {
             /* if the mapper couldn't map by this object because
              * it isn't available, but the error allows us to try
