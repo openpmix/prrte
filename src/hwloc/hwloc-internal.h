@@ -55,11 +55,12 @@ enum {
     PRTE_PROC_ON_HOST = 0x0004,
     PRTE_PROC_ON_NODE = 0x000c, // same host
     PRTE_PROC_ON_PACKAGE = 0x0020,
-    PRTE_PROC_ON_L3CACHE = 0x0040,
-    PRTE_PROC_ON_L2CACHE = 0x0080,
-    PRTE_PROC_ON_L1CACHE = 0x0100,
-    PRTE_PROC_ON_CORE = 0x0200,
-    PRTE_PROC_ON_HWTHREAD = 0x0400,
+    PRTE_PROC_ON_NUMA = 0x0040,
+    PRTE_PROC_ON_L3CACHE = 0x0080,
+    PRTE_PROC_ON_L2CACHE = 0x0100,
+    PRTE_PROC_ON_L1CACHE = 0x0200,
+    PRTE_PROC_ON_CORE = 0x0400,
+    PRTE_PROC_ON_HWTHREAD = 0x0800,
     PRTE_PROC_ALL_LOCAL = 0x0fff,
 };
 
@@ -69,6 +70,7 @@ enum {
 #define PRTE_PROC_ON_LOCAL_HOST(n)     (!!((n) &PRTE_PROC_ON_HOST))
 #define PRTE_PROC_ON_LOCAL_NODE(n)     (!!((n) &PRTE_PROC_ON_LOCAL_HOST(n)))
 #define PRTE_PROC_ON_LOCAL_PACKAGE(n)  (!!((n) &PRTE_PROC_ON_PACKAGE))
+#define PRTE_PROC_ON_LOCAL_NUMA(n)     (!!((n) &PRTE_PROC_ON_NUMA))
 #define PRTE_PROC_ON_LOCAL_L3CACHE(n)  (!!((n) &PRTE_PROC_ON_L3CACHE))
 #define PRTE_PROC_ON_LOCAL_L2CACHE(n)  (!!((n) &PRTE_PROC_ON_L2CACHE))
 #define PRTE_PROC_ON_LOCAL_L1CACHE(n)  (!!((n) &PRTE_PROC_ON_L1CACHE))
@@ -143,11 +145,12 @@ typedef uint16_t prte_binding_policy_t;
  */
 #define PRTE_BIND_TO_NONE            1
 #define PRTE_BIND_TO_PACKAGE         2
-#define PRTE_BIND_TO_L3CACHE         3
-#define PRTE_BIND_TO_L2CACHE         4
-#define PRTE_BIND_TO_L1CACHE         5
-#define PRTE_BIND_TO_CORE            6
-#define PRTE_BIND_TO_HWTHREAD        7
+#define PRTE_BIND_TO_NUMA            3
+#define PRTE_BIND_TO_L3CACHE         4
+#define PRTE_BIND_TO_L2CACHE         5
+#define PRTE_BIND_TO_L1CACHE         6
+#define PRTE_BIND_TO_CORE            7
+#define PRTE_BIND_TO_HWTHREAD        8
 #define PRTE_GET_BINDING_POLICY(pol) ((pol) &0x0fff)
 #define PRTE_SET_BINDING_POLICY(target, pol) \
     (target) = (pol) | (((target) &0x2000) | PRTE_BIND_GIVEN)

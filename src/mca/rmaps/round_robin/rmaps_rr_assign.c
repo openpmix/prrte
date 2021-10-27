@@ -201,9 +201,8 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target, unsig
                 k = start;
                 do {
                     /* get the hwloc object */
-                    if (NULL
-                        == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target,
-                                                                  cache_level, k))) {
+                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, k);
+                    if (NULL == obj) {
                         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                         hwloc_bitmap_free(available);
                         if (NULL != job_cpuset) {
@@ -231,8 +230,7 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target, unsig
                 }
                 prte_output_verbose(20, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rr: assigning proc to object %d", k);
-                prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj,
-                                   PMIX_POINTER);
+                prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
                 /* Position at next sequential resource for next search */
                 start = (k + 1) % nobjs;
                 /* track the bookmark */

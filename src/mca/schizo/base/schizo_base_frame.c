@@ -418,7 +418,7 @@ bool prte_schizo_base_check_directives(char *directive,
     size_t n, m, len, l1, l2;
     char **args, **qls, *v, *q;
     char *pproptions[] = {"slot", "hwthread", "core", "l1cache",
-                          "l2cache",  "l3cache", "package", "node",
+                          "l2cache",  "l3cache", "numa", "package", "node",
                           NULL};
     bool found;
 
@@ -515,18 +515,18 @@ bool prte_schizo_base_check_directives(char *directive,
 int prte_schizo_base_sanity(prte_cmd_line_t *cmd_line)
 {
     prte_value_t *pval;
-    char *mappers[] = {"slot", "hwthread", "core", "l1cache", "l2cache",  "l3cache", "package",
-                       "node", "seq",      "dist", "ppr",     "rankfile", NULL};
+    char *mappers[] = {"slot", "hwthread", "core", "l1cache", "l2cache",  "l3cache", "numa",
+                       "package", "node", "seq",      "dist", "ppr",     "rankfile", NULL};
     char *mapquals[] = {"pe=", "span", "oversubscribe", "nooversubscribe", "nolocal",
                         "hwtcpus", "corecpus", "device=", "inherit", "noinherit", "pe-list=",
                         "file=", "donotlaunch", NULL};
 
     char *rankers[] = {"slot",    "hwthread", "core", "l1cache", "l2cache",
-                       "l3cache", "package",  "node", NULL};
+                       "l3cache", "numa", "package",  "node", NULL};
     char *rkquals[] = {"span", "fill", NULL};
 
     char *binders[] = {"none",    "hwthread", "core",    "l1cache",
-                       "l2cache", "l3cache",  "package", NULL};
+                       "l2cache", "l3cache", "numa", "package", NULL};
     char *bndquals[] = {"overload-allowed", "if-supported", "ordered", "report", NULL};
 
     char *outputs[] = {"tag", "timestamp", "xml", "merge-stderr-to-stdout", "directory", "filename", NULL};
