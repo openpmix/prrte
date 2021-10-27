@@ -174,6 +174,13 @@ static int ppr_mapper(prte_job_t *jdata)
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
             }
             n++;
+        } else if (0 == strncasecmp(ck[1], "numa", len) || 0 == strncasecmp(ck[1], "nm", len)) {
+            rmaps_ppr_global[PRTE_HWLOC_NUMA_LEVEL] = strtol(ck[0], NULL, 10);
+            if (start < PRTE_HWLOC_NUMA_LEVEL) {
+                start = PRTE_HWLOC_NUMA_LEVEL;
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
+            }
+            n++;
         } else if (0 == strncasecmp(ck[1], "l1cache", len)) {
             rmaps_ppr_global[PRTE_HWLOC_L1CACHE_LEVEL] = strtol(ck[0], NULL, 10);
             if (start < PRTE_HWLOC_L1CACHE_LEVEL) {
@@ -246,9 +253,9 @@ static int ppr_mapper(prte_job_t *jdata)
 
         /* get the available nodes */
         PRTE_CONSTRUCT(&node_list, prte_list_t);
-        if (PRTE_SUCCESS
-            != (rc = prte_rmaps_base_get_target_nodes(&node_list, &num_slots, app,
-                                                      jdata->map->mapping, initial_map, false))) {
+        rc = prte_rmaps_base_get_target_nodes(&node_list, &num_slots, app,
+                                              jdata->map->mapping, initial_map, false);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             goto error;
         }
@@ -300,8 +307,7 @@ static int ppr_mapper(prte_job_t *jdata)
                 }
             } else {
                 /* get the number of lowest resources on this node */
-                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, lowest,
-                                                           cache_level);
+                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, lowest, cache_level);
                 /* Map up to number of slots_available on node or number of specified resource on
                  * node whichever is less. */
                 if (node->slots_available < (int) nobjs) {
@@ -313,8 +319,7 @@ static int ppr_mapper(prte_job_t *jdata)
                  * recording the locale of each proc so we know its cpuset
                  */
                 for (i = 0; i < num_available; i++) {
-                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, lowest, cache_level,
-                                                          i);
+                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, lowest, cache_level, i);
                     for (j = 0; j < rmaps_ppr_global[start] && nprocs_mapped < total_procs; j++) {
                         if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, idx))) {
                             rc = PRTE_ERR_OUT_OF_RESOURCE;
@@ -348,10 +353,9 @@ static int ppr_mapper(prte_job_t *jdata)
                  * we have violated the total slot specification - regardless,
                  * if slots_max was given, we are not allowed to violate it!
                  */
-                if ((node->slots < (int) node->num_procs)
-                    || (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
-                    if (PRTE_MAPPING_NO_OVERSUBSCRIBE
-                        & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
+                if ((node->slots < (int) node->num_procs) ||
+                    (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
+                    if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                         prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                        true, node->num_procs, app->app);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
@@ -368,16 +372,14 @@ static int ppr_mapper(prte_job_t *jdata)
                         /* if we weren't given a directive either way, then we will error out
                          * as the #slots were specifically given, either by the host RM or
                          * via hostfile/dash-host */
-                        if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN
-                              & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
+                        if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
                             prte_show_help("help-prte-rmaps-base.txt",
                                            "prte-rmaps-base:alloc-error", true, app->num_procs,
                                            app->app);
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                             rc = PRTE_ERR_SILENT;
                             goto error;
-                        } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE
-                                   & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
+                        } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                             /* if we were explicitly told not to oversubscribe, then don't */
                             prte_show_help("help-prte-rmaps-base.txt",
                                            "prte-rmaps-base:alloc-error", true, app->num_procs,
@@ -514,8 +516,7 @@ static void prune(pmix_nspace_t jobid, prte_app_idx_t app_idx, prte_node_t *node
                 continue;
             }
             locale = NULL;
-            if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void **) &locale,
-                                   PMIX_POINTER)) {
+            if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void **) &locale, PMIX_POINTER)) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 return;
             }
@@ -558,8 +559,8 @@ static void prune(pmix_nspace_t jobid, prte_app_idx_t app_idx, prte_node_t *node
                 nunder = 0;
                 pptr = NULL;
                 for (n = 0; n < node->procs->size; n++) {
-                    if (NULL
-                        == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, n))) {
+                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, n);
+                    if (NULL == proc) {
                         continue;
                     }
                     if (!PMIX_CHECK_NSPACE(proc->name.nspace, jobid) || proc->app_idx != app_idx) {
@@ -662,6 +663,8 @@ static int assign_locations(prte_job_t *jdata)
         level = HWLOC_OBJ_CORE;
     } else if (PRTE_MAPPING_BYPACKAGE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         level = HWLOC_OBJ_PACKAGE;
+    } else if (PRTE_MAPPING_BYNUMA == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        level = HWLOC_OBJ_NODE;
     } else if (PRTE_MAPPING_BYL1CACHE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         level = HWLOC_OBJ_L1CACHE;
         cache_level = 1;
@@ -691,8 +694,8 @@ static int assign_locations(prte_job_t *jdata)
         }
         nprocs_mapped = 0;
         for (m = 0; m < jdata->map->nodes->size; m++) {
-            if (NULL
-                == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m))) {
+            node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+            if (NULL == node) {
                 continue;
             }
             if (NULL == node->topology || NULL == node->topology->topo) {
@@ -702,8 +705,8 @@ static int assign_locations(prte_job_t *jdata)
             if (HWLOC_OBJ_MACHINE == level) {
                 obj = hwloc_get_root_obj(node->topology->topo);
                 for (j = 0; j < node->procs->size; j++) {
-                    if (NULL
-                        == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                    if (NULL == proc) {
                         continue;
                     }
                     if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
@@ -727,17 +730,15 @@ static int assign_locations(prte_job_t *jdata)
                     for (j = 0;
                          j < node->procs->size && cnt < ppr && nprocs_mapped < app->num_procs;
                          j++) {
-                        if (NULL
-                            == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs,
-                                                                                   j))) {
+                        proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                        if (NULL == proc) {
                             continue;
                         }
                         if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
                             continue;
                         }
                         /* if we already assigned it, then skip */
-                        if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, NULL,
-                                               PMIX_POINTER)) {
+                        if (prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, NULL, PMIX_POINTER)) {
                             continue;
                         }
                         nprocs_mapped++;

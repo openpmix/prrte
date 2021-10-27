@@ -279,7 +279,7 @@ static prte_cmd_line_init_t prte_cmd_line_init[] = {
     /* Mapping options */
     {'\0', "map-by", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache | "
-     "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr |,"
+     "l2cache | l3cache | numa (default:np>2) | package | node | seq | dist | ppr |,"
      "rankfile]"
      " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
      "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
@@ -290,14 +290,14 @@ static prte_cmd_line_init_t prte_cmd_line_init[] = {
     /* Ranking options */
     {'\0', "rank-by", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache "
-     "| l2cache | l3cache | package (default:np>2) | node], with modifier :SPAN or :FILL",
+     "| l2cache | l3cache | numa (default:np>2) | package | node], with modifier :SPAN or :FILL",
      PRTE_CMD_LINE_OTYPE_RANKING},
 
     /* Binding options */
     {'\0', "bind-to", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Binding policy for job. Allowed values: none, hwthread, core, l1cache, l2cache, "
-     "l3cache, package, (\"none\" is the default when oversubscribed, \"core\" is "
-     "the default when np<=2, and \"package\" is the default when np>2). Allowed colon-delimited "
+     "l3cache, numa, package, (\"none\" is the default when oversubscribed, \"core\" is "
+     "the default when np<=2, and \"numa\" is the default when np>2). Allowed colon-delimited "
      "qualifiers: "
      "overload-allowed, if-supported",
      PRTE_CMD_LINE_OTYPE_BINDING},

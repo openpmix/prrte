@@ -99,16 +99,17 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_job_map_t);
  * so the values match the corresponding
  * levels in src/hwloc/hwloc-internal.h
  */
-#define PRTE_MAPPING_BYNODE     1
-#define PRTE_MAPPING_BYPACKAGE  2
-#define PRTE_MAPPING_BYL3CACHE  3
-#define PRTE_MAPPING_BYL2CACHE  4
-#define PRTE_MAPPING_BYL1CACHE  5
-#define PRTE_MAPPING_BYCORE     6
-#define PRTE_MAPPING_BYHWTHREAD 7
+#define PRTE_MAPPING_BYNODE      1
+#define PRTE_MAPPING_BYNUMA      2
+#define PRTE_MAPPING_BYPACKAGE   3
+#define PRTE_MAPPING_BYL3CACHE   4
+#define PRTE_MAPPING_BYL2CACHE   5
+#define PRTE_MAPPING_BYL1CACHE   6
+#define PRTE_MAPPING_BYCORE      7
+#define PRTE_MAPPING_BYHWTHREAD  8
 /* now take the other round-robin options */
-#define PRTE_MAPPING_BYSLOT 8
-#define PRTE_MAPPING_BYDIST 9
+#define PRTE_MAPPING_BYSLOT      9
+#define PRTE_MAPPING_BYDIST     10
 /* convenience - declare anything <= 15 to be round-robin*/
 #define PRTE_MAPPING_RR 16
 
@@ -138,13 +139,14 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_job_map_t);
 
 /* define ranking policies */
 #define PRTE_RANK_BY_NODE            1
-#define PRTE_RANK_BY_PACKAGE         2
-#define PRTE_RANK_BY_L3CACHE         3
-#define PRTE_RANK_BY_L2CACHE         4
-#define PRTE_RANK_BY_L1CACHE         5
-#define PRTE_RANK_BY_CORE            6
-#define PRTE_RANK_BY_HWTHREAD        7
-#define PRTE_RANK_BY_SLOT            8
+#define PRTE_RANK_BY_NUMA            2
+#define PRTE_RANK_BY_PACKAGE         3
+#define PRTE_RANK_BY_L3CACHE         4
+#define PRTE_RANK_BY_L2CACHE         5
+#define PRTE_RANK_BY_L1CACHE         6
+#define PRTE_RANK_BY_CORE            7
+#define PRTE_RANK_BY_HWTHREAD        8
+#define PRTE_RANK_BY_SLOT            9
 #define PRTE_GET_RANKING_POLICY(pol) ((pol) &0x0fff)
 /* macro to determine if ranking policy is set */
 #define PRTE_RANKING_POLICY_IS_SET(pol)      ((pol) &0x0fff)

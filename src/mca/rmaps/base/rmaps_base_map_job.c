@@ -55,7 +55,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_job_map_t *app_map, *daemon_map;
     prte_proc_t *proc;
     int rc = PRTE_SUCCESS;
-    bool did_map, pernode = false, perpackage = false;
+    bool did_map, pernode = false, perpackage = false, pernuma = false;
     prte_rmaps_base_selected_module_t *mod;
     prte_job_t *parent = NULL, *target_jdata;
     pmix_rank_t nprocs;
@@ -356,6 +356,18 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             }
             ++p; // step over the colon
             u16 = strtoul(p, NULL, 10);
+        } else if (NULL != strcasestr(tmp, "numa")) {
+            pernuma = true;
+            /* get the ppn */
+            if (NULL == (p = strchr(tmp, ':'))) {
+                /* should never happen */
+                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+                jdata->exit_code = PRTE_ERR_BAD_PARAM;
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
+            }
+            ++p; // step over the colon
+            u16 = strtoul(p, NULL, 10);
         }
         free(tmp);
     } else if (PRTE_MAPPING_SEQ == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
@@ -381,9 +393,15 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     /* add in #packages for each node */
                     PRTE_LIST_FOREACH(node, &nodes, prte_node_t)
                     {
-                        slots += u16
-                                 * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                      HWLOC_OBJ_PACKAGE, 0);
+                        slots += u16 * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                          HWLOC_OBJ_PACKAGE, 0);
+                    }
+                } else if (pernuma) {
+                    /* add in #NUMA for each node */
+                    PRTE_LIST_FOREACH(node, &nodes, prte_node_t)
+                    {
+                        slots += u16 * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                          HWLOC_OBJ_NODE, 0);
                     }
                 } else if (sequential) {
                     slots = prte_list_get_size(&nodes);
@@ -448,12 +466,16 @@ compute:
                     PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
                 }
             } else {
-                /* if package is available, map by that */
-                if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
+                /* if NUMA is available, map by that */
+                if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NODE, 0)) {
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] mapping not set by user - using bypackage",
-                                        __LINE__);
-                    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
+                                        "mca:rmaps[%d] mapping not set by user - using bynuma", __LINE__);
+                    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
+                } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
+                    /* if package is available, map by that */
+                    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps[%d] mapping not set by user - using bypackage", __LINE__);
+                    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
                 } else {
                     /* if we have neither, then just do by slot */
                     prte_output_verbose(
@@ -505,7 +527,14 @@ ranking:
             }
         }
         if (!did_map) {
-            PRTE_SET_RANKING_POLICY(jdata->map->ranking, PRTE_RANK_BY_SLOT);
+            rc = prte_rmaps_base_set_ranking_policy(jdata, NULL);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+                PRTE_RELEASE(caddy);
+                jdata->exit_code = PRTE_ERR_NOT_FOUND;
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                return;
+            }
         }
     }
 
@@ -551,33 +580,31 @@ ranking:
                 if (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                     if (PRTE_MAPPING_BYHWTHREAD == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps[%d] binding not given - using byhwthread",
-                                            __LINE__);
+                                            "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
                     } else if (PRTE_MAPPING_BYCORE == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps[%d] binding not given - using bycore",
-                                            __LINE__);
+                                            "mca:rmaps[%d] binding not given - using bycore", __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
                     } else if (PRTE_MAPPING_BYL1CACHE == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps[%d] binding not given - using byL1",
-                                            __LINE__);
+                                            "mca:rmaps[%d] binding not given - using byL1", __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L1CACHE);
                     } else if (PRTE_MAPPING_BYL2CACHE == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps[%d] binding not given - using byL2",
-                                            __LINE__);
+                                            "mca:rmaps[%d] binding not given - using byL2", __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L2CACHE);
                     } else if (PRTE_MAPPING_BYL3CACHE == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps[%d] binding not given - using byL3",
-                                            __LINE__);
+                                            "mca:rmaps[%d] binding not given - using byL3", __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L3CACHE);
+                    } else if (PRTE_MAPPING_BYNUMA == mpol) {
+                        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                            "mca:rmaps[%d] binding not given - using bynuma", __LINE__);
+                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
                     } else if (PRTE_MAPPING_BYPACKAGE == mpol) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps[%d] binding not given - using bypackage",
-                                            __LINE__);
+                                            "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
                     } else {
                         /* we are mapping by node or some other non-object method */
@@ -631,8 +658,13 @@ ranking:
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
                     }
                 } else {
-                    /* for performance, bind to package, if available */
-                    if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
+                    /* for performance, bind to NUMA, if available */
+                    if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NODE, 0)) {
+                        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                            "mca:rmaps[%d] binding not given - using bynuma",
+                                            __LINE__);
+                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
+                    } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
                         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                             "mca:rmaps[%d] binding not given - using bypackage",
                                             __LINE__);
