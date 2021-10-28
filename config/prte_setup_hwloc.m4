@@ -138,7 +138,7 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
 
     if test ! -z "$prte_hwloc_CPPFLAGS"; then
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_hwloc_CPPFLAGS)
-        PRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, prte_hwloc_CPPFLAGS)
+        PRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prte_hwloc_CPPFLAGS)
     fi
     if test ! -z "$prte_hwloc_LDFLAGS"; then
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_hwloc_LDFLAGS)
