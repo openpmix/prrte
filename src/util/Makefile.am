@@ -17,6 +17,7 @@
 # Copyright (c) 2016      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -77,7 +78,6 @@ headers = \
         prte_environ.h \
         prte_getcwd.h \
         prte_pty.h \
-        qsort.h \
         session_dir.h \
         show_help_lex.h \
         show_help.h \
@@ -122,7 +122,6 @@ libprrteutil_la_SOURCES = \
         prte_environ.c \
         prte_getcwd.c \
         prte_pty.c \
-        qsort.c \
         session_dir.c \
         show_help.c \
         show_help_lex.l \
