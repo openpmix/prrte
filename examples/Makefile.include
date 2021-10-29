@@ -53,4 +53,5 @@ EXTRA_DIST += \
         examples/pub.c \
         examples/tool.c \
         examples/server.c \
-        examples/showkeys.c
+        examples/showkeys.c \
+	examples/legacy.c
