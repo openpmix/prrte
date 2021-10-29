@@ -56,7 +56,8 @@ EXAMPLES = \
 	bad_exit \
 	jctrl \
 	launcher \
-	showkeys
+	showkeys \
+	legacy
 
 all: $(EXAMPLES)
 
