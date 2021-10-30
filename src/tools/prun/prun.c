@@ -690,18 +690,7 @@ int prun(int argc, char *argv[])
 
     /***** CONSTRUCT THE APP'S JOB-INFO ****/
     PMIX_INFO_LIST_START(jinfo);
-
-    /* see if we ourselves were spawned by someone */
-    ret = PMIx_Get(&prte_process_info.myproc, PMIX_PARENT_ID, NULL, 0, &val);
-    if (PMIX_SUCCESS == ret) {
-        PMIX_LOAD_PROCID(&parent, val->data.proc->nspace, val->data.proc->rank);
-        PMIX_VALUE_RELEASE(val);
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
-        /* indicate that we are launching on behalf of a parent */
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PARENT_ID, &parent, PMIX_PROC);
-    } else {
-        PMIX_LOAD_PROCID(&parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
-    }
+    PMIX_LOAD_PROCID(&parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
 
     /***** CHECK FOR LAUNCH DIRECTIVES - ADD THEM TO JOB INFO IF FOUND ****/
     PMIX_LOAD_PROCID(&pname, myproc.nspace, PMIX_RANK_WILDCARD);
