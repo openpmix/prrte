@@ -181,6 +181,7 @@ int main(int argc, char *argv[])
     prte_pointer_array_init(&mca_types, 256, INT_MAX, 128);
 
     /* add a type for prte itself */
+    prte_pointer_array_add(&mca_types, "mca");
     prte_pointer_array_add(&mca_types, "prte");
 
     /* add a type for hwloc */

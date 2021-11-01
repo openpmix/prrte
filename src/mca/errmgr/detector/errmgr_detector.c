@@ -491,9 +491,9 @@ static void fd_event_cb(int fd, short flags, void *pdetector)
         PMIX_LOAD_PROCID(&temp_proc_name, prte_process_info.myproc.nspace, detector->hb_observing);
         /* if first time detected */
         if (errmgr_get_daemon_status(temp_proc_name)) {
-            PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+            prte_output_verbose( 5, prte_errmgr_base_framework.framework_output,
                                  "errmgr:detector %d detected daemon %d failed, heartbeat delay",
-                                 prte_process_info.myproc.rank, detector->hb_observing));
+                                 prte_process_info.myproc.rank, detector->hb_observing);
             prte_propagate.prp(temp_proc_name.nspace, NULL, &temp_proc_name, PRTE_ERR_PROC_ABORTED);
 
             /* with every 8 failed nodes realloc 8 more slots to store the vpid of failed nodes */

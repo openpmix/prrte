@@ -48,7 +48,7 @@
 #include "src/mca/base/prte_mca_base_vari.h"
 #include "src/mca/mca.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/runtime/runtime.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/argv.h"
 #include "src/util/error.h"
 #include "src/util/keyval_parse.h"
@@ -71,6 +71,7 @@ static char **prte_mca_base_var_file_list = NULL;
 static bool prte_mca_base_var_suppress_override_warning = false;
 static prte_list_t prte_mca_base_var_file_values;
 static prte_list_t prte_mca_base_envar_file_values;
+static char *prte_mca_base_var_files = NULL;
 
 static int prte_mca_base_var_count = 0;
 
@@ -253,8 +254,8 @@ static void save_value(const char *file, int lineno, const char *name, const cha
  */
 int prte_mca_base_var_init(void)
 {
-    int ret;
-    char *tmp;
+    int ret, n;
+    char *tmp, **filelist = NULL;
     prte_mca_base_var_file_value_t *fv;
 
     if (!prte_mca_base_var_initialized) {
@@ -297,23 +298,35 @@ int prte_mca_base_var_init(void)
 
         /* start with the system default param file */
         tmp = prte_os_path(false, prte_install_dirs.sysconfdir, "prte-mca-params.conf", NULL);
-        ret = prte_util_keyval_parse(tmp, save_value);
+        prte_argv_append_nosize(&filelist, tmp);
         free(tmp);
-        if (PRTE_SUCCESS != ret && PRTE_ERR_NOT_FOUND != ret) {
-            PRTE_ERROR_LOG(ret);
-            return ret;
-        }
-
 #if PRTE_WANT_HOME_CONFIG_FILES
         /* do the user's home default param files */
         tmp = prte_os_path(false, home, ".prte", "mca-params.conf", NULL);
-        ret = prte_util_keyval_parse(tmp, save_value);
+        prte_argv_append_nosize(&filelist, tmp);
         free(tmp);
-        if (PRTE_SUCCESS != ret && PRTE_ERR_NOT_FOUND != ret) {
-            PRTE_ERROR_LOG(ret);
-            return ret;
-        }
 #endif
+
+        /* Initialize a parameter that says where MCA param files can be found.
+         We may change this value so set the scope to PMIX_MCA_BASE_VAR_SCOPE_READONLY */
+        prte_mca_base_var_files = prte_argv_join(filelist, ';');
+        prte_argv_free(filelist);
+        ret = prte_mca_base_var_register("prte", "mca", "base", "param_files",
+                                         "Path for MCA configuration files containing variable values",
+                                         PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                         PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
+                                         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_var_files);
+
+        filelist = prte_argv_split(prte_mca_base_var_files, ';');
+        for (n=0; NULL != filelist[n]; n++) {
+            ret = prte_util_keyval_parse(filelist[n], save_value);
+            if (PRTE_SUCCESS != ret && PRTE_ERR_NOT_FOUND != ret) {
+                PRTE_ERROR_LOG(ret);
+                prte_argv_free(filelist);
+                return ret;
+            }
+        }
+        prte_argv_free(filelist);
 
         /* push the results into our environment, but do not overwrite
          * a value if the user already has it set as their environment
@@ -562,6 +575,7 @@ int prte_mca_base_var_set_value(int vari, const void *value, size_t size,
 {
     prte_mca_base_var_t *var;
     int ret;
+    PRTE_HIDE_UNUSED_PARAMS(size);
 
     ret = var_get(vari, &var, true);
     if (PRTE_SUCCESS != ret) {
@@ -721,6 +735,7 @@ static int var_find(const char *project_name, const char *framework_name,
 {
     char *full_name;
     int ret, vari;
+    PRTE_HIDE_UNUSED_PARAMS(project_name);
 
     ret = prte_mca_base_var_generate_full_name4(NULL, framework_name, component_name, variable_name,
                                                 &full_name);
@@ -1291,11 +1306,13 @@ static int var_get_env(prte_mca_base_var_t *var, const char *name, char **source
     const char source_prefix[] = "SOURCE_";
     const int max_len = strlen(prte_mca_prefix) + strlen(source_prefix) + strlen(name) + 1;
     char *envvar = alloca(max_len);
+    int ret;
+    PRTE_HIDE_UNUSED_PARAMS(var);
+
     if (NULL == envvar) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    int ret;
     ret = snprintf(envvar, max_len, "%s%s", prte_mca_prefix, name);
     if (0 > ret) {
         return PRTE_ERROR;

@@ -618,6 +618,19 @@ extern char *prte_if_exclude;
 /* Enable/disable ft */
 PRTE_EXPORT extern bool prte_enable_ft;
 
+#if PRTE_PICKY_COMPILERS
+#define PRTE_HIDE_UNUSED_PARAMS(...)                \
+do {                                            \
+int __x = 3;                                \
+prte_hide_unused_params(__x, __VA_ARGS__);  \
+} while(0)
+
+PMIX_EXPORT void prte_hide_unused_params(int x, ...);
+
+#else
+#define PRTE_HIDE_UNUSED_PARAMS(...)
+#endif
+
 END_C_DECLS
 
 #endif /* PRTE_RUNTIME_PRTE_GLOBALS_H */

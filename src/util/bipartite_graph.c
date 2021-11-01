@@ -20,6 +20,7 @@
 #include "prte_stdint.h"
 #include "src/class/prte_list.h"
 #include "src/class/prte_pointer_array.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
 
@@ -460,6 +461,7 @@ static int bottleneck_path(prte_bp_graph_t *gx, int n, int *pred)
 {
     int u, v;
     int min;
+    PRTE_HIDE_UNUSED_PARAMS(n);
 
     min = INT_MAX;
     FOREACH_UV_ON_PATH(pred, gx->source_idx, gx->sink_idx, u, v)

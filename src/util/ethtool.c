@@ -39,6 +39,7 @@
 #    include <linux/sockios.h>
 #endif
 
+#include "src/runtime/prte_globals.h"
 #include "src/util/ethtool.h"
 #include "src/util/if.h"
 #include "src/util/string_copy.h"
@@ -85,6 +86,8 @@ unsigned int prte_ethtool_get_speed(const char *if_name)
 
 out:
     close(sockfd);
+#else
+    PRTE_HIDE_UNUSED_PARAMS(if_name);
 #endif
 
     return speed;

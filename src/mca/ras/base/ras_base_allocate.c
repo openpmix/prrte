@@ -187,6 +187,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
     char *hosts = NULL;
     char *ptr;
     pmix_status_t ret;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 

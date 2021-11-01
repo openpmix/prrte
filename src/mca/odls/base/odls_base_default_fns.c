@@ -104,6 +104,7 @@ static void setup_cbfunc(pmix_status_t status, pmix_info_t info[], size_t ninfo,
     pmix_data_buffer_t pbuf;
     pmix_byte_object_t pbo;
     int rc = PRTE_SUCCESS;
+    PRTE_HIDE_UNUSED_PARAMS(status);
 
     /* release any info */
     if (NULL != cd->info) {
@@ -400,6 +401,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
 static void ls_cbunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
@@ -900,6 +902,7 @@ static void timer_cb(int fd, short event, void *cbdata)
 {
     prte_timer_t *tm = (prte_timer_t *) cbdata;
     prte_odls_launch_local_t *ll = (prte_odls_launch_local_t *) tm->payload;
+    PRTE_HIDE_UNUSED_PARAMS(fd, event);
 
     PRTE_ACQUIRE_OBJECT(tm);
 
@@ -949,6 +952,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     pmix_proc_t pproc;
     pmix_status_t ret;
     char *ptr;
+    PRTE_HIDE_UNUSED_PARAMS(fd, sd);
 
     PRTE_ACQUIRE_OBJECT(cd);
 
@@ -966,6 +970,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
                 PMIX_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                 rc = PRTE_ERR_BAD_PARAM;
                 state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
+                free(tmp);
                 goto errorout;
             }
             *ptr = '\0';
@@ -1125,6 +1130,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     char **argvptr;
     char *pathenv = NULL, *mpiexec_pathenv = NULL;
     char *full_search;
+    PRTE_HIDE_UNUSED_PARAMS(fd, sd);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -1571,6 +1577,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
     prte_job_t *jobdat;
     prte_proc_state_t state = PRTE_PROC_STATE_WAITPID_FIRED;
     prte_proc_t *cptr;
+    PRTE_HIDE_UNUSED_PARAMS(fd, sd);
 
     prte_output_verbose(5, prte_odls_base_framework.framework_output,
                         "%s odls:wait_local_proc child process %s pid %ld terminated",

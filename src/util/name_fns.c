@@ -31,7 +31,6 @@
 #include "src/threads/tsd.h"
 #include "src/util/printf.h"
 #include "src/util/string_copy.h"
-
 #include "src/mca/errmgr/errmgr.h"
 
 #include "src/util/name_fns.h"
@@ -45,16 +44,11 @@ static void prte_namelist_construct(prte_namelist_t *list)
     PMIX_LOAD_PROCID(&list->name, NULL, PMIX_RANK_INVALID);
 }
 
-/* destructor - used to free any resources held by instance */
-static void prte_namelist_destructor(prte_namelist_t *list)
-{
-}
-
 /* define instance of prte_class_t */
 PRTE_CLASS_INSTANCE(prte_namelist_t,           /* type name */
                     prte_list_item_t,          /* parent "class" name */
                     prte_namelist_construct,   /* constructor */
-                    prte_namelist_destructor); /* destructor */
+                    NULL); /* destructor */
 
 static bool fns_init = false;
 

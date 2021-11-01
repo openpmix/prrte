@@ -28,7 +28,7 @@
 #include "src/util/show_help.h"
 
 /* instantiate the global list of interfaces */
-prte_list_t prte_if_list = {{0}};
+prte_list_t prte_if_list = PRTE_LIST_STATIC_INIT;
 bool prte_if_retain_loopback = false;
 
 static int prte_if_base_open(prte_mca_base_open_flag_t flags);
@@ -284,8 +284,7 @@ static char **split_and_resolve(char **orig_str, char *name)
         /* Go through all interfaces and see if we can find a match */
         for (if_index = prte_ifbegin(); if_index >= 0; if_index = prte_ifnext(if_index)) {
             prte_ifindextoaddr(if_index, (struct sockaddr *) &if_inaddr, sizeof(if_inaddr));
-            if (prte_net_samenetwork((struct sockaddr *) &argv_inaddr,
-                                     (struct sockaddr *) &if_inaddr, argv_prefix)) {
+            if (prte_net_samenetwork(&argv_inaddr, &if_inaddr, argv_prefix)) {
                 break;
             }
         }

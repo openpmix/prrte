@@ -57,6 +57,7 @@ void prte_rml_base_post_recv(int sd, short args, void *cbdata)
 {
     prte_rml_recv_request_t *req = (prte_rml_recv_request_t *) cbdata;
     prte_rml_posted_recv_t *post, *recv;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PRTE_ACQUIRE_OBJECT(req);
 
@@ -154,6 +155,7 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
 {
     prte_rml_recv_t *msg = (prte_rml_recv_t *) cbdata;
     prte_rml_posted_recv_t *post;
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags);
 
     PRTE_ACQUIRE_OBJECT(msg);
 

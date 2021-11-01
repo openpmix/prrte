@@ -68,6 +68,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     bool use_hwthreads = false, colocate_daemons = false;
     bool sequential = false;
     int32_t slots;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;

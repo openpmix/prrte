@@ -51,7 +51,15 @@
 /*
  * Global variables
  */
-prte_rmaps_base_t prte_rmaps_base = {{{0}}};
+prte_rmaps_base_t prte_rmaps_base = {
+    .selected_modules = PRTE_LIST_STATIC_INIT,
+    .mapping = 0,
+    .ranking = 0,
+    .device = NULL,
+    .inherit = false,
+    .hwthread_cpus = false,
+    .file = NULL
+};
 
 /*
  * Local variables
@@ -62,6 +70,8 @@ static bool rmaps_base_inherit = false;
 
 static int prte_rmaps_base_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
+
     /* define default mapping policy */
     rmaps_base_mapping_policy = NULL;
     (void) prte_mca_base_var_register(

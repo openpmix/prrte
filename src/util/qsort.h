@@ -22,20 +22,10 @@
 #ifndef PRTE_QSORT_H
 #define PRTE_QSORT_H
 
-#if PRTE_HAVE_BROKEN_QSORT
-
-#    ifdef HAVE_SYS_TYPES_H
-#        include <sys/types.h> /* for size_t */
-#    endif
-
 BEGIN_C_DECLS
 
 void prte_qsort(void *a, size_t n, size_t es, int (*cmp)(const void *, const void *));
 
 END_C_DECLS
-
-#else
-#    error "Don't include src/qsort/qsort.h directly"
-#endif /* PRTE_HAVE_BROKEN_QSORT */
 
 #endif

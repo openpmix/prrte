@@ -906,8 +906,6 @@ AC_DEFINE_UNQUOTED([PRTE_HAVE__SC_NPROCESSORS_ONLN], [$result],
 # all: endian
 AC_C_BIGENDIAN
 
-PRTE_CHECK_BROKEN_QSORT
-
 #
 # Check out what thread support we have
 #
@@ -1212,7 +1210,7 @@ LIBS="$LIBS $PRTE_FINAL_LIBS"
 AS_IF([test ! -z "$PRTE_CFLAGS_cache"], [CFLAGS="$CFLAGS $PRTE_CFLAGS_cache"])
 
 # setup "picky" compiler options if enabled
-#PRTE_SETUP_PICKY_COMPILERS
+PRTE_SETUP_PICKY_COMPILERS
 
 # Cleanup duplicate flags
 PRTE_FLAGS_UNIQ(CFLAGS)
