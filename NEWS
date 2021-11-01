@@ -39,6 +39,16 @@ version 1.0.
 ------------------------------------
 +**** NOTE: As of v2.0.1, PRRTE no longer has a dependency on "pandoc"
 +**** for building and installing man pages.
+
+PR #1135: Final update v2.0.1 for rc3
+ - Show MCA base params in prte_info
+ - Silence variety of warnings
+ - Start enabling picky compilers when requested
+ - Remove unused variables in BMG component
+ - Increase verbosity of detected error
+ - Remove broken qsort support
+ - Add a legacy example
+ - Don't specify parent ID from tool
 PR #1104: Update v2.0.1 for rc3
  - Silence Coverity warnings
  - Update portable platform file
