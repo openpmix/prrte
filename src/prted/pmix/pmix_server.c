@@ -676,6 +676,7 @@ int pmix_server_init(void)
         }
     }
 
+#ifdef PMIX_SINGLETON
     /* if we were started to support a singleton, then let the server library know */
     if (NULL != prte_pmix_server_globals.singleton) {
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SINGLETON,
@@ -685,6 +686,7 @@ int pmix_server_init(void)
             return rc;
         }
     }
+#endif
 
     /* if we are the MASTER, then we are the scheduler
      * as well as a gateway */
