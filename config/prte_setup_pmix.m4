@@ -117,7 +117,7 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
         AS_IF([test "x`ls $pmix_ext_install_dir/include/pmix_version.h 2> /dev/null`" = "x"],
                [AC_MSG_RESULT([not found - assuming pre-v2.0])
                 AC_MSG_WARN([PRTE does not support PMIx versions])
-                AC_MSG_WARN([less than v4.01 as only PMIx-based tools can])
+                AC_MSG_WARN([less than v4.1.0 as only PMIx-based tools can])
                 AC_MSG_WARN([can connect to the server.])
                 AC_MSG_ERROR([Please select a newer version and configure again])],
                [AC_MSG_RESULT([found])
@@ -156,7 +156,7 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
         AS_IF([test "$prte_external_pmix_version_found" = "0"],
               [AC_MSG_WARN([PRTE does not support PMIx versions])
-               AC_MSG_WARN([less than v4.1 as only PMIx-based tools can])
+               AC_MSG_WARN([less than v4.1.0 as only PMIx-based tools can])
                AC_MSG_WARN([can connect to the server.])
                AC_MSG_ERROR([Please select a newer version and configure again])])
 

@@ -40,6 +40,7 @@ version 1.0.
 +**** NOTE: As of v2.0.1, PRRTE no longer has a dependency on "pandoc"
 +**** for building and installing man pages.
 
+PR #1137: Protect against PMIx v4.1.1-only definitions
 PR #1135: Final update v2.0.1 for rc3
  - Show MCA base params in prte_info
  - Silence variety of warnings
