@@ -468,6 +468,17 @@ PRTE_EXPORT int prte_pmix_register_cleanup(char *path, bool directory, bool igno
 #define PMIX_ERROR_LOG(r) \
     prte_output(0, "[%s:%d] PMIx Error: %s", __FILE__, __LINE__, PMIx_Error_string((r)))
 
+#ifndef PMIX_DATA_BUFFER_STATIC_INIT
+    #define PMIX_DATA_BUFFER_STATIC_INIT    \
+    {                                       \
+        .base_ptr = NULL,                   \
+        .pack_ptr = NULL,                   \
+        .unpack_ptr = NULL,                 \
+        .bytes_allocated = 0,               \
+        .bytes_used = 0                     \
+    }
+#endif
+
 END_C_DECLS
 
 #endif
