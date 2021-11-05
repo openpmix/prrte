@@ -26,11 +26,9 @@
 #endif
 #include <stdarg.h>
 #include <stdint.h>
-#include PRTE_HWLOC_HEADER
-#if !PRTE_HWLOC_HEADER_GIVEN
-#    if HWLOC_API_VERSION >= 0x20000
-#        include <hwloc/shmem.h>
-#    endif
+#include <hwloc.h>
+#if HWLOC_API_VERSION >= 0x20000
+#   include <hwloc/shmem.h>
 #endif
 
 #include "src/class/prte_list.h"

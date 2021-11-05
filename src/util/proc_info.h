@@ -42,10 +42,7 @@
 #include "types.h"
 
 #include "src/hwloc/hwloc-internal.h"
-#include PRTE_PMIX_HEADER
-#if !PRTE_PMIX_HEADER_GIVEN
-#    include <pmix_common.h>
-#endif
+#include <pmix.h>
 
 BEGIN_C_DECLS
 

@@ -32,12 +32,10 @@
 #include "src/util/printf.h"
 #include "src/util/proc_info.h"
 
-#include PRTE_PMIX_HEADER
-#if !PRTE_PMIX_HEADER_GIVEN
-#    include <pmix_server.h>
-#    include <pmix_tool.h>
-#    include <pmix_version.h>
-#endif
+#include <pmix.h>
+#include <pmix_server.h>
+#include <pmix_tool.h>
+#include <pmix_version.h>
 
 BEGIN_C_DECLS
 
