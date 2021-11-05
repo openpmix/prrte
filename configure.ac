@@ -1076,7 +1076,7 @@ PRTE_CHECK_PMIX
 
 prte_show_title "Configure HWLOC"
 
-PRTE_HWLOC_CONFIG
+PRTE_SETUP_HWLOC
 
 ##################################
 # MCA
