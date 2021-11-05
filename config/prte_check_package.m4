@@ -1,75 +1,93 @@
-dnl -*- shell-script -*-
-dnl
-dnl Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
-dnl                         University Research and Technology
-dnl                         Corporation.  All rights reserved.
-dnl Copyright (c) 2004-2005 The University of Tennessee and The University
-dnl                         of Tennessee Research Foundation.  All rights
-dnl                         reserved.
-dnl Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
-dnl                         University of Stuttgart.  All rights reserved.
-dnl Copyright (c) 2004-2005 The Regents of the University of California.
-dnl                         All rights reserved.
-dnl Copyright (c) 2012-2020 Cisco Systems, Inc.  All rights reserved
-dnl Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
-dnl Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2015-2016 Research Organization for Information Science
-dnl                         and Technology (RIST). All rights reserved.
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
-dnl $COPYRIGHT$
-dnl
-dnl Additional copyrights may follow
-dnl
-dnl $HEADER$
-dnl
+# -*- shell-script -*-
+#
+# Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
+#                         University Research and Technology
+#                         Corporation.  All rights reserved.
+# Copyright (c) 2004-2005 The University of Tennessee and The University
+#                         of Tennessee Research Foundation.  All rights
+#                         reserved.
+# Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
+#                         University of Stuttgart.  All rights reserved.
+# Copyright (c) 2004-2005 The Regents of the University of California.
+#                         All rights reserved.
+# Copyright (c) 2012-2020 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2012      Oracle and/or its affiliates.  All rights reserved.
+# Copyright (c) 2014-2019 Intel, Inc. All rights reserved.
+# Copyright (c) 2017-2021 Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
 
-dnl _PRTE_CHECK_PACKAGE_HEADER(prefix, header, dir-prefix,
-dnl                            [action-if-found], [action-if-not-found],
-dnl                            includes)
-dnl --------------------------------------------------------------------
+# _PRTE_CHECK_PACKAGE_HEADER(prefix, header, dir-prefix,
+#                            [action-if-found], [action-if-not-found],
+#                            includes)
+# --------------------------------------------------------------------
 AC_DEFUN([_PRTE_CHECK_PACKAGE_HEADER], [
     # This is stolen from autoconf to peek under the covers to get the
     # cache variable for the library check.  one should not copy this
     # code into other places unless you want much pain and suffering
     AS_VAR_PUSHDEF([prte_Header], [ac_cv_header_$2])
-    PRTE_VAR_SCOPE_PUSH([dir_prefix])
 
     # so this sucks, but there's no way to get through the progression
     # of header includes without killing off the cache variable and trying
     # again...
     unset prte_Header
+    prte_check_package_header_happy="no"
 
     # get rid of the trailing slash(es)
-    dir_prefix=$(echo $3 | sed -e 'sX/*$XXg')
-    prte_check_package_header_happy="no"
-    AS_IF([test "$dir_prefix" = "" || \
-           test "$dir_prefix" = "/usr" || \
-           test "$dir_prefix" = "/usr/local"],
-           [ # try as is...
-            AC_MSG_NOTICE([looking for header without includes])
-            AC_CHECK_HEADERS([$2], [prte_check_package_header_happy="yes"], [])
-            AS_IF([test "$prte_check_package_header_happy" = "no"],
-                  [# no go on the as is - reset the cache and try again
-                   unset prte_Header])])
+    hdir_prefix=$(echo $3 | sed -e 'sX/*$XXg')
 
-    AS_IF([test "$prte_check_package_header_happy" = "no" && \
-           test ! -z "$dir_prefix"],
-          [$1_CPPFLAGS="$$1_CPPFLAGS -I$dir_prefix/include"
-           CPPFLAGS="$CPPFLAGS -I$dir_prefix/include"
-           AC_CHECK_HEADERS([$2], [prte_check_package_header_happy="yes"], [], [$6])
-	       AS_IF([test "$prte_check_package_header_happy" = "yes"], [$4], [$5])],
-          [$4])
+    # We cannot just blindly use AC_CHECK_HEADERS as it will
+    # _always_ include the standard locations, even it we try
+    # to restrain it by setting CPPFLAGS to point to only our
+    # specified location.  Thus, if we use that macro we can
+    # (and often will) return 'success' by finding the header
+    # in a standard location without ever checking the specified
+    # location, leading us down a bad path
+    #
+    # Instead, we start by simply checking for existence of
+    # the specified file as that is the best we can do
+
+    if test "$hdir_prefix" != ""; then
+        AC_MSG_CHECKING([for header $2 in $hdir_prefix])
+        if test -f $hdir_prefix/$2; then
+            AC_MSG_RESULT([yes])
+            $1_CPPFLAGS="-I$hdir_prefix"
+            prte_check_package_header_happy="yes"
+        else
+            AC_MSG_RESULT([no])
+            AC_MSG_CHECKING([for header $2 in $hdir_prefix/include])
+            if test -f $hdir_prefix/include/$2; then
+                AC_MSG_RESULT([yes])
+                $1_CPPFLAGS="-I$hdir_prefix/include"
+                prte_check_package_header_happy="yes"
+            else
+                AC_MSG_RESULT([no])
+            fi
+        fi
+    else
+        # try in standard paths
+        AC_MSG_CHECKING([looking for header $2 in standard paths])
+        AC_MSG_RESULT([])
+        AC_CHECK_HEADERS([$2], [prte_check_package_header_happy="yes"], [])
+    fi
+
+    AS_IF([test "$prte_check_package_header_happy" = "yes"],
+          [$4], [$5])
+
     unset prte_check_package_header_happy
-
-    PRTE_VAR_SCOPE_POP([dir_prefix])
-    AS_VAR_POPDEF([prte_Header])dnl
 ])
 
 
-dnl _PRTE_CHECK_PACKAGE_LIB(prefix, library, function, extra-libraries,
-dnl                         dir-prefix, libdir,
-dnl                         [action-if-found], [action-if-not-found]])
-dnl --------------------------------------------------------------------
+# _PRTE_CHECK_PACKAGE_LIB(prefix, library, function, extra-libraries,
+#                         dir-prefix, libdir,
+#                         [action-if-found], [action-if-not-found]])
+# --------------------------------------------------------------------
 AC_DEFUN([_PRTE_CHECK_PACKAGE_LIB], [
     # This is stolen from autoconf to peek under the covers to get the
     # cache variable for the library check.  one should not copy this
@@ -79,129 +97,78 @@ AC_DEFUN([_PRTE_CHECK_PACKAGE_LIB], [
     # see comment above
     unset prte_Lib
     prte_check_package_lib_happy="no"
-    AS_IF([test "$6" != ""],
-          [ # libdir was specified - search only there
-           $1_LDFLAGS="$$1_LDFLAGS -L$6"
-           LDFLAGS="$LDFLAGS -L$6"
-           AC_SEARCH_LIBS([$3], [$2],
-                        [prte_check_package_lib_happy="yes"],
-                        [prte_check_package_lib_happy="no"], [$4])
-           AS_IF([test "$prte_check_package_lib_happy" = "no"],
-                 [LDFLAGS="$prte_check_package_$1_save_LDFLAGS"
-                  $1_LDFLAGS="$prte_check_package_$1_orig_LDFLAGS"
-                  unset prte_Lib])],
-          [ # libdir was not specified - go through search path
-           prte_check_package_libdir="$5"
-           AS_IF([test "$prte_check_package_libdir" = "" || \
-                  test "$prte_check_package_libdir" = "/usr" || \
-                  test "$prte_check_package_libdir" = "/usr/local"],
-               [ # try as is...
-                AC_MSG_NOTICE([looking for library without search path])
-                AC_SEARCH_LIBS([$3], [$2],
-                        [prte_check_package_lib_happy="yes"],
-                        [prte_check_package_lib_happy="no"], [$4])
-                AS_IF([test "$prte_check_package_lib_happy" = "no"],
-                    [ # no go on the as is..  see what happens later...
-                     LDFLAGS="$prte_check_package_$1_save_LDFLAGS"
-                     $1_LDFLAGS="$prte_check_package_$1_orig_LDFLAGS"
-                     unset prte_Lib])])
 
-           AS_IF([test "$prte_check_package_lib_happy" = "no"],
-               [AS_IF([test "$prte_check_package_libdir" != ""],
-                    [$1_LDFLAGS="$$1_LDFLAGS -L$prte_check_package_libdir/lib"
-                     LDFLAGS="$LDFLAGS -L$prte_check_package_libdir/lib"
-                     AC_MSG_NOTICE([looking for library in lib])
-                     AC_SEARCH_LIBS([$3], [$2],
-                               [prte_check_package_lib_happy="yes"],
-                               [prte_check_package_lib_happy="no"], [$4])
-                     AS_IF([test "$prte_check_package_lib_happy" = "no"],
-                         [ # no go on the as is..  see what happens later...
-                          LDFLAGS="$prte_check_package_$1_save_LDFLAGS"
-                          $1_LDFLAGS="$prte_check_package_$1_orig_LDFLAGS"
-                          unset prte_Lib])])])
+    # get rid of the trailing slash(es)
+    libdir_prefix=$(echo $6 | sed -e 'sX/*$XXg')
 
-           AS_IF([test "$prte_check_package_lib_happy" = "no"],
-               [AS_IF([test "$prte_check_package_libdir" != ""],
-                    [$1_LDFLAGS="$$1_LDFLAGS -L$prte_check_package_libdir/lib64"
-                     LDFLAGS="$LDFLAGS -L$prte_check_package_libdir/lib64"
-                     AC_MSG_NOTICE([looking for library in lib64])
-                     AC_SEARCH_LIBS([$3], [$2],
-                               [prte_check_package_lib_happy="yes"],
-                               [prte_check_package_lib_happy="no"], [$4])
-                     AS_IF([test "$prte_check_package_lib_happy" = "no"],
-                         [ # no go on the as is..  see what happens later...
-                          LDFLAGS="$prte_check_package_$1_save_LDFLAGS"
-                          $1_LDFLAGS="$prte_check_package_$1_orig_LDFLAGS"
-                          unset prte_Lib])])])])
+    if test "$libdir_prefix" != ""; then
+        # libdir was specified - unfortunately, AC_SEARCH_LIBS
+        # _always_ looks at the default location. You cannot
+        # constrain it to just one place. So if the library
+        # doesn't exist in the specified location, but does
+        # exist in a standard location, then the test will
+        # return "success" - and we will have the wrong lib.
+        # Thus, we simply check to see if the library even
+        # exists in the specified location - not bullet-proof,
+        # but better than blindly getting the wrong answer.
+        #
+        # The vulnerability here is that the specified lib
+        # might not be compilable in this environment, but
+        # one in a standard location is. This test will pass
+        # and set an LDFLAG to include the "bad" version in
+        # the library path, possibly causing problems down
+        # the road.
+        #
+        # No perfect solution
+
+        AC_MSG_CHECKING([library $2 in $libdir_prefix])
+        checkloc="`ls $libdir_prefix/lib$2* >& /dev/null`"
+        if test "$?" == "0"; then
+            AC_MSG_RESULT([found])
+            $1_LDFLAGS="-L$libdir_prefix"
+            prte_check_package_lib_happy=yes
+            $1_LIBS="-l$2 $4"
+        else
+            AC_MSG_RESULT([not found])
+            prte_check_package_lib_happy=no
+        fi
+
+    else
+
+        # try standard locations
+        AC_MSG_CHECKING([looking for library without search path])
+        AC_MSG_RESULT([])
+        AC_SEARCH_LIBS([$3], [$2],
+                       [prte_check_package_lib_happy="yes"],
+                       [prte_check_package_lib_happy="no"], [$4])
+        AS_IF([test "$ac_cv_search_$3" != "no" &&
+               test "$ac_cv_search_$3" != "none required"],
+              [$1_LIBS="$ac_cv_search_$3 $4"],
+              [$1_LIBS="$4"])
+    fi
 
     AS_IF([test "$prte_check_package_lib_happy" = "yes"],
-          [ # libnl v1 and libnl3 are known to *not* coexist
-            # harmoniously in the same process.  Check to see if this
-            # new package will introduce such a conflict.
-           PRTE_LIBNL_SANITY_CHECK([$2], [$3], [$$1_LIBS],
-                                   [prte_check_package_libnl_check_ok])
-           AS_IF([test $prte_check_package_libnl_check_ok -eq 0],
-                 [prte_check_package_lib_happy=no])
-           ])
-
-    AS_IF([test "$prte_check_package_lib_happy" = "yes"],
-          [ # The result of AC SEARCH_LIBS is cached in $ac_cv_search_[function]
-           AS_IF([test "$ac_cv_search_$3" != "no" &&
-                  test "$ac_cv_search_$3" != "none required"],
-                 [$1_LIBS="$ac_cv_search_$3 $4"],
-                 [$1_LIBS="$4"])
-           $7],
+          [$7],
           [$8])
 
     AS_VAR_POPDEF([prte_Lib])dnl
 ])
 
 
-dnl PRTE_CHECK_PACKAGE(prefix,
-dnl                    header,
-dnl                    library,
-dnl                    function,
-dnl                    extra-libraries,
-dnl                    dir-prefix,
-dnl                    libdir-prefix,
-dnl                    [action-if-found], [action-if-not-found],
-dnl                    includes)
-dnl -----------------------------------------------------------
-dnl Check for package defined by header and libs, and probably
-dnl located in dir-prefix, possibly with libs in libdir-prefix.
-dnl Both dir-prefix and libdir-prefix can be empty.  Will set
-dnl prefix_{CPPFLAGS, LDFLAGS, LIBS} as needed.
-dnl
-dnl The general intent of this macro is to provide finer-grained scoping
-dnl of C preprocessor flags, linker flags, and libraries (as opposed to
-dnl unconditionally adding to the top-level CPFLAGS, LDFLAGS, and LIBS,
-dnl which get used to compile/link *everything*).
-dnl
-dnl Here is a breakdown of the parameters:
-dnl
-dnl * prefix: the macro sets $prefix_CPPFLAGS, $prefix_LDFLAGS, and
-dnl   $prefix_LIBS (and AC_SUBSTs all of them).  For example, if a
-dnl   provider uses this macro to check for a header/library that it
-dnl   needs, it might well set prefix to be its provider name.
-dnl * header_filename: the foo.h file to check for
-dnl * library_name / function_name: check for function function_name in
-dnl   -llibrary_name.  Specifically, for library_name, use the "foo" form,
-dnl   as opposed to "libfoo".
-dnl * extra_libraries: if the library_name you are checking for requires
-dnl   additional -l arguments to link successfully, list them here.
-dnl * dir_prefix: if the header/library is located in a non-standard
-dnl   location (e.g., /opt/foo as opposed to /usr), list it here
-dnl * libdir_prefix: if the library is not under $dir_prefix/lib or
-dnl   $dir_prefix/lib64, list it here.
-dnl * action_if_found: if both the header and library are found and
-dnl   usable, execute action_if_found
-dnl * action_if_not_found: otherwise, execute action_if_not_found
-dnl * extra_includes: if including header_filename requires additional
-dnl   headers to be included first, list them here
-dnl
-dnl The output _CPPFLAGS, _LDFLAGS, and _LIBS can be used to limit the
-dnl scope various flags in Makefiles.
-dnl
+# PRTE_CHECK_PACKAGE(prefix,
+#                    header,
+#                    library,
+#                    function,
+#                    extra-libraries,
+#                    dir-prefix,
+#                    libdir-prefix,
+#                    [action-if-found], [action-if-not-found],
+#                    includes)
+# -----------------------------------------------------------
+# check for package defined by header and libs, and probably
+# located in dir-prefix, possibly with libs in libdir-prefix.
+# Both dir-prefix and libdir-prefix can be empty.  Will set
+# prefix_{CPPFLAGS, LDFLAGS, LIBS} as needed
 AC_DEFUN([PRTE_CHECK_PACKAGE],[
     prte_check_package_$1_save_CPPFLAGS="$CPPFLAGS"
     prte_check_package_$1_save_LDFLAGS="$LDFLAGS"

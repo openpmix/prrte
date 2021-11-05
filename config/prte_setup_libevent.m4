@@ -17,7 +17,7 @@
 # MCA_libevent_CONFIG([action-if-found], [action-if-not-found])
 # --------------------------------------------------------------------
 AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
-    PRTE_VAR_SCOPE_PUSH([prte_event_dir prte_event_libdir prte_event_defaults prte_check_libevent_save_CPPFLAGS prte_check_libevent_save_LDFLAGS prte_check_libevent_save_LIBS])
+    PRTE_VAR_SCOPE_PUSH([prte_event_dir prte_event_libdir prte_check_libevent_save_CPPFLAGS prte_check_libevent_save_LDFLAGS prte_check_libevent_save_LIBS])
 
     AC_ARG_WITH([libevent],
                 [AS_HELP_STRING([--with-libevent=DIR],
@@ -39,64 +39,50 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
     AS_IF([test ! -z "$libevent_prefix" && test "$libevent_prefix" != "yes"],
           [prte_event_dir="$libevent_prefix"],
           [prte_event_dir=""])
-    _PRTE_CHECK_PACKAGE_HEADER([prte_libevent], [event.h], [$prte_event_dir],
-                               [prte_libevent_support=1],
-                               [prte_libevent_support=0])
-    if test $prte_libevent_support -eq 0 && test -z $prte_event_dir; then
-        # try default locations
-        if test -d /usr/include; then
-            prte_event_dir=/usr
-            _PRTE_CHECK_PACKAGE_HEADER([prte_libevent], [event.h], [$prte_event_dir],
-                                       [prte_libevent_support=1],
-                                       [prte_libevent_support=0])
-        fi
-        if test $prte_libevent_support -eq 0 && test -d /usr/local/include; then
-            prte_event_dir=/usr/local
-            _PRTE_CHECK_PACKAGE_HEADER([prte_libevent], [event.h], [$prte_event_dir],
-                                       [prte_libevent_support=1],
-                                       [prte_libevent_support=0])
-        fi
-    fi
 
-    if test $prte_libevent_support -eq 1; then
-        AS_IF([test ! -z "$libeventdir_prefix" && test "$libeventdir_prefix" != "yes"],
-                     [prte_event_libdir="$libeventdir_prefix"],
-                     [AS_IF([test ! -z "$libevent_prefix" && test "$libevent_prefix" != "yes"],
-                            [if test -d $libevent_prefix/lib64; then
-                                prte_event_libdir=$libevent_prefix/lib64
-                             elif test -d $libevent_prefix/lib; then
-                                prte_event_libdir=$libevent_prefix/lib
-                             else
-                                AC_MSG_WARN([Could not find $libevent_prefix/lib or $libevent_prefix/lib64])
-                                AC_MSG_ERROR([Can not continue])
-                             fi
-                            ],
-                            [prte_event_libdir=""])])
-        _PRTE_CHECK_PACKAGE_LIB([prte_libevent], [event_core], [event_config_new],
-                                [-levent_pthreads], [$prte_event_dir],
-                                [$prte_event_libdir],
-                                [prte_libevent_support=1],
-                                [prte_libevent_support=0])
+    AS_IF([test ! -z "$libeventdir_prefix" && test "$libeventdir_prefix" != "yes"],
+                 [prte_event_libdir="$libeventdir_prefix"],
+                 [AS_IF([test ! -z "$libevent_prefix" && test "$libevent_prefix" != "yes"],
+                        [if test -d $libevent_prefix/lib64; then
+                            prte_event_libdir=$libevent_prefix/lib64
+                         elif test -d $libevent_prefix/lib; then
+                            prte_event_libdir=$libevent_prefix/lib
+                         else
+                            AC_MSG_WARN([Could not find $libevent_prefix/lib or $libevent_prefix/lib64])
+                            AC_MSG_ERROR([Can not continue])
+                         fi
+                        ],
+                        [prte_event_libdir=""])])
 
-        # Check to see if the above check failed because it conflicted with LSF's libevent.so
-        # This can happen if LSF's library is in the LDFLAGS envar or default search
-        # path. The 'event_getcode4name' function is only defined in LSF's libevent.so and not
-        # in Libevent's libevent.so
-        if test $prte_libevent_support -eq 0; then
-            AC_CHECK_LIB([event], [event_getcode4name],
-                         [AC_MSG_WARN([===================================================================])
-                          AC_MSG_WARN([Possible conflicting libevent.so libraries detected on the system.])
-                          AC_MSG_WARN([])
-                          AC_MSG_WARN([LSF provides a libevent.so that is not from Libevent in its])
-                          AC_MSG_WARN([library path. It is possible that you have installed Libevent])
-                          AC_MSG_WARN([on the system, but the linker is picking up the wrong version.])
-                          AC_MSG_WARN([])
-                          AC_MSG_WARN([You will need to address this linker path issue. One way to do so is])
-                          AC_MSG_WARN([to make sure the libevent system library path occurs before the])
-                          AC_MSG_WARN([LSF library path.])
-                          AC_MSG_WARN([===================================================================])
-                          ])
-        fi
+    PRTE_CHECK_PACKAGE([prte_libevent],
+                       [event.h],
+                       [event_core],
+                       [event_config_new],
+                       [-levent_pthreads],
+                       [$prte_event_dir],
+                       [$prte_event_libdir],
+                       [prte_libevent_support=1],
+                       [prte_libevent_support=0],
+                       [])
+
+    # Check to see if the above check failed because it conflicted with LSF's libevent.so
+    # This can happen if LSF's library is in the LDFLAGS envar or default search
+    # path. The 'event_getcode4name' function is only defined in LSF's libevent.so and not
+    # in Libevent's libevent.so
+    if test $prte_libevent_support -eq 0; then
+        AC_CHECK_LIB([event], [event_getcode4name],
+                     [AC_MSG_WARN([===================================================================])
+                      AC_MSG_WARN([Possible conflicting libevent.so libraries detected on the system.])
+                      AC_MSG_WARN([])
+                      AC_MSG_WARN([LSF provides a libevent.so that is not from Libevent in its])
+                      AC_MSG_WARN([library path. It is possible that you have installed Libevent])
+                      AC_MSG_WARN([on the system, but the linker is picking up the wrong version.])
+                      AC_MSG_WARN([])
+                      AC_MSG_WARN([You will need to address this linker path issue. One way to do so is])
+                      AC_MSG_WARN([to make sure the libevent system library path occurs before the])
+                      AC_MSG_WARN([LSF library path.])
+                      AC_MSG_WARN([===================================================================])
+                      ])
     fi
 
     if test $prte_libevent_support -eq 1; then
@@ -148,7 +134,11 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
                            AC_MSG_WARN([libevent version is too old (2.0.21 or later required)])
                            prte_libevent_support=0])
     fi
-    prte_libevent_source=$prte_event_dir
+    if test -z "$prte_event_dir"; then
+        prte_libevent_source="Standard locations"
+    else
+        prte_libevent_source=$prte_event_dir
+    fi
     PRTE_EVENT_HEADER="<event.h>"
     PRTE_EVENT2_THREAD_HEADER="<event2/thread.h>"
 

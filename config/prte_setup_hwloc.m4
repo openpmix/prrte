@@ -13,7 +13,7 @@
 
 # MCA_hwloc_CONFIG([action-if-found], [action-if-not-found])
 # --------------------------------------------------------------------
-AC_DEFUN([PRTE_HWLOC_CONFIG],[
+AC_DEFUN([PRTE_SETUP_HWLOC],[
     PRTE_VAR_SCOPE_PUSH([prte_hwloc_dir prte_hwloc_libdir prte_check_hwloc_save_CPPFLAGS prte_check_hwloc_save_LDFLAGS prte_check_hwloc_save_LIBS])
 
     AC_ARG_WITH([hwloc],
@@ -43,33 +43,6 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
     AS_IF([test ! -z "$hwloc_prefix" && test "$hwloc_prefix" != "yes"],
                  [prte_hwloc_dir="$hwloc_prefix"],
                  [prte_hwloc_dir=""])
-    _PRTE_CHECK_PACKAGE_HEADER([prte_hwloc], [hwloc.h], [$prte_hwloc_dir],
-                               [prte_hwloc_support=1],
-                               [prte_hwloc_support=0])
-
-    if test $prte_hwloc_support -eq 0 && test -z $prte_hwloc_dir; then
-        # try default locations
-        if test -d /usr/include; then
-            prte_hwloc_dir=/usr
-            _PRTE_CHECK_PACKAGE_HEADER([prte_hwloc], [hwloc.h], [$prte_hwloc_dir],
-                                       [prte_hwloc_support=1],
-                                       [prte_hwloc_support=0])
-        fi
-        if test $prte_hwloc_support -eq 0 && test -d /usr/local/include; then
-            prte_hwloc_dir=/usr/local
-            _PRTE_CHECK_PACKAGE_HEADER([prte_hwloc], [hwloc.h], [$prte_hwloc_dir],
-                                       [prte_hwloc_support=1],
-                                       [prte_hwloc_support=0])
-        fi
-    fi
-
-    if test $prte_hwloc_support -eq 0; then
-        AC_MSG_WARN([PRRTE requires HWLOC topology library support, but])
-        AC_MSG_WARN([an adequate version of that library was not found.])
-        AC_MSG_WARN([Please reconfigure and point to a location where])
-        AC_MSG_WARN([the HWLOC library can be found.])
-        AC_MSG_ERROR([Cannot continue.])
-    fi
 
     AS_IF([test ! -z "$hwlocdir_prefix" && test "$hwlocdir_prefix" != "yes"],
                  [prte_hwloc_libdir="$hwlocdir_prefix"],
@@ -85,16 +58,26 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
                         ],
                         [prte_hwloc_libdir=""])])
 
-    _PRTE_CHECK_PACKAGE_LIB([prte_hwloc], [hwloc], [hwloc_topology_init],
-                            [], [$prte_hwloc_dir],
-                            [$prte_hwloc_libdir],
-                            [],
-                            [AC_MSG_WARN([PRTE requires HWLOC support using])
-                             AC_MSG_WARN([an external copy that you supply.])
-                             AC_MSG_WARN([The library was not found in $prte_hwloc_libdir.])
-                             AC_MSG_ERROR([Cannot continue])])
+    PRTE_CHECK_PACKAGE([prte_hwloc],
+                       [hwloc.h],
+                       [hwloc],
+                       [hwloc_topology_init],
+                       [],
+                       [$prte_hwloc_dir],
+                       [$prte_hwloc_libdir],
+                       [prte_hwloc_support=1],
+                       [prte_hwloc_support=0],
+                       [])
 
-    # update global flags to test for HWLOC version
+    if test $prte_hwloc_support -eq 0; then
+        AC_MSG_WARN([PMIx requires HWLOC topology library support, but])
+        AC_MSG_WARN([an adequate version of that library was not found.])
+        AC_MSG_WARN([Please reconfigure and point to a location where])
+        AC_MSG_WARN([the HWLOC library can be found.])
+        AC_MSG_ERROR([Cannot continue.])
+    fi
+
+   # update global flags to test for HWLOC version
     if test ! -z "$prte_hwloc_CPPFLAGS"; then
         PRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prte_hwloc_CPPFLAGS)
     fi
@@ -105,7 +88,7 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
         PRTE_FLAGS_APPEND_UNIQ(LIBS, $prte_hwloc_LIBS)
     fi
 
-    AC_MSG_CHECKING([if external hwloc version is 1.5 or greater])
+    AC_MSG_CHECKING([if hwloc version is 1.5 or greater])
     AC_COMPILE_IFELSE(
           [AC_LANG_PROGRAM([[#include <hwloc.h>]],
           [[
@@ -117,7 +100,7 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
           [AC_MSG_RESULT([no])
            AC_MSG_ERROR([Cannot continue])])
 
-    AC_MSG_CHECKING([if external hwloc version is 1.8 or greater])
+    AC_MSG_CHECKING([if hwloc version is 1.8 or greater])
     AC_COMPILE_IFELSE(
           [AC_LANG_PROGRAM([[#include <hwloc.h>]],
           [[
@@ -128,9 +111,6 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
           [AC_MSG_RESULT([yes])
            prte_have_topology_dup=1],
           [AC_MSG_RESULT([no])])
-
-    # set the header
-    PRTE_HWLOC_HEADER="<hwloc.h>"
 
     CPPFLAGS=$prte_check_hwloc_save_CPPFLAGS
     LDFLAGS=$prte_check_hwloc_save_LDFLAGS
@@ -149,16 +129,15 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
         PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_hwloc_LIBS)
     fi
 
-    AC_MSG_CHECKING([location of hwloc header])
-    AC_DEFINE_UNQUOTED([PRTE_HWLOC_HEADER], [$PRTE_HWLOC_HEADER],
-                       [Location of hwloc.h])
-    AC_MSG_RESULT([$PRTE_HWLOC_HEADER])
-
     AC_DEFINE_UNQUOTED([PRTE_HAVE_HWLOC_TOPOLOGY_DUP], [$prte_have_topology_dup],
                        [Whether or not hwloc_topology_dup is available])
 
     prte_hwloc_support_will_build=yes
-    prte_hwloc_source=$prte_hwloc_dir
+    if test -z "$prte_hwloc_dir"; then
+        prte_hwloc_source="Standard locations"
+    else
+        prte_hwloc_source=$prte_hwloc_dir
+    fi
 
     PRTE_SUMMARY_ADD([[Required Packages]],[[HWLOC]], [prte_hwloc], [$prte_hwloc_support_will_build ($prte_hwloc_source)])
 
