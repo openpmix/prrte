@@ -89,13 +89,13 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
         # need to add resulting flags to global ones so we can
         # test for thread support
         if test ! -z "$prte_libevent_CPPFLAGS"; then
-            PRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prte_libevent_CPPFLAGS)
+            PRTE_FLAGS_PREPEND_UNIQ(CPPFLAGS, $prte_libevent_CPPFLAGS)
         fi
         if test ! -z "$prte_libevent_LDFLAGS"; then
-            PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prte_libevent_LDFLAGS)
+            PRTE_FLAGS_PREPEND_UNIQ(LDFLAGS, $prte_libevent_LDFLAGS)
         fi
         if test ! -z "$prte_libevent_LIBS"; then
-            PRTE_FLAGS_APPEND_UNIQ(LIBS, $prte_libevent_LIBS)
+            PRTE_FLAGS_PREPEND_UNIQ(LIBS, $prte_libevent_LIBS)
         fi
 
         # Ensure that this libevent has the symbol
