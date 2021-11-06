@@ -79,13 +79,13 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
 
    # update global flags to test for HWLOC version
     if test ! -z "$prte_hwloc_CPPFLAGS"; then
-        PRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prte_hwloc_CPPFLAGS)
+        PRTE_FLAGS_PREPEND_UNIQ(CPPFLAGS, $prte_hwloc_CPPFLAGS)
     fi
     if test ! -z "$prte_hwloc_LDFLAGS"; then
-        PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prte_hwloc_LDFLAGS)
+        PRTE_FLAGS_PREPEND_UNIQ(LDFLAGS, $prte_hwloc_LDFLAGS)
     fi
     if test ! -z "$prte_hwloc_LIBS"; then
-        PRTE_FLAGS_APPEND_UNIQ(LIBS, $prte_hwloc_LIBS)
+        PRTE_FLAGS_PREPEND_UNIQ(LIBS, $prte_hwloc_LIBS)
     fi
 
     AC_MSG_CHECKING([if hwloc version is 1.5 or greater])

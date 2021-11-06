@@ -97,13 +97,13 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     # need to add resulting flags to global ones so we can
     # test the version
     if test ! -z "$prte_pmix_CPPFLAGS"; then
-        PRTE_FLAGS_APPEND_UNIQ(CPPFLAGS, $prte_pmix_CPPFLAGS)
+        PRTE_FLAGS_PREPEND_UNIQ(CPPFLAGS, $prte_pmix_CPPFLAGS)
     fi
     if test ! -z "$prte_pmix_LDFLAGS"; then
-        PRTE_FLAGS_APPEND_UNIQ(LDFLAGS, $prte_pmix_LDFLAGS)
+        PRTE_FLAGS_PREPEND_UNIQ(LDFLAGS, $prte_pmix_LDFLAGS)
     fi
     if test ! -z "$prte_pmix_LIBS"; then
-        PRTE_FLAGS_APPEND_UNIQ(LIBS, $prte_pmix_LIBS)
+        PRTE_FLAGS_PREPEND_UNIQ(LIBS, $prte_pmix_LIBS)
     fi
 
     # if the version file exists, then we need to parse it to find
