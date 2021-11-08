@@ -50,9 +50,11 @@ int main(int argc, char **argv)
     myrel_t myrel;
     pmix_status_t dbg = PMIX_ERR_DEBUGGER_RELEASE;
     pid_t pid;
+    char hostname[1024];
 
     pid = getpid();
-    fprintf(stderr, "Client %lu: Running\n", (unsigned long) pid);
+    gethostname(hostname, 1024);
+    fprintf(stderr, "Client %lu: Running on node %s\n", (unsigned long) pid, hostname);
 
     /* init us - note that the call to "init" includes the return of
      * any job-related info provided by the RM. This includes any
