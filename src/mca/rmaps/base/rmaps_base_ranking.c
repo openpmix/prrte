@@ -464,8 +464,7 @@ static int rank_by(prte_job_t *jdata, hwloc_obj_type_t target, unsigned cache_le
                         /* protect against bozo case */
                         locale = NULL;
                         if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
-                                                (void **) &locale, PMIX_POINTER)
-                            || NULL == locale) {
+                                                (void **) &locale, PMIX_POINTER) || NULL == locale) {
                             /* all mappers are _required_ to set the locale where the proc
                              * has been mapped - it is therefore an error for this attribute
                              * not to be set. Likewise, only a programming error could allow
