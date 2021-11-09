@@ -81,8 +81,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     /*
      * Check for Colaunch
      */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_NODE, (void **) &u16ptr,
-                           PMIX_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_NODE, (void **) &u16ptr, PMIX_UINT16)) {
         daemons_per_node = u16;
         if (daemons_per_node <= 0) {
             prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_NODE value %u <= 0\n",
@@ -94,8 +93,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
         colocate_daemons = true;
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC, (void **) &u16ptr,
-                           PMIX_UINT16)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC, (void **) &u16ptr, PMIX_UINT16)) {
         if (daemons_per_node > 0) {
             prte_output(0, "Error: Both PRTE_JOB_DEBUG_DAEMONS_PER_PROC and "
                            "PRTE_JOB_DEBUG_DAEMONS_PER_NODE provided.");
@@ -116,10 +114,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         colocate_daemons = true;
     }
     if (colocate_daemons) {
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_TARGET, (void **) &target_proc,
-                                PMIX_PROC)) {
-            prte_output(
-                0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC/NODE provided without a Debug Target\n");
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_TARGET, (void **) &target_proc, PMIX_PROC)) {
+            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC/NODE provided without a Debug Target\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -166,21 +162,19 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         PRTE_SET_RANKING_POLICY(daemon_map->ranking, PRTE_RANK_BY_SLOT);
 
         jdata->num_procs = 0;
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL,
-                           PMIX_BOOL);
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
 
         // Foreach node assigned to the target application
         for (int i = 0; i < app_map->num_nodes; i++) {
             node = (prte_node_t *) prte_pointer_array_get_item(app_map->nodes, i);
             if (daemons_per_proc > 0) {
-                prte_output_verbose(
-                    5, prte_rmaps_base_framework.framework_output,
-                    "mca:rmaps: mapping job %s: Assign %d daemons each process on node %s",
-                    PRTE_JOBID_PRINT(jdata->nspace), daemons_per_proc, node->name);
+                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps: mapping job %s: Assign %d daemons each process on node %s",
+                                    PRTE_JOBID_PRINT(jdata->nspace), daemons_per_proc, node->name);
             } else if (daemons_per_node > 0) {
                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps: mapping job %s: Assign %d daemons to node %s",
-                                    PRTE_JOBID_PRINT(jdata->nspace), daemons_per_proc, node->name);
+                                    PRTE_JOBID_PRINT(jdata->nspace), daemons_per_node, node->name);
             }
 
             // Map the node to this job
@@ -206,8 +200,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             if (daemons_per_proc > 0) {
                 // Foreach application process associated with this job on this node
                 for (int npr = 0; npr < node->procs->size; ++npr) {
-                    if (NULL
-                        == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, npr))) {
+                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, npr);
+                    if (NULL == proc) {
                         continue;
                     }
                     if (proc->job != target_jdata) {
@@ -251,8 +245,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         } else if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
             if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INHERIT, NULL, PMIX_BOOL)) {
                 inherit = true;
-            } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL,
-                                          PMIX_BOOL)) {
+            } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NOINHERIT, NULL, PMIX_BOOL)) {
                 inherit = false;
                 parent = NULL;
             } else {
@@ -280,20 +273,16 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         /* if not already assigned, inherit the parent's ppr */
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, NULL, PMIX_STRING)) {
             /* get the parent job's ppr, if it had one */
-            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PPR, (void **) &tmp,
-                                   PMIX_STRING)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PPR, tmp,
-                                   PMIX_STRING);
+            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PPR, (void **) &tmp, PMIX_STRING)) {
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PPR, tmp, PMIX_STRING);
                 free(tmp);
             }
         }
         /* if not already assigned, inherit the parent's pes/proc */
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16)) {
             /* get the parent job's pes/proc, if it had one */
-            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr,
-                                   PMIX_UINT16)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PES_PER_PROC,
-                                   u16ptr, PMIX_UINT16);
+            if (prte_get_attribute(&parent->attributes, PRTE_JOB_PES_PER_PROC, (void **) &u16ptr, PMIX_UINT16)) {
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_PES_PER_PROC, u16ptr, PMIX_UINT16);
             }
         }
         /* if not already assigned, inherit the parent's cpu designation */
@@ -301,20 +290,15 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             && !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
             /* get the parent job's designation, if it had one */
             if (prte_get_attribute(&parent->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS, NULL,
-                                   PMIX_BOOL);
-            } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_CORE_CPUS, NULL,
-                                          PMIX_BOOL)) {
-                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS, NULL,
-                                   PMIX_BOOL);
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
+            } else if (prte_get_attribute(&parent->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
+                prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL);
             } else {
                 /* default */
                 if (prte_rmaps_base.hwthread_cpus) {
-                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS,
-                                       NULL, PMIX_BOOL);
+                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
                 } else {
-                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS,
-                                       NULL, PMIX_BOOL);
+                    prte_set_attribute(&jdata->attributes, PRTE_ATTR_GLOBAL, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL);
                 }
             }
         }
@@ -625,14 +609,10 @@ ranking:
                                                                 PRTE_BIND_TO_CORE);
                             }
                         } else {
-                            if (NULL
-                                != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE,
-                                                         0)) {
-                                prte_output_verbose(
-                                    5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
-                                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
-                                                                PRTE_BIND_TO_PACKAGE);
+                            if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
+                                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                                    "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
+                                                    PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
                             } else {
                                 /* if we have neither, then just don't bind */
                                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
