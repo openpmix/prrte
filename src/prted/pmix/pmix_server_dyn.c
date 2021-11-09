@@ -139,8 +139,8 @@ static void spawn(int sd, short args, void *cbdata)
 
     /* add this request to our tracker hotel */
     PRTE_ADJUST_TIMEOUT(req);
-    if (PRTE_SUCCESS
-        != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+    rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+    if (PRTE_SUCCESS != rc) {
         prte_show_help("help-prted.txt", "noroom", true, req->operation,
                        prte_pmix_server_globals.num_rooms);
         goto callback;
