@@ -664,7 +664,7 @@ static int assign_locations(prte_job_t *jdata)
     } else if (PRTE_MAPPING_BYPACKAGE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         level = HWLOC_OBJ_PACKAGE;
     } else if (PRTE_MAPPING_BYNUMA == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
-        level = HWLOC_OBJ_NODE;
+        level = HWLOC_OBJ_NUMANODE;
     } else if (PRTE_MAPPING_BYL1CACHE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         level = HWLOC_OBJ_L1CACHE;
         cache_level = 1;

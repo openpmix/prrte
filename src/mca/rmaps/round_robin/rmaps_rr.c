@@ -209,7 +209,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
             }
         } else if (PRTE_MAPPING_BYNUMA == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
             rc = prte_rmaps_rr_byobj(jdata, app, &node_list, num_slots, app->num_procs,
-                                     HWLOC_OBJ_NODE, 0);
+                                     HWLOC_OBJ_NUMANODE, 0);
             if (PRTE_ERR_NOT_FOUND == rc) {
                 /* if the mapper couldn't map by this object because
                  * it isn't available, but the error allows us to try
@@ -349,7 +349,7 @@ static int prte_rmaps_rr_assign_locations(prte_job_t *jdata)
             rc = prte_rmaps_rr_assign_root_level(jdata);
         }
     } else if (PRTE_MAPPING_BYNUMA == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
-        rc = prte_rmaps_rr_assign_byobj(jdata, HWLOC_OBJ_NODE, 0);
+        rc = prte_rmaps_rr_assign_byobj(jdata, HWLOC_OBJ_NUMANODE, 0);
         if (PRTE_ERR_NOT_FOUND == rc) {
             /* if the mapper couldn't map by this object because
              * it isn't available, but the error allows us to try
