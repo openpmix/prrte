@@ -335,19 +335,6 @@
 #    endif
 
 /*
- * Some platforms (Solaris) have a broken qsort implementation.  Work
- * around by using our own.
- */
-#    if PRTE_HAVE_BROKEN_QSORT
-#        ifdef qsort
-#            undef qsort
-#        endif
-
-#        include "src/util/qsort.h"
-#        define qsort prte_qsort
-#    endif
-
-/*
  * On some homogenous big-iron machines (Sandia's Red Storm), there
  * are no htonl and friends.  If that's the case, provide stubs.  I
  * would hope we never find a platform that doesn't have these macros
