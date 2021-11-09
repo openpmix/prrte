@@ -385,7 +385,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     PRTE_LIST_FOREACH(node, &nodes, prte_node_t)
                     {
                         slots += u16 * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                          HWLOC_OBJ_NODE, 0);
+                                                                          HWLOC_OBJ_NUMANODE, 0);
                     }
                 } else if (sequential) {
                     slots = prte_list_get_size(&nodes);
@@ -451,7 +451,7 @@ compute:
                 }
             } else {
                 /* if NUMA is available, map by that */
-                if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NODE, 0)) {
+                if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                         "mca:rmaps[%d] mapping not set by user - using bynuma", __LINE__);
                     PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
@@ -459,7 +459,7 @@ compute:
                     /* if package is available, map by that */
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                         "mca:rmaps[%d] mapping not set by user - using bypackage", __LINE__);
-                    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
+                    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
                 } else {
                     /* if we have neither, then just do by slot */
                     prte_output_verbose(
