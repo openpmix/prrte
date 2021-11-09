@@ -107,8 +107,8 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
             nprocs_mapped++;
-            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj,
-                               PMIX_POINTER);
+            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
+                               PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
         }
     }
 
@@ -716,10 +716,9 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, prte_list_t 
                                         "mca:rmaps:rr: assigning proc to object %d",
                                         (i + start) % nobjs);
                     /* get the hwloc object */
-                    if (NULL
-                        == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target,
-                                                                  cache_level,
-                                                                  (i + start) % nobjs))) {
+                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target,
+                                                          cache_level, (i + start) % nobjs);
+                    if (NULL == obj) {
                         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                         hwloc_bitmap_free(available);
                         if (NULL != job_cpuset) {
@@ -953,9 +952,8 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, prte_list_t *n
         /* loop through the number of objects */
         for (i = 0; i < (int) nobjs && nprocs_mapped < (int) app->num_procs; i++) {
             /* get the hwloc object */
-            if (NULL
-                == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level,
-                                                          i))) {
+            obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, i);
+            if (NULL == obj) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 hwloc_bitmap_free(available);
                 if (NULL != job_cpuset) {
@@ -963,8 +961,7 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, prte_list_t *n
                 }
                 return PRTE_ERR_NOT_FOUND;
             }
-            npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus, available,
-                                            obj);
+            npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus, available, obj);
             if (cpus_per_rank > npus) {
                 prte_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true, cpus_per_rank,
                                npus, prte_rmaps_base_print_mapping(prte_rmaps_base.mapping));

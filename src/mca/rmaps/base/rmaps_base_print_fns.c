@@ -127,6 +127,9 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
     case PRTE_MAPPING_BYPACKAGE:
         map = "BYPACKAGE";
         break;
+    case PRTE_MAPPING_BYNUMA:
+        map = "BYNUMA";
+        break;
     case PRTE_MAPPING_BYL3CACHE:
         map = "BYL3CACHE";
         break;
@@ -204,6 +207,8 @@ char *prte_rmaps_base_print_ranking(prte_ranking_policy_t ranking)
         return "NODE";
     case PRTE_RANK_BY_PACKAGE:
         return "PACKAGE";
+    case PRTE_RANK_BY_NUMA:
+        return "NUMA";
     case PRTE_RANK_BY_CORE:
         return "CORE";
     case PRTE_RANK_BY_HWTHREAD:

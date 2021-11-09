@@ -218,12 +218,9 @@ static pmix_status_t spawn_daemons(char **dbgrs)
     /* provide directives so the daemons go where we want, and
      * let the RM know these are debugger daemons */
     PMIX_INFO_LIST_START(dirs);
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUGGER_DAEMONS, NULL,
-                       PMIX_BOOL); // these are debugger daemons
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_TARGET, &target_proc,
-                       PMIX_PROC); // the nspace being debugged
-    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_NOTIFY_COMPLETION, NULL,
-                       PMIX_BOOL); // notify us when the debugger job completes
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUGGER_DAEMONS, NULL, PMIX_BOOL); // these are debugger daemons
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_TARGET, &target_proc, PMIX_PROC); // the nspace being debugged
+    PMIX_INFO_LIST_ADD(rc, dirs, PMIX_NOTIFY_COMPLETION, NULL, PMIX_BOOL); // notify us when the debugger job completes
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
     PMIX_INFO_LIST_ADD(rc, dirs, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
     if (0 < daemon_colocate_per_proc) {
@@ -233,9 +230,8 @@ static pmix_status_t spawn_daemons(char **dbgrs)
         PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_DAEMONS_PER_NODE, &daemon_colocate_per_node, PMIX_UINT16);
     }
     else {
-        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_MAPBY, "ppr:1:node:oversubscribe",
-                           PMIX_STRING); // instruct the RM to launch one copy of the daemon on each
-                                         // node
+        // instruct the RM to launch one copy of the daemon on each node
+        PMIX_INFO_LIST_ADD(rc, dirs, PMIX_MAPBY, "ppr:1:node:oversubscribe", PMIX_STRING);
         if (NULL != hostfile) {
             app.maxprocs = num_nodes;
             PMIX_INFO_LIST_ADD(rc, dirs, PMIX_HOSTFILE, hostfile, PMIX_STRING);

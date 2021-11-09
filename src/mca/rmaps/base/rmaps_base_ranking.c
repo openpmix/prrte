@@ -375,7 +375,8 @@ static int rank_by(prte_job_t *jdata, hwloc_obj_type_t target, unsigned cache_le
      */
     vpid = 0;
     for (n = 0, napp = 0; napp < jdata->num_apps && n < jdata->apps->size; n++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n))) {
+        app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n);
+        if (NULL == app) {
             continue;
         }
         napp++;
@@ -385,8 +386,8 @@ static int rank_by(prte_job_t *jdata, hwloc_obj_type_t target, unsigned cache_le
 
         cnt = 0;
         for (m = 0, nn = 0; nn < jdata->map->num_nodes && m < jdata->map->nodes->size; m++) {
-            if (NULL
-                == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m))) {
+            node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+            if (NULL == node) {
                 continue;
             }
             nn++;
@@ -430,9 +431,8 @@ static int rank_by(prte_job_t *jdata, hwloc_obj_type_t target, unsigned cache_le
                     /* scan across the procs and find the first unassigned one that includes this
                      * object */
                     for (j = 0; j < node->procs->size && cnt < app->num_procs; j++) {
-                        if (NULL
-                            == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs,
-                                                                                   j))) {
+                        proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                        if (NULL == proc) {
                             continue;
                         }
                         /* ignore procs from other jobs */
@@ -464,8 +464,7 @@ static int rank_by(prte_job_t *jdata, hwloc_obj_type_t target, unsigned cache_le
                         /* protect against bozo case */
                         locale = NULL;
                         if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
-                                                (void **) &locale, PMIX_POINTER)
-                            || NULL == locale) {
+                                                (void **) &locale, PMIX_POINTER) || NULL == locale) {
                             /* all mappers are _required_ to set the locale where the proc
                              * has been mapped - it is therefore an error for this attribute
                              * not to be set. Likewise, only a programming error could allow
@@ -476,9 +475,9 @@ static int rank_by(prte_job_t *jdata, hwloc_obj_type_t target, unsigned cache_le
                         }
                         /* ignore procs not on this object */
                         if (!hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
-                            prte_output_verbose(
-                                5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps:rank_by: proc at position %d is not on object %d", j, i);
+                            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                                "mca:rmaps:rank_by: proc at position %d is not on object %d",
+                                                j, i);
                             continue;
                         }
                         /* assign the vpid */
@@ -494,15 +493,13 @@ static int rank_by(prte_job_t *jdata, hwloc_obj_type_t target, unsigned cache_le
                                             "%d assigned rank %s",
                                             j, i, PRTE_VPID_PRINT(proc->name.rank));
                         /* insert the proc into the jdata array */
-                        if (NULL
-                            != (pptr = (prte_proc_t *)
-                                    prte_pointer_array_get_item(jdata->procs, proc->name.rank))) {
+                        pptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->name.rank);
+                        if (NULL != pptr) {
                             PRTE_RELEASE(pptr);
                         }
                         PRTE_RETAIN(proc);
-                        if (PRTE_SUCCESS
-                            != (rc = prte_pointer_array_set_item(jdata->procs, proc->name.rank,
-                                                                 proc))) {
+                        rc = prte_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+                        if (PRTE_SUCCESS != rc) {
                             PRTE_ERROR_LOG(rc);
                             PRTE_DESTRUCT(&objs);
                             return rc;
@@ -560,6 +557,21 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
                             "mca:rmaps: computing ranks by package for job %s",
                             PRTE_JOBID_PRINT(jdata->nspace));
         if (PRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_PACKAGE, 0))) {
+            if (PRTE_ERR_NOT_SUPPORTED == rc
+                && !(PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
+                PRTE_SET_RANKING_POLICY(map->ranking, PRTE_RANK_BY_SLOT);
+                goto rankbyslot;
+            }
+            PRTE_ERROR_LOG(rc);
+        }
+        return rc;
+    }
+
+    if (PRTE_RANK_BY_NUMA == PRTE_GET_RANKING_POLICY(map->ranking)) {
+        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                            "mca:rmaps: computing ranks by NUMA for job %s",
+                            PRTE_JOBID_PRINT(jdata->nspace));
+        if (PRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_NUMANODE, 0))) {
             if (PRTE_ERR_NOT_SUPPORTED == rc
                 && !(PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
                 PRTE_SET_RANKING_POLICY(map->ranking, PRTE_RANK_BY_SLOT);
@@ -657,8 +669,8 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
          */
         vpid = 0;
         for (n = 0; n < jdata->apps->size; n++) {
-            if (NULL
-                == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n))) {
+            app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n);
+            if (NULL == app) {
                 continue;
             }
             cnt = 0;
@@ -666,15 +678,13 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
             while (cnt < app->num_procs && one_found) {
                 one_found = false;
                 for (m = 0; m < jdata->map->nodes->size; m++) {
-                    if (NULL
-                        == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes,
-                                                                               m))) {
+                    node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+                    if (NULL == node) {
                         continue;
                     }
                     for (j = 0; j < node->procs->size; j++) {
-                        if (NULL
-                            == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs,
-                                                                                   j))) {
+                        proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                        if (NULL == proc) {
                             continue;
                         }
                         /* ignore procs from other jobs */
@@ -698,15 +708,13 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
                         cnt++;
 
                         /* insert the proc into the jdata array */
-                        if (NULL
-                            != (pptr = (prte_proc_t *)
-                                    prte_pointer_array_get_item(jdata->procs, proc->name.rank))) {
+                        pptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->name.rank);
+                        if (NULL != pptr) {
                             PRTE_RELEASE(pptr);
                         }
                         PRTE_RETAIN(proc);
-                        if (PRTE_SUCCESS
-                            != (rc = prte_pointer_array_set_item(jdata->procs, proc->name.rank,
-                                                                 proc))) {
+                        rc = prte_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+                        if (PRTE_SUCCESS != rc) {
                             PRTE_ERROR_LOG(rc);
                             return rc;
                         }
@@ -733,67 +741,10 @@ rankbyslot:
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:base: computing vpids by slot for job %s",
                             PRTE_JOBID_PRINT(jdata->nspace));
-        vpid = 0;
-        for (n = 0; n < jdata->apps->size; n++) {
-            cnt = 0;
-            if (NULL
-                == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n))) {
-                continue;
-            }
-            for (m = 0; m < jdata->map->nodes->size; m++) {
-                if (NULL
-                    == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m))) {
-                    continue;
-                }
-
-                for (j = 0; j < node->procs->size; j++) {
-                    if (NULL
-                        == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
-                        continue;
-                    }
-                    /* ignore procs from other jobs */
-                    if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
-                        continue;
-                    }
-                    /* tie proc to its job */
-                    proc->job = jdata;
-                    /* ignore procs from other apps */
-                    if (proc->app_idx != app->idx) {
-                        continue;
-                    }
-                    if (PMIX_RANK_INVALID == proc->name.rank) {
-                        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps:base: assigning rank %s to node %s",
-                                            PRTE_VPID_PRINT(vpid), node->name);
-                        proc->name.rank = vpid;
-                        proc->rank = vpid++;
-                        if (0 == cnt) {
-                            app->first_rank = proc->name.rank;
-                        }
-                        cnt++;
-
-                        /* track where the highest vpid landed - this is our
-                         * new bookmark
-                         */
-                        jdata->bookmark = node;
-                    }
-                    /* insert the proc into the jdata array */
-                    if (NULL
-                        != (pptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs,
-                                                                               proc->name.rank))) {
-                        PRTE_RELEASE(pptr);
-                    }
-                    PRTE_RETAIN(proc);
-                    if (PRTE_SUCCESS
-                        != (rc = prte_pointer_array_set_item(jdata->procs, proc->name.rank,
-                                                             proc))) {
-                        PRTE_ERROR_LOG(rc);
-                        return rc;
-                    }
-                }
-            }
+        if (PRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_PU, 0))) {
+            PRTE_ERROR_LOG(rc);
         }
-        return PRTE_SUCCESS;
+        return rc;
     }
 
     return PRTE_ERR_NOT_IMPLEMENTED;
