@@ -107,8 +107,8 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
             nprocs_mapped++;
-            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL, obj,
-                               PMIX_POINTER);
+            prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
+                               PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
         }
     }
 

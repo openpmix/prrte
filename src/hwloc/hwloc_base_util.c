@@ -61,6 +61,32 @@
 
 #include "src/hwloc/hwloc-internal.h"
 
+/* Historically, CPU packages contained a single cpu die
+ * and nothing else. NUMA was therefore determined by simply
+ * looking at the memory bus attached to the socket where
+ * the package resided - all cpus in the package were
+ * exclusively "under" that NUMA. Since each socket had a
+ * unique NUMA, you could easily map by them.
+
+ * More recently, packages have started to contain multiple
+ * cpu dies as well as memory and sometimes even fabric die.
+ * In these cases, the memory bus of the cpu dies in the
+ * package generally share any included memory die. This
+ * complicates the memory situation, leaving NUMA domains
+ * no longer cleanly delineated by processor (i.e.., the
+ * NUMA domains overlap each other).
+ *
+ * Fortunately, the OS index of non-CPU NUMA domains starts
+ * at 255 and counts downward (at least for GPUs) - while
+ * the index of CPU NUMA domains starts at 0 and counts
+ * upward. We can therefore separate the two by excluding
+ * NUMA domains with an OS index above a certain level.
+ * The following constant is based solely on checking a
+ * few systems, but hopefully proves correct in general.
+*/
+#define PRTE_HWLOC_NUMA_OSINDEX_CUTOFF  150
+
+
 static bool topo_in_shmem = false;
 
 /*
