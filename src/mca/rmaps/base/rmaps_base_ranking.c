@@ -572,7 +572,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps: computing ranks by NUMA for job %s",
                             PRTE_JOBID_PRINT(jdata->nspace));
-        if (PRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_NODE, 0))) {
+        if (PRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_NUMANODE, 0))) {
             if (PRTE_ERR_NOT_SUPPORTED == rc
                 && !(PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(map->ranking))) {
                 PRTE_SET_RANKING_POLICY(map->ranking, PRTE_RANK_BY_SLOT);
