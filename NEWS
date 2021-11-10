@@ -35,11 +35,19 @@ This file contains the main features as well as overviews of specific
 bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
-2.0.1: TBD
+2.0.1: (tag point, not official release)
 ------------------------------------
 +**** NOTE: As of v2.0.1, PRRTE no longer has a dependency on "pandoc"
 +**** for building and installing man pages.
 
+PR #1147: Updates
+ - Minor infrastructure and example cleanup
+ - Allow external caller to set prte_tool_basename
+ - Restore support for map/rank/bind by NUMA domains
+ - Standardize on use of HWLOC_OBJ_NUMANODE
+ - Activate the colocation code and debug it
+ - Update man pages
+PR #1145: delete use of PMIX_CHECK_BROKEN_QSORT refs
 PR #1137: Protect against PMIx v4.1.1-only definitions
 PR #1135: Final update v2.0.1 for rc3
  - Show MCA base params in prte_info
