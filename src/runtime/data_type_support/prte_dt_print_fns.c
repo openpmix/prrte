@@ -221,11 +221,14 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
     tmp = tmp2;
 
 PRINT_PROCS:
-    for (i = 0; i < src->procs->size; i++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(src->procs, i))) {
+    /* we want to print these procs in their job-rank'd order, but they
+     * will be in the node array based on the order in which they were
+     * mapped - which doesn't match job-rank'd order in many cases */
+    for (i = 0; i < jdata->procs->size; i++) {
+        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, i))) {
             continue;
         }
-        if (proc->job != jdata) {
+        if (proc->node != src) {
             continue;
         }
         prte_proc_print(&tmp2, jdata, proc);

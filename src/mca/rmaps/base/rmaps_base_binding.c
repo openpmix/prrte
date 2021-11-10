@@ -277,9 +277,8 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
 
         /* bozo check */
         locale = NULL;
-        if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void **) &locale,
-                                PMIX_POINTER)
-            || NULL == locale) {
+        if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void **) &locale, PMIX_POINTER) ||
+            NULL == locale) {
             prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-locale", true,
                            PRTE_NAME_PRINT(&proc->name));
             hwloc_bitmap_free(totalcpuset);
@@ -601,8 +600,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
             }
             /* bozo check */
             locale = NULL;
-            if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void **) &locale,
-                                    PMIX_POINTER)) {
+            if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void **) &locale, PMIX_POINTER)) {
                 prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-locale", true,
                                PRTE_NAME_PRINT(&proc->name));
                 hwloc_bitmap_free(available);
@@ -621,9 +619,8 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
                 return PRTE_ERR_SILENT;
             }
             /* get the number of cpus under this location */
-            if (0
-                == (ncpus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
-                                                     available, locale))) {
+            if (0 == (ncpus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
+                                                       available, locale))) {
                 prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true,
                                node->name);
                 hwloc_bitmap_free(available);
@@ -994,6 +991,9 @@ int prte_rmaps_base_compute_bindings(prte_job_t *jdata)
     case PRTE_BIND_TO_PACKAGE:
         hwb = HWLOC_OBJ_PACKAGE;
         break;
+    case PRTE_BIND_TO_NUMA:
+        hwb = HWLOC_OBJ_NODE;
+        break;
     case PRTE_BIND_TO_L3CACHE:
         PRTE_HWLOC_MAKE_OBJ_CACHE(3, hwb, clvl);
         break;
@@ -1054,9 +1054,9 @@ execute:
                         PRTE_JOBID_PRINT(jdata->nspace));
 
     dobind = false;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
         dobind = true;
     }
 

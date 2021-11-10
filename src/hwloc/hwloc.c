@@ -161,8 +161,8 @@ int prte_hwloc_base_register(void)
     ret = prte_mca_base_var_register("prte", "hwloc", "default", "binding_policy",
                                      "Default policy for binding processes. Allowed values: none, hwthread, core, l1cache, "
                                      "l2cache, "
-                                     "l3cache, package, (\"none\" is the default when oversubscribed, \"core\" is "
-                                     "the default when np<=2, and \"package\" is the default when np>2). Allowed "
+                                     "l3cache, numa, package, (\"none\" is the default when oversubscribed, \"core\" is "
+                                     "the default when np<=2, and \"numa\" is the default when np>2). Allowed "
                                      "colon-delimited qualifiers: "
                                      "overload-allowed, if-supported",
                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
@@ -374,6 +374,11 @@ char *prte_hwloc_base_print_locality(prte_hwloc_locality_t locality)
         ptr->buffers[ptr->cntr][idx++] = 'S';
         ptr->buffers[ptr->cntr][idx++] = ':';
     }
+    if (PRTE_PROC_ON_LOCAL_NUMA(locality)) {
+        ptr->buffers[ptr->cntr][idx++] = 'N';
+        ptr->buffers[ptr->cntr][idx++] = 'M';
+        ptr->buffers[ptr->cntr][idx++] = ':';
+    }
     if (PRTE_PROC_ON_LOCAL_L3CACHE(locality)) {
         ptr->buffers[ptr->cntr][idx++] = 'L';
         ptr->buffers[ptr->cntr][idx++] = '3';
@@ -528,6 +533,8 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
             PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L2CACHE);
         } else if (0 == strncasecmp(myspec, "l3cache", len)) {
             PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L3CACHE);
+        } else if (0 == strncasecmp(myspec, "numa", len)) {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NUMA);
         } else if (0 == strncasecmp(myspec, "package", len)) {
             PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
         } else {

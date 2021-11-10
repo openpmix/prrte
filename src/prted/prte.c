@@ -269,7 +269,11 @@ int prte(int argc, char *argv[])
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
-    prte_tool_basename = prte_basename(argv[0]);
+    if (NULL == (param = getenv("PRTE_BASENAME"))) {
+        prte_tool_basename = prte_basename(argv[0]);
+    } else {
+        prte_tool_basename = strdup(param);
+    }
     pargc = argc;
     pargv = prte_argv_copy(argv);
     /* save a pristine copy of the environment for launch purposes.
