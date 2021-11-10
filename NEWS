@@ -35,7 +35,7 @@ This file contains the main features as well as overviews of specific
 bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
-2.0.1: TBD
+2.0.1: (tag point, not official release)
 ------------------------------------
 +**** NOTE: As of v2.0.1, PRRTE no longer has a dependency on "pandoc"
 +**** for building and installing man pages.

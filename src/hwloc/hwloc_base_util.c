@@ -696,7 +696,7 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
         rc = 0;
         for (w=0; w < width; w++) {
             obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, w);
-            if (200 > obj->os_index) {
+            if (PRTE_HWLOC_NUMA_OSINDEX_CUTOFF > obj->os_index) {
                 // this is a CPU NUMA
                 ++rc;
             }
@@ -788,7 +788,7 @@ hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo, hwloc_obj_typ
         cnt = 0;
         for (w=0; w < width; w++) {
             obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, w);
-            if (200 > obj->os_index) {
+            if (PRTE_HWLOC_NUMA_OSINDEX_CUTOFF > obj->os_index) {
                 if (cnt == instance) {
                     return obj;
                 }
