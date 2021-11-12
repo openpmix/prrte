@@ -132,7 +132,7 @@ PRTE_EXPORT int prte_unsetenv(const char *name, char ***env) __prte_attribute_no
 /* A consistent way to retrieve the home and tmp directory on all supported
  * platforms.
  */
-PRTE_EXPORT const char *prte_home_directory(void);
+PRTE_EXPORT const char *prte_home_directory(uid_t uid);
 PRTE_EXPORT const char *prte_tmp_directory(void);
 
 /* Some care is needed with environ on OS X when dealing with shared

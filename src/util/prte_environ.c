@@ -24,9 +24,16 @@
 
 #include "prte_config.h"
 
+#ifdef HAVE_UNISTD_H
+#    include <unistd.h>
+#endif
+#ifdef HAVE_SYS_TYPES_H
+#    include <sys/types.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pwd.h>
 
 #include "constants.h"
 #include "src/util/argv.h"
@@ -258,9 +265,17 @@ const char *prte_tmp_directory(void)
     return str;
 }
 
-const char *prte_home_directory(void)
+const char *prte_home_directory(uid_t uid)
 {
-    char *home = getenv("HOME");
+    const char *home = NULL;
+
+    if (-1 == uid || uid == geteuid()) {
+        home = getenv("HOME");
+    }
+    if (NULL == home) {
+        struct passwd *pw = getpwuid(uid);
+        home = pw->pw_dir;
+    }
 
     return home;
 }

@@ -59,7 +59,8 @@ libprrte_mca_base_la_SOURCES = \
         prte_mca_base_var_group.c \
         prte_mca_base_components_register.c \
         prte_mca_base_framework.c \
-        prte_mca_base_alias.c
+        prte_mca_base_alias.c \
+        prte_mca_base_parse_paramfile.c
 
 # Conditionally install the header files
 

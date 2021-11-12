@@ -50,6 +50,7 @@
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
+#include "src/mca/base/prte_mca_base_vari.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
@@ -1519,9 +1520,106 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
     return PRTE_SUCCESS;
 }
 
+static bool check_prte_overlap(char *var, char *value)
+{
+    char *tmp;
+
+    if (0 == strncmp(var, "dl_", 3)) {
+        prte_asprintf(&tmp, "PRTE_MCA_prtedl_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "oob_", 4)) {
+        prte_asprintf(&tmp, "PRTE_MCA_%s", var);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "hwloc_", 6)) {
+        prte_asprintf(&tmp, "PRTE_MCA_%s", var);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "if_", 3)) {
+        // need to convert if to prteif
+        prte_asprintf(&tmp, "PRTE_MCA_prteif_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
+        // need to convert reachable to prtereachable
+        prte_asprintf(&tmp, "PRTE_MCA_prtereachable_%s", &var[strlen("reachable")]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    }
+    return false;
+}
+
+
+static bool check_pmix_overlap(char *var, char *value)
+{
+    char *tmp;
+
+    if (0 == strncmp(var, "dl_", 3)) {
+        prte_asprintf(&tmp, "PMIX_MCA_pdl_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "oob_", 4)) {
+        prte_asprintf(&tmp, "PMIX_MCA_ptl_%s", &var[4]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "hwloc_", 6)) {
+        prte_asprintf(&tmp, "PMIX_MCA_%s", var);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "if_", 3)) {
+        // need to convert if to pif
+        prte_asprintf(&tmp, "PMIX_MCA_pif_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
+        // need to convert reachable to preachable
+        prte_asprintf(&tmp, "PMIX_MCA_preachable_%s", &var[strlen("reachable")]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    }
+    return false;
+}
+
 static int detect_proxy(char *personalities)
 {
-    char *evar;
+    char *evar, *tmp, *e2;
+    char *file;
+    const char *home;
+    prte_list_t params;
+    prte_mca_base_var_file_value_t *fv;
+    uid_t uid;
+    int n, len;
 
     prte_output_verbose(2, prte_schizo_base_framework.framework_output,
                         "%s[%s]: detect proxy with %s (%s)",
@@ -1534,7 +1632,7 @@ static int detect_proxy(char *personalities)
         /* this is a list of personalities we need to check -
          * if it contains "ompi", then we are available */
         if (NULL != strstr(personalities, "ompi")) {
-            return 100;
+            goto weareit;
         }
         return 0;
     }
@@ -1542,7 +1640,7 @@ static int detect_proxy(char *personalities)
     /* if we were told the proxy, then use it */
     if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy"))) {
         if (0 == strcmp(evar, "ompi")) {
-            return 100;
+            goto weareit;
         } else {
             return 0;
         }
@@ -1550,6 +1648,119 @@ static int detect_proxy(char *personalities)
 
     /* if neither of those were true, then it cannot be us */
     return 0;
+
+weareit:
+    /* since we are the proxy, we need to check the OMPI default
+     * MCA params to see if there is something relating to PRRTE
+     * in them - this would be "old" references to things from
+     * ORTE, as well as a few OPAL references that also impact us
+     *
+     * NOTE: we do this in the following precedence order. Note
+     * that we do not overwrite at any step - this is so that we
+     * don't overwrite something previously set by the user. So
+     * the order to execution is the opposite of the intended
+     * precedence order.
+     *
+     * 1. check the environmental paramaters for OMPI_MCA values
+     *    that need to be translated
+     *
+     * 2. the user's home directory file as it should
+     *    overwrite the system default file, but not the
+     *    envars
+     *
+     * 3. the system default parameter file
+     */
+    len = strlen("OMPI_MCA_");
+    for (n=0; NULL != environ[n]; n++) {
+        if (0 == strncmp(environ[n], "OMPI_MCA_", len)) {
+            e2 = strdup(environ[n]);
+            evar = strrchr(e2, '=');
+            *evar = '\0';
+            ++evar;
+            if (check_prte_overlap(&e2[len], evar)) {
+                // check for pmix overlap
+                check_pmix_overlap(&e2[len], evar);
+            } else if (prte_schizo_base_check_prte_param(&e2[len])) {
+                    prte_asprintf(&tmp, "PRTE_MCA_%s", &e2[len]);
+                    // set it, but don't overwrite if they already
+                    // have a value in our environment
+                    setenv(tmp, evar, false);
+                    free(tmp);
+                    // check for pmix overlap
+                    check_pmix_overlap(&e2[len], evar);
+            } else if (prte_schizo_base_check_pmix_param(&e2[len])) {
+                prte_asprintf(&tmp, "PMIX_MCA_%s", &e2[len]);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, evar, false);
+                free(tmp);
+            }
+            free(e2);
+        }
+    }
+
+    /* see if the user has a default MCA param file */
+    uid = geteuid();
+
+    /* try to get their home directory */
+    home = prte_home_directory(uid);
+    if (NULL != home) {
+        file = prte_os_path(false, home, ".openmpi", "mca-params.conf", NULL);
+        PRTE_CONSTRUCT(&params, prte_list_t);
+        prte_mca_base_parse_paramfile(file, &params);
+        free(file);
+        PRTE_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+            // see if this param relates to PRRTE
+            if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
+                check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            } else if (prte_schizo_base_check_prte_param(fv->mbvfv_var)) {
+                prte_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, fv->mbvfv_value, false);
+                free(tmp);
+                // if this relates to the DL, OOB, HWLOC, IF, or
+                // REACHABLE frameworks, then we also need to set
+                // the equivalent PMIx value
+                check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            } else if (prte_schizo_base_check_pmix_param(fv->mbvfv_var)) {
+                prte_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, fv->mbvfv_value, false);
+                free(tmp);
+            }
+        }
+        PRTE_LIST_DESTRUCT(&params);
+    }
+
+    /* check if the user has set OMPIHOME in their environment */
+    if (NULL != (evar = getenv("OMPIHOME"))) {
+        /* look for the default MCA param file */
+        file = prte_os_path(false, evar, "etc", "openmpi-mca-params.conf", NULL);
+        PRTE_CONSTRUCT(&params, prte_list_t);
+        prte_mca_base_parse_paramfile(file, &params);
+        free(file);
+        PRTE_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+            // see if this param relates to PRRTE
+            if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
+                check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            } else if (prte_schizo_base_check_prte_param(fv->mbvfv_var)) {
+                prte_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, fv->mbvfv_value, false);
+                free(tmp);
+                // if this relates to the DL, OOB, HWLOC, IF, or
+                // REACHABLE frameworks, then we also need to set
+                // the equivalent PMIx value
+                check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            }
+        }
+        PRTE_LIST_DESTRUCT(&params);
+    }
+
+    return 100;
 }
 
 static void allow_run_as_root(prte_cmd_line_t *cmd_line)
