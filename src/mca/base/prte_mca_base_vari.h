@@ -121,6 +121,8 @@ PRTE_EXPORT int prte_mca_base_var_group_get_internal(const int group_index,
                                                      prte_mca_base_var_group_t **group,
                                                      bool invalidok);
 
+PRTE_EXPORT int prte_mca_base_parse_paramfile(const char *paramfile, prte_list_t *list);
+
 /**
  * \internal
  *
