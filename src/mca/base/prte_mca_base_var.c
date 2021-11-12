@@ -294,7 +294,7 @@ int prte_mca_base_var_init(void)
          * INTO THE ENVIRONMENT */
 
         /* We may need this later */
-        home = (char *) prte_home_directory();
+        home = (char *) prte_home_directory(-1);
 
         /* start with the system default param file */
         tmp = prte_os_path(false, prte_install_dirs.sysconfdir, "prte-mca-params.conf", NULL);

@@ -79,7 +79,7 @@ int prte_util_check_context_cwd(prte_app_context_t *context, bool want_chdir)
         was a system-supplied default directory, so it's ok
         to not go there.  Try to go to the $HOME directory
         instead. */
-        tmp = prte_home_directory();
+        tmp = prte_home_directory(-1);
         if (NULL != tmp) {
             /* Try $HOME.  Same test as above. */
             good = true;
