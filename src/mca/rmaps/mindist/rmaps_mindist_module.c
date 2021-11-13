@@ -375,7 +375,7 @@ static int mindist_map(prte_job_t *jdata)
                 }
                 /* first we need to fill summary object for root with information about nodes
                  * so we call prte_hwloc_base_get_nbobjs_by_type */
-                prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_NODE, 0);
+                prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_NUMANODE, 0);
                 PRTE_CONSTRUCT(&numa_list, prte_list_t);
                 ret = prte_hwloc_get_sorted_numa_list(node->topology->topo, prte_rmaps_base.device,
                                                       &numa_list);
@@ -400,7 +400,7 @@ static int mindist_map(prte_job_t *jdata)
                         /* get the hwloc object for this numa */
                         if (NULL
                             == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                                      HWLOC_OBJ_NODE, 0,
+                                                                      HWLOC_OBJ_NUMANODE, 0,
                                                                       numa->index))) {
                             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                             return PRTE_ERR_NOT_FOUND;
@@ -560,7 +560,7 @@ static int assign_locations(prte_job_t *jdata)
 
             /* first we need to fill summary object for root with information about nodes
              * so we call prte_hwloc_base_get_nbobjs_by_type */
-            prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_NODE, 0);
+            prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_NUMANODE, 0);
             PRTE_CONSTRUCT(&numa_list, prte_list_t);
             rc = prte_hwloc_get_sorted_numa_list(node->topology->topo, prte_rmaps_base.device,
                                                  &numa_list);
@@ -582,7 +582,7 @@ static int assign_locations(prte_job_t *jdata)
             {
                 /* get the hwloc object for this numa */
                 if (NULL
-                    == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, HWLOC_OBJ_NODE,
+                    == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, HWLOC_OBJ_NUMANODE,
                                                               0, numa->index))) {
                     PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                     PRTE_LIST_DESTRUCT(&numa_list);
