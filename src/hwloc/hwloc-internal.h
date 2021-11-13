@@ -129,9 +129,7 @@ typedef struct {
     prte_object_t super;
     hwloc_cpuset_t available;
     prte_list_t summaries;
-
-    /** \brief Additional space for custom data */
-    void *userdata;
+    unsigned numa_cutoff;
 } prte_hwloc_topo_data_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_hwloc_topo_data_t);
 

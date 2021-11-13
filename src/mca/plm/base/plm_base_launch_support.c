@@ -96,12 +96,12 @@ void prte_plm_base_set_slots(prte_node_t *node)
                 /* some systems don't report sockets - in this case,
                  * use numanodes */
                 node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                 HWLOC_OBJ_NODE, 0);
+                                                                 HWLOC_OBJ_NUMANODE, 0);
             }
         }
     } else if (0 == strncmp(prte_set_slots, "numas", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
-            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_NODE,
+            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_NUMANODE,
                                                              0);
         }
     } else if (0 == strncmp(prte_set_slots, "hwthreads", strlen(prte_set_slots))) {
