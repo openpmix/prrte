@@ -61,32 +61,6 @@
 
 #include "src/hwloc/hwloc-internal.h"
 
-/* Historically, CPU packages contained a single cpu die
- * and nothing else. NUMA was therefore determined by simply
- * looking at the memory bus attached to the socket where
- * the package resided - all cpus in the package were
- * exclusively "under" that NUMA. Since each socket had a
- * unique NUMA, you could easily map by them.
-
- * More recently, packages have started to contain multiple
- * cpu dies as well as memory and sometimes even fabric die.
- * In these cases, the memory bus of the cpu dies in the
- * package generally share any included memory die. This
- * complicates the memory situation, leaving NUMA domains
- * no longer cleanly delineated by processor (i.e.., the
- * NUMA domains overlap each other).
- *
- * Fortunately, the OS index of non-CPU NUMA domains starts
- * at 255 and counts downward (at least for GPUs) - while
- * the index of CPU NUMA domains starts at 0 and counts
- * upward. We can therefore separate the two by excluding
- * NUMA domains with an OS index above a certain level.
- * The following constant is based solely on checking a
- * few systems, but hopefully proves correct in general.
-*/
-#define PRTE_HWLOC_NUMA_OSINDEX_CUTOFF  150
-
-
 static bool topo_in_shmem = false;
 
 /*
@@ -238,6 +212,9 @@ int prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
     hwloc_obj_t root;
     hwloc_cpuset_t avail = NULL;
     prte_hwloc_topo_data_t *sum;
+    unsigned width, w, m, N, last;
+    hwloc_bitmap_t *numas;
+    hwloc_obj_t obj;
 
     root = hwloc_get_root_obj(topo);
 
@@ -268,6 +245,69 @@ int prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
     /* cache this info */
     sum->available = avail;
 
+    /* Historically, CPU packages contained a single cpu die
+     * and nothing else. NUMA was therefore determined by simply
+     * looking at the memory bus attached to the socket where
+     * the package resided - all cpus in the package were
+     * exclusively "under" that NUMA. Since each socket had a
+     * unique NUMA, you could easily map by them.
+
+     * More recently, packages have started to contain multiple
+     * cpu dies as well as memory and sometimes even fabric die.
+     * In these cases, the memory bus of the cpu dies in the
+     * package generally share any included memory die. This
+     * complicates the memory situation, leaving NUMA domains
+     * no longer cleanly delineated by processor (i.e.., the
+     * NUMA domains overlap each other).
+     *
+     * Fortunately, the OS index of non-CPU NUMA domains starts
+     * at 255 and counts downward (at least for GPUs) - while
+     * the index of CPU NUMA domains starts at 0 and counts
+     * upward. We can therefore separate the two by excluding
+     * NUMA domains with an OS index above the level where
+     * they first begin to intersect
+     */
+
+    /* compute the CPU NUMA cutoff for this node */
+    width = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
+    if (0 == width) {
+        sum->numa_cutoff = 0;
+        return PRTE_SUCCESS;
+    }
+    numas = (hwloc_bitmap_t*)malloc(width * sizeof(hwloc_bitmap_t));
+    N = 0;
+    last = 0;
+    for (w=0; w < UINT_MAX && N < width; w++) {
+        /* get the object at this index */
+        obj = hwloc_get_numanode_obj_by_os_index(topo, w);
+        if (NULL == obj) {
+            continue;
+        }
+        /* check for overlap with all preceding numas */
+        for (m=0; m < N; m++) {
+            if (hwloc_bitmap_intersects(obj->cpuset, numas[m])) {
+                // if it intersects anyone, then we are done
+                sum->numa_cutoff = last+1;
+                break;
+            }
+        }
+        if (-1 != sum->numa_cutoff) {
+            break;
+        } else {
+            last = w;
+            /* cache this bitmap */
+            numas[N] = hwloc_bitmap_alloc();
+            hwloc_bitmap_copy(numas[N], obj->cpuset);
+            ++N;
+        }
+    }
+    if (-1 == sum->numa_cutoff) {
+        sum->numa_cutoff = last + 1;
+    }
+    for (m=0; m < N; m++) {
+        hwloc_bitmap_free(numas[m]);
+    }
+    free(numas);
     return PRTE_SUCCESS;
 }
 
@@ -321,14 +361,15 @@ int prte_hwloc_base_get_topology(void)
 
     if (NULL == prte_hwloc_base_topo_file) {
         prte_output_verbose(1, prte_hwloc_base_output, "hwloc:base discovering topology");
-        if (0 != hwloc_topology_init(&prte_hwloc_topology)
-            || 0 != prte_hwloc_base_topology_set_flags(prte_hwloc_topology, 0, true)
-            || 0 != hwloc_topology_load(prte_hwloc_topology)) {
+        if (0 != hwloc_topology_init(&prte_hwloc_topology) ||
+            0 != prte_hwloc_base_topology_set_flags(prte_hwloc_topology, 0, true) ||
+            0 != hwloc_topology_load(prte_hwloc_topology)) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
             return PRTE_ERR_NOT_SUPPORTED;
         }
     } else {
-        prte_output_verbose(1, prte_hwloc_base_output, "hwloc:base loading topology from file %s",
+        prte_output_verbose(1, prte_hwloc_base_output,
+                            "hwloc:base loading topology from file %s",
                             prte_hwloc_base_topo_file);
         if (PRTE_SUCCESS != (rc = prte_hwloc_base_set_topology(prte_hwloc_base_topo_file))) {
             return rc;
@@ -689,15 +730,20 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
      * CPU NUMAs and ignore the GPU NUMAs as we only deal
      * with CPUs at this time */
     if (HWLOC_OBJ_NUMANODE == target) {
-        unsigned width, w;
-        hwloc_obj_t obj;
+        unsigned w;
+        hwloc_obj_t obj, root;
+        prte_hwloc_topo_data_t *sum;
 
-        width = hwloc_get_nbobjs_by_type(topo, target);
+        root = hwloc_get_root_obj(topo);
+        sum = (prte_hwloc_topo_data_t *) root->userdata;
+        if (NULL == sum) {
+            return 0;
+        }
+
         rc = 0;
-        for (w=0; w < width; w++) {
-            obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, w);
-            if (PRTE_HWLOC_NUMA_OSINDEX_CUTOFF > obj->os_index) {
-                // this is a CPU NUMA
+        for (w=0; w < sum->numa_cutoff; w++) {
+            obj = hwloc_get_numanode_obj_by_os_index(topo, w);
+            if (NULL != obj) {
                 ++rc;
             }
         }
@@ -781,14 +827,20 @@ hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo, hwloc_obj_typ
     /* if we are looking for NUMA, then ignore all the
      * GPU NUMAs */
     if (HWLOC_OBJ_NUMANODE == target) {
-        unsigned width, w, cnt;
-        hwloc_obj_t obj;
+        unsigned w, cnt;
+        hwloc_obj_t obj, root;
+        prte_hwloc_topo_data_t *sum;
 
-        width = hwloc_get_nbobjs_by_type(topo, target);
+        root = hwloc_get_root_obj(topo);
+        sum = (prte_hwloc_topo_data_t *) root->userdata;
+        if (NULL == sum) {
+            return NULL;
+        }
+
         cnt = 0;
-        for (w=0; w < width; w++) {
-            obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, w);
-            if (PRTE_HWLOC_NUMA_OSINDEX_CUTOFF > obj->os_index) {
+        for (w=0; w < sum->numa_cutoff; w++) {
+            obj = hwloc_get_numanode_obj_by_os_index(topo, w);
+            if (NULL != obj) {
                 if (cnt == instance) {
                     return obj;
                 }
@@ -1142,7 +1194,7 @@ static void prte_hwloc_base_get_relative_locality_by_depth(hwloc_topology_t topo
             case HWLOC_OBJ_PACKAGE:
                 *locality |= PRTE_PROC_ON_PACKAGE;
                 break;
-            case HWLOC_OBJ_NODE:
+            case HWLOC_OBJ_NUMANODE:
                 *locality |= PRTE_PROC_ON_NUMA;
                 break;
 #if HWLOC_API_VERSION < 0x20000
@@ -1220,7 +1272,7 @@ prte_hwloc_locality_t prte_hwloc_base_get_relative_locality(hwloc_topology_t top
         /* get the object type at this depth */
         type = hwloc_get_depth_type(topo, d);
         /* if it isn't one of interest, then ignore it */
-        if (HWLOC_OBJ_NODE != type && HWLOC_OBJ_PACKAGE != type &&
+        if (HWLOC_OBJ_NUMANODE != type && HWLOC_OBJ_PACKAGE != type &&
 #if HWLOC_API_VERSION < 0x20000
             HWLOC_OBJ_CACHE != type &&
 #else
@@ -1588,7 +1640,7 @@ static void sort_by_dist(hwloc_topology_t topo, char *device_name, prte_list_t *
                 /* find numa node containing this device */
                 obj = device_obj->parent;
 #if HWLOC_API_VERSION < 0x20000
-                while ((obj != NULL) && (obj->type != HWLOC_OBJ_NODE)) {
+                while ((obj != NULL) && (obj->type != HWLOC_OBJ_NUMANODE)) {
                     obj = obj->parent;
                 }
 #else
@@ -1612,10 +1664,10 @@ static void sort_by_dist(hwloc_topology_t topo, char *device_name, prte_list_t *
                 /* find distance matrix for all numa nodes */
 #if HWLOC_API_VERSION < 0x20000
                 distances = (struct hwloc_distances_s *)
-                    hwloc_get_whole_distance_matrix_by_type(topo, HWLOC_OBJ_NODE);
+                    hwloc_get_whole_distance_matrix_by_type(topo, HWLOC_OBJ_NUMANODE);
                 if (NULL == distances) {
                     /* we can try to find distances under group object. This info can be there. */
-                    depth = hwloc_get_type_depth(topo, HWLOC_OBJ_NODE);
+                    depth = hwloc_get_type_depth(topo, HWLOC_OBJ_NUMANODE);
                     if (HWLOC_TYPE_DEPTH_UNKNOWN == depth) {
                         prte_output_verbose(5, prte_hwloc_base_output,
                                             "hwloc:base:get_sorted_numa_list: There is no "
@@ -1653,11 +1705,9 @@ static void sort_by_dist(hwloc_topology_t topo, char *device_name, prte_list_t *
                 }
 #else
                 distances_nr = 1;
-                if (0
-                        != hwloc_distances_get_by_type(topo, HWLOC_OBJ_NODE, &distances_nr,
-                                                       &distances,
-                                                       HWLOC_DISTANCES_KIND_MEANS_LATENCY, 0)
-                    || 0 == distances_nr) {
+                if (0 != hwloc_distances_get_by_type(topo, HWLOC_OBJ_NUMANODE, &distances_nr,
+                                                    &distances, HWLOC_DISTANCES_KIND_MEANS_LATENCY, 0) ||
+                    0 == distances_nr) {
                     prte_output_verbose(5, prte_hwloc_base_output,
                                         "hwloc:base:get_sorted_numa_list: There is no information "
                                         "about distances on the node.");
@@ -1714,7 +1764,7 @@ int prte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char *device_name,
     if (NULL != data) {
         PRTE_LIST_FOREACH(sum, &data->summaries, prte_hwloc_summary_t)
         {
-            if (HWLOC_OBJ_NODE == sum->type) {
+            if (HWLOC_OBJ_NUMANODE == sum->type) {
                 if (prte_list_get_size(&sum->sorted_by_dist_list) > 0) {
                     PRTE_LIST_FOREACH(numa, &(sum->sorted_by_dist_list), prte_rmaps_numa_node_t)
                     {
@@ -1771,7 +1821,7 @@ char *prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
     unsigned i;
     hwloc_bitmap_t complete, allowed;
 
-    nnuma = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NODE, 0);
+    nnuma = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE, 0);
     npackage = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE, 0);
     nl3 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L3CACHE, 3);
     nl2 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L2CACHE, 2);
@@ -1891,7 +1941,7 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
         /* get the object type at this depth */
         type = hwloc_get_depth_type(topo, d);
         /* if it isn't one of interest, then ignore it */
-        if (HWLOC_OBJ_NODE != type && HWLOC_OBJ_PACKAGE != type &&
+        if (HWLOC_OBJ_NUMANODE != type && HWLOC_OBJ_PACKAGE != type &&
 #if HWLOC_API_VERSION < 0x20000
             HWLOC_OBJ_CACHE != type &&
 #else
@@ -1910,7 +1960,7 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
         if (!hwloc_bitmap_iszero(result)) {
             hwloc_bitmap_list_asprintf(&tmp, result);
             switch (type) {
-            case HWLOC_OBJ_NODE:
+            case HWLOC_OBJ_NUMANODE:
                 prte_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
@@ -2035,7 +2085,7 @@ char *prte_hwloc_base_get_location(char *locality, hwloc_obj_type_t type, unsign
         return NULL;
     }
     switch (type) {
-    case HWLOC_OBJ_NODE:
+    case HWLOC_OBJ_NUMANODE:
         srch = "NM";
         break;
     case HWLOC_OBJ_PACKAGE:
