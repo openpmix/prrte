@@ -992,7 +992,7 @@ int prte_rmaps_base_compute_bindings(prte_job_t *jdata)
         hwb = HWLOC_OBJ_PACKAGE;
         break;
     case PRTE_BIND_TO_NUMA:
-        hwb = HWLOC_OBJ_NODE;
+        hwb = HWLOC_OBJ_NUMANODE;
         break;
     case PRTE_BIND_TO_L3CACHE:
         PRTE_HWLOC_MAKE_OBJ_CACHE(3, hwb, clvl);
