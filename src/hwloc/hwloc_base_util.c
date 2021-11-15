@@ -213,7 +213,6 @@ int prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
     hwloc_cpuset_t avail = NULL;
     prte_hwloc_topo_data_t *sum;
     unsigned width, w, m, N, last;
-    hwloc_bitmap_t *numas;
     hwloc_obj_t obj;
 
     root = hwloc_get_root_obj(topo);
@@ -271,43 +270,29 @@ int prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
     /* compute the CPU NUMA cutoff for this node */
     width = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
     if (0 == width) {
-        sum->numa_cutoff = 0;
+        sum->num_numas = 0;
         return PRTE_SUCCESS;
     }
-    numas = (hwloc_bitmap_t*)malloc(width * sizeof(hwloc_bitmap_t));
-    N = 0;
-    last = 0;
-    for (w=0; w < UINT_MAX && N < width; w++) {
+    sum->numas = (hwloc_obj_t*)malloc(width * sizeof(hwloc_obj_t));
+    sum->num_numas = 0;
+    for (w=0; w < UINT_MAX && sum->num_numas < width; w++) {
         /* get the object at this index */
         obj = hwloc_get_numanode_obj_by_os_index(topo, w);
         if (NULL == obj) {
             continue;
         }
         /* check for overlap with all preceding numas */
-        for (m=0; m < N; m++) {
-            if (hwloc_bitmap_intersects(obj->cpuset, numas[m])) {
+        for (m=0; m < sum->num_numas; m++) {
+            if (hwloc_bitmap_intersects(obj->cpuset, sum->numas[m]->cpuset)) {
                 // if it intersects anyone, then we are done
-                sum->numa_cutoff = last+1;
-                break;
+                return PRTE_SUCCESS;
             }
         }
-        if (-1 != sum->numa_cutoff) {
-            break;
-        } else {
-            last = w;
-            /* cache this bitmap */
-            numas[N] = hwloc_bitmap_alloc();
-            hwloc_bitmap_copy(numas[N], obj->cpuset);
-            ++N;
-        }
+        /* cache this objet */
+        sum->numas[sum->num_numas] = obj;
+        sum->num_numas++;
     }
-    if (-1 == sum->numa_cutoff) {
-        sum->numa_cutoff = last + 1;
-    }
-    for (m=0; m < N; m++) {
-        hwloc_bitmap_free(numas[m]);
-    }
-    free(numas);
+
     return PRTE_SUCCESS;
 }
 
@@ -323,15 +308,15 @@ static void fill_cache_line_size(void)
     while (cache_level > 0 && !found) {
         i = 0;
         while (1) {
-            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, cache_object, cache_level,
-                                                  i);
+            obj = prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, cache_object, cache_level, i);
             if (NULL == obj) {
                 --cache_level;
                 cache_object = HWLOC_OBJ_L1CACHE;
                 break;
             } else {
-                if (NULL != obj->attr && obj->attr->cache.linesize > 0
-                    && size > obj->attr->cache.linesize) {
+                if (NULL != obj->attr &&
+                    obj->attr->cache.linesize > 0 &&
+                    size > obj->attr->cache.linesize) {
                     size = obj->attr->cache.linesize;
                     found = true;
                 }
@@ -434,7 +419,9 @@ int prte_hwloc_base_set_topology(char *topofile)
      */
     obj = hwloc_get_root_obj(prte_hwloc_topology);
     for (k = 0; k < obj->infos_count; k++) {
-        if (NULL == obj->infos[k].name || NULL == obj->infos[k].value) {
+        if (NULL == obj->infos ||
+            NULL == obj->infos[k].name ||
+            NULL == obj->infos[k].value) {
             continue;
         }
         if (0 == strncmp(obj->infos[k].name, "HostName", strlen("HostName"))) {
@@ -725,13 +712,9 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
         return 0;
     }
 
-#if HWLOC_API_VERSION >= 0x20000
-    /* if the type is NUMA, then we need to only count the
-     * CPU NUMAs and ignore the GPU NUMAs as we only deal
-     * with CPUs at this time */
+    /* if the type is NUMA, then we just return the cached number */
     if (HWLOC_OBJ_NUMANODE == target) {
-        unsigned w;
-        hwloc_obj_t obj, root;
+        hwloc_obj_t root;
         prte_hwloc_topo_data_t *sum;
 
         root = hwloc_get_root_obj(topo);
@@ -739,16 +722,10 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
         if (NULL == sum) {
             return 0;
         }
-
-        rc = 0;
-        for (w=0; w < sum->numa_cutoff; w++) {
-            obj = hwloc_get_numanode_obj_by_os_index(topo, w);
-            if (NULL != obj) {
-                ++rc;
-            }
-        }
-        return rc;
+        return sum->num_numas;
     }
+
+#if HWLOC_API_VERSION >= 0x20000
     if (0 > (rc = hwloc_get_nbobjs_by_type(topo, target))) {
         prte_output(0, "UNKNOWN HWLOC ERROR");
         return 0;
@@ -823,32 +800,20 @@ hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo, hwloc_obj_typ
         return NULL;
     }
 
-#if HWLOC_API_VERSION >= 0x20000
-    /* if we are looking for NUMA, then ignore all the
-     * GPU NUMAs */
+    /* if we are looking for NUMA, then just return the cached object */
     if (HWLOC_OBJ_NUMANODE == target) {
-        unsigned w, cnt;
         hwloc_obj_t obj, root;
         prte_hwloc_topo_data_t *sum;
 
         root = hwloc_get_root_obj(topo);
         sum = (prte_hwloc_topo_data_t *) root->userdata;
-        if (NULL == sum) {
+        if (NULL == sum || sum->num_numas <= instance) {
             return NULL;
         }
-
-        cnt = 0;
-        for (w=0; w < sum->numa_cutoff; w++) {
-            obj = hwloc_get_numanode_obj_by_os_index(topo, w);
-            if (NULL != obj) {
-                if (cnt == instance) {
-                    return obj;
-                }
-                ++cnt;
-            }
-        }
-        return NULL;
+        return sum->numas[instance];
     }
+
+#if HWLOC_API_VERSION >= 0x20000
     return hwloc_get_obj_by_type(topo, target, instance);
 #else
     hwloc_obj_t obj;

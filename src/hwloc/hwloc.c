@@ -457,7 +457,8 @@ static void topo_data_const(prte_hwloc_topo_data_t *ptr)
 {
     ptr->available = NULL;
     PRTE_CONSTRUCT(&ptr->summaries, prte_list_t);
-    ptr->numa_cutoff = -1;
+    ptr->numas = NULL;
+    ptr->num_numas = 0;
 }
 static void topo_data_dest(prte_hwloc_topo_data_t *ptr)
 {
@@ -470,6 +471,9 @@ static void topo_data_dest(prte_hwloc_topo_data_t *ptr)
         PRTE_RELEASE(item);
     }
     PRTE_DESTRUCT(&ptr->summaries);
+    if (NULL != ptr->numas) {
+        free(ptr->numas);
+    }
 }
 PRTE_CLASS_INSTANCE(prte_hwloc_topo_data_t, prte_object_t, topo_data_const, topo_data_dest);
 

@@ -699,6 +699,10 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
                 case PRTE_MAPPING_BYHWTHREAD:
                     PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_HWTHREAD);
                     break;
+                case PRTE_MAPPING_PPR:
+                    // do not set the policy for PPR - we will set it in
+                    // the ppr mapper
+                    break;
                 default:
                     /* anything not tied to a specific hw obj can rank by slot */
                     PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
