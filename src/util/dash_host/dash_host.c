@@ -306,7 +306,6 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                 free(shortname);
                 shortname = NULL;
             }
-            break;
         } else {
             /* if we didn't find it, add it to the list */
             node = PRTE_NEW(prte_node_t);
