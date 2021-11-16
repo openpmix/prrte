@@ -421,7 +421,7 @@ static int check_help(prte_cmd_line_t *cli, char **argv)
 
 static int convert_deprecated_cli(char *option, char ***argv, int i)
 {
-    char **pargs, *p2, *modifier;
+    char **pargs, *p1, *p2, *tmp, *tmp2, *output, *modifier;
     int rc = PRTE_SUCCESS;
 
     pargs = *argv;
@@ -582,6 +582,96 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
                        "This CLI option will be deprecated starting in Open MPI v5");
         rc = PRTE_ERR_TAKE_NEXT_OPTION;
     }
+    /* --map-by socket ->  --map-by package */
+    else if (0 == strcmp(option, "--map-by")) {
+        /* check the value of the option for "socket" */
+        if (0 == strncasecmp(pargs[i + 1], "socket", strlen("socket"))) {
+            p1 = strdup(pargs[i + 1]); // save the original option
+            /* replace "socket" with "package" */
+            if (NULL == (p2 = strchr(pargs[i + 1], ':'))) {
+                /* no modifiers */
+                tmp = strdup("package");
+            } else {
+                *p2 = '\0';
+                ++p2;
+                prte_asprintf(&tmp, "package:%s", p2);
+            }
+            prte_asprintf(&p2, "%s %s", option, p1);
+            prte_asprintf(&tmp2, "%s %s", option, tmp);
+            /* can't just call show_help as we want every instance to be reported */
+            output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                                           tmp2);
+            fprintf(stderr, "%s\n", output);
+            free(output);
+            free(p1);
+            free(p2);
+            free(tmp2);
+            free(pargs[i + 1]);
+            pargs[i + 1] = tmp;
+            return PRTE_ERR_TAKE_NEXT_OPTION;
+        }
+        rc = PRTE_OPERATION_SUCCEEDED;
+    }
+    /* --rank-by socket ->  --rank-by package */
+    else if (0 == strcmp(option, "--rank-by")) {
+        /* check the value of the option for "socket" */
+        if (0 == strncasecmp(pargs[i + 1], "socket", strlen("socket"))) {
+            p1 = strdup(pargs[i + 1]); // save the original option
+            /* replace "socket" with "package" */
+            if (NULL == (p2 = strchr(pargs[i + 1], ':'))) {
+                /* no modifiers */
+                tmp = strdup("package");
+            } else {
+                *p2 = '\0';
+                ++p2;
+                prte_asprintf(&tmp, "package:%s", p2);
+            }
+            prte_asprintf(&p2, "%s %s", option, p1);
+            prte_asprintf(&tmp2, "%s %s", option, tmp);
+            /* can't just call show_help as we want every instance to be reported */
+            output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                                           tmp2);
+            fprintf(stderr, "%s\n", output);
+            free(output);
+            free(p1);
+            free(p2);
+            free(tmp2);
+            free(pargs[i + 1]);
+            pargs[i + 1] = tmp;
+            return PRTE_ERR_TAKE_NEXT_OPTION;
+        }
+        rc = PRTE_OPERATION_SUCCEEDED;
+    }
+    /* --bind-to socket ->  --bind-to package */
+    else if (0 == strcmp(option, "--bind-to")) {
+        /* check the value of the option for "socket" */
+        if (0 == strncasecmp(pargs[i + 1], "socket", strlen("socket"))) {
+            p1 = strdup(pargs[i + 1]); // save the original option
+            /* replace "socket" with "package" */
+            if (NULL == (p2 = strchr(pargs[i + 1], ':'))) {
+                /* no modifiers */
+                tmp = strdup("package");
+            } else {
+                *p2 = '\0';
+                ++p2;
+                prte_asprintf(&tmp, "package:%s", p2);
+            }
+            prte_asprintf(&p2, "%s %s", option, p1);
+            prte_asprintf(&tmp2, "%s %s", option, tmp);
+            /* can't just call show_help as we want every instance to be reported */
+            output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                                           tmp2);
+            fprintf(stderr, "%s\n", output);
+            free(output);
+            free(p1);
+            free(p2);
+            free(tmp2);
+            free(pargs[i + 1]);
+            pargs[i + 1] = tmp;
+            return PRTE_ERR_TAKE_NEXT_OPTION;
+        }
+        rc = PRTE_OPERATION_SUCCEEDED;
+    }
 
     return rc;
 }
@@ -624,6 +714,9 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***arg
                        "--output-filename",
                        "--output-directory",
                        "--debug",
+                       "--map-by",
+                       "--rank-by",
+                       "--bind-to",
                        NULL};
 
     rc = prte_schizo_base_process_deprecated_cli(cmdline, argc, argv, options,

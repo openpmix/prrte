@@ -1521,7 +1521,7 @@ char *prte_hwloc_base_cset2str(hwloc_cpuset_t cpuset, bool use_hwthread_cpus, hw
 
     npus = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
     ncores = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
-    if (npus == ncores) {
+    if (npus == ncores && !use_hwthread_cpus) {
         /* the bits in this bitmap represent cores */
         bits_as_cores = true;
     }
