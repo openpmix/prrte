@@ -472,7 +472,7 @@ static int rank_by(prte_job_t *jdata,
                     continue;
                 }
                 /* cycle thru the procs on this node */
-                for (j = 0; j < node->procs->size && cnt < app->num_procs; j++) {
+                for (j = 0; j < node->procs->size; j++) {
                     proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
                     if (NULL == proc) {
                         continue;
