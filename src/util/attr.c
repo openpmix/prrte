@@ -221,6 +221,8 @@ char *prte_attr_print_list(prte_list_t *attributes)
     return out1;
 }
 
+static char unknownkey[180] = {0};
+
 const char *prte_attr_key_to_str(prte_attribute_key_t key)
 {
     int i;
@@ -513,7 +515,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
         case PRTE_RML_ROUTED_ATTRIB:
             return "RML-DESIRED-ROUTED-MODULES";
         default:
-            return "UNKNOWN-KEY";
+            prte_snprintf(unknownkey, 180, "UNKNOWN-KEY: %d", key);
+            return unknownkey;
         }
     }
 
@@ -527,7 +530,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
     }
 
     /* get here if nobody know what to do */
-    return "UNKNOWN-KEY";
+    prte_snprintf(unknownkey, 180, "UNKNOWN-KEY: %d", key);
+    return unknownkey;
 }
 
 int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
