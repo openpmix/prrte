@@ -358,11 +358,12 @@ Please specify a mapping level that has more cpus, or else let us
 define a default mapping that will allow multiple cpus-per-proc.
 #
 [unrecognized-modifier]
-The mapping request contains an unrecognized modifier:
+The mapping request contains an unrecognized qualifier:
 
   Request: %s
 
-Please check your request and try again.
+Please check your request and try again. Remember, multiple
+qualifiers must be separated by a colon (':').
 #
 [invalid-pattern]
 The mapping request contains a pattern that doesn't match
