@@ -567,6 +567,7 @@ static pmix_status_t spawn_app(void)
     }
     sprintf(map_str, "ppr:%d:node", app_npernode);
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_MAPBY, map_str, PMIX_STRING); // app procs/node
+    PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_RANKBY, "slot", PMIX_STRING); // match baseline
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_NOTIFY_COMPLETION, NULL,

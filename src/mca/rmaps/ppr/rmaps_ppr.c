@@ -152,6 +152,9 @@ static int ppr_mapper(prte_job_t *jdata)
         if (0 == strncasecmp(ck[1], "node", len)) {
             rmaps_ppr_global[PRTE_HWLOC_NODE_LEVEL] = strtol(ck[0], NULL, 10);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNODE);
+            if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+                PRTE_SET_RANKING_POLICY(jdata->map->ranking, PRTE_RANK_BY_NODE);
+            }
             start = PRTE_HWLOC_NODE_LEVEL;
             n++;
         } else if (0 == strncasecmp(ck[1], "hwthread", len)
@@ -159,12 +162,18 @@ static int ppr_mapper(prte_job_t *jdata)
             rmaps_ppr_global[PRTE_HWLOC_HWTHREAD_LEVEL] = strtol(ck[0], NULL, 10);
             start = PRTE_HWLOC_HWTHREAD_LEVEL;
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
+            if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+                PRTE_SET_RANKING_POLICY(jdata->map->ranking, PRTE_RANK_BY_HWTHREAD);
+            }
             n++;
         } else if (0 == strncasecmp(ck[1], "core", len)) {
             rmaps_ppr_global[PRTE_HWLOC_CORE_LEVEL] = strtol(ck[0], NULL, 10);
             if (start < PRTE_HWLOC_CORE_LEVEL) {
                 start = PRTE_HWLOC_CORE_LEVEL;
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
+                if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+                    PRTE_SET_RANKING_POLICY(jdata->map->ranking, PRTE_RANK_BY_CORE);
+                }
             }
             n++;
         } else if (0 == strncasecmp(ck[1], "package", len) || 0 == strncasecmp(ck[1], "skt", len)) {
@@ -172,6 +181,9 @@ static int ppr_mapper(prte_job_t *jdata)
             if (start < PRTE_HWLOC_PACKAGE_LEVEL) {
                 start = PRTE_HWLOC_PACKAGE_LEVEL;
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
+                if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+                    PRTE_SET_RANKING_POLICY(jdata->map->ranking, PRTE_RANK_BY_PACKAGE);
+                }
             }
             n++;
         } else if (0 == strncasecmp(ck[1], "numa", len) || 0 == strncasecmp(ck[1], "nm", len)) {
@@ -179,6 +191,9 @@ static int ppr_mapper(prte_job_t *jdata)
             if (start < PRTE_HWLOC_NUMA_LEVEL) {
                 start = PRTE_HWLOC_NUMA_LEVEL;
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
+                if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+                    PRTE_SET_RANKING_POLICY(jdata->map->ranking, PRTE_RANK_BY_NUMA);
+                }
             }
             n++;
         } else if (0 == strncasecmp(ck[1], "l1cache", len)) {
@@ -187,6 +202,9 @@ static int ppr_mapper(prte_job_t *jdata)
                 start = PRTE_HWLOC_L1CACHE_LEVEL;
                 cache_level = 1;
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYL1CACHE);
+                if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+                    PRTE_SET_RANKING_POLICY(jdata->map->ranking, PRTE_RANK_BY_L1CACHE);
+                }
             }
             n++;
         } else if (0 == strncasecmp(ck[1], "l2cache", len)) {
@@ -195,6 +213,9 @@ static int ppr_mapper(prte_job_t *jdata)
                 start = PRTE_HWLOC_L2CACHE_LEVEL;
                 cache_level = 2;
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYL2CACHE);
+                if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+                    PRTE_SET_RANKING_POLICY(jdata->map->ranking, PRTE_RANK_BY_L2CACHE);
+                }
             }
             n++;
         } else if (0 == strncasecmp(ck[1], "l3cache", len)) {
@@ -203,6 +224,9 @@ static int ppr_mapper(prte_job_t *jdata)
                 start = PRTE_HWLOC_L3CACHE_LEVEL;
                 cache_level = 3;
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYL3CACHE);
+                if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+                    PRTE_SET_RANKING_POLICY(jdata->map->ranking, PRTE_RANK_BY_L3CACHE);
+                }
             }
             n++;
         } else {
@@ -318,9 +342,9 @@ static int ppr_mapper(prte_job_t *jdata)
                 /* map the specified number of procs to each such resource on this node,
                  * recording the locale of each proc so we know its cpuset
                  */
-                for (i = 0; i < num_available; i++) {
-                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, lowest, cache_level, i);
-                    for (j = 0; j < rmaps_ppr_global[start] && nprocs_mapped < total_procs; j++) {
+                for (j = 0; j < rmaps_ppr_global[start] && nprocs_mapped < total_procs; j++) {
+                    for (i=0; i < num_available && nprocs_mapped < total_procs; i++) {
+                        obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, lowest, cache_level, i);
                         if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, idx))) {
                             rc = PRTE_ERR_OUT_OF_RESOURCE;
                             goto error;
@@ -330,7 +354,6 @@ static int ppr_mapper(prte_job_t *jdata)
                                            PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
                     }
                 }
-
                 if (pruning_reqd) {
                     /* go up the ladder and prune the procs according to
                      * the specification, adjusting the count of procs on the
