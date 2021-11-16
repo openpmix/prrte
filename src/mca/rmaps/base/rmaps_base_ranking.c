@@ -872,6 +872,10 @@ rankbyslot:
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:base: computing vpids by slot for job %s",
                             PRTE_JOBID_PRINT(jdata->nspace));
+        /* if they mapped by core or by hwthread, then rank-by slot is a match */
+        if (PRTE_MAPPING_BYHWTHREAD == mapping || PRTE_MAPPING_BYCORE == mapping) {
+            matched = true;
+        }
         if (PRTE_SUCCESS != (rc = rank_by(jdata, HWLOC_OBJ_PU, 0, matched))) {
             PRTE_ERROR_LOG(rc);
         }
