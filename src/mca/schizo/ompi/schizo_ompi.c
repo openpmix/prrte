@@ -835,19 +835,20 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     return PRTE_ERR_NOT_FOUND;
                 }
                 free(p1);
+            } else {
+                prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);;
+                prte_argv_free(tmp);
+                prte_argv_free(cache);
+                prte_argv_free(cachevals);
+                prte_argv_free(xparams);
+                prte_argv_free(xvals);
+                return PRTE_ERR_NOT_FOUND;
             }
-        } else {
-            prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);;
-            prte_argv_free(tmp);
-            prte_argv_free(cache);
-            prte_argv_free(cachevals);
-            prte_argv_free(xparams);
-            prte_argv_free(xvals);
-            return PRTE_ERR_NOT_FOUND;
-       }
+        }
         while (NULL != (line = prte_schizo_base_getline(fp))) {
-            if ('\0' == line[0])
+            if ('\0' == line[0]) {
                 continue; /* skip empty lines */
+            }
             opts = prte_argv_split_with_empty(line, ' ');
             if (NULL == opts) {
                 prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
