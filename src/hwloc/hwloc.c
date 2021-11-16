@@ -38,21 +38,29 @@ char *prte_hwloc_base_topo_file = NULL;
 int prte_hwloc_base_output = -1;
 bool prte_hwloc_default_use_hwthread_cpus = false;
 
-hwloc_obj_type_t prte_hwloc_levels[] = {HWLOC_OBJ_MACHINE, HWLOC_OBJ_NODE,    HWLOC_OBJ_PACKAGE,
-                                        HWLOC_OBJ_L3CACHE, HWLOC_OBJ_L2CACHE, HWLOC_OBJ_L1CACHE,
-                                        HWLOC_OBJ_CORE,    HWLOC_OBJ_PU};
+hwloc_obj_type_t prte_hwloc_levels[] = {
+    HWLOC_OBJ_MACHINE,
+    HWLOC_OBJ_NUMANODE,
+    HWLOC_OBJ_PACKAGE,
+    HWLOC_OBJ_L3CACHE,
+    HWLOC_OBJ_L2CACHE,
+    HWLOC_OBJ_L1CACHE,
+    HWLOC_OBJ_CORE,
+    HWLOC_OBJ_PU
+};
 
-static prte_mca_base_var_enum_value_t hwloc_base_map[] = {{PRTE_HWLOC_BASE_MAP_NONE, "none"},
-                                                          {PRTE_HWLOC_BASE_MAP_LOCAL_ONLY,
-                                                           "local_only"},
-                                                          {0, NULL}};
+static prte_mca_base_var_enum_value_t hwloc_base_map[] = {
+    {PRTE_HWLOC_BASE_MAP_NONE, "none"},
+    {PRTE_HWLOC_BASE_MAP_LOCAL_ONLY, "local_only"},
+    {0, NULL}
+};
 
-static prte_mca_base_var_enum_value_t hwloc_failure_action[] = {{PRTE_HWLOC_BASE_MBFA_SILENT,
-                                                                 "silent"},
-                                                                {PRTE_HWLOC_BASE_MBFA_WARN, "warn"},
-                                                                {PRTE_HWLOC_BASE_MBFA_ERROR,
-                                                                 "error"},
-                                                                {0, NULL}};
+static prte_mca_base_var_enum_value_t hwloc_failure_action[] = {
+    {PRTE_HWLOC_BASE_MBFA_SILENT, "silent"},
+    {PRTE_HWLOC_BASE_MBFA_WARN, "warn"},
+    {PRTE_HWLOC_BASE_MBFA_ERROR, "error"},
+    {0, NULL}
+};
 
 static char *prte_hwloc_base_binding_policy = NULL;
 static int verbosity = 0;
@@ -81,7 +89,7 @@ int prte_hwloc_base_register(void)
 
     /* handle some deprecated options */
     prte_hwloc_default_use_hwthread_cpus = false;
-    (void) prte_mca_base_var_register("opal", "hwloc", "base", "use_hwthreads_as_cpus",
+    (void) prte_mca_base_var_register("prte", "hwloc", "base", "use_hwthreads_as_cpus",
                                       "Use hardware threads as independent cpus",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL,
                                       NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
@@ -89,7 +97,7 @@ int prte_hwloc_base_register(void)
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                       &prte_hwloc_default_use_hwthread_cpus);
 
-    (void) prte_mca_base_var_register("opal", "hwloc", "base", "bind_to_core",
+    (void) prte_mca_base_var_register("prte", "hwloc", "base", "bind_to_core",
                                       "Bind processes to cores",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL,
                                       NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
@@ -97,7 +105,7 @@ int prte_hwloc_base_register(void)
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                       &bind_to_core);
 
-    (void) prte_mca_base_var_register("opal", "hwloc", "base", "bind_to_socket",
+    (void) prte_mca_base_var_register("prte", "hwloc", "base", "bind_to_socket",
                                       "Bind processes to sockets",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL,
                                       NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
@@ -449,7 +457,8 @@ static void topo_data_const(prte_hwloc_topo_data_t *ptr)
 {
     ptr->available = NULL;
     PRTE_CONSTRUCT(&ptr->summaries, prte_list_t);
-    ptr->userdata = NULL;
+    ptr->numas = NULL;
+    ptr->num_numas = 0;
 }
 static void topo_data_dest(prte_hwloc_topo_data_t *ptr)
 {
@@ -462,7 +471,9 @@ static void topo_data_dest(prte_hwloc_topo_data_t *ptr)
         PRTE_RELEASE(item);
     }
     PRTE_DESTRUCT(&ptr->summaries);
-    ptr->userdata = NULL;
+    if (NULL != ptr->numas) {
+        free(ptr->numas);
+    }
 }
 PRTE_CLASS_INSTANCE(prte_hwloc_topo_data_t, prte_object_t, topo_data_const, topo_data_dest);
 

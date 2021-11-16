@@ -35,11 +35,20 @@ This file contains the main features as well as overviews of specific
 bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
-2.0.1: (tag point, not official release)
+2.0.1LZ1: (tag point, not official release)
 ------------------------------------
 +**** NOTE: As of v2.0.1, PRRTE no longer has a dependency on "pandoc"
 +**** for building and installing man pages.
 
+PR #1157: Fix brackets around code clause that caused
+     erroneous "unable to find tune file" error
+PR #1156: Handle default param case for HWT CPUs
+PR #1155: Cleanup qualifier detection for mapping policy
+PR #1154: Increase speed of rank computation
+   - Remove spurious break in loop
+PR #1153: Ensure the direct-multi test ranks-by slot
+PR #1151: Revamp map-by NUMA support
+PR #1150: Tranlate legacy OMPI params
 PR #1147: Updates
  - Minor infrastructure and example cleanup
  - Allow external caller to set prte_tool_basename

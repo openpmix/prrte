@@ -424,8 +424,17 @@ bool prte_schizo_base_check_directives(char *directive,
 
     /* if it starts with a ':', then these are just modifiers */
     if (':' == dir[0]) {
-        return prte_schizo_base_check_qualifiers(directive, quals, &dir[1]);
+        qls = prte_argv_split(&dir[1], ',');
+        for (m=0; NULL != qls[m]; m++) {
+            if (!prte_schizo_base_check_qualifiers(directive, quals, qls[m])) {
+                prte_argv_free(qls);
+                return false;
+            }
+        }
+        prte_argv_free(qls);
+        return true;
     }
+
     /* always accept the "help" directive */
     if (0 == strcasecmp(dir, "help") ||
         0 == strcasecmp(dir, "-help") ||

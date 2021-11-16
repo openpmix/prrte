@@ -532,14 +532,6 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     }
     /* --map-by socket ->  --map-by package */
     else if (0 == strcmp(option, "--map-by")) {
-        /* if the option consists solely of qualifiers, then add
-         * the "core" default value */
-        if (':' == pargs[i + 1][0]) {
-            prte_asprintf(&p2, "core%s", pargs[i + 1]);
-            free(pargs[i + 1]);
-            pargs[i + 1] = p2;
-            return PRTE_OPERATION_SUCCEEDED;
-        }
         /* check the value of the option for "socket" */
         if (0 == strncasecmp(pargs[i + 1], "socket", strlen("socket"))) {
             p1 = strdup(pargs[i + 1]); // save the original option

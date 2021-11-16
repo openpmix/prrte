@@ -139,15 +139,15 @@ static int prte_rmaps_base_open(prte_mca_base_open_flag_t flags)
 
     /* set the default mapping and ranking policies */
     if (NULL != rmaps_base_mapping_policy) {
-        if (PRTE_SUCCESS
-            != (rc = prte_rmaps_base_set_mapping_policy(NULL, rmaps_base_mapping_policy))) {
+        rc = prte_rmaps_base_set_mapping_policy(NULL, rmaps_base_mapping_policy);
+        if (PRTE_SUCCESS != rc) {
             return rc;
         }
     }
 
     if (NULL != rmaps_base_ranking_policy) {
-        if (PRTE_SUCCESS
-            != (rc = prte_rmaps_base_set_ranking_policy(NULL, rmaps_base_ranking_policy))) {
+        rc = prte_rmaps_base_set_ranking_policy(NULL, rmaps_base_ranking_policy);
+        if (PRTE_SUCCESS != rc) {
             return rc;
         }
     }
@@ -698,6 +698,10 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
                     break;
                 case PRTE_MAPPING_BYHWTHREAD:
                     PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_HWTHREAD);
+                    break;
+                case PRTE_MAPPING_PPR:
+                    // do not set the policy for PPR - we will set it in
+                    // the ppr mapper
                     break;
                 default:
                     /* anything not tied to a specific hw obj can rank by slot */
