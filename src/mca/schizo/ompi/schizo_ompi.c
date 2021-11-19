@@ -1192,28 +1192,34 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
             }
             p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
             if (0 != strcmp("no", p1) && 0 != strcmp("false", p1) && 0 != strcmp("0", p1)) {
-                if (NULL == target) {
-                    /* push it into our environment */
-                    prte_asprintf(&param, "PRTE_MCA_prte_enable_ft");
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                                        "%s schizo:ompi:parse_cli pushing %s into environment",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
-                    prte_setenv(param, "true", true, &environ);
-                    // prte_enable_ft = true;
-                    prte_enable_recovery = true;
-                    prte_asprintf(&param, "OMPI_MCA_mpi_ft_enable");
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                                        "%s schizo:ompi:parse_cli pushing %s into environment",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
-                    prte_setenv(param, "true", true, &environ);
-                } else {
-                    prte_argv_append_nosize(target, "--prtemca");
-                    prte_argv_append_nosize(target, "prte_enable_ft");
-                    prte_argv_append_nosize(target, "true");
-                    prte_argv_append_nosize(target, "--enable-recovery");
-                    prte_argv_append_nosize(target, "--mca");
-                    prte_argv_append_nosize(target, "mpi_ft_enable");
-                    prte_argv_append_nosize(target, "true");
+                if(0 == strcmp("yes", p1) || 0 == strcmp("true", p1) || 0 == strcmp("1", p1)
+                || 0 == strcmp("ulfm", p1) || 0 == strcmp("mpi", p1)) {
+                    if (NULL == target) {
+                        /* push it into our environment */
+                        prte_asprintf(&param, "PRTE_MCA_prte_enable_ft");
+                        prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                                            "%s schizo:ompi:parse_cli pushing %s into environment",
+                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                        prte_setenv(param, "true", true, &environ);
+                        prte_enable_recovery = true;
+                        prte_asprintf(&param, "OMPI_MCA_mpi_ft_enable");
+                        prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                                            "%s schizo:ompi:parse_cli pushing %s into environment",
+                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                        prte_setenv(param, "true", true, &environ);
+                    } else {
+                        prte_argv_append_nosize(target, "--prtemca");
+                        prte_argv_append_nosize(target, "prte_enable_ft");
+                        prte_argv_append_nosize(target, "true");
+                        prte_argv_append_nosize(target, "--enable-recovery");
+                        prte_argv_append_nosize(target, "--mca");
+                        prte_argv_append_nosize(target, "mpi_ft_enable");
+                        prte_argv_append_nosize(target, "true");
+                    }
+                }
+                else {
+                    prte_output(0, "UNRECOGNIZED OPTION: --with-ft %s", p1);
+                    return PRTE_ERR_FATAL;
                 }
             }
             free(p1);
