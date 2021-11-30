@@ -34,7 +34,7 @@ bool prte_if_retain_loopback = false;
 static int prte_if_base_open(prte_mca_base_open_flag_t flags);
 static int prte_if_base_close(void);
 static void prte_if_construct(prte_if_t *obj);
-static char **split_and_resolve(char **orig_str, char *name);
+static char **split_and_resolve(const char *orig_str, const char *name);
 
 static bool frameopen = false;
 
@@ -74,11 +74,11 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
      * subnet+mask
      */
     if (NULL != prte_if_include) {
-        interfaces = split_and_resolve(&prte_if_include, "include");
+        interfaces = split_and_resolve(prte_if_include, "include");
         including = true;
         excluding = false;
     } else if (NULL != prte_if_exclude) {
-        interfaces = split_and_resolve(&prte_if_exclude, "exclude");
+        interfaces = split_and_resolve(prte_if_exclude, "exclude");
         including = false;
         excluding = true;
     }
@@ -225,38 +225,38 @@ static void prte_if_construct(prte_if_t *obj)
  * (a.b.c.d/e), resolve them to an interface name (Currently only
  * supporting IPv4).  If unresolvable, warn and remove.
  */
-static char **split_and_resolve(char **orig_str, char *name)
+static char **split_and_resolve(const char *orig_str,
+                                const char *name)
 {
-    int i, n, ret, if_index, match_count, interface_count;
+    int i, n, ret, if_index, match_count;
     char **argv, **interfaces, *str, *tmp;
     struct sockaddr_storage argv_inaddr, if_inaddr;
     uint32_t argv_prefix;
     char if_name[PRTE_IF_NAMESIZE];
+    bool found;
 
     /* Sanity check */
-    if (NULL == orig_str || NULL == *orig_str) {
+    if (NULL == orig_str) {
         return NULL;
     }
 
     argv = prte_argv_split(*orig_str, ',');
-    if (NULL == argv) {
-        return NULL;
-    }
-    interface_count = 0;
     interfaces = NULL;
     for (i = 0; NULL != argv[i]; ++i) {
         if (isalpha(argv[i][0])) {
             /* This is an interface name. If not already in the interfaces array, add it */
-            for (n = 0; n < interface_count; n++) {
+            found = false;
+            for (n = 0; NULL != interfaces && NULL != interfaces[n]; n++) {
                 if (0 == strcmp(argv[i], interfaces[n])) {
+                    found = true;
                     break;
                 }
             }
-            if (n == interface_count) {
+            if (!found) {
                 prte_output_verbose(20,
                                     prte_prteif_base_framework.framework_output,
                                     "prteif:base: Using interface: %s ", argv[i]);
-                prte_argv_append(&interface_count, &interfaces, argv[i]);
+                pmix_argv_append_nosize(&interfaces, argv[i]);
             }
             continue;
         }
@@ -266,8 +266,8 @@ static char **split_and_resolve(char **orig_str, char *name)
         tmp = strdup(argv[i]);
         str = strchr(argv[i], '/');
         if (NULL == str) {
-            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
-                           prte_process_info.nodename, tmp,
+            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true,
+                           name, prte_process_info.nodename, tmp,
                            "Invalid specification (missing \"/\")");
             free(tmp);
             continue;
@@ -280,8 +280,8 @@ static char **split_and_resolve(char **orig_str, char *name)
         ret = inet_pton(AF_INET, argv[i], &((struct sockaddr_in *) &argv_inaddr)->sin_addr);
 
         if (1 != ret) {
-            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
-                           prte_process_info.nodename, tmp,
+            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true,
+                           name, prte_process_info.nodename, tmp,
                            "Invalid specification (inet_pton() failed)");
             free(tmp);
             continue;
@@ -299,25 +299,25 @@ static char **split_and_resolve(char **orig_str, char *name)
             prte_ifindextoaddr(if_index,
                                (struct sockaddr*) &if_inaddr,
                                sizeof(if_inaddr));
-            if (prte_net_samenetwork((struct sockaddr*) &argv_inaddr,
-                                     (struct sockaddr*) &if_inaddr,
-                                     argv_prefix)) {
+            if (prte_net_samenetwork(&argv_inaddr, &if_inaddr, argv_prefix)) {
                 /* We found a match. If it's not already in the interfaces array,
                    add it. If it's already in the array, treat it as a match */
-                match_count = match_count + 1;
+                ++match_count;
                 prte_ifindextoname(if_index, if_name, sizeof(if_name));
-                for (n = 0; n < interface_count; n++) {
+                found = false;
+                for (n = 0; NULL != interfaces && NULL != interfaces[n]; n++) {
                     if (0 == strcmp(if_name, interfaces[n])) {
+                        found = true;
                         break;
                     }
                 }
-                if (n == interface_count) {
+                if (!found) {
                     prte_output_verbose(20,
                                         prte_prteif_base_framework.framework_output,
                                         "prteif:base: Found match: %s (%s)",
                                         prte_net_get_hostname((struct sockaddr*) &if_inaddr),
                                         if_name);
-                    prte_argv_append(&interface_count, &interfaces, if_name);
+                    pmix_argv_append_nosize(&interfaces, if_name);
                 }
             }
         }
@@ -331,12 +331,6 @@ static char **split_and_resolve(char **orig_str, char *name)
         }
     }
 
-    /* Mark the end of the interface name array with NULL */
-    if (NULL != interfaces) {
-        interfaces[interface_count] = NULL;
-    }
     prte_argv_free(argv);
-    free(*orig_str);
-    *orig_str = prte_argv_join(interfaces, ',');
     return interfaces;
 }
