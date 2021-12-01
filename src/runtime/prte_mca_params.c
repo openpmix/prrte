@@ -666,11 +666,9 @@ int prte_register_params(void)
                                NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_pmix_verbose_output);
 
-#if PRTE_ENABLE_FT
-    prte_mca_base_var_register("prte", "prte", NULL, "enable_ft", "Enable/disable fault tolerance",
+    prte_mca_base_var_register("prte", "prte", NULL, "enable_ft_detector", "Enable/disable resilient fault detector",
                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_enable_ft);
-#endif
+                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_enable_ft_detector);
 
     return PRTE_SUCCESS;
 }

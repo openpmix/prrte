@@ -348,7 +348,6 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     {'\0', "display-allocation", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Display the allocation being used by this job", PRTE_CMD_LINE_OTYPE_DEBUG},
 
-#if PRTE_ENABLE_FT
     {'\0', "enable-recovery", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Enable recovery from process failure [Default = disabled]", PRTE_CMD_LINE_OTYPE_FT},
     {'\0', "max-restarts", 1, PRTE_CMD_LINE_TYPE_INT,
@@ -360,7 +359,6 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     {'\0', "with-ft", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Specify the type(s) of error handling that the application will use.",
      PRTE_CMD_LINE_OTYPE_LAUNCH},
-#endif
 
     /* mpiexec mandated form launch key parameters */
     {'\0', "initial-errhandler", 1, PRTE_CMD_LINE_TYPE_STRING,
@@ -1184,7 +1182,6 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
             }
         }
 
-#if PRTE_ENABLE_FT
         if (0 == strcmp("--with-ft", argv[i]) || 0 == strcmp("-with-ft", argv[i])) {
             if (NULL == argv[i + 1]) {
                 /* this is an error */
@@ -1194,12 +1191,12 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
             if (0 != strcmp("no", p1) && 0 != strcmp("false", p1) && 0 != strcmp("0", p1)) {
                 if (NULL == target) {
                     /* push it into our environment */
-                    prte_asprintf(&param, "PRTE_MCA_prte_enable_ft");
+                    prte_asprintf(&param, "PRTE_MCA_prte_enable_ft_detector");
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:ompi:parse_cli pushing %s into environment",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
                     prte_setenv(param, "true", true, &environ);
-                    // prte_enable_ft = true;
+                    // prte_enable_ft_detector = true;
                     prte_enable_recovery = true;
                     prte_asprintf(&param, "OMPI_MCA_mpi_ft_enable");
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
@@ -1208,7 +1205,7 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
                     prte_setenv(param, "true", true, &environ);
                 } else {
                     prte_argv_append_nosize(target, "--prtemca");
-                    prte_argv_append_nosize(target, "prte_enable_ft");
+                    prte_argv_append_nosize(target, "prte_enable_ft_detector");
                     prte_argv_append_nosize(target, "true");
                     prte_argv_append_nosize(target, "--enable-recovery");
                     prte_argv_append_nosize(target, "--mca");
@@ -1218,7 +1215,6 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
             }
             free(p1);
         }
-#endif
     }
 
     return PRTE_SUCCESS;

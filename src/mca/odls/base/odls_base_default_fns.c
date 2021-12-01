@@ -1755,8 +1755,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                              strsignal(WTERMSIG(proc->exit_code))));
         proc->exit_code = WTERMSIG(proc->exit_code) + 128;
 
-#if PRTE_ENABLE_FT
-        if (prte_enable_ft) {
+        if (prte_enable_ft_detector) {
             /* register an event handler for the PRTE_ERR_PROC_ABORTED event */
             int rc;
             pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
@@ -1778,7 +1777,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
             PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
         }
-#endif
 
         /* Do not decrement the number of local procs here. That is handled in the errmgr */
     }

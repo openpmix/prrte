@@ -28,7 +28,7 @@ int prte_propagate_base_select(void)
     prte_propagate_base_component_t *best_component = NULL;
     prte_propagate_base_module_t *best_module = NULL;
     /* early bailout. */
-    if (!prte_enable_ft)
+    if (!prte_enable_ft_detector)
         return PRTE_SUCCESS;
     /*
      * Select the best component

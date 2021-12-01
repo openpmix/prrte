@@ -158,7 +158,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
         if (PMIX_CHECK_PROCID(&nmcheck->name, errorproc)) {
             PRTE_OUTPUT_VERBOSE(
                 (10, prte_propagate_base_framework.framework_output,
-                 "propagate: prperror: already propagated this msg: error proc is %s",
+                 "propagate: prperror: daemon already propagated that %s proc has failed: no msg sent",
                  PRTE_NAME_PRINT(errorproc)));
             return rc;
         }
@@ -406,7 +406,7 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source, pmix
         if (PMIX_CHECK_PROCID(&nmcheck->name, errorproc)) {
             PRTE_OUTPUT_VERBOSE(
                 (10, prte_propagate_base_framework.framework_output,
-                 "propagate: prperror: already propagated this msg: error proc is %s",
+                 "propagate: prperror: daemon already propagated that %s proc has failed: no msg sent",
                  PRTE_NAME_PRINT(errorproc)));
             return false;
         }
@@ -493,8 +493,8 @@ static int prte_propagate_prperror_recv(pmix_data_buffer_t *buffer)
 
     PRTE_OUTPUT_VERBOSE(
         (5, prte_propagate_base_framework.framework_output,
-         "%s propagete: prperror: daemon received %s gone forwarding with status %d",
-         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&errorproc), state));
+         "propagate: prperror: daemon received that %s is dead with status %d; forwarding...",
+         PRTE_NAME_PRINT(&errorproc), state));
 
     return _prte_propagate_prperror(prte_process_info.myproc.nspace, NULL, &errorproc, state, buffer,
                                     &rly);

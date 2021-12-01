@@ -151,7 +151,6 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
-#if PRTE_ENABLE_FT
     /* open the propagator */
     if (PRTE_SUCCESS
         != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework,
@@ -159,7 +158,6 @@ static int rte_init(int argc, char **argv)
         error = "prte_propagate_base_open";
         goto error;
     }
-#endif
 
     /* Since we are the HNP, then responsibility for
      * defining the name falls to the PLM component for our
@@ -303,13 +301,11 @@ static int rte_init(int argc, char **argv)
         error = "prte_errmgr_base_select";
         goto error;
     }
-#if PRTE_ENABLE_FT
     /* setup the propagate */
     if (PRTE_SUCCESS != (ret = prte_propagate_base_select())) {
         error = "prte_propagate_base_select";
         goto error;
     }
-#endif
     /* get the job data object for the daemons */
     jdata = PRTE_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
@@ -581,9 +577,10 @@ static int rte_finalize(void)
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
     prte_errmgr.finalize();
-#if PRTE_ENABLE_FT
+    if (NULL != prte_propagate.finalize) {
+         prte_propagate.finalize();
+     }
     (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
-#endif
 
     /* remove my contact info file, if we have session directories */
     if (NULL != prte_process_info.jobfam_session_dir) {

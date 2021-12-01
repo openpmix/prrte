@@ -105,7 +105,7 @@ static int errmgr_detector_close(void)
 static int errmgr_detector_component_query(prte_mca_base_module_t **module, int *priority)
 {
     /* used by DVM masters */
-    if (prte_enable_ft && PRTE_PROC_IS_DAEMON) {
+    if (prte_enable_ft_detector && PRTE_PROC_IS_DAEMON) {
         *priority = my_priority;
         *module = (prte_mca_base_module_t *) &prte_errmgr_detector_module;
         return PRTE_SUCCESS;

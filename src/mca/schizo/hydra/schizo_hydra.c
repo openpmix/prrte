@@ -343,7 +343,6 @@ static prte_cmd_line_init_t hydra_cmd_line_init[] = {
     {'\0', "display-allocation", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Display the allocation being used by this job", PRTE_CMD_LINE_OTYPE_DEBUG},
 
-#if PRTE_ENABLE_FT
     {'\0', "enable-recovery", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Enable recovery from process failure [Default = disabled]", PRTE_CMD_LINE_OTYPE_FT},
     {'\0', "max-restarts", 1, PRTE_CMD_LINE_TYPE_INT,
@@ -355,7 +354,6 @@ static prte_cmd_line_init_t hydra_cmd_line_init[] = {
     {'\0', "with-ft", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Specify the type(s) of error handling that the application will use.",
      PRTE_CMD_LINE_OTYPE_LAUNCH},
-#endif
 
     /* mpiexec mandated form launch key parameters */
     {'\0', "initial-errhandler", 1, PRTE_CMD_LINE_TYPE_STRING,

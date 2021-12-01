@@ -616,7 +616,7 @@ extern char *prte_if_include;
 extern char *prte_if_exclude;
 
 /* Enable/disable ft */
-PRTE_EXPORT extern bool prte_enable_ft;
+PRTE_EXPORT extern bool prte_enable_ft_detector;
 
 END_C_DECLS
 

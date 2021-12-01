@@ -88,7 +88,7 @@ prte_errmgr_base_module_t prte_errmgr_dvm_module = {
 static void job_errors(int fd, short args, void *cbdata);
 static void proc_errors(int fd, short args, void *cbdata);
 
-#if PRTE_ENABLE_FT
+/* propagate error handler callbacks */
 static int pack_state_for_proc(pmix_data_buffer_t *alert, prte_proc_t *child)
 {
     int rc;
@@ -222,7 +222,6 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
         cbfunc(PRTE_SUCCESS, NULL, 0, NULL, NULL, cbdata);
     }
 }
-#endif
 
 static int init(void)
 {
@@ -234,8 +233,7 @@ static int init(void)
      */
     prte_state.add_proc_state(PRTE_PROC_STATE_COMM_FAILED, proc_errors, PRTE_MSG_PRI);
 
-#if PRTE_ENABLE_FT
-    if (prte_enable_ft) {
+    if (prte_enable_ft_detector) {
         /* setup state machine to trap proc errors */
         pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
 
@@ -244,7 +242,6 @@ static int init(void)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PMIx_Register_event_handler(&pcode, 1, NULL, 0, error_notify_cbfunc, register_cbfunc, NULL);
     }
-#endif
 
     prte_state.add_proc_state(PRTE_PROC_STATE_ERROR, proc_errors, PRTE_ERROR_PRI);
 
@@ -585,7 +582,7 @@ keep_going:
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
             /* do not kill the job if ft prte is enabled */
-            if (!prte_enable_ft) {
+            if (!prte_enable_ft_detector) {
                 _terminate_job(jdata->nspace);
             }
         }
@@ -736,7 +733,7 @@ keep_going:
         if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, proc->nspace)) {
             /* do not kill the job if ft prte is enabled, with newly spawned process the jobid could
              * be different */
-            if (!prte_enable_ft) {
+            if (!prte_enable_ft_detector) {
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             }
             break;

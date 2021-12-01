@@ -727,7 +727,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
 
             /* if ft prte is enabled, a PMIx event has already been produced
              * and this is redundant. */
-            if (!prte_enable_ft) {
+            if (!prte_enable_ft_detector) {
                 _send_notification(PRTE_ERR_PROC_ABORTED, pdata->state, &pdata->name, &parent);
             }
         }
