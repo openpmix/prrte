@@ -3,7 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010-2017 Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2004-2011 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2011      Oracle and/or all its affiliates.  All rights reserved.
@@ -564,7 +564,9 @@ keep_going:
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
             /* kill the job */
-            _terminate_job(jdata->nspace);
+            if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RECOVERABLE)) {
+                _terminate_job(jdata->nspace);
+            }
         }
         break;
 
@@ -581,8 +583,8 @@ keep_going:
             PRTE_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
-            /* do not kill the job if ft prte is enabled */
-            if (!prte_enable_ft_detector) {
+            /* do not kill the job if it is recoverable */
+            if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RECOVERABLE)) {
                 _terminate_job(jdata->nspace);
             }
         }
@@ -610,7 +612,9 @@ keep_going:
                 jdata->exit_code = PRTE_ERROR_DEFAULT_EXIT_CODE;
             }
             /* kill the job */
-            _terminate_job(jdata->nspace);
+            if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RECOVERABLE) && !prte_allowed_exit_without_sync) {
+                _terminate_job(jdata->nspace);
+            }
         }
         break;
 
@@ -731,13 +735,13 @@ keep_going:
          * hosed - so just exit out
          */
         if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, proc->nspace)) {
-            /* do not kill the job if ft prte is enabled, with newly spawned process the jobid could
-             * be different */
-            if (!prte_enable_ft_detector) {
+            /* do not kill the job if it is recoverable */
+            if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RECOVERABLE)) {
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             }
-            break;
         }
+        /* remove from dependent routes, if it is one */
+        prte_routed.route_lost(proc);
         break;
 
     default:
