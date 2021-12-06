@@ -147,15 +147,12 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
         AC_MSG_RESULT([yes])
         if test ! -z "$prte_libevent_CPPFLAGS"; then
             PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_libevent_CPPFLAGS)
-            PRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prte_libevent_CPPFLAGS)
         fi
         if test ! -z "$prte_libevent_LDFLAGS"; then
             PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_libevent_LDFLAGS)
-            PRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prte_libevent_LDFLAGS)
         fi
         if test ! -z "$prte_libevent_LIBS"; then
             PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_libevent_LIBS)
-            PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_libevent_LIBS)
         fi
         # Set output variables
         AC_DEFINE_UNQUOTED([PRTE_EVENT_HEADER], [$PRTE_EVENT_HEADER],

@@ -118,15 +118,12 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
 
     if test ! -z "$prte_hwloc_CPPFLAGS"; then
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_hwloc_CPPFLAGS)
-        PRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prte_hwloc_CPPFLAGS)
     fi
     if test ! -z "$prte_hwloc_LDFLAGS"; then
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_hwloc_LDFLAGS)
-        PRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prte_hwloc_LDFLAGS)
     fi
     if test ! -z "$prte_hwloc_LIBS"; then
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_hwloc_LIBS)
-        PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_hwloc_LIBS)
     fi
 
     AC_DEFINE_UNQUOTED([PRTE_HAVE_HWLOC_TOPOLOGY_DUP], [$prte_have_topology_dup],

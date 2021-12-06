@@ -21,35 +21,12 @@
 # $HEADER$
 #
 
+if PRTE_HAVE_PMIXCC
 
-AM_LDFLAGS = $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
-AM_CFLAGS = \
-            -DPRTE_CONFIGURE_USER="\"@PRTE_CONFIGURE_USER@\"" \
-            -DPRTE_CONFIGURE_HOST="\"@PRTE_CONFIGURE_HOST@\"" \
-            -DPRTE_CONFIGURE_DATE="\"@PRTE_CONFIGURE_DATE@\"" \
-            -DPRTE_BUILD_USER="\"$$USER\"" \
-            -DPRTE_BUILD_HOST="\"$${HOSTNAME:-`(hostname || uname -n) | sed 1q`}\"" \
-            -DPRTE_BUILD_DATE="\"`$(top_srcdir)/config/getdate.sh`\"" \
-            -DPRTE_BUILD_CFLAGS="\"@CFLAGS@\"" \
-            -DPRTE_BUILD_CPPFLAGS="\"@CPPFLAGS@\"" \
-            -DPRTE_BUILD_LDFLAGS="\"@LDFLAGS@\"" \
-            -DPRTE_BUILD_LIBS="\"@LIBS@\"" \
-            -DPRTE_CC_ABSOLUTE="\"@PRTE_CC_ABSOLUTE@\"" \
-            -DPRTE_GREEK_VERSION="\"@PRTE_GREEK_VERSION@\"" \
-            -DPRTE_REPO_REV="\"@PRTE_REPO_REV@\"" \
-            -DPRTE_RELEASE_DATE="\"@PRTE_RELEASE_DATE@\""
+install-exec-hook:
+	(cd $(DESTDIR)$(bindir); rm -f pcc; $(LN_S) $(PMIXCC_PATH)$(EXEEXT) pcc)
 
-bin_PROGRAMS = pcc
+uninstall-local:
+	rm -f $(DESTDIR)$(bindir)/pcc$(EXEEXT)
 
-nodist_prtedata_DATA = pcc-wrapper-data.txt
-
-dist_prtedata_DATA = help-pcc.txt
-
-pcc_SOURCES = \
-        pcc.c
-
-pcc_LDADD = \
-    $(prte_libevent_LIBS) \
-    $(prte_hwloc_LIBS) \
-    $(prte_pmix_LIBS) \
-	$(top_builddir)/src/libprrte.la
+endif

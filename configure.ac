@@ -293,7 +293,6 @@ fi
 
 AC_ENABLE_SHARED([])
 AC_DISABLE_STATIC([])
-PRTE_SETUP_WRAPPER_INIT
 
 ##################################
 # Check for known incompatibility
@@ -916,10 +915,6 @@ CFLAGS="$CFLAGS $THREAD_CFLAGS"
 LDFLAGS="$LDFLAGS $THREAD_LDFLAGS"
 LIBS="$LIBS $THREAD_LIBS"
 
-PRTE_WRAPPER_FLAGS_ADD([CFLAGS], [$THREAD_CFLAGS])
-PRTE_WRAPPER_FLAGS_ADD([LDFLAGS], [$THREAD_LDFLAGS])
-
-# no need to update WRAPPER_EXTRA_LIBS - we'll get it from LT later
 #
 # What is the local equivalent of "ln -s"
 #
@@ -1243,13 +1238,6 @@ AC_MSG_RESULT([$LIBS])
 # Aggregate MCA parameters directory
 #
 AC_SUBST([AMCA_PARAM_SETS_DIR], ['$(prtedatadir)/amca-param-sets'])
-
-############################################################################
-# final wrapper compiler config
-############################################################################
-prte_show_subtitle "Wrapper compiler final setup"
-
-PRTE_SETUP_WRAPPER_FINAL
 
 # If there is a local hook, call it.
 m4_ifdef([prte_CONFIG_LOCAL], [prte_CONFIG_LOCAL])

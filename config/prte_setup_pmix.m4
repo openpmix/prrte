@@ -39,7 +39,7 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
     AC_ARG_ENABLE([pmix-devel-support],
                   [AS_HELP_STRING([--enable-pmix-devel-support],
-                                  [Add necessary wrapper flags to enable access to PMIx devel headers])])
+                                  [Add necessary flags to enable access to PMIx devel headers])])
 
     prte_pmix_support=0
 
@@ -146,15 +146,12 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
     if test ! -z "$prte_pmix_CPPFLAGS"; then
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_pmix_CPPFLAGS)
-        PRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prte_pmix_CPPFLAGS)
     fi
     if test ! -z "$prte_pmix_LDFLAGS"; then
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_pmix_LDFLAGS)
-        PRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prte_pmix_LDFLAGS)
     fi
     if test ! -z "$prte_pmix_LIBS"; then
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_pmix_LIBS)
-        PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_pmix_LIBS)
     fi
 
     if test -z "$pmix_ext_install_dir"; then
@@ -162,6 +159,32 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     else
         prte_pmix_source=$pmix_ext_install_dir
     fi
+
+    PMIXCC_PATH=""
+    if test -z "$pmix_ext_install_dir"; then
+        PRTE_WHICH([pmixcc], [PMIXCC_PATH])
+        AS_IF([test -z "$PMIXCC_PATH"],
+                [AC_MSG_WARN([Could not find pmixcc in PATH])
+                 prte_pmixcc_happy=no],
+                [prte_pmixcc_happy=yes])
+    else
+        PMIXCC_PATH=$pmix_ext_install_dir/bin
+        if test -d $PMIXCC_PATH; then
+            PMIXCC_PATH=$PMIXCC_PATH/pmixcc
+            if test -e $PMIXCC_PATH; then
+                prte_pmixcc_happy=yes
+
+            else
+                AC_MSG_WARN([Could not find usable $PMIXCC_PATH])
+                prte_pmixcc_happy=no
+            fi
+        else
+            AC_MSG_WARN([Could not find $PMIXCC_PATH])
+            prte_pmixcc_happy=no
+        fi
+    fi
+    AM_CONDITIONAL(PRTE_HAVE_PMIXCC, test "$prte_pmixcc_happy" = "yes")
+    AC_SUBST(PMIXCC_PATH)
 
     PRTE_SUMMARY_ADD([[Required Packages]],[[PMIx]],[pmix],[yes ($prte_pmix_source)])
 
