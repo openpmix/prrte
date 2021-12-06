@@ -168,11 +168,6 @@ AC_DEFUN([PRTE_SETUP_CC],[
 
     PRTE_VAR_SCOPE_PUSH([prte_prog_cc_c11_helper__Thread_local_available prte_prog_cc_c11_helper_atomic_var_available prte_prog_cc_c11_helper__Atomic_available prte_prog_cc_c11_helper__static_assert_available prte_prog_cc_c11_helper__Generic_available prte_prog_cc__thread_available prte_prog_cc_c11_helper_atomic_fetch_xor_explicit_available prte_prog_cc_c11_atomic_function])
 
-    # AC_PROG_CC_C99 changes CC (instead of CFLAGS) so save CC (without c99
-    # flags) for use in our wrappers.
-    WRAPPER_CC="$CC"
-    AC_SUBST([WRAPPER_CC])
-
     PRTE_PROG_CC_C11
     PRTE_CHECK_CC_IQUOTE
 

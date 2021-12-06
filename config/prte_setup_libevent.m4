@@ -143,6 +143,7 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
     AC_MSG_CHECKING([will libevent support be built])
     if test $prte_libevent_support -eq 1; then
         AC_MSG_RESULT([yes])
+<<<<<<< HEAD
         AS_IF([test "$prte_event_defaults" = "no"],
               [PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_libevent_CPPFLAGS)
                PRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prte_libevent_CPPFLAGS)
@@ -152,6 +153,30 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
         PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_libevent_LIBS)
         PRTE_EVENT_HEADER="<event.h>"
         PRTE_EVENT2_THREAD_HEADER="<event2/thread.h>"
+||||||| parent of cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
+        if test ! -z "$prte_libevent_CPPFLAGS"; then
+            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_libevent_CPPFLAGS)
+            PRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prte_libevent_CPPFLAGS)
+        fi
+        if test ! -z "$prte_libevent_LDFLAGS"; then
+            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_libevent_LDFLAGS)
+            PRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prte_libevent_LDFLAGS)
+        fi
+        if test ! -z "$prte_libevent_LIBS"; then
+            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_libevent_LIBS)
+            PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_libevent_LIBS)
+        fi
+=======
+        if test ! -z "$prte_libevent_CPPFLAGS"; then
+            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_libevent_CPPFLAGS)
+        fi
+        if test ! -z "$prte_libevent_LDFLAGS"; then
+            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_libevent_LDFLAGS)
+        fi
+        if test ! -z "$prte_libevent_LIBS"; then
+            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_libevent_LIBS)
+        fi
+>>>>>>> cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
         # Set output variables
         AC_DEFINE_UNQUOTED([PRTE_EVENT_HEADER], [$PRTE_EVENT_HEADER],
                            [Location of event.h])

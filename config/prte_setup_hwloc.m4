@@ -145,6 +145,7 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
     LDFLAGS=$prte_check_hwloc_save_LDFLAGS
     LIBS=$prte_check_hwloc_save_LIBS
 
+<<<<<<< HEAD
     if test "$prte_hwloc_support" == "1"; then
         AS_IF([test "$prte_hwloc_header_given" != "1"],
               [PRTE_HWLOC_HEADER="<hwloc.h>"])
@@ -155,7 +156,27 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
         AS_IF([test "$prte_hwloc_standard_lib_location" != "yes"],
               [PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_hwloc_LDFLAGS)
                PRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prte_hwloc_LDFLAGS)])
+||||||| parent of cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
+    if test ! -z "$prte_hwloc_CPPFLAGS"; then
+        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_hwloc_CPPFLAGS)
+        PRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prte_hwloc_CPPFLAGS)
+    fi
+    if test ! -z "$prte_hwloc_LDFLAGS"; then
+        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_hwloc_LDFLAGS)
+        PRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prte_hwloc_LDFLAGS)
+    fi
+    if test ! -z "$prte_hwloc_LIBS"; then
+=======
+    if test ! -z "$prte_hwloc_CPPFLAGS"; then
+        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_hwloc_CPPFLAGS)
+    fi
+    if test ! -z "$prte_hwloc_LDFLAGS"; then
+        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_hwloc_LDFLAGS)
+    fi
+    if test ! -z "$prte_hwloc_LIBS"; then
+>>>>>>> cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_hwloc_LIBS)
+<<<<<<< HEAD
         PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_hwloc_LIBS)
         PRTE_HWLOC_HEADER="<hwloc.h>"
     else
@@ -164,6 +185,10 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
         AC_MSG_WARN([Please reconfigure and point to a location where])
         AC_MSG_WARN([the HWLOC library can be found.])
         AC_MSG_ERROR([Cannot continue.])
+||||||| parent of cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
+        PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_hwloc_LIBS)
+=======
+>>>>>>> cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
     fi
 
     AC_MSG_CHECKING([hwloc header])

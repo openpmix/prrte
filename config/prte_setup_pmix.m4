@@ -43,7 +43,7 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
     AC_ARG_ENABLE([pmix-devel-support],
                   [AS_HELP_STRING([--enable-pmix-devel-support],
-                                  [Add necessary wrapper flags to enable access to PMIx devel headers])])
+                                  [Add necessary flags to enable access to PMIx devel headers])])
 
     if test "x$with_pmix_header" != "x"; then
         AS_IF([test "$with_pmix_header" = "yes"],
@@ -170,23 +170,72 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                prte_pmix_LDFLAGS="-L$pmix_ext_install_libdir"])
 
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_pmix_CPPFLAGS)
+<<<<<<< HEAD
         PRTE_WRAPPER_FLAGS_ADD([CPPFLAGS], [$prte_pmix_CPPFLAGS])
 
         AS_IF([test "$enable_pmix_devel_support" = "yes"],
               [PRTE_WRAPPER_FLAGS_ADD([CPPFLAGS], [-I$pmix_ext_install_dir/include/pmix -I$pmix_ext_install_dir/include/pmix/src -I$pmix_ext_install_dir/include/pmix/src/include])])
 
+||||||| parent of cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
+        PRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prte_pmix_CPPFLAGS)
+    fi
+    if test ! -z "$prte_pmix_LDFLAGS"; then
+=======
+    fi
+    if test ! -z "$prte_pmix_LDFLAGS"; then
+>>>>>>> cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_pmix_LDFLAGS)
+<<<<<<< HEAD
         PRTE_WRAPPER_FLAGS_ADD([LDFLAGS], [$prte_pmix_LDFLAGS])
 
         prte_pmix_LIBS=-lpmix
+||||||| parent of cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
+        PRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prte_pmix_LDFLAGS)
+    fi
+    if test ! -z "$prte_pmix_LIBS"; then
+=======
+    fi
+    if test ! -z "$prte_pmix_LIBS"; then
+>>>>>>> cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_pmix_LIBS)
-        PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_pmix_LIBS)
     fi
 
     AC_DEFINE_UNQUOTED([PRTE_PMIX_HEADER], [$PRTE_PMIX_HEADER], [PMIx header to use])
     AC_DEFINE_UNQUOTED([PRTE_PMIX_HEADER_GIVEN], [$prte_pmix_header_given], [Whether or not the PMIx header was explicitly passed])
 
+<<<<<<< HEAD
     PRTE_SUMMARY_ADD([[Required Packages]],[[PMIx]],[pmix],[yes ($pmix_ext_install_dir)])
+||||||| parent of cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
+    PRTE_SUMMARY_ADD([[Required Packages]],[[PMIx]],[pmix],[yes ($prte_pmix_source)])
+=======
+    PMIXCC_PATH=""
+    if test -z "$pmix_ext_install_dir"; then
+        PRTE_WHICH([pmixcc], [PMIXCC_PATH])
+        AS_IF([test -z "$PMIXCC_PATH"],
+                [AC_MSG_WARN([Could not find pmixcc in PATH])
+                 prte_pmixcc_happy=no],
+                [prte_pmixcc_happy=yes])
+    else
+        PMIXCC_PATH=$pmix_ext_install_dir/bin
+        if test -d $PMIXCC_PATH; then
+            PMIXCC_PATH=$PMIXCC_PATH/pmixcc
+            if test -e $PMIXCC_PATH; then
+                prte_pmixcc_happy=yes
+
+            else
+                AC_MSG_WARN([Could not find usable $PMIXCC_PATH])
+                prte_pmixcc_happy=no
+            fi
+        else
+            AC_MSG_WARN([Could not find $PMIXCC_PATH])
+            prte_pmixcc_happy=no
+        fi
+    fi
+    AM_CONDITIONAL(PRTE_HAVE_PMIXCC, test "$prte_pmixcc_happy" = "yes")
+    AC_SUBST(PMIXCC_PATH)
+
+    PRTE_SUMMARY_ADD([[Required Packages]],[[PMIx]],[pmix],[yes ($prte_pmix_source)])
+>>>>>>> cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
 
     PRTE_VAR_SCOPE_POP
 ])
