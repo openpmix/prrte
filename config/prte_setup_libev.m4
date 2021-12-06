@@ -95,11 +95,8 @@ AC_DEFUN([PRTE_LIBEV_CONFIG],[
         AC_MSG_RESULT([yes])
         AS_IF([test "$prte_event_defaults" = "no"],
               [PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_libev_CPPFLAGS)
-               PRTE_WRAPPER_FLAGS_ADD(CPPFLAGS, $prte_libev_CPPFLAGS)
-               PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_libev_LDFLAGS)
-               PRTE_WRAPPER_FLAGS_ADD(LDFLAGS, $prte_libev_LDFLAGS)])
+               PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_libev_LDFLAGS)])
         PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_libev_LIBS)
-        PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_libev_LIBS)
         PRTE_EVENT_HEADER="<event.h>"
         # Set output variables
         AC_DEFINE_UNQUOTED([PRTE_EVENT_HEADER], [$PRTE_EVENT_HEADER],

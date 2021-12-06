@@ -165,8 +165,6 @@ AC_DEFUN([PRTE_CHECK_TM],[
 	   $1_LDFLAGS="[$]$1_LDFLAGS $prte_check_tm_LDFLAGS"
 	   $1_CPPFLAGS="[$]$1_CPPFLAGS $prte_check_tm_CPPFLAGS"
 	   # add the TM libraries to static builds as they are required
-	   $1_WRAPPER_EXTRA_LDFLAGS=[$]$1_LDFLAGS
-	   $1_WRAPPER_EXTRA_LIBS=[$]$1_LIBS
 	   $2],
           [AS_IF([test ! -z "$with_tm" && test "$with_tm" != "no"],
                  [AC_MSG_ERROR([TM support requested but not found.  Aborting])])
