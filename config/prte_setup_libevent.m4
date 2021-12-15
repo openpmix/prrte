@@ -39,12 +39,21 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
     AC_ARG_WITH([libevent-libdir],
                 [AS_HELP_STRING([--with-libevent-libdir=DIR],
                                 [Search for libevent libraries in DIR ])])
+    AC_ARG_WITH([libevent-extra-libs],
+                [AS_HELP_STRING([--with-libevent-extra-libs=LIBS],
+                                [Add LIBS as dependencies of Libevent])])
+    AC_ARG_ENABLE([libevent-lib-checks],
+                   [AS_HELP_STRING([--disable-libevent-lib-checks],
+                                   [If --disable-libevent-lib-checks is specified, configure will assume that -levent is available])])
 
     prte_libevent_support=1
 
     AS_IF([test "$with_libevent" = "no"],
           [AC_MSG_NOTICE([Libevent support disabled by user.])
            prte_libevent_support=0])
+
+    AS_IF([test "$with_libevent_extra_libs" = "yes" -o "$with_libevent_extra_libs" = "no"],
+	  [AC_MSG_ERROR([--with-libevent-extra-libs requires an argument other than yes or no])])
 
     AS_IF([test $prte_libevent_support -eq 1],
           [PRTE_CHECK_WITHDIR([libevent], [$with_libevent], [include/event.h])
@@ -76,16 +85,18 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
                         ],
                         [prte_event_libdir=""])])
 
-           PRTE_CHECK_PACKAGE([prte_libevent],
-                              [event.h],
-                              [event_core],
-                              [event_config_new],
-                              [-levent_pthreads],
-                              [$prte_event_dir],
-                              [$prte_event_libdir],
-                              [],
-                              [prte_libevent_support=0],
-                              [])])
+           AS_IF([test "$enable_libevent_lib_checks" != "no"],
+                 [PRTE_CHECK_PACKAGE([prte_libevent],
+                                     [event.h],
+                                     [event_core],
+                                     [event_config_new],
+                                     [-levent_pthreads $with_libevent_extra_libs],
+                                     [$prte_event_dir],
+                                     [$prte_event_libdir],
+                                     [],
+                                     [prte_libevent_support=0],
+                                     [])],
+                 [PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$with_libevent_extra_libs])])])
 
     # Check to see if the above check failed because it conflicted with LSF's libevent.so
     # This can happen if LSF's library is in the LDFLAGS envar or default search

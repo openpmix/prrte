@@ -21,12 +21,17 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
     AC_ARG_WITH([hwloc],
                 [AS_HELP_STRING([--with-hwloc=DIR],
                                 [Search for hwloc headers and libraries in DIR ])])
-
     AC_ARG_WITH([hwloc-libdir],
                 [AS_HELP_STRING([--with-hwloc-libdir=DIR],
                                 [Search for hwloc libraries in DIR ])])
+    AC_ARG_WITH([hwloc-extra-libs],
+                [AS_HELP_STRING([--with-hwloc-extra-libs=LIBS],
+                                [Add LIBS as dependencies of hwloc])])
+    AC_ARG_ENABLE([hwloc-lib-checks],
+                  [AS_HELP_STRING([--disable-hwloc-lib-checks],
+                                  [If --disable-hwloc-lib-checks is specified, configure will assume that -lhwloc is available])])
 
-    prte_hwloc_support=0
+    prte_hwloc_support=1
     prte_check_hwloc_save_CPPFLAGS="$CPPFLAGS"
     prte_check_hwloc_save_LDFLAGS="$LDFLAGS"
     prte_check_hwloc_save_LIBS="$LIBS"
@@ -37,6 +42,9 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
         AC_MSG_WARN([Please reconfigure so we can find the library.])
         AC_MSG_ERROR([Cannot continue.])
     fi
+
+    AS_IF([test "$with_hwloc_extra_libs" = "yes" -o "$with_hwloc_extra_libs" = "no"],
+	  [AC_MSG_ERROR([--with-hwloc-extra-libs requires an argument other than yes or no])])
 
     # get rid of any trailing slash(es)
     hwloc_prefix=$(echo $with_hwloc | sed -e 'sX/*$XXg')
@@ -60,16 +68,18 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
                         ],
                         [prte_hwloc_libdir=""])])
 
-    PRTE_CHECK_PACKAGE([prte_hwloc],
-                       [hwloc.h],
-                       [hwloc],
-                       [hwloc_topology_init],
-                       [],
-                       [$prte_hwloc_dir],
-                       [$prte_hwloc_libdir],
-                       [prte_hwloc_support=1],
-                       [prte_hwloc_support=0],
-                       [])
+    AS_IF([test "$enable_hwloc_lib_checks" != "no"],
+          [PRTE_CHECK_PACKAGE([prte_hwloc],
+                              [hwloc.h],
+                              [hwloc],
+                              [hwloc_topology_init],
+                              [$with_hwloc_extra_libs],
+                              [$prte_hwloc_dir],
+                              [$prte_hwloc_libdir],
+                              [],
+                              [prte_hwloc_support=0],
+                              [])],
+          [PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$with_hwloc_extra_libs])])
 
     if test $prte_hwloc_support -eq 0; then
         AC_MSG_WARN([PRRTE requires HWLOC topology library support, but])

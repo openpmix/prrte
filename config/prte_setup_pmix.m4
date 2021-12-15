@@ -18,6 +18,8 @@
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
 # Copyright (c) 2021      Nanook Consulting  All rights reserved.
+# Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -32,22 +34,29 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     AC_ARG_WITH([pmix],
                 [AS_HELP_STRING([--with-pmix(=DIR)],
                                 [Where to find PMIx support, optionally adding DIR to the search path])])
-
     AC_ARG_WITH([pmix-libdir],
                 [AS_HELP_STRING([--with-pmix-libdir=DIR],
                                 [Look for libpmix in the given directory DIR, DIR/lib or DIR/lib64])])
-
     AC_ARG_ENABLE([pmix-devel-support],
                   [AS_HELP_STRING([--enable-pmix-devel-support],
                                   [Add necessary flags to enable access to PMIx devel headers])])
+    AC_ARG_WITH([pmix-extra-libs],
+                [AS_HELP_STRING([--with-pmix-extra-libs=LIBS],
+                                [Add LIBS as dependencies of pmix])])
+    AC_ARG_ENABLE([pmix-lib-checks],
+                  [AS_HELP_STRING([--disable-pmix-lib-checks],
+                                  [If --disable-pmix-lib-checks is specified, configure will assume that -lpmix is available])])
 
-    prte_pmix_support=0
+    prte_pmix_support=1
 
     if test "$with_pmix" = "no"; then
         AC_MSG_WARN([PRTE requires PMIx support using])
         AC_MSG_WARN([an external copy that you supply.])
         AC_MSG_ERROR([Cannot continue])
     fi
+
+    AS_IF([test "$with_hwloc_extra_libs" = "yes" -o "$with_hwloc_extra_libs" = "no"],
+	  [AC_MSG_ERROR([--with-hwloc-extra-libs requires an argument other than yes or no])])
 
     # get rid of any trailing slash(es)
     pmix_prefix=$(echo $with_pmix | sed -e 'sX/*$XXg')
@@ -72,23 +81,25 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                         ],
                         [pmix_ext_install_libdir=""])])
 
-    PRTE_CHECK_PACKAGE([prte_pmix],
-                       [pmix.h],
-                       [pmix],
-                       [PMIx_Init],
-                       [],
-                       [$pmix_ext_install_dir],
-                       [$pmix_ext_install_libdir],
-                       [],
-                       [],
-                       [AC_MSG_WARN([PRTE requires PMIx support using])
-                        AC_MSG_WARN([an external copy that you supply.])
-                        if test -z "$pmix_ext_install_libdir"; then
-                            AC_MSG_WARN([The library was not found in standard locations.])
-                        else
-                            AC_MSG_WARN([The library was not found in $pmix_ext_install_libdir.])
-                        fi
-                        AC_MSG_ERROR([Cannot continue])])
+echo "--> $pmix_ext_install_dir"
+echo "--> $pmix_ext_install_libdir"
+
+    AS_IF([test "$enable_pmix_lib_checks" != "no"],
+          [PRTE_CHECK_PACKAGE([prte_pmix],
+                              [pmix.h],
+                              [pmix],
+                              [PMIx_Init],
+                              [$with_pmix_extra_libs],
+                              [$pmix_ext_install_dir],
+                              [$pmix_ext_install_libdir],
+                              [],
+                              [prte_pmix_support=0],
+                              [])],
+          [PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$with_pmix_extra_libs])])
+
+    AS_IF([test $prte_pmix_support -eq 0],
+          [AC_MSG_WARN([PRRTE requires PMIx support using an external copy that you supply.])
+           AC_MSG_ERROR([Cannot continue.])])
 
     prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
     prte_external_pmix_save_LDFLAGS=$LDFLAGS
