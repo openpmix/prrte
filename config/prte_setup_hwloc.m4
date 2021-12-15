@@ -4,6 +4,8 @@
 # Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
 # Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -51,6 +53,7 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
         AC_MSG_WARN([Please reconfigure so we can find the library.])
         AC_MSG_ERROR([Cannot continue.])
 
+<<<<<<< HEAD
     else
         AC_MSG_CHECKING([for hwloc in])
         if test ! -z "$with_hwloc" && test "$with_hwloc" != "yes"; then
@@ -138,13 +141,115 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
                    prte_have_topology_dup=1],
                   [AC_MSG_RESULT([no])])
         fi
+||||||| parent of 529ada6604 (Update libevent/hwloc handling to match PMIx)
+    # get rid of any trailing slash(es)
+    hwloc_prefix=$(echo $with_hwloc | sed -e 'sX/*$XXg')
+    hwlocdir_prefix=$(echo $with_hwloc_libdir | sed -e 'sX/*$XXg')
 
+    AS_IF([test ! -z "$hwloc_prefix" && test "$hwloc_prefix" != "yes"],
+                 [prte_hwloc_dir="$hwloc_prefix"],
+                 [prte_hwloc_dir=""])
+
+    AS_IF([test ! -z "$hwlocdir_prefix" && test "$hwlocdir_prefix" != "yes"],
+                 [prte_hwloc_libdir="$hwlocdir_prefix"],
+                 [AS_IF([test ! -z "$hwloc_prefix" && test "$hwloc_prefix" != "yes"],
+                        [if test -d $hwloc_prefix/lib64; then
+                            prte_hwloc_libdir=$hwloc_prefix/lib64
+                         elif test -d $hwloc_prefix/lib; then
+                            prte_hwloc_libdir=$hwloc_prefix/lib
+                         else
+                            AC_MSG_WARN([Could not find $hwloc_prefix/lib or $hwloc_prefix/lib64])
+                            AC_MSG_ERROR([Can not continue])
+                         fi
+                        ],
+                        [prte_hwloc_libdir=""])])
+
+    PRTE_CHECK_PACKAGE([prte_hwloc],
+                       [hwloc.h],
+                       [hwloc],
+                       [hwloc_topology_init],
+                       [],
+                       [$prte_hwloc_dir],
+                       [$prte_hwloc_libdir],
+                       [prte_hwloc_support=1],
+                       [prte_hwloc_support=0],
+                       [])
+
+    if test $prte_hwloc_support -eq 0; then
+        AC_MSG_WARN([PMIx requires HWLOC topology library support, but])
+        AC_MSG_WARN([an adequate version of that library was not found.])
+        AC_MSG_WARN([Please reconfigure and point to a location where])
+        AC_MSG_WARN([the HWLOC library can be found.])
+        AC_MSG_ERROR([Cannot continue.])
     fi
+=======
+    # get rid of any trailing slash(es)
+    hwloc_prefix=$(echo $with_hwloc | sed -e 'sX/*$XXg')
+    hwlocdir_prefix=$(echo $with_hwloc_libdir | sed -e 'sX/*$XXg')
+
+    AS_IF([test ! -z "$hwloc_prefix" && test "$hwloc_prefix" != "yes"],
+                 [prte_hwloc_dir="$hwloc_prefix"],
+                 [prte_hwloc_dir=""])
+
+    AS_IF([test ! -z "$hwlocdir_prefix" && test "$hwlocdir_prefix" != "yes"],
+                 [prte_hwloc_libdir="$hwlocdir_prefix"],
+                 [AS_IF([test ! -z "$hwloc_prefix" && test "$hwloc_prefix" != "yes"],
+                        [if test -d $hwloc_prefix/lib64; then
+                            prte_hwloc_libdir=$hwloc_prefix/lib64
+                         elif test -d $hwloc_prefix/lib; then
+                            prte_hwloc_libdir=$hwloc_prefix/lib
+                         else
+                            AC_MSG_WARN([Could not find $hwloc_prefix/lib or $hwloc_prefix/lib64])
+                            AC_MSG_ERROR([Can not continue])
+                         fi
+                        ],
+                        [prte_hwloc_libdir=""])])
+
+    PRTE_CHECK_PACKAGE([prte_hwloc],
+                       [hwloc.h],
+                       [hwloc],
+                       [hwloc_topology_init],
+                       [],
+                       [$prte_hwloc_dir],
+                       [$prte_hwloc_libdir],
+                       [prte_hwloc_support=1],
+                       [prte_hwloc_support=0],
+                       [])
+
+    if test $prte_hwloc_support -eq 0; then
+        AC_MSG_WARN([PRRTE requires HWLOC topology library support, but])
+        AC_MSG_WARN([an adequate version of that library was not found.])
+        AC_MSG_WARN([Please reconfigure and point to a location where])
+        AC_MSG_WARN([the HWLOC library can be found.])
+        AC_MSG_ERROR([Cannot continue.])
+    fi
+>>>>>>> 529ada6604 (Update libevent/hwloc handling to match PMIx)
+
+<<<<<<< HEAD
+    fi
+||||||| parent of 529ada6604 (Update libevent/hwloc handling to match PMIx)
+   # update global flags to test for HWLOC version
+    if test ! -z "$prte_hwloc_CPPFLAGS"; then
+        PRTE_FLAGS_PREPEND_UNIQ(CPPFLAGS, $prte_hwloc_CPPFLAGS)
+    fi
+    if test ! -z "$prte_hwloc_LDFLAGS"; then
+        PRTE_FLAGS_PREPEND_UNIQ(LDFLAGS, $prte_hwloc_LDFLAGS)
+    fi
+    if test ! -z "$prte_hwloc_LIBS"; then
+        PRTE_FLAGS_PREPEND_UNIQ(LIBS, $prte_hwloc_LIBS)
+    fi
+=======
+    # update global flags to test for HWLOC version
+    PRTE_FLAGS_PREPEND_UNIQ([CPPFLAGS], [$prte_hwloc_CPPFLAGS])
+    PRTE_FLAGS_PREPEND_UNIQ([LDFLAGS], [$prte_hwloc_LDFLAGS])
+    PRTE_FLAGS_PREPEND_UNIQ([LIBS], [$prte_hwloc_LIBS])
+>>>>>>> 529ada6604 (Update libevent/hwloc handling to match PMIx)
 
     CPPFLAGS=$prte_check_hwloc_save_CPPFLAGS
     LDFLAGS=$prte_check_hwloc_save_LDFLAGS
     LIBS=$prte_check_hwloc_save_LIBS
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     if test "$prte_hwloc_support" == "1"; then
         AS_IF([test "$prte_hwloc_header_given" != "1"],
@@ -190,6 +295,21 @@ AC_DEFUN([PRTE_HWLOC_CONFIG],[
 =======
 >>>>>>> cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
     fi
+||||||| parent of 529ada6604 (Update libevent/hwloc handling to match PMIx)
+    if test ! -z "$prte_hwloc_CPPFLAGS"; then
+        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_hwloc_CPPFLAGS)
+    fi
+    if test ! -z "$prte_hwloc_LDFLAGS"; then
+        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_hwloc_LDFLAGS)
+    fi
+    if test ! -z "$prte_hwloc_LIBS"; then
+        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_hwloc_LIBS)
+    fi
+=======
+    PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_CPPFLAGS], [$prte_hwloc_CPPFLAGS])
+    PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LDFLAGS], [$prte_hwloc_LDFLAGS])
+    PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$prte_hwloc_LIBS])
+>>>>>>> 529ada6604 (Update libevent/hwloc handling to match PMIx)
 
     AC_MSG_CHECKING([hwloc header])
     AC_DEFINE_UNQUOTED([PRTE_HWLOC_HEADER], [$PRTE_HWLOC_HEADER],
