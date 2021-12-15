@@ -4,6 +4,8 @@
 # Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
 # Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -70,23 +72,17 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
                        [])
 
     if test $prte_hwloc_support -eq 0; then
-        AC_MSG_WARN([PMIx requires HWLOC topology library support, but])
+        AC_MSG_WARN([PRRTE requires HWLOC topology library support, but])
         AC_MSG_WARN([an adequate version of that library was not found.])
         AC_MSG_WARN([Please reconfigure and point to a location where])
         AC_MSG_WARN([the HWLOC library can be found.])
         AC_MSG_ERROR([Cannot continue.])
     fi
 
-   # update global flags to test for HWLOC version
-    if test ! -z "$prte_hwloc_CPPFLAGS"; then
-        PRTE_FLAGS_PREPEND_UNIQ(CPPFLAGS, $prte_hwloc_CPPFLAGS)
-    fi
-    if test ! -z "$prte_hwloc_LDFLAGS"; then
-        PRTE_FLAGS_PREPEND_UNIQ(LDFLAGS, $prte_hwloc_LDFLAGS)
-    fi
-    if test ! -z "$prte_hwloc_LIBS"; then
-        PRTE_FLAGS_PREPEND_UNIQ(LIBS, $prte_hwloc_LIBS)
-    fi
+    # update global flags to test for HWLOC version
+    PRTE_FLAGS_PREPEND_UNIQ([CPPFLAGS], [$prte_hwloc_CPPFLAGS])
+    PRTE_FLAGS_PREPEND_UNIQ([LDFLAGS], [$prte_hwloc_LDFLAGS])
+    PRTE_FLAGS_PREPEND_UNIQ([LIBS], [$prte_hwloc_LIBS])
 
     AC_MSG_CHECKING([if hwloc version is 1.5 or greater])
     AC_COMPILE_IFELSE(
@@ -116,15 +112,9 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
     LDFLAGS=$prte_check_hwloc_save_LDFLAGS
     LIBS=$prte_check_hwloc_save_LIBS
 
-    if test ! -z "$prte_hwloc_CPPFLAGS"; then
-        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_hwloc_CPPFLAGS)
-    fi
-    if test ! -z "$prte_hwloc_LDFLAGS"; then
-        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_hwloc_LDFLAGS)
-    fi
-    if test ! -z "$prte_hwloc_LIBS"; then
-        PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_hwloc_LIBS)
-    fi
+    PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_CPPFLAGS], [$prte_hwloc_CPPFLAGS])
+    PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LDFLAGS], [$prte_hwloc_LDFLAGS])
+    PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$prte_hwloc_LIBS])
 
     AC_DEFINE_UNQUOTED([PRTE_HAVE_HWLOC_TOPOLOGY_DUP], [$prte_have_topology_dup],
                        [Whether or not hwloc_topology_dup is available])
