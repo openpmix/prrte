@@ -7,6 +7,8 @@
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
 # Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -14,8 +16,20 @@
 # $HEADER$
 #
 
-# MCA_libevent_CONFIG([action-if-found], [action-if-not-found])
+# PRTE_LIBEVENT_CONFIG([action-if-found], [action-if-not-found])
 # --------------------------------------------------------------------
+# Attempt to find a libevent package.  If found, evaluate
+# action-if-found.  Otherwise, evaluate action-if-not-found.
+#
+# Modifies the following in the environment:
+#  * prte_libevent_CPPFLAGS
+#  * prte_libevent_LDFLAGS
+#  * prte_libevent_LIBS
+#
+# Adds the following to the wrapper compilers:
+#  * CPPFLAGS: none
+#  * LDLFGAS: add prte_libevent_LDFLAGS
+#  * LIBS: add prte_libevent_LIBS
 AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
     PRTE_VAR_SCOPE_PUSH([prte_event_dir prte_event_libdir prte_check_libevent_save_CPPFLAGS prte_check_libevent_save_LDFLAGS prte_check_libevent_save_LIBS])
 
@@ -25,22 +39,39 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
     AC_ARG_WITH([libevent-libdir],
                 [AS_HELP_STRING([--with-libevent-libdir=DIR],
                                 [Search for libevent libraries in DIR ])])
+    AC_ARG_WITH([libevent-extra-libs],
+                [AS_HELP_STRING([--with-libevent-extra-libs=LIBS],
+                                [Add LIBS as dependencies of Libevent])])
+    AC_ARG_ENABLE([libevent-lib-checks],
+                   [AS_HELP_STRING([--disable-libevent-lib-checks],
+                                   [If --disable-libevent-lib-checks is specified, configure will assume that -levent is available])])
 
-    prte_libevent_support=0
+    prte_libevent_support=1
 
-    prte_check_libevent_save_CPPFLAGS="$CPPFLAGS"
-    prte_check_libevent_save_LDFLAGS="$LDFLAGS"
-    prte_check_libevent_save_LIBS="$LIBS"
+    AS_IF([test "$with_libevent" = "no"],
+          [AC_MSG_NOTICE([Libevent support disabled by user.])
+           prte_libevent_support=0])
 
-    # get rid of any trailing slash(es)
-    libevent_prefix=$(echo $with_libevent | sed -e 'sX/*$XXg')
-    libeventdir_prefix=$(echo $with_libevent_libdir | sed -e 'sX/*$XXg')
+    AS_IF([test "$with_libevent_extra_libs" = "yes" -o "$with_libevent_extra_libs" = "no"],
+	  [AC_MSG_ERROR([--with-libevent-extra-libs requires an argument other than yes or no])])
 
-    AS_IF([test ! -z "$libevent_prefix" && test "$libevent_prefix" != "yes"],
-          [prte_event_dir="$libevent_prefix"],
-          [prte_event_dir=""])
+    AS_IF([test $prte_libevent_support -eq 1],
+          [PRTE_CHECK_WITHDIR([libevent], [$with_libevent], [include/event.h])
+           PRTE_CHECK_WITHDIR([libevent-libdir], [$with_libevent_libdir], [libevent.*])
 
-    AS_IF([test ! -z "$libeventdir_prefix" && test "$libeventdir_prefix" != "yes"],
+           prte_check_libevent_save_CPPFLAGS="$CPPFLAGS"
+           prte_check_libevent_save_LDFLAGS="$LDFLAGS"
+           prte_check_libevent_save_LIBS="$LIBS"
+
+           # get rid of any trailing slash(es)
+           libevent_prefix=$(echo $with_libevent | sed -e 'sX/*$XXg')
+           libeventdir_prefix=$(echo $with_libevent_libdir | sed -e 'sX/*$XXg')
+
+           AS_IF([test ! -z "$libevent_prefix" && test "$libevent_prefix" != "yes"],
+                 [prte_event_dir="$libevent_prefix"],
+                 [prte_event_dir=""])
+
+           AS_IF([test ! -z "$libeventdir_prefix" -a "$libeventdir_prefix" != "yes"],
                  [prte_event_libdir="$libeventdir_prefix"],
                  [AS_IF([test ! -z "$libevent_prefix" && test "$libevent_prefix" != "yes"],
                         [if test -d $libevent_prefix/lib64; then
@@ -54,16 +85,18 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
                         ],
                         [prte_event_libdir=""])])
 
-    PRTE_CHECK_PACKAGE([prte_libevent],
-                       [event.h],
-                       [event_core],
-                       [event_config_new],
-                       [-levent_pthreads],
-                       [$prte_event_dir],
-                       [$prte_event_libdir],
-                       [prte_libevent_support=1],
-                       [prte_libevent_support=0],
-                       [])
+           AS_IF([test "$enable_libevent_lib_checks" != "no"],
+                 [PRTE_CHECK_PACKAGE([prte_libevent],
+                                     [event.h],
+                                     [event_core],
+                                     [event_config_new],
+                                     [-levent_pthreads $with_libevent_extra_libs],
+                                     [$prte_event_dir],
+                                     [$prte_event_libdir],
+                                     [],
+                                     [prte_libevent_support=0],
+                                     [])],
+                 [PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$with_libevent_extra_libs])])])
 
     # Check to see if the above check failed because it conflicted with LSF's libevent.so
     # This can happen if LSF's library is in the LDFLAGS envar or default search
@@ -88,34 +121,40 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
     if test $prte_libevent_support -eq 1; then
         # need to add resulting flags to global ones so we can
         # test for thread support
-        if test ! -z "$prte_libevent_CPPFLAGS"; then
-            PRTE_FLAGS_PREPEND_UNIQ(CPPFLAGS, $prte_libevent_CPPFLAGS)
-        fi
-        if test ! -z "$prte_libevent_LDFLAGS"; then
-            PRTE_FLAGS_PREPEND_UNIQ(LDFLAGS, $prte_libevent_LDFLAGS)
-        fi
-        if test ! -z "$prte_libevent_LIBS"; then
-            PRTE_FLAGS_PREPEND_UNIQ(LIBS, $prte_libevent_LIBS)
-        fi
+        PRTE_FLAGS_PREPEND_UNIQ([CPPFLAGS], [$prte_libevent_CPPFLAGS])
+        PRTE_FLAGS_PREPEND_UNIQ([LDFLAGS], [$prte_libevent_LDFLAGS])
+        PRTE_FLAGS_PREPEND_UNIQ([LIBS], [$prte_libevent_LIBS])
 
-        # Ensure that this libevent has the symbol
-        # "evthread_set_lock_callbacks", which will only exist if
-        # libevent was configured with thread support.
-        AC_CHECK_LIB([event_core], [evthread_set_lock_callbacks],
-                     [],
-                     [AC_MSG_WARN([libevent does not have thread support])
-                      AC_MSG_WARN([PRTE requires libevent to be compiled with])
-                      AC_MSG_WARN([thread support enabled])
-                      prte_libevent_support=0])
+        # Check for general threading support
+        AC_MSG_CHECKING([if libevent threads enabled])
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([
+#include <event.h>
+#include <event2/thread.h>
+          ], [[
+#if !(EVTHREAD_LOCK_API_VERSION >= 1)
+#  error "No threads!"
+#endif
+          ]])],
+          [AC_MSG_RESULT([yes])],
+          [AC_MSG_RESULT([no])
+           AC_MSG_WARN([PRTE rquires libevent to be compiled with thread support enabled])
+           prte_libevent_support=0])
     fi
 
     if test $prte_libevent_support -eq 1; then
-        AC_CHECK_LIB([event_pthreads], [evthread_use_pthreads],
-                     [],
-                     [AC_MSG_WARN([libevent does not have thread support])
-                      AC_MSG_WARN([PRTE requires libevent to be compiled with])
-                      AC_MSG_WARN([thread support enabled])
-                      prte_libevent_support=0])
+        AC_MSG_CHECKING([for libevent pthreads support])
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([
+#include <event.h>
+#include <event2/thread.h>
+          ], [[
+#if !defined(EVTHREAD_USE_PTHREADS_IMPLEMENTED) || !EVTHREAD_USE_PTHREADS_IMPLEMENTED
+#  error "No pthreads!"
+#endif
+          ]])],
+          [AC_MSG_RESULT([yes])],
+          [AC_MSG_RESULT([no])
+           AC_MSG_WARN([PRTE requires libevent to be compiled with pthread support enabled])
+           prte_libevent_support=0])
     fi
 
     if test $prte_libevent_support -eq 1; then
@@ -139,37 +178,30 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
     else
         prte_libevent_source=$prte_event_dir
     fi
-    PRTE_EVENT_HEADER="<event.h>"
-    PRTE_EVENT2_THREAD_HEADER="<event2/thread.h>"
-
-    AC_MSG_CHECKING([will libevent support be built])
-    if test $prte_libevent_support -eq 1; then
-        AC_MSG_RESULT([yes])
-        if test ! -z "$prte_libevent_CPPFLAGS"; then
-            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_libevent_CPPFLAGS)
-        fi
-        if test ! -z "$prte_libevent_LDFLAGS"; then
-            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_libevent_LDFLAGS)
-        fi
-        if test ! -z "$prte_libevent_LIBS"; then
-            PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_libevent_LIBS)
-        fi
-        # Set output variables
-        AC_DEFINE_UNQUOTED([PRTE_EVENT_HEADER], [$PRTE_EVENT_HEADER],
-                           [Location of event.h])
-        AC_DEFINE_UNQUOTED([PRTE_EVENT2_THREAD_HEADER], [$PRTE_EVENT2_THREAD_HEADER],
-                           [Location of event2/thread.h])
-        PRTE_SUMMARY_ADD([[Required Packages]],[[Libevent]], [prte_libevent], [yes ($prte_libevent_source)])
-    else
-        AC_MSG_RESULT([no])
-    fi
 
     # restore global flags
     CPPFLAGS="$prte_check_libevent_save_CPPFLAGS"
     LDFLAGS="$prte_check_libevent_save_LDFLAGS"
     LIBS="$prte_check_libevent_save_LIBS"
 
-    AC_DEFINE_UNQUOTED([PRTE_HAVE_LIBEVENT], [$prte_libevent_support], [Whether we are building against libevent])
+    AC_MSG_CHECKING([will libevent support be built])
+    if test $prte_libevent_support -eq 1; then
+        AC_MSG_RESULT([yes])
+        PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_CPPFLAGS], [$prte_libevent_CPPFLAGS])
+
+        PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LDFLAGS], [$prte_libevent_LDFLAGS])
+
+        PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$prte_libevent_LIBS])
+
+        # Set output variables
+        PRTE_SUMMARY_ADD([[Required Packages]],[[Libevent]], [prte_libevent], [yes ($prte_libevent_source)])
+
+        $1
+    else
+        AC_MSG_RESULT([no])
+
+        $2
+    fi
 
     PRTE_VAR_SCOPE_POP
 ])
