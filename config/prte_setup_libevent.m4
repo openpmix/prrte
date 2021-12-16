@@ -139,8 +139,6 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
     else
         prte_libevent_source=$prte_event_dir
     fi
-    PRTE_EVENT_HEADER="<event.h>"
-    PRTE_EVENT2_THREAD_HEADER="<event2/thread.h>"
 
     AC_MSG_CHECKING([will libevent support be built])
     if test $prte_libevent_support -eq 1; then
@@ -155,10 +153,6 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
             PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_libevent_LIBS)
         fi
         # Set output variables
-        AC_DEFINE_UNQUOTED([PRTE_EVENT_HEADER], [$PRTE_EVENT_HEADER],
-                           [Location of event.h])
-        AC_DEFINE_UNQUOTED([PRTE_EVENT2_THREAD_HEADER], [$PRTE_EVENT2_THREAD_HEADER],
-                           [Location of event2/thread.h])
         PRTE_SUMMARY_ADD([[Required Packages]],[[Libevent]], [prte_libevent], [yes ($prte_libevent_source)])
     else
         AC_MSG_RESULT([no])
