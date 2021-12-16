@@ -166,7 +166,105 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
             PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_libevent_LIBS)
             PRTE_WRAPPER_FLAGS_ADD(LIBS, $prte_libevent_LIBS)
         fi
+<<<<<<< HEAD
 =======
+||||||| parent of bb76e289a2 (Remove event header defines)
+
+        # Ensure that this libevent has the symbol
+        # "evthread_set_lock_callbacks", which will only exist if
+        # libevent was configured with thread support.
+        AC_CHECK_LIB([event_core], [evthread_set_lock_callbacks],
+                     [],
+                     [AC_MSG_WARN([libevent does not have thread support])
+                      AC_MSG_WARN([PRTE requires libevent to be compiled with])
+                      AC_MSG_WARN([thread support enabled])
+                      prte_libevent_support=0])
+    fi
+
+    if test $prte_libevent_support -eq 1; then
+        AC_CHECK_LIB([event_pthreads], [evthread_use_pthreads],
+                     [],
+                     [AC_MSG_WARN([libevent does not have thread support])
+                      AC_MSG_WARN([PRTE requires libevent to be compiled with])
+                      AC_MSG_WARN([thread support enabled])
+                      prte_libevent_support=0])
+    fi
+
+    if test $prte_libevent_support -eq 1; then
+        # Pin the "oldest supported" version to 2.0.21
+        AC_MSG_CHECKING([if libevent version is 2.0.21 or greater])
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <event2/event.h>]],
+                                           [[
+                                             #if defined(_EVENT_NUMERIC_VERSION) && _EVENT_NUMERIC_VERSION < 0x02001500
+                                             #error "libevent API version is less than 0x02001500"
+                                             #elif defined(EVENT__NUMERIC_VERSION) && EVENT__NUMERIC_VERSION < 0x02001500
+                                             #error "libevent API version is less than 0x02001500"
+                                             #endif
+                                           ]])],
+                          [AC_MSG_RESULT([yes])],
+                          [AC_MSG_RESULT([no])
+                           AC_MSG_WARN([libevent version is too old (2.0.21 or later required)])
+                           prte_libevent_support=0])
+    fi
+    if test -z "$prte_event_dir"; then
+        prte_libevent_source="Standard locations"
+    else
+        prte_libevent_source=$prte_event_dir
+    fi
+    PRTE_EVENT_HEADER="<event.h>"
+    PRTE_EVENT2_THREAD_HEADER="<event2/thread.h>"
+
+    AC_MSG_CHECKING([will libevent support be built])
+    if test $prte_libevent_support -eq 1; then
+        AC_MSG_RESULT([yes])
+=======
+
+        # Ensure that this libevent has the symbol
+        # "evthread_set_lock_callbacks", which will only exist if
+        # libevent was configured with thread support.
+        AC_CHECK_LIB([event_core], [evthread_set_lock_callbacks],
+                     [],
+                     [AC_MSG_WARN([libevent does not have thread support])
+                      AC_MSG_WARN([PRTE requires libevent to be compiled with])
+                      AC_MSG_WARN([thread support enabled])
+                      prte_libevent_support=0])
+    fi
+
+    if test $prte_libevent_support -eq 1; then
+        AC_CHECK_LIB([event_pthreads], [evthread_use_pthreads],
+                     [],
+                     [AC_MSG_WARN([libevent does not have thread support])
+                      AC_MSG_WARN([PRTE requires libevent to be compiled with])
+                      AC_MSG_WARN([thread support enabled])
+                      prte_libevent_support=0])
+    fi
+
+    if test $prte_libevent_support -eq 1; then
+        # Pin the "oldest supported" version to 2.0.21
+        AC_MSG_CHECKING([if libevent version is 2.0.21 or greater])
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <event2/event.h>]],
+                                           [[
+                                             #if defined(_EVENT_NUMERIC_VERSION) && _EVENT_NUMERIC_VERSION < 0x02001500
+                                             #error "libevent API version is less than 0x02001500"
+                                             #elif defined(EVENT__NUMERIC_VERSION) && EVENT__NUMERIC_VERSION < 0x02001500
+                                             #error "libevent API version is less than 0x02001500"
+                                             #endif
+                                           ]])],
+                          [AC_MSG_RESULT([yes])],
+                          [AC_MSG_RESULT([no])
+                           AC_MSG_WARN([libevent version is too old (2.0.21 or later required)])
+                           prte_libevent_support=0])
+    fi
+    if test -z "$prte_event_dir"; then
+        prte_libevent_source="Standard locations"
+    else
+        prte_libevent_source=$prte_event_dir
+    fi
+
+    AC_MSG_CHECKING([will libevent support be built])
+    if test $prte_libevent_support -eq 1; then
+        AC_MSG_RESULT([yes])
+>>>>>>> bb76e289a2 (Remove event header defines)
         if test ! -z "$prte_libevent_CPPFLAGS"; then
             PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_libevent_CPPFLAGS)
         fi
@@ -178,10 +276,6 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
         fi
 >>>>>>> cddf773271 (Change the pcc wrapper compiler to a symlink to pmixcc)
         # Set output variables
-        AC_DEFINE_UNQUOTED([PRTE_EVENT_HEADER], [$PRTE_EVENT_HEADER],
-                           [Location of event.h])
-        AC_DEFINE_UNQUOTED([PRTE_EVENT2_THREAD_HEADER], [$PRTE_EVENT2_THREAD_HEADER],
-                           [Location of event2/thread.h])
         PRTE_SUMMARY_ADD([[Required Packages]],[[Libevent]], [prte_libevent], [yes ($prte_libevent_source)])
     else
         AC_MSG_RESULT([no])
