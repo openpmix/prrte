@@ -1099,7 +1099,7 @@ PRTE_CHECK_PMIX
 
 prte_show_title "Configure HWLOC"
 
-PRTE_HWLOC_CONFIG
+PRTE_SETUP_HWLOC
 
 ##################################
 # MCA
@@ -1237,6 +1237,9 @@ PRTE_SETUP_PICKY_COMPILERS
 
 # Cleanup duplicate flags
 PRTE_FLAGS_UNIQ(CFLAGS)
+PRTE_FLAGS_UNIQ(CPPFLAGS)
+PRTE_FLAGS_UNIQ(LDFLAGS)
+PRTE_FLAGS_UNIQ(LIBS)
 
 #
 # Delayed the substitution of CFLAGS and CXXFLAGS until now because
@@ -1244,6 +1247,20 @@ PRTE_FLAGS_UNIQ(CFLAGS)
 #
 
 AC_SUBST(CFLAGS)
+AC_SUBST(CPPFLAGS)
+
+AC_MSG_CHECKING([final CPPFLAGS])
+AC_MSG_RESULT([$CPPFLAGS])
+
+AC_MSG_CHECKING([final CFLAGS])
+AC_MSG_RESULT([$CFLAGS])
+
+AC_MSG_CHECKING([final LDFLAGS])
+AC_MSG_RESULT([$LDFLAGS])
+
+AC_MSG_CHECKING([final LIBS])
+AC_MSG_RESULT([$LIBS])
+
 
 #
 # Aggregate MCA parameters directory

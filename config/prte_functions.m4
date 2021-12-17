@@ -494,6 +494,35 @@ dnl #######################################################################
 dnl #######################################################################
 dnl #######################################################################
 
+# PRTE_FLAGS_PREPEND_UNIQ(variable, new_argument)
+# ----------------------------------------------
+# Prepend new_argument to variable if:
+#
+# - the argument does not begin with -I, -L, or -l, or
+# - the argument begins with -I, -L, or -l, and it's not already in variable
+#
+# This macro assumes a space seperated list.
+AC_DEFUN([PRTE_FLAGS_PREPEND_UNIQ], [
+    PRTE_VAR_SCOPE_PUSH([prte_tmp prte_prepend])
+
+    for arg in $2; do
+        prte_tmp=`echo $arg | cut -c1-2`
+        prte_prepend=1
+        AS_IF([test "$prte_tmp" = "-I" || test "$prte_tmp" = "-L" || test "$prte_tmp" = "-l"],
+              [for val in ${$1}; do
+                   AS_IF([test "x$val" = "x$arg"], [prte_prepend=0])
+               done])
+        AS_IF([test "$prte_prepend" = "1"],
+              [AS_IF([test -z "$$1"], [$1=$arg], [$1="$arg $$1"])])
+    done
+
+    PRTE_VAR_SCOPE_POP
+])
+
+dnl #######################################################################
+dnl #######################################################################
+dnl #######################################################################
+
 # Macro that serves as an alternative to using `which <prog>`. It is
 # preferable to simply using `which <prog>` because backticks (`) (aka
 # backquotes) invoke a sub-shell which may source a "noisy"

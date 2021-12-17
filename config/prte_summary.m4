@@ -6,6 +6,7 @@ dnl Copyright (c) 2016-2020 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2016      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
+dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -37,7 +38,7 @@ AC_DEFUN([PRTE_SUMMARY_ADD],[
 
 AC_DEFUN([PRTE_SUMMARY_PRINT],[
     PRTE_VAR_SCOPE_PUSH([prte_summary_section prte_summary_section_name])
-    cat <<EOF
+    cat <<EOF >&2
 
 PRTE configuration:
 -----------------------
@@ -45,29 +46,29 @@ Version: $PRTE_MAJOR_VERSION.$PRTE_MINOR_VERSION.$PRTE_RELEASE_VERSION$PRTE_GREE
 EOF
 
     if test $WANT_DEBUG = 0 ; then
-        echo "Debug build: no"
+        echo "Debug build: no" >&2
     else
-        echo "Debug build: yes"
+        echo "Debug build: yes" >&2
     fi
 
     if test ! -z $with_prte_platform ; then
-        echo "Platform file: $with_prte_platform"
+        echo "Platform file: $with_prte_platform" >&2
     else
-        echo "Platform file: (none)"
+        echo "Platform file: (none)" >&2
     fi
 
-    echo
+    echo >&2
 
     for prte_summary_section in $(echo $prte_summary_sections) ; do
         prte_summary_section_name=$(echo $prte_summary_section | tr '_' ' ')
-        echo "$prte_summary_section_name"
-        echo "-----------------------"
-        echo "$(eval echo \$prte_summary_values_$prte_summary_section)" | tr ',' $'\n' | sort -f
-        echo " "
+        echo "$prte_summary_section_name" >&2
+        echo "-----------------------" >&2
+        echo "$(eval echo \$prte_summary_values_$prte_summary_section)" | tr ',' $'\n' | sort -f >&2
+        echo " " >&2
     done
 
     if test $WANT_DEBUG = 1 ; then
-        cat <<EOF
+        cat <<EOF >&2
 *****************************************************************************
  THIS IS A DEBUG BUILD!  DO NOT USE THIS BUILD FOR PERFORMANCE MEASUREMENTS!
 *****************************************************************************
