@@ -293,7 +293,6 @@ fi
 
 AC_ENABLE_SHARED([])
 AC_DISABLE_STATIC([])
-PRTE_SETUP_WRAPPER_INIT
 
 ##################################
 # Check for known incompatibility
@@ -916,10 +915,6 @@ CFLAGS="$CFLAGS $THREAD_CFLAGS"
 LDFLAGS="$LDFLAGS $THREAD_LDFLAGS"
 LIBS="$LIBS $THREAD_LIBS"
 
-PRTE_WRAPPER_FLAGS_ADD([CFLAGS], [$THREAD_CFLAGS])
-PRTE_WRAPPER_FLAGS_ADD([LDFLAGS], [$THREAD_LDFLAGS])
-
-# no need to update WRAPPER_EXTRA_LIBS - we'll get it from LT later
 #
 # What is the local equivalent of "ln -s"
 #
@@ -1041,22 +1036,50 @@ AC_CACHE_SAVE
 ##################################
 # Libevent
 ##################################
+prte_show_title "Event libraries"
 
-prte_show_title "Configure event library support - libev"
+dnl Only one of Libev or Libevent can be used by PRTE.  The
+dnl selection logic for the two is:
+dnl
+dnl   * libev is used if explicitly requested
+dnl   * libevent is used if explicitly requested
+dnl   * if both are explicitly requested, then we report the error
+dnl     and abort
+dnl   * if neither is explicitly requested, then we default to
+dnl     using libevent if it is available. If libevent isn't
+dnl     available, then we see if libev is available.
+dnl
+dnl poking at $with_libevent and $with_libev is a bit of an
+dnl abstraction break, but makes implementing this logic
+dnl significantly easier.
+prte_libev_support=0
+prte_libevent_support=0
 
-PRTE_LIBEV_CONFIG
+AS_IF([test ! -z "$with_libevent" -a "$with_libevent" != "no"],
+      [want_libevent=1])
+AS_IF([test ! -z "$with_libev" -a "$with_libev" != "no"],
+      [want_libev=1])
 
-prte_show_title "Configure event library support - libevent"
-
-PRTE_LIBEVENT_CONFIG
-
-AS_IF([test $prte_libevent_support -eq 1 && test $prte_libev_support -eq 1],
+AS_IF([test "$want_libevent" = "1" -a "$want_libev" = "1"],
       [AC_MSG_WARN([Both libevent and libev support have been specified.])
        AC_MSG_WARN([Only one can be configured against at a time. Please])
        AC_MSG_WARN([remove one from the configure command line.])
        AC_MSG_ERROR([Cannot continue])])
 
-AS_IF([test $prte_libevent_support -eq 0 && test $prte_libev_support -eq 0],
+prte_found_event_lib=0
+dnl If libevent succeeds, then we don't need libev, but we skip
+dnl libevent if libev was explicitly requested.
+AS_IF([test "$want_libev" != "1"],
+      [PRTE_LIBEVENT_CONFIG([prte_found_event_lib=1])])
+AS_IF([test $prte_found_event_lib -eq 0],
+      [PRTE_LIBEV_CONFIG([prte_found_event_lib=1])])
+
+dnl The following must _always_ be defined, regardless of which
+dnl event library was selected/requested
+AC_DEFINE_UNQUOTED([PRTE_HAVE_LIBEV], [$prte_libev_support], [Whether we are building against libev])
+AC_DEFINE_UNQUOTED([PRTE_HAVE_LIBEVENT], [$prte_libevent_support], [Whether we are building against libevent])
+
+AS_IF([test $prte_found_event_lib -eq 0],
       [AC_MSG_WARN([Either libevent or libev support is required, but neither])
        AC_MSG_WARN([was found. Please use the configure options to point us])
        AC_MSG_WARN([to where we can find one or the other library])
@@ -1076,7 +1099,7 @@ PRTE_CHECK_PMIX
 
 prte_show_title "Configure HWLOC"
 
-PRTE_HWLOC_CONFIG
+PRTE_SETUP_HWLOC
 
 ##################################
 # MCA
@@ -1214,6 +1237,9 @@ PRTE_SETUP_PICKY_COMPILERS
 
 # Cleanup duplicate flags
 PRTE_FLAGS_UNIQ(CFLAGS)
+PRTE_FLAGS_UNIQ(CPPFLAGS)
+PRTE_FLAGS_UNIQ(LDFLAGS)
+PRTE_FLAGS_UNIQ(LIBS)
 
 #
 # Delayed the substitution of CFLAGS and CXXFLAGS until now because
@@ -1221,18 +1247,25 @@ PRTE_FLAGS_UNIQ(CFLAGS)
 #
 
 AC_SUBST(CFLAGS)
+AC_SUBST(CPPFLAGS)
+
+AC_MSG_CHECKING([final CPPFLAGS])
+AC_MSG_RESULT([$CPPFLAGS])
+
+AC_MSG_CHECKING([final CFLAGS])
+AC_MSG_RESULT([$CFLAGS])
+
+AC_MSG_CHECKING([final LDFLAGS])
+AC_MSG_RESULT([$LDFLAGS])
+
+AC_MSG_CHECKING([final LIBS])
+AC_MSG_RESULT([$LIBS])
+
 
 #
 # Aggregate MCA parameters directory
 #
 AC_SUBST([AMCA_PARAM_SETS_DIR], ['$(prtedatadir)/amca-param-sets'])
-
-############################################################################
-# final wrapper compiler config
-############################################################################
-prte_show_subtitle "Wrapper compiler final setup"
-
-PRTE_SETUP_WRAPPER_FINAL
 
 # If there is a local hook, call it.
 m4_ifdef([prte_CONFIG_LOCAL], [prte_CONFIG_LOCAL])
