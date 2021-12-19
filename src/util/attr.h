@@ -198,6 +198,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_OUTPUT_NOCOPY              (PRTE_JOB_START_KEY + 91) // bool - do not copy output to stdout/err
 #define PRTE_JOB_RANK_OUTPUT                (PRTE_JOB_START_KEY + 92) // bool - tag stdout/stderr with rank
 #define PRTE_SPAWN_TIMEOUT                  (PRTE_JOB_START_KEY + 93) // int32 - number of seconds to spawn before terminating it as timed out
+#define PRTE_JOB_RAW_OUTPUT                 (PRTE_JOB_START_KEY + 94) // bool - do not buffer output
 
 #define PRTE_JOB_MAX_KEY 300
 
