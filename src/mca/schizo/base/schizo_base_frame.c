@@ -538,8 +538,8 @@ int prte_schizo_base_sanity(prte_cmd_line_t *cmd_line)
                        "l2cache", "l3cache", "numa", "package", NULL};
     char *bndquals[] = {"overload-allowed", "if-supported", "ordered", "report", NULL};
 
-    char *outputs[] = {"tag", "timestamp", "xml", "merge-stderr-to-stdout", "directory", "filename", NULL};
-    char *outquals[] = {"nocopy", NULL};
+    char *outputs[] = {"tag", "rank", "timestamp", "xml", "merge-stderr-to-stdout", "directory", "filename", NULL};
+    char *outquals[] = {"nocopy", "raw", NULL};
 
     char *displays[] = {"allocation", "map", "bind", "map-devel", "topo", NULL};
 
