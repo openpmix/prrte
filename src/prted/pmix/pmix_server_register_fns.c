@@ -89,6 +89,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     size_t ndist;
     pmix_topology_t topo;
     pmix_data_array_t darray, lparray;
+    bool flag, *fptr;
 
     prte_output_verbose(2, prte_pmix_server_globals.output, "%s register nspace for %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace));
@@ -322,17 +323,18 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     free(tmp);
 
     /* check for output directives */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, NULL, PMIX_BOOL)) {
-        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
+    fptr = &flag;
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_TAG_OUTPUT, &flag, PMIX_BOOL);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_RANK_OUTPUT, NULL, PMIX_BOOL)) {
-        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_RANK_OUTPUT, NULL, PMIX_BOOL);
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_RANK_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_RANK_OUTPUT, &flag, PMIX_BOOL);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL)) {
-        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
-        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_XML_OUTPUT, &flag, PMIX_BOOL);
     }
     tmp = NULL;
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_TO_FILE, (void **) &tmp, PMIX_STRING)
@@ -346,12 +348,17 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         PMIX_INFO_LIST_ADD(ret, info, PMIX_OUTPUT_TO_DIRECTORY, tmp, PMIX_STRING);
         free(tmp);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY, NULL, PMIX_BOOL)) {
-        PMIX_INFO_LIST_ADD(ret, info, PMIX_OUTPUT_NOCOPY, NULL, PMIX_BOOL);
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_NOCOPY, (void**)&fptr, PMIX_BOOL)) {
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_OUTPUT_NOCOPY, &flag, PMIX_BOOL);
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL)) {
-        PMIX_INFO_LIST_ADD(ret, info, PMIX_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL);
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, (void**)&fptr, PMIX_BOOL)) {
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
     }
+#ifdef PMIX_IOF_OUTPUT_RAW
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_RAW_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_OUTPUT_RAW, &flag, PMIX_BOOL);
+    }
+#endif
 
     /* for each app in the job, create an app-array */
     for (n = 0; n < jdata->apps->size; n++) {
