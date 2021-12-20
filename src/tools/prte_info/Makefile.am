@@ -41,7 +41,7 @@ AM_CFLAGS = \
             -DPRTE_REPO_REV="\"@PRTE_REPO_REV@\"" \
             -DPRTE_RELEASE_DATE="\"@PRTE_RELEASE_DATE@\""
 
-AM_LDFLAGS = $(PRTE_EXTRA_LIB_LDFLAGS) $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
+AM_LDFLAGS = $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
 
 bin_PROGRAMS = prte_info
 
@@ -56,7 +56,6 @@ prte_info_SOURCES = \
         version.c
 
 prte_info_LDADD = \
-    $(PRTE_EXTRA_LTLIB) \
     $(prte_libevent_LIBS) \
     $(prte_hwloc_LIBS) \
     $(prte_pmix_LIBS) \

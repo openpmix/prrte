@@ -19,7 +19,7 @@ Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
 Copyright (c) 2012      Sandia National Laboratories.  All rights reserved.
 Copyright (c) 2012      University of Houston. All rights reserved.
 Copyright (c) 2013      NVIDIA Corporation.  All rights reserved.
-# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 Copyright (c) 2018-2001 Amazon.com, Inc. or its affiliates.  All Rights
                         reserved.
 Copyright (c) 2021      Nanook Consulting.  All rights reserved.
@@ -35,11 +35,29 @@ This file contains the main features as well as overviews of specific
 bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
-2.0.1LZ1: (tag point, not official release)
+2.0.1: TBD
 ------------------------------------
 +**** NOTE: As of v2.0.1, PRRTE no longer has a dependency on "pandoc"
 +**** for building and installing man pages.
 
+PR #1169: Updates for rc5
+   - Enable support for PMIX_IOF_OUTPUT_RAW attribute
+   - Update NEWS
+PR #1167: Updates
+   - Be more flexible in library handling
+   - Update libevent/hwloc handling to match PMIx
+   - Remove event header defines
+   - Minor cleanups and ensure no local IOF copy
+     when persistent
+   - change the pcc wrapper compiler to a symlink
+     to pmixcc
+   - Cleanup code a bit
+   - Select all adapters with IPv4 addresses within
+     specified subnet ranges
+   - validate input for mpiexec --with-ft options
+PR #1158: Updates
+   - Fix uninitialized variable
+   - Update NEWS
 PR #1157: Fix brackets around code clause that caused
      erroneous "unable to find tune file" error
 PR #1156: Handle default param case for HWT CPUs
