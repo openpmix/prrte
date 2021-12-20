@@ -464,6 +464,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "DO-NOT-COPY-OUTPUT";
         case PRTE_SPAWN_TIMEOUT:
             return "SPAWN-TIMEOUT";
+        case PRTE_JOB_RAW_OUTPUT:
+            return "DO-NOT-BUFFER-OUTPUT";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

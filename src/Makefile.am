@@ -51,8 +51,7 @@ libprrte_la_SOURCES =
 libprrte_la_LIBADD = \
 	mca/base/libprrte_mca_base.la \
 	util/libprrteutil.la \
-	$(MCA_prte_FRAMEWORK_LIBS) \
-	$(PRTE_EXTRA_LIB)
+	$(MCA_prte_FRAMEWORK_LIBS)
 libprrte_la_DEPENDENCIES = \
 	mca/base/libprrte_mca_base.la \
 	util/libprrteutil.la \

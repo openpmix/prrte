@@ -587,6 +587,14 @@ static void interim(int sd, short args, void *cbdata)
             prte_set_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
 
+#ifdef PMIX_IOF_OUTPUT_RAW
+            /***   RAW OUTPUT   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_OUTPUT_RAW)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_RAW_OUTPUT, PRTE_ATTR_GLOBAL, &flag,
+                               PMIX_BOOL);
+#endif
+
             /***   STDIN TARGET   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_STDIN_TGT)) {
             if (0 == strcmp(info->value.data.string, "all")) {

@@ -43,7 +43,6 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include <pmix.h>
-#include <pmix_common.h>
 
 BEGIN_C_DECLS
 

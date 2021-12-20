@@ -28,7 +28,7 @@
 #include <stdint.h>
 #include <hwloc.h>
 #if HWLOC_API_VERSION >= 0x20000
-#    include <hwloc/shmem.h>
+#   include <hwloc/shmem.h>
 #endif
 
 #if HWLOC_API_VERSION < 0x00010b00
