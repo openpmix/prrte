@@ -85,7 +85,7 @@ static int rank_span(prte_job_t *jdata, hwloc_obj_type_t target,
     prte_node_t *node;
     prte_proc_t *proc, *pptr;
     pmix_rank_t vpid;
-    int cnt, delta;
+    int delta;
     hwloc_obj_t locale;
     bool first;
 
@@ -135,7 +135,7 @@ static int rank_span(prte_job_t *jdata, hwloc_obj_type_t target,
                 }
                 vpid = i;
                 /* cycle thru the procs on this node */
-                for (j = 0; j < node->procs->size && cnt < app->num_procs; j++) {
+                for (j = 0; j < node->procs->size; j++) {
                     proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
                     if (NULL == proc) {
                         continue;
@@ -187,94 +187,87 @@ static int rank_span(prte_job_t *jdata, hwloc_obj_type_t target,
         }
 
         first = true;
-        while (cnt < app->num_procs) {
-            for (m = 0; m < jdata->map->nodes->size; m++) {
-                node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
-                if (NULL == node) {
-                    continue;
-                }
-                /* get the number of objects - only consider those we can actually use */
-                num_objs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target, cache_level);
+        for (m = 0; m < jdata->map->nodes->size; m++) {
+            node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+            if (NULL == node) {
+                continue;
+            }
+            /* get the number of objects - only consider those we can actually use */
+            num_objs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, target, cache_level);
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "mca:rmaps:rank_span: found %d objects on node %s with %d procs", num_objs,
+                                node->name, (int) node->num_procs);
+            if (0 == num_objs) {
+                return PRTE_ERR_NOT_SUPPORTED;
+            }
+
+            /* for each object */
+            for (i = 0; i < num_objs; i++) {
+                obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, i);
+
                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps:rank_span: found %d objects on node %s with %d procs", num_objs,
-                                    node->name, (int) node->num_procs);
-                if (0 == num_objs) {
-                    return PRTE_ERR_NOT_SUPPORTED;
-                }
+                                    "mca:rmaps:rank_span: working object %d", i);
 
-                /* for each object */
-                for (i = 0; i < num_objs && cnt < app->num_procs; i++) {
-                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, i);
-
-                    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps:rank_span: working object %d", i);
-
-                    /* cycle thru the procs on this node */
-                    for (j = 0; j < node->procs->size && cnt < app->num_procs; j++) {
-                        proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
-                        if (NULL == proc) {
-                            continue;
-                        }
-                        /* ignore procs from other jobs */
-                        if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
-                            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                                "mca:rmaps:rank_span skipping proc %s - from "
-                                                "another job, num_ranked %d",
-                                                PRTE_NAME_PRINT(&proc->name), num_ranked);
-                            continue;
-                        }
-                        /* ignore procs that are already assigned */
-                        if (PMIX_RANK_INVALID != proc->name.rank) {
-                            continue;
-                        }
-                        /* ignore procs from other apps */
-                        if (proc->app_idx != app->idx) {
-                            continue;
-                        }
-                        /* protect against bozo case */
-                        locale = NULL;
-                        if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
-                                                (void **) &locale, PMIX_POINTER) ||
-                            NULL == locale) {
-                            /* all mappers are _required_ to set the locale where the proc
-                             * has been mapped - it is therefore an error for this attribute
-                             * not to be set. Likewise, only a programming error could allow
-                             * the attribute to be set to a NULL value - however, we add that
-                             * conditional here to silence any compiler warnings */
-                            PRTE_ERROR_LOG(PRTE_ERROR);
-                            return PRTE_ERROR;
-                        }
-                        /* ignore procs not on this object */
-                        if (!hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
-                            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                                "mca:rmaps:rank_span: proc at position %d is not on object %d",
-                                                j, i);
-                            continue;
-                        }
-                        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                            "mca:rmaps:rank_span: assigning vpid %s",
-                                            PRTE_VPID_PRINT(vpid));
-                        rc = assign_proc(jdata, proc, vpid);
-                        ++vpid;
-                        if (first) {
-                            app->first_rank = proc->name.rank;
-                            first = false;
-                        }
-
-                        /* track where the highest vpid landed - this is our
-                         * new bookmark
-                         */
-                        jdata->bookmark = node;
-                        /* move to next object */
-                        break;
+                /* cycle thru the procs on this node */
+                for (j = 0; j < node->procs->size; j++) {
+                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                    if (NULL == proc) {
+                        continue;
                     }
+                    /* ignore procs from other jobs */
+                    if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
+                        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                            "mca:rmaps:rank_span skipping proc %s - from "
+                                            "another job, num_ranked %d",
+                                            PRTE_NAME_PRINT(&proc->name), num_ranked);
+                        continue;
+                    }
+                    /* ignore procs that are already assigned */
+                    if (PMIX_RANK_INVALID != proc->name.rank) {
+                        continue;
+                    }
+                    /* ignore procs from other apps */
+                    if (proc->app_idx != app->idx) {
+                        continue;
+                    }
+                    /* protect against bozo case */
+                    locale = NULL;
+                    if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
+                                            (void **) &locale, PMIX_POINTER) ||
+                        NULL == locale) {
+                        /* all mappers are _required_ to set the locale where the proc
+                         * has been mapped - it is therefore an error for this attribute
+                         * not to be set. Likewise, only a programming error could allow
+                         * the attribute to be set to a NULL value - however, we add that
+                         * conditional here to silence any compiler warnings */
+                        PRTE_ERROR_LOG(PRTE_ERROR);
+                        return PRTE_ERROR;
+                    }
+                    /* ignore procs not on this object */
+                    if (!hwloc_bitmap_intersects(obj->cpuset, locale->cpuset)) {
+                        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                            "mca:rmaps:rank_span: proc at position %d is not on object %d",
+                                            j, i);
+                        continue;
+                    }
+                    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps:rank_span: assigning vpid %s",
+                                        PRTE_VPID_PRINT(vpid));
+                    rc = assign_proc(jdata, proc, vpid);
+                    ++vpid;
+                    if (first) {
+                        app->first_rank = proc->name.rank;
+                        first = false;
+                    }
+
+                    /* track where the highest vpid landed - this is our
+                     * new bookmark
+                     */
+                    jdata->bookmark = node;
+                    /* move to next object */
+                    break;
                 }
             }
-        }
-
-        /* Are all the procs ranked? we don't want to crash on INVALID ranks */
-        if (cnt < app->num_procs) {
-            return PRTE_ERR_FAILED_TO_MAP;
         }
     }
 
