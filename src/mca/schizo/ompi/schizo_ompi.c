@@ -1322,6 +1322,7 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
                 }
                 else {
                     prte_output(0, "UNRECOGNIZED OPTION: --with-ft %s", p1);
+                    free(p1);
                     return PRTE_ERR_FATAL;
                 }
             }
