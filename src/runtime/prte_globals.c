@@ -185,7 +185,7 @@ bool prte_in_parallel_debugger = false;
 char *prte_daemon_cores = NULL;
 
 /* enable/disable ft */
-bool prte_enable_ft = false;
+prte_enable_ft_t prte_enable_ft = {0};
 
 int prte_dt_init(void)
 {

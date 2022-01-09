@@ -4,7 +4,7 @@
  *                         reserved.
  *
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -89,7 +89,7 @@ static int propagate_prperror_close(void)
 static int propagate_prperror_component_query(prte_mca_base_module_t **module, int *priority)
 {
     /* only daemon propagate */
-    if (prte_enable_ft && (PRTE_PROC_IS_DAEMON || PRTE_PROC_IS_MASTER)) {
+    if (prte_enable_ft.utk) {
         *priority = my_priority;
         *module = (prte_mca_base_module_t *) &prte_propagate_prperror_module;
         return PRTE_SUCCESS;
