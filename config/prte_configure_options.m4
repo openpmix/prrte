@@ -377,20 +377,41 @@ AC_DEFINE_UNQUOTED([PRTE_ENABLE_GETPWUID], [$prte_want_getpwuid],
 
 dnl Check for FT
 AC_MSG_CHECKING([if want fault tolerance support])
-AC_ARG_ENABLE([prte-ft],
-    [AS_HELP_STRING([--enable-prte-ft],
-        [ENable PRRTE fault tolerance support (default: disabled)])])
-if test "$enable_prte_ft" = "yes"; then
-    AC_MSG_RESULT([yes])
-    prte_enable_ft=1
-    PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance]], [prte_ft], [yes])
-else
+AC_ARG_WITH([prte-ft],
+            [AS_HELP_STRING([--with-prte-ft],
+                            [Enable PRRTE fault tolerance support using the specified method. Current options: utk, rcm (default: disabled) ])])
+if test -z "$with_prte_ft" || test "$with_prte_ft" = "no"; then
     AC_MSG_RESULT([no])
-    prte_enable_ft=0
-    PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance]], [prte_ft], [no])
+    prte_ft_enabled=no
+    prte_ft_method=""
+elif test "$with_prte_ft" = "yes"; then
+    AC_MSG_RESULT([yes])
+    AC_MSG_WARN([PRRTE supports multiple fault tolerance methods, and])
+    AC_MSG_WARN([so the method to be used must be specified. Current])
+    AC_MSG_WARN([options include:])
+    AC_MSG_WARN([    rcm: Automatically restart processes, including])
+    AC_MSG_WARN([         relocation to possibly more stable nodes])
+    AC_MSG_WARN([         NOTE: under development, not currently available])
+    AC_MSG_WARN([    utk: Support for Open MPI's ULFM method])
+    AC_MSG_WARN([Please select an option and rerun configure])
+    AC_MSG_ERROR([Cannot continue])
+else
+    AC_MSG_RESULT([yes])
+    prte_ft_enabled=yes
+    prte_ft_method=$with_prte_ft
 fi
-AC_DEFINE_UNQUOTED([PRTE_ENABLE_FT], [$prte_enable_ft],
-                   [Enable PRRTE fault tolerance support (default: disabled)])
+PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance]], [prte_ft], [$prte_ft_enabled])
+PRTE_FT_METHOD_STRING=$prte_ft_method
+AC_SUBST(PRTE_FT_METHOD_STRING)
 
+if test "$prte_ft_enabled" = "yes"; then
+    AC_DEFINE_UNQUOTED([PRTE_ENABLE_FT], [1], [Fault tolerance enabled])
+    if test "$prte_ft_method" = "rcm"; then
+        AC_DEFINE_UNQUOTED([PRTE_ENABLE_PRCM], [1], [PRRTE Resilient Cluster Manager enabled])
+    elif test "$prte_ft_method" = "utk"; then
+        AC_DEFINE_UNQUOTED([PRTE_ENABLE_UTK], [1], [UTK fault tolerance enabled])
+    fi
+    PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance method]], [prte_ft], [$prte_ft_method])
+fi
 
 ])dnl
