@@ -746,3 +746,13 @@ static void tdes(prte_topology_t *t)
     }
 }
 PRTE_CLASS_INSTANCE(prte_topology_t, prte_object_t, tcon, tdes);
+
+#if PRTE_PICKY_COMPILERS
+void prte_hide_unused_params(int x, ...)
+{
+    va_list ap;
+
+    va_start(ap, x);
+    va_end(ap);
+}
+#endif

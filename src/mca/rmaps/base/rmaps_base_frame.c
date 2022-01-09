@@ -51,7 +51,15 @@
 /*
  * Global variables
  */
-prte_rmaps_base_t prte_rmaps_base = {{{0}}};
+prte_rmaps_base_t prte_rmaps_base = {
+    .selected_modules = PRTE_LIST_STATIC_INIT,
+    .mapping = 0,
+    .ranking = 0,
+    .device = NULL,
+    .inherit = false,
+    .hwthread_cpus = false,
+    .file = NULL
+};
 
 /*
  * Local variables
@@ -62,12 +70,14 @@ static bool rmaps_base_inherit = false;
 
 static int prte_rmaps_base_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
+
     /* define default mapping policy */
     rmaps_base_mapping_policy = NULL;
     (void) prte_mca_base_var_register(
         "prte", "rmaps", "default", "mapping_policy",
         "Default mapping Policy [slot | hwthread | core (default:np<=2) | l1cache | "
-        "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr | rankfile],"
+        "l2cache | l3cache | numa (default:np>2) | package | node | seq | dist | ppr | rankfile],"
         " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
         "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
         "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, PE-LIST=a,b (comma-delimited "
@@ -81,7 +91,7 @@ static int prte_rmaps_base_register(prte_mca_base_register_flag_t flags)
     (void) prte_mca_base_var_register(
         "prte", "rmaps", "default", "ranking_policy",
         "Default ranking Policy [slot (default:np<=2) | hwthread | core | l1cache "
-        "| l2cache | l3cache | package (default:np>2) | node], with modifier :SPAN or :FILL",
+        "| l2cache | l3cache | numa (default:np>2) | package | node], with modifier :SPAN or :FILL",
         PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_ranking_policy);
 
@@ -129,15 +139,15 @@ static int prte_rmaps_base_open(prte_mca_base_open_flag_t flags)
 
     /* set the default mapping and ranking policies */
     if (NULL != rmaps_base_mapping_policy) {
-        if (PRTE_SUCCESS
-            != (rc = prte_rmaps_base_set_mapping_policy(NULL, rmaps_base_mapping_policy))) {
+        rc = prte_rmaps_base_set_mapping_policy(NULL, rmaps_base_mapping_policy);
+        if (PRTE_SUCCESS != rc) {
             return rc;
         }
     }
 
     if (NULL != rmaps_base_ranking_policy) {
-        if (PRTE_SUCCESS
-            != (rc = prte_rmaps_base_set_ranking_policy(NULL, rmaps_base_ranking_policy))) {
+        rc = prte_rmaps_base_set_ranking_policy(NULL, rmaps_base_ranking_policy);
+        if (PRTE_SUCCESS != rc) {
             return rc;
         }
     }
@@ -558,6 +568,8 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL2CACHE);
         } else if (0 == strncasecmp(spec, "l3cache", len)) {
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL3CACHE);
+        } else if (0 == strncasecmp(spec, "numa", len)) {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYNUMA);
         } else if (0 == strncasecmp(spec, "package", len)) {
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYPACKAGE);
         } else if (0 == strcasecmp(spec, "rankfile")) {
@@ -609,8 +621,8 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             }
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYDIST);
         } else {
-            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "mapping",
-                           spec);
+            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+                           true, "mapping", spec);
             free(spec);
             return PRTE_ERR_SILENT;
         }
@@ -660,34 +672,41 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
         if (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
             map = PRTE_GET_MAPPING_POLICY(mapping);
             switch (map) {
-            case PRTE_MAPPING_BYSLOT:
-                PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
-                break;
-            case PRTE_MAPPING_BYNODE:
-                PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NODE);
-                break;
-            case PRTE_MAPPING_BYCORE:
-                PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_CORE);
-                break;
-            case PRTE_MAPPING_BYL1CACHE:
-                PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_L1CACHE);
-                break;
-            case PRTE_MAPPING_BYL2CACHE:
-                PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_L2CACHE);
-                break;
-            case PRTE_MAPPING_BYL3CACHE:
-                PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_L3CACHE);
-                break;
-            case PRTE_MAPPING_BYPACKAGE:
-                PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_PACKAGE);
-                break;
-            case PRTE_MAPPING_BYHWTHREAD:
-                PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_HWTHREAD);
-                break;
-            default:
-                /* anything not tied to a specific hw obj can rank by slot */
-                PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
-                break;
+                case PRTE_MAPPING_BYSLOT:
+                    PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
+                    break;
+                case PRTE_MAPPING_BYNODE:
+                    PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NODE);
+                    break;
+                case PRTE_MAPPING_BYCORE:
+                    PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_CORE);
+                    break;
+                case PRTE_MAPPING_BYL1CACHE:
+                    PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_L1CACHE);
+                    break;
+                case PRTE_MAPPING_BYL2CACHE:
+                    PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_L2CACHE);
+                    break;
+                case PRTE_MAPPING_BYL3CACHE:
+                    PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_L3CACHE);
+                    break;
+                case PRTE_MAPPING_BYNUMA:
+                    PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NUMA);
+                    break;
+                case PRTE_MAPPING_BYPACKAGE:
+                    PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_PACKAGE);
+                    break;
+                case PRTE_MAPPING_BYHWTHREAD:
+                    PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_HWTHREAD);
+                    break;
+                case PRTE_MAPPING_PPR:
+                    // do not set the policy for PPR - we will set it in
+                    // the ppr mapper
+                    break;
+                default:
+                    /* anything not tied to a specific hw obj can rank by slot */
+                    PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
+                    break;
             }
         } else {
             /* if no map-by was given, default to by-slot */
@@ -729,11 +748,13 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_L2CACHE);
         } else if (0 == strncasecmp(ck[0], "l3cache", len)) {
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_L3CACHE);
+        } else if (0 == strncasecmp(ck[0], "numa", len)) {
+            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NUMA);
         } else if (0 == strncasecmp(ck[0], "package", len)) {
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_PACKAGE);
         } else {
-            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "ranking",
-                           rmaps_base_ranking_policy);
+            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
+                           "ranking", ck[0]);
             prte_argv_free(ck);
             return PRTE_ERR_SILENT;
         }

@@ -169,14 +169,11 @@ static int rbcast(pmix_data_buffer_t *buf)
 static void rbcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                         prte_rml_tag_t tg, void *cbdata)
 {
-    int ret, cnt;
+    int ret, cnt, cbtype;
     pmix_data_buffer_t datbuf, *relay, *rly, *data;
     prte_grpcomm_signature_t sig;
     prte_rml_tag_t tag;
-    int cbtype;
-    size_t inlen, cmplen;
-    uint8_t *packed_data, *cmpdata;
-    int8_t flag;
+    bool flag;
     pmix_byte_object_t bo, pbo;
 
     PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,

@@ -50,6 +50,7 @@
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
+#include "src/mca/base/prte_mca_base_vari.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
@@ -293,7 +294,7 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     /* Mapping options */
     {'\0', "map-by", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache | "
-     "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr |,"
+     "l2cache | l3cache | numa (default:np>2) | package | node | seq | dist | ppr |,"
      "rankfile]"
      " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
      "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
@@ -304,14 +305,14 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     /* Ranking options */
     {'\0', "rank-by", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache "
-     "| l2cache | l3cache | package (default:np>2) | node], with modifier :SPAN or :FILL",
+     "| l2cache | l3cache | numa (default:np>2) | package | node], with modifier :SPAN or :FILL",
      PRTE_CMD_LINE_OTYPE_RANKING},
 
     /* Binding options */
     {'\0', "bind-to", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Binding policy for job. Allowed values: none, hwthread, core, l1cache, l2cache, "
-     "l3cache, package, (\"none\" is the default when oversubscribed, \"core\" is "
-     "the default when np<=2, and \"package\" is the default when np>2). Allowed colon-delimited "
+     "l3cache, numa, package, (\"none\" is the default when oversubscribed, \"core\" is "
+     "the default when np<=2, and \"numa\" is the default when np>2). Allowed colon-delimited "
      "qualifiers: "
      "overload-allowed, if-supported",
      PRTE_CMD_LINE_OTYPE_BINDING},
@@ -418,7 +419,7 @@ static int check_help(prte_cmd_line_t *cli, char **argv)
 
 static int convert_deprecated_cli(char *option, char ***argv, int i)
 {
-    char **pargs, *p2, *modifier;
+    char **pargs, *p1, *p2, *tmp, *tmp2, *output, *modifier;
     int rc = PRTE_SUCCESS;
 
     pargs = *argv;
@@ -579,6 +580,96 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
                        "This CLI option will be deprecated starting in Open MPI v5");
         rc = PRTE_ERR_TAKE_NEXT_OPTION;
     }
+    /* --map-by socket ->  --map-by package */
+    else if (0 == strcmp(option, "--map-by")) {
+        /* check the value of the option for "socket" */
+        if (0 == strncasecmp(pargs[i + 1], "socket", strlen("socket"))) {
+            p1 = strdup(pargs[i + 1]); // save the original option
+            /* replace "socket" with "package" */
+            if (NULL == (p2 = strchr(pargs[i + 1], ':'))) {
+                /* no modifiers */
+                tmp = strdup("package");
+            } else {
+                *p2 = '\0';
+                ++p2;
+                prte_asprintf(&tmp, "package:%s", p2);
+            }
+            prte_asprintf(&p2, "%s %s", option, p1);
+            prte_asprintf(&tmp2, "%s %s", option, tmp);
+            /* can't just call show_help as we want every instance to be reported */
+            output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                                           tmp2);
+            fprintf(stderr, "%s\n", output);
+            free(output);
+            free(p1);
+            free(p2);
+            free(tmp2);
+            free(pargs[i + 1]);
+            pargs[i + 1] = tmp;
+            return PRTE_ERR_TAKE_NEXT_OPTION;
+        }
+        rc = PRTE_OPERATION_SUCCEEDED;
+    }
+    /* --rank-by socket ->  --rank-by package */
+    else if (0 == strcmp(option, "--rank-by")) {
+        /* check the value of the option for "socket" */
+        if (0 == strncasecmp(pargs[i + 1], "socket", strlen("socket"))) {
+            p1 = strdup(pargs[i + 1]); // save the original option
+            /* replace "socket" with "package" */
+            if (NULL == (p2 = strchr(pargs[i + 1], ':'))) {
+                /* no modifiers */
+                tmp = strdup("package");
+            } else {
+                *p2 = '\0';
+                ++p2;
+                prte_asprintf(&tmp, "package:%s", p2);
+            }
+            prte_asprintf(&p2, "%s %s", option, p1);
+            prte_asprintf(&tmp2, "%s %s", option, tmp);
+            /* can't just call show_help as we want every instance to be reported */
+            output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                                           tmp2);
+            fprintf(stderr, "%s\n", output);
+            free(output);
+            free(p1);
+            free(p2);
+            free(tmp2);
+            free(pargs[i + 1]);
+            pargs[i + 1] = tmp;
+            return PRTE_ERR_TAKE_NEXT_OPTION;
+        }
+        rc = PRTE_OPERATION_SUCCEEDED;
+    }
+    /* --bind-to socket ->  --bind-to package */
+    else if (0 == strcmp(option, "--bind-to")) {
+        /* check the value of the option for "socket" */
+        if (0 == strncasecmp(pargs[i + 1], "socket", strlen("socket"))) {
+            p1 = strdup(pargs[i + 1]); // save the original option
+            /* replace "socket" with "package" */
+            if (NULL == (p2 = strchr(pargs[i + 1], ':'))) {
+                /* no modifiers */
+                tmp = strdup("package");
+            } else {
+                *p2 = '\0';
+                ++p2;
+                prte_asprintf(&tmp, "package:%s", p2);
+            }
+            prte_asprintf(&p2, "%s %s", option, p1);
+            prte_asprintf(&tmp2, "%s %s", option, tmp);
+            /* can't just call show_help as we want every instance to be reported */
+            output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                                           tmp2);
+            fprintf(stderr, "%s\n", output);
+            free(output);
+            free(p1);
+            free(p2);
+            free(tmp2);
+            free(pargs[i + 1]);
+            pargs[i + 1] = tmp;
+            return PRTE_ERR_TAKE_NEXT_OPTION;
+        }
+        rc = PRTE_OPERATION_SUCCEEDED;
+    }
 
     return rc;
 }
@@ -621,6 +712,9 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***arg
                        "--output-filename",
                        "--output-directory",
                        "--debug",
+                       "--map-by",
+                       "--rank-by",
+                       "--bind-to",
                        NULL};
 
     rc = prte_schizo_base_process_deprecated_cli(cmdline, argc, argv, options,
@@ -822,7 +916,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 p1 = prte_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
                 fp = fopen(p1, "r");
                 if (NULL == fp) {
-                    prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i], p1);;
+                    prte_show_help("help-schizo-base.txt", "missing-param-file-def", true, tmp[i], p1);;
                     prte_argv_free(tmp);
                     prte_argv_free(cache);
                     prte_argv_free(cachevals);
@@ -832,11 +926,20 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     return PRTE_ERR_NOT_FOUND;
                 }
                 free(p1);
+            } else {
+                prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);;
+                prte_argv_free(tmp);
+                prte_argv_free(cache);
+                prte_argv_free(cachevals);
+                prte_argv_free(xparams);
+                prte_argv_free(xvals);
+                return PRTE_ERR_NOT_FOUND;
             }
         }
         while (NULL != (line = prte_schizo_base_getline(fp))) {
-            if ('\0' == line[0])
+            if ('\0' == line[0]) {
                 continue; /* skip empty lines */
+            }
             opts = prte_argv_split_with_empty(line, ' ');
             if (NULL == opts) {
                 prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
@@ -1188,29 +1291,35 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
                 return PRTE_ERR_FATAL;
             }
             p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
-            if (0 != strcmp("no", p1) && 0 != strcmp("false", p1) && 0 != strcmp("0", p1)) {
-                if (NULL == target) {
-                    /* push it into our environment */
-                    prte_asprintf(&param, "PRTE_MCA_prte_enable_ft_detector");
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                                        "%s schizo:ompi:parse_cli pushing %s into environment",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
-                    prte_setenv(param, "true", true, &environ);
-                    // prte_enable_ft_detector = true;
-                    prte_enable_recovery = true;
-                    prte_asprintf(&param, "OMPI_MCA_mpi_ft_enable");
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
-                                        "%s schizo:ompi:parse_cli pushing %s into environment",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
-                    prte_setenv(param, "true", true, &environ);
-                } else {
-                    prte_argv_append_nosize(target, "--prtemca");
-                    prte_argv_append_nosize(target, "prte_enable_ft_detector");
-                    prte_argv_append_nosize(target, "true");
-                    prte_argv_append_nosize(target, "--enable-recovery");
-                    prte_argv_append_nosize(target, "--mca");
-                    prte_argv_append_nosize(target, "mpi_ft_enable");
-                    prte_argv_append_nosize(target, "true");
+            if(0 == strcmp("yes", p1) || 0 == strcmp("true", p1) || 0 == strcmp("1", p1)
+                || 0 == strcmp("ulfm", p1) || 0 == strcmp("mpi", p1)) {
+                    if (NULL == target) {
+                        /* push it into our environment */
+                        prte_asprintf(&param, "PRTE_MCA_prte_enable_ft");
+                        prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                                            "%s schizo:ompi:parse_cli pushing %s into environment",
+                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                        prte_setenv(param, "true", true, &environ);
+                        prte_enable_recovery = true;
+                        prte_asprintf(&param, "OMPI_MCA_mpi_ft_enable");
+                        prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                                            "%s schizo:ompi:parse_cli pushing %s into environment",
+                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                        prte_setenv(param, "true", true, &environ);
+                    } else {
+                        prte_argv_append_nosize(target, "--prtemca");
+                        prte_argv_append_nosize(target, "prte_enable_ft");
+                        prte_argv_append_nosize(target, "true");
+                        prte_argv_append_nosize(target, "--enable-recovery");
+                        prte_argv_append_nosize(target, "--mca");
+                        prte_argv_append_nosize(target, "mpi_ft_enable");
+                        prte_argv_append_nosize(target, "true");
+                    }
+                }
+                else {
+                    prte_output(0, "UNRECOGNIZED OPTION: --with-ft %s", p1);
+                    free(p1);
+                    return PRTE_ERR_FATAL;
                 }
             }
             free(p1);
@@ -1507,9 +1616,106 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
     return PRTE_SUCCESS;
 }
 
+static bool check_prte_overlap(char *var, char *value)
+{
+    char *tmp;
+
+    if (0 == strncmp(var, "dl_", 3)) {
+        prte_asprintf(&tmp, "PRTE_MCA_prtedl_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "oob_", 4)) {
+        prte_asprintf(&tmp, "PRTE_MCA_%s", var);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "hwloc_", 6)) {
+        prte_asprintf(&tmp, "PRTE_MCA_%s", var);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "if_", 3)) {
+        // need to convert if to prteif
+        prte_asprintf(&tmp, "PRTE_MCA_prteif_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
+        // need to convert reachable to prtereachable
+        prte_asprintf(&tmp, "PRTE_MCA_prtereachable_%s", &var[strlen("reachable")]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    }
+    return false;
+}
+
+
+static bool check_pmix_overlap(char *var, char *value)
+{
+    char *tmp;
+
+    if (0 == strncmp(var, "dl_", 3)) {
+        prte_asprintf(&tmp, "PMIX_MCA_pdl_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "oob_", 4)) {
+        prte_asprintf(&tmp, "PMIX_MCA_ptl_%s", &var[4]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "hwloc_", 6)) {
+        prte_asprintf(&tmp, "PMIX_MCA_%s", var);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "if_", 3)) {
+        // need to convert if to pif
+        prte_asprintf(&tmp, "PMIX_MCA_pif_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
+        // need to convert reachable to preachable
+        prte_asprintf(&tmp, "PMIX_MCA_preachable_%s", &var[strlen("reachable")]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    }
+    return false;
+}
+
 static int detect_proxy(char *personalities)
 {
-    char *evar;
+    char *evar, *tmp, *e2;
+    char *file;
+    const char *home;
+    prte_list_t params;
+    prte_mca_base_var_file_value_t *fv;
+    uid_t uid;
+    int n, len;
 
     prte_output_verbose(2, prte_schizo_base_framework.framework_output,
                         "%s[%s]: detect proxy with %s (%s)",
@@ -1522,7 +1728,7 @@ static int detect_proxy(char *personalities)
         /* this is a list of personalities we need to check -
          * if it contains "ompi", then we are available */
         if (NULL != strstr(personalities, "ompi")) {
-            return 100;
+            goto weareit;
         }
         return 0;
     }
@@ -1530,7 +1736,7 @@ static int detect_proxy(char *personalities)
     /* if we were told the proxy, then use it */
     if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy"))) {
         if (0 == strcmp(evar, "ompi")) {
-            return 100;
+            goto weareit;
         } else {
             return 0;
         }
@@ -1538,6 +1744,119 @@ static int detect_proxy(char *personalities)
 
     /* if neither of those were true, then it cannot be us */
     return 0;
+
+weareit:
+    /* since we are the proxy, we need to check the OMPI default
+     * MCA params to see if there is something relating to PRRTE
+     * in them - this would be "old" references to things from
+     * ORTE, as well as a few OPAL references that also impact us
+     *
+     * NOTE: we do this in the following precedence order. Note
+     * that we do not overwrite at any step - this is so that we
+     * don't overwrite something previously set by the user. So
+     * the order to execution is the opposite of the intended
+     * precedence order.
+     *
+     * 1. check the environmental paramaters for OMPI_MCA values
+     *    that need to be translated
+     *
+     * 2. the user's home directory file as it should
+     *    overwrite the system default file, but not the
+     *    envars
+     *
+     * 3. the system default parameter file
+     */
+    len = strlen("OMPI_MCA_");
+    for (n=0; NULL != environ[n]; n++) {
+        if (0 == strncmp(environ[n], "OMPI_MCA_", len)) {
+            e2 = strdup(environ[n]);
+            evar = strrchr(e2, '=');
+            *evar = '\0';
+            ++evar;
+            if (check_prte_overlap(&e2[len], evar)) {
+                // check for pmix overlap
+                check_pmix_overlap(&e2[len], evar);
+            } else if (prte_schizo_base_check_prte_param(&e2[len])) {
+                    prte_asprintf(&tmp, "PRTE_MCA_%s", &e2[len]);
+                    // set it, but don't overwrite if they already
+                    // have a value in our environment
+                    setenv(tmp, evar, false);
+                    free(tmp);
+                    // check for pmix overlap
+                    check_pmix_overlap(&e2[len], evar);
+            } else if (prte_schizo_base_check_pmix_param(&e2[len])) {
+                prte_asprintf(&tmp, "PMIX_MCA_%s", &e2[len]);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, evar, false);
+                free(tmp);
+            }
+            free(e2);
+        }
+    }
+
+    /* see if the user has a default MCA param file */
+    uid = geteuid();
+
+    /* try to get their home directory */
+    home = prte_home_directory(uid);
+    if (NULL != home) {
+        file = prte_os_path(false, home, ".openmpi", "mca-params.conf", NULL);
+        PRTE_CONSTRUCT(&params, prte_list_t);
+        prte_mca_base_parse_paramfile(file, &params);
+        free(file);
+        PRTE_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+            // see if this param relates to PRRTE
+            if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
+                check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            } else if (prte_schizo_base_check_prte_param(fv->mbvfv_var)) {
+                prte_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, fv->mbvfv_value, false);
+                free(tmp);
+                // if this relates to the DL, OOB, HWLOC, IF, or
+                // REACHABLE frameworks, then we also need to set
+                // the equivalent PMIx value
+                check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            } else if (prte_schizo_base_check_pmix_param(fv->mbvfv_var)) {
+                prte_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, fv->mbvfv_value, false);
+                free(tmp);
+            }
+        }
+        PRTE_LIST_DESTRUCT(&params);
+    }
+
+    /* check if the user has set OMPIHOME in their environment */
+    if (NULL != (evar = getenv("OMPIHOME"))) {
+        /* look for the default MCA param file */
+        file = prte_os_path(false, evar, "etc", "openmpi-mca-params.conf", NULL);
+        PRTE_CONSTRUCT(&params, prte_list_t);
+        prte_mca_base_parse_paramfile(file, &params);
+        free(file);
+        PRTE_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+            // see if this param relates to PRRTE
+            if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
+                check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            } else if (prte_schizo_base_check_prte_param(fv->mbvfv_var)) {
+                prte_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, fv->mbvfv_value, false);
+                free(tmp);
+                // if this relates to the DL, OOB, HWLOC, IF, or
+                // REACHABLE frameworks, then we also need to set
+                // the equivalent PMIx value
+                check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            }
+        }
+        PRTE_LIST_DESTRUCT(&params);
+    }
+
+    return 100;
 }
 
 static void allow_run_as_root(prte_cmd_line_t *cmd_line)

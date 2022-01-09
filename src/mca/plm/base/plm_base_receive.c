@@ -132,6 +132,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     char **env;
     char *prefix_dir, *tmp;
     pmix_rank_t tgt, *tptr;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:receive processing msg", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -639,5 +640,6 @@ CLEANUP:
 /* where HNP messages come */
 void prte_plm_base_receive_process_msg(int fd, short event, void *data)
 {
+    PRTE_HIDE_UNUSED_PARAMS(fd, event, data);
     assert(0);
 }

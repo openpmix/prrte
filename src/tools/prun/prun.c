@@ -315,7 +315,7 @@ static prte_cmd_line_init_t prte_tool_options[] = {
 int prun(int argc, char *argv[])
 {
     int rc = 1, i;
-    char *param, *ptr, *cptr;
+    char *param, *ptr, *cptr, **options;
     prte_pmix_lock_t lock, rellock;
     prte_list_t apps;
     prte_pmix_app_t *app;
@@ -325,7 +325,7 @@ int prun(int argc, char *argv[])
     pmix_status_t ret;
     bool flag;
     size_t n, ninfo;
-    pmix_app_t *papps;
+    pmix_app_t *papps = NULL;
     size_t napps;
     mylock_t mylock;
     prte_value_t *pval;
@@ -690,18 +690,7 @@ int prun(int argc, char *argv[])
 
     /***** CONSTRUCT THE APP'S JOB-INFO ****/
     PMIX_INFO_LIST_START(jinfo);
-
-    /* see if we ourselves were spawned by someone */
-    ret = PMIx_Get(&prte_process_info.myproc, PMIX_PARENT_ID, NULL, 0, &val);
-    if (PMIX_SUCCESS == ret) {
-        PMIX_LOAD_PROCID(&parent, val->data.proc->nspace, val->data.proc->rank);
-        PMIX_VALUE_RELEASE(val);
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REQUESTOR_IS_TOOL, NULL, PMIX_BOOL);
-        /* indicate that we are launching on behalf of a parent */
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PARENT_ID, &parent, PMIX_PROC);
-    } else {
-        PMIX_LOAD_PROCID(&parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
-    }
+    PMIX_LOAD_PROCID(&parent, prte_process_info.myproc.nspace, prte_process_info.myproc.rank);
 
     /***** CHECK FOR LAUNCH DIRECTIVES - ADD THEM TO JOB INFO IF FOUND ****/
     PMIX_LOAD_PROCID(&pname, myproc.nspace, PMIX_RANK_WILDCARD);
@@ -753,10 +742,35 @@ int prun(int argc, char *argv[])
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output", 0, 0))) {
         targv = prte_argv_split(pval->value.data.string, ',');
 
-        for (int idx = 0; idx < prte_argv_count(targv); idx++) {
+        for (int idx = 0; NULL != targv[idx]; idx++) {
+            /* check for qualifiers */
+            cptr = strchr(targv[idx], ':');
+            if (NULL != cptr) {
+                *cptr = '\0';
+                ++cptr;
+                /* could be multiple qualifiers, so separate them */
+                options = prte_argv_split(cptr, ',');
+                for (int m=0; NULL != options[m]; m++) {
+                    if (0 == strcasecmp(options[m], "nocopy")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
+                    } else if (0 == strcasecmp(options[m], "pattern")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
+#ifdef PMIX_IOF_OUTPUT_RAW
+                    } else if (0 == strcasecmp(options[m], "raw")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
+#endif
+                    }
+                }
+                prte_argv_free(options);
+            }
+            if (0 == strlen(targv[idx])) {
+                // only qualifiers were given
+                continue;
+            }
             /* remove any '=' sign in the directive */
             if (NULL != (ptr = strchr(targv[idx], '='))) {
                 *ptr = '\0';
+                ++ptr;
             }
             if (0 == strncasecmp(targv[idx], "tag", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, &flag, PMIX_BOOL);
@@ -780,15 +794,6 @@ int prun(int argc, char *argv[])
                                    "missing-qualifier", true,
                                    "output", "directory", "directory");
                     return PRTE_ERR_FATAL;
-                }
-                ++ptr;
-                /* check for qualifiers */
-                if (NULL != (cptr = strchr(ptr, ':'))) {
-                    *cptr = '\0';
-                    ++cptr;
-                    if (0 == strcasecmp(cptr, "nocopy")) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
-                    }
                 }
                 /* If the given filename isn't an absolute path, then
                  * convert it to one so the name will be relative to
@@ -816,15 +821,6 @@ int prun(int argc, char *argv[])
                                    "missing-qualifier", true,
                                    "output", "filename", "filename");
                     return PRTE_ERR_FATAL;
-                }
-                ++ptr;
-                /* check for qualifiers */
-                if (NULL != (cptr = strchr(ptr, ':'))) {
-                    *cptr = '\0';
-                    ++cptr;
-                    if (0 == strcasecmp(cptr, "nocopy")) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
-                    }
                 }
                 /* If the given filename isn't an absolute path, then
                  * convert it to one so the name will be relative to
@@ -1117,7 +1113,9 @@ DONE:
         prte_event_signal_del(&evitm->ev);
     }
     PRTE_LIST_DESTRUCT(&forwarded_signals);
-
+    if (NULL != papps) {
+        PMIX_APP_FREE(papps, napps);
+    }
     /* cleanup and leave */
     ret = PMIx_tool_finalize();
     if (PMIX_SUCCESS != ret) {

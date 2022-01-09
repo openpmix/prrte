@@ -44,6 +44,7 @@
 #include "src/mca/base/prte_mca_base_component_repository.h"
 #include "src/mca/mca.h"
 #include "src/mca/prtedl/base/base.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/basename.h"
 #include "src/util/printf.h"
 #include "src/util/string_copy.h"
@@ -104,6 +105,7 @@ static int process_repository_item(const char *filename, void *data)
     prte_list_t *component_list;
     char *base;
     int ret;
+    PRTE_HIDE_UNUSED_PARAMS(data);
 
     base = prte_basename(filename);
     if (NULL == base) {

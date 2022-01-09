@@ -110,6 +110,7 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
 {
     char str_local[128], str_remote[128], *conn_type;
     struct sockaddr *local_sockaddr, *remote_sockaddr;
+    struct sockaddr_storage laddr, raddr;
     int weight;
 
     local_sockaddr = (struct sockaddr *) &local_if->if_addr;
@@ -126,10 +127,14 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
     weight = calculate_weight(0, 0, CQ_NO_CONNECTION);
 
     if (AF_INET == local_sockaddr->sa_family && AF_INET == remote_sockaddr->sa_family) {
+        memset(&laddr, 0, sizeof(laddr));
+        memcpy(&laddr, local_sockaddr, sizeof(struct sockaddr));
+        memset(&raddr, 0, sizeof(raddr));
+        memcpy(&raddr, remote_sockaddr, sizeof(struct sockaddr));
 
         if (prte_net_addr_isipv4public(local_sockaddr)
             && prte_net_addr_isipv4public(remote_sockaddr)) {
-            if (prte_net_samenetwork(local_sockaddr, remote_sockaddr, local_if->if_mask)) {
+            if (prte_net_samenetwork(&laddr, &raddr, local_if->if_mask)) {
                 conn_type = "IPv4 PUBLIC SAME NETWORK";
                 weight = calculate_weight(local_if->if_bandwidth, remote_if->if_bandwidth,
                                           CQ_PUBLIC_SAME_NETWORK);
@@ -140,7 +145,7 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
             }
         } else if (!prte_net_addr_isipv4public(local_sockaddr)
                    && !prte_net_addr_isipv4public(remote_sockaddr)) {
-            if (prte_net_samenetwork(local_sockaddr, remote_sockaddr, local_if->if_mask)) {
+            if (prte_net_samenetwork(&laddr, &raddr, local_if->if_mask)) {
                 conn_type = "IPv4 PRIVATE SAME NETWORK";
                 weight = calculate_weight(local_if->if_bandwidth, remote_if->if_bandwidth,
                                           CQ_PRIVATE_SAME_NETWORK);
@@ -158,6 +163,10 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
 
 #if PRTE_ENABLE_IPV6
     } else if (AF_INET6 == local_sockaddr->sa_family && AF_INET6 == remote_sockaddr->sa_family) {
+        memset(&laddr, 0, sizeof(laddr));
+        memcpy(&laddr, local_sockaddr, sizeof(struct sockaddr));
+        memset(&raddr, 0, sizeof(raddr));
+        memcpy(&raddr, remote_sockaddr, sizeof(struct sockaddr));
         if (prte_net_addr_isipv6linklocal(local_sockaddr)
             && prte_net_addr_isipv6linklocal(remote_sockaddr)) {
             /* we can't actually tell if link local addresses are on
@@ -178,7 +187,7 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
                                       CQ_PRIVATE_SAME_NETWORK);
         } else if (!prte_net_addr_isipv6linklocal(local_sockaddr)
                    && !prte_net_addr_isipv6linklocal(remote_sockaddr)) {
-            if (prte_net_samenetwork(local_sockaddr, remote_sockaddr, local_if->if_mask)) {
+            if (prte_net_samenetwork(&laddr, &raddr, local_if->if_mask)) {
                 conn_type = "IPv6 PUBLIC SAME NETWORK";
                 weight = calculate_weight(local_if->if_bandwidth, remote_if->if_bandwidth,
                                           CQ_PUBLIC_SAME_NETWORK);

@@ -590,10 +590,10 @@ int pmix_server_init(void)
             prte_pmix_server_globals.num_rooms = PRTE_PMIX_SERVER_MIN_ROOMS;
         }
     }
-    if (PRTE_SUCCESS
-        != (rc = prte_hotel_init(&prte_pmix_server_globals.reqs, prte_pmix_server_globals.num_rooms,
-                                 prte_event_base, prte_pmix_server_globals.timeout, PRTE_ERROR_PRI,
-                                 eviction_cbfunc))) {
+    rc = prte_hotel_init(&prte_pmix_server_globals.reqs, prte_pmix_server_globals.num_rooms,
+                         prte_event_base, prte_pmix_server_globals.timeout, PRTE_ERROR_PRI,
+                         eviction_cbfunc);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -604,7 +604,7 @@ int pmix_server_init(void)
 
     /* tell the server our hostname so we agree on it */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_HOSTNAME, prte_process_info.nodename, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
         return rc;
     }
@@ -615,13 +615,13 @@ int pmix_server_init(void)
     mytopology.source = strdup("hwloc");
     mytopology.topology = prte_hwloc_topology;
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_TOPOLOGY2, &mytopology, PMIX_TOPO);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
         return rc;
     }
     // tell the server to share this topology for us
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SHARE_TOPOLOGY, NULL, PMIX_BOOL);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
         return rc;
     }
@@ -630,16 +630,18 @@ int pmix_server_init(void)
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_TMPDIR,
                        prte_process_info.jobfam_session_dir,
                        PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 
     /* tell the server to use its own internal monitoring */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_ENABLE_MONITORING,
                        NULL, PMIX_BOOL);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
     /* if requested, tell the server to drop a session-level
@@ -647,8 +649,9 @@ int pmix_server_init(void)
     if (prte_pmix_server_globals.session_server) {
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_TOOL_SUPPORT,
                            NULL, PMIX_BOOL);
-        if (PMIX_SUCCESS != rc) {
+        if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
             return rc;
         }
     }
@@ -660,8 +663,9 @@ int pmix_server_init(void)
     if (prte_pmix_server_globals.system_server && PRTE_PROC_IS_MASTER) {
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYSTEM_SUPPORT,
                            NULL, PMIX_BOOL);
-        if (PMIX_SUCCESS != rc) {
+        if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
             return rc;
         }
     }
@@ -670,65 +674,75 @@ int pmix_server_init(void)
     if (NULL != prte_pmix_server_globals.report_uri) {
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_TCP_REPORT_URI,
                            prte_pmix_server_globals.report_uri, PMIX_STRING);
-        if (PMIX_SUCCESS != rc) {
+        if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
             return rc;
         }
     }
 
+#ifdef PMIX_SINGLETON
     /* if we were started to support a singleton, then let the server library know */
     if (NULL != prte_pmix_server_globals.singleton) {
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SINGLETON,
                            prte_pmix_server_globals.singleton, PMIX_STRING);
-        if (PMIX_SUCCESS != rc) {
+        if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
             return rc;
         }
     }
+#endif
 
     /* if we are the MASTER, then we are the scheduler
      * as well as a gateway */
     if (PRTE_PROC_IS_MASTER) {
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SCHEDULER, NULL, PMIX_BOOL);
-        if (PMIX_SUCCESS != rc) {
+        if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
             return rc;
         }
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_GATEWAY, NULL, PMIX_BOOL);
-        if (PMIX_SUCCESS != rc) {
+        if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
             return rc;
         }
         /* if we are also persistent, then we do not output IOF ourselves */
         if (prte_persistent) {
             flag = false;
         } else {
-            /* if we have a parent, then we don't write out ourselves */
-            if (NULL != getenv("PMIX_LAUNCHER_RNDZ_URI")) {
+            /* if we have a parent or we are in persistent mode, then we
+             * don't write out ourselves */
+            if (NULL != getenv("PMIX_LAUNCHER_RNDZ_URI") || prte_persistent) {
                 flag = false;
             } else {
                 flag = true;
             }
         }
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
-        if (PMIX_SUCCESS != rc) {
+        if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
             return rc;
         }
     } else {
         /* prted's never locally output */
         flag = false;
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
-        if (PMIX_SUCCESS != rc) {
+        if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
             return rc;
         }
     }
 
     /* PRTE always allows remote tool connections */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_REMOTE_CONNECTIONS, &flag, PMIX_BOOL);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 
@@ -736,28 +750,32 @@ int pmix_server_init(void)
      * notification of our termination sent */
     if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_EVENT_SILENT_TERMINATION, &flag, PMIX_BOOL);
-        if (PMIX_SUCCESS != rc) {
+        if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
             return rc;
         }
      }
 
     /* tell the server what we are doing with FQDN */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_HOSTNAME_KEEP_FQDN, &prte_keep_fqdn_hostnames, PMIX_BOOL);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 
     /* tell the server our name so we agree on our identifier */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_NSPACE, prte_process_info.myproc.nspace, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_RANK, &prte_process_info.myproc.rank, PMIX_PROC_RANK);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 

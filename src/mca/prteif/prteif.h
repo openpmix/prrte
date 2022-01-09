@@ -6,7 +6,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -71,7 +71,7 @@ BEGIN_C_DECLS
 #endif
 
 #define DEFAULT_NUMBER_INTERFACES 10
-#define MAX_IFCONF_SIZE           10 * 1024 * 1024
+#define MAX_IFCONF_SIZE           10485760
 
 typedef struct prte_if_t {
     prte_list_item_t super;

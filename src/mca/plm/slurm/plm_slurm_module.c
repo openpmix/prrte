@@ -185,7 +185,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     char *name_string;
     char **custom_strings;
     int num_args, i;
-    char *cur_prefix;
+    char *cur_prefix = NULL;
     int proc_vpid_index;
     bool failed_launch = true;
     prte_job_t *daemons;
@@ -456,7 +456,9 @@ cleanup:
     if (NULL != argv) {
         prte_argv_free(argv);
     }
-
+    if (NULL != cur_prefix) {
+        free(cur_prefix);
+    }
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_LAUNCH);

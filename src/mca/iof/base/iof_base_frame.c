@@ -62,11 +62,13 @@ int prte_iof_base_output_limit = 0;
 
 static int prte_iof_base_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
+
     /* check for maximum number of pending output messages */
     prte_iof_base_output_limit = (size_t) INT_MAX;
     (void) prte_mca_base_var_register("prte", "iof", "base", "output_limit",
                                       "Maximum backlog of output messages [default: unlimited]",
-                                      PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0,
+                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                       &prte_iof_base_output_limit);

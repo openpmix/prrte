@@ -28,13 +28,13 @@
 #include "src/util/show_help.h"
 
 /* instantiate the global list of interfaces */
-prte_list_t prte_if_list = {{0}};
+prte_list_t prte_if_list = PRTE_LIST_STATIC_INIT;
 bool prte_if_retain_loopback = false;
 
 static int prte_if_base_open(prte_mca_base_open_flag_t flags);
 static int prte_if_base_close(void);
 static void prte_if_construct(prte_if_t *obj);
-static char **split_and_resolve(char **orig_str, char *name);
+static char **split_and_resolve(const char *orig_str, const char *name);
 
 static bool frameopen = false;
 
@@ -74,11 +74,11 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
      * subnet+mask
      */
     if (NULL != prte_if_include) {
-        interfaces = split_and_resolve(&prte_if_include, "include");
+        interfaces = split_and_resolve(prte_if_include, "include");
         including = true;
         excluding = false;
     } else if (NULL != prte_if_exclude) {
-        interfaces = split_and_resolve(&prte_if_exclude, "exclude");
+        interfaces = split_and_resolve(prte_if_exclude, "exclude");
         including = false;
         excluding = true;
     }
@@ -225,40 +225,40 @@ static void prte_if_construct(prte_if_t *obj)
  * (a.b.c.d/e), resolve them to an interface name (Currently only
  * supporting IPv4).  If unresolvable, warn and remove.
  */
-static char **split_and_resolve(char **orig_str, char *name)
+static char **split_and_resolve(const char *orig_str,
+                                const char *name)
 {
-    int i, ret, save, if_index;
-    char **argv, *str, *tmp;
+    int i, ret, if_index;
+    char **argv, **interfaces, *str;
     struct sockaddr_storage argv_inaddr, if_inaddr;
     uint32_t argv_prefix;
     char if_name[PRTE_IF_NAMESIZE];
+    bool found;
 
     /* Sanity check */
-    if (NULL == orig_str || NULL == *orig_str) {
+    if (NULL == orig_str) {
         return NULL;
     }
 
-    argv = prte_argv_split(*orig_str, ',');
-    if (NULL == argv) {
-        return NULL;
-    }
-    for (save = i = 0; NULL != argv[i]; ++i) {
+    argv = prte_argv_split(orig_str, ',');
+    interfaces = NULL;
+    for (i = 0; NULL != argv[i]; ++i) {
         if (isalpha(argv[i][0])) {
-            argv[save++] = argv[i];
+            /* This is an interface name. If not already in the interfaces array, add it */
+            pmix_argv_append_unique_nosize(&interfaces, argv[i]);
+            prte_output_verbose(20,
+                                prte_prteif_base_framework.framework_output,
+                                "prteif:base: Using interface: %s ", argv[i]);
             continue;
         }
-
         /* Found a subnet notation.  Convert it to an IP
          address/netmask.  Get the prefix first. */
         argv_prefix = 0;
-        tmp = strdup(argv[i]);
         str = strchr(argv[i], '/');
         if (NULL == str) {
-            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
-                           prte_process_info.nodename, tmp,
+            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true,
+                           name, prte_process_info.nodename, argv[i],
                            "Invalid specification (missing \"/\")");
-            free(argv[i]);
-            free(tmp);
             continue;
         }
         *str = '\0';
@@ -267,13 +267,12 @@ static char **split_and_resolve(char **orig_str, char *name)
         /* Now convert the IPv4 address */
         ((struct sockaddr *) &argv_inaddr)->sa_family = AF_INET;
         ret = inet_pton(AF_INET, argv[i], &((struct sockaddr_in *) &argv_inaddr)->sin_addr);
-        free(argv[i]);
+        *str = '/';
 
         if (1 != ret) {
-            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
-                           prte_process_info.nodename, tmp,
+            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true,
+                           name, prte_process_info.nodename, argv[i],
                            "Invalid specification (inet_pton() failed)");
-            free(tmp);
             continue;
         }
         prte_output_verbose(20, prte_prteif_base_framework.framework_output,
@@ -281,36 +280,36 @@ static char **split_and_resolve(char **orig_str, char *name)
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), name,
                             prte_net_get_hostname((struct sockaddr *) &argv_inaddr), argv_prefix);
 
-        /* Go through all interfaces and see if we can find a match */
-        for (if_index = prte_ifbegin(); if_index >= 0; if_index = prte_ifnext(if_index)) {
-            prte_ifindextoaddr(if_index, (struct sockaddr *) &if_inaddr, sizeof(if_inaddr));
-            if (prte_net_samenetwork((struct sockaddr *) &argv_inaddr,
-                                     (struct sockaddr *) &if_inaddr, argv_prefix)) {
-                break;
+
+        /* Go through all interfaces to see if we can find one or more matches */
+        found = false;
+        for (if_index = prte_ifbegin(); if_index >= 0;
+             if_index = prte_ifnext(if_index)) {
+            prte_ifindextoaddr(if_index,
+                               (struct sockaddr*) &if_inaddr,
+                               sizeof(if_inaddr));
+            if (prte_net_samenetwork(&argv_inaddr, &if_inaddr, argv_prefix)) {
+                /* We found a match. If it's not already in the interfaces array,
+                   add it. If it's already in the array, treat it as a match */
+                found = true;
+                prte_ifindextoname(if_index, if_name, sizeof(if_name));
+                pmix_argv_append_unique_nosize(&interfaces, if_name);
+                    prte_output_verbose(20,
+                                        prte_prteif_base_framework.framework_output,
+                                        "prteif:base: Found match: %s (%s)",
+                                        prte_net_get_hostname((struct sockaddr*) &if_inaddr),
+                                        if_name);
             }
         }
-        /* If we didn't find a match, keep trying */
-        if (if_index < 0) {
-            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
-                           prte_process_info.nodename, tmp,
-                           "Did not find interface matching this subnet");
-            free(tmp);
-            continue;
-        }
 
-        /* We found a match; get the name and replace it in the argv */
-        prte_ifindextoname(if_index, if_name, sizeof(if_name));
-        prte_output_verbose(20, prte_prteif_base_framework.framework_output,
-                            "%s if: Found match: %s (%s)", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            prte_net_get_hostname((struct sockaddr *) &if_inaddr), if_name);
-        argv[save++] = strdup(if_name);
-        free(tmp);
+        /* If we didn't find a match, keep trying */
+        if (!found) {
+            prte_show_help("help-oob-tcp.txt", "invalid if_inexclude", true, name,
+                           prte_process_info.nodename, argv[i],
+                           "Did not find interface matching this subnet");
+        }
     }
 
-    /* The list may have been compressed if there were invalid
-     entries, so ensure we end it with a NULL entry */
-    argv[save] = NULL;
-    free(*orig_str);
-    *orig_str = prte_argv_join(argv, ',');
-    return argv;
+    prte_argv_free(argv);
+    return interfaces;
 }

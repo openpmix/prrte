@@ -28,9 +28,9 @@
 #include <stdarg.h>
 #include <stdint.h>
 
-#include PRTE_EVENT_HEADER
+#include <event.h>
 #if !PRTE_HAVE_LIBEV
-#    include PRTE_EVENT2_THREAD_HEADER
+#    include <event2/thread.h>
 #endif
 
 #include "src/class/prte_list.h"

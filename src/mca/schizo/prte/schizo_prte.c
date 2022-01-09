@@ -279,7 +279,7 @@ static prte_cmd_line_init_t prte_cmd_line_init[] = {
     /* Mapping options */
     {'\0', "map-by", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache | "
-     "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr |,"
+     "l2cache | l3cache | numa (default:np>2) | package | node | seq | dist | ppr |,"
      "rankfile]"
      " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
      "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
@@ -290,14 +290,14 @@ static prte_cmd_line_init_t prte_cmd_line_init[] = {
     /* Ranking options */
     {'\0', "rank-by", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache "
-     "| l2cache | l3cache | package (default:np>2) | node], with modifier :SPAN or :FILL",
+     "| l2cache | l3cache | numa (default:np>2) | package | node], with modifier :SPAN or :FILL",
      PRTE_CMD_LINE_OTYPE_RANKING},
 
     /* Binding options */
     {'\0', "bind-to", 1, PRTE_CMD_LINE_TYPE_STRING,
      "Binding policy for job. Allowed values: none, hwthread, core, l1cache, l2cache, "
-     "l3cache, package, (\"none\" is the default when oversubscribed, \"core\" is "
-     "the default when np<=2, and \"package\" is the default when np>2). Allowed colon-delimited "
+     "l3cache, numa, package, (\"none\" is the default when oversubscribed, \"core\" is "
+     "the default when np<=2, and \"numa\" is the default when np>2). Allowed colon-delimited "
      "qualifiers: "
      "overload-allowed, if-supported",
      PRTE_CMD_LINE_OTYPE_BINDING},
@@ -530,14 +530,6 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     }
     /* --map-by socket ->  --map-by package */
     else if (0 == strcmp(option, "--map-by")) {
-        /* if the option consists solely of qualifiers, then add
-         * the "core" default value */
-        if (':' == pargs[i + 1][0]) {
-            prte_asprintf(&p2, "core%s", pargs[i + 1]);
-            free(pargs[i + 1]);
-            pargs[i + 1] = p2;
-            return PRTE_OPERATION_SUCCEEDED;
-        }
         /* check the value of the option for "socket" */
         if (0 == strncasecmp(pargs[i + 1], "socket", strlen("socket"))) {
             p1 = strdup(pargs[i + 1]); // save the original option

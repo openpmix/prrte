@@ -200,8 +200,6 @@ AC_DEFUN([PRTE_CHECK_LSF],[
            $1_LDFLAGS="[$]$1_LDFLAGS $prte_check_lsf_LDFLAGS"
            $1_CPPFLAGS="[$]$1_CPPFLAGS $prte_check_lsf_CPPFLAGS"
            # add the LSF libraries to static builds as they are required
-           $1_WRAPPER_EXTRA_LDFLAGS=[$]$1_LDFLAGS
-           $1_WRAPPER_EXTRA_LIBS=[$]$1_LIBS
            $2],
           [AS_IF([test ! -z "$with_lsf" && test "$with_lsf" != "no"],
                  [AC_MSG_WARN([LSF support requested (via --with-lsf) but not found.])

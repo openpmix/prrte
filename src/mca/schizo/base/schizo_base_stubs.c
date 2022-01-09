@@ -353,6 +353,22 @@ static char *prte_frameworks[] = {
     NULL,
 };
 
+bool prte_schizo_base_check_prte_param(char *param)
+{
+    char **tmp;
+    size_t n;
+
+    tmp = prte_argv_split(param, '_');
+    for (n=0; NULL != prte_frameworks[n]; n++) {
+        if (0 == strncmp(tmp[0], prte_frameworks[n], strlen(prte_frameworks[n]))) {
+            prte_argv_free(tmp);
+            return true;
+        }
+    }
+    prte_argv_free(tmp);
+    return false;
+}
+
 int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target)
 {
     int i, j;
@@ -410,13 +426,17 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                  * one so we know this has been processed */
                 free(argv[i]);
                 argv[i] = strdup("--prtemca");
-                /* if this refers to the "if" framework, convert to "pif" */
+                /* if this refers to the "if" framework, convert to "prteif" */
                 if (0 == strncasecmp(p1, "if", 2)) {
-                    prte_asprintf(&param, "pif_%s", &p1[3]);
+                    prte_asprintf(&param, "prteif_%s", &p1[3]);
                     free(p1);
                     p1 = param;
                 } else if (0 == strncasecmp(p1, "reachable", strlen("reachable"))) {
-                    prte_asprintf(&param, "preachable_%s", &p1[strlen("reachable_")]);
+                    prte_asprintf(&param, "prtereachable_%s", &p1[strlen("reachable_")]);
+                    free(p1);
+                    p1 = param;
+                } else if (0 == strncasecmp(p1, "dl", strlen("dl"))) {
+                    prte_asprintf(&param, "prtedl_%s", &p1[strlen("dl_")]);
                     free(p1);
                     p1 = param;
                 }
@@ -425,12 +445,12 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                     asprintf(&param, "PRTE_MCA_%s", p1);
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:prte:parse_cli pushing %s into environment",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1);
                     prte_setenv(param, p2, true, &environ);
                 } else {
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:prte:parse_cli adding %s to target",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1);
                     prte_argv_append_nosize(target, "--prtemca");
                     prte_argv_append_nosize(target, p1);
                     prte_argv_append_nosize(target, p2);
@@ -467,6 +487,22 @@ static char *pmix_frameworks[] = {
     "ptl",
     NULL
 };
+
+bool prte_schizo_base_check_pmix_param(char *param)
+{
+    char **tmp;
+    size_t n;
+
+    tmp = prte_argv_split(param, '_');
+    for (n=0; NULL != pmix_frameworks[n]; n++) {
+        if (0 == strncmp(tmp[0], pmix_frameworks[n], strlen(pmix_frameworks[n]))) {
+            prte_argv_free(tmp);
+            return true;
+        }
+    }
+    prte_argv_free(tmp);
+    return false;
+}
 
 int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target)
 {
@@ -527,6 +563,20 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
                  * one so we know this has been processed */
                 free(argv[i]);
                 argv[i] = strdup("--pmixmca");
+                /* if this refers to the "if" framework, convert to "pif" */
+                if (0 == strncasecmp(p1, "if", 2)) {
+                    prte_asprintf(&param, "pif_%s", &p1[3]);
+                    free(p1);
+                    p1 = param;
+                } else if (0 == strncasecmp(p1, "reachable", strlen("reachable"))) {
+                    prte_asprintf(&param, "preachable_%s", &p1[strlen("reachable_")]);
+                    free(p1);
+                    p1 = param;
+                } else if (0 == strncasecmp(p1, "dl", strlen("dl"))) {
+                    prte_asprintf(&param, "pdl_%s", &p1[strlen("dl_")]);
+                    free(p1);
+                    p1 = param;
+                }
                 if (NULL == target) {
                     /* push it into our environment */
                     asprintf(&param, "PMIX_MCA_%s", p1);

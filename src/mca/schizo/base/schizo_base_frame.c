@@ -37,18 +37,25 @@
 /*
  * Global variables
  */
-prte_schizo_base_t prte_schizo_base = {{{0}}};
-prte_schizo_API_module_t prte_schizo = {.parse_env = prte_schizo_base_parse_env,
-                                        .detect_proxy = prte_schizo_base_detect_proxy,
-                                        .setup_app = prte_schizo_base_setup_app,
-                                        .setup_fork = prte_schizo_base_setup_fork,
-                                        .setup_child = prte_schizo_base_setup_child,
-                                        .job_info = prte_schizo_base_job_info,
-                                        .check_sanity = prte_schizo_base_check_sanity,
-                                        .finalize = prte_schizo_base_finalize};
+prte_schizo_base_t prte_schizo_base = {
+    .active_modules = PRTE_LIST_STATIC_INIT,
+    .test_proxy_launch = false
+};
+prte_schizo_API_module_t prte_schizo = {
+    .parse_env = prte_schizo_base_parse_env,
+    .detect_proxy = prte_schizo_base_detect_proxy,
+    .setup_app = prte_schizo_base_setup_app,
+    .setup_fork = prte_schizo_base_setup_fork,
+    .setup_child = prte_schizo_base_setup_child,
+    .job_info = prte_schizo_base_job_info,
+    .check_sanity = prte_schizo_base_check_sanity,
+    .finalize = prte_schizo_base_finalize
+};
 
 static int prte_schizo_base_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
+
     /* test proxy launch */
     prte_schizo_base.test_proxy_launch = false;
     prte_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch", "Test proxy launches",
@@ -411,14 +418,23 @@ bool prte_schizo_base_check_directives(char *directive,
     size_t n, m, len, l1, l2;
     char **args, **qls, *v, *q;
     char *pproptions[] = {"slot", "hwthread", "core", "l1cache",
-                          "l2cache",  "l3cache", "package", "node",
+                          "l2cache",  "l3cache", "numa", "package", "node",
                           NULL};
     bool found;
 
     /* if it starts with a ':', then these are just modifiers */
     if (':' == dir[0]) {
-        return prte_schizo_base_check_qualifiers(directive, quals, &dir[1]);
+        qls = prte_argv_split(&dir[1], ',');
+        for (m=0; NULL != qls[m]; m++) {
+            if (!prte_schizo_base_check_qualifiers(directive, quals, qls[m])) {
+                prte_argv_free(qls);
+                return false;
+            }
+        }
+        prte_argv_free(qls);
+        return true;
     }
+
     /* always accept the "help" directive */
     if (0 == strcasecmp(dir, "help") ||
         0 == strcasecmp(dir, "-help") ||
@@ -508,22 +524,22 @@ bool prte_schizo_base_check_directives(char *directive,
 int prte_schizo_base_sanity(prte_cmd_line_t *cmd_line)
 {
     prte_value_t *pval;
-    char *mappers[] = {"slot", "hwthread", "core", "l1cache", "l2cache",  "l3cache", "package",
-                       "node", "seq",      "dist", "ppr",     "rankfile", NULL};
+    char *mappers[] = {"slot", "hwthread", "core", "l1cache", "l2cache",  "l3cache", "numa",
+                       "package", "node", "seq",      "dist", "ppr",     "rankfile", NULL};
     char *mapquals[] = {"pe=", "span", "oversubscribe", "nooversubscribe", "nolocal",
                         "hwtcpus", "corecpus", "device=", "inherit", "noinherit", "pe-list=",
                         "file=", "donotlaunch", NULL};
 
     char *rankers[] = {"slot",    "hwthread", "core", "l1cache", "l2cache",
-                       "l3cache", "package",  "node", NULL};
+                       "l3cache", "numa", "package",  "node", NULL};
     char *rkquals[] = {"span", "fill", NULL};
 
     char *binders[] = {"none",    "hwthread", "core",    "l1cache",
-                       "l2cache", "l3cache",  "package", NULL};
+                       "l2cache", "l3cache", "numa", "package", NULL};
     char *bndquals[] = {"overload-allowed", "if-supported", "ordered", "report", NULL};
 
-    char *outputs[] = {"tag", "timestamp", "xml", "merge-stderr-to-stdout", "directory", "filename", NULL};
-    char *outquals[] = {"nocopy", NULL};
+    char *outputs[] = {"tag", "rank", "timestamp", "xml", "merge-stderr-to-stdout", "directory", "filename", NULL};
+    char *outquals[] = {"nocopy", "raw", NULL};
 
     char *displays[] = {"allocation", "map", "bind", "map-devel", "topo", NULL};
 

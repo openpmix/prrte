@@ -29,6 +29,7 @@
 #include "src/event/event-internal.h"
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
+#include "src/runtime/prte_globals.h"
 
 #include "src/mca/ras/base/base.h"
 #include "src/mca/ras/base/ras_private.h"
@@ -49,10 +50,19 @@
 /*
  * Global variables
  */
-prte_ras_base_t prte_ras_base = {0};
+prte_ras_base_t prte_ras_base = {
+    .allocation_read = false,
+    .active_module = NULL,
+    .total_slots_alloc = 0,
+    .multiplier = 0,
+    .launch_orted_on_hn = false,
+    .simulated = false
+};
 
 static int ras_register(prte_mca_base_register_flag_t flags)
 {
+    PRTE_HIDE_UNUSED_PARAMS(flags);
+
     prte_ras_base.multiplier = 1;
     prte_mca_base_var_register("prte", "ras", "base", "multiplier",
                                "Simulate a larger cluster by launching N daemons/node",

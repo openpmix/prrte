@@ -53,6 +53,7 @@ int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
 {
     prte_iof_write_output_t *output;
     int num_buffered;
+    PRTE_HIDE_UNUSED_PARAMS(stream);
 
     PRTE_OUTPUT_VERBOSE(
         (1, prte_iof_base_framework.framework_output,
@@ -97,6 +98,7 @@ void prte_iof_base_write_handler(int _fd, short event, void *cbdata)
     prte_list_item_t *item;
     prte_iof_write_output_t *output;
     int num_written, total_written = 0;
+    PRTE_HIDE_UNUSED_PARAMS(_fd, event);
 
     PRTE_ACQUIRE_OBJECT(sink);
 

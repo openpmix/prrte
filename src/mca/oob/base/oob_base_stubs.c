@@ -16,6 +16,7 @@
 #include "constants.h"
 
 #include "src/pmix/pmix-internal.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/argv.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
@@ -39,6 +40,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
     prte_oob_base_component_t *component;
     bool reachable;
     char *uri;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(cd);
 

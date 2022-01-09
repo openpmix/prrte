@@ -73,6 +73,7 @@
 #endif
 
 #include "prte_stdint.h"
+#include "src/runtime/prte_globals.h"
 #include "src/util/argv.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
@@ -424,6 +425,8 @@ static char *prte_check_mtab(char *dev_path)
         }
         endmntent(mtab);
     }
+#else
+    PRTE_HIDE_UNUSED_PARAMS(dev_path);
 #endif
     return NULL;
 }

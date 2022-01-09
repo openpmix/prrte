@@ -18,7 +18,7 @@ dnl                         reserved.
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 dnl
 dnl Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2021      Nanook Consulting  All rights reserved.
+dnl Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -63,22 +63,16 @@ fi
 #
 
 AC_MSG_CHECKING([if want developer-level compiler pickyness])
-AC_ARG_ENABLE(picky,
-    AS_HELP_STRING([--enable-picky],
-                   [enable developer-level compiler pickyness when building Open MPI (default: disabled, unless a .git directory is found in the build tree)]))
-if test "$enable_picky" = "yes"; then
+AC_ARG_ENABLE(devel-check,
+    AS_HELP_STRING([--enable-devel-check],
+                   [enable developer-level compiler pickyness when building Open MPI (default: disabled)]))
+if test "$enable_devel_check" = "yes"; then
     AC_MSG_RESULT([yes])
     WANT_PICKY_COMPILER=1
 else
     AC_MSG_RESULT([no])
     WANT_PICKY_COMPILER=0
 fi
-#################### Developer default override ####################
-#if test "$WANT_PICKY_COMPILER" = "0" && test -z "$enable_picky" && test "$PRTE_DEVEL" = 1; then
-#    WANT_PICKY_COMPILER=1
-#    echo "--> developer override: enable picky compiler by default"
-#fi
-#################### Developer default override ####################
 
 AC_DEFINE_UNQUOTED(PRTE_PICKY_COMPILERS, $WANT_PICKY_COMPILER,
                    [Whether or not we are using picky compiler settings])
@@ -290,7 +284,7 @@ if test -n "$with_proxy_bugreport"; then
     PRTE_PROXY_BUGREPORT=$with_proxy_bugreport
 else
     AC_MSG_RESULT([no])
-    PRTE_PROXY_BUGREPORT=https://github.com/openpmix/prte/
+    PRTE_PROXY_BUGREPORT=https://github.com/openpmix/prrte/
 fi
 AC_DEFINE_UNQUOTED(PRTE_PROXY_BUGREPORT, "$PRTE_PROXY_BUGREPORT",
                    [Bugreport string to be returned by prte when in proxy mode])
@@ -328,67 +322,12 @@ AC_DEFINE_UNQUOTED([PRTE_ENABLE_IPV6], [$prte_want_ipv6],
                    [Enable IPv6 support, but only if the underlying system supports it])
 
 
-# Add any extra lib?
-AC_ARG_WITH([prte-extra-lib],
-            AS_HELP_STRING([--with-prte-extra-lib=LIB],
-                           [Link the output PRTE library to this extra lib (used in embedded mode)]))
-AC_MSG_CHECKING([for extra lib])
-AS_IF([test ! -z "$with_prte_extra_lib"],
-      [AS_IF([test "$with_prte_extra_lib" = "yes" || test "$with_prte_extra_lib" = "no"],
-             [AC_MSG_RESULT([ERROR])
-              AC_MSG_WARN([Invalid value for --with-extra-prte-lib:])
-              AC_MSG_WARN([    $with_prte_extra_lib])
-              AC_MSG_WARN([Must be path name of the library to add])
-              AC_MSG_ERROR([Cannot continue])],
-             [AC_MSG_RESULT([$with_prte_extra_lib])
-              PRTE_EXTRA_LIB=$with_prte_extra_lib])],
-      [AC_MSG_RESULT([no])
-       PRTE_EXTRA_LIB=])
-AC_SUBST(PRTE_EXTRA_LIB)
-
-# Add any extra libtool lib?
-AC_ARG_WITH([prte-extra-ltlib],
-            AS_HELP_STRING([--with-prte-extra-ltlib=LIB],
-                           [Link any embedded components/tools that require it to the provided libtool lib (used in embedded mode)]))
-AC_MSG_CHECKING([for extra ltlib])
-AS_IF([test ! -z "$with_prte_extra_ltlib"],
-      [AS_IF([test "$with_prte_extra_ltlib" = "yes" || test "$with_prte_extra_ltlib" = "no"],
-             [AC_MSG_RESULT([ERROR])
-              AC_MSG_WARN([Invalid value for --with-prte-extra-ltlib:])
-              AC_MSG_WARN([    $with_prte_extra_ltlib])
-              AC_MSG_WARN([Must be path name of the library to add])
-              AC_MSG_ERROR([Cannot continue])],
-             [AC_MSG_RESULT([$with_prte_extra_ltlib])
-              PRTE_EXTRA_LTLIB=$with_prte_extra_ltlib])],
-      [AC_MSG_RESULT([no])
-       PRTE_EXTRA_LTLIB=])
-AC_SUBST(PRTE_EXTRA_LTLIB)
-
-# Add any extra LDFLAGS for the extra libs?
-AC_ARG_WITH([prte-extra-lib-ldflags],
-            AS_HELP_STRING([--with-prte-extra-lib-ldflags=flags],
-                           [Where to find the extra libs]))
-AC_MSG_CHECKING([for extra lib LDFLAGS])
-AS_IF([test ! -z "$with_prte_extra_lib_ldflags"],
-      [AS_IF([test "$with_prte_extra_lib_ldflags" = "yes" || test "$with_prte_extra_lib_ldflags" = "no"],
-             [AC_MSG_RESULT([ERROR])
-              AC_MSG_WARN([Invalid value for --with-prte-extra-lib-ldflags:])
-              AC_MSG_WARN([    $with_prte_extra_lib_ldflags])
-              AC_MSG_WARN([Must be path name pointing to the libs to add])
-              AC_MSG_ERROR([Cannot continue])],
-             [AC_MSG_RESULT([$with_prte_extra_lib_ldflags])
-              PRTE_EXTRA_LIB_LDFLAGS=$with_prte_extra_lib_ldflags])],
-      [AC_MSG_RESULT([no])
-       PRTE_EXTRA_LIB_LDFLAGS=])
-AC_SUBST(PRTE_EXTRA_LIB_LDFLAGS)
-
-#
 # Package/brand string
 #
 AC_MSG_CHECKING([if want package/brand string])
 AC_ARG_WITH([package-string],
      [AS_HELP_STRING([--with-package-string=STRING],
-                     [Use a branding string throughout Open MPI])])
+                     [Use a branding string throughout PRRTE])])
 if test "$with_package_string" = "" || test "$with_package_string" = "no"; then
     with_package_string="Open MPI $PRTE_CONFIGURE_USER@$PRTE_CONFIGURE_HOST Distribution"
 fi

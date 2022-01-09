@@ -274,6 +274,7 @@ static void job_errors(int fd, short args, void *cbdata)
     prte_job_t *jdata;
     prte_job_state_t jobstate;
     int32_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
@@ -375,6 +376,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     prte_proc_state_t state = caddy->proc_state;
     int i;
     int32_t i32, *i32ptr;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
 

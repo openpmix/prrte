@@ -129,6 +129,7 @@ examples/debugger/daemon
 examples/debugger/hello
 examples/debugger/direct-multi
 examples/debugger/indirect-multi
+examples/legacy
 
 src/sys/powerpc/atomic-32.s
 src/sys/powerpc/atomic-64.s

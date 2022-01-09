@@ -269,7 +269,11 @@ int prte(int argc, char *argv[])
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
-    prte_tool_basename = prte_basename(argv[0]);
+    if (NULL == (param = getenv("PRTE_BASENAME"))) {
+        prte_tool_basename = prte_basename(argv[0]);
+    } else {
+        prte_tool_basename = strdup(param);
+    }
     pargc = argc;
     pargv = prte_argv_copy(argv);
     /* save a pristine copy of the environment for launch purposes.
@@ -912,15 +916,40 @@ int prte(int argc, char *argv[])
     outfile = NULL;
     if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output", 0, 0))) {
         targv = prte_argv_split(pval->value.data.string, ',');
-        for (int idx = 0; idx < prte_argv_count(targv); idx++) {
+        for (int idx = 0; NULL != targv[idx]; idx++) {
+            /* check for qualifiers */
+            cptr = strchr(targv[idx], ':');
+            if (NULL != cptr) {
+                *cptr = '\0';
+                ++cptr;
+                /* could be multiple qualifiers, so separate them */
+                options = prte_argv_split(cptr, ',');
+                for (int m=0; NULL != options[m]; m++) {
+                    if (0 == strcasecmp(options[m], "nocopy")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
+                    } else if (0 == strcasecmp(options[m], "pattern")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
+#ifdef PMIX_IOF_OUTPUT_RAW
+                    } else if (0 == strcasecmp(options[m], "raw")) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
+#endif
+                    }
+                }
+                prte_argv_free(options);
+            }
+            if (0 == strlen(targv[idx])) {
+                // only qualifiers were given
+                continue;
+            }
             /* remove any '=' sign in the directive */
             if (NULL != (ptr = strchr(targv[idx], '='))) {
                 *ptr = '\0';
+                ++ptr; // step over '=' sign
             }
             if (0 == strncasecmp(targv[idx], "tag", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, &flag, PMIX_BOOL);
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
             } else if (0 == strncasecmp(targv[idx], "rank", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_RANK_OUTPUT, &flag, PMIX_BOOL);
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_RANK_OUTPUT, NULL, PMIX_BOOL);
             } else if (0 == strncasecmp(targv[idx], "timestamp", strlen(targv[idx]))) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
             } else if (0 == strncasecmp(targv[idx], "xml", strlen(targv[idx]))) {
@@ -937,15 +966,6 @@ int prte(int argc, char *argv[])
                                    "missing-qualifier", true,
                                    "output", "directory", "directory");
                     return PRTE_ERR_FATAL;
-                }
-                ++ptr;
-                /* check for qualifiers */
-                if (NULL != (cptr = strchr(ptr, ':'))) {
-                    *cptr = '\0';
-                    ++cptr;
-                    if (0 == strcasecmp(cptr, "nocopy")) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
-                    }
                 }
                 /* If the given filename isn't an absolute path, then
                  * convert it to one so the name will be relative to
@@ -972,20 +992,6 @@ int prte(int argc, char *argv[])
                                    "missing-qualifier", true,
                                    "output", "filename", "filename");
                     return PRTE_ERR_FATAL;
-                }
-                ++ptr;
-                /* check for qualifiers */
-                if (NULL != (cptr = strchr(ptr, ':'))) {
-                    *cptr = '\0';
-                    ++cptr;
-                    options = prte_argv_split(cptr, ',');
-                    for (int m=0; NULL != options[m]; m++) {
-                        if (0 == strcasecmp(options[m], "nocopy")) {
-                            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
-                        } else if (0 == strcasecmp(options[m], "pattern")) {
-                            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
-                        }
-                    }
                 }
                 /* If the given filename isn't an absolute path, then
                  * convert it to one so the name will be relative to

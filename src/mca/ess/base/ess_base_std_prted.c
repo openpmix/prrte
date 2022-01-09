@@ -605,6 +605,7 @@ int prte_ess_base_prted_finalize(void)
 
 static void shutdown_signal(int fd, short flags, void *arg)
 {
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags, arg);
     /* trigger the call to shutdown callback to protect
      * against race conditions - the trigger event will
      * check the one-time lock
@@ -618,6 +619,7 @@ static void shutdown_signal(int fd, short flags, void *arg)
  */
 static void epipe_signal_callback(int fd, short flags, void *arg)
 {
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags, arg);
     /* for now, we just ignore them */
     return;
 }
@@ -629,6 +631,7 @@ static void signal_forward_callback(int fd, short event, void *arg)
     int32_t signum, rc;
     pmix_data_buffer_t *cmd;
     prte_daemon_cmd_flag_t command = PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
+    PRTE_HIDE_UNUSED_PARAMS(fd, event);
 
     signum = PRTE_EVENT_SIGNAL(signal);
     if (!prte_execute_quiet) {

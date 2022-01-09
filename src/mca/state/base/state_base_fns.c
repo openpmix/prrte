@@ -360,6 +360,7 @@ void prte_state_base_local_launch_complete(int fd, short argc, void *cbdata)
 {
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata = state->jdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
     if (prte_report_launch_progress) {
         if (0 == jdata->num_daemons_reported % 100
@@ -374,6 +375,7 @@ void prte_state_base_cleanup_job(int fd, short argc, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
     PRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -393,6 +395,7 @@ void prte_state_base_report_progress(int fd, short argc, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
     PRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -460,6 +463,7 @@ static void _send_notification(int status, prte_proc_state_t state, pmix_proc_t 
     pmix_data_buffer_t pbkt;
     pmix_data_range_t range = PMIX_RANGE_CUSTOM;
     pmix_status_t code, ret;
+    PRTE_HIDE_UNUSED_PARAMS(state);
 
     prte_output_verbose(5, prte_state_base_framework.framework_output,
                         "%s state:base:sending notification %s proc %s target %s",
@@ -552,6 +556,7 @@ static void _send_notification(int status, prte_proc_state_t state, pmix_proc_t 
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
@@ -567,6 +572,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
     pmix_proc_t parent, target;
     prte_pmix_lock_t lock;
     pmix_rank_t threshold;
+    PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
     PRTE_ACQUIRE_OBJECT(caddy);
     proc = &caddy->name;
@@ -753,6 +759,7 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
     int32_t i32, *i32ptr;
     prte_pmix_lock_t lock;
     prte_app_context_t *app;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PRTE_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;

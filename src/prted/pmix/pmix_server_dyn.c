@@ -139,8 +139,8 @@ static void spawn(int sd, short args, void *cbdata)
 
     /* add this request to our tracker hotel */
     PRTE_ADJUST_TIMEOUT(req);
-    if (PRTE_SUCCESS
-        != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+    rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+    if (PRTE_SUCCESS != rc) {
         prte_show_help("help-prted.txt", "noroom", true, req->operation,
                        prte_pmix_server_globals.num_rooms);
         goto callback;
@@ -586,6 +586,14 @@ static void interim(int sd, short args, void *cbdata)
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
+
+#ifdef PMIX_IOF_OUTPUT_RAW
+            /***   RAW OUTPUT   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_OUTPUT_RAW)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_RAW_OUTPUT, PRTE_ATTR_GLOBAL, &flag,
+                               PMIX_BOOL);
+#endif
 
             /***   STDIN TARGET   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_STDIN_TGT)) {

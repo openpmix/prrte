@@ -38,6 +38,60 @@ version 1.0.
 Master (not on release branches yet)
 ------------------------------------
 
+2.0.1: (tag point, not official release)
+------------------------------------
++**** NOTE: As of v2.0.1, PRRTE no longer has a dependency on "pandoc"
++**** for building and installing man pages.
+
+PR #1147: Updates
+ - Minor infrastructure and example cleanup
+ - Allow external caller to set prte_tool_basename
+ - Restore support for map/rank/bind by NUMA domains
+ - Standardize on use of HWLOC_OBJ_NUMANODE
+ - Activate the colocation code and debug it
+ - Update man pages
+PR #1145: delete use of PMIX_CHECK_BROKEN_QSORT refs
+PR #1137: Protect against PMIx v4.1.1-only definitions
+PR #1135: Final update v2.0.1 for rc3
+ - Show MCA base params in prte_info
+ - Silence variety of warnings
+ - Start enabling picky compilers when requested
+ - Remove unused variables in BMG component
+ - Increase verbosity of detected error
+ - Remove broken qsort support
+ - Add a legacy example
+ - Don't specify parent ID from tool
+PR #1104: Update v2.0.1 for rc3
+ - Silence Coverity warnings
+ - Update portable platform file
+ - Only order DVM termination once
+ - Abort configure if gcc is <= 4.8.1
+ - Fix segmentation fault caused by wrong size for vpids buffer
+PR #1097: Update v2.0.1 for rc2
+ - Update NEWS and VERSION
+ - Circulate and report local completion status for collectives
+ - Don't require pandoc to make a tarball
+ - Do not register xml topos
+ - Remove the Markdown source files for PRRTE man pages
+PR #1089:
+ - Cleanup timeout support to differentiate spawn vs execution time limits
+PR #1086:
+ - Use the info list array feature to construct registration data
+ - Fix path check for pandoc
+PR #1083:
+ - Add MCA param to control device distance computation
+ - Correctly report --output-directory and --output-filename as deprecated
+ - Check for libevent minimum 2.0.21
+ - Properly handle generic "orte" MCA params
+ - Cleanups associated with IOF operations
+ - Avoid use of MCA params for singleton and report-uri
+ - autogen.pl: ignore all excluded components
+ - Don't allow PRRTE IOF to block during delivery
+ - Update ignores to include Coverity working directory
+ - Ensure we hold the IOF data until the PMIx library is done with it
+ - Add an "unlock" call to balance the code
+ - Use correct ninfo when passing into APIs
+ - Don't locally output stdout/err if prterun has a parent
 2.0.0: 29 July 2021
 ------------------------------------
 This is the initial production release of the PRRTE software system. It

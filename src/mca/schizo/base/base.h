@@ -99,6 +99,8 @@ PRTE_EXPORT bool prte_schizo_base_check_directives(char *directive,
 PRTE_EXPORT bool prte_schizo_base_check_qualifiers(char *directive,
                                                    char **valid,
                                                    char *qual);
+PRTE_EXPORT bool prte_schizo_base_check_prte_param(char *param);
+PRTE_EXPORT bool prte_schizo_base_check_pmix_param(char *param);
 
 END_C_DECLS
 
