@@ -19,7 +19,7 @@
  * Copyright (c) 2016      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -160,7 +160,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     prte_oob_tcp_peer_t *peer;
     prte_oob_tcp_addr_t *addr;
     bool connected = false;
-    prte_if_t *interface;
+    prte_if_t *intf;
     char *host;
 
     remote_list = PRTE_NEW(prte_list_t);
@@ -177,21 +177,21 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     /* Construct a list of remote prte_if_t from peer */
     PRTE_LIST_FOREACH(addr, &peer->addrs, prte_oob_tcp_addr_t)
     {
-        interface = PRTE_NEW(prte_if_t);
-        if (NULL == interface) {
+        intf = PRTE_NEW(prte_if_t);
+        if (NULL == intf) {
             prte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
             goto cleanup;
         }
-        interface->af_family = addr->addr.ss_family;
-        memcpy(&interface->if_addr, &addr->addr, sizeof(struct sockaddr_storage));
-        interface->if_mask = addr->if_mask;
+        intf->af_family = addr->addr.ss_family;
+        memcpy(&intf->if_addr, &addr->addr, sizeof(struct sockaddr_storage));
+        intf->if_mask = addr->if_mask;
         /* We do not pass along bandwidth information, setting as arbitrary non
          * zero value
          */
-        interface->if_bandwidth = 1;
-        prte_list_append(remote_list, &(interface->super));
+        intf->if_bandwidth = 1;
+        prte_list_append(remote_list, &(intf->super));
     }
     local_if_count = prte_list_get_size(local_list);
     remote_if_count = prte_list_get_size(remote_list);
@@ -251,7 +251,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         for (i = 0; i < best_i; i++) {
             ptr = ptr->prte_list_next;
         }
-        interface = (prte_if_t *) ptr;
+        intf = (prte_if_t *) ptr;
         prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                             "%s prte_tcp_peer_try_connect: "
                             "attempting to connect to proc %s on %s:%d - %d retries",
@@ -303,7 +303,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         }
 
         /* Bind the socket manually to selected address */
-        if (bind(peer->sd, (struct sockaddr *) &interface->if_addr, addrlen) < 0) {
+        if (bind(peer->sd, (struct sockaddr *) &intf->if_addr, addrlen) < 0) {
             /* If we cannot bind to this address, set remaining entries
              * for this address from the reachable table to no connection
              * and try a new connection.
