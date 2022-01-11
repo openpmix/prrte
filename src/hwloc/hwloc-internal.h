@@ -7,7 +7,7 @@
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,9 +31,19 @@
 #   include <hwloc/shmem.h>
 #endif
 
-#if HWLOC_API_VERSION < 0x00010b00
+#if HWLOC_API_VERSION < 0x10b00
 #define HWLOC_OBJ_NUMANODE HWLOC_OBJ_NODE
 #define HWLOC_OBJ_PACKAGE HWLOC_OBJ_SOCKET
+#endif
+#if HWLOC_API_VERSION < 0x10a00
+static inline hwloc_obj_t hwloc_get_numanode_obj_by_os_index(hwloc_topology_t topology, unsigned os_index)
+{
+    hwloc_obj_t obj = NULL;
+    while ((obj = hwloc_get_next_obj_by_type(topology, HWLOC_OBJ_NUMANODE, obj)) != NULL)
+        if (obj->os_index == os_index)
+            return obj;
+    return NULL;
+}
 #endif
 
 #include "src/class/prte_list.h"
