@@ -17,7 +17,7 @@ dnl Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 dnl                         reserved.
 dnl Copyright (c) 2017-2021 IBM Corporation.  All rights reserved.
 dnl Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -79,10 +79,12 @@ AC_DEFUN([PRTE_CHECK_LSF],[
           # on AIX it should be in libbsd
           # on HP-UX it should be in libBSD
           # on IRIX < 6 it should be in libsun (IRIX 6 and later it is in libc)
+          # on RHEL: libnsl, libnsl2 AND libnsl2-devel are required to link libnsl to get yp_all.
           AS_IF([test "$prte_check_lsf_happy" = "yes"],
                 [PRTE_SEARCH_LIBS_COMPONENT([yp_all_nsl], [yp_all], [nsl bsd BSD sun],
                               [prte_check_lsf_happy="yes"],
-                              [prte_check_lsf_happy="no"])])
+                              [AC_MSG_WARN([[Could not find yp_all. Please see https://github.com/openpmix/prrte/wiki/Building-LSF-support for more details.]])
+                              prte_check_lsf_happy="no"])])
 
           # liblsf requires shm_open, shm_unlink, which are in librt
           AS_IF([test "$prte_check_lsf_happy" = "yes"],
@@ -154,18 +156,18 @@ AC_DEFUN([PRTE_CHECK_LSF],[
                         # (3) Check to see if the -levent is from Libevent (check for a symbol it has)
                         AC_CHECK_LIB([event], [evthread_set_condition_callbacks],
                                      [AC_MSG_CHECKING([for libevent conflict])
-                                      AC_MSG_RESULT([No. The correct libevent.so was linked.])
+                                      AC_MSG_RESULT([No conflict found. The correct libevent.so was linked.])
                                       prte_check_lsf_event_conflict=no],
                                      [# (4) The libevent.so is not from Libevent. Warn the user.
                                       AC_MSG_CHECKING([for libevent conflict])
-                                      AC_MSG_RESULT([Yes. Detected a libevent.so that is not from Libevent.])
+                                      AC_MSG_RESULT([Conflict found. Detected a libevent.so that is not from Libevent.])
                                       prte_check_lsf_event_conflict=yes])
                        ],
                        [AC_MSG_CHECKING([for libevent conflict])
-                        AC_MSG_RESULT([No. -levent is not being explicitly used.])
+                        AC_MSG_RESULT([No conflict found. -levent is not being explicitly used.])
                         prte_check_lsf_event_conflict=na])],
                 [AC_MSG_CHECKING([for libevent conflict])
-                 AC_MSG_RESULT([No. LSF checks passed.])
+                 AC_MSG_RESULT([No conflict found. LSF checks passed.])
                  prte_check_lsf_event_conflict=na])
 
           AS_IF([test "$prte_check_lsf_event_conflict" = "yes"],
