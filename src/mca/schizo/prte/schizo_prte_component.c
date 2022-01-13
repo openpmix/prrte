@@ -25,6 +25,7 @@
 #include "src/mca/schizo/schizo.h"
 
 static int component_query(prte_mca_base_module_t **module, int *priority);
+static int component_register(void);
 
 /*
  * Struct of function pointers and all that to let us be initialized
@@ -37,14 +38,31 @@ prte_schizo_prte_component_t prte_schizo_prte_component = {
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                         PRTE_RELEASE_VERSION),
             .mca_query_component = component_query,
+            .mca_register_component_params = component_register,
         },
         .base_data = {
             /* The component is checkpoint ready */
             PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
         },
     },
-    .priority = 5
+    .priority = 5,
+    .warn_deprecations = true
 };
+
+static int component_register(void)
+{
+    prte_mca_base_component_t *c = &prte_schizo_prte_component.super.base_version;
+
+    prte_schizo_prte_component.warn_deprecations = true;
+    (void) prte_mca_base_component_var_register(c, "warn_deprecations",
+                                                "Issue warnings about deprecated command line options",
+                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                &prte_schizo_prte_component.warn_deprecations);
+
+    return PRTE_SUCCESS;
+}
 
 static int component_query(prte_mca_base_module_t **module, int *priority)
 {

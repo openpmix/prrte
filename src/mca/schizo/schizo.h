@@ -38,6 +38,14 @@ BEGIN_C_DECLS
 
 typedef int (*prte_schizo_convertor_fn_t)(char *option, char ***argv, int idx);
 
+typedef struct {
+    pmix_rank_t nprocs;
+    uint16_t cpus_per_rank;
+    bool use_hwthreads;
+    int stream;
+    int verbosity;
+} prte_schizo_options_t;
+
 /*
  * schizo module functions
  */
@@ -75,6 +83,16 @@ typedef int (*prte_schizo_base_module_parse_env_fn_t)(char **srcenv,
 /* check if running as root is allowed in this environment */
 typedef void (*prte_schizo_base_module_allow_run_as_root_fn_t)(prte_cli_result_t *results);
 
+/* Set the default mapping policy for a job */
+typedef int (*prte_schizo_base_module_set_default_mapping_fn_t)(prte_job_t *jdata,
+                                                                prte_schizo_options_t *options);
+
+typedef int (*prte_schizo_base_module_set_default_ranking_fn_t)(prte_job_t *jdata,
+                                                                prte_schizo_options_t *options);
+
+typedef int (*prte_schizo_base_module_set_default_binding_fn_t)(prte_job_t *jdata,
+                                                                prte_schizo_options_t *options);
+
 /* do whatever preparation work
  * is required to setup the app for execution. This is intended to be
  * used by prun and other launcher tools to, for example, change
@@ -100,15 +118,18 @@ typedef void (*prte_schizo_base_module_job_info_fn_t)(prte_cli_result_t *results
  */
 typedef struct {
     char *name;
-    prte_schizo_base_module_init_fn_t               init;
-    prte_schizo_base_module_parse_cli_fn_t          parse_cli;
-    prte_schizo_base_module_parse_env_fn_t          parse_env;
-    prte_schizo_base_detect_proxy_fn_t              detect_proxy;
-    prte_schizo_base_module_allow_run_as_root_fn_t  allow_run_as_root;
-    prte_schizo_base_module_setup_app_fn_t          setup_app;
-    prte_schizo_base_module_setup_fork_fn_t         setup_fork;
-    prte_schizo_base_module_job_info_fn_t           job_info;
-    prte_schizo_base_module_finalize_fn_t           finalize;
+    prte_schizo_base_module_init_fn_t                   init;
+    prte_schizo_base_module_parse_cli_fn_t              parse_cli;
+    prte_schizo_base_module_parse_env_fn_t              parse_env;
+    prte_schizo_base_detect_proxy_fn_t                  detect_proxy;
+    prte_schizo_base_module_allow_run_as_root_fn_t      allow_run_as_root;
+    prte_schizo_base_module_set_default_mapping_fn_t    set_default_mapping;
+    prte_schizo_base_module_set_default_ranking_fn_t    set_default_ranking;
+    prte_schizo_base_module_set_default_binding_fn_t    set_default_binding;
+    prte_schizo_base_module_setup_app_fn_t              setup_app;
+    prte_schizo_base_module_setup_fork_fn_t             setup_fork;
+    prte_schizo_base_module_job_info_fn_t               job_info;
+    prte_schizo_base_module_finalize_fn_t               finalize;
 } prte_schizo_base_module_t;
 
 /*

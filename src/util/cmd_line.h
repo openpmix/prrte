@@ -258,6 +258,7 @@ PRTE_CLASS_DECLARATION(prte_cli_result_t);
 #define PRTE_CLI_NOLAUNCH   "donotlaunch"
 #define PRTE_CLI_FILL       "fill"
 #define PRTE_CLI_OVERLOAD   "overload-allowed"
+#define PRTE_CLI_NOOVERLOAD "no-overload"
 #define PRTE_CLI_IF_SUPP    "if-supported"
 #define PRTE_CLI_ORDERED    "ordered"
 #define PRTE_CLI_REPORT     "report"
@@ -331,6 +332,26 @@ static inline char* prte_cmd_line_get_nth_instance(prte_cli_result_t *results,
     return opt->values[idx];
 }
 
+#define PRTE_CLI_DEBUG_LIST(r)  \
+do {                                                                    \
+    prte_cli_item_t *_c;                                                \
+    prte_output(0, "\n[%s:%s:%d]", __FILE__, __func__, __LINE__);       \
+    PRTE_LIST_FOREACH(_c, &(r)->instances, prte_cli_item_t) {           \
+        prte_output(0, "KEY: %s", _c->key);                             \
+        if (NULL != _c->values) {                                       \
+            for (int _n=0; NULL != _c->values[_n]; _n++) {              \
+                prte_output(0, "    VAL[%d]: %s", _n, _c->values[_n]);  \
+            }                                                           \
+        }                                                               \
+    }                                                                   \
+    prte_output(0, "\n");                                               \
+} while(0)
+
+#define PRTE_CLI_REMOVE_DEPRECATED(r, o)    \
+do {                                                        \
+    prte_list_remove_item(&(r)->instances, &(o)->super);    \
+    PRTE_RELEASE(o);                                        \
+} while(0)
 END_C_DECLS
 
 #endif /* PRTE_CMD_LINE_H */
