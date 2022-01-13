@@ -61,7 +61,8 @@ typedef int (*prte_schizo_base_module_init_fn_t)(void);
 
 /* parse a tool command line */
 typedef int (*prte_schizo_base_module_parse_cli_fn_t)(char **argv,
-                                                      prte_cli_result_t *results);
+                                                      prte_cli_result_t *results,
+                                                      bool silent);
 
 /* detect if we are running as a proxy
  * Check the environment to determine what, if any, host we are running

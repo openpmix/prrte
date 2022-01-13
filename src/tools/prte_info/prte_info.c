@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
 
     /* parse the input argv to get values, including everyone's MCA params */
     PRTE_CONSTRUCT(&prte_info_cmd_line, prte_cli_result_t);
-    ret = schizo->parse_cli(argv, &prte_info_cmd_line);
+    ret = schizo->parse_cli(argv, &prte_info_cmd_line, PRTE_CLI_SILENT);
     if (PRTE_SUCCESS != ret) {
         PRTE_DESTRUCT(&prte_info_cmd_line);
         if (PRTE_ERR_SILENT != ret) {

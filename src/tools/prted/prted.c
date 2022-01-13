@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
 
     /* parse the CLI to load the MCA params */
     PRTE_CONSTRUCT(&results, prte_cli_result_t);
-    ret = schizo->parse_cli(pargv, &results);
+    ret = schizo->parse_cli(pargv, &results, PRTE_CLI_SILENT);
     if (PRTE_SUCCESS != ret) {
         if (PRTE_ERR_SILENT != ret) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename,

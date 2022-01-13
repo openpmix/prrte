@@ -97,7 +97,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
     /* parse the cmd line - do this every time thru so we can
      * repopulate the globals */
     PRTE_CONSTRUCT(&results, prte_cli_result_t);
-    rc = schizo->parse_cli(argv, &results);
+    rc = schizo->parse_cli(argv, &results, PRTE_CLI_SILENT);
     if (PRTE_SUCCESS != rc) {
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", argv[0], prte_strerror(rc));
