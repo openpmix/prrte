@@ -68,6 +68,11 @@ PRTE_CLASS_DECLARATION(prte_cli_result_t);
 #define PRTE_ARG_NONE       no_argument
 #define PRTE_ARG_OPTIONAL   optional_argument
 
+/* define PRTE-named flags for whether parsing
+ * CLI shall include deprecation warnings */
+#define PRTE_CLI_SILENT     true
+#define PRTE_CLI_WARN       false
+
 /* define a long option that has no short option equivalent
  *
  * n = name of the option (see below for definitions)

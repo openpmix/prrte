@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    rc = schizo->parse_cli(argv, &results);
+    rc = schizo->parse_cli(argv, &results, PRTE_CLI_WARN);
     if (PRTE_SUCCESS != rc) {
         PRTE_DESTRUCT(&results);
         if (PRTE_ERR_SILENT != rc) {

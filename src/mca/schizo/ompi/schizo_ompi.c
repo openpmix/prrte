@@ -59,7 +59,7 @@
 #include "schizo_ompi.h"
 #include "src/mca/schizo/base/base.h"
 
-static int parse_cli(char **argv, prte_cli_result_t *results);
+static int parse_cli(char **argv, prte_cli_result_t *results, bool silent);
 static int detect_proxy(char *argv);
 static int parse_env(char **srcenv, char ***dstenv, prte_cli_result_t *cli);
 static void allow_run_as_root(prte_cli_result_t *results);
@@ -232,9 +232,11 @@ static struct option ompioptions[] = {
 };
 static char *ompishorts = "h::vVpn:c:N:sH:x:";
 
-static int convert_deprecated_cli(prte_cli_result_t *results);
+static int convert_deprecated_cli(prte_cli_result_t *results,
+                                  bool silent);
 
-static int parse_cli(char **argv, prte_cli_result_t *results)
+static int parse_cli(char **argv, prte_cli_result_t *results,
+                     bool silent)
 {
     int rc, n;
     prte_cli_item_t *opt;
@@ -283,7 +285,7 @@ static int parse_cli(char **argv, prte_cli_result_t *results)
     }
 
     /* check for deprecated options - warn and convert them */
-    rc = convert_deprecated_cli(results);
+    rc = convert_deprecated_cli(results, silent);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
@@ -334,12 +336,20 @@ static int parse_cli(char **argv, prte_cli_result_t *results)
     return PRTE_SUCCESS;
 };
 
-static int convert_deprecated_cli(prte_cli_result_t *results)
+static int convert_deprecated_cli(prte_cli_result_t *results,
+                                  bool silent)
 {
     char *option, *p1, *p2, *tmp, *tmp2, *output, *modifier;
     int rc = PRTE_SUCCESS;
     prte_cli_item_t *opt, *nxt;
     prte_value_t *pval, val;
+    bool warn;
+
+    if (silent) {
+        warn = false;
+    } else {
+        warn = prte_schizo_ompi_component.warn_deprecations;
+    }
 
     PRTE_LIST_FOREACH_SAFE(opt, nxt, &results->instances, prte_cli_item_t) {
         option = opt->key;
@@ -353,28 +363,28 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
         else if (0 == strcmp(option, "nolocal")) {
             rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_NOLOCAL,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --oversubscribe -> --map-by :OVERSUBSCRIBE */
         else if (0 == strcmp(option, "oversubscribe")) {
             rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_OVERSUB,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --nooversubscribe -> --map-by :NOOVERSUBSCRIBE */
         else if (0 == strcmp(option, "nooversubscribe")) {
             rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_NOOVER,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --use-hwthread-cpus -> --bind-to hwthread */
         else if (0 == strcmp(option, "use-hwthread-cpus")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_BINDTO, PRTE_CLI_HWT,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --cpu-set and --cpu-list -> --map-by pe-list:X
@@ -383,7 +393,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
             prte_asprintf(&p2, "%s%s", PRTE_CLI_PELIST, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             free(p2);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -391,33 +401,33 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
         else if (0 == strcmp(option, "bind-to-core")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_BINDTO, PRTE_CLI_CORE,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         } else if (0 == strcmp(option, "bind-to-socket")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_BINDTO, PRTE_CLI_PACKAGE,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --bynode -> "--map-by X --rank-by X" */
         else if (0 == strcmp(option, "bynode")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_NODE,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --bycore -> "--map-by X --rank-by X" */
         else if (0 == strcmp(option, "bycore")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_CORE,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --byslot -> "--map-by X --rank-by X" */
         else if (0 == strcmp(option, "byslot")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_SLOT,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --cpus-per-proc/rank X -> --map-by :pe=X */
@@ -425,7 +435,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
             prte_asprintf(&p2, "%s%s", PRTE_CLI_PE, opt->values[0]);
             rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_MAPBY, p2,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             free(p2);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -434,7 +444,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
             prte_asprintf(&p2, "ppr:%s:node", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             free(p2);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -443,19 +453,19 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
             prte_asprintf(&p2, "ppr:%s:node", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             free(p2);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         } else if (0 == strcmp(option, "pernode")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, "ppr:1:node",
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         } else if (0 == strcmp(option, "npersocket")) {
             prte_asprintf(&p2, "ppr:%s:package", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             free(p2);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -469,7 +479,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
             prte_asprintf(&p2, "ppr:%s", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             free(p2);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -477,7 +487,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
         else if (0 == strcmp(option, "amca") || 0 == strcmp(option, "am")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_TUNE, opt->values[0],
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --rankfile X -> map-by rankfile:file=X */
@@ -491,14 +501,14 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
         else if (0 == strcmp(option, "tag-output")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, PRTE_CLI_TAG,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --timestamp-output  ->  --output timestamp */
         else if (0 == strcmp(option, "timestamp-output")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, PRTE_CLI_TIMESTAMP,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --output-directory DIR  ->  --output dir=DIR */
@@ -506,7 +516,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
             prte_asprintf(&p2, "%s%s", PRTE_CLI_QDIR, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, p2,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             free(p2);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -515,7 +525,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
             prte_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, p2,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             free(p2);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
@@ -523,55 +533,55 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
         else if (0 == strcmp(option, "xml")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, PRTE_CLI_XML,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --display-devel-map  -> --display allocation-devel */
         else if (0 == strcmp(option, "display-devel-map")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_MAPDEV,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --output-proctable  ->  --display map-devel */
         else if (0 == strcmp(option, "output-proctable")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_MAPDEV,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --display-map  ->  --display map */
         else if (0 == strcmp(option, "display-map")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_MAP,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --display-topo  ->  --display topo */
         else if (0 == strcmp(option, "display-topo")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_TOPO,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --report-bindings  ->  --display bind */
         else if (0 == strcmp(option, "report-bindings")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_BIND,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --display-allocation  ->  --display allocation */
         else if (0 == strcmp(option, "display-allocation")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_ALLOC,
-                                                prte_schizo_ompi_component.warn_deprecations);
+                                                warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --debug will be deprecated starting with open mpi v5
          */
         else if (0 == strcmp(option, "debug")) {
-            if (prte_schizo_ompi_component.warn_deprecations) {
+            if (warn) {
                 prte_show_help("help-schizo-base.txt", "deprecated-inform", true, option,
                                "This CLI option will be deprecated starting in Open MPI v5");
             }
@@ -591,7 +601,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
                     ++p2;
                     prte_asprintf(&tmp, "%s:%s", PRTE_CLI_PACKAGE, p2);
                 }
-                if (prte_schizo_ompi_component.warn_deprecations) {
+                if (warn) {
                     prte_asprintf(&p2, "%s %s", option, p1);
                     prte_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
@@ -621,7 +631,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
                     ++p2;
                     prte_asprintf(&tmp, "package:%s", p2);
                 }
-                if (prte_schizo_ompi_component.warn_deprecations) {
+                if (warn) {
                     prte_asprintf(&p2, "%s %s", option, p1);
                     prte_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
@@ -651,7 +661,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results)
                     ++p2;
                     prte_asprintf(&tmp, "%s:%s", PRTE_CLI_PACKAGE, p2);
                 }
-                if (prte_schizo_ompi_component.warn_deprecations) {
+                if (warn) {
                     prte_asprintf(&p2, "%s %s", option, p1);
                     prte_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
