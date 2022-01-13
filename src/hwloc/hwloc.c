@@ -302,8 +302,7 @@ void prte_hwloc_base_close(void)
     prte_hwloc_base_inited = false;
 }
 
-int prte_hwloc_base_set_default_binding(void *jd,
-                                        void *opt)
+int prte_hwloc_base_set_default_binding(void *jd, void *opt)
 {
     prte_job_t *jdata = (prte_job_t*)jd;
     prte_schizo_options_t *options = (prte_schizo_options_t*)opt;
@@ -320,7 +319,7 @@ int prte_hwloc_base_set_default_binding(void *jd,
         } else {
             /* bind to core */
             prte_output_verbose(options->verbosity, options->stream,
-                                "mca:rmaps[%d] binding not given - using bycore", __LINE__);
+                                "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
             PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
         }
     } else {
@@ -330,32 +329,32 @@ int prte_hwloc_base_set_default_binding(void *jd,
         if (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
             if (PRTE_MAPPING_BYHWTHREAD == mpol) {
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
+                                    "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
             } else if (PRTE_MAPPING_BYCORE == mpol) {
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given - using bycore", __LINE__);
+                                    "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
             } else if (PRTE_MAPPING_BYL1CACHE == mpol) {
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given - using byL1", __LINE__);
+                                    "setdefaultbinding[%d] binding not given - using byL1", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L1CACHE);
             } else if (PRTE_MAPPING_BYL2CACHE == mpol) {
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given - using byL2", __LINE__);
+                                    "setdefaultbinding[%d] binding not given - using byL2", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L2CACHE);
             } else if (PRTE_MAPPING_BYL3CACHE == mpol) {
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given - using byL3", __LINE__);
+                                    "setdefaultbinding[%d] binding not given - using byL3", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L3CACHE);
             } else if (PRTE_MAPPING_BYNUMA == mpol) {
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given - using bynuma",
+                                    "setdefaultbinding[%d] binding not given - using bynuma",
                                     __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
             } else if (PRTE_MAPPING_BYPACKAGE == mpol) {
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
+                                    "setdefaultbinding[%d] binding not given - using bypackage", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
             } else {
                 /* we are mapping by node or some other non-object method */
@@ -363,13 +362,13 @@ int prte_hwloc_base_set_default_binding(void *jd,
                     if (options->use_hwthreads) {
                         /* if we are using hwthread cpus, then bind to those */
                         prte_output_verbose(options->verbosity, options->stream,
-                                            "mca:rmaps[%d] binding not given - using byhwthread", __LINE__);
+                                            "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
                                                         PRTE_BIND_TO_HWTHREAD);
                     } else {
                         /* for performance, bind to core */
                         prte_output_verbose(options->verbosity, options->stream,
-                                            "mca:rmaps[%d] binding not given - using bycore", __LINE__);
+                                            "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
                                                         PRTE_BIND_TO_CORE);
                     }
@@ -377,16 +376,16 @@ int prte_hwloc_base_set_default_binding(void *jd,
                     /* bind to numa (if present), or by package (if numa isn't present and package is) */
                     if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
                         prte_output_verbose(options->verbosity, options->stream,
-                                            "mca:rmaps[%d] binding not given - using bynuma", __LINE__);
+                                            "setdefaultbinding[%d] binding not given - using bynuma", __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
                     } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
                         prte_output_verbose(options->verbosity, options->stream,
-                                            "mca:rmaps[%d] binding not given - using bypackage", __LINE__);
+                                            "setdefaultbinding[%d] binding not given - using bypackage", __LINE__);
                         PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
                     } else {
                         /* if we have neither, then just don't bind */
                         prte_output_verbose(options->verbosity, options->stream,
-                                            "mca:rmaps[%d] binding not given and no NUMA "
+                                            "setdefaultbinding[%d] binding not given and no NUMA "
                                             "or packages - not binding",
                                             __LINE__);
                         PRTE_SET_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NONE);
@@ -397,13 +396,13 @@ int prte_hwloc_base_set_default_binding(void *jd,
             if (options->use_hwthreads) {
                 /* if we are using hwthread cpus, then bind to those */
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given - using byhwthread",
+                                    "setdefaultbinding[%d] binding not given - using byhwthread",
                                     __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
             } else {
                 /* for performance, bind to core */
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given - using bycore",
+                                    "setdefaultbinding[%d] binding not given - using bycore",
                                     __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
             }
@@ -411,18 +410,18 @@ int prte_hwloc_base_set_default_binding(void *jd,
             /* for performance, bind to numa, if available, else try package */
             if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given - using bynuma",
+                                    "setdefaultbinding[%d] binding not given - using bynuma",
                                     __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
             } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given - using bypackage",
+                                    "setdefaultbinding[%d] binding not given - using bypackage",
                                     __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
             } else {
                 /* just don't bind */
                 prte_output_verbose(options->verbosity, options->stream,
-                                    "mca:rmaps[%d] binding not given and no packages - not binding",
+                                    "setdefaultbinding[%d] binding not given and no packages - not binding",
                                     __LINE__);
                 PRTE_SET_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NONE);
             }
@@ -435,6 +434,7 @@ int prte_hwloc_base_set_default_binding(void *jd,
             jdata->map->binding |= PRTE_BIND_ALLOW_OVERLOAD;
         }
     }
+    return PRTE_SUCCESS;
 }
 
 static bool fns_init = false;
