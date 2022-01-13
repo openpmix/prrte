@@ -153,6 +153,8 @@ typedef uint16_t prte_binding_policy_t;
 /* bind each rank to the cpu in the given
  * cpu list based on its node-local-rank */
 #define PRTE_BIND_ORDERED 0x8000
+// overload policy was given
+#define PRTE_BIND_OVERLOAD_GIVEN 0x0100
 
 /* binding policies - any changes in these
  * values must be reflected in prte/mca/rmaps/rmaps.h
@@ -165,14 +167,14 @@ typedef uint16_t prte_binding_policy_t;
 #define PRTE_BIND_TO_L1CACHE         6
 #define PRTE_BIND_TO_CORE            7
 #define PRTE_BIND_TO_HWTHREAD        8
-#define PRTE_GET_BINDING_POLICY(pol) ((pol) &0x0fff)
+#define PRTE_GET_BINDING_POLICY(pol) ((pol) &0x00ff)
 #define PRTE_SET_BINDING_POLICY(target, pol) \
-    (target) = (pol) | (((target) &0x2000) | PRTE_BIND_GIVEN)
-#define PRTE_SET_DEFAULT_BINDING_POLICY(target, pol)                          \
-    do {                                                                      \
-        if (!PRTE_BINDING_POLICY_IS_SET((target))) {                          \
-            (target) = (pol) | (((target) &0xf000) | PRTE_BIND_IF_SUPPORTED); \
-        }                                                                     \
+    (target) = (pol) | (((target) & 0xff00) | PRTE_BIND_GIVEN)
+#define PRTE_SET_DEFAULT_BINDING_POLICY(target, pol)                           \
+    do {                                                                       \
+        if (!PRTE_BINDING_POLICY_IS_SET((target))) {                           \
+            (target) = (pol) | (((target) & 0xff00) | PRTE_BIND_IF_SUPPORTED); \
+        }                                                                      \
     } while (0);
 
 /* check if policy is set */
@@ -181,6 +183,7 @@ typedef uint16_t prte_binding_policy_t;
 #define PRTE_BINDING_REQUIRED(n) (!(PRTE_BIND_IF_SUPPORTED & (n)))
 /* macro to detect if binding is forced */
 #define PRTE_BIND_OVERLOAD_ALLOWED(n)  (PRTE_BIND_ALLOW_OVERLOAD & (n))
+#define PRTE_BIND_OVERLOAD_SET(n) (PRTE_BIND_OVERLOAD_GIVEN & (n))
 #define PRTE_BIND_ORDERED_REQUESTED(n) (PRTE_BIND_ORDERED & (n))
 
 /* some global values */
@@ -257,6 +260,8 @@ PRTE_EXPORT prte_hwloc_locality_t prte_hwloc_base_get_relative_locality(hwloc_to
                                                                         char *cpuset1,
                                                                         char *cpuset2);
 
+PRTE_EXPORT int prte_hwloc_base_set_default_binding(void *jdata,
+                                                    void *options);
 PRTE_EXPORT int prte_hwloc_base_set_binding_policy(void *jdata, char *spec);
 
 /**

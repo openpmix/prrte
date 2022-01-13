@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -449,6 +449,51 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
     return PRTE_SUCCESS;
 }
 
+int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
+                                        prte_schizo_options_t *options)
+{
+    /* default based on number of procs */
+    if (options->nprocs <= 2) {
+        if (1 < options->cpus_per_rank) {
+            /* assigning multiple cpus to a rank requires that we map to
+             * objects that have multiple cpus in them, so default
+             * to byslot if nothing else was specified by the user.
+             */
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "mca:rmaps[%d] mapping not given - using byslot", __LINE__);
+            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
+        } else if (options->use_hwthreads) {
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "mca:rmaps[%d] mapping not given - using byhwthread",
+                                __LINE__);
+            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
+        } else {
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "mca:rmaps[%d] mapping not given - using bycore", __LINE__);
+            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
+        }
+    } else {
+        /* if NUMA is available, map by that */
+        if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "mca:rmaps[%d] mapping not set by user - using bynuma", __LINE__);
+            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
+        } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
+            /* if package is available, map by that */
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "mca:rmaps[%d] mapping not set by user - using bypackage", __LINE__);
+            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
+        } else {
+            /* if we have neither, then just do by slot */
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "mca:rmaps[%d] mapping not given and no packages - using byslot",
+                                __LINE__);
+            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
+        }
+    }
+    return PRTE_SUCCESS;
+}
+
 int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
 {
     char *ck;
@@ -644,6 +689,14 @@ setpolicy:
     }
 
     return PRTE_SUCCESS;
+}
+
+int prte_rmaps_base_set_default_ranking(prte_job_t *jdata,
+                                        prte_schizo_options_t *options)
+{
+    int rc;
+    rc = prte_rmaps_base_set_ranking_policy(jdata, NULL);
+    return rc;
 }
 
 int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)

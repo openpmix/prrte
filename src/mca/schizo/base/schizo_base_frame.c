@@ -365,6 +365,7 @@ int prte_schizo_base_sanity(prte_cli_result_t *cmd_line)
     };
     char *bndquals[] = {
         PRTE_CLI_OVERLOAD,
+        PRTE_CLI_NOOVERLOAD,
         PRTE_CLI_IF_SUPP,
         PRTE_CLI_ORDERED,
         PRTE_CLI_REPORT,

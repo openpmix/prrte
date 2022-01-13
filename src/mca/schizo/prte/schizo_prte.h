@@ -26,6 +26,7 @@ BEGIN_C_DECLS
 typedef struct {
     prte_schizo_base_component_t super;
     int priority;
+    bool warn_deprecations;
 } prte_schizo_prte_component_t;
 
 PRTE_MODULE_EXPORT extern prte_schizo_prte_component_t prte_schizo_prte_component;
