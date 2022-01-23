@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,6 +19,7 @@
 
 #include "src/class/prte_list.h"
 #include "src/event/event-internal.h"
+#include "src/runtime/prte_globals.h"
 #include "src/threads/threads.h"
 #include "src/util/error.h"
 #include "src/util/fd.h"
@@ -239,6 +240,12 @@ static void stop_progress_engine(prte_progress_tracker_t *trk)
 
 static int start_progress_engine(prte_progress_tracker_t *trk)
 {
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
+    cpu_set_t cpuset;
+    char **ranges, *dash;
+    int k, n, start, end;
+#endif
+
     assert(!trk->ev_active);
     trk->ev_active = true;
 
@@ -251,6 +258,34 @@ static int start_progress_engine(prte_progress_tracker_t *trk)
         PRTE_ERROR_LOG(rc);
     }
 
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
+    if (NULL != prte_progress_thread_cpus) {
+        CPU_ZERO(&cpuset);
+        // comma-delimited list of cpu ranges
+        ranges = prte_argv_split(prte_progress_thread_cpus, ',');
+        for (n=0; NULL != ranges[n]; n++) {
+            // look for '-'
+            start = strtoul(ranges[n], &dash, 10);
+            if (NULL == dash) {
+                CPU_SET(start, &cpuset);
+            } else {
+                ++dash;  // skip over the '-'
+                end = strtoul(dash, NULL, 10);
+                for (k=start; k < end; k++) {
+                    CPU_SET(k, &cpuset);
+                }
+            }
+        }
+        rc = pthread_setaffinity_np(trk->engine.t_handle, sizeof(cpu_set_t), &cpuset);
+        if (0 != rc && prte_bind_progress_thread_reqd) {
+            prte_output(0, "Failed to bind progress thread %s",
+                        (NULL == trk->name) ? "NULL" : trk->name);
+            rc = PRTE_ERR_NOT_SUPPORTED;
+        } else {
+            rc = PRTE_SUCCESS;
+        }
+    }
+#endif
     return rc;
 }
 

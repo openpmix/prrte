@@ -919,6 +919,9 @@ AC_PROG_LN_S
 AC_PROG_GREP
 AC_PROG_EGREP
 
+# This check must come after PRTE_CONFIG_THREADS
+AC_CHECK_FUNCS([pthread_setaffinity_np])
+
 #
 # We need as and lex
 #

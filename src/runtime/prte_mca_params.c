@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,6 +64,8 @@ char *prte_if_include = NULL;
 char *prte_if_exclude = NULL;
 char *prte_set_max_sys_limits = NULL;
 int prte_pmix_verbose_output = 0;
+char *prte_progress_thread_cpus = NULL;
+bool prte_bind_progress_thread_reqd = false;
 
 int prte_max_thread_in_progress = 1;
 
@@ -665,6 +667,19 @@ int prte_register_params(void)
                                "Verbosity for PRTE-level PMIx code", PRTE_MCA_BASE_VAR_TYPE_INT,
                                NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_pmix_verbose_output);
+
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "progress_thread_cpus",
+                                      "Comma-delimited list of ranges of CPUs to which"
+                                      "the internal PRRTE progress thread is to be bound",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_ALL, &prte_progress_thread_cpus);
+
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "bind_progress_thread_reqd",
+                                      "Whether binding of internal PRRTE progress thread is required",
+                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_ALL, &prte_bind_progress_thread_reqd);
 
 #if PRTE_ENABLE_FT
     prte_mca_base_var_register("prte", "prte", NULL, "enable_ft", "Enable/disable fault tolerance",
