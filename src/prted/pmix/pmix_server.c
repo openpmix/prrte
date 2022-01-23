@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -691,6 +691,15 @@ int pmix_server_init(void)
             rc = prte_pmix_convert_status(prc);
             return rc;
         }
+    }
+#endif
+
+#ifdef PMIX_BIND_PROGRESS_THREAD
+    if (NULL != prte_progress_thread_cpus) {
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_BIND_PROGRESS_THREAD,
+                           prte_progress_thread_cpus, PMIX_STRING);
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_BIND_REQUIRED,
+                           &prte_bind_progress_thread_reqd, PMIX_BOOL);
     }
 #endif
 
