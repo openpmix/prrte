@@ -25,7 +25,7 @@
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
 # Copyright (c) 2018-2021 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
-# Copyright (c) 2021      Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -49,7 +49,7 @@ m4_include([config/autogen_found_items.m4])
 
 AC_INIT([prte],
         [m4_normalize(esyscmd([config/prte_get_version.sh VERSION --tarball]))],
-        [https://github.com/openpmix/prte/], [prte])
+        [https://github.com/openpmix/prrte/], [prrte])
 
 AC_PREREQ(2.69)
 AC_CONFIG_AUX_DIR(config)
@@ -457,10 +457,6 @@ AC_CHECK_ALIGNOF(size_t)
 PRTE_C_WEAK_SYMBOLS
 PRTE_C_MACRO_WEAK_SYMBOLS
 
-
-if test "x$CC" = "xicc"; then
-    PRTE_CHECK_ICC_VARARGS
-fi
 
 # Check if we support the offsetof compiler directive
 PRTE_CHECK_OFFSETOF
@@ -922,6 +918,9 @@ LIBS="$LIBS $THREAD_LIBS"
 AC_PROG_LN_S
 AC_PROG_GREP
 AC_PROG_EGREP
+
+# This check must come after PRTE_CONFIG_THREADS
+AC_CHECK_FUNCS([pthread_setaffinity_np])
 
 #
 # We need as and lex

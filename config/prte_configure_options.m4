@@ -18,7 +18,7 @@ dnl                         reserved.
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 dnl
 dnl Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2021      Nanook Consulting  All rights reserved.
+dnl Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -284,7 +284,7 @@ if test -n "$with_proxy_bugreport"; then
     PRTE_PROXY_BUGREPORT=$with_proxy_bugreport
 else
     AC_MSG_RESULT([no])
-    PRTE_PROXY_BUGREPORT=https://github.com/openpmix/prte/
+    PRTE_PROXY_BUGREPORT=https://github.com/openpmix/prrte/
 fi
 AC_DEFINE_UNQUOTED(PRTE_PROXY_BUGREPORT, "$PRTE_PROXY_BUGREPORT",
                    [Bugreport string to be returned by prte when in proxy mode])
