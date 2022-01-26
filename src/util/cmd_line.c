@@ -92,7 +92,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                         char *helpfile)
 {
     int option_index = 0;   /* getopt_long stores the option index here. */
-    int n, opt, argc, rc;
+    int n, opt, argc, rc, argind;
     bool found;
     char *ptr, *str, c, **argv;
     prte_cmd_line_store_fn_t mystore;
@@ -118,6 +118,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
 
     // run the parser
     while (1) {
+        argind = optind;
         opt = getopt_long(argc, argv, shorts, myoptions, &option_index);
         if (-1 == opt) {
             break;
@@ -264,6 +265,10 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
             default:
                 /* this could be one of the short options other than 'h' or 'V', so
                  * we have to check */
+                if ('-' != argv[argind][0]) {
+                    // this was not an option
+                    break;
+                }
                 found = false;
                 for (n=0; '\0' != shorts[n]; n++) {
                     int ascii = shorts[n];

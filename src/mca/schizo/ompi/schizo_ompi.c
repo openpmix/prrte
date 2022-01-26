@@ -241,45 +241,50 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
     int rc, n;
     prte_cli_item_t *opt;
     char *p1;
+    char **pargv;
+
+    /* backup the argv */
+    pargv = prte_argv_copy(argv);
 
     /* handle the non-compliant options - i.e., the single-dash
      * multi-character options mandated by the MPI standard */
-    for (n=0; NULL != argv[n]; n++) {
-        if (0 == strcmp(argv[n], "-soft")) {
-            free(argv[n]);
-            argv[n] = strdup("--soft");
-        } else if (0 == strcmp(argv[n], "-host")) {
-            free(argv[n]);
-            argv[n] = strdup("--host");
-        } else if (0 == strcmp(argv[n], "-arch")) {
-            free(argv[n]);
-            argv[n] = strdup("--arch");
-        } else if (0 == strcmp(argv[n], "-wdir")) {
-            free(argv[n]);
-            argv[n] = strdup("--wdir");
-        } else if (0 == strcmp(argv[n], "-path")) {
-            free(argv[n]);
-            argv[n] = strdup("--path");
-        } else if (0 == strcmp(argv[n], "-file")) {
-            free(argv[n]);
-            argv[n] = strdup("--file");
-        } else if (0 == strcmp(argv[n], "-initial-errhandler")) {
-            free(argv[n]);
-            argv[n] = strdup("--initial-errhandler");
-        } else if (0 == strcmp(argv[n], "-np")) {
-            free(argv[n]);
-            argv[n] = strdup("--np");
+    for (n=0; NULL != pargv[n]; n++) {
+        if (0 == strcmp(pargv[n], "-soft")) {
+            free(pargv[n]);
+            pargv[n] = strdup("--soft");
+        } else if (0 == strcmp(pargv[n], "-host")) {
+            free(pargv[n]);
+            pargv[n] = strdup("--host");
+        } else if (0 == strcmp(pargv[n], "-arch")) {
+            free(pargv[n]);
+            pargv[n] = strdup("--arch");
+        } else if (0 == strcmp(pargv[n], "-wdir")) {
+            free(pargv[n]);
+            pargv[n] = strdup("--wdir");
+        } else if (0 == strcmp(pargv[n], "-path")) {
+            free(pargv[n]);
+            pargv[n] = strdup("--path");
+        } else if (0 == strcmp(pargv[n], "-file")) {
+            free(pargv[n]);
+            pargv[n] = strdup("--file");
+        } else if (0 == strcmp(pargv[n], "-initial-errhandler")) {
+            free(pargv[n]);
+            pargv[n] = strdup("--initial-errhandler");
+        } else if (0 == strcmp(pargv[n], "-np")) {
+            free(pargv[n]);
+            pargv[n] = strdup("--np");
         }
 #if PRTE_ENABLE_FT
-        else if (0 == strcmp(argv[n], "-with-ft")) {
-            free(argv[n]);
-            argv[n] = strdup("--with-ft");
+        else if (0 == strcmp(pargv[n], "-with-ft")) {
+            free(pargv[n]);
+            pargv[n] = strdup("--with-ft");
         }
 #endif
     }
 
-    rc = prte_cmd_line_parse(argv, ompishorts, ompioptions, NULL,
+    rc = prte_cmd_line_parse(pargv, ompishorts, ompioptions, NULL,
                              results, "help-schizo-ompi.txt");
+    prte_argv_free(pargv);
     if (PRTE_SUCCESS != rc) {
         return rc;
     }
@@ -330,6 +335,19 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
                 }
             }
 #endif
+        }
+    }
+
+    if (NULL != results->tail) {
+        /* search for the leader of the tail */
+        for (n=0; NULL != argv[n]; n++) {
+            if (0 == strcmp(results->tail[0], argv[n])) {
+                /* this starts the tail - replace the rest of the
+                 * tail with the original argv */
+                prte_argv_free(results->tail);
+                results->tail = prte_argv_copy(&argv[n]);
+                break;
+            }
         }
     }
 
