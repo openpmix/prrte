@@ -17,7 +17,7 @@
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -72,6 +72,8 @@ PRTE_EXPORT extern bool prte_proc_is_bound;        /* instantiated in src/runtim
 PRTE_EXPORT extern int prte_progress_thread_debug; /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern char *prte_tool_basename;       // argv[0] of prun or one of its symlinks
 PRTE_EXPORT extern char *prte_tool_actual;         // actual tool executable
+PRTE_EXPORT extern char *prte_progress_thread_cpus;
+PRTE_EXPORT extern bool prte_bind_progress_thread_reqd;
 
 /**
  * Global indicating where this process was bound to at launch (will
