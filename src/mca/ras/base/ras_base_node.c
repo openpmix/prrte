@@ -15,7 +15,7 @@
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -149,6 +149,12 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
             }
             /* if the node name is different, store it as an alias */
             prte_argv_append_unique_nosize(&hnp_node->aliases, node->name);
+            if (NULL != node->rawname) {
+                if (NULL != hnp_node->rawname) {
+                    free(hnp_node->rawname);
+                }
+                hnp_node->rawname = strdup(node->rawname);
+            }
             /* don't keep duplicate copy */
             PRTE_RELEASE(node);
             /* create copies, if required */
