@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -180,6 +180,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
                     node->name = strdup(node_name);
                 } else {
                     node->name = strdup(alias);
+                    node->rawname = strdup(node_name);
                 }
                 if (NULL != username) {
                     prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME, PRTE_ATTR_LOCAL,
@@ -223,6 +224,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
                 node->name = strdup(node_name);
             } else {
                 node->name = strdup(alias);
+                node->rawname = strdup(node_name);
             }
             node->slots = 1;
             if (NULL != username) {
@@ -266,6 +268,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
             node->name = strdup(prte_util_hostfile_value.sval);
         } else {
             node->name = strdup(alias);
+            node->rawname = strdup(prte_util_hostfile_value.sval);
         }
         if (NULL != alias && 0 != strcmp(alias, node->name)) {
             // new node object, so alias must be unique
@@ -339,6 +342,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         if (NULL != alias) {
             prte_argv_append_unique_nosize(&node->aliases, alias);
             free(alias);
+            node->rawname = strdup(node_name);
         }
         PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s hostfile: node %s slots %d nodes-given %s",
