@@ -15,7 +15,7 @@
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -282,6 +282,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         PRTE_LIST_FOREACH(node, &nodes, prte_node_t) {
             if (!prte_net_isaddr(node->name) &&
                 NULL != (ptr = strchr(node->name, '.'))) {
+                node->rawname = strdup(node->name);
                 if (prte_keep_fqdn_hostnames) {
                     /* retain the non-fqdn name as an alias */
                     *ptr = '\0';
