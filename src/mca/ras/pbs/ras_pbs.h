@@ -13,7 +13,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,10 +23,10 @@
 /**
  * @file
  *
- * Resource Allocation (TM)
+ * Resource Allocation (PBS)
  */
-#ifndef PRTE_RAS_TM_H
-#define PRTE_RAS_TM_H
+#ifndef PRTE_RAS_PBS_H
+#define PRTE_RAS_PBS_H
 
 #include "prte_config.h"
 #include "src/mca/ras/base/base.h"
@@ -34,15 +34,14 @@
 
 BEGIN_C_DECLS
 
-struct prte_ras_tm_component_t {
+struct prte_ras_pbs_component_t {
     prte_ras_base_component_t super;
-    char *nodefile_dir;
     bool smp_mode;
 };
-typedef struct prte_ras_tm_component_t prte_ras_tm_component_t;
+typedef struct prte_ras_pbs_component_t prte_ras_pbs_component_t;
 
-PRTE_EXPORT extern prte_ras_tm_component_t prte_ras_tm_component;
-PRTE_EXPORT extern prte_ras_base_module_t prte_ras_tm_module;
+PRTE_EXPORT extern prte_ras_pbs_component_t prte_ras_pbs_component;
+PRTE_EXPORT extern prte_ras_base_module_t prte_ras_pbs_module;
 
 END_C_DECLS
 

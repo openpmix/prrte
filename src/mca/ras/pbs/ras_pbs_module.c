@@ -14,7 +14,7 @@
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +37,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 
-#include "ras_tm.h"
+#include "ras_pbs.h"
 #include "src/mca/ras/base/ras_private.h"
 
 /*
@@ -47,16 +47,16 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes);
 static int finalize(void);
 
 static int discover(prte_list_t *nodelist, char *pbs_jobid);
-static char *tm_getline(FILE *fp);
+static char *pbs_getline(FILE *fp);
 
-#define TM_FILE_MAX_LINE_LENGTH 512
+#define PBS_FILE_MAX_LINE_LENGTH 512
 
 static char *filename;
 
 /*
  * Global variable
  */
-prte_ras_base_module_t prte_ras_tm_module = {NULL, allocate, NULL, finalize};
+prte_ras_base_module_t prte_ras_pbs_module = {NULL, allocate, NULL, finalize};
 
 /**
  * Discover available (pre-allocated) nodes and report
@@ -84,13 +84,16 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         return ret;
     }
 
-    /* in the TM world, if we didn't find anything, then this
+    /* in the PBS world, if we didn't find anything, then this
      * is an unrecoverable error - report it
      */
     if (prte_list_is_empty(nodes)) {
-        prte_show_help("help-ras-tm.txt", "no-nodes-found", true, filename);
+        prte_show_help("help-ras-pbs.txt", "no-nodes-found", true, filename);
         return PRTE_ERR_NOT_FOUND;
     }
+
+    /* record the number of allocated nodes */
+    prte_num_allocated_nodes = prte_list_get_size(nodes);
 
     /* All done */
     return PRTE_SUCCESS;
@@ -102,13 +105,13 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 static int finalize(void)
 {
     PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                         "%s ras:tm:finalize: success (nothing to do)",
+                         "%s ras:pbs:finalize: success (nothing to do)",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     return PRTE_SUCCESS;
 }
 
 /**
- * Discover the available resources.  Obtain directly from TM (and
+ * Discover the available resources.  Obtain directly from PBS (and
  * therefore have no need to validate) -- ignore hostfile or any other
  * user-specified parameters.
  *
@@ -126,10 +129,10 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
     bool found;
 
     /* Ignore anything that the user already specified -- we're
-       getting nodes only from TM. */
+       getting nodes only from PBS. */
 
-    /* TM "nodes" may actually correspond to PBS "VCPUs", which means
-       there may be multiple "TM nodes" that correspond to the same
+    /* PBS "nodes" may actually correspond to PBS "VCPUs", which means
+       there may be multiple "PBS nodes" that correspond to the same
        physical node.  This doesn't really affect what we're doing
        here (we actually ignore the fact that they're duplicates --
        slightly inefficient, but no big deal); just mentioned for
@@ -138,9 +141,9 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
     /* if we are in SMP mode, then read the environment to get the
      * number of cpus for each node read in the file
      */
-    if (prte_ras_tm_component.smp_mode) {
+    if (prte_ras_pbs_component.smp_mode) {
         if (NULL == (cppn = getenv("PBS_PPN"))) {
-            prte_show_help("help-ras-tm.txt", "smp-error", true);
+            prte_show_help("help-ras-pbs.txt", "smp-error", true);
             return PRTE_ERR_NOT_FOUND;
         }
         ppn = strtol(cppn, NULL, 10);
@@ -149,40 +152,43 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
     }
 
     /* setup the full path to the PBS file */
-    filename = prte_os_path(false, prte_ras_tm_component.nodefile_dir, pbs_jobid, NULL);
+    filename = getenv("PBS_NODEFILE");
+    if (NULL == filename) {
+        prte_show_help("help-ras-pbs.txt", "no-nodefile", true);
+        return PRTE_ERR_NOT_FOUND;
+    }
     fp = fopen(filename, "r");
     if (NULL == fp) {
         PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
-        free(filename);
         return PRTE_ERR_FILE_OPEN_FAILURE;
     }
 
-    /* Iterate through all the nodes and make an entry for each.  TM
+    /* Iterate through all the nodes and make an entry for each.  PBS
        node ID's will never be duplicated, but they may end up
        resolving to the same hostname (i.e., vcpu's on a single
        host). */
 
     nodeid = 0;
-    while (NULL != (hostname = tm_getline(fp))) {
+    while (NULL != (hostname = pbs_getline(fp))) {
 
         PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                             "%s ras:tm:allocate:discover: got hostname %s",
+                             "%s ras:pbs:allocate:discover: got hostname %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hostname));
 
-        /* Remember that TM may list the same node more than once.  So
+        /* Remember that PBS may list the same node more than once.  So
            we have to check for duplicates. */
         found = false;
         PRTE_LIST_FOREACH(node, nodelist, prte_node_t) {
             if (0 == strcmp(node->name, hostname)) {
-                if (prte_ras_tm_component.smp_mode) {
+                if (prte_ras_pbs_component.smp_mode) {
                     /* this cannot happen in smp mode */
-                    prte_show_help("help-ras-tm.txt", "smp-multi", true);
+                    prte_show_help("help-ras-pbs.txt", "smp-multi", true);
                     return PRTE_ERR_BAD_PARAM;
                 }
                 ++node->slots;
 
                 PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                                     "%s ras:tm:allocate:discover: found -- bumped slots to %d",
+                                     "%s ras:pbs:allocate:discover: found -- bumped slots to %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->slots));
                 found = true;
                 break;
@@ -196,7 +202,7 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
             /* Nope -- didn't find it, so add a new item to the list */
 
             PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
-                                 "%s ras:tm:allocate:discover: not found -- added to list",
+                                 "%s ras:pbs:allocate:discover: not found -- added to list",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
             node = PRTE_NEW(prte_node_t);
@@ -222,12 +228,12 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
     return PRTE_SUCCESS;
 }
 
-static char *tm_getline(FILE *fp)
+static char *pbs_getline(FILE *fp)
 {
     char *ret, *buff;
-    char input[TM_FILE_MAX_LINE_LENGTH];
+    char input[PBS_FILE_MAX_LINE_LENGTH];
 
-    ret = fgets(input, TM_FILE_MAX_LINE_LENGTH, fp);
+    ret = fgets(input, PBS_FILE_MAX_LINE_LENGTH, fp);
     if (NULL != ret) {
         input[strlen(input) - 1] = '\0'; /* remove newline */
         buff = strdup(input);
