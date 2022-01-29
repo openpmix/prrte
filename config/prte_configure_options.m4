@@ -380,6 +380,8 @@ AC_MSG_CHECKING([if want fault tolerance support])
 AC_ARG_WITH([prte-ft],
             [AS_HELP_STRING([--with-prte-ft],
                             [Enable PRRTE fault tolerance support using the specified method(s). Current options: utk, rcm (default: disabled) ])])
+prte_build_ft_method_utk=no
+prte_build_ft_method_rcm=no
 if test -z "$with_prte_ft" || test "$with_prte_ft" = "no"; then
     AC_MSG_RESULT([no])
     prte_ft_enabled=no
@@ -399,7 +401,9 @@ elif test "$with_prte_ft" = "yes"; then
 elif test "$with_prte_ft" = "all"; then
     AC_MSG_RESULT([yes])
     prte_ft_enabled=yes
+    prte_build_ft_method_rcm=yes
     AC_DEFINE_UNQUOTED([PRTE_ENABLE_PRCM], [1], [PRRTE Resilient Cluster Manager enabled])
+    prte_build_ft_method_utk=yes
     AC_DEFINE_UNQUOTED([PRTE_ENABLE_UTK], [1], [UTK fault tolerance enabled])
 else
     AC_MSG_RESULT([yes])
@@ -410,8 +414,10 @@ else
     for item in $with_prte_ft; do
         if test "$item" = "rcm"; then
             AC_DEFINE_UNQUOTED([PRTE_ENABLE_PRCM], [1], [PRRTE Resilient Cluster Manager enabled])
+            prte_build_ft_method_rcm=yes
         elif test "$item" = "utk"; then
             AC_DEFINE_UNQUOTED([PRTE_ENABLE_UTK], [1], [UTK fault tolerance enabled])
+            prte_build_ft_method_utk=yes
         fi
     done
     IFS=$ifs_save
@@ -419,7 +425,7 @@ fi
 
 if test "$prte_ft_enabled" = "yes"; then
     AC_DEFINE_UNQUOTED([PRTE_ENABLE_FT], [1], [Fault tolerance enabled])
-    PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance method]], [prte_ft], [$prte_ft_method])
+    PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance method]], [prte_ft], [$with_prte_ft])
 fi
 PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance]], [prte_ft], [$prte_ft_enabled])
 PRTE_FT_METHOD_STRING=$prte_ft_method

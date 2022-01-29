@@ -26,31 +26,31 @@
 #include "src/mca/base/base.h"
 #include "src/util/show_help.h"
 #include "src/mca/rmaps/base/base.h"
-#include "rmaps_resilient.h"
+#include "rmaps_rcm.h"
 
 /*
  * Local functions
  */
 
-static int resilient_register(void);
-static int resilient_open(void);
-static int resilient_close(void);
-static int resilient_query(prte_mca_base_module_t **module, int *priority);
+static int rcm_register(void);
+static int rcm_open(void);
+static int rcm_close(void);
+static int rcm_query(prte_mca_base_module_t **module, int *priority);
 
 static int my_priority;
 
-prte_rmaps_res_component_t prte_rmaps_resilient_component = {
+prte_rmaps_res_component_t prte_rmaps_rcm_component = {
     {
         .base_version = {
             PRTE_RMAPS_BASE_VERSION_2_0_0,
 
-            .mca_component_name = "resilient",
+            .mca_component_name = "rcm",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                        PRTE_RELEASE_VERSION),
-            .mca_open_component = resilient_open,
-            .mca_close_component = resilient_close,
-            .mca_query_component = resilient_query,
-            .mca_register_component_params = resilient_register,
+            .mca_open_component = rcm_open,
+            .mca_close_component = rcm_close,
+            .mca_query_component = rcm_query,
+            .mca_register_component_params = rcm_register,
         },
         .base_data = {
             /* The component is checkpoint ready */
@@ -64,61 +64,64 @@ static int my_priority;
 /**
   * component register/open/close/init function
   */
-static int resilient_register (void)
+static int rcm_register (void)
 {
     my_priority = 40;
-    (void) prte_mca_base_component_var_register (&prte_rmaps_resilient_component.super.base_version,
-                                            "priority", "Priority of the resilient rmaps component",
+    (void) prte_mca_base_component_var_register (&prte_rmaps_rcm_component.super.base_version,
+                                            "priority", "Priority of the rcm rmaps component",
                                                  PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
                                                  PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                                  PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
 
-    prte_rmaps_resilient_component.fault_group_file = NULL;
-    (void) prte_mca_base_component_var_register (&prte_rmaps_resilient_component.super.base_version,
+    prte_rmaps_rcm_component.fault_group_file = NULL;
+    (void) prte_mca_base_component_var_register (&prte_rmaps_rcm_component.super.base_version,
                                              "fault_grp_file",
                                              "Filename that contains a description of fault groups for this system",
                                              PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                              PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                              PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                             &prte_rmaps_resilient_component.fault_group_file);
+                                             &prte_rmaps_rcm_component.fault_group_file);
 
     return PRTE_SUCCESS;
 }
 
-static int resilient_open(void)
+static int rcm_open(void)
 {
     /* initialize globals */
-    PRTE_CONSTRUCT(&prte_rmaps_resilient_component.fault_grps, prte_list_t);
+    PRTE_CONSTRUCT(&prte_rmaps_rcm_component.fault_grps, prte_list_t);
 
     return PRTE_SUCCESS;
 }
 
 
-static int resilient_query(prte_mca_base_module_t **module, int *priority)
+static int rcm_query(prte_mca_base_module_t **module, int *priority)
 {
-    *priority = my_priority;
-    *module = (prte_mca_base_module_t *)&prte_rmaps_resilient_module;
-
     /* if a fault group file was provided, we should be first */
-    if (NULL != prte_rmaps_resilient_component.fault_group_file) {
-        *priority = 1000;
+    if (NULL != prte_rmaps_rcm_component.fault_group_file) {
+        my_priority = 1000;
     }
-
-    return PRTE_SUCCESS;
+    if (prte_enable_ft.rcm) {
+        *priority = my_priority;
+        *module = (prte_mca_base_module_t *)&prte_rmaps_rcm_module;
+        return PRTE_SUCCESS;
+    }
+    *priority = 0;
+    *module = NULL;
+    return PRTE_ERR_NOT_AVAILABLE;
 }
 
 /**
  *  Close all subsystems.
  */
 
-static int resilient_close(void)
+static int rcm_close(void)
 {
     prte_list_item_t *item;
 
-    PRTE_LIST_DESTRUCT(&prte_rmaps_resilient_component.fault_grps);
+    PRTE_LIST_DESTRUCT(&prte_rmaps_rcm_component.fault_grps);
 
-    if (NULL != prte_rmaps_resilient_component.fault_group_file) {
-        free(prte_rmaps_resilient_component.fault_group_file);
+    if (NULL != prte_rmaps_rcm_component.fault_group_file) {
+        free(prte_rmaps_rcm_component.fault_group_file);
     }
 
     return PRTE_SUCCESS;

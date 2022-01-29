@@ -11,13 +11,13 @@
 # $HEADER$
 #
 
-# MCA_errmgr_rmaps_resilient_CONFIG([action-if-can-compile],
+# MCA_errmgr_rmaps_rcm_CONFIG([action-if-can-compile],
 #                                   [action-if-cant-compile])
 # ------------------------------------------------
-AC_DEFUN([MCA_prte_rmaps_resilient_CONFIG],[
-    AC_CONFIG_FILES([src/mca/rmaps/resilient/Makefile])
+AC_DEFUN([MCA_prte_rmaps_rcm_CONFIG],[
+    AC_CONFIG_FILES([src/mca/rmaps/rcm/Makefile])
 
-    AS_IF([test "$prte_ft_enabled" = "yes" && test "$prte_ft_method" = "rcm"],
+    AS_IF([test "$prte_build_ft_method_rcm" = "yes"],
           [$1],
           [$2])
 
