@@ -9,21 +9,21 @@
 #
 # $HEADER$
 #
-# This is the US/English general help file for the resilient mapper.
+# This is the US/English general help file for the rcm mapper.
 #
-[orte-rmaps-resilient:file-not-found]
+[orte-rmaps-rcm:file-not-found]
 The specified file that describes the fault groups for this system:
 
 FILE: %s
 
 was not found. Please verify the file name and location.
 #
-[orte-rmaps-resilient:num-procs]
-The resilient mapper requires that you specify the number of processes
+[orte-rmaps-rcm:num-procs]
+The rcm mapper requires that you specify the number of processes
 to be launched for each application. Please provide the required information
 and try again.
 
 Alternatively, if you truly wish to take advantage of the -perxxx options
 or to simply launch one process on every available slot, do not specify the
-resilient mapper. Mpirun will automatically select the appropriate mapper
+rcm mapper. Mpirun will automatically select the appropriate mapper
 to support your request.

@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -731,11 +731,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
             /* if this was an abnormal term, notify the other procs of the termination */
             PMIX_LOAD_PROCID(&parent, jdata->nspace, PMIX_RANK_WILDCARD);
 
-            /* if ft prte is enabled, a PMIx event has already been produced
-             * and this is redundant. */
-            if (!prte_enable_ft) {
-                _send_notification(PRTE_ERR_PROC_ABORTED, pdata->state, &pdata->name, &parent);
-            }
+            _send_notification(PRTE_ERR_PROC_ABORTED, pdata->state, &pdata->name, &parent);
         }
     }
 

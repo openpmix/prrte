@@ -35,14 +35,14 @@
 
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
-#include "rmaps_resilient.h"
+#include "rmaps_rcm.h"
 
-static int resilient_map(prte_job_t *jdata);
-static int resilient_assign(prte_job_t *jdata);
+static int rcm_map(prte_job_t *jdata);
+static int rcm_assign(prte_job_t *jdata);
 
-prte_rmaps_base_module_t prte_rmaps_resilient_module = {
-    .map_job = resilient_map,
-    .assign_locations = resilient_assign
+prte_rmaps_base_module_t prte_rmaps_rcm_module = {
+    .map_job = rcm_map,
+    .assign_locations = rcm_assign
 };
 
 
@@ -65,7 +65,7 @@ static int map_to_ftgrps(prte_job_t *jdata);
 /*
  * Loadbalance the cluster
  */
-static int resilient_map(prte_job_t *jdata)
+static int rcm_map(prte_job_t *jdata)
 {
     prte_app_context_t *app;
     int i, j;
@@ -77,7 +77,7 @@ static int resilient_map(prte_job_t *jdata)
     prte_list_t node_list;
     int num_slots;
     prte_list_item_t *item;
-    prte_mca_base_component_t *c = &prte_rmaps_resilient_component.super.base_version;
+    prte_mca_base_component_t *c = &prte_rmaps_rcm_component.super.base_version;
     bool found;
 
     if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
@@ -85,25 +85,25 @@ static int resilient_map(prte_job_t *jdata)
             0 != strcasecmp(jdata->map->req_mapper, c->mca_component_name)) {
             /* a mapper has been specified, and it isn't me */
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps:resilient: job %s not using resilient mapper",
+                                "mca:rmaps:rcm: job %s not using rcm mapper",
                                 PRTE_JOBID_PRINT(jdata->nspace));
             return PRTE_ERR_TAKE_NEXT_OPTION;
         }
-        if (NULL == prte_rmaps_resilient_component.fault_group_file) {
+        if (NULL == prte_rmaps_rcm_component.fault_group_file) {
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps:resilient: cannot perform initial map of job %s - no fault groups",
+                                "mca:rmaps:rcm: cannot perform initial map of job %s - no fault groups",
                                 PRTE_JOBID_PRINT(jdata->nspace));
             return PRTE_ERR_TAKE_NEXT_OPTION;
         }
     } else if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_PROCS_MIGRATING)) {
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:resilient: cannot map job %s - not in restart or migrating",
+                            "mca:rmaps:rcm: cannot map job %s - not in restart or migrating",
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                        "mca:rmaps:resilient: mapping job %s",
+                        "mca:rmaps:rcm: mapping job %s",
                         PRTE_JOBID_PRINT(jdata->nspace));
 
     /* flag that I did the mapping */
@@ -129,7 +129,7 @@ static int resilient_map(prte_job_t *jdata)
      * node field will be NULL.
      */
     PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                         "%s rmaps:resilient: remapping job %s",
+                         "%s rmaps:rcm: remapping job %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_JOBID_PRINT(jdata->nspace)));
 
@@ -160,12 +160,12 @@ static int resilient_map(prte_job_t *jdata)
 
         if (NULL == oldnode) {
             PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                                 "%s rmaps:resilient: proc %s is to be started",
+                                 "%s rmaps:rcm: proc %s is to be started",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&proc->name)));
         } else {
             PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                                 "%s rmaps:resilient: proc %s from node %s[%s] is to be restarted",
+                                 "%s rmaps:rcm: proc %s from node %s[%s] is to be restarted",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&proc->name),
                                  (NULL == oldnode->name) ? "NULL" : oldnode->name,
@@ -212,14 +212,14 @@ static int resilient_map(prte_job_t *jdata)
              * so we couldn't have come out of the loop with nd=NULL
              */
             PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                                 "%s rmaps:resilient: Placing new process on node %s[%s] (no ftgrp)",
+                                 "%s rmaps:rcm: Placing new process on node %s[%s] (no ftgrp)",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  nd->name,
                                  (NULL == nd->daemon) ? "--" : PRTE_VPID_PRINT(nd->daemon->name.rank)));
         } else {
 
             PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                                 "%s rmaps:resilient: proc %s from node %s is to be restarted",
+                                 "%s rmaps:rcm: proc %s from node %s is to be restarted",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&proc->name),
                                  (NULL == proc->node) ? "NULL" : proc->node->name));
@@ -231,7 +231,7 @@ static int resilient_map(prte_job_t *jdata)
                     goto error;
                 }
                 PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                                     "%s rmaps:resilient: placing proc %s into fault group %d node %s",
+                                     "%s rmaps:rcm: placing proc %s into fault group %d node %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&proc->name), target->ftgrp, nd->name));
             } else {
@@ -279,15 +279,15 @@ static int resilient_map(prte_job_t *jdata)
     return rc;
 }
 
-static int resilient_assign(prte_job_t *jdata)
+static int rcm_assign(prte_job_t *jdata)
 {
-    prte_mca_base_component_t *c = &prte_rmaps_resilient_component.super.base_version;
+    prte_mca_base_component_t *c = &prte_rmaps_rcm_component.super.base_version;
 
     if (NULL == jdata->map->last_mapper ||
         0 != strcasecmp(jdata->map->last_mapper, c->mca_component_name)) {
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:resilient: job %s not using resilient assign: %s",
+                            "mca:rmaps:rcm: job %s not using rcm assign: %s",
                             PRTE_JOBID_PRINT(jdata->nspace),
                             (NULL == jdata->map->last_mapper) ? "NULL" : jdata->map->last_mapper);
         return PRTE_ERR_TAKE_NEXT_OPTION;
@@ -326,19 +326,19 @@ static int construct_ftgrps(void)
     /* flag that we did this */
     made_ftgrps = true;
 
-    if (NULL == prte_rmaps_resilient_component.fault_group_file) {
+    if (NULL == prte_rmaps_rcm_component.fault_group_file) {
         /* nothing to build */
         return PRTE_SUCCESS;
     }
 
     /* construct it */
     PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                         "%s rmaps:resilient: constructing fault groups",
+                         "%s rmaps:rcm: constructing fault groups",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-    fp = fopen(prte_rmaps_resilient_component.fault_group_file, "r");
+    fp = fopen(prte_rmaps_rcm_component.fault_group_file, "r");
     if (NULL == fp) { /* not found */
-        prte_show_help("help-rmaps-resilient.txt", "file-not-found",
-                       true, prte_rmaps_resilient_component.fault_group_file);
+        prte_show_help("help-rmaps-rcm.txt", "file-not-found",
+                       true, prte_rmaps_rcm_component.fault_group_file);
         return PRTE_ERR_FAILED_TO_MAP;
     }
 
@@ -358,7 +358,7 @@ static int construct_ftgrps(void)
                 if (0 == strcmp(node->name, nodes[k])) {
                     PRTE_RETAIN(node);
                     PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                                         "%s rmaps:resilient: adding node %s to fault group %d",
+                                         "%s rmaps:rcm: adding node %s to fault group %d",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                          node->name, ftgrp->ftgrp));
                     prte_pointer_array_add(&ftgrp->nodes, node);
@@ -367,7 +367,7 @@ static int construct_ftgrps(void)
                 }
             }
         }
-        prte_list_append(&prte_rmaps_resilient_component.fault_grps, &ftgrp->super);
+        prte_list_append(&prte_rmaps_rcm_component.fault_grps, &ftgrp->super);
         prte_argv_free(nodes);
         free(ftinput);
     }
@@ -398,8 +398,8 @@ static int get_ftgrp_target(prte_proc_t *proc,
      */
     minload = 1000000.0;
     target = NULL;
-    for (item = prte_list_get_first(&prte_rmaps_resilient_component.fault_grps);
-         item != prte_list_get_end(&prte_rmaps_resilient_component.fault_grps);
+    for (item = prte_list_get_first(&prte_rmaps_rcm_component.fault_grps);
+         item != prte_list_get_end(&prte_rmaps_rcm_component.fault_grps);
          item = prte_list_get_next(item)) {
         ftgrp = (prte_rmaps_res_ftgrp_t*)item;
         /* see if the node is in this fault group */
@@ -412,7 +412,7 @@ static int get_ftgrp_target(prte_proc_t *proc,
             if (NULL != proc->node && 0 == strcmp(node->name, proc->node->name)) {
                 /* yes - mark it to not be included */
                 PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                                     "%s rmaps:resilient: node %s is in fault group %d, which will be excluded",
+                                     "%s rmaps:rcm: node %s is in fault group %d, which will be excluded",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      proc->node->name, ftgrp->ftgrp));
                 ftgrp->included = false;
@@ -439,7 +439,7 @@ static int get_ftgrp_target(prte_proc_t *proc,
             minload = avgload;
             target = ftgrp;
             PRTE_OUTPUT_VERBOSE((2, prte_rmaps_base_framework.framework_output,
-                                 "%s rmaps:resilient: found new min load ftgrp %d",
+                                 "%s rmaps:rcm: found new min load ftgrp %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  ftgrp->ftgrp));
         }
@@ -517,7 +517,7 @@ static int get_new_node(prte_proc_t *proc,
         nd = (prte_node_t*)prte_list_get_first(&node_list);
         prte_set_attribute(&proc->attributes, PRTE_PROC_PRIOR_NODE, PRTE_ATTR_LOCAL, oldnode, PMIX_POINTER);
         PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                             "%s rmaps:resilient: Placing process %s on node %s[%s] (only one avail node)",
+                             "%s rmaps:rcm: Placing process %s on node %s[%s] (only one avail node)",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_NAME_PRINT(&proc->name),
                              nd->name,
@@ -622,7 +622,7 @@ static int get_new_node(prte_proc_t *proc,
         if (NULL != oldnode) {
             nd = oldnode;
             PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                                 "%s rmaps:resilient: Placing process %s on prior node %s[%s] (no ftgrp)",
+                                 "%s rmaps:rcm: Placing process %s on prior node %s[%s] (no ftgrp)",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&proc->name),
                                  (NULL == nd->name) ? "NULL" : nd->name,
@@ -631,7 +631,7 @@ static int get_new_node(prte_proc_t *proc,
             nd = proc->node;
             prte_set_attribute(&proc->attributes, PRTE_PROC_PRIOR_NODE, PRTE_ATTR_LOCAL, nd, PMIX_POINTER);
             PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                                 "%s rmaps:resilient: Placing process %s back on same node %s[%s] (no ftgrp)",
+                                 "%s rmaps:rcm: Placing process %s back on same node %s[%s] (no ftgrp)",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&proc->name),
                                  (NULL == nd->name) ? "NULL" : nd->name,
@@ -647,7 +647,7 @@ static int get_new_node(prte_proc_t *proc,
 
  release:
     PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                         "%s rmaps:resilient: Placing process on node %s[%s] (no ftgrp)",
+                         "%s rmaps:rcm: Placing process on node %s[%s] (no ftgrp)",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (NULL == nd->name) ? "NULL" : nd->name,
                          (NULL == nd->daemon) ? "--" : PRTE_VPID_PRINT(nd->daemon->name.rank)));
@@ -668,8 +668,8 @@ static void flag_nodes(prte_list_t *node_list)
     prte_rmaps_res_ftgrp_t *ftgrp;
     int k;
 
-    for (item = prte_list_get_first(&prte_rmaps_resilient_component.fault_grps);
-         item != prte_list_get_end(&prte_rmaps_resilient_component.fault_grps);
+    for (item = prte_list_get_first(&prte_rmaps_rcm_component.fault_grps);
+         item != prte_list_get_end(&prte_rmaps_rcm_component.fault_grps);
          item = prte_list_get_next(item)) {
         ftgrp = (prte_rmaps_res_ftgrp_t*)item;
         /* reset the flags */
@@ -711,7 +711,7 @@ static int map_to_ftgrps(prte_job_t *jdata)
     bool initial_map=true;
 
     PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                         "%s rmaps:resilient: creating initial map for job %s",
+                         "%s rmaps:rcm: creating initial map for job %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_JOBID_PRINT(jdata->nspace)));
 
@@ -728,7 +728,7 @@ static int map_to_ftgrps(prte_job_t *jdata)
          * launch for each app
          */
         if (0 == app->num_procs) {
-            prte_show_help("help-rmaps-resilient.txt",
+            prte_show_help("help-rmaps-rcm.txt",
                            "num-procs",
                            true);
             return PRTE_ERR_SILENT;
@@ -773,12 +773,12 @@ static int map_to_ftgrps(prte_job_t *jdata)
              */
             target = NULL;
             minload = 1000000000.0;
-            for (item = prte_list_get_first(&prte_rmaps_resilient_component.fault_grps);
-                 item != prte_list_get_end(&prte_rmaps_resilient_component.fault_grps);
+            for (item = prte_list_get_first(&prte_rmaps_rcm_component.fault_grps);
+                 item != prte_list_get_end(&prte_rmaps_rcm_component.fault_grps);
                  item = prte_list_get_next(item)) {
                 ftgrp = (prte_rmaps_res_ftgrp_t*)item;
                 PRTE_OUTPUT_VERBOSE((2, prte_rmaps_base_framework.framework_output,
-                                     "%s rmaps:resilient: fault group %d used: %s included %s",
+                                     "%s rmaps:rcm: fault group %d used: %s included %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      ftgrp->ftgrp,
                                      ftgrp->used ? "YES" : "NO",
@@ -804,7 +804,7 @@ static int map_to_ftgrps(prte_job_t *jdata)
                     minload = avgload;
                     target = ftgrp;
                     PRTE_OUTPUT_VERBOSE((2, prte_rmaps_base_framework.framework_output,
-                                         "%s rmaps:resilient: found new min load ftgrp %d",
+                                         "%s rmaps:rcm: found new min load ftgrp %d",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                          ftgrp->ftgrp));
                 }
@@ -816,7 +816,7 @@ static int map_to_ftgrps(prte_job_t *jdata)
              */
             if (NULL == target) {
                 PRTE_OUTPUT_VERBOSE((2, prte_rmaps_base_framework.framework_output,
-                                     "%s rmaps:resilient: more procs than fault groups - mapping excess rr",
+                                     "%s rmaps:rcm: more procs than fault groups - mapping excess rr",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                 nd = (prte_node_t*)curitem;
                 curitem = prte_list_get_next(curitem);
@@ -837,7 +837,7 @@ static int map_to_ftgrps(prte_job_t *jdata)
                 }
             }
             PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
-                                 "%s rmaps:resilient: placing proc into fault group %d node %s",
+                                 "%s rmaps:rcm: placing proc into fault group %d node %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  (NULL == target) ? -1 : target->ftgrp, nd->name));
             /* if the node isn't in the map, add it */

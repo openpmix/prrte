@@ -94,7 +94,7 @@ static int dvm_close(void)
 static int dvm_component_query(prte_mca_base_module_t **module, int *priority)
 {
     /* used by DVM masters */
-    if (prte_enable_ft && PRTE_PROC_IS_MASTER) {
+    if (prte_enable_ft.utk && PRTE_PROC_IS_MASTER) {
         *priority = my_priority;
         *module = (prte_mca_base_module_t *) &prte_errmgr_utk_dvm_module;
         return PRTE_SUCCESS;
