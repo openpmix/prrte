@@ -4,7 +4,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,18 +50,20 @@ static int finalize(void);
 /******************
  * PRTED module
  ******************/
-prte_state_base_module_t prte_state_prted_module = {init,
-                                                    finalize,
-                                                    prte_state_base_activate_job_state,
-                                                    prte_state_base_add_job_state,
-                                                    prte_state_base_set_job_state_callback,
-                                                    prte_state_base_set_job_state_priority,
-                                                    prte_state_base_remove_job_state,
-                                                    prte_state_base_activate_proc_state,
-                                                    prte_state_base_add_proc_state,
-                                                    prte_state_base_set_proc_state_callback,
-                                                    prte_state_base_set_proc_state_priority,
-                                                    prte_state_base_remove_proc_state};
+prte_state_base_module_t prte_state_prted_module = {
+    .init = init,
+    .finalize = finalize,
+    .activate_job_state = prte_state_base_activate_job_state,
+    .add_job_state = prte_state_base_add_job_state,
+    .set_job_state_callback = prte_state_base_set_job_state_callback,
+    .set_job_state_priority = prte_state_base_set_job_state_priority,
+    .remove_job_state = prte_state_base_remove_job_state,
+    .activate_proc_state = prte_state_base_activate_proc_state,
+    .add_proc_state = prte_state_base_add_proc_state,
+    .set_proc_state_callback = prte_state_base_set_proc_state_callback,
+    .set_proc_state_priority = prte_state_base_set_proc_state_priority,
+    .remove_proc_state = prte_state_base_remove_proc_state
+};
 
 /* Local functions */
 static void track_jobs(int fd, short argc, void *cbdata);
@@ -69,22 +71,31 @@ static void track_procs(int fd, short argc, void *cbdata);
 static int pack_state_update(pmix_data_buffer_t *buf, prte_job_t *jdata);
 
 /* defined default state machines */
-static prte_job_state_t job_states[] = {PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE,
-                                        PRTE_JOB_STATE_READY_FOR_DEBUG};
-static prte_state_cbfunc_t job_callbacks[] = {track_jobs, track_jobs};
+static prte_job_state_t job_states[] = {
+    PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE,
+    PRTE_JOB_STATE_READY_FOR_DEBUG
+};
+static prte_state_cbfunc_t job_callbacks[] = {
+    track_jobs,
+    track_jobs
+};
 
-static prte_proc_state_t proc_states[] = {PRTE_PROC_STATE_RUNNING,
-                                          PRTE_PROC_STATE_READY_FOR_DEBUG,
-                                          PRTE_PROC_STATE_REGISTERED,
-                                          PRTE_PROC_STATE_IOF_COMPLETE,
-                                          PRTE_PROC_STATE_WAITPID_FIRED,
-                                          PRTE_PROC_STATE_TERMINATED};
-static prte_state_cbfunc_t proc_callbacks[] = {track_procs,
-                                               track_procs,
-                                               track_procs,
-                                               track_procs,
-                                               track_procs,
-                                               track_procs};
+static prte_proc_state_t proc_states[] = {
+    PRTE_PROC_STATE_RUNNING,
+    PRTE_PROC_STATE_READY_FOR_DEBUG,
+    PRTE_PROC_STATE_REGISTERED,
+    PRTE_PROC_STATE_IOF_COMPLETE,
+    PRTE_PROC_STATE_WAITPID_FIRED,
+    PRTE_PROC_STATE_TERMINATED
+};
+static prte_state_cbfunc_t proc_callbacks[] = {
+    track_procs,
+    track_procs,
+    track_procs,
+    track_procs,
+    track_procs,
+    track_procs
+};
 
 /************************
  * API Definitions
@@ -484,10 +495,8 @@ static void track_procs(int fd, short argc, void *cbdata)
          */
         if (prte_prteds_term_ordered && 0 == prte_routed.num_routes()) {
             for (i = 0; i < prte_local_children->size; i++) {
-                if (NULL
-                        != (pdata = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                                i))
-                    && PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
+                pdata = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+                if (NULL != pdata && PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
                     /* at least one is still alive */
                     PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
                                          "%s state:prted all routes gone but proc %s still alive",
@@ -504,8 +513,8 @@ static void track_procs(int fd, short argc, void *cbdata)
             goto cleanup;
         }
         /* track job status */
-        if (jdata->num_terminated == jdata->num_local_procs
-            && !prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NOTIFIED, NULL, PMIX_BOOL)) {
+        if (jdata->num_terminated == jdata->num_local_procs &&
+            !prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NOTIFIED, NULL, PMIX_BOOL)) {
             /* pack update state command */
             cmd = PRTE_PLM_UPDATE_PROC_STATE;
             PMIX_DATA_BUFFER_CREATE(alert);

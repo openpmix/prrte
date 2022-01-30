@@ -178,6 +178,7 @@ static void error_notify_cbfunc(int sd, short args, void *cbdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         goto cleanup;
     }
+    PRTE_FLAG_SET(temp_prte_proc, PRTE_PROC_FLAG_WAITPID);
 
     PMIX_DATA_BUFFER_CREATE(alert);
     /* pack update state command */

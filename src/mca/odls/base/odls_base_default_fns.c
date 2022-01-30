@@ -1584,10 +1584,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                         (long) proc->pid);
 
-    /* regardless of our eventual code path, we need to
-     * flag that this proc has had its waitpid fired */
-    PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
-
     /* if the child was previously flagged as dead, then just
      * update its exit status and
      * ensure that its exit state gets reported to avoid hanging
@@ -1628,6 +1624,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
     /* get the jobdat for this child */
     if (NULL == (jobdat = prte_get_job_data_object(proc->name.nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        state = PRTE_PROC_STATE_ERROR;
         goto MOVEON;
     }
 
@@ -1638,6 +1635,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child %s was ordered to die",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
+        state = PRTE_PROC_STATE_KILLED_BY_CMD;
         goto MOVEON;
     }
 
