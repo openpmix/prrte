@@ -22,7 +22,7 @@ Copyright (c) 2013      NVIDIA Corporation.  All rights reserved.
 # Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 Copyright (c) 2018-2001 Amazon.com, Inc. or its affiliates.  All Rights
                         reserved.
-Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 $COPYRIGHT$
 
 Additional copyrights may follow
@@ -38,11 +38,50 @@ version 1.0.
 Master (not on release branches yet)
 ------------------------------------
 
-2.0.1: (tag point, not official release)
+2.0.1: 1 Feb 2022
 ------------------------------------
 +**** NOTE: As of v2.0.1, PRRTE no longer has a dependency on "pandoc"
 +**** for building and installing man pages.
 
+**** NOTE: PRRTE has identified a bug in HWLOC versions 2.5.0 thru
+**** 2.7.0 (inclusive) that causes PMIx to segfault during certain
+**** operations. We have worked with the HWLOC developers to fix
+**** that problem, and the fix will be included beginning in HWLOC
+**** version 2.7.1. Accordingly, PRRTE now checks for the problem
+**** HWLOC versions and will error out of configure if they are
+**** encountered.
+
+PR #1185 and 1186: Update HWLOC version detection
+    - Reject versions 2.5.0-2.7.0, inclusive
+PR #1183: Always build the PBS scheduler support
+PR #1182: Cleanup handling of allocated node names
+PR #1169: Updates for rc5
+   - Enable support for PMIX_IOF_OUTPUT_RAW attribute
+   - Update NEWS
+PR #1167: Updates
+   - Be more flexible in library handling
+   - Update libevent/hwloc handling to match PMIx
+   - Remove event header defines
+   - Minor cleanups and ensure no local IOF copy
+     when persistent
+   - change the pcc wrapper compiler to a symlink
+     to pmixcc
+   - Cleanup code a bit
+   - Select all adapters with IPv4 addresses within
+     specified subnet ranges
+   - validate input for mpiexec --with-ft options
+PR #1158: Updates
+   - Fix uninitialized variable
+   - Update NEWS
+PR #1157: Fix brackets around code clause that caused
+     erroneous "unable to find tune file" error
+PR #1156: Handle default param case for HWT CPUs
+PR #1155: Cleanup qualifier detection for mapping policy
+PR #1154: Increase speed of rank computation
+   - Remove spurious break in loop
+PR #1153: Ensure the direct-multi test ranks-by slot
+PR #1151: Revamp map-by NUMA support
+PR #1150: Tranlate legacy OMPI params
 PR #1147: Updates
  - Minor infrastructure and example cleanup
  - Allow external caller to set prte_tool_basename
@@ -92,6 +131,8 @@ PR #1083:
  - Add an "unlock" call to balance the code
  - Use correct ninfo when passing into APIs
  - Don't locally output stdout/err if prterun has a parent
+
+
 2.0.0: 29 July 2021
 ------------------------------------
 This is the initial production release of the PRRTE software system. It
