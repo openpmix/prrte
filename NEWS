@@ -22,7 +22,7 @@ Copyright (c) 2013      NVIDIA Corporation.  All rights reserved.
 Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 Copyright (c) 2018-2001 Amazon.com, Inc. or its affiliates.  All Rights
                         reserved.
-Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 $COPYRIGHT$
 
 Additional copyrights may follow
@@ -35,11 +35,23 @@ This file contains the main features as well as overviews of specific
 bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
-2.0.1: TBD
+2.0.1: 1 Feb 2022
 ------------------------------------
 +**** NOTE: As of v2.0.1, PRRTE no longer has a dependency on "pandoc"
 +**** for building and installing man pages.
 
+**** NOTE: PRRTE has identified a bug in HWLOC versions 2.5.0 thru
+**** 2.7.0 (inclusive) that causes PMIx to segfault during certain
+**** operations. We have worked with the HWLOC developers to fix
+**** that problem, and the fix will be included beginning in HWLOC
+**** version 2.7.1. Accordingly, PRRTE now checks for the problem
+**** HWLOC versions and will error out of configure if they are
+**** encountered.
+
+PR #1185 and 1186: Update HWLOC version detection
+    - Reject versions 2.5.0-2.7.0, inclusive
+PR #1183: Always build the PBS scheduler support
+PR #1182: Cleanup handling of allocated node names
 PR #1169: Updates for rc5
    - Enable support for PMIX_IOF_OUTPUT_RAW attribute
    - Update NEWS
