@@ -13,12 +13,16 @@
 # Copyright (c) 2006      Sun Microsystems, Inc.  All rights reserved.
 #                         Use is subject to license terms.
 # Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
 #
 # $HEADER$
 #
+[no-nodefile]
+The PBS_NODEFILE environmental variable was
+not found - no nodes can be allocated
 [no-nodes-found]
 No nodes were found in the PBS_NODEFILE:
 

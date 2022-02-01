@@ -14,7 +14,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -116,6 +116,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
     bool slots_given;
     char *cptr;
     char *shortname;
+    char *rawname;
 
     PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s dashhost: parsing args %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -268,6 +269,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
 
         /* check for local name and compute non-fqdn name */
         shortname = NULL;
+        rawname = NULL;
         if (prte_check_host_is_local(mini_map[i])) {
             ndname = prte_process_info.nodename;
         } else {
@@ -277,6 +279,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                 !prte_net_isaddr(ndname)) {
                 cptr = strchr(ndname, '.');
                 if (NULL != cptr) {
+                    rawname = strdup(ndname);
                     *cptr = '\0';
                     shortname = strdup(ndname);
                     *cptr = '.';
@@ -306,6 +309,10 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                 free(shortname);
                 shortname = NULL;
             }
+            if (NULL != rawname) {
+                node->rawname = rawname;
+                rawname = NULL;
+            }
         } else {
             /* if we didn't find it, add it to the list */
             node = PRTE_NEW(prte_node_t);
@@ -314,12 +321,19 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
                 if (NULL != shortname) {
                     free(shortname);
                 }
+                if (NULL != rawname) {
+                    free(rawname);
+                }
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
             if (prte_keep_fqdn_hostnames || NULL == shortname) {
                 node->name = strdup(ndname);
             } else {
                 node->name = strdup(shortname);
+            }
+            if (NULL != rawname) {
+                node->rawname = rawname;
+                rawname = NULL;
             }
             PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: added node %s to list - slots %d",
@@ -349,6 +363,9 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
         }
         if (NULL != shortname) {
             free(shortname);
+        }
+        if (NULL != rawname) {
+            free(rawname);
         }
     }
     prte_argv_free(mini_map);

@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -998,7 +998,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     prte_plm_ssh_caddy_t *caddy;
     prte_list_t coll;
-    char *username;
+    char *username, *nname;
     int port, *portptr;
     prte_namelist_t *child;
 
@@ -1117,7 +1117,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
              * prefer to find some other node so we can tell what the remote
              * shell is, if necessary
              */
-            if (0 != strcmp(node->name, prte_process_info.nodename)) {
+            if (!prte_check_host_is_local(node->name)) {
                 break;
             }
         }
@@ -1190,13 +1190,18 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
         /* setup node name */
         free(argv[node_name_index1]);
+        if (NULL == node->rawname) {
+            nname = node->name;
+        } else {
+            nname = node->rawname;
+        }
         username = NULL;
         if (prte_get_attribute(&node->attributes, PRTE_NODE_USERNAME, (void **) &username,
                                PMIX_STRING)) {
-            prte_asprintf(&argv[node_name_index1], "%s@%s", username, node->name);
+            prte_asprintf(&argv[node_name_index1], "%s@%s", username, nname);
             free(username);
         } else {
-            argv[node_name_index1] = strdup(node->name);
+            argv[node_name_index1] = strdup(nname);
         }
 
         /* pass the vpid */

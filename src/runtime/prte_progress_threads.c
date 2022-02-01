@@ -21,6 +21,7 @@
 #include "src/event/event-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/threads.h"
+#include "src/util/argv.h"
 #include "src/util/error.h"
 #include "src/util/fd.h"
 

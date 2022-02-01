@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -2340,11 +2340,11 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
             PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output, "%s checking node %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nptr->name));
             for (i = 0; i < prte_node_pool->size; i++) {
-                if (NULL
-                    == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i))) {
+                node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i);
+                if (NULL == node) {
                     continue;
                 }
-                if (0 != strcmp(node->name, nptr->name)) {
+                if (!prte_nptr_match(node, nptr)) {
                     continue;
                 }
                 /* have a match - now see if we want this node */

@@ -258,6 +258,7 @@ typedef struct {
     int32_t index;
     /** String node name */
     char *name;
+    char *rawname;  // name originally given in allocation, if different from name
     /** aliases */
     char **aliases;
     /* daemon on this node */
