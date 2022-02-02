@@ -78,7 +78,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     jdata = caddy->jdata;
     schizo = (prte_schizo_base_module_t*)jdata->schizo;
     if (NULL == schizo) {
-        prte_output(0, "ARG");
+        prte_show_help("help-prte-rmaps-base.txt", "missing-personality", true,
+                       PRTE_JOBID_PRINT(jdata->nspace));
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
         goto cleanup;
     }
@@ -584,7 +585,7 @@ ranking:
             PRTE_RELEASE(caddy);
             jdata->exit_code = PRTE_ERR_NOT_FOUND;
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-            return;
+            goto cleanup;
         }
         t0 = node->topology;
         for (int i = 1; i < prte_node_pool->size; i++) {
