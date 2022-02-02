@@ -147,8 +147,6 @@ int main(int argc, char *argv[])
         PRTE_DESTRUCT(&prte_info_cmd_line);
         if (PRTE_ERR_SILENT != ret) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
-        } else {
-            ret = PRTE_SUCCESS;
         }
         return ret;
     }
