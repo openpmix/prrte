@@ -20,7 +20,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -937,8 +937,8 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
     package_id = atoi(package_core[0]);
 
     /* get the object for this package id */
-    if (NULL
-        == (package = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id))) {
+    package = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id);
+    if (NULL == package) {
         prte_argv_free(package_core);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -978,6 +978,10 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
                     core_id = atoi(list[j]) + npus;
                     /* get that object */
                     core = prte_hwloc_base_get_obj_by_type(topo, obj_type, 0, core_id);
+                    if (NULL == core) {
+                        rc = PRTE_ERR_NOT_FOUND;
+                        break;
+                    }
                     /* get the cpus */
                     hwloc_bitmap_or(cpumask, cpumask, core->cpuset);
                 }
@@ -994,6 +998,10 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
                     core_id = j + npus;
                     /* get that object */
                     core = prte_hwloc_base_get_obj_by_type(topo, obj_type, 0, core_id);
+                    if (NULL == core) {
+                        rc = PRTE_ERR_NOT_FOUND;
+                        break;
+                    }
                     /* get the cpus add them into the result */
                     hwloc_bitmap_or(cpumask, cpumask, core->cpuset);
                 }
@@ -1092,7 +1100,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                             prte_argv_free(item);
                             prte_argv_free(rngs);
                             prte_argv_free(list);
-                            return PRTE_ERR_SILENT;
+                            return PRTE_ERR_NOT_FOUND;
                         }
                         /* get the cpus for that object and set them in the massk*/
                         hwloc_bitmap_or(cpumask, cpumask, pu->cpuset);
@@ -1109,7 +1117,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                             prte_argv_free(range);
                             prte_argv_free(item);
                             prte_argv_free(rngs);
-                            return PRTE_ERR_SILENT;
+                            return PRTE_ERR_NOT_FOUND;
                         }
                         /* get the cpus for that object and set them in the mask*/
                         hwloc_bitmap_or(cpumask, cpumask, pu->cpuset);
@@ -1495,7 +1503,8 @@ static void build_map(hwloc_topology_t topo, hwloc_cpuset_t avail, bool use_hwth
 /*
  * Make a prettyprint string for a hwloc_cpuset_t
  */
-char *prte_hwloc_base_cset2str(hwloc_cpuset_t cpuset, bool use_hwthread_cpus, hwloc_topology_t topo)
+char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
+                               bool use_hwthread_cpus, hwloc_topology_t topo)
 {
     int n, npkgs, npus, ncores;
     char tmp[2048], ans[4096];

@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -202,7 +202,6 @@ process:
                                 app->app);
             PRTE_CONSTRUCT(&sq_list, prte_list_t);
             rc = process_file(hosts, &sq_list);
-            free(hosts);
             if (PRTE_SUCCESS != rc) {
                 PRTE_LIST_DESTRUCT(&sq_list);
                 goto error;
@@ -217,10 +216,8 @@ process:
              * list */
             if (PRTE_SUCCESS != (rc = prte_util_get_ordered_dash_host_list(&node_list, hosts))) {
                 PRTE_ERROR_LOG(rc);
-                free(hosts);
                 goto error;
             }
-            free(hosts);
             /* transfer the list to a seq_node_t list */
             PRTE_CONSTRUCT(&sq_list, prte_list_t);
             while (NULL != (nd = (prte_node_t *) prte_list_remove_first(&node_list))) {
@@ -242,7 +239,6 @@ process:
                                 app->app);
             PRTE_CONSTRUCT(&sq_list, prte_list_t);
             rc = process_file(hosts, &sq_list);
-            free(hosts);
             if (PRTE_SUCCESS != rc) {
                 PRTE_LIST_DESTRUCT(&sq_list);
                 goto error;
@@ -252,6 +248,7 @@ process:
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using default hostfile nodes on app %s", app->app);
             seq_list = &default_seq_list;
+            hosts = strdup(prte_default_hostfile);
         } else {
             /* can't do anything - no nodes available! */
             prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
@@ -281,7 +278,8 @@ process:
         if (NULL == seq_list || 0 == (num_nodes = (int32_t) prte_list_get_size(seq_list))) {
             prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
                            true);
-            return PRTE_ERR_SILENT;
+            rc = PRTE_ERR_SILENT;
+            goto error;
         }
 
         /* set #procs to the number of entries */
@@ -293,7 +291,8 @@ process:
         } else if (num_nodes < app->num_procs) {
             prte_show_help("help-prte-rmaps-seq.txt", "seq:not-enough-resources", true,
                            app->num_procs, num_nodes);
-            return PRTE_ERR_SILENT;
+            rc = PRTE_ERR_SILENT;
+            goto error;
         }
 
         if (seq_list == &default_seq_list) {
@@ -357,14 +356,16 @@ process:
                         prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                        true, app->num_procs, app->app);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                        return PRTE_ERR_SILENT;
+                        rc = PRTE_ERR_SILENT;
+                        goto error;
                     } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE
                                & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                         /* if we were explicitly told not to oversubscribe, then don't */
                         prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                        true, app->num_procs, app->app);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                        return PRTE_ERR_SILENT;
+                        rc = PRTE_ERR_SILENT;
+                        goto error;
                     }
                 }
             }
@@ -396,9 +397,19 @@ process:
                     /* setup the bitmap */
                     bitmap = hwloc_bitmap_alloc();
                     /* parse the slot_list to find the package and core */
-                    if (PRTE_SUCCESS
-                        != (rc = prte_hwloc_base_cpu_list_parse(sq->cpuset, node->topology->topo,
-                                                                bitmap))) {
+                    rc = prte_hwloc_base_cpu_list_parse(sq->cpuset, node->topology->topo, bitmap);
+                    if (PRTE_ERR_NOT_FOUND == rc) {
+                        char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
+                                                             false, node->topology->topo);
+                        prte_show_help("help-rmaps-seq.txt", "missing-cpu", true,
+                                       prte_tool_basename, sq->cpuset, tmp);
+                        free(tmp);
+                    } else if (PRTE_ERROR == rc) {
+                        prte_show_help("help-rmaps-seq.txt", "bad-syntax", true, hosts);
+                        rc = PRTE_ERR_SILENT;
+                        hwloc_bitmap_free(bitmap);
+                        goto error;
+                    } else {
                         PRTE_ERROR_LOG(rc);
                         hwloc_bitmap_free(bitmap);
                         goto error;
@@ -453,6 +464,9 @@ process:
         } else {
             save = sq;
         }
+        if (NULL != hosts) {
+            free(hosts);
+        }
     }
 
     /* mark that this job is to be fully
@@ -464,6 +478,9 @@ process:
 
 error:
     PRTE_LIST_DESTRUCT(&default_seq_list);
+    if (NULL != hosts) {
+        free(hosts);
+    }
     return rc;
 }
 
