@@ -18,7 +18,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -194,7 +194,7 @@ int prte_ess_base_prted_setup(void)
         error = "prte_errmgr_base_open";
         goto error;
     }
-#if PRTE_ENABLE_UTK
+#if PRTE_ENABLE_FT
     /* open the propagate */
     if (PRTE_SUCCESS
         != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework,
@@ -402,7 +402,7 @@ int prte_ess_base_prted_setup(void)
         error = "prte_errmgr_base_select";
         goto error;
     }
-#if PRTE_ENABLE_UTK
+#if PRTE_ENABLE_FT
     /* select the propagate */
     if (PRTE_SUCCESS != (ret = prte_propagate_base_select())) {
         PRTE_ERROR_LOG(ret);
@@ -570,7 +570,7 @@ int prte_ess_base_prted_finalize(void)
         unlink(log_path);
     }
 
-#if PRTE_ENABLE_UTK
+#if PRTE_ENABLE_FT
     if (NULL != prte_propagate.finalize) {
         prte_propagate.finalize();
     }

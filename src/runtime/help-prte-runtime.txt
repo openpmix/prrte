@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -74,12 +74,3 @@ libz library on the receiving node:
 
 Please ensure that the libz library is present on all
 compute nodes.
-#
-[missing-ft-method]
-Enabling PRRTE fault tolerance requires that the method be
-specified. The following methods were enabled at configure:
-
-  Available methods: %s
-  Methods specified: %s
-
-Please specify an available method.

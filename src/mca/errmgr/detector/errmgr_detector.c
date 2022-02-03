@@ -4,7 +4,7 @@
  *                         reserved.
  *
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -57,26 +57,24 @@
 #include "src/mca/errmgr/base/errmgr_private.h"
 #include "src/mca/errmgr/errmgr.h"
 
-#include "errmgr_utk_prted.h"
+#include "errmgr_detector.h"
 #include "src/mca/propagate/propagate.h"
 #include <math.h>
 
 static int init(void);
 static int finalize(void);
 
-static void enable_detector(void);
+static void enable_detector(bool flag);
 /******************
- * utk_prted module
+ * detector module
  ******************/
-prte_errmgr_base_module_t
-prte_errmgr_utk_prted_module = {
-    .init = init,
-    .finalize = finalize,
-    .logfn = prte_errmgr_base_log,
-    .abort = prte_errmgr_base_abort,
-    .abort_peers = prte_errmgr_base_abort_peers,
-    .enable_detector = enable_detector
-};
+prte_errmgr_base_module_t prte_errmgr_detector_module
+    = {.init = init,
+       .finalize = finalize,
+       .logfn = prte_errmgr_base_log,
+       .abort = prte_errmgr_base_abort,
+       .abort_peers = prte_errmgr_base_abort_peers,
+       .enable_detector = enable_detector};
 
 /* local storage */
 static prte_errmgr_detector_t prte_errmgr_world_detector = {0};
@@ -133,14 +131,15 @@ static int pack_state_for_proc(pmix_data_buffer_t *alert, prte_proc_t *child)
 static void register_cbfunc(int status, size_t errhndler, void *cbdata)
 {
     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                         "errmgr:utk_prted:event register cbfunc with status %d ", status));
+                         "errmgr:detector:event register cbfunc with status %d ", status));
 }
 
-static void error_notify_cbfunc(int sd, short args, void *cbdata)
+static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t status,
+                                const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                                pmix_info_t *results, size_t nresults,
+                                pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
-    prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
-    pmix_proc_t *proc = &caddy->name;
-    prte_proc_state_t state = caddy->proc_state;
+    pmix_proc_t proc;
     int rc;
     prte_proc_t *temp_prte_proc;
     pmix_data_buffer_t *alert;
@@ -148,106 +147,118 @@ static void error_notify_cbfunc(int sd, short args, void *cbdata)
     prte_plm_cmd_flag_t cmd;
     size_t n;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-         "%s errmgr: utk_prted: error proc %s notified %s",
-         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
-         prte_proc_state_to_str(state)));
+    if (NULL != info) {
+        for (n = 0; n < ninfo; n++) {
+            if (0 == strncmp(info[n].key, PMIX_EVENT_AFFECTED_PROC, PMIX_MAX_KEYLEN)) {
+                PMIX_XFER_PROCID(&proc, info[n].value.data.proc);
 
-    if (prte_get_proc_daemon_vpid(proc) != PRTE_PROC_MY_NAME->rank) {
-        PRTE_OUTPUT_VERBOSE(
-            (5, prte_errmgr_base_framework.framework_output,
-             "%s errmgr:utk_prted:error_notify_callback vpid mismatch - ignoring error",
-             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        goto cleanup;
-    }
+                PRTE_OUTPUT_VERBOSE(
+                    (5, prte_errmgr_base_framework.framework_output,
+                     "%s errmgr: detector: error proc %s with key-value %s notified from %s",
+                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc), info[n].key,
+                     PRTE_NAME_PRINT(source)));
 
-    if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
-        /* must already be complete */
-        PRTE_OUTPUT_VERBOSE(
-            (5, prte_errmgr_base_framework.framework_output,
-             "%s errmgr:utk_prted:error_notify_callback NULL jdata - ignoring error",
-             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        goto cleanup;
-    }
-    if (NULL
-        == (temp_prte_proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs,
-                                                                         proc->rank))) {
-        PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk_prted:error_notify_callback NULL "
-                             "jdata->procs - ignoring error",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        goto cleanup;
-    }
-    PRTE_FLAG_SET(temp_prte_proc, PRTE_PROC_FLAG_WAITPID);
+                if (prte_get_proc_daemon_vpid(&proc) != PRTE_PROC_MY_NAME->rank) {
+                    PRTE_OUTPUT_VERBOSE(
+                        (5, prte_errmgr_base_framework.framework_output,
+                         "%s errmgr:detector:error_notify_callback vpid mismatch - ignoring error",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                    continue;
+                }
 
-    PMIX_DATA_BUFFER_CREATE(alert);
-    /* pack update state command */
-    cmd = PRTE_PLM_UPDATE_PROC_STATE;
-    rc = PMIx_Data_pack(NULL, alert, &cmd, 1, PMIX_UINT8);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(alert);
-        goto cleanup;
-    }
+                if (NULL == (jdata = prte_get_job_data_object(proc.nspace))) {
+                    /* must already be complete */
+                    PRTE_OUTPUT_VERBOSE(
+                        (5, prte_errmgr_base_framework.framework_output,
+                         "%s errmgr:detector:error_notify_callback NULL jdata - ignoring error",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                    continue;
+                }
+                if (NULL
+                    == (temp_prte_proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs,
+                                                                                     proc.rank))) {
+                    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+                                         "%s errmgr:detector:error_notify_callback NULL "
+                                         "jdata->procs - ignoring error",
+                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                    continue;
+                }
 
-    /* pack jobid */
-    rc = PMIx_Data_pack(NULL, alert, &proc->nspace, 1, PMIX_PROC_NSPACE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(alert);
-        goto cleanup;
-    }
+                PMIX_DATA_BUFFER_CREATE(alert);
+                /* pack update state command */
+                cmd = PRTE_PLM_UPDATE_PROC_STATE;
+                rc = PMIx_Data_pack(NULL, alert, &cmd, 1, PMIX_UINT8);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
+                    return;
+                }
 
-    /* proc state now is PRTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this;
-     * code is 128+9 */
-    temp_prte_proc->state = PRTE_PROC_STATE_ABORTED_BY_SIG;
-    /* now pack the child's info */
-    if (PMIX_SUCCESS != (rc = pack_state_for_proc(alert, temp_prte_proc))) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(alert);
-        goto cleanup;
-    }
+                /* pack jobid */
+                rc = PMIx_Data_pack(NULL, alert, &proc.nspace, 1, PMIX_PROC_NSPACE);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
+                    return;
+                }
 
-    /* send this process's info to hnp */
-    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                          prte_rml_send_callback, NULL))) {
-        PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk_prted: send to hnp failed",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        PRTE_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(alert);
-    }
-    if (PRTE_FLAG_TEST(temp_prte_proc, PRTE_PROC_FLAG_IOF_COMPLETE)
-        && PRTE_FLAG_TEST(temp_prte_proc, PRTE_PROC_FLAG_WAITPID)
-        && !PRTE_FLAG_TEST(temp_prte_proc, PRTE_PROC_FLAG_RECORDED)) {
-        PRTE_ACTIVATE_PROC_STATE(proc, PRTE_PROC_STATE_TERMINATED);
-    }
+                /* proc state now is PRTE_PROC_STATE_ABORTED_BY_SIG, cause odls set state to this;
+                 * code is 128+9 */
+                temp_prte_proc->state = PRTE_PROC_STATE_ABORTED_BY_SIG;
+                /* now pack the child's info */
+                if (PMIX_SUCCESS != (rc = pack_state_for_proc(alert, temp_prte_proc))) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
+                    return;
+                }
 
-    prte_propagate.prp(PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME, proc, PRTE_ERR_PROC_ABORTED);
+                /* send this process's info to hnp */
+                if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
+                                                      prte_rml_send_callback, NULL))) {
+                    PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+                                         "%s errmgr:detector: send to hnp failed",
+                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                    PRTE_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
+                }
+                if (PRTE_FLAG_TEST(temp_prte_proc, PRTE_PROC_FLAG_IOF_COMPLETE)
+                    && PRTE_FLAG_TEST(temp_prte_proc, PRTE_PROC_FLAG_WAITPID)
+                    && !PRTE_FLAG_TEST(temp_prte_proc, PRTE_PROC_FLAG_RECORDED)) {
+                    PRTE_ACTIVATE_PROC_STATE(&proc, PRTE_PROC_STATE_TERMINATED);
+                }
 
-cleanup:
-    PRTE_RELEASE(caddy);
+                prte_propagate.prp(source->nspace, source, &proc, PRTE_ERR_PROC_ABORTED);
+                break;
+            }
+        }
+    }
+    if (NULL != cbfunc) {
+        cbfunc(PRTE_SUCCESS, NULL, 0, NULL, NULL, cbdata);
+    }
 }
 
 static int init(void)
 {
     fd_event_base = prte_event_base;
 
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT_REQUEST,
-                            PRTE_RML_PERSISTENT, fd_heartbeat_request_cb, NULL);
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT, PRTE_RML_PERSISTENT,
-                            fd_heartbeat_recv_cb, NULL);
+    if (PRTE_PROC_IS_DAEMON) {
+        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT_REQUEST,
+                                PRTE_RML_PERSISTENT, fd_heartbeat_request_cb, NULL);
+        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT, PRTE_RML_PERSISTENT,
+                                fd_heartbeat_recv_cb, NULL);
+    }
     return PRTE_SUCCESS;
 }
 
 int finalize(void)
 {
+    if (PRTE_PROC_IS_DAEMON) {
         prte_errmgr_detector_t *detector = &prte_errmgr_world_detector;
 
         if (detector->hb_observer != (int) PMIX_RANK_INVALID) {
             detector->hb_observer = prte_process_info.myproc.rank;
             PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                                 "errmgr:utk_prted: send last heartbeat message"));
+                                 "errmgr:detector: send last heartbeat message"));
             fd_heartbeat_send(detector);
             detector->hb_period = INFINITY;
         }
@@ -260,6 +271,7 @@ int finalize(void)
         /* set heartbeat period to infinity and observer to invalid */
         prte_errmgr_world_detector.hb_period = INFINITY;
         prte_errmgr_world_detector.hb_observer = PMIX_RANK_INVALID;
+    }
     return PRTE_SUCCESS;
 }
 
@@ -294,18 +306,23 @@ static double Wtime(void)
     return wtime;
 }
 
-static void enable_detector(void)
+static void enable_detector(bool enable_flag)
 {
     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                         "%s errmgr:utk_prted report detector_enable_status %d",
+                         "%s errmgr:detector report detector_enable_status %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), enable_flag));
 
-    if (prte_enable_ft.utk) {
+    if (PRTE_PROC_IS_DAEMON && enable_flag) {
         prte_errmgr_detector_t *detector = &prte_errmgr_world_detector;
         int ndmns, i;
         uint32_t vpid;
 
-        prte_state.add_proc_state(PRTE_PROC_STATE_ABORTED_BY_SIG, error_notify_cbfunc, PRTE_ERROR_PRI);
+        pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
+
+        PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+                             "%s errmgr:detector: register evhandler in errmgr",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+        PMIx_Register_event_handler(&pcode, 1, NULL, 0, error_notify_cbfunc, register_cbfunc, NULL);
         prte_propagate.register_cb();
 
         /* num of daemon in this jobid */
@@ -319,8 +336,8 @@ static void enable_detector(void)
         }
         /* someone is observing us: range [1~n], the observing ring */
         detector->hb_observer = (ndmns + vpid) % ndmns + 1;
-        detector->hb_period = prte_errmgr_utk_prted_component.heartbeat_period;
-        detector->hb_timeout = prte_errmgr_utk_prted_component.heartbeat_timeout;
+        detector->hb_period = prte_errmgr_detector_component.heartbeat_period;
+        detector->hb_timeout = prte_errmgr_detector_component.heartbeat_timeout;
         detector->hb_sstamp = 0.;
         /* give some slack for MPI_Init */
         detector->hb_rstamp = Wtime() + (double) ndmns;
@@ -331,7 +348,7 @@ static void enable_detector(void)
         }
 
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "errmgr:utk_prted daemon %d observing %d; observed by %d", vpid,
+                             "errmgr:detector daemon %d observing %d; observed by %d", vpid,
                              detector->hb_observing, detector->hb_observer));
 
         prte_event_set(fd_event_base, &detector->fd_event, -1, PRTE_EV_TIMEOUT | PRTE_EV_PERSIST,
@@ -386,7 +403,7 @@ static int fd_heartbeat_request(prte_errmgr_detector_t *detector)
         }
 
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "errmgr:utk_prted hb request updating ring"));
+                             "errmgr:detector hb request updating ring"));
         detector->hb_observing = daemon.rank;
         PMIX_DATA_BUFFER_CREATE(buffer);
         rc = PMIx_Data_pack(NULL, buffer, &prte_process_info.myproc.nspace, 1, PMIX_PROC_NSPACE);
@@ -404,7 +421,7 @@ static int fd_heartbeat_request(prte_errmgr_detector_t *detector)
         break;
     }
     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                         "errmgr:utk_prted updated ring daemon %d observing %d; observed by %d",
+                         "errmgr:detector updated ring daemon %d observing %d; observed by %d",
                          PRTE_PROC_MY_NAME->rank, detector->hb_observing, detector->hb_observer));
     /* we add one timeout slack to account for the send time */
     detector->hb_rstamp = Wtime() + detector->hb_timeout;
@@ -431,7 +448,7 @@ static void fd_heartbeat_request_cb(int status, pmix_proc_t *sender, pmix_data_b
         PMIX_ERROR_LOG(rc);
     }
     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                         "errmgr:utk_prted %d receive %d", prte_process_info.myproc.rank,
+                         "errmgr:detector %d receive %d", prte_process_info.myproc.rank,
                          detector->hb_observer));
     ndmns = prte_process_info.num_nodes;
     rr = (ndmns - prte_process_info.myproc.rank + vpid)
@@ -475,7 +492,7 @@ static void fd_event_cb(int fd, short flags, void *pdetector)
         /* if first time detected */
         if (errmgr_get_daemon_status(temp_proc_name)) {
             prte_output_verbose( 5, prte_errmgr_base_framework.framework_output,
-                                 "errmgr:utk_prted %d detected daemon %d failed, heartbeat delay",
+                                 "errmgr:detector %d detected daemon %d failed, heartbeat delay",
                                  prte_process_info.myproc.rank, detector->hb_observing);
             prte_propagate.prp(temp_proc_name.nspace, NULL, &temp_proc_name, PRTE_ERR_PROC_ABORTED);
 
@@ -503,7 +520,7 @@ static void fd_heartbeat_send(prte_errmgr_detector_t *detector)
     if (0. != detector->hb_sstamp && (now - detector->hb_sstamp) >= 2. * detector->hb_period) {
         /* missed my send deadline find a verbose to use */
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "errmgr:utk_prted: daemon %s MISSED my deadline by %.1e, "
+                             "errmgr:detector: daemon %s MISSED my deadline by %.1e, "
                              "this could trigger a false suspicion for me",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), now - detector->hb_sstamp));
     }
@@ -527,7 +544,7 @@ static void fd_heartbeat_send(prte_errmgr_detector_t *detector)
     if (0 > (rc = prte_rml.send_buffer_nb(&daemon, buffer, PRTE_RML_TAG_HEARTBEAT,
                                           prte_rml_send_callback, NULL))) {
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "errmgr:utk_prted:failed to send heartbeat to %s",
+                             "errmgr:detector:failed to send heartbeat to %s",
                              PRTE_NAME_PRINT(&daemon)));
         PRTE_ERROR_LOG(rc);
     }
@@ -545,7 +562,7 @@ static void fd_heartbeat_recv_cb(int status, pmix_proc_t *sender, pmix_data_buff
     if (sender->rank == prte_process_info.myproc.rank) {
         /* this is a quit msg from observed process, stop detector */
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "errmgr:utk_prted:%s %s Received heartbeat from %d, "
+                             "errmgr:detector:%s %s Received heartbeat from %d, "
                              "which is myself, quit msg to close detector",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __func__, sender->rank));
         detector->hb_observing = detector->hb_observer = PMIX_RANK_INVALID;
@@ -567,21 +584,21 @@ static void fd_heartbeat_recv_cb(int status, pmix_proc_t *sender, pmix_data_buff
 
     if ((int) vpid != detector->hb_observing) {
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "errmgr:utk_prted: daemon %s receive heartbeat from vpid %d, "
+                             "errmgr:detector: daemon %s receive heartbeat from vpid %d, "
                              "but I am monitoring vpid %d ",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), vpid, detector->hb_observing));
     } else {
         double stamp = Wtime();
         double grace = detector->hb_timeout - (stamp - detector->hb_rstamp);
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "errmgr:utk_prted: daemon %s receive heartbeat from vpid %d tag %d at "
+                             "errmgr:detector: daemon %s receive heartbeat from vpid %d tag %d at "
                              "timestamp %g (remained %.1e of %.1e before suspecting)",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), vpid, tg, stamp, grace,
                              detector->hb_timeout));
         detector->hb_rstamp = stamp;
         if (grace < 0.0) {
             PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                                 "errmgr:utk_prted: daemon %s  MISSED (%.1e)",
+                                 "errmgr:detector: daemon %s  MISSED (%.1e)",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), grace));
         }
     }

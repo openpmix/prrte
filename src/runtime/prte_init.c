@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -290,28 +290,28 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
 
     /* setup the global job and node arrays */
     prte_job_data = PRTE_NEW(prte_pointer_array_t);
-    ret = prte_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
-    if (PRTE_SUCCESS != ret) {
+    if (PRTE_SUCCESS
+        != (ret = prte_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         error = "setup job array";
         goto error;
     }
     prte_node_pool = PRTE_NEW(prte_pointer_array_t);
-    ret = prte_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
-    if (PRTE_SUCCESS != ret) {
+    if (PRTE_SUCCESS
+        != (ret = prte_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         error = "setup node array";
         goto error;
     }
     prte_node_topologies = PRTE_NEW(prte_pointer_array_t);
-    ret = prte_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
-    if (PRTE_SUCCESS != ret) {
+    if (PRTE_SUCCESS
+        != (ret = prte_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         error = "setup node topologies array";
         goto error;
@@ -319,9 +319,9 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
 
     /* open the SCHIZO framework as everyone needs it, and the
      * ess will use it to help select its component */
-    ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                       PRTE_MCA_BASE_OPEN_DEFAULT);
-    if (PRTE_SUCCESS != ret) {
+    if (PRTE_SUCCESS
+        != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
+                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_schizo_base_open";
         goto error;
@@ -333,9 +333,9 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     }
 
     /* open the ESS and select the correct module for this environment */
-    ret = prte_mca_base_framework_open(&prte_ess_base_framework,
-                                       PRTE_MCA_BASE_OPEN_DEFAULT);
-    if (PRTE_SUCCESS != ret) {
+    if (PRTE_SUCCESS
+        != (ret = prte_mca_base_framework_open(&prte_ess_base_framework,
+                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_ess_base_open";
         goto error;
@@ -356,9 +356,13 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     prte_cache = PRTE_NEW(prte_pointer_array_t);
     prte_pointer_array_init(prte_cache, 1, INT_MAX, 1);
 
-    if (NULL != prte_errmgr.enable_detector) {
-        prte_errmgr.enable_detector();
+#if PRTE_ENABLE_FT
+    if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_DAEMON) {
+        if (NULL != prte_errmgr.enable_detector) {
+            prte_errmgr.enable_detector(prte_enable_ft);
+        }
     }
+#endif
 
     /* start listening - will be ignored if no listeners
      * were registered */

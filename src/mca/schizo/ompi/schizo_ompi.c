@@ -18,7 +18,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2021 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -349,7 +349,7 @@ static prte_cmd_line_init_t ompi_cmd_line_init[] = {
     {'\0', "display-allocation", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Display the allocation being used by this job", PRTE_CMD_LINE_OTYPE_DEBUG},
 
-#ifdef PRTE_ENABLE_UTK
+#if PRTE_ENABLE_FT
     {'\0', "enable-recovery", 0, PRTE_CMD_LINE_TYPE_BOOL,
      "Enable recovery from process failure [Default = disabled]", PRTE_CMD_LINE_OTYPE_FT},
     {'\0', "max-restarts", 1, PRTE_CMD_LINE_TYPE_INT,
@@ -1287,7 +1287,7 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
             }
         }
 
-#ifdef PRTE_ENABLE_UTK
+#if PRTE_ENABLE_FT
         if (0 == strcmp("--with-ft", argv[i]) || 0 == strcmp("-with-ft", argv[i])) {
             if (NULL == argv[i + 1]) {
                 /* this is an error */

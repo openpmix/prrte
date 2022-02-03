@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -56,7 +56,6 @@ static char *prte_local_tmpdir_base = NULL;
 static char *prte_remote_tmpdir_base = NULL;
 static char *prte_top_session_dir = NULL;
 static char *prte_jobfam_session_dir = NULL;
-static char *prte_ftm = NULL;
 
 char *prte_signal_string = NULL;
 char *prte_stacktrace_output_filename = NULL;
@@ -562,7 +561,6 @@ int prte_register_params(void)
                                       NULL, 0, PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_do_not_barrier);
 
-#ifdef PRTE_ENABLE_PRCM
     prte_enable_recovery = false;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "enable_recovery",
                                       "Enable recovery from process failure [Default = disabled]",
@@ -592,7 +590,6 @@ int prte_register_params(void)
         }
         prte_enable_recovery = true;
     }
-#endif
 
     prte_abort_non_zero_exit = true;
     (void) prte_mca_base_var_register(
@@ -684,21 +681,10 @@ int prte_register_params(void)
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_ALL, &prte_bind_progress_thread_reqd);
 
-#ifdef PRTE_ENABLE_FT
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "enable_ft", "Enable/disable fault tolerance (specify method)",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                      PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ftm);
-    if (NULL != prte_ftm) {
-        if (0 == strcasecmp(prte_ftm, "utk")) {
-            prte_enable_ft.utk = true;
-        } else if (0 == strcasecmp(prte_ftm, "rcm")) {
-            prte_enable_ft.rcm = true;
-        } else {
-            prte_show_help("help-prte-runtime.txt", "missing-ft-method", true,
-                           PRTE_FT_METHOD_STRING, prte_ftm);
-            return PRTE_ERROR;
-        }
-    }
+#if PRTE_ENABLE_FT
+    prte_mca_base_var_register("prte", "prte", NULL, "enable_ft", "Enable/disable fault tolerance",
+                               PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
+                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_enable_ft);
 #endif
 
     return PRTE_SUCCESS;

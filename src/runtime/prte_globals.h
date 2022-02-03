@@ -619,11 +619,7 @@ extern char *prte_if_include;
 extern char *prte_if_exclude;
 
 /* Enable/disable ft */
-typedef struct {
-    bool utk;
-    bool rcm;
-} prte_enable_ft_t;
-PRTE_EXPORT extern prte_enable_ft_t prte_enable_ft;
+PRTE_EXPORT extern bool prte_enable_ft;
 
 #if PRTE_PICKY_COMPILERS
 #define PRTE_HIDE_UNUSED_PARAMS(...)                \
