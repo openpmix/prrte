@@ -15,7 +15,7 @@
 # Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.  All rights reserved.
 # Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -35,23 +35,32 @@
 EXTRA_DIST += \
         examples/README \
         examples/Makefile \
+        examples/examples.h \
+        examples/alloc.c \
+        examples/bad_exit.c \
         examples/client.c \
-        examples/debugger/direct.c \
-	examples/debugger/direct-multi.c \
-        examples/debugger/indirect.c \
-	examples/debugger/indirect-multi.c \
+        examples/client2.c\
+        examples/daemon_error_notify.c \
         examples/debugger/attach.c \
         examples/debugger/daemon.c \
+        examples/debugger/direct.c \
+        examples/debugger/direct-multi.c \
+        examples/debugger/indirect.c \
+        examples/debugger/indirect-multi.c \
         examples/debugger/hello.c \
         examples/dmodex.c \
         examples/dynamic.c \
+        examples/error_notify.c \
         examples/fault.c \
+        examples/hello.c \
         examples/jctrl.c \
         examples/launcher.c \
+        examples/legacy.c \
         examples/log.c \
         examples/pmi1client.c \
+        examples/probe.c \
         examples/pub.c \
-        examples/tool.c \
         examples/server.c \
         examples/showkeys.c \
-	examples/legacy.c
+        examples/target.c \
+        examples/tool.c
