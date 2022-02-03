@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
  *
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -346,8 +346,22 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                 }
                 bitmap = hwloc_bitmap_alloc();
                 /* parse the slot_list to find the package and core */
-                if (PRTE_SUCCESS
-                    != (rc = prte_hwloc_base_cpu_list_parse(slots, node->topology->topo, bitmap))) {
+                rc = prte_hwloc_base_cpu_list_parse(slots, node->topology->topo, bitmap);
+                if (PRTE_ERR_NOT_FOUND == rc) {
+                    char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
+                                                         false, node->topology->topo);
+                    prte_show_help("help-rmaps_rank_file.txt", "missing-cpu", true,
+                                   prte_tool_basename, slots, tmp);
+                    free(tmp);
+                    rc = PRTE_ERR_SILENT;
+                    hwloc_bitmap_free(bitmap);
+                    goto error;
+                } else if (PRTE_ERROR == rc) {
+                    prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                    rc = PRTE_ERR_SILENT;
+                    hwloc_bitmap_free(bitmap);
+                    goto error;
+               } else {
                     PRTE_ERROR_LOG(rc);
                     hwloc_bitmap_free(bitmap);
                     goto error;
@@ -437,7 +451,8 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
     prte_rmaps_rank_file_in = fopen(rankfile, "r");
 
     if (NULL == prte_rmaps_rank_file_in) {
-        prte_show_help("help-rmaps_rank_file.txt", "no-rankfile", true, rankfile);
+        prte_show_help("help-rmaps_rank_file.txt", "no-rankfile", true,
+                       prte_tool_basename, rankfile, prte_tool_basename);
         rc = PRTE_ERR_NOT_FOUND;
         goto unlock;
     }
