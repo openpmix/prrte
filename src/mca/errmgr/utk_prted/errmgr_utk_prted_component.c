@@ -102,7 +102,7 @@ static int errmgr_utk_prted_close(void)
 
 static int errmgr_utk_prted_component_query(prte_mca_base_module_t **module, int *priority)
 {
-    if (prte_enable_ft.utk && PRTE_PROC_IS_DAEMON) {
+    if (prte_enable_ft && PRTE_PROC_IS_DAEMON) {
         *priority = my_priority;
         *module = (prte_mca_base_module_t *) &prte_errmgr_utk_prted_module;
         return PRTE_SUCCESS;

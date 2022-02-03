@@ -64,7 +64,7 @@
 static int init(void);
 static int finalize(void);
 
-static void enable_detector(void);
+static void enable_detector(bool flag);
 /******************
  * utk_prted module
  ******************/
@@ -293,13 +293,13 @@ static double Wtime(void)
     return wtime;
 }
 
-static void enable_detector(void)
+static void enable_detector(bool enable_flag)
 {
     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:utk_prted report detector_enable_status %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), enable_flag));
 
-    if (prte_enable_ft.utk) {
+    if (enable_flag) {
         prte_errmgr_detector_t *detector = &prte_errmgr_world_detector;
         int ndmns, i;
         uint32_t vpid;

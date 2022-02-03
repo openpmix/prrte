@@ -3,7 +3,7 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,19 +27,17 @@ int prte_propagate_base_select(void)
     int exit_status = PRTE_SUCCESS;
     prte_propagate_base_component_t *best_component = NULL;
     prte_propagate_base_module_t *best_module = NULL;
-    
     /* early bailout. */
-    if (!prte_enable_ft.utk) {
+    if (!prte_enable_ft)
         return PRTE_SUCCESS;
-    }
     /*
      * Select the best component
      */
-    if (PRTE_SUCCESS != prte_mca_base_select("propagate",
-                                             prte_propagate_base_framework.framework_output,
-                                             &prte_propagate_base_framework.framework_components,
-                                             (prte_mca_base_module_t **) &best_module,
-                                             (prte_mca_base_component_t **) &best_component, NULL)) {
+    if (PRTE_SUCCESS
+        != prte_mca_base_select("propagate", prte_propagate_base_framework.framework_output,
+                                &prte_propagate_base_framework.framework_components,
+                                (prte_mca_base_module_t **) &best_module,
+                                (prte_mca_base_component_t **) &best_component, NULL)) {
         /* This will only happen if no component was selected */
         exit_status = PRTE_ERROR;
         goto cleanup;
