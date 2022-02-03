@@ -357,7 +357,7 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     prte_pointer_array_init(prte_cache, 1, INT_MAX, 1);
 
     if (NULL != prte_errmgr.enable_detector) {
-        prte_errmgr.enable_detector();
+        prte_errmgr.enable_detector(prte_enable_ft);
     }
 
     /* start listening - will be ignored if no listeners

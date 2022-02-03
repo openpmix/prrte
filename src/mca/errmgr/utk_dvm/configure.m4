@@ -17,7 +17,7 @@
 AC_DEFUN([MCA_prte_errmgr_utk_dvm_CONFIG],[
     AC_CONFIG_FILES([src/mca/errmgr/utk_dvm/Makefile])
 
-    AS_IF([test "$prte_build_ft_method_utk" = "yes"],
+    AS_IF([test "$prte_ft_enabled" = "yes" && test "$prte_ft_method" = "utk"],
           [$1],
           [$2])
 

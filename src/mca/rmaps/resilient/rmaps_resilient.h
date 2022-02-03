@@ -40,8 +40,8 @@ typedef struct {
 } prte_rmaps_res_ftgrp_t;
 PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_rmaps_res_ftgrp_t);
 
-PRTE_EXPORT extern prte_rmaps_res_component_t prte_rmaps_rcm_component;
-extern prte_rmaps_base_module_t prte_rmaps_rcm_module;
+PRTE_EXPORT extern prte_rmaps_res_component_t prte_rmaps_resilient_component;
+extern prte_rmaps_base_module_t prte_rmaps_resilient_module;
 
 
 END_C_DECLS

@@ -2,7 +2,7 @@
  * Copyright (c) 2017-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,12 +32,7 @@
 /*
  * Global
  */
-prte_propagate_base_module_t prte_propagate = {
-    .init = NULL,
-    .finalize = NULL,
-    .prp = NULL,
-    .register_cb = NULL
-};
+prte_propagate_base_module_t prte_propagate = {NULL, NULL, NULL, NULL};
 
 static int prte_propagate_base_close(void)
 {
