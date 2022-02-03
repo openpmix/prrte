@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -561,7 +561,6 @@ int prte_register_params(void)
                                       NULL, 0, PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_do_not_barrier);
 
-#ifdef PRTE_ENABLE_PRCM
     prte_enable_recovery = false;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "enable_recovery",
                                       "Enable recovery from process failure [Default = disabled]",
@@ -591,7 +590,6 @@ int prte_register_params(void)
         }
         prte_enable_recovery = true;
     }
-#endif
 
     prte_abort_non_zero_exit = true;
     (void) prte_mca_base_var_register(
@@ -683,7 +681,7 @@ int prte_register_params(void)
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_ALL, &prte_bind_progress_thread_reqd);
 
-#ifdef PRTE_ENABLE_FT
+#if PRTE_ENABLE_FT
     prte_mca_base_var_register("prte", "prte", NULL, "enable_ft", "Enable/disable fault tolerance",
                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_enable_ft);

@@ -4,7 +4,7 @@
  *                         reserved.
  *
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef MCA_ERRMGR_UTK_PRTED_EXPORT_H
-#define MCA_ERRMGR_UTK_PRTED_EXPORT_H
+#ifndef MCA_ERRMGR_DETECTOR_EXPORT_H
+#define MCA_ERRMGR_DETECTOR_EXPORT_H
 
 #include "prte_config.h"
 
@@ -46,11 +46,11 @@ typedef struct {
     prte_errmgr_base_component_t super;
     double heartbeat_period;
     double heartbeat_timeout;
-} prte_errmgr_utk_prted_component_t;
+} prte_errmgr_detector_component_t;
 
-PRTE_MODULE_EXPORT extern prte_errmgr_utk_prted_component_t prte_errmgr_utk_prted_component;
+PRTE_MODULE_EXPORT extern prte_errmgr_detector_component_t prte_errmgr_detector_component;
 
-PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr_utk_prted_module;
+PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr_detector_module;
 
 /*
  * Propagator functions
@@ -63,4 +63,4 @@ bool errmgr_get_daemon_status(pmix_proc_t daemon);
 void errmgr_set_daemon_status(pmix_proc_t daemon);
 END_C_DECLS
 
-#endif /* MCA_ERRMGR_UTK_PRTED_EXPORT_H */
+#endif /* MCA_ERRMGR_DETECTOR_EXPORT_H */
