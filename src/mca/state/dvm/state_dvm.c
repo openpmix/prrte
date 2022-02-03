@@ -4,7 +4,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -67,80 +67,90 @@ static void ready_for_debug(int fd, short args, void *cbata);
 /******************
  * DVM module - used when mpirun is persistent
  ******************/
-prte_state_base_module_t prte_state_dvm_module = {init,
-                                                  finalize,
-                                                  prte_state_base_activate_job_state,
-                                                  prte_state_base_add_job_state,
-                                                  prte_state_base_set_job_state_callback,
-                                                  prte_state_base_set_job_state_priority,
-                                                  prte_state_base_remove_job_state,
-                                                  prte_state_base_activate_proc_state,
-                                                  prte_state_base_add_proc_state,
-                                                  prte_state_base_set_proc_state_callback,
-                                                  prte_state_base_set_proc_state_priority,
-                                                  prte_state_base_remove_proc_state};
+prte_state_base_module_t prte_state_dvm_module = {
+    .init = init,
+    .finalize = finalize,
+    .activate_job_state = prte_state_base_activate_job_state,
+    .add_job_state = prte_state_base_add_job_state,
+    .set_job_state_callback = prte_state_base_set_job_state_callback,
+    .set_job_state_priority = prte_state_base_set_job_state_priority,
+    .remove_job_state = prte_state_base_remove_job_state,
+    .activate_proc_state = prte_state_base_activate_proc_state,
+    .add_proc_state = prte_state_base_add_proc_state,
+    .set_proc_state_callback = prte_state_base_set_proc_state_callback,
+    .set_proc_state_priority = prte_state_base_set_proc_state_priority,
+    .remove_proc_state = prte_state_base_remove_proc_state
+};
 
 static void dvm_notify(int sd, short args, void *cbdata);
 
 /* defined default state machine sequence - individual
  * plm's must add a state for launching daemons
  */
-static prte_job_state_t launch_states[] = {PRTE_JOB_STATE_INIT,
-                                           PRTE_JOB_STATE_INIT_COMPLETE,
-                                           PRTE_JOB_STATE_ALLOCATE,
-                                           PRTE_JOB_STATE_ALLOCATION_COMPLETE,
-                                           PRTE_JOB_STATE_DAEMONS_LAUNCHED,
-                                           PRTE_JOB_STATE_DAEMONS_REPORTED,
-                                           PRTE_JOB_STATE_VM_READY,
-                                           PRTE_JOB_STATE_MAP,
-                                           PRTE_JOB_STATE_MAP_COMPLETE,
-                                           PRTE_JOB_STATE_SYSTEM_PREP,
-                                           PRTE_JOB_STATE_LAUNCH_APPS,
-                                           PRTE_JOB_STATE_SEND_LAUNCH_MSG,
-                                           PRTE_JOB_STATE_STARTED,
-                                           PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE,
-                                           PRTE_JOB_STATE_READY_FOR_DEBUG,
-                                           PRTE_JOB_STATE_RUNNING,
-                                           PRTE_JOB_STATE_REGISTERED,
-                                           /* termination states */
-                                           PRTE_JOB_STATE_TERMINATED,
-                                           PRTE_JOB_STATE_NOTIFY_COMPLETED,
-                                           PRTE_JOB_STATE_NOTIFIED,
-                                           PRTE_JOB_STATE_ALL_JOBS_COMPLETE};
-static prte_state_cbfunc_t launch_callbacks[] = {prte_plm_base_setup_job,
-                                                 init_complete,
-                                                 prte_ras_base_allocate,
-                                                 prte_plm_base_allocation_complete,
-                                                 prte_plm_base_daemons_launched,
-                                                 prte_plm_base_daemons_reported,
-                                                 vm_ready,
-                                                 prte_rmaps_base_map_job,
-                                                 prte_plm_base_mapping_complete,
-                                                 prte_plm_base_complete_setup,
-                                                 prte_plm_base_launch_apps,
-                                                 prte_plm_base_send_launch_msg,
-                                                 job_started,
-                                                 prte_state_base_local_launch_complete,
-                                                 ready_for_debug,
-                                                 prte_plm_base_post_launch,
-                                                 prte_plm_base_registered,
-                                                 check_complete,
-                                                 dvm_notify,
-                                                 cleanup_job,
-                                                 prte_quit};
+static prte_job_state_t launch_states[] = {
+    PRTE_JOB_STATE_INIT,
+    PRTE_JOB_STATE_INIT_COMPLETE,
+    PRTE_JOB_STATE_ALLOCATE,
+    PRTE_JOB_STATE_ALLOCATION_COMPLETE,
+    PRTE_JOB_STATE_DAEMONS_LAUNCHED,
+    PRTE_JOB_STATE_DAEMONS_REPORTED,
+    PRTE_JOB_STATE_VM_READY,
+    PRTE_JOB_STATE_MAP,
+    PRTE_JOB_STATE_MAP_COMPLETE,
+    PRTE_JOB_STATE_SYSTEM_PREP,
+    PRTE_JOB_STATE_LAUNCH_APPS,
+    PRTE_JOB_STATE_SEND_LAUNCH_MSG,
+    PRTE_JOB_STATE_STARTED,
+    PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE,
+    PRTE_JOB_STATE_READY_FOR_DEBUG,
+    PRTE_JOB_STATE_RUNNING,
+    PRTE_JOB_STATE_REGISTERED,
+    /* termination states */
+    PRTE_JOB_STATE_TERMINATED,
+    PRTE_JOB_STATE_NOTIFY_COMPLETED,
+    PRTE_JOB_STATE_NOTIFIED,
+    PRTE_JOB_STATE_ALL_JOBS_COMPLETE
+};
+static prte_state_cbfunc_t launch_callbacks[] = {
+    prte_plm_base_setup_job,
+    init_complete,
+    prte_ras_base_allocate,
+    prte_plm_base_allocation_complete,
+    prte_plm_base_daemons_launched,
+    prte_plm_base_daemons_reported,
+    vm_ready,
+    prte_rmaps_base_map_job,
+    prte_plm_base_mapping_complete,
+    prte_plm_base_complete_setup,
+    prte_plm_base_launch_apps,
+    prte_plm_base_send_launch_msg,
+    job_started,
+    prte_state_base_local_launch_complete,
+    ready_for_debug,
+    prte_plm_base_post_launch,
+    prte_plm_base_registered,
+    check_complete,
+    dvm_notify,
+    cleanup_job,
+    prte_quit
+};
 
-static prte_proc_state_t proc_states[] = {PRTE_PROC_STATE_RUNNING,
-                                          PRTE_PROC_STATE_READY_FOR_DEBUG,
-                                          PRTE_PROC_STATE_REGISTERED,
-                                          PRTE_PROC_STATE_IOF_COMPLETE,
-                                          PRTE_PROC_STATE_WAITPID_FIRED,
-                                          PRTE_PROC_STATE_TERMINATED};
-static prte_state_cbfunc_t proc_callbacks[] = {prte_state_base_track_procs,
-                                               prte_state_base_track_procs,
-                                               prte_state_base_track_procs,
-                                               prte_state_base_track_procs,
-                                               prte_state_base_track_procs,
-                                               prte_state_base_track_procs};
+static prte_proc_state_t proc_states[] = {
+    PRTE_PROC_STATE_RUNNING,
+    PRTE_PROC_STATE_READY_FOR_DEBUG,
+    PRTE_PROC_STATE_REGISTERED,
+    PRTE_PROC_STATE_IOF_COMPLETE,
+    PRTE_PROC_STATE_WAITPID_FIRED,
+    PRTE_PROC_STATE_TERMINATED
+};
+static prte_state_cbfunc_t proc_callbacks[] = {
+    prte_state_base_track_procs,
+    prte_state_base_track_procs,
+    prte_state_base_track_procs,
+    prte_state_base_track_procs,
+    prte_state_base_track_procs,
+    prte_state_base_track_procs
+};
 
 static void force_quit(int fd, short args, void *cbdata)
 {

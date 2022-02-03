@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1618,15 +1618,13 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                              "%s odls:waitpid_fired child %s died by call to abort",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
         state = PRTE_PROC_STATE_CALLED_ABORT;
-        /* regardless of our eventual code path, we need to
-         * flag that this proc has had its waitpid fired */
-        PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
         goto MOVEON;
     }
 
     /* get the jobdat for this child */
     if (NULL == (jobdat = prte_get_job_data_object(proc->name.nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        state = PRTE_PROC_STATE_ERROR;
         goto MOVEON;
     }
 
@@ -1637,9 +1635,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child %s was ordered to die",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
-        /* regardless of our eventual code path, we need to
-         * flag that this proc has had its waitpid fired */
-        PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
+        state = PRTE_PROC_STATE_KILLED_BY_CMD;
         goto MOVEON;
     }
 
@@ -1761,31 +1757,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                              strsignal(WTERMSIG(proc->exit_code))));
         proc->exit_code = WTERMSIG(proc->exit_code) + 128;
-
-#if PRTE_ENABLE_FT
-        if (prte_enable_ft) {
-            /* register an event handler for the PRTE_ERR_PROC_ABORTED event */
-            int rc;
-            pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
-            pmix_info_t *pinfo;
-            PMIX_INFO_CREATE(pinfo, 2);
-            PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &proc->name, PMIX_PROC);
-            PMIX_INFO_LOAD(&pinfo[1], "prte.notify.donotloop", NULL, PMIX_BOOL);
-
-            rc = PMIx_Notify_event(pcode, PRTE_PROC_MY_NAME, PMIX_RANGE_LOCAL, pinfo, 2, NULL,  NULL);
-            if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-                PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                                     "%s odls:notify failed, release pinfo",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            }
-            PMIX_INFO_FREE(pinfo, 2);
-
-            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                                 "%s odls:event notify in odls proc %s gone",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
-            PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
-        }
-#endif
 
         /* Do not decrement the number of local procs here. That is handled in the errmgr */
     }

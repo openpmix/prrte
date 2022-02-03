@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -56,19 +56,23 @@ prte_errmgr_base_t prte_errmgr_base = {
 };
 
 /* Public module provides a wrapper around previous functions */
-prte_errmgr_base_module_t prte_errmgr_default_fns = {.init = NULL,     /* init     */
-                                                     .finalize = NULL, /* finalize */
-                                                     .logfn = prte_errmgr_base_log,
-                                                     .abort = prte_errmgr_base_abort,
-                                                     .abort_peers = prte_errmgr_base_abort_peers,
-                                                     .enable_detector = NULL};
+prte_errmgr_base_module_t prte_errmgr_default_fns = {
+    .init = NULL,     /* init     */
+    .finalize = NULL, /* finalize */
+    .logfn = prte_errmgr_base_log,
+    .abort = prte_errmgr_base_abort,
+    .abort_peers = prte_errmgr_base_abort_peers,
+    .enable_detector = NULL
+};
 
 /* NOTE: ABSOLUTELY MUST initialize this
  * struct to include the log function as it
  * gets called even if the errmgr hasn't been
  * opened yet due to error
  */
-prte_errmgr_base_module_t prte_errmgr = {.logfn = prte_errmgr_base_log};
+prte_errmgr_base_module_t prte_errmgr = {
+    .logfn = prte_errmgr_base_log
+};
 
 static int prte_errmgr_base_close(void)
 {

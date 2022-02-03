@@ -14,7 +14,7 @@
 # Copyright (c) 2012      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -23,6 +23,9 @@
 #
 
 # This makefile.am does not stand on its own - it is included from src/Makefile.am
+
+AM_CFLAGS = \
+            -DPRTE_FT_METHOD_STRING="\"@PRTE_FT_METHOD_STRING@\""
 
 dist_prtedata_DATA += runtime/help-prte-runtime.txt
 
