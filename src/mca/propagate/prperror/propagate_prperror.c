@@ -4,7 +4,7 @@
  *                         reserved.
  *
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -56,6 +56,7 @@
 
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/errmgr/base/errmgr_private.h"
+#include "src/mca/errmgr/detector/errmgr_detector.h"
 #include "src/mca/errmgr/errmgr.h"
 
 #include "propagate_prperror.h"
@@ -75,12 +76,9 @@ static int prte_propagate_prperror_recv(pmix_data_buffer_t *buffer);
 /* flag use to register callback for grpcomm rbcast forward */
 int enable_callback_register_flag = 1;
 
-prte_propagate_base_module_t prte_propagate_prperror_module = {
-    .init = init,
-    .finalize = finalize,
-    .prp = prte_propagate_prperror,
-    .register_cb = register_prp_callback
-};
+prte_propagate_base_module_t prte_propagate_prperror_module = {init, finalize,
+                                                               prte_propagate_prperror,
+                                                               register_prp_callback};
 
 static void flush_error_list(size_t evhdlr_registration_id, pmix_status_t status,
                              const pmix_proc_t *psource, pmix_info_t info[], size_t ninfo,
