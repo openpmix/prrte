@@ -102,7 +102,7 @@ bool prte_node_info_communicated = false;
 /* launch agents */
 char *prte_launch_agent = NULL;
 char **prted_cmd_line = NULL;
-char **prte_fork_agent = NULL;
+char *prte_fork_agent_string = NULL;
 
 /* exit flags */
 int prte_exit_status = 0;

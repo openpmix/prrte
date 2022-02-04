@@ -146,10 +146,6 @@ int prte_finalize(void)
     }
     PRTE_RELEASE(prte_node_pool);
 
-    if (NULL != prte_fork_agent) {
-        prte_argv_free(prte_fork_agent);
-    }
-
     free(prte_process_info.nodename);
     prte_process_info.nodename = NULL;
 

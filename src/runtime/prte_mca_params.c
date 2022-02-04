@@ -50,7 +50,6 @@
 
 static bool passed_thru = false;
 static int prte_progress_thread_debug_level = -1;
-static char *prte_fork_agent_string = NULL;
 static char *prte_tmpdir_base = NULL;
 static char *prte_local_tmpdir_base = NULL;
 static char *prte_remote_tmpdir_base = NULL;
@@ -479,10 +478,6 @@ int prte_register_params(void)
                                    PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                    PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                    PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_fork_agent_string);
-
-    if (NULL != prte_fork_agent_string) {
-        prte_fork_agent = prte_argv_split(prte_fork_agent_string, ' ');
-    }
 
     /* whether or not to require RM allocation */
     prte_allocation_required = false;

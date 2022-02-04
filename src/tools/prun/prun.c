@@ -762,12 +762,12 @@ int prun(int argc, char *argv[])
     }
 
     /* check what user wants us to do with stdin */
-    opt = prte_cmd_line_get_param(&results, "stdin");
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_STDIN);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, opt->values[0], PMIX_STRING);
     }
 
-    opt = prte_cmd_line_get_param(&results, "map-by");
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, opt->values[0], PMIX_STRING);
         if (NULL != strcasestr(opt->values[0], "DONOTLAUNCH")) {
@@ -776,23 +776,29 @@ int prun(int argc, char *argv[])
     }
 
     /* if the user specified a ranking policy, then set it */
-    opt = prte_cmd_line_get_param(&results, "rank-by");
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_RANKBY);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, opt->values[0], PMIX_STRING);
     }
 
     /* if the user specified a binding policy, then set it */
-    opt = prte_cmd_line_get_param(&results, "bind-to");
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_BINDTO);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, opt->values[0], PMIX_STRING);
     }
 
+    /* check for an exec agent */
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_EXEC_AGENT);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_EXEC_AGENT, opt->values[0], PMIX_STRING);
+    }
+
     /* mark if recovery was enabled on the cmd line */
-    if (prte_cmd_line_is_taken(&results, "enable-recovery")) {
+    if (prte_cmd_line_is_taken(&results, PRTE_CLI_ENABLE_RECOVERY)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_RECOVERABLE, &flag, PMIX_BOOL);
     }
     /* record the max restarts */
-    opt = prte_cmd_line_get_param(&results, "max-restarts");
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_MAX_RESTARTS);
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t)
