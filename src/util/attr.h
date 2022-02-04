@@ -3,7 +3,7 @@
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
@@ -158,7 +158,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_INFO_CACHE                 (PRTE_JOB_START_KEY + 52) // prte_list_t - list of prte_value_t to be included in job_info
 #define PRTE_JOB_FULLY_DESCRIBED            (PRTE_JOB_START_KEY + 53) // bool - job is fully described in launch msg
 #define PRTE_JOB_SILENT_TERMINATION         (PRTE_JOB_START_KEY + 54) // bool - do not generate an event notification when job
-                                                                  //        normally terminates
+                                                                      //        normally terminates
 #define PRTE_JOB_SET_ENVAR                  (PRTE_JOB_START_KEY + 55) // prte_envar_t - set the given envar to the specified value
 #define PRTE_JOB_UNSET_ENVAR                (PRTE_JOB_START_KEY + 56) // string - name of envar to unset, if present
 #define PRTE_JOB_PREPEND_ENVAR              (PRTE_JOB_START_KEY + 57) // prte_envar_t - prepend the specified value to the given envar
@@ -199,6 +199,8 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_RANK_OUTPUT                (PRTE_JOB_START_KEY + 92) // bool - tag stdout/stderr with rank
 #define PRTE_SPAWN_TIMEOUT                  (PRTE_JOB_START_KEY + 93) // int32 - number of seconds to spawn before terminating it as timed out
 #define PRTE_JOB_RAW_OUTPUT                 (PRTE_JOB_START_KEY + 94) // bool - do not buffer output
+#define PRTE_JOB_EXEC_AGENT                 (PRTE_JOB_START_KEY + 95) // char* - string specifying the cmd to use when exec'ing the local proc
+
 
 #define PRTE_JOB_MAX_KEY 300
 

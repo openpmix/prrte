@@ -385,6 +385,11 @@ static void interim(int sd, short args, void *cbdata)
                 goto complete;
             }
 
+            /*** EXEC AGENT ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_EXEC_AGENT)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT, PRTE_ATTR_GLOBAL,
+                               info->value.data.string, PMIX_STRING);
+
             /***   CPUS/RANK   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_CPUS_PER_PROC)) {
             u16 = info->value.data.uint32;
