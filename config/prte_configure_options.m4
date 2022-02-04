@@ -379,25 +379,18 @@ dnl Check for FT
 AC_MSG_CHECKING([if want fault tolerance support])
 AC_ARG_WITH([prte-ft],
             [AS_HELP_STRING([--with-prte-ft],
-                            [Enable PRRTE fault tolerance support using the specified method(s). Current options: utk, rcm (default: disabled) ])])
+                            [Enable PRRTE fault tolerance support using the specified method(s). Current options: utk, rcm, all (default: utk enabled) ])])
 prte_build_ft_method_utk=no
 prte_build_ft_method_rcm=no
-if test -z "$with_prte_ft" || test "$with_prte_ft" = "no"; then
+if test "$with_prte_ft" = "no"; then
     AC_MSG_RESULT([no])
     prte_ft_enabled=no
     prte_ft_method=""
-elif test "$with_prte_ft" = "yes"; then
-    AC_MSG_RESULT([yes])
-    AC_MSG_WARN([PRRTE supports multiple fault tolerance methods. One or])
-    AC_MSG_WARN([more methods to be used must be specified. Current])
-    AC_MSG_WARN([options include:])
-    AC_MSG_WARN([    rcm: Automatically restart processes, including])
-    AC_MSG_WARN([         relocation to possibly more stable nodes])
-    AC_MSG_WARN([         NOTE: under development, not currently available])
-    AC_MSG_WARN([    utk: Support for Open MPI's ULFM method])
-    AC_MSG_WARN([    all: Enable all supported options])
-    AC_MSG_WARN([Please select an option and rerun configure])
-    AC_MSG_ERROR([Cannot continue])
+elif test -z "$with_prte_ft" || test "$with_prte_ft" = "yes"; then
+    prte_ft_enabled=yes
+    prte_ft_method="utk (default)"
+    prte_build_ft_method_utk=yes
+    AC_DEFINE_UNQUOTED([PRTE_ENABLE_UTK], [1], [UTK fault tolerance enabled])
 elif test "$with_prte_ft" = "all"; then
     AC_MSG_RESULT([yes])
     prte_ft_enabled=yes
@@ -425,7 +418,7 @@ fi
 
 if test "$prte_ft_enabled" = "yes"; then
     AC_DEFINE_UNQUOTED([PRTE_ENABLE_FT], [1], [Fault tolerance enabled])
-    PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance method]], [prte_ft], [$with_prte_ft])
+    PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance method]], [prte_ft], [$prte_ft_method])
 fi
 PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance]], [prte_ft], [$prte_ft_enabled])
 PRTE_FT_METHOD_STRING=$prte_ft_method

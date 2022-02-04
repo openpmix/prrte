@@ -11,11 +11,11 @@
 # $HEADER$
 #
 
-# MCA_errmgr_utk_prted_CONFIG([action-if-can-compile],
+# MCA_errmgr_detector_CONFIG([action-if-can-compile],
 #                            [action-if-cant-compile])
 # ------------------------------------------------
-AC_DEFUN([MCA_prte_errmgr_utk_prted_CONFIG],[
-    AC_CONFIG_FILES([src/mca/errmgr/utk_prted/Makefile])
+AC_DEFUN([MCA_prte_errmgr_detector_CONFIG],[
+    AC_CONFIG_FILES([src/mca/errmgr/detector/Makefile])
 
     AS_IF([test "$prte_build_ft_method_utk" = "yes"],
           [$1],
