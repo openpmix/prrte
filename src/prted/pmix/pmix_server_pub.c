@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -559,7 +559,12 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender, pmix_data_buffer
                 goto release;
             }
             PMIX_LOAD_KEY(pdata[n].key, info.key);
-            pmix_value_xfer(&pdata[n].value, &info.value);
+            PMIX_VALUE_XFER_DIRECT(ret, &pdata[n].value, &info.value);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+                PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+                goto release;
+            }
             PMIX_INFO_DESTRUCT(&info);
         }
     }
