@@ -16,7 +16,7 @@
  *
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -389,6 +389,76 @@ char *prte_argv_join_range(char **argv, size_t start, size_t end, int delimiter)
 }
 
 /*
+ * Join all the elements of an argv array into a single
+ * newly-allocated string, stripping any leading/trailing
+ * quotes from each element
+ */
+char *prte_argv_join_strip(char **argv, int delimiter)
+{
+    char **p;
+    char *pp;
+    char *str;
+    size_t str_len = 0;
+    size_t i;
+
+    /* Bozo case */
+
+    if (NULL == argv || NULL == argv[0]) {
+        return strdup("");
+    }
+
+    /* Find the total string length in argv including delimiters.  The
+     last delimiter is replaced by the NULL character. */
+
+    for (p = argv; *p; ++p) {
+        str_len += strlen(*p) + 1;
+    }
+
+    /* Allocate the string. */
+
+    if (NULL == (str = (char *) malloc(str_len)))
+        return NULL;
+
+    /* Loop filling in the string. */
+
+    memset(str, 0, str_len);
+    p = argv;
+    pp = *p;
+    if ('\"' == *pp) {
+        // string starts with a quote - skip it
+        pp++;
+    }
+
+    for (i = 0; i < str_len; ++i) {
+        if ('\0' == *pp) {
+            /* End of a string, fill in a delimiter and go to the next
+             string. */
+            ++p;
+            pp = *p;
+            if (NULL == pp) {
+                // we are done - no delimiter at end
+                break;
+            }
+            if ('\"' == str[i-1]) {
+                // string ended in a quote - backup one
+                --i;
+            }
+            str[i] = (char) delimiter;
+            if ('\"' == *pp) {
+                // string starts with a quote - skip it
+                pp++;
+            }
+        } else {
+            str[i] = *pp++;
+        }
+    }
+
+    /* All done */
+
+    return str;
+}
+
+/*
  * Return the number of bytes consumed by an argv array.
  */
 size_t prte_argv_len(char **argv)
@@ -431,6 +501,56 @@ char **prte_argv_copy(char **argv)
         }
 
         ++argv;
+    }
+
+    /* All done */
+
+    return dupv;
+}
+
+/*
+ * Copy a NULL-terminated argv array, stripping any leading/trailing
+ * quotes from each element
+ */
+char **prte_argv_copy_strip(char **argv)
+{
+    char **dupv = NULL;
+    int dupc = 0;
+    int n;
+    char *start;
+    bool mod;
+    size_t len;
+    
+    if (NULL == argv) {
+        return NULL;
+    }
+
+    /* create an "empty" list, so that we return something valid if we
+     were passed a valid list with no contained elements */
+    dupv = (char **) malloc(sizeof(char *));
+    dupv[0] = NULL;
+
+    for (n=0; NULL != argv[n]; n++) {
+        mod = false;
+        start = argv[n];
+        if ('\"' == argv[n][0]) {
+            ++start;
+        }
+        len = strlen(argv[n]);
+        if ('\"' == argv[n][len-1]) {
+            argv[n][len-1] = '\0';
+            mod = true;
+        }
+        if (PRTE_SUCCESS != prte_argv_append(&dupc, &dupv, start)) {
+            prte_argv_free(dupv);
+            if (mod) {
+                argv[n][len-1] = '\"';
+            }
+            return NULL;
+        }
+        if (mod) {
+            argv[n][len-1] = '\"';
+        }
     }
 
     /* All done */

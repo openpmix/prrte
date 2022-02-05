@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,6 +50,7 @@
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/routed/routed.h"
+#include "src/mca/schizo/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
@@ -57,6 +58,7 @@
 #include "src/util/error_strings.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
+#include "src/util/show_help.h"
 #include "types.h"
 
 #include "src/mca/plm/base/base.h"
@@ -207,6 +209,20 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
 
         /* record the sender so we know who to respond to */
         PMIX_LOAD_PROCID(&jdata->originator, sender->nspace, sender->rank);
+
+        /* assign a schizo module */
+        if (NULL == jdata->personality) {
+            prte_argv_append_nosize(&jdata->personality, "prte");
+        }
+        tmp = prte_argv_join(jdata->personality, ',');
+        jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
+        if (NULL == jdata->schizo) {
+            prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, tmp);
+            free(tmp);
+            rc = PRTE_ERR_NOT_FOUND;
+            goto ANSWER_LAUNCH;
+        }
+        free(tmp);
 
         /* get the name of the actual spawn parent - i.e., the proc that actually
          * requested the spawn */

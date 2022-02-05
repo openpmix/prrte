@@ -18,7 +18,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,6 +64,7 @@
 #include "src/mca/routed/base/base.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/rtc/base/base.h"
+#include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/prted/pmix/pmix_server.h"
@@ -288,6 +289,15 @@ int prte_ess_base_prted_setup(void)
     jdata = PRTE_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
     prte_set_job_data_object(jdata);
+    /* set the schizo personality to "prte" by default */
+    jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy("prte");
+    if (NULL == jdata->schizo) {
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
+        error = "select personality";
+        ret = PRTE_ERR_SILENT;
+        goto error;
+    }
+
     /* every job requires at least one app */
     app = PRTE_NEW(prte_app_context_t);
     prte_pointer_array_set_item(jdata->apps, 0, app);

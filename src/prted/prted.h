@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,6 +29,7 @@
 
 #include "src/class/prte_pointer_array.h"
 #include "src/mca/rml/rml_types.h"
+#include "src/mca/schizo/schizo.h"
 
 BEGIN_C_DECLS
 
@@ -44,8 +45,8 @@ PRTE_EXPORT void prte_daemon_cmd_processor(int fd, short event, void *data);
 PRTE_EXPORT int prte_daemon_process_commands(pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                                              prte_rml_tag_t tag);
 
-PRTE_EXPORT int prte_parse_locals(prte_cmd_line_t *prte_cmd_line, prte_list_t *jdata, int argc,
-                                  char *argv[], char ***hostfiles, char ***hosts);
+PRTE_EXPORT int prte_parse_locals(prte_schizo_base_module_t *schizo, prte_list_t *jdata,
+                                  char **argv, char ***hostfiles, char ***hosts);
 
 END_C_DECLS
 

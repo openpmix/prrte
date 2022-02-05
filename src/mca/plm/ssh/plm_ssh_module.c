@@ -93,7 +93,6 @@
 #include "src/mca/rml/rml.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/routed/routed.h"
-#include "src/mca/schizo/schizo.h"
 #include "src/mca/state/state.h"
 
 #include "src/mca/plm/base/base.h"
@@ -626,18 +625,6 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
         prte_argv_append(&argc, &argv, "prte_parent_uri");
         prte_argv_append(&argc, &argv, param);
         free(param);
-    }
-
-    /* unless told otherwise... */
-    if (prte_plm_ssh_component.pass_environ_mca_params) {
-        /* now check our local environment for MCA params - add them
-         * only if they aren't already present
-         */
-        if (PRTE_SUCCESS != (rc = prte_schizo.parse_env(NULL, environ, &argv, true))) {
-            prte_argv_free(argv);
-            return rc;
-        }
-        argc = prte_argv_count(argv);
     }
 
     /* protect the params */

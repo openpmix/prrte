@@ -3,7 +3,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,6 +18,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/schizo/schizo.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/tsd.h"
 #include "src/util/argv.h"
@@ -301,6 +302,141 @@ void prte_hwloc_base_close(void)
     prte_hwloc_base_inited = false;
 }
 
+int prte_hwloc_base_set_default_binding(void *jd, void *opt)
+{
+    prte_job_t *jdata = (prte_job_t*)jd;
+    prte_schizo_options_t *options = (prte_schizo_options_t*)opt;
+    prte_mapping_policy_t mpol;
+
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16)) {
+        /* bind to cpus */
+        if (options->use_hwthreads) {
+            /* if we are using hwthread cpus, then bind to those */
+            prte_output_verbose(options->verbosity, options->stream,
+                                "setdefaultbinding[%d] binding not given - using byhwthread",
+                                __LINE__);
+            PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
+        } else {
+            /* bind to core */
+            prte_output_verbose(options->verbosity, options->stream,
+                                "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
+            PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
+        }
+    } else {
+        /* if the user explicitly mapped-by some object, then we default
+         * to binding to that object */
+        mpol = PRTE_GET_MAPPING_POLICY(jdata->map->mapping);
+        if (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
+            if (PRTE_MAPPING_BYHWTHREAD == mpol) {
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
+            } else if (PRTE_MAPPING_BYCORE == mpol) {
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
+            } else if (PRTE_MAPPING_BYL1CACHE == mpol) {
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using byL1", __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L1CACHE);
+            } else if (PRTE_MAPPING_BYL2CACHE == mpol) {
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using byL2", __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L2CACHE);
+            } else if (PRTE_MAPPING_BYL3CACHE == mpol) {
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using byL3", __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L3CACHE);
+            } else if (PRTE_MAPPING_BYNUMA == mpol) {
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using bynuma",
+                                    __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
+            } else if (PRTE_MAPPING_BYPACKAGE == mpol) {
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using bypackage", __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
+            } else {
+                /* we are mapping by node or some other non-object method */
+                if (options->nprocs <= 2) {
+                    if (options->use_hwthreads) {
+                        /* if we are using hwthread cpus, then bind to those */
+                        prte_output_verbose(options->verbosity, options->stream,
+                                            "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
+                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                        PRTE_BIND_TO_HWTHREAD);
+                    } else {
+                        /* for performance, bind to core */
+                        prte_output_verbose(options->verbosity, options->stream,
+                                            "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
+                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                        PRTE_BIND_TO_CORE);
+                    }
+                } else {
+                    /* bind to numa (if present), or by package (if numa isn't present and package is) */
+                    if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
+                        prte_output_verbose(options->verbosity, options->stream,
+                                            "setdefaultbinding[%d] binding not given - using bynuma", __LINE__);
+                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
+                    } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
+                        prte_output_verbose(options->verbosity, options->stream,
+                                            "setdefaultbinding[%d] binding not given - using bypackage", __LINE__);
+                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
+                    } else {
+                        /* if we have neither, then just don't bind */
+                        prte_output_verbose(options->verbosity, options->stream,
+                                            "setdefaultbinding[%d] binding not given and no NUMA "
+                                            "or packages - not binding",
+                                            __LINE__);
+                        PRTE_SET_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NONE);
+                    }
+                }
+            }
+        } else if (options->nprocs <= 2) {
+            if (options->use_hwthreads) {
+                /* if we are using hwthread cpus, then bind to those */
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using byhwthread",
+                                    __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
+            } else {
+                /* for performance, bind to core */
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using bycore",
+                                    __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
+            }
+        } else {
+            /* for performance, bind to numa, if available, else try package */
+            if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using bynuma",
+                                    __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
+            } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using bypackage",
+                                    __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
+            } else {
+                /* just don't bind */
+                prte_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given and no packages - not binding",
+                                    __LINE__);
+                PRTE_SET_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NONE);
+            }
+        }
+    }
+    /* they might have set the overload-allowed flag while wanting PRRTE
+     * to set the default binding - don't override it */
+    if (!PRTE_BIND_OVERLOAD_SET(jdata->map->binding)) {
+        if (PRTE_BIND_OVERLOAD_ALLOWED(prte_hwloc_default_binding_policy)) {
+            jdata->map->binding |= PRTE_BIND_ALLOW_OVERLOAD;
+        }
+    }
+    return PRTE_SUCCESS;
+}
+
 static bool fns_init = false;
 static prte_tsd_key_t print_tsd_key;
 char *prte_hwloc_print_null = "NULL";
@@ -507,7 +643,10 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
             if (0 == strcasecmp(quals[i], "if-supported")) {
                 tmp |= PRTE_BIND_IF_SUPPORTED;
             } else if (0 == strcasecmp(quals[i], "overload-allowed")) {
-                tmp |= PRTE_BIND_ALLOW_OVERLOAD;
+                tmp |= (PRTE_BIND_ALLOW_OVERLOAD | PRTE_BIND_OVERLOAD_GIVEN);
+            } else if (0 == strcasecmp(quals[i], "no-overload")) {
+                tmp = (tmp & ~PRTE_BIND_ALLOW_OVERLOAD);
+                tmp |= PRTE_BIND_OVERLOAD_GIVEN;
             } else if (0 == strcasecmp(quals[i], "ordered")) {
                 tmp |= PRTE_BIND_ORDERED;
             } else if (0 == strcasecmp(quals[i], "REPORT")) {

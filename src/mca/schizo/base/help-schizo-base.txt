@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2020      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -135,3 +135,32 @@ this parameter belongs to (e.g., "--prtemca" for a PRRTE param,
 "--pmixmca" for a PMIx param, "--omca" for an OMPI param) or
 ensure that the generic param is correct and known to the active
 personality.
+#
+[too-many-instances]
+The command line includes too many instances of the following option:
+
+  Command line: %s
+  Option: %s
+  Number of instances: %d
+  Allowed number: %d
+
+Please correct the command line and try again.
+#
+[too-many-directives]
+When resolving deprecated command line options, the result generated
+too many directives for the target option:
+
+  Command line option: %s
+  Initial value: %s
+  Deprecated option: %s %s
+
+Please correct the command line and try again.
+#
+[too-many-values]
+When resolving deprecated command line options, the following
+command line option has more than one value:
+
+  Option: %s
+
+The resolution function cannot handle this scenario - please
+notify the developers
