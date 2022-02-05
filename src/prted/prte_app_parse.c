@@ -229,7 +229,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
     }
     opt = prte_cmd_line_get_param(&results, "preload-files");
     if (NULL != opt) {
-        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_FILES, NULL, PMIX_BOOL);
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_FILES, opt->values[0], PMIX_STRING);
     }
 
     /* Do not try to find argv[0] here -- the starter is responsible
