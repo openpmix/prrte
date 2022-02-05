@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -229,8 +229,8 @@ static int create_app(prte_cmd_line_t *prte_cmd_line, int argc, char *argv[], pr
             PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_BIN, NULL, PMIX_BOOL);
         }
     }
-    if (prte_cmd_line_is_taken(prte_cmd_line, "preload-files")) {
-        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_FILES, NULL, PMIX_BOOL);
+    if (NULL != (pvalue = prte_cmd_line_get_param(prte_cmd_line, "preload-files", 0, 0))) {
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_FILES, pvalue->value.data.string, PMIX_STRING);
     }
 
     /* Do not try to find argv[0] here -- the starter is responsible
