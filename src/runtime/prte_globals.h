@@ -546,7 +546,7 @@ PRTE_EXPORT extern bool prte_node_info_communicated;
 /* launch agents */
 PRTE_EXPORT extern char *prte_launch_agent;
 PRTE_EXPORT extern char **prted_cmd_line;
-PRTE_EXPORT extern char **prte_fork_agent;
+PRTE_EXPORT extern char *prte_fork_agent_string;
 
 /* exit flags */
 PRTE_EXPORT extern bool prte_abnormal_term_ordered;

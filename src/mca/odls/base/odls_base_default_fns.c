@@ -1066,17 +1066,33 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
             cd->cmd = strdup(app->app);
             cd->argv = prte_argv_copy(app->argv);
         }
-    } else if (NULL != prte_fork_agent) {
+    } else if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_EXEC_AGENT, (void**)&ptr, PMIX_STRING)) {
         /* we were given a fork agent - use it */
-        cd->argv = prte_argv_copy(prte_fork_agent);
+        cd->argv = prte_argv_split(ptr, ' ');
         /* add in the argv from the app */
         for (i = 0; NULL != app->argv[i]; i++) {
             prte_argv_append_nosize(&cd->argv, app->argv[i]);
         }
-        cd->cmd = prte_path_findv(prte_fork_agent[0], X_OK, prte_launch_environ, NULL);
+        cd->cmd = prte_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
         if (NULL == cd->cmd) {
             prte_show_help("help-prte-odls-base.txt", "prte-odls-base:fork-agent-not-found", true,
-                           prte_process_info.nodename, prte_fork_agent[0]);
+                           prte_process_info.nodename, ptr);
+            state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
+            free(ptr);
+            goto errorout;
+        }
+        free(ptr);
+    } else if (NULL != prte_fork_agent_string) {
+        /* we were given a fork agent - use it */
+        cd->argv = prte_argv_split(prte_fork_agent_string, ' ');
+        /* add in the argv from the app */
+        for (i = 0; NULL != app->argv[i]; i++) {
+            prte_argv_append_nosize(&cd->argv, app->argv[i]);
+        }
+        cd->cmd = prte_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
+        if (NULL == cd->cmd) {
+            prte_show_help("help-prte-odls-base.txt", "prte-odls-base:fork-agent-not-found", true,
+                           prte_process_info.nodename, cd->argv[0]);
             state = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
             goto errorout;
         }

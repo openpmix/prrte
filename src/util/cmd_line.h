@@ -170,6 +170,7 @@ PRTE_CLASS_DECLARATION(prte_cli_result_t);
 #define PRTE_CLI_MAX_RESTARTS           "max-restarts"              // required
 #define PRTE_CLI_DISABLE_RECOVERY       "disable-recovery"          // none
 #define PRTE_CLI_CONTINUOUS             "continuous"                // none
+#define PRTE_CLI_EXEC_AGENT             "exec-agent"                // required
 
 // Placement options
 #define PRTE_CLI_MAPBY                  "map-by"                    // required
