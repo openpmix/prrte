@@ -22,13 +22,14 @@ Provide detailed information on your PRRTE installation.
 -h|--help                            This help message
    --hostname                        Show the hostname that PRRTE was configured and built on
    --internal                        Show internal MCA parameters (not meant to be modified by users)
-   --param <arg0> <arg1>             Show MCA parameters.  The first parameter is the framework (or the
-                                     keyword "all"); the second parameter is the specific component name (or
-                                     the keyword "all").
+   --param <arg0>:<arg1>,<arg2>      Show MCA parameters.  The first parameter is the framework (or the
+                                     keyword "all"); the second parameter is a comma-delimited list of
+                                     specific component names (if only <arg0> is given, then all
+                                     components will be reported).
    --path <arg0>                     Show paths that PRRTE was configured with.  Accepts the following
                                      parameters: prefix, bindir, libdir, incdir, mandir, pkglibdir,
                                      sysconfdir
-   --show-version <arg0> <arg1>      Show version of PRRTE or a component.  The first parameter can be the
+   --show-version <arg0>:<arg1>      Show version of PRRTE or a component.  The first parameter can be the
                                      keywords "prte" or "all", a framework name (indicating all components in
                                      a framework), or a framework:component string (indicating a specific
                                      component).  The second parameter can be one of: full, major, minor,

@@ -79,7 +79,8 @@ const char *prte_info_path_pkgincludedir = "pkgincludedir";
 
 void prte_info_do_params(bool want_all_in, bool want_internal)
 {
-    char *type, *component, *str, **tmp;
+    char *type, *str;
+    char **args = NULL, **tmp;
     bool found;
     int i, j;
     bool want_all = false;
@@ -96,11 +97,10 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
          * superceeds any individual type
          */
         if (NULL != opt) {
-            for (i=0; NULL != opt->values[i]; i++) {
-                if (0 == strcmp(prte_info_type_all, opt->values[i])) {
-                    want_all = true;
-                    break;
-                }
+            /* split the arguments at the colon */
+            args = prte_argv_split(opt->values[0], ':');
+            if (0 == strcmp(args[0], "all")) {
+                want_all = true;
             }
         }
     }
@@ -114,31 +114,38 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
             prte_info_show_mca_params(type, prte_info_component_all, want_internal);
         }
     } else {
-        if (NULL != opt) {
-            for (j=0; NULL != opt->values[j]; j++) {
-                tmp = prte_argv_split(opt->values[j], ' ');
-                type = tmp[0];
-                component = tmp[1];
+        if (NULL != opt && NULL != args) {
+            type = args[0];
+            if (NULL != args[1]) {
+                tmp = prte_argv_split(args[1], ',');
 
-                for (found = false, i = 0; i < mca_types.size; ++i) {
-                    if (NULL == (str = (char *) prte_pointer_array_get_item(&mca_types, i))) {
-                        continue;
+                for (j=0; NULL != tmp[j]; j++) {
+                    for (found = false, i = 0; i < mca_types.size; ++i) {
+                        str = (char *) prte_pointer_array_get_item(&mca_types, i);
+                        if (NULL == str) {
+                            continue;
+                        }
+                        if (0 == strcmp(str, type)) {
+                            found = true;
+                            break;
+                        }
                     }
-                    if (0 == strcmp(str, type)) {
-                        found = true;
-                        break;
+
+                    if (!found) {
+                        prte_show_help("help-pinfo.txt", "not-found", true, type);
+                        exit(1);
                     }
-                }
 
-                if (!found) {
-                    prte_show_help("help-pinfo.txt", "not-found", true, type);
-                    exit(1);
+                    prte_info_show_mca_params(type, tmp[j], want_internal);
                 }
-
-                prte_info_show_mca_params(type, component, want_internal);
                 prte_argv_free(tmp);
+            } else {
+                prte_info_show_mca_params(type, "*", want_internal);
             }
         }
+    }
+    if (NULL != args) {
+        prte_argv_free(args);
     }
 }
 
