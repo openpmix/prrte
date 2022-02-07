@@ -97,8 +97,8 @@ void prte_info_show_prte_version(const char *scope)
 void prte_info_do_version(bool want_all)
 {
     size_t i, n;
-    char *arg1, *scope, *type, *component, **tmp;
-    char *pos;
+    char *arg1, *scope, **tmp;
+    char *pos = NULL;
     int j;
     prte_cli_item_t *opt;
 
@@ -116,37 +116,40 @@ void prte_info_do_version(bool want_all)
     } else {
         opt = prte_cmd_line_get_param(&prte_info_cmd_line, "show-version");
         if (NULL != opt) {
-            for (n=0; NULL != opt->values[n]; n++) {
-                tmp = prte_argv_split(opt->values[n], ' ');
-                arg1 = tmp[0];
-                scope = tmp[2];
-
-                /* Version of PRTE */
-
-                if (0 == strcmp(prte_info_type_prte, arg1)) {
-                    prte_info_show_prte_version(scope);
+            tmp = prte_argv_split(opt->values[0], ':');
+            arg1 = tmp[0];
+            if (NULL == tmp[1]) {
+                scope = (char*)prte_info_ver_all;
+            } else {
+                if (NULL != tmp[2]) {
+                    pos = tmp[1];
+                    scope = tmp[2];
+                } else {
+                    pos = tmp[1];
+                    scope = (char*)prte_info_ver_all;
                 }
-
-                /* Specific type and component */
-
-                else if (NULL != (pos = strchr(arg1, ':'))) {
-                    *pos = '\0';
-                    type = arg1;
-                    pos++;
-                    component = pos;
-
-                    prte_info_show_component_version(type, component, scope, prte_info_ver_all);
-
-                }
-
-                /* All components of a specific type */
-
-                else {
-                    prte_info_show_component_version(arg1, prte_info_component_all, scope,
-                                                     prte_info_ver_all);
-                }
-                prte_argv_free(tmp);
             }
+
+            /* Version of PRTE */
+
+            if (0 == strcmp(prte_info_type_prte, arg1)) {
+                prte_info_show_prte_version(scope);
+            }
+
+            /* Specific type and component */
+
+            else if (NULL != pos) {
+                prte_info_show_component_version(arg1, pos, scope, prte_info_ver_all);
+
+            }
+
+            /* All components of a specific type */
+
+            else {
+                prte_info_show_component_version(arg1, prte_info_component_all, scope,
+                                                 prte_info_ver_all);
+            }
+            prte_argv_free(tmp);
         }
     }
 }
