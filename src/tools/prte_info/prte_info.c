@@ -189,6 +189,9 @@ int main(int argc, char *argv[])
     if (want_all) {
         prte_info_do_version(want_all);
         acted = true;
+    } else if (prte_cmd_line_is_taken(&prte_info_cmd_line, "show-version")) {
+        prte_info_do_version(false);
+        acted = true;
     }
     if (want_all || prte_cmd_line_is_taken(&prte_info_cmd_line, "path")) {
         prte_info_do_path(want_all);
