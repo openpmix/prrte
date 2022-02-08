@@ -265,7 +265,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
             default:
                 /* this could be one of the short options other than 'h' or 'V', so
                  * we have to check */
-                if ('-' != argv[argind][0]) {
+                if (0 != argind && '-' != argv[argind][0]) {
                     // this was not an option
                     break;
                 }
