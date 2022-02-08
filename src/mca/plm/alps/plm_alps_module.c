@@ -57,7 +57,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/prte_environ.h"

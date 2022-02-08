@@ -14,7 +14,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2021 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -66,7 +66,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/name_fns.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/output.h"

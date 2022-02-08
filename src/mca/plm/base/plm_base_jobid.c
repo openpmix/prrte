@@ -12,7 +12,7 @@
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -56,7 +56,7 @@ int prte_plm_base_set_hnp_name(void)
     }
 
     if (NULL == prte_plm_globals.base_nspace) {
-        /* use basename-hostname-pid as our base nspace */
+        /* use pmix_basename.hostname-pid as our base nspace */
         prte_asprintf(&prte_plm_globals.base_nspace, "%s-%s-%u", prte_tool_basename,
                       prte_process_info.nodename, (uint32_t) prte_process_info.pid);
     }

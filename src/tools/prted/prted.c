@@ -64,7 +64,7 @@
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/daemon_init.h"
 #include "src/util/fd.h"

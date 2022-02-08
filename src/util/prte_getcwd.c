@@ -25,7 +25,7 @@
 #include <string.h>
 
 #include "constants.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/prte_getcwd.h"
 #include "src/util/string_copy.h"
 

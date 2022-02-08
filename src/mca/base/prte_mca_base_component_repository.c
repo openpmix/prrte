@@ -45,7 +45,7 @@
 #include "src/mca/mca.h"
 #include "src/mca/prtedl/base/base.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/printf.h"
 #include "src/util/string_copy.h"
 

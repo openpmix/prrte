@@ -40,7 +40,7 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
