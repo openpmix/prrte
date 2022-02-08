@@ -55,7 +55,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 
@@ -1848,7 +1848,7 @@ char *prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
             cpus = strdup("unknown");
         }
     }
-    prte_asprintf(&sig, "%dN:%dS:%dL3:%dL2:%dL1:%dC:%dH:%s:%s:%s:%s", nnuma, npackage, nl3, nl2,
+    pmix_asprintf(&sig, "%dN:%dS:%dL3:%dL2:%dL1:%dC:%dH:%s:%s:%s:%s", nnuma, npackage, nl3, nl2,
                   nl1, ncore, nhwt, pus, cpus, arch, endian);
     free(pus);
     free(cpus);
@@ -1935,14 +1935,14 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
             hwloc_bitmap_list_asprintf(&tmp, result);
             switch (type) {
             case HWLOC_OBJ_NUMANODE:
-                prte_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
                 locality = t2;
                 break;
             case HWLOC_OBJ_PACKAGE:
-                prte_asprintf(&t2, "%sSK%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sSK%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
@@ -1952,21 +1952,21 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
             case HWLOC_OBJ_CACHE: {
                 unsigned cachedepth = hwloc_get_obj_by_depth(topo, d, 0)->attr->cache.depth;
                 if (3 == cachedepth) {
-                    prte_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
+                    pmix_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
                     locality = t2;
                     break;
                 } else if (2 == cachedepth) {
-                    prte_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
+                    pmix_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
                     locality = t2;
                     break;
                 } else {
-                    prte_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
+                    pmix_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
@@ -1976,21 +1976,21 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
             } break;
 #else
             case HWLOC_OBJ_L3CACHE:
-                prte_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
                 locality = t2;
                 break;
             case HWLOC_OBJ_L2CACHE:
-                prte_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
                 locality = t2;
                 break;
             case HWLOC_OBJ_L1CACHE:
-                prte_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
@@ -1998,14 +1998,14 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
                 break;
 #endif
             case HWLOC_OBJ_CORE:
-                prte_asprintf(&t2, "%sCR%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sCR%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
                 locality = t2;
                 break;
             case HWLOC_OBJ_PU:
-                prte_asprintf(&t2, "%sHT%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sHT%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
@@ -2028,7 +2028,7 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
          * that we came up empty at this depth */
         if (!hwloc_bitmap_iszero(result)) {
             hwloc_bitmap_list_asprintf(&tmp, result);
-            prte_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
+            pmix_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
             if (NULL != locality) {
                 free(locality);
             }
@@ -2214,13 +2214,13 @@ static void print_hwloc_obj(char **output, char *prefix, hwloc_topology_t topo, 
 
     /* print the object type */
     hwloc_obj_type_snprintf(string, 1024, obj, 1);
-    prte_asprintf(&pfx, "\n%s\t", (NULL == prefix) ? "" : prefix);
-    prte_asprintf(&tmp, "%sType: %s Number of child objects: %u%sName=%s",
+    pmix_asprintf(&pfx, "\n%s\t", (NULL == prefix) ? "" : prefix);
+    pmix_asprintf(&tmp, "%sType: %s Number of child objects: %u%sName=%s",
                   (NULL == prefix) ? "" : prefix, string, obj->arity, pfx,
                   (NULL == obj->name) ? "NULL" : obj->name);
     if (0 < hwloc_obj_attr_snprintf(string, 1024, obj, pfx, 1)) {
         /* print the attributes */
-        prte_asprintf(&tmp2, "%s%s%s", tmp, pfx, string);
+        pmix_asprintf(&tmp2, "%s%s%s", tmp, pfx, string);
         free(tmp);
         tmp = tmp2;
     }
@@ -2229,28 +2229,28 @@ static void print_hwloc_obj(char **output, char *prefix, hwloc_topology_t topo, 
      */
     if (NULL != obj->cpuset) {
         hwloc_bitmap_snprintf(string, PRTE_HWLOC_MAX_STRING, obj->cpuset);
-        prte_asprintf(&tmp2, "%s%sCpuset:  %s", tmp, pfx, string);
+        pmix_asprintf(&tmp2, "%s%sCpuset:  %s", tmp, pfx, string);
         free(tmp);
         tmp = tmp2;
     }
     if (HWLOC_OBJ_MACHINE == obj->type) {
         /* root level object - add support values */
         support = (struct hwloc_topology_support *) hwloc_topology_get_support(topo);
-        prte_asprintf(&tmp2, "%s%sBind CPU proc:   %s%sBind CPU thread: %s", tmp, pfx,
+        pmix_asprintf(&tmp2, "%s%sBind CPU proc:   %s%sBind CPU thread: %s", tmp, pfx,
                       (support->cpubind->set_thisproc_cpubind) ? "TRUE" : "FALSE", pfx,
                       (support->cpubind->set_thisthread_cpubind) ? "TRUE" : "FALSE");
         free(tmp);
         tmp = tmp2;
-        prte_asprintf(&tmp2, "%s%sBind MEM proc:   %s%sBind MEM thread: %s", tmp, pfx,
+        pmix_asprintf(&tmp2, "%s%sBind MEM proc:   %s%sBind MEM thread: %s", tmp, pfx,
                       (support->membind->set_thisproc_membind) ? "TRUE" : "FALSE", pfx,
                       (support->membind->set_thisthread_membind) ? "TRUE" : "FALSE");
         free(tmp);
         tmp = tmp2;
     }
-    prte_asprintf(&tmp2, "%s%s\n", (NULL == *output) ? "" : *output, tmp);
+    pmix_asprintf(&tmp2, "%s%s\n", (NULL == *output) ? "" : *output, tmp);
     free(tmp);
     free(pfx);
-    prte_asprintf(&pfx, "%s\t", (NULL == prefix) ? "" : prefix);
+    pmix_asprintf(&pfx, "%s\t", (NULL == prefix) ? "" : prefix);
     for (i = 0; i < obj->arity; i++) {
         obj2 = obj->children[i];
         /* print the object */

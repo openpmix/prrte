@@ -19,7 +19,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/oob/base/base.h"
@@ -258,7 +258,7 @@ void prte_oob_base_get_addr(char **uri)
                 continue;
             }
             /* add new value to final one */
-            prte_asprintf(&tmp, "%s;%s", final, turi);
+            pmix_asprintf(&tmp, "%s;%s", final, turi);
             free(turi);
             free(final);
             final = tmp;

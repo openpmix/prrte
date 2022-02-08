@@ -50,7 +50,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 
@@ -67,32 +67,32 @@ char *prte_ras_base_flag_string(prte_node_t *node)
 
     tmp = strdup("flags: ");
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
-        prte_asprintf(&t2, "%sDAEMON_LAUNCHED:", tmp);
+        pmix_asprintf(&t2, "%sDAEMON_LAUNCHED:", tmp);
         free(tmp);
         tmp = t2;
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_LOC_VERIFIED)) {
-        prte_asprintf(&t2, "%sLOCATION_VERIFIED:", tmp);
+        pmix_asprintf(&t2, "%sLOCATION_VERIFIED:", tmp);
         free(tmp);
         tmp = t2;
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_OVERSUBSCRIBED)) {
-        prte_asprintf(&t2, "%sOVERSUBSCRIBED:", tmp);
+        pmix_asprintf(&t2, "%sOVERSUBSCRIBED:", tmp);
         free(tmp);
         tmp = t2;
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
-        prte_asprintf(&t2, "%sMAPPED:", tmp);
+        pmix_asprintf(&t2, "%sMAPPED:", tmp);
         free(tmp);
         tmp = t2;
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
-        prte_asprintf(&t2, "%sSLOTS_GIVEN:", tmp);
+        pmix_asprintf(&t2, "%sSLOTS_GIVEN:", tmp);
         free(tmp);
         tmp = t2;
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_NON_USABLE)) {
-        prte_asprintf(&t2, "%sNONUSABLE:", tmp);
+        pmix_asprintf(&t2, "%sNONUSABLE:", tmp);
         free(tmp);
         tmp = t2;
     }
@@ -114,9 +114,9 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     char *flgs, *aliases;
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
-        prte_asprintf(&tmp, "<allocation>\n");
+        pmix_asprintf(&tmp, "<allocation>\n");
     } else {
-        prte_asprintf(&tmp,
+        pmix_asprintf(&tmp,
                       "\n======================   ALLOCATED NODES   ======================\n");
     }
     if (prte_hnp_is_allocated) {
@@ -130,7 +130,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
         }
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
             /* need to create the output in XML format */
-            prte_asprintf(&tmp2,
+            pmix_asprintf(&tmp2,
                           "\t<host name=\"%s\" slots=\"%d\" max_slots=\"%d\" slots_inuse=\"%d\">\n",
                           (NULL == alloc->name) ? "UNKNOWN" : alloc->name, (int) alloc->slots,
                           (int) alloc->slots_max, (int) alloc->slots_inuse);
@@ -143,7 +143,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
             } else {
                 aliases = NULL;
             }
-            prte_asprintf(&tmp2, "    %s: slots=%d max_slots=%d slots_inuse=%d state=%s\n\t%s\n\taliases: %s\n",
+            pmix_asprintf(&tmp2, "    %s: slots=%d max_slots=%d slots_inuse=%d state=%s\n\t%s\n\taliases: %s\n",
                           (NULL == alloc->name) ? "UNKNOWN" : alloc->name, (int) alloc->slots,
                           (int) alloc->slots_max, (int) alloc->slots_inuse,
                           prte_node_state_to_str(alloc->state), flgs,
@@ -156,7 +156,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
         if (NULL == tmp) {
             tmp = tmp2;
         } else {
-            prte_asprintf(&tmp3, "%s%s", tmp, tmp2);
+            pmix_asprintf(&tmp3, "%s%s", tmp, tmp2);
             free(tmp);
             free(tmp2);
             tmp = tmp3;

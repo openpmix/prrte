@@ -14,7 +14,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,7 +29,7 @@
 #include <string.h>
 
 #include "src/threads/tsd.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/string_copy.h"
 #include "src/mca/errmgr/errmgr.h"
 
@@ -290,7 +290,7 @@ int prte_util_convert_vpid_to_string(char **vpid_string, const pmix_rank_t vpid)
     } else if (PMIX_RANK_UNDEF == vpid) {
         *vpid_string = strdup("UNDEFINED");
     } else {
-        if (0 > prte_asprintf(vpid_string, "%u", vpid)) {
+        if (0 > pmix_asprintf(vpid_string, "%u", vpid)) {
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
@@ -335,7 +335,7 @@ int prte_util_convert_process_name_to_string(char **name_string, const pmix_proc
 
     job = prte_util_print_jobids(name->nspace);
     rank = prte_util_print_vpids(name->rank);
-    prte_asprintf(name_string, "%s.%s", job, rank);
+    pmix_asprintf(name_string, "%s.%s", job, rank);
 
     return PRTE_SUCCESS;
 }
@@ -409,9 +409,9 @@ char *prte_pretty_print_timing(int64_t secs, int64_t usecs)
     seconds = seconds % 60l;
     if (0 == minutes && 0 == seconds) {
         fsecs = ((float) (secs) *1000000.0 + (float) usecs) / 1000.0;
-        prte_asprintf(&timestring, "%8.2f millisecs", fsecs);
+        pmix_asprintf(&timestring, "%8.2f millisecs", fsecs);
     } else {
-        prte_asprintf(&timestring, "%3lu:%02lu min:sec", minutes, seconds);
+        pmix_asprintf(&timestring, "%3lu:%02lu min:sec", minutes, seconds);
     }
 
     return timestring;

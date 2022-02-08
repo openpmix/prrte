@@ -407,7 +407,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         /* --cpu-set and --cpu-list -> --map-by pe-list:X
          */
         else if (0 == strcmp(option, "cpu-set") || 0 == strcmp(option, "cpu-list")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_PELIST, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_PELIST, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -449,7 +449,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* --cpus-per-proc/rank X -> --map-by :pe=X */
         else if (0 == strcmp(option, "cpus-per-proc") || 0 == strcmp(option, "cpus-per-rank")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_PE, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_PE, opt->values[0]);
             rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -458,7 +458,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* -N ->   map-by ppr:N:node */
         else if (0 == strcmp(option, "N")) {
-            prte_asprintf(&p2, "ppr:%s:node", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s:node", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -467,7 +467,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* --npernode X and --npersocket X -> --map-by ppr:X:node/socket */
         else if (0 == strcmp(option, "npernode")) {
-            prte_asprintf(&p2, "ppr:%s:node", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s:node", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -479,7 +479,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                                                 warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         } else if (0 == strcmp(option, "npersocket")) {
-            prte_asprintf(&p2, "ppr:%s:package", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s:package", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -493,7 +493,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                 prte_show_help("help-schizo-base.txt", "bad-ppr", true, opt->values[0], true);
                 return PRTE_ERR_SILENT;
             }
-            prte_asprintf(&p2, "ppr:%s", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -509,7 +509,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* --rankfile X -> map-by rankfile:file=X */
         else if (0 == strcmp(option, "rankfile")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option, PRTE_CLI_MAPBY, p2, true);
             free(p2);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
@@ -530,7 +530,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* --output-directory DIR  ->  --output dir=DIR */
         else if (0 == strcmp(option, "output-directory")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_QDIR, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_QDIR, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, p2,
                                                 warn);
@@ -539,7 +539,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* --output-filename DIR  ->  --output file=file */
         else if (0 == strcmp(option, "output-filename")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, p2,
                                                 warn);
@@ -616,11 +616,11 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                 } else {
                     *p2 = '\0';
                     ++p2;
-                    prte_asprintf(&tmp, "%s:%s", PRTE_CLI_PACKAGE, p2);
+                    pmix_asprintf(&tmp, "%s:%s", PRTE_CLI_PACKAGE, p2);
                 }
                 if (warn) {
-                    prte_asprintf(&p2, "%s %s", option, p1);
-                    prte_asprintf(&tmp2, "%s %s", option, tmp);
+                    pmix_asprintf(&p2, "%s %s", option, p1);
+                    pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
                     output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
@@ -646,11 +646,11 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                 } else {
                     *p2 = '\0';
                     ++p2;
-                    prte_asprintf(&tmp, "package:%s", p2);
+                    pmix_asprintf(&tmp, "package:%s", p2);
                 }
                 if (warn) {
-                    prte_asprintf(&p2, "%s %s", option, p1);
-                    prte_asprintf(&tmp2, "%s %s", option, tmp);
+                    pmix_asprintf(&p2, "%s %s", option, p1);
+                    pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
                     output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
@@ -676,11 +676,11 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                 } else {
                     *p2 = '\0';
                     ++p2;
-                    prte_asprintf(&tmp, "%s:%s", PRTE_CLI_PACKAGE, p2);
+                    pmix_asprintf(&tmp, "%s:%s", PRTE_CLI_PACKAGE, p2);
                 }
                 if (warn) {
-                    prte_asprintf(&p2, "%s %s", option, p1);
-                    prte_asprintf(&tmp2, "%s %s", option, tmp);
+                    pmix_asprintf(&p2, "%s %s", option, p1);
+                    pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
                     output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
@@ -967,7 +967,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                             return PRTE_ERR_BAD_PARAM;
                         }
                         p2 = prte_schizo_base_strip_quotes(opts[n + 3]);
-                        prte_asprintf(&param, "%s=%s", p1, p2);
+                        pmix_asprintf(&param, "%s=%s", p1, p2);
                         free(p1);
                         free(p2);
                         p1 = param;
@@ -1081,7 +1081,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         /* add the results into dstenv */
         for (i = 0; NULL != cache[i]; i++) {
             if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
-                prte_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
+                pmix_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
                 prte_setenv(p1, cachevals[i], true, dstenv);
                 free(p1);
             } else {
@@ -1421,7 +1421,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     if (NULL != cache) {
         for (i = 0; NULL != cache[i]; i++) {
             if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
-                prte_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
+                pmix_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
                 prte_setenv(p1, cachevals[i], true, dstenv);
                 free(p1);
             } else {
@@ -1449,21 +1449,21 @@ static bool check_prte_overlap(char *var, char *value)
     char *tmp;
 
     if (0 == strncmp(var, "dl_", 3)) {
-        prte_asprintf(&tmp, "PRTE_MCA_prtedl_%s", &var[3]);
+        pmix_asprintf(&tmp, "PRTE_MCA_prtedl_%s", &var[3]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "oob_", 4)) {
-        prte_asprintf(&tmp, "PRTE_MCA_%s", var);
+        pmix_asprintf(&tmp, "PRTE_MCA_%s", var);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "hwloc_", 6)) {
-        prte_asprintf(&tmp, "PRTE_MCA_%s", var);
+        pmix_asprintf(&tmp, "PRTE_MCA_%s", var);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1471,7 +1471,7 @@ static bool check_prte_overlap(char *var, char *value)
         return true;
     } else if (0 == strncmp(var, "if_", 3)) {
         // need to convert if to prteif
-        prte_asprintf(&tmp, "PRTE_MCA_prteif_%s", &var[3]);
+        pmix_asprintf(&tmp, "PRTE_MCA_prteif_%s", &var[3]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1479,7 +1479,7 @@ static bool check_prte_overlap(char *var, char *value)
         return true;
     } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
         // need to convert reachable to prtereachable
-        prte_asprintf(&tmp, "PRTE_MCA_prtereachable_%s", &var[strlen("reachable")]);
+        pmix_asprintf(&tmp, "PRTE_MCA_prtereachable_%s", &var[strlen("reachable")]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1495,21 +1495,21 @@ static bool check_pmix_overlap(char *var, char *value)
     char *tmp;
 
     if (0 == strncmp(var, "dl_", 3)) {
-        prte_asprintf(&tmp, "PMIX_MCA_pdl_%s", &var[3]);
+        pmix_asprintf(&tmp, "PMIX_MCA_pdl_%s", &var[3]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "oob_", 4)) {
-        prte_asprintf(&tmp, "PMIX_MCA_ptl_%s", &var[4]);
+        pmix_asprintf(&tmp, "PMIX_MCA_ptl_%s", &var[4]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "hwloc_", 6)) {
-        prte_asprintf(&tmp, "PMIX_MCA_%s", var);
+        pmix_asprintf(&tmp, "PMIX_MCA_%s", var);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1517,7 +1517,7 @@ static bool check_pmix_overlap(char *var, char *value)
         return true;
     } else if (0 == strncmp(var, "if_", 3)) {
         // need to convert if to pif
-        prte_asprintf(&tmp, "PMIX_MCA_pif_%s", &var[3]);
+        pmix_asprintf(&tmp, "PMIX_MCA_pif_%s", &var[3]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1525,7 +1525,7 @@ static bool check_pmix_overlap(char *var, char *value)
         return true;
     } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
         // need to convert reachable to preachable
-        prte_asprintf(&tmp, "PMIX_MCA_preachable_%s", &var[strlen("reachable")]);
+        pmix_asprintf(&tmp, "PMIX_MCA_preachable_%s", &var[strlen("reachable")]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1567,7 +1567,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
+                    pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
                     prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
@@ -1593,7 +1593,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
+                    pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
                     prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
@@ -1631,7 +1631,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
+                    pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
                     prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
@@ -1657,7 +1657,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
+                    pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
                     prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
@@ -1750,7 +1750,7 @@ weareit:
                 // check for pmix overlap
                 check_pmix_overlap(&e2[len], evar);
             } else if (prte_schizo_base_check_prte_param(&e2[len])) {
-                    prte_asprintf(&tmp, "PRTE_MCA_%s", &e2[len]);
+                    pmix_asprintf(&tmp, "PRTE_MCA_%s", &e2[len]);
                     // set it, but don't overwrite if they already
                     // have a value in our environment
                     setenv(tmp, evar, false);
@@ -1758,7 +1758,7 @@ weareit:
                     // check for pmix overlap
                     check_pmix_overlap(&e2[len], evar);
             } else if (prte_schizo_base_check_pmix_param(&e2[len])) {
-                prte_asprintf(&tmp, "PMIX_MCA_%s", &e2[len]);
+                pmix_asprintf(&tmp, "PMIX_MCA_%s", &e2[len]);
                 // set it, but don't overwrite if they already
                 // have a value in our environment
                 setenv(tmp, evar, false);
@@ -1783,7 +1783,7 @@ weareit:
             if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
             } else if (prte_schizo_base_check_prte_param(fv->mbvfv_var)) {
-                prte_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+                pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
                 // set it, but don't overwrite if they already
                 // have a value in our environment
                 setenv(tmp, fv->mbvfv_value, false);
@@ -1793,7 +1793,7 @@ weareit:
                 // the equivalent PMIx value
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
             } else if (prte_schizo_base_check_pmix_param(fv->mbvfv_var)) {
-                prte_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
+                pmix_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
                 // set it, but don't overwrite if they already
                 // have a value in our environment
                 setenv(tmp, fv->mbvfv_value, false);
@@ -1815,7 +1815,7 @@ weareit:
             if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
             } else if (prte_schizo_base_check_prte_param(fv->mbvfv_var)) {
-                prte_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+                pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
                 // set it, but don't overwrite if they already
                 // have a value in our environment
                 setenv(tmp, fv->mbvfv_value, false);

@@ -547,7 +547,7 @@ static void check_and_replace(char **argv, int idx,
     if (NULL == tmp) {
         argv[idx] = strdup(replacement);
     } else {
-        prte_asprintf(&argv[idx], "%s%s", replacement, tmp);
+        pmix_asprintf(&argv[idx], "%s%s", replacement, tmp);
         free(tmp);
     }
 }
@@ -633,7 +633,7 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
 
     /* --outfile-pattern -> --output file= */
     if (0 == strcmp(option, "--outfile-pattern")) {
-        prte_asprintf(&p2, "file=%s:pattern", pargs[i+1]);
+        pmix_asprintf(&p2, "file=%s:pattern", pargs[i+1]);
         rc = prte_schizo_base_convert(argv, i, 2, "--output", NULL, p2, false);
         return PRTE_ERR_SILENT;
     }

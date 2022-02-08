@@ -55,4 +55,4 @@ THE CORRECT URL FOR YOUR GITHUB REPO, and set the email address properly:
     mailinglist = netloc-commits@open-mpi.org
     diffopts = --stat --summary --find-copies-harder
     emailmaxlines = 5000
-    showrev="t=%s; printf https://github.com/open-mpi/netloc/commit/$t; echo; echo; git show --stat --patch -C $t; echo"
+    showrev="t=%s; pmix_printf.https://github.com/open-mpi/netloc/commit/$t; echo; echo; git show --stat --patch -C $t; echo"

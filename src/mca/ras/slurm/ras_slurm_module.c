@@ -987,7 +987,7 @@ static int dyn_allocate(prte_job_t *jdata)
     /* construct the cmd string */
     pmix_argv_append_nosize(&cmd, "allocate");
     /* add the jobid */
-    prte_asprintf(&tmp, "jobid=%s", jdata->nspace);
+    pmix_asprintf(&tmp, "jobid=%s", jdata->nspace);
     pmix_argv_append_nosize(&cmd, tmp);
     free(tmp);
     /* if we want the allocation for all apps in one shot,
@@ -1005,7 +1005,7 @@ static int dyn_allocate(prte_job_t *jdata)
 #endif
 
     /* pass the timeout */
-    prte_asprintf(&tmp, "timeout=%d", prte_ras_slurm_component.timeout);
+    pmix_asprintf(&tmp, "timeout=%d", prte_ras_slurm_component.timeout);
     pmix_argv_append_nosize(&cmd, tmp);
     free(tmp);
 
@@ -1016,17 +1016,17 @@ static int dyn_allocate(prte_job_t *jdata)
             continue;
         }
         /* add the app id, preceded by a colon separator */
-        prte_asprintf(&tmp, ": app=%d", (int) app->idx);
+        pmix_asprintf(&tmp, ": app=%d", (int) app->idx);
         pmix_argv_append_nosize(&cmd, tmp);
         free(tmp);
         /* add the number of process "slots" we need */
-        prte_asprintf(&tmp, "np=%d", app->num_procs);
+        pmix_asprintf(&tmp, "np=%d", app->num_procs);
         pmix_argv_append_nosize(&cmd, tmp);
         free(tmp);
         /* if we were given a minimum number of nodes, pass it along */
         if (prte_get_attribute(&app->attributes, PRTE_APP_MIN_NODES, (void **) &i64ptr,
                                PMIX_INT64)) {
-            prte_asprintf(&tmp, "N=%ld", (long int) i64);
+            pmix_asprintf(&tmp, "N=%ld", (long int) i64);
             pmix_argv_append_nosize(&cmd, tmp);
             free(tmp);
         }
@@ -1035,7 +1035,7 @@ static int dyn_allocate(prte_job_t *jdata)
          */
         node_list = get_node_list(app);
         if (NULL != node_list) {
-            prte_asprintf(&tmp, "node_list=%s", node_list);
+            pmix_asprintf(&tmp, "node_list=%s", node_list);
             pmix_argv_append_nosize(&cmd, tmp);
             free(node_list);
             free(tmp);

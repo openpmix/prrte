@@ -10,7 +10,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,7 +28,7 @@
 
 #include "src/pmix/pmix-internal.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "src/threads/threads.h"
 #include "src/util/error_strings.h"
@@ -151,7 +151,7 @@ static void prted_abort(int error_code, char *fmt, ...)
     /* If there was a message, construct it */
     va_start(arglist, fmt);
     if (NULL != fmt) {
-        prte_vasprintf(&outmsg, fmt, arglist);
+        pmix_vasprintf(&outmsg, fmt, arglist);
     }
     va_end(arglist);
 

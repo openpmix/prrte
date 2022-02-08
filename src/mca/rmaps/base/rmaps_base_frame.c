@@ -32,7 +32,7 @@
 #include "src/mca/mca.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"

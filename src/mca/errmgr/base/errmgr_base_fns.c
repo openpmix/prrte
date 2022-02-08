@@ -55,7 +55,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
@@ -104,7 +104,7 @@ void prte_errmgr_base_abort(int error_code, char *fmt, ...)
     va_start(arglist, fmt);
     if (NULL != fmt) {
         char *buffer = NULL;
-        prte_vasprintf(&buffer, fmt, arglist);
+        pmix_vasprintf(&buffer, fmt, arglist);
         prte_output(0, "%s", buffer);
         free(buffer);
     }

@@ -272,7 +272,7 @@ static int raw_preposition_files(prte_job_t *jdata,
              */
             cptr = pmix_basename(app->app);
             free(app->app);
-            prte_asprintf(&app->app, "./%s", cptr);
+            pmix_asprintf(&app->app, "./%s", cptr);
             free(app->argv[0]);
             app->argv[0] = strdup(app->app);
             fs->remote_target = strdup(app->app);
@@ -872,7 +872,7 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
                          "%s filem:raw: identifying links for archive %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inbnd->fullpath));
 
-    prte_asprintf(&cmd, "tar tf %s", inbnd->fullpath);
+    pmix_asprintf(&cmd, "tar tf %s", inbnd->fullpath);
     fp = popen(cmd, "r");
     free(cmd);
     if (NULL == fp) {
@@ -1113,11 +1113,11 @@ static void write_handler(int fd, short event, void *cbdata)
             } else {
                 /* unarchive the file */
                 if (PRTE_FILEM_TYPE_TAR == sink->type) {
-                    prte_asprintf(&cmd, "tar xf %s", sink->file);
+                    pmix_asprintf(&cmd, "tar xf %s", sink->file);
                 } else if (PRTE_FILEM_TYPE_BZIP == sink->type) {
-                    prte_asprintf(&cmd, "tar xjf %s", sink->file);
+                    pmix_asprintf(&cmd, "tar xjf %s", sink->file);
                 } else if (PRTE_FILEM_TYPE_GZIP == sink->type) {
-                    prte_asprintf(&cmd, "tar xzf %s", sink->file);
+                    pmix_asprintf(&cmd, "tar xzf %s", sink->file);
                 } else {
                     PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);

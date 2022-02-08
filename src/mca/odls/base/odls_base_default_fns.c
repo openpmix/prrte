@@ -53,7 +53,7 @@
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/path.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/prte_environ.h"
 #include "src/util/sys_limits.h"
 
@@ -1045,7 +1045,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
                 cd->argv = pmix_argv_copy(prte_odls_globals.xtermcmd);
                 /* insert the rank into the correct place as a window title */
                 free(cd->argv[2]);
-                prte_asprintf(&cd->argv[2], "Rank %s", PRTE_VPID_PRINT(child->name.rank));
+                pmix_asprintf(&cd->argv[2], "Rank %s", PRTE_VPID_PRINT(child->name.rank));
                 /* add in the argv from the app */
                 for (i = 0; NULL != app->argv[i]; i++) {
                     pmix_argv_append_nosize(&cd->argv, app->argv[i]);
@@ -1104,7 +1104,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     /* if we are indexing the argv by rank, do so now */
     if (cd->index_argv) {
         char *param;
-        prte_asprintf(&param, "%s-%u", cd->argv[0], child->name.rank);
+        pmix_asprintf(&param, "%s-%u", cd->argv[0], child->name.rank);
         free(cd->argv[0]);
         cd->argv[0] = param;
     }
@@ -1360,9 +1360,9 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (NULL != mpiexec_pathenv) {
             argvptr = NULL;
             if (pathenv != NULL) {
-                prte_asprintf(&full_search, "%s:%s", mpiexec_pathenv, pathenv);
+                pmix_asprintf(&full_search, "%s:%s", mpiexec_pathenv, pathenv);
             } else {
-                prte_asprintf(&full_search, "%s", mpiexec_pathenv);
+                pmix_asprintf(&full_search, "%s", mpiexec_pathenv);
             }
             prte_setenv("PATH", full_search, true, &argvptr);
             free(full_search);

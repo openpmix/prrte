@@ -540,7 +540,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         /* --cpu-set and --cpu-list -> --map-by pe-list:X
          */
         else if (0 == strcmp(option, "cpu-set") || 0 == strcmp(option, "cpu-list")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_PELIST, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_PELIST, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -582,7 +582,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* --cpus-per-proc/rank X -> --map-by :pe=X */
         else if (0 == strcmp(option, "cpus-per-proc") || 0 == strcmp(option, "cpus-per-rank")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_PE, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_PE, opt->values[0]);
             rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -591,7 +591,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* -N ->   map-by ppr:N:node */
         else if (0 == strcmp(option, "N")) {
-            prte_asprintf(&p2, "ppr:%s:node", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s:node", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -600,7 +600,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* --npernode X and --npersocket X -> --map-by ppr:X:node/socket */
         else if (0 == strcmp(option, "npernode")) {
-            prte_asprintf(&p2, "ppr:%s:node", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s:node", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -612,7 +612,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                                                 warn);
             PRTE_CLI_REMOVE_DEPRECATED(results, opt);
         } else if (0 == strcmp(option, "npersocket")) {
-            prte_asprintf(&p2, "ppr:%s:package", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s:package", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -626,7 +626,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                 prte_show_help("help-schizo-base.txt", "bad-ppr", true, opt->values[0], true);
                 return PRTE_ERR_SILENT;
             }
-            prte_asprintf(&p2, "ppr:%s", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -642,7 +642,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* --rankfile X -> map-by rankfile:file=X */
         else if (0 == strcmp(option, "rankfile")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
@@ -665,7 +665,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* --output-directory DIR  ->  --output dir=DIR */
         else if (0 == strcmp(option, "output-directory")) {
-            prte_asprintf(&p2, "dir=%s", opt->values[0]);
+            pmix_asprintf(&p2, "dir=%s", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, p2,
                                                 warn);
@@ -674,7 +674,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         }
         /* --output-filename DIR  ->  --output file=file */
         else if (0 == strcmp(option, "--output-filename")) {
-            prte_asprintf(&p2, "file=%s", opt->values[0]);
+            pmix_asprintf(&p2, "file=%s", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, p2,
                                                 warn);
@@ -751,11 +751,11 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                 } else {
                     *p2 = '\0';
                     ++p2;
-                    prte_asprintf(&tmp, "package:%s", p2);
+                    pmix_asprintf(&tmp, "package:%s", p2);
                 }
                 if (warn) {
-                    prte_asprintf(&p2, "%s %s", option, p1);
-                    prte_asprintf(&tmp2, "%s %s", option, tmp);
+                    pmix_asprintf(&p2, "%s %s", option, p1);
+                    pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
                     output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
@@ -781,11 +781,11 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                 } else {
                     *p2 = '\0';
                     ++p2;
-                    prte_asprintf(&tmp, "package:%s", p2);
+                    pmix_asprintf(&tmp, "package:%s", p2);
                 }
                 if (warn) {
-                    prte_asprintf(&p2, "%s %s", option, p1);
-                    prte_asprintf(&tmp2, "%s %s", option, tmp);
+                    pmix_asprintf(&p2, "%s %s", option, p1);
+                    pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
                     output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
@@ -811,11 +811,11 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                 } else {
                     *p2 = '\0';
                     ++p2;
-                    prte_asprintf(&tmp, "package:%s", p2);
+                    pmix_asprintf(&tmp, "package:%s", p2);
                 }
                 if (warn) {
-                    prte_asprintf(&p2, "%s %s", option, p1);
-                    prte_asprintf(&tmp2, "%s %s", option, tmp);
+                    pmix_asprintf(&p2, "%s %s", option, p1);
+                    pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
                     output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
@@ -959,7 +959,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
+                    pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
                     prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
@@ -985,7 +985,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
+                    pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
                     prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
@@ -1023,7 +1023,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
+                    pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
                     prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
@@ -1049,7 +1049,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
+                    pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
                     prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);

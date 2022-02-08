@@ -763,7 +763,7 @@ release:
     }
 
     /* remove the session directory tree */
-    if (0 > prte_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
+    if (0 > pmix_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
                           PRTE_LOCAL_JOBID(jdata->nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
     } else {

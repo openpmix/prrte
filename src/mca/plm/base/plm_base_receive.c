@@ -159,7 +159,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
             goto CLEANUP;
         }
         /* the new nspace is our base nspace with an "@N" extension */
-        prte_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
+        pmix_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
         PMIX_LOAD_NSPACE(job, tmp);
         free(tmp);
         prte_plm_globals.next_jobid++;

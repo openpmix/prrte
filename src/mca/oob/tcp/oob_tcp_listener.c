@@ -331,7 +331,7 @@ static int create_listen(void)
         }
         prte_list_append(&prte_oob_tcp_component.listeners, &conn->item);
         /* and to our ports */
-        prte_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in *) &inaddr)->sin_port));
+        pmix_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in *) &inaddr)->sin_port));
         pmix_argv_append_nosize(&prte_oob_tcp_component.ipv4ports, tconn);
         free(tconn);
         if (OOB_TCP_DEBUG_CONNECT
@@ -530,7 +530,7 @@ static int create_listen6(void)
         conn->port = ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port);
         prte_list_append(&prte_oob_tcp_component.listeners, &conn->item);
         /* and to our ports */
-        prte_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port));
+        pmix_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port));
         pmix_argv_append_nosize(&prte_oob_tcp_component.ipv6ports, tconn);
         free(tconn);
         if (OOB_TCP_DEBUG_CONNECT

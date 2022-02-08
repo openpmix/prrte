@@ -342,17 +342,17 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * require any further arguments
      */
     if (map->num_new_daemons < prte_num_allocated_nodes) {
-        prte_asprintf(&tmp, "--nodes=%lu", (unsigned long) map->num_new_daemons);
+        pmix_asprintf(&tmp, "--nodes=%lu", (unsigned long) map->num_new_daemons);
         pmix_argv_append(&argc, &argv, tmp);
         free(tmp);
 
-        prte_asprintf(&tmp, "--nodelist=%s", nodelist_flat);
+        pmix_asprintf(&tmp, "--nodelist=%s", nodelist_flat);
         pmix_argv_append(&argc, &argv, tmp);
         free(tmp);
     }
 
     /* tell srun how many tasks to run */
-    prte_asprintf(&tmp, "--ntasks=%lu", (unsigned long) map->num_new_daemons);
+    pmix_asprintf(&tmp, "--ntasks=%lu", (unsigned long) map->num_new_daemons);
     pmix_argv_append(&argc, &argv, tmp);
     free(tmp);
 
@@ -637,9 +637,9 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
             /* Reset PATH */
             oldenv = getenv("PATH");
             if (NULL != oldenv) {
-                prte_asprintf(&newenv, "%s/%s:%s", prefix, bin_base, oldenv);
+                pmix_asprintf(&newenv, "%s/%s:%s", prefix, bin_base, oldenv);
             } else {
-                prte_asprintf(&newenv, "%s/%s", prefix, bin_base);
+                pmix_asprintf(&newenv, "%s/%s", prefix, bin_base);
             }
             setenv("PATH", newenv, true);
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
@@ -650,9 +650,9 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
             /* Reset LD_LIBRARY_PATH */
             oldenv = getenv("LD_LIBRARY_PATH");
             if (NULL != oldenv) {
-                prte_asprintf(&newenv, "%s/%s:%s", prefix, lib_base, oldenv);
+                pmix_asprintf(&newenv, "%s/%s:%s", prefix, lib_base, oldenv);
             } else {
-                prte_asprintf(&newenv, "%s/%s", prefix, lib_base);
+                pmix_asprintf(&newenv, "%s/%s", prefix, lib_base);
             }
             setenv("LD_LIBRARY_PATH", newenv, true);
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,

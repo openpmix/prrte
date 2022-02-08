@@ -18,7 +18,7 @@
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,7 +45,7 @@
 #include "src/mca/base/base.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/sys/atomic.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "types.h"
 
@@ -185,7 +185,7 @@ PRTE_CLASS_DECLARATION(prte_pmix_tool_t);
     do {                                                                             \
         pmix_server_req_t *_req;                                                     \
         _req = PRTE_NEW(pmix_server_req_t);                                          \
-        prte_asprintf(&_req->operation, "DMDX: %s:%d", __FILE__, __LINE__);          \
+        pmix_asprintf(&_req->operation, "DMDX: %s:%d", __FILE__, __LINE__);          \
         memcpy(&_req->tproc, (p), sizeof(pmix_proc_t));                              \
         _req->info = (pmix_info_t *) (i);                                            \
         _req->ninfo = (ni);                                                          \
@@ -201,7 +201,7 @@ PRTE_CLASS_DECLARATION(prte_pmix_tool_t);
     do {                                                                             \
         pmix_server_req_t *_req;                                                     \
         _req = PRTE_NEW(pmix_server_req_t);                                          \
-        prte_asprintf(&_req->operation, "SPAWN: %s:%d", __FILE__, __LINE__);         \
+        pmix_asprintf(&_req->operation, "SPAWN: %s:%d", __FILE__, __LINE__);         \
         _req->jdata = (j);                                                           \
         _req->spcbfunc = (ocf);                                                      \
         _req->cbdata = (ocd);                                                        \

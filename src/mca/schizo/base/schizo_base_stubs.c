@@ -105,7 +105,7 @@ int prte_schizo_base_add_directive(prte_cli_result_t *results,
             // does this contain only a qualifier?
             if (':' == opt->values[0][0]) {
                 // prepend it with the directive
-                prte_asprintf(&tmp, "%s%s", directive, opt->values[0]);
+                pmix_asprintf(&tmp, "%s%s", directive, opt->values[0]);
                 free(opt->values[0]);
                 opt->values[0] = tmp;
             } else {
@@ -123,12 +123,12 @@ int prte_schizo_base_add_directive(prte_cli_result_t *results,
                     *ptr = '\0';
                     ++ptr;
                     // form the new value
-                    prte_asprintf(&tmp, "%s,%s:%s", opt->values[0], directive, ptr);
+                    pmix_asprintf(&tmp, "%s,%s:%s", opt->values[0], directive, ptr);
                     free(opt->values[0]);
                     opt->values[0] = tmp;
                 } else {
                     // append the directive to the pre-existing ones
-                    prte_asprintf(&tmp, "%s,%s", opt->values[0], directive);
+                    pmix_asprintf(&tmp, "%s,%s", opt->values[0], directive);
                     free(opt->values[0]);
                     opt->values[0] = tmp;
                 }
@@ -143,7 +143,7 @@ int prte_schizo_base_add_directive(prte_cli_result_t *results,
     }
 
     if (report) {
-        prte_asprintf(&tmp, "--%s %s", target, directive);
+        pmix_asprintf(&tmp, "--%s %s", target, directive);
         /* can't just call show_help as we want every instance to be reported */
         ptr = prte_show_help_string("help-schizo-base.txt", "deprecated-converted",
                                     true, deprecated, tmp);
@@ -168,7 +168,7 @@ int prte_schizo_base_add_qualifier(prte_cli_result_t *results,
         // does it already have a value?
         if (NULL == opt->values) {
             // technically this should never happen, but...
-            prte_asprintf(&tmp, ":%s", qualifier);
+            pmix_asprintf(&tmp, ":%s", qualifier);
             pmix_argv_append_nosize(&opt->values, tmp);
             free(tmp);
         } else if (1 < pmix_argv_count(opt->values)) {
@@ -181,12 +181,12 @@ int prte_schizo_base_add_qualifier(prte_cli_result_t *results,
             // does it already contain a qualifier?
             if (NULL != strchr(opt->values[0], ':')) {
                 // can just add this one to the end
-                prte_asprintf(&tmp, "%s,%s", opt->values[0], qualifier);
+                pmix_asprintf(&tmp, "%s,%s", opt->values[0], qualifier);
                 free(opt->values[0]);
                 opt->values[0] = tmp;
             } else {
                 // append with a colon delimiter
-                prte_asprintf(&tmp, "%s:%s", opt->values[0], qualifier);
+                pmix_asprintf(&tmp, "%s:%s", opt->values[0], qualifier);
                 free(opt->values[0]);
                 opt->values[0] = tmp;
             }
@@ -195,14 +195,14 @@ int prte_schizo_base_add_qualifier(prte_cli_result_t *results,
         // add the new option
         opt = PRTE_NEW(prte_cli_item_t);
         opt->key = strdup(target);
-        prte_asprintf(&tmp, ":%s", qualifier);
+        pmix_asprintf(&tmp, ":%s", qualifier);
         pmix_argv_append_nosize(&opt->values, tmp);
         free(tmp);
         prte_list_append(&results->instances, &opt->super);
     }
 
     if (report) {
-        prte_asprintf(&tmp, "--%s :%s", target, qualifier);
+        pmix_asprintf(&tmp, "--%s :%s", target, qualifier);
         /* can't just call show_help as we want every instance to be reported */
         ptr = prte_show_help_string("help-schizo-base.txt", "deprecated-converted",
                                     true, deprecated, tmp);
@@ -350,15 +350,15 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                 argv[i] = strdup("--prtemca");
                 /* if this refers to the "if" framework, convert to "prteif" */
                 if (0 == strncasecmp(p1, "if", 2)) {
-                    prte_asprintf(&param, "prteif_%s", &p1[3]);
+                    pmix_asprintf(&param, "prteif_%s", &p1[3]);
                     free(p1);
                     p1 = param;
                 } else if (0 == strncasecmp(p1, "reachable", strlen("reachable"))) {
-                    prte_asprintf(&param, "prtereachable_%s", &p1[strlen("reachable_")]);
+                    pmix_asprintf(&param, "prtereachable_%s", &p1[strlen("reachable_")]);
                     free(p1);
                     p1 = param;
                 } else if (0 == strncasecmp(p1, "dl", strlen("dl"))) {
-                    prte_asprintf(&param, "prtedl_%s", &p1[strlen("dl_")]);
+                    pmix_asprintf(&param, "prtedl_%s", &p1[strlen("dl_")]);
                     free(p1);
                     p1 = param;
                 }
@@ -489,15 +489,15 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
                 argv[i] = strdup("--pmixmca");
                 /* if this refers to the "if" framework, convert to "pif" */
                 if (0 == strncasecmp(p1, "if", 2)) {
-                    prte_asprintf(&param, "pif_%s", &p1[3]);
+                    pmix_asprintf(&param, "pif_%s", &p1[3]);
                     free(p1);
                     p1 = param;
                 } else if (0 == strncasecmp(p1, "reachable", strlen("reachable"))) {
-                    prte_asprintf(&param, "preachable_%s", &p1[strlen("reachable_")]);
+                    pmix_asprintf(&param, "preachable_%s", &p1[strlen("reachable_")]);
                     free(p1);
                     p1 = param;
                 } else if (0 == strncasecmp(p1, "dl", strlen("dl"))) {
-                    prte_asprintf(&param, "pdl_%s", &p1[strlen("dl_")]);
+                    pmix_asprintf(&param, "pdl_%s", &p1[strlen("dl_")]);
                     free(p1);
                     p1 = param;
                 }

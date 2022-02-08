@@ -72,7 +72,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/net.h"
 #include "src/util/nidmap.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/prte_environ.h"
 #include "src/util/session_dir.h"
@@ -295,7 +295,7 @@ static void spawn_timeout_cb(int fd, short event, void *cbdata)
         PRTE_RELEASE(timer);
         prte_remove_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT_EVENT);
     }
-    prte_asprintf(&st, "--------------------------------------------------------------------------\n"
+    pmix_asprintf(&st, "--------------------------------------------------------------------------\n"
                        "The user-provided time limit for job launch has been reached:\n\n"
                        "  Timeout: %d seconds\n\n"
                        "The job will now be aborted.  Please check your environment to\n"
@@ -365,7 +365,7 @@ static void stack_trace_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
             PMIX_DATA_BUFFER_DESTRUCT(&blob);
             continue;
         }
-        prte_asprintf(&st, "STACK TRACE FOR PROC %s (%s, PID %lu)\n",
+        pmix_asprintf(&st, "STACK TRACE FOR PROC %s (%s, PID %lu)\n",
                       PRTE_NAME_PRINT(&name), hostname,
                       (unsigned long) pid);
         pmix_argv_append_nosize(&jdata->traces, st);
@@ -374,7 +374,7 @@ static void stack_trace_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
         /* unpack the stack_trace until complete */
         cnt = 1;
         while (PRTE_SUCCESS == PMIx_Data_unpack(NULL, &blob, &st, &cnt, PMIX_STRING)) {
-            prte_asprintf(&st2, "\t%s", st); // has its own newline
+            pmix_asprintf(&st2, "\t%s", st); // has its own newline
             pmix_argv_append_nosize(&jdata->traces, st2);
             free(st);
             free(st2);
@@ -470,7 +470,7 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
          *something* if it does */
         timeout = -1;
     }
-    prte_asprintf(&st, "--------------------------------------------------------------------------\n"
+    pmix_asprintf(&st, "--------------------------------------------------------------------------\n"
                        "The user-provided time limit for job execution has been reached:\n\n"
                        "  Timeout: %d seconds\n\n"
                        "The job will now be aborted.  Please check your code and/or\n"
@@ -490,19 +490,19 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
         /* output the results - note that the output might need to go to a
          * tool instead of just to stderr, so we use the PMIx IOF deliver
          * function to ensure it gets where it needs to go */
-        prte_asprintf(&st, "DATA FOR JOB: %s\n", PRTE_JOBID_PRINT(jdata->nspace));
+        pmix_asprintf(&st, "DATA FOR JOB: %s\n", PRTE_JOBID_PRINT(jdata->nspace));
         bo.bytes = st;
         bo.size = strlen(st);
         PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
         free(st);
-        prte_asprintf(&st, "\tNum apps: %d\tNum procs: %d\tJobState: %s\tAbort: %s\n",
+        pmix_asprintf(&st, "\tNum apps: %d\tNum procs: %d\tJobState: %s\tAbort: %s\n",
                       (int) jdata->num_apps, (int) jdata->num_procs, prte_job_state_to_str(jdata->state),
                       (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) ? "True" : "False");
         bo.bytes = st;
         bo.size = strlen(st);
         PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
         free(st);
-        prte_asprintf(&st, "\tNum launched: %ld\tNum reported: %ld\tNum terminated: %ld\n\n\tProcs:\n",
+        pmix_asprintf(&st, "\tNum launched: %ld\tNum reported: %ld\tNum terminated: %ld\n\n\tProcs:\n",
                       (long) jdata->num_launched, (long) jdata->num_reported,
                       (long) jdata->num_terminated);
         bo.bytes = st;
@@ -511,7 +511,7 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
         free(st);
         for (i = 0; i < jdata->procs->size; i++) {
             if (NULL != (proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, i))) {
-                prte_asprintf(&st, "\t\tRank: %s\tNode: %s\tPID: %u\tState: %s\tExitCode %d\n",
+                pmix_asprintf(&st, "\t\tRank: %s\tNode: %s\tPID: %u\tState: %s\tExitCode %d\n",
                               PRTE_VPID_PRINT(proc->name.rank),
                               (NULL == proc->node) ? "UNKNOWN" : proc->node->name,
                               (unsigned int) proc->pid, prte_proc_state_to_str(proc->state),
@@ -1966,7 +1966,7 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     }
     pmix_argv_append(argc, argv, "--prtemca");
     pmix_argv_append(argc, argv, "ess_base_num_procs");
-    prte_asprintf(&param, "%lu", num_procs);
+    pmix_asprintf(&param, "%lu", num_procs);
     pmix_argv_append(argc, argv, param);
     free(param);
 
@@ -2047,7 +2047,7 @@ void prte_plm_base_wrap_args(char **args)
             if ('\"' == args[i][0]) {
                 continue;
             }
-            prte_asprintf(&tstr, "\"%s\"", args[i]);
+            pmix_asprintf(&tstr, "\"%s\"", args[i]);
             free(args[i]);
             args[i] = tstr;
         }

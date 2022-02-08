@@ -46,7 +46,7 @@
 #include "src/mca/prtedl/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/string_copy.h"
 
 #if PRTE_HAVE_DL_SUPPORT
@@ -191,7 +191,7 @@ static int file_exists(const char *filename, const char *ext)
         return access(filename, F_OK) == 0;
     }
 
-    ret = prte_asprintf(&final, "%s.%s", filename, ext);
+    ret = pmix_asprintf(&final, "%s.%s", filename, ext);
     if (0 > ret || NULL == final) {
         return 0;
     }
@@ -473,7 +473,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
        Malloc out enough space for it. */
 
     do {
-        ret = prte_asprintf(&struct_name, "prte_%s_%s_component", ri->ri_type, ri->ri_name);
+        ret = pmix_asprintf(&struct_name, "prte_%s_%s_component", ri->ri_type, ri->ri_name);
         if (0 > ret) {
             ret = PRTE_ERR_OUT_OF_RESOURCE;
             break;

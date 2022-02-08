@@ -132,7 +132,7 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
                 } else {
                     char *tmp;
                     (void) hwloc_bitmap_list_asprintf(&tmp, sum->available);
-                    prte_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
+                    pmix_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
                                   prte_strerror(rc), tmp);
                     free(tmp);
                 }
@@ -170,7 +170,7 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
         cpuset = hwloc_bitmap_alloc();
         if (0 != (rc = hwloc_bitmap_list_sscanf(cpuset, cpu_bitmap))) {
             /* See comment above about "This may be a small memory leak" */
-            prte_asprintf(&msg, "hwloc_bitmap_sscanf returned \"%s\" for the string \"%s\"",
+            pmix_asprintf(&msg, "hwloc_bitmap_sscanf returned \"%s\" for the string \"%s\"",
                           prte_strerror(rc), cpu_bitmap);
             if (NULL == msg) {
                 msg = "failed to convert bitmap list to hwloc bitmap";
@@ -203,7 +203,7 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
             } else if (errno == EXDEV) {
                 msg = "hwloc indicates cpu binding cannot be enforced";
             } else {
-                prte_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
+                pmix_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
                               prte_strerror(rc), cpu_bitmap);
             }
             if (PRTE_BINDING_REQUIRED(jobdat->map->binding)) {
