@@ -47,7 +47,6 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/arch.h"
 #include "src/util/argv.h"
 #include "src/util/basename.h"
 #include "src/util/fd.h"

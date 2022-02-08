@@ -5,7 +5,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -270,7 +270,7 @@ static int raw_preposition_files(prte_job_t *jdata,
              * syntax or we won't find it - the binary will be positioned in the
              * session dir, so ensure the app is relative to that location
              */
-            cptr = prte_basename(app->app);
+            cptr = pmix_basename(app->app);
             free(app->app);
             prte_asprintf(&app->app, "./%s", cptr);
             free(app->argv[0]);
@@ -314,7 +314,7 @@ static int raw_preposition_files(prte_job_t *jdata,
                  * remote path is just the basename file name
                  */
                 if (prte_filem_raw_flatten_trees) {
-                    fs->remote_target = prte_basename(files[j]);
+                    fs->remote_target = pmix_basename(files[j]);
                 } else {
                     /* if this was an absolute path, then we need
                      * to convert it to a relative path - we do not
@@ -573,7 +573,7 @@ static int create_link(char *my_dir, char *path, char *link_pt)
                              "%s filem:raw: creating symlink to %s\n\tmypath: %s\n\tlink: %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), link_pt, mypath, fullname));
         /* create any required path to the link location */
-        basedir = prte_dirname(fullname);
+        basedir = pmix_dirname(fullname);
         if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(basedir, S_IRWXU))) {
             PRTE_ERROR_LOG(rc);
             prte_output(0, "%s Failed to symlink %s to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -628,7 +628,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
     }
     if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PMIX_BOOL)) {
         /* add the app itself to the list */
-        bname = prte_basename(app->app);
+        bname = pmix_basename(app->app);
         prte_argv_append_nosize(&files, bname);
         free(bname);
     }
@@ -1016,7 +1016,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                              "%s filem:raw: opening target file %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), incoming->fullpath));
         /* create the path to the target, if not already existing */
-        tmp = prte_dirname(incoming->fullpath);
+        tmp = pmix_dirname(incoming->fullpath);
         if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(tmp, S_IRWXU))) {
             PRTE_ERROR_LOG(rc);
             send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
@@ -1128,7 +1128,7 @@ static void write_handler(int fd, short event, void *cbdata)
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
                     return;
                 }
-                dirname = prte_dirname(sink->fullpath);
+                dirname = pmix_dirname(sink->fullpath);
                 if (0 != chdir(dirname)) {
                     PRTE_ERROR_LOG(PRTE_ERROR);
                     send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);

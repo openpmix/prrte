@@ -219,7 +219,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
      * can't easily find the class on the cmd line. Java apps have to
      * preload their binary via the preload_files option
      */
-    appname = prte_basename(app->app.cmd);
+    appname = pmix_basename(app->app.cmd);
     if (0 == strcmp(appname, "java")) {
         opt = prte_cmd_line_get_param(&results, PRTE_CLI_PRELOAD_BIN);
         if (NULL != opt) {

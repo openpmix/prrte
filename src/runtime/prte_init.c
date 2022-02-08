@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,7 +36,6 @@
 #    include <unistd.h>
 #endif
 
-#include "src/util/arch.h"
 #include "src/util/error.h"
 #include "src/util/error_strings.h"
 #include "src/util/keyval_parse.h"
@@ -179,12 +178,6 @@ int prte_init_util(prte_proc_type_t flags)
     if (PRTE_SUCCESS != (ret = prte_util_init_sys_limits(&error))) {
         prte_show_help("help-prte-runtime.txt", "prte_init:syslimit", false, error);
         return PRTE_ERR_SILENT;
-    }
-
-    /* initialize the arch string */
-    if (PRTE_SUCCESS != (ret = prte_arch_init())) {
-        error = "prte_arch_init";
-        goto error;
     }
 
     /* Initialize the data storage service. */ /* initialize the mca */

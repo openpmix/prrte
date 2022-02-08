@@ -17,7 +17,7 @@
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
@@ -100,6 +100,10 @@ echo "--> $pmix_ext_install_libdir"
     AS_IF([test $prte_pmix_support -eq 0],
           [AC_MSG_WARN([PRRTE requires PMIx support using an external copy that you supply.])
            AC_MSG_ERROR([Cannot continue.])])
+
+    # need to add one level of indirection so that we can
+    # access the PMIx headers
+    prte_pmix_CPPFLAGS="$prte_pmix_CPPFLAGS -I$pmix_ext_install_dir/include/pmix"
 
     prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
     prte_external_pmix_save_LDFLAGS=$LDFLAGS
