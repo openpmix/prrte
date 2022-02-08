@@ -43,7 +43,7 @@
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
 #include "src/threads/threads.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/error_strings.h"
 #include "src/util/hostfile/hostfile.h"
@@ -139,7 +139,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
             flgs = prte_ras_base_flag_string(alloc);
             /* build the aliases string */
             if (NULL != alloc->aliases) {
-                aliases = prte_argv_join(alloc->aliases, ',');
+                aliases = pmix_argv_join(alloc->aliases, ',');
             } else {
                 aliases = NULL;
             }
@@ -286,11 +286,11 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                 if (prte_keep_fqdn_hostnames) {
                     /* retain the non-fqdn name as an alias */
                     *ptr = '\0';
-                    prte_argv_append_unique_nosize(&node->aliases, node->name);
+                    pmix_argv_append_unique_nosize(&node->aliases, node->name);
                     *ptr = '.';
                 } else {
                     /* add the fqdn name as an alias */
-                    prte_argv_append_unique_nosize(&node->aliases, node->name);
+                    pmix_argv_append_unique_nosize(&node->aliases, node->name);
                     /* retain the non-fqdn name as the node's name */
                     *ptr = '\0';
                 }
@@ -432,11 +432,11 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
 
             /* hostfile was specified - parse it and add it to the list */
-            hostlist = prte_argv_split(hosts, ',');
+            hostlist = pmix_argv_split(hosts, ',');
             free(hosts);
             for (j=0; NULL != hostlist[j]; j++) {
                 if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, hostlist[j]))) {
-                    prte_argv_free(hostlist);
+                    pmix_argv_free(hostlist);
                     PRTE_DESTRUCT(&nodes);
                     /* set an error event */
                     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
@@ -444,7 +444,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                     return;
                 }
             }
-            prte_argv_free(hostlist);
+            pmix_argv_free(hostlist);
         }
     }
 

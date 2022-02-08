@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +32,7 @@
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 
 /**
  * JOB
@@ -96,8 +96,8 @@ int prte_app_copy(prte_app_context_t **dest, prte_app_context_t *src)
         (*dest)->app = strdup(src->app);
     }
     (*dest)->num_procs = src->num_procs;
-    (*dest)->argv = prte_argv_copy(src->argv);
-    (*dest)->env = prte_argv_copy(src->env);
+    (*dest)->argv = pmix_argv_copy(src->argv);
+    (*dest)->env = pmix_argv_copy(src->env);
     if (NULL != src->cwd) {
         (*dest)->cwd = strdup(src->cwd);
     }

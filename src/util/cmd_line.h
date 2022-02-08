@@ -38,7 +38,7 @@
 
 #include "src/class/prte_list.h"
 #include "src/class/prte_object.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 
 BEGIN_C_DECLS
 
@@ -318,7 +318,7 @@ static inline int prte_cmd_line_get_ninsts(prte_cli_result_t *results,
     if (NULL == opt) {
         return 0;
     }
-    return prte_argv_count(opt->values);
+    return pmix_argv_count(opt->values);
 }
 
 static inline char* prte_cmd_line_get_nth_instance(prte_cli_result_t *results,
@@ -331,7 +331,7 @@ static inline char* prte_cmd_line_get_nth_instance(prte_cli_result_t *results,
     if (NULL == opt) {
         return NULL;
     }
-    ninst = prte_argv_count(opt->values);
+    ninst = pmix_argv_count(opt->values);
     if (ninst < idx) {
         return NULL;
     }

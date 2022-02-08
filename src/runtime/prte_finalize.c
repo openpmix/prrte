@@ -32,7 +32,7 @@
 #include "constants.h"
 
 #include "src/mca/base/prte_mca_base_framework.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 
 #include "src/mca/base/prte_mca_base_alias.h"

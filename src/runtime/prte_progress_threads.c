@@ -21,7 +21,7 @@
 #include "src/event/event-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/threads.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/error.h"
 #include "src/util/fd.h"
 
@@ -263,7 +263,7 @@ static int start_progress_engine(prte_progress_tracker_t *trk)
     if (NULL != prte_progress_thread_cpus) {
         CPU_ZERO(&cpuset);
         // comma-delimited list of cpu ranges
-        ranges = prte_argv_split(prte_progress_thread_cpus, ',');
+        ranges = pmix_argv_split(prte_progress_thread_cpus, ',');
         for (n=0; NULL != ranges[n]; n++) {
             // look for '-'
             start = strtoul(ranges[n], &dash, 10);

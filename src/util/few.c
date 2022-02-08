@@ -32,7 +32,7 @@
 #endif
 
 #include "constants.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/few.h"
 

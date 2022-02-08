@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  *
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,7 +22,7 @@
 
 #include "src/class/prte_list.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
@@ -58,21 +58,21 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
     prte_hwloc_topo_data_t *rdata;
     hwloc_cpuset_t available, mycpus;
 
-    node_cnt = prte_argv_split(prte_ras_simulator_component.num_nodes, ',');
+    node_cnt = pmix_argv_split(prte_ras_simulator_component.num_nodes, ',');
     if (NULL != prte_ras_simulator_component.slots) {
-        slot_cnt = prte_argv_split(prte_ras_simulator_component.slots, ',');
+        slot_cnt = pmix_argv_split(prte_ras_simulator_component.slots, ',');
         /* backfile the slot_cnt so every topology has a cnt */
-        tmp = slot_cnt[prte_argv_count(slot_cnt) - 1];
-        for (n = prte_argv_count(slot_cnt); n < prte_argv_count(node_cnt); n++) {
-            prte_argv_append_nosize(&slot_cnt, tmp);
+        tmp = slot_cnt[pmix_argv_count(slot_cnt) - 1];
+        for (n = pmix_argv_count(slot_cnt); n < pmix_argv_count(node_cnt); n++) {
+            pmix_argv_append_nosize(&slot_cnt, tmp);
         }
     }
     if (NULL != prte_ras_simulator_component.slots_max) {
-        max_slot_cnt = prte_argv_split(prte_ras_simulator_component.slots_max, ',');
+        max_slot_cnt = pmix_argv_split(prte_ras_simulator_component.slots_max, ',');
         /* backfill the max_slot_cnt as reqd */
-        tmp = max_slot_cnt[prte_argv_count(slot_cnt) - 1];
-        for (n = prte_argv_count(max_slot_cnt); n < prte_argv_count(max_slot_cnt); n++) {
-            prte_argv_append_nosize(&max_slot_cnt, tmp);
+        tmp = max_slot_cnt[pmix_argv_count(slot_cnt) - 1];
+        for (n = pmix_argv_count(max_slot_cnt); n < pmix_argv_count(max_slot_cnt); n++) {
+            pmix_argv_append_nosize(&max_slot_cnt, tmp);
         }
     }
 
@@ -160,13 +160,13 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
     prte_num_allocated_nodes = prte_list_get_size(nodes);
 
     if (NULL != max_slot_cnt) {
-        prte_argv_free(max_slot_cnt);
+        pmix_argv_free(max_slot_cnt);
     }
     if (NULL != slot_cnt) {
-        prte_argv_free(slot_cnt);
+        pmix_argv_free(slot_cnt);
     }
     if (NULL != node_cnt) {
-        prte_argv_free(node_cnt);
+        pmix_argv_free(node_cnt);
     }
     if (NULL != job_cpuset) {
         free(job_cpuset);

@@ -30,7 +30,7 @@
 #include "src/class/prte_list.h"
 #include "src/class/prte_object.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/cmd_line.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
@@ -66,7 +66,7 @@ static void check_store(const char *name, const char *option,
              * a boolean value - the presence of the option in
              * the results is considered "true" */
             if (NULL != option) {
-                prte_argv_append_nosize(&opt->values, option);
+                pmix_argv_append_nosize(&opt->values, option);
             }
             return;
         }
@@ -80,7 +80,7 @@ static void check_store(const char *name, const char *option,
      * a boolean value - the presence of the option in
      * the results is considered "true" */
     if (NULL != option) {
-        prte_argv_append_nosize(&opt->values, option);
+        pmix_argv_append_nosize(&opt->values, option);
     }
     return;
 }
@@ -100,8 +100,8 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
     /* the getopt_long parser reorders the input argv array, so
      * we have to protect it here - remove all leading/trailing
      * quotes to ensure we are looking at simple options/values */
-    argv = prte_argv_copy_strip(pargv);
-    argc = prte_argv_count(argv);
+    argv = pmix_argv_copy_strip(pargv);
+    argc = pmix_argv_count(argv);
     // assign a default store_fn if one isn't provided
     if (NULL == storefn) {
         mystore = check_store;
@@ -137,7 +137,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                             printf("%s", str);
                             free(str);
                         }
-                        prte_argv_free(argv);
+                        pmix_argv_free(argv);
                         return PRTE_ERR_SILENT;
                     }
                 }
@@ -173,7 +173,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                             printf("%s", str);
                             free(str);
                         }
-                        prte_argv_free(argv);
+                        pmix_argv_free(argv);
                         return PRTE_ERR_SILENT;
                     }
                     if (0 == strcmp(ptr, "verbose") || 0 == strcmp(ptr, "v")) {
@@ -182,7 +182,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                             printf("%s", str);
                             free(str);
                         }
-                        prte_argv_free(argv);
+                        pmix_argv_free(argv);
                         return PRTE_ERR_SILENT;
                     }
                     if (0 == strcmp(ptr, "help") || 0 == strcmp(ptr, "h")) {
@@ -196,7 +196,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                             printf("%s", str);
                             free(str);
                         }
-                        prte_argv_free(argv);
+                        pmix_argv_free(argv);
                         return PRTE_ERR_SILENT;
                     }
                     /* see if the argument is one of our options */
@@ -210,7 +210,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                                     printf("%s", str);
                                     free(str);
                                 }
-                                prte_argv_free(argv);
+                                pmix_argv_free(argv);
                                 return PRTE_ERR_SILENT;
                             }
                         }
@@ -223,7 +223,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                             printf("%s", str);
                             free(str);
                         }
-                        prte_argv_free(argv);
+                        pmix_argv_free(argv);
                         return PRTE_ERR_SILENT;
                     }
                 } else if (NULL == optarg) {
@@ -237,7 +237,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                         printf("%s", str);
                         free(str);
                     }
-                    prte_argv_free(argv);
+                    pmix_argv_free(argv);
                     return PRTE_ERR_SILENT;
                 } else {  // unrecognized option
                     str = prte_show_help_string("help-cli.txt", "unrecognized-option", true,
@@ -246,7 +246,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                         printf("%s", str);
                         free(str);
                     }
-                    prte_argv_free(argv);
+                    pmix_argv_free(argv);
                     return PRTE_ERR_SILENT;
                 }
                 break;
@@ -260,7 +260,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                     free(str);
                 }
                 // if they ask for the version, that is all we do
-                prte_argv_free(argv);
+                pmix_argv_free(argv);
                 return PRTE_ERR_SILENT;
             default:
                 /* this could be one of the short options other than 'h' or 'V', so
@@ -317,7 +317,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                                             printf("%s", str);
                                             free(str);
                                         }
-                                        prte_argv_free(argv);
+                                        pmix_argv_free(argv);
                                         return PRTE_ERR_SILENT;
                                     }
                                 }
@@ -339,7 +339,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                             printf("%s", str);
                             free(str);
                         }
-                        prte_argv_free(argv);
+                        pmix_argv_free(argv);
                         return PRTE_ERR_SILENT;
                     }
                 }
@@ -352,14 +352,14 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                     printf("%s", str);
                     free(str);
                 }
-                prte_argv_free(argv);
+                pmix_argv_free(argv);
                 return PRTE_ERR_SILENT;
         }
     }
     if (optind < argc) {
-        results->tail = prte_argv_copy(&argv[optind]);
+        results->tail = pmix_argv_copy(&argv[optind]);
     }
-    prte_argv_free(argv);
+    pmix_argv_free(argv);
     return PRTE_SUCCESS;
 }
 
@@ -374,7 +374,7 @@ static void ides(prte_cli_item_t *p)
         free(p->key);
     }
     if (NULL != p->values) {
-        prte_argv_free(p->values);
+        pmix_argv_free(p->values);
     }
 }
 PRTE_CLASS_INSTANCE(prte_cli_item_t,
@@ -390,7 +390,7 @@ static void odes(prte_cli_result_t *p)
 {
     PRTE_LIST_DESTRUCT(&p->instances);
     if (NULL != p->tail) {
-        prte_argv_free(p->tail);
+        pmix_argv_free(p->tail);
     }
 }
 PRTE_CLASS_INSTANCE(prte_cli_result_t,

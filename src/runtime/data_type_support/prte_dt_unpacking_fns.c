@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +30,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -150,7 +150,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
             PRTE_RELEASE(jptr);
             return prte_pmix_convert_status(rc);
         }
-        prte_argv_append_nosize(&jptr->personality, tmp);
+        pmix_argv_append_nosize(&jptr->personality, tmp);
         free(tmp);
     }
 
@@ -556,7 +556,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
             PRTE_RELEASE(app);
             return prte_pmix_convert_status(rc);
         }
-        prte_argv_append_nosize(&app->argv, tmp);
+        pmix_argv_append_nosize(&app->argv, tmp);
         free(tmp);
     }
 
@@ -576,7 +576,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
             PRTE_RELEASE(app);
             return prte_pmix_convert_status(rc);
         }
-        prte_argv_append_nosize(&app->env, tmp);
+        pmix_argv_append_nosize(&app->env, tmp);
         free(tmp);
     }
 

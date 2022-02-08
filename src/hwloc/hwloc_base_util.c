@@ -52,7 +52,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/tsd.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
@@ -113,14 +113,14 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo, bool use_h
     hwloc_obj_t pu;
 
     /* find the specified logical cpus */
-    ranges = prte_argv_split(cpulist, ',');
+    ranges = pmix_argv_split(cpulist, ',');
     avail = hwloc_bitmap_alloc();
     hwloc_bitmap_zero(avail);
     res = hwloc_bitmap_alloc();
     pucpus = hwloc_bitmap_alloc();
-    for (idx = 0; idx < prte_argv_count(ranges); idx++) {
-        range = prte_argv_split(ranges[idx], '-');
-        switch (prte_argv_count(range)) {
+    for (idx = 0; idx < pmix_argv_count(ranges); idx++) {
+        range = pmix_argv_split(ranges[idx], '-');
+        switch (pmix_argv_count(range)) {
         case 1:
             /* only one cpu given - get that object */
             cpu = strtoul(range[0], NULL, 10);
@@ -165,10 +165,10 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo, bool use_h
         default:
             break;
         }
-        prte_argv_free(range);
+        pmix_argv_free(range);
     }
     if (NULL != ranges) {
-        prte_argv_free(ranges);
+        pmix_argv_free(ranges);
     }
     hwloc_bitmap_free(res);
     hwloc_bitmap_free(pucpus);
@@ -890,8 +890,8 @@ static int package_to_cpu_set(char *cpus, hwloc_topology_t topo, hwloc_bitmap_t 
         return PRTE_SUCCESS;
     }
 
-    range = prte_argv_split(cpus, '-');
-    range_cnt = prte_argv_count(range);
+    range = pmix_argv_split(cpus, '-');
+    range_cnt = pmix_argv_count(range);
     switch (range_cnt) {
     case 1: /* no range was present, so just one package given */
         package_id = atoi(range[0]);
@@ -911,10 +911,10 @@ static int package_to_cpu_set(char *cpus, hwloc_topology_t topo, hwloc_bitmap_t 
         }
         break;
     default:
-        prte_argv_free(range);
+        pmix_argv_free(range);
         return PRTE_ERROR;
     }
-    prte_argv_free(range);
+    pmix_argv_free(range);
 
     return PRTE_SUCCESS;
 }
@@ -933,13 +933,13 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
     unsigned int npus;
     bool hwthreadcpus = false;
 
-    package_core = prte_argv_split(package_core_list, ':');
+    package_core = pmix_argv_split(package_core_list, ':');
     package_id = atoi(package_core[0]);
 
     /* get the object for this package id */
     package = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id);
     if (NULL == package) {
-        prte_argv_free(package_core);
+        pmix_argv_free(package_core);
         return PRTE_ERR_NOT_FOUND;
     }
 
@@ -967,12 +967,12 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
             rc = PRTE_SUCCESS;
             break;
         } else {
-            range = prte_argv_split(corestr, '-');
-            range_cnt = prte_argv_count(range);
+            range = pmix_argv_split(corestr, '-');
+            range_cnt = pmix_argv_count(range);
             /* see if a range was set or not */
             switch (range_cnt) {
             case 1: /* only one core, or a list of cores, specified */
-                list = prte_argv_split(range[0], ',');
+                list = pmix_argv_split(range[0], ',');
                 for (j = 0; NULL != list[j]; j++) {
                     /* get the indexed core from this package */
                     core_id = atoi(list[j]) + npus;
@@ -985,7 +985,7 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
                     /* get the cpus */
                     hwloc_bitmap_or(cpumask, cpumask, core->cpuset);
                 }
-                prte_argv_free(list);
+                pmix_argv_free(list);
                 break;
 
             case 2: /* range of core id's was given */
@@ -1008,14 +1008,14 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
                 break;
 
             default:
-                prte_argv_free(range);
-                prte_argv_free(package_core);
+                pmix_argv_free(range);
+                pmix_argv_free(package_core);
                 return PRTE_ERROR;
             }
-            prte_argv_free(range);
+            pmix_argv_free(range);
         }
     }
-    prte_argv_free(package_core);
+    pmix_argv_free(package_core);
 
     return rc;
 }
@@ -1041,7 +1041,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
     prte_output_verbose(5, prte_hwloc_base_output, "slot assignment: slot_list == %s", slot_str);
 
     /* split at ';' */
-    item = prte_argv_split(slot_str, ';');
+    item = pmix_argv_split(slot_str, ';');
 
     /* start with a clean mask */
     hwloc_bitmap_zero(cpumask);
@@ -1061,15 +1061,15 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                  * it could specify multiple packages
                  * Skip the P and look for ranges
                  */
-                rngs = prte_argv_split(&item[i][1], ',');
+                rngs = pmix_argv_split(&item[i][1], ',');
                 for (j = 0; NULL != rngs[j]; j++) {
                     if (PRTE_SUCCESS != (rc = package_to_cpu_set(rngs[j], topo, cpumask))) {
-                        prte_argv_free(rngs);
-                        prte_argv_free(item);
+                        pmix_argv_free(rngs);
+                        pmix_argv_free(item);
                         return rc;
                     }
                 }
-                prte_argv_free(rngs);
+                pmix_argv_free(rngs);
             } else {
                 if ('P' == item[i][0] || 'p' == item[i][0] || 'S' == item[i][0]
                     || 's' == item[i][0]) {
@@ -1078,34 +1078,34 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                     lst = item[i];
                 }
                 if (PRTE_SUCCESS != (rc = package_core_to_cpu_set(lst, topo, cpumask))) {
-                    prte_argv_free(item);
+                    pmix_argv_free(item);
                     return rc;
                 }
             }
         } else {
-            rngs = prte_argv_split(item[i], ',');
+            rngs = pmix_argv_split(item[i], ',');
             for (k = 0; NULL != rngs[k]; k++) {
                 /* just a core specification - see if one or a range was given */
-                range = prte_argv_split(rngs[k], '-');
-                range_cnt = prte_argv_count(range);
+                range = pmix_argv_split(rngs[k], '-');
+                range_cnt = pmix_argv_count(range);
                 /* see if a range was set or not */
                 switch (range_cnt) {
                 case 1: /* only one core, or a list of cores, specified */
-                    list = prte_argv_split(range[0], ',');
+                    list = pmix_argv_split(range[0], ',');
                     for (j = 0; NULL != list[j]; j++) {
                         core_id = atoi(list[j]);
                         /* find the specified available cpu */
                         if (NULL == (pu = prte_hwloc_base_get_pu(topo, false, core_id))) {
-                            prte_argv_free(range);
-                            prte_argv_free(item);
-                            prte_argv_free(rngs);
-                            prte_argv_free(list);
+                            pmix_argv_free(range);
+                            pmix_argv_free(item);
+                            pmix_argv_free(rngs);
+                            pmix_argv_free(list);
                             return PRTE_ERR_NOT_FOUND;
                         }
                         /* get the cpus for that object and set them in the massk*/
                         hwloc_bitmap_or(cpumask, cpumask, pu->cpuset);
                     }
-                    prte_argv_free(list);
+                    pmix_argv_free(list);
                     break;
 
                 case 2: /* range of core id's was given */
@@ -1114,9 +1114,9 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                     for (core_id = lower_range; core_id <= upper_range; core_id++) {
                         /* find the specified logical available cpu */
                         if (NULL == (pu = prte_hwloc_base_get_pu(topo, false, core_id))) {
-                            prte_argv_free(range);
-                            prte_argv_free(item);
-                            prte_argv_free(rngs);
+                            pmix_argv_free(range);
+                            pmix_argv_free(item);
+                            pmix_argv_free(rngs);
                             return PRTE_ERR_NOT_FOUND;
                         }
                         /* get the cpus for that object and set them in the mask*/
@@ -1125,17 +1125,17 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                     break;
 
                 default:
-                    prte_argv_free(range);
-                    prte_argv_free(item);
-                    prte_argv_free(rngs);
+                    pmix_argv_free(range);
+                    pmix_argv_free(item);
+                    pmix_argv_free(rngs);
                     return PRTE_ERROR;
                 }
-                prte_argv_free(range);
+                pmix_argv_free(range);
             }
-            prte_argv_free(rngs);
+            pmix_argv_free(rngs);
         }
     }
-    prte_argv_free(item);
+    pmix_argv_free(item);
     return PRTE_SUCCESS;
 }
 
@@ -1313,15 +1313,15 @@ char *prte_hwloc_base_find_coprocessors(hwloc_topology_t topo)
                     PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                                          "hwloc:base:find_coprocessors: coprocessor %s found",
                                          osdev->infos[i].value));
-                    prte_argv_append_nosize(&cps, osdev->infos[i].value);
+                    pmix_argv_append_nosize(&cps, osdev->infos[i].value);
                 }
             }
         }
         osdev = osdev->next_cousin;
     }
     if (NULL != cps) {
-        cpstring = prte_argv_join(cps, ',');
-        prte_argv_free(cps);
+        cpstring = pmix_argv_join(cps, ',');
+        pmix_argv_free(cps);
     }
     PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:find_coprocessors: hosting coprocessors %s",
@@ -1559,12 +1559,12 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
             hwloc_bitmap_list_snprintf(tmp, 2048, coreset);
             snprintf(ans, 4096, "package[%d][core:%s]", n, tmp);
         }
-        prte_argv_append_nosize(&output, ans);
+        pmix_argv_append_nosize(&output, ans);
     }
 
     if (NULL != output) {
-        result = prte_argv_join(output, ' ');
-        prte_argv_free(output);
+        result = pmix_argv_join(output, ' ');
+        pmix_argv_free(output);
     } else {
         result = NULL;
     }
@@ -2095,14 +2095,14 @@ char *prte_hwloc_base_get_location(char *locality, hwloc_obj_type_t type, unsign
     default:
         return NULL;
     }
-    loc = prte_argv_split(locality, ':');
+    loc = pmix_argv_split(locality, ':');
     for (n = 0; NULL != loc[n]; n++) {
         if (0 == strncmp(loc[n], srch, 2)) {
             ans = strdup(&loc[n][2]);
             break;
         }
     }
-    prte_argv_free(loc);
+    pmix_argv_free(loc);
 
     return ans;
 }
@@ -2125,8 +2125,8 @@ prte_hwloc_locality_t prte_hwloc_compute_relative_locality(char *loc1, char *loc
         return locality;
     }
 
-    set1 = prte_argv_split(loc1, ':');
-    set2 = prte_argv_split(loc2, ':');
+    set1 = pmix_argv_split(loc1, ':');
+    set2 = pmix_argv_split(loc2, ':');
     bit1 = hwloc_bitmap_alloc();
     bit2 = hwloc_bitmap_alloc();
 
@@ -2165,8 +2165,8 @@ prte_hwloc_locality_t prte_hwloc_compute_relative_locality(char *loc1, char *loc
             }
         }
     }
-    prte_argv_free(set1);
-    prte_argv_free(set2);
+    pmix_argv_free(set1);
+    pmix_argv_free(set2);
     hwloc_bitmap_free(bit1);
     hwloc_bitmap_free(bit2);
     return locality;

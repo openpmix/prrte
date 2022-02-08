@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,7 +39,7 @@
 #include "prte_stdint.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/error.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/output.h"
@@ -163,12 +163,12 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             tmp = NULL;
             vpid = PMIX_RANK_VALID;
             ui32 = 0;
-            prte_argv_append_nosize(&list, node->name);
+            pmix_argv_append_nosize(&list, node->name);
             /* assemble all the ranks for this job that are on this node */
             for (k = 0; k < node->procs->size; k++) {
                 if (NULL != (pptr = (prte_proc_t *) prte_pointer_array_get_item(node->procs, k))) {
                     if (PMIX_CHECK_NSPACE(jdata->nspace, pptr->name.nspace)) {
-                        prte_argv_append_nosize(&micro, PRTE_VPID_PRINT(pptr->name.rank));
+                        pmix_argv_append_nosize(&micro, PRTE_VPID_PRINT(pptr->name.rank));
                         if (pptr->name.rank < vpid) {
                             vpid = pptr->name.rank;
                         }
@@ -194,9 +194,9 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             }
             /* assemble the rank/node map */
             if (NULL != micro) {
-                tmp = prte_argv_join(micro, ',');
-                prte_argv_free(micro);
-                prte_argv_append_nosize(&procs, tmp);
+                tmp = pmix_argv_join(micro, ',');
+                pmix_argv_free(micro);
+                pmix_argv_append_nosize(&procs, tmp);
             }
             /* construct the node info array */
             PMIX_INFO_LIST_START(iarray);
@@ -234,8 +234,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     }
     /* let the PMIx server generate the nodemap regex */
     if (NULL != list) {
-        tmp = prte_argv_join(list, ',');
-        prte_argv_free(list);
+        tmp = pmix_argv_join(list, ',');
+        pmix_argv_free(list);
         list = NULL;
         if (PMIX_SUCCESS != (ret = PMIx_generate_regex(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
@@ -251,8 +251,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
 
     /* let the PMIx server generate the procmap regex */
     if (NULL != procs) {
-        tmp = prte_argv_join(procs, ';');
-        prte_argv_free(procs);
+        tmp = pmix_argv_join(procs, ';');
+        pmix_argv_free(procs);
         procs = NULL;
         if (PMIX_SUCCESS != (ret = PMIx_generate_ppn(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
@@ -375,7 +375,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         /* add the wdir */
         PMIX_INFO_LIST_ADD(ret, iarray, PMIX_WDIR, app->cwd, PMIX_STRING);
         /* add the argv */
-        tmp = prte_argv_join(app->argv, ' ');
+        tmp = pmix_argv_join(app->argv, ' ');
         PMIX_INFO_LIST_ADD(ret, iarray, PMIX_APP_ARGV, tmp, PMIX_STRING);
         free(tmp);
         /* add the pset name */

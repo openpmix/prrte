@@ -17,7 +17,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      NVIDIA Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,7 +46,7 @@
 #include "constants.h"
 #include "src/runtime/prte_globals.h"
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 #include "src/util/sys_limits.h"
@@ -118,15 +118,15 @@ int prte_util_init_sys_limits(char **errmsg)
     }
 
     /* parse the requested limits to set */
-    lims = prte_argv_split(prte_set_max_sys_limits, ',');
+    lims = pmix_argv_split(prte_set_max_sys_limits, ',');
     if (NULL == lims) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     /* each limit is expressed as a "param:value" pair */
     for (i = 0; NULL != lims[i]; i++) {
-        lim = prte_argv_split(lims[i], ':');
-        if (1 == prte_argv_count(lim)) {
+        lim = pmix_argv_split(lims[i], ':');
+        if (1 == pmix_argv_count(lim)) {
             setlim = "max";
         } else {
             setlim = lim[1];
@@ -224,7 +224,7 @@ int prte_util_init_sys_limits(char **errmsg)
                                             lim[0], setlim);
             goto out;
         }
-        prte_argv_free(lim);
+        pmix_argv_free(lim);
         lim = NULL;
     }
 
@@ -234,9 +234,9 @@ int prte_util_init_sys_limits(char **errmsg)
     rc = PRTE_SUCCESS;
 
 out:
-    prte_argv_free(lims);
+    pmix_argv_free(lims);
     if (NULL != lim) {
-        prte_argv_free(lim);
+        pmix_argv_free(lim);
     }
 
     return rc;

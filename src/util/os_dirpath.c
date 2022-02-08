@@ -13,7 +13,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +40,7 @@
 #endif /* HAVE_DIRENT_H */
 
 #include "constants.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
@@ -79,7 +79,7 @@ int prte_os_dirpath_create(const char *path, const mode_t mode)
     /* didnt work, so now have to build our way down the tree */
     /* Split the requested path up into its individual parts */
 
-    parts = prte_argv_split(path, path_sep[0]);
+    parts = pmix_argv_split(path, path_sep[0]);
 
     /* Ensure to allocate enough space for tmp: the strlen of the
        incoming path + 1 (for \0) */
@@ -91,7 +91,7 @@ int prte_os_dirpath_create(const char *path, const mode_t mode)
        building up a directory name.  Check to see if that dirname
        exists.  If it doesn't, create it. */
 
-    len = prte_argv_count(parts);
+    len = pmix_argv_count(parts);
     for (i = 0; i < len; ++i) {
         if (i == 0) {
             /* If in POSIX-land, ensure that we never end a directory
@@ -119,13 +119,13 @@ int prte_os_dirpath_create(const char *path, const mode_t mode)
         /* coverity[TOCTOU] */
         if (0 != stat(tmp, &buf)) {
             prte_show_help("help-prte-util.txt", "mkdir-failed", true, tmp, strerror(ret));
-            prte_argv_free(parts);
+            pmix_argv_free(parts);
             free(tmp);
             return PRTE_ERROR;
         } else if (i == (len - 1) && (mode != (mode & buf.st_mode))
                    && (0 > chmod(tmp, (buf.st_mode | mode)))) {
             prte_show_help("help-prte-util.txt", "dir-mode", true, tmp, mode, strerror(errno));
-            prte_argv_free(parts);
+            pmix_argv_free(parts);
             free(tmp);
             return (PRTE_ERR_PERM); /* can't set correct mode */
         }
@@ -133,7 +133,7 @@ int prte_os_dirpath_create(const char *path, const mode_t mode)
 
     /* All done */
 
-    prte_argv_free(parts);
+    pmix_argv_free(parts);
     free(tmp);
     return PRTE_SUCCESS;
 }

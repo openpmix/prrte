@@ -16,7 +16,7 @@
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,7 +34,7 @@
 #include "constants.h"
 
 #include "src/mca/base/prte_mca_base_var.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 
 #include "plm_tm.h"
 #include "src/mca/plm/base/base.h"
@@ -112,7 +112,7 @@ static int plm_tm_open(void)
 static int plm_tm_close(void)
 {
     if (NULL != prte_plm_tm_component.checked_paths) {
-        prte_argv_free(prte_plm_tm_component.checked_paths);
+        pmix_argv_free(prte_plm_tm_component.checked_paths);
     }
 
     return PRTE_SUCCESS;

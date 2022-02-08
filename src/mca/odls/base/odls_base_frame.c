@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +35,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/runtime/prte_progress_threads.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/printf.h"
@@ -148,7 +148,7 @@ void prte_odls_base_harvest_threads(void)
         prte_odls_globals.ev_bases[0] = prte_event_base;
         prte_odls_globals.num_threads = 0;
         if (NULL != prte_odls_globals.ev_threads) {
-            prte_argv_free(prte_odls_globals.ev_threads);
+            pmix_argv_free(prte_odls_globals.ev_threads);
             prte_odls_globals.ev_threads = NULL;
         }
     }
@@ -207,7 +207,7 @@ startup:
         for (i = 0; i < prte_odls_globals.num_threads; i++) {
             prte_asprintf(&tmp, "PRTE-ODLS-%d", i);
             prte_odls_globals.ev_bases[i] = prte_progress_thread_init(tmp);
-            prte_argv_append_nosize(&prte_odls_globals.ev_threads, tmp);
+            pmix_argv_append_nosize(&prte_odls_globals.ev_threads, tmp);
             free(tmp);
         }
     }
@@ -284,7 +284,7 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
         /* construct a list of ranks to be displayed */
         xterm_hold = false;
         prte_util_parse_range_options(prte_xterm, &ranks);
-        for (i = 0; i < prte_argv_count(ranks); i++) {
+        for (i = 0; i < pmix_argv_count(ranks); i++) {
             if (0 == strcmp(ranks[i], "BANG")) {
                 xterm_hold = true;
                 continue;
@@ -308,21 +308,21 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
             }
             prte_list_append(&prte_odls_globals.xterm_ranks, &nm->super);
         }
-        prte_argv_free(ranks);
+        pmix_argv_free(ranks);
         /* construct the xtermcmd */
         prte_odls_globals.xtermcmd = NULL;
         tmp = prte_find_absolute_path("xterm");
         if (NULL == tmp) {
             return PRTE_ERROR;
         }
-        prte_argv_append_nosize(&prte_odls_globals.xtermcmd, tmp);
+        pmix_argv_append_nosize(&prte_odls_globals.xtermcmd, tmp);
         free(tmp);
-        prte_argv_append_nosize(&prte_odls_globals.xtermcmd, "-T");
-        prte_argv_append_nosize(&prte_odls_globals.xtermcmd, "save");
+        pmix_argv_append_nosize(&prte_odls_globals.xtermcmd, "-T");
+        pmix_argv_append_nosize(&prte_odls_globals.xtermcmd, "save");
         if (xterm_hold) {
-            prte_argv_append_nosize(&prte_odls_globals.xtermcmd, "-hold");
+            pmix_argv_append_nosize(&prte_odls_globals.xtermcmd, "-hold");
         }
-        prte_argv_append_nosize(&prte_odls_globals.xtermcmd, "-e");
+        pmix_argv_append_nosize(&prte_odls_globals.xtermcmd, "-e");
     }
 
     /* Open up all available components */
@@ -364,10 +364,10 @@ static void scdes(prte_odls_spawn_caddy_t *p)
         free(p->wdir);
     }
     if (NULL != p->argv) {
-        prte_argv_free(p->argv);
+        pmix_argv_free(p->argv);
     }
     if (NULL != p->env) {
-        prte_argv_free(p->env);
+        pmix_argv_free(p->env);
     }
 }
 PRTE_CLASS_INSTANCE(prte_odls_spawn_caddy_t, prte_object_t, sccon, scdes);

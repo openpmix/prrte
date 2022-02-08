@@ -13,7 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +31,7 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/prte_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"

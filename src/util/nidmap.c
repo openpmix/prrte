@@ -5,7 +5,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,7 +22,7 @@
 #endif
 #include <ctype.h>
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -87,18 +87,18 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool, pmix_data_buffer_t *buff
             continue;
         }
         /* add the hostname to the argv */
-        prte_argv_append_nosize(&names, nptr->name);
+        pmix_argv_append_nosize(&names, nptr->name);
         als = NULL;
         if (NULL != nptr->aliases) {
             for (m=0; NULL != nptr->aliases[m]; m++) {
-                prte_argv_append_nosize(&als, nptr->aliases[m]);
+                pmix_argv_append_nosize(&als, nptr->aliases[m]);
             }
-            raw = prte_argv_join(als, ',');
-            prte_argv_free(als);
-            prte_argv_append_nosize(&aliases, raw);
+            raw = pmix_argv_join(als, ',');
+            pmix_argv_free(als);
+            pmix_argv_append_nosize(&aliases, raw);
             free(raw);
         } else {
-            prte_argv_append_nosize(&aliases, "PRTENONE");
+            pmix_argv_append_nosize(&aliases, "PRTENONE");
         }
         /* store the vpid */
         if (NULL == nptr->daemon) {
@@ -117,8 +117,8 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool, pmix_data_buffer_t *buff
     }
 
     /* construct the string of node names for compression */
-    raw = prte_argv_join(names, ',');
-    prte_argv_free(names);
+    raw = pmix_argv_join(names, ',');
+    pmix_argv_free(names);
     if (PMIx_Data_compress((uint8_t *) raw, strlen(raw) + 1, (uint8_t **) &bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
@@ -149,8 +149,8 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool, pmix_data_buffer_t *buff
     free(bo.bytes);
 
     /* construct the string of aliases for compression */
-    raw = prte_argv_join(aliases, ';');
-    prte_argv_free(aliases);
+    raw = pmix_argv_join(aliases, ';');
+    pmix_argv_free(aliases);
     if (PMIx_Data_compress((uint8_t *) raw, strlen(raw) + 1, (uint8_t **) &bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
@@ -282,7 +282,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         pbo.size = 0;
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-    names = prte_argv_split(raw, ',');
+    names = pmix_argv_split(raw, ',');
     free(raw);
 
     /* unpack compression flag for node aliases */
@@ -315,7 +315,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         pbo.size = 0;
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-    aliases = prte_argv_split(raw, ';');
+    aliases = pmix_argv_split(raw, ';');
     free(raw);
 
     /* unpack compression flag for daemon vpids */
@@ -380,9 +380,9 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
             }
             if (0 != strcmp(aliases[n], "PRTENONE")) {
                 if (NULL != nd->aliases) {
-                    prte_argv_free(nd->aliases);
+                    pmix_argv_free(nd->aliases);
                 }
-                nd->aliases = prte_argv_split(aliases[n], ',');
+                nd->aliases = pmix_argv_split(aliases[n], ',');
             }
             continue;
         }
@@ -393,7 +393,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         prte_pointer_array_set_item(prte_node_pool, n, nd);
         /* add any aliases */
         if (0 != strcmp(aliases[n], "PRTENONE")) {
-            nd->aliases = prte_argv_split(aliases[n], ',');
+            nd->aliases = pmix_argv_split(aliases[n], ',');
         }
         /* set the topology - always default to homogeneous
          * as that is the most common scenario */
@@ -428,7 +428,7 @@ cleanup:
         free(vpid);
     }
     if (NULL != names) {
-        prte_argv_free(names);
+        pmix_argv_free(names);
     }
     return rc;
 }
@@ -488,7 +488,7 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
                 goto cleanup;
             }
             /* track it */
-            prte_argv_append_nosize(&topos, t->sig);
+            pmix_argv_append_nosize(&topos, t->sig);
             /* pack the topology itself */
             pt.topology = t->topo;
             rc = PMIx_Data_pack(NULL, &bucket, &pt, 1, PMIX_TOPO);
@@ -729,7 +729,7 @@ cleanup:
         free(flags);
     }
     if (NULL != topos) {
-        prte_argv_free(topos);
+        pmix_argv_free(topos);
     }
     return rc;
 }
@@ -821,7 +821,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
                 goto cleanup;
             }
             /* cache it */
-            prte_argv_append_nosize(&topos, sig);
+            pmix_argv_append_nosize(&topos, sig);
             /* unpack the topology */
             cnt = 1;
             rc = PMIx_Data_unpack(NULL, &bucket, &ptopo, &cnt, PMIX_TOPO);
@@ -1053,7 +1053,7 @@ cleanup:
         free(flags);
     }
     if (NULL != topos) {
-        prte_argv_free(topos);
+        pmix_argv_free(topos);
     }
     return rc;
 }

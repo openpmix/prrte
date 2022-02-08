@@ -37,7 +37,7 @@
 #include <getopt.h>
 
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
@@ -887,8 +887,8 @@ static int parse_env(char **srcenv, char ***dstenv,
                         prte_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
                                        value);
                         free(param);
-                        prte_argv_free(xparams);
-                        prte_argv_free(xvals);
+                        pmix_argv_free(xparams);
+                        pmix_argv_free(xvals);
                         return PRTE_ERR_BAD_PARAM;
                     }
                 }
@@ -902,16 +902,16 @@ static int parse_env(char **srcenv, char ***dstenv,
                         /* this is an error - different values */
                         prte_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
                                        xvals[i]);
-                        prte_argv_free(xparams);
-                        prte_argv_free(xvals);
+                        pmix_argv_free(xparams);
+                        pmix_argv_free(xvals);
                         return PRTE_ERR_BAD_PARAM;
                     }
                 }
             }
 
             /* cache this for later inclusion - do not modify dstenv in this loop */
-            prte_argv_append_nosize(&xparams, p1);
-            prte_argv_append_nosize(&xvals, p2);
+            pmix_argv_append_nosize(&xparams, p1);
+            pmix_argv_append_nosize(&xvals, p2);
         }
     }
 
@@ -920,8 +920,8 @@ static int parse_env(char **srcenv, char ***dstenv,
         for (i = 0; NULL != xparams[i]; i++) {
             prte_setenv(xparams[i], xvals[i], true, dstenv);
         }
-        prte_argv_free(xparams);
-        prte_argv_free(xvals);
+        pmix_argv_free(xparams);
+        pmix_argv_free(xvals);
     }
 
     return PRTE_SUCCESS;

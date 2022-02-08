@@ -34,7 +34,7 @@
 #endif
 
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -300,7 +300,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     size_t m, n;
     pmix_status_t rc;
 
-    if (NULL == keys || 0 == prte_argv_count(keys)) {
+    if (NULL == keys || 0 == pmix_argv_count(keys)) {
         return PMIX_ERR_BAD_PARAM;
     }
 
@@ -335,7 +335,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     }
 
     /* pack the number of keys */
-    n = prte_argv_count(keys);
+    n = pmix_argv_count(keys);
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &n, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
         PRTE_RELEASE(req);
@@ -417,7 +417,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     }
 
     /* pack the number of keys */
-    n = prte_argv_count(keys);
+    n = pmix_argv_count(keys);
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &n, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
         PRTE_RELEASE(req);

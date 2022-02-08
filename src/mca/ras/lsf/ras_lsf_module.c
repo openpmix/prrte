@@ -12,7 +12,7 @@
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +32,7 @@
 #include <lsf/lsbatch.h>
 
 #include "src/hwloc/hwloc-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/net.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -105,7 +105,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
     }
 
     /* release the nodelist from lsf */
-    prte_argv_free(nodelist);
+    pmix_argv_free(nodelist);
 
     /* check to see if any mapping or binding directives were given */
     if (NULL != jdata && NULL != jdata->map) {

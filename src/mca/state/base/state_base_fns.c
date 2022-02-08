@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +30,7 @@
 #include "src/class/prte_list.h"
 #include "src/event/event-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/grpcomm.h"
@@ -1065,13 +1065,13 @@ void prte_state_base_check_fds(prte_job_t *jdata)
         }
         /* construct the list of capabilities */
         if (fdflags & FD_CLOEXEC) {
-            prte_argv_append_nosize(&list, "cloexec");
+            pmix_argv_append_nosize(&list, "cloexec");
         }
         if (flflags & O_APPEND) {
-            prte_argv_append_nosize(&list, "append");
+            pmix_argv_append_nosize(&list, "append");
         }
         if (flflags & O_NONBLOCK) {
-            prte_argv_append_nosize(&list, "nonblock");
+            pmix_argv_append_nosize(&list, "nonblock");
         }
         /* from the man page:
          *  Unlike the other values that can be specified in flags,
@@ -1080,22 +1080,22 @@ void prte_state_base_check_fds(prte_job_t *jdata)
          * the low order two bits of flags, and defined respectively
          * as 0, 1, and 2. */
         if (O_RDONLY == (flflags & 3)) {
-            prte_argv_append_nosize(&list, "rdonly");
+            pmix_argv_append_nosize(&list, "rdonly");
         } else if (O_WRONLY == (flflags & 3)) {
-            prte_argv_append_nosize(&list, "wronly");
+            pmix_argv_append_nosize(&list, "wronly");
         } else {
-            prte_argv_append_nosize(&list, "rdwr");
+            pmix_argv_append_nosize(&list, "rdwr");
         }
         if (flk && F_UNLCK != fl.l_type) {
             if (F_WRLCK == fl.l_type) {
-                prte_argv_append_nosize(&list, "wrlock");
+                pmix_argv_append_nosize(&list, "wrlock");
             } else {
-                prte_argv_append_nosize(&list, "rdlock");
+                pmix_argv_append_nosize(&list, "rdlock");
             }
         }
         if (NULL != list) {
-            status = prte_argv_join(list, ' ');
-            prte_argv_free(list);
+            status = pmix_argv_join(list, ' ');
+            pmix_argv_free(list);
             list = NULL;
             if (NULL == result) {
                 prte_asprintf(&result, "    %d\t(%s)\t%s\n", i, info, status);

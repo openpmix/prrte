@@ -68,7 +68,7 @@
 #include "src/threads/threads.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
 #include "src/util/net.h"
 #include "src/util/nidmap.h"
@@ -368,14 +368,14 @@ static void stack_trace_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
         prte_asprintf(&st, "STACK TRACE FOR PROC %s (%s, PID %lu)\n",
                       PRTE_NAME_PRINT(&name), hostname,
                       (unsigned long) pid);
-        prte_argv_append_nosize(&jdata->traces, st);
+        pmix_argv_append_nosize(&jdata->traces, st);
         free(hostname);
         free(st);
         /* unpack the stack_trace until complete */
         cnt = 1;
         while (PRTE_SUCCESS == PMIx_Data_unpack(NULL, &blob, &st, &cnt, PMIX_STRING)) {
             prte_asprintf(&st2, "\t%s", st); // has its own newline
-            prte_argv_append_nosize(&jdata->traces, st2);
+            pmix_argv_append_nosize(&jdata->traces, st2);
             free(st);
             free(st2);
             cnt = 1;
@@ -963,7 +963,7 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
                 free(name);
             }
             /* pass the argv from each app */
-            name = prte_argv_join(app->argv, ' ');
+            name = pmix_argv_join(app->argv, ' ');
             PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_APP_ARGV, name, PMIX_STRING);
             free(name);
         }
@@ -1264,14 +1264,14 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
         /* separate the serial numbers of the coprocessors
          * on this host
          */
-        sns = prte_argv_split(coprocessors, ',');
+        sns = pmix_argv_split(coprocessors, ',');
         for (idx = 0; NULL != sns[idx]; idx++) {
             /* compute the hash */
             PRTE_HASH_STR(sns[idx], h);
             /* mark that this coprocessor is hosted by this node */
             prte_hash_table_set_value_uint32(prte_coprocessors, h, (void *) &daemon->name.rank);
         }
-        prte_argv_free(sns);
+        pmix_argv_free(sns);
         free(coprocessors);
         prte_coprocessors_detected = true;
     }
@@ -1491,7 +1491,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             NULL != (ptr = strchr(nodename, '.'))) {
             /* retain the non-fqdn name as an alias */
             *ptr = '\0';
-            prte_argv_append_unique_nosize(&daemon->node->aliases, nodename);
+            pmix_argv_append_unique_nosize(&daemon->node->aliases, nodename);
             *ptr = '.';
         }
 
@@ -1513,7 +1513,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
          * and apps may refer to the host by that name
          */
         if (0 != strcmp(nodename, daemon->node->name)) {
-            prte_argv_append_unique_nosize(&daemon->node->aliases, daemon->node->name);
+            pmix_argv_append_unique_nosize(&daemon->node->aliases, daemon->node->name);
             free(daemon->node->name);
             daemon->node->name = strdup(nodename);
         }
@@ -1534,7 +1534,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 prted_failed_launch = true;
                 goto CLEANUP;
             }
-            prte_argv_append_unique_nosize(&daemon->node->aliases, alias);
+            pmix_argv_append_unique_nosize(&daemon->node->aliases, alias);
             free(alias);
         }
 
@@ -1884,14 +1884,14 @@ int prte_plm_base_setup_prted_cmd(int *argc, char ***argv)
      */
     loc = 0;
     /* split the command apart in case it is multi-word */
-    tmpv = prte_argv_split(prte_launch_agent, ' ');
+    tmpv = pmix_argv_split(prte_launch_agent, ' ');
     for (i = 0; NULL != tmpv && NULL != tmpv[i]; ++i) {
         if (0 == strcmp(tmpv[i], "prted")) {
             loc = i;
         }
-        prte_argv_append(argc, argv, tmpv[i]);
+        pmix_argv_append(argc, argv, tmpv[i]);
     }
-    prte_argv_free(tmpv);
+    pmix_argv_free(tmpv);
 
     return loc;
 }
@@ -1909,52 +1909,52 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
 
     /* check for debug flags */
     if (prte_debug_flag) {
-        prte_argv_append(argc, argv, "--debug");
+        pmix_argv_append(argc, argv, "--debug");
     }
     if (prte_debug_daemons_flag) {
-        prte_argv_append(argc, argv, "--debug-daemons");
+        pmix_argv_append(argc, argv, "--debug-daemons");
     }
     if (prte_debug_daemons_file_flag) {
-        prte_argv_append(argc, argv, "--debug-daemons-file");
+        pmix_argv_append(argc, argv, "--debug-daemons-file");
     }
     if (prte_leave_session_attached) {
-        prte_argv_append(argc, argv, "--leave-session-attached");
+        pmix_argv_append(argc, argv, "--leave-session-attached");
     }
 
     if (prte_map_stddiag_to_stderr) {
-        prte_argv_append(argc, argv, "--prtemca");
-        prte_argv_append(argc, argv, "prte_map_stddiag_to_stderr");
-        prte_argv_append(argc, argv, "1");
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "prte_map_stddiag_to_stderr");
+        pmix_argv_append(argc, argv, "1");
     } else if (prte_map_stddiag_to_stdout) {
-        prte_argv_append(argc, argv, "--prtemca");
-        prte_argv_append(argc, argv, "prte_map_stddiag_to_stdout");
-        prte_argv_append(argc, argv, "1");
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "prte_map_stddiag_to_stdout");
+        pmix_argv_append(argc, argv, "1");
     }
 
     /* the following is not an mca param */
     if (NULL != getenv("PRTE_TEST_PRTED_SUICIDE")) {
-        prte_argv_append(argc, argv, "--test-suicide");
+        pmix_argv_append(argc, argv, "--test-suicide");
     }
 
     /* tell the orted what ESS component to use */
     if (NULL != ess) {
-        prte_argv_append(argc, argv, "--prtemca");
-        prte_argv_append(argc, argv, "ess");
-        prte_argv_append(argc, argv, ess);
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "ess");
+        pmix_argv_append(argc, argv, ess);
     }
 
     /* pass the daemon nspace */
-    prte_argv_append(argc, argv, "--prtemca");
-    prte_argv_append(argc, argv, "ess_base_nspace");
-    prte_argv_append(argc, argv, prte_process_info.myproc.nspace);
+    pmix_argv_append(argc, argv, "--prtemca");
+    pmix_argv_append(argc, argv, "ess_base_nspace");
+    pmix_argv_append(argc, argv, prte_process_info.myproc.nspace);
     free(param);
 
     /* setup to pass the vpid */
     if (NULL != proc_vpid_index) {
-        prte_argv_append(argc, argv, "--prtemca");
-        prte_argv_append(argc, argv, "ess_base_vpid");
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "ess_base_vpid");
         *proc_vpid_index = *argc;
-        prte_argv_append(argc, argv, "<template>");
+        pmix_argv_append(argc, argv, "<template>");
     }
 
     /* pass the total number of daemons that will be in the system */
@@ -1964,29 +1964,29 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     } else {
         num_procs = prte_process_info.num_daemons;
     }
-    prte_argv_append(argc, argv, "--prtemca");
-    prte_argv_append(argc, argv, "ess_base_num_procs");
+    pmix_argv_append(argc, argv, "--prtemca");
+    pmix_argv_append(argc, argv, "ess_base_num_procs");
     prte_asprintf(&param, "%lu", num_procs);
-    prte_argv_append(argc, argv, param);
+    pmix_argv_append(argc, argv, param);
     free(param);
 
     /* pass the HNP uri */
-    prte_argv_append(argc, argv, "--prtemca");
-    prte_argv_append(argc, argv, "prte_hnp_uri");
-    prte_argv_append(argc, argv, prte_process_info.my_hnp_uri);
+    pmix_argv_append(argc, argv, "--prtemca");
+    pmix_argv_append(argc, argv, "prte_hnp_uri");
+    pmix_argv_append(argc, argv, prte_process_info.my_hnp_uri);
 
     /* if --xterm was specified, pass that along */
     if (NULL != prte_xterm) {
-        prte_argv_append(argc, argv, "--prtemca");
-        prte_argv_append(argc, argv, "prte_xterm");
-        prte_argv_append(argc, argv, prte_xterm);
+        pmix_argv_append(argc, argv, "--prtemca");
+        pmix_argv_append(argc, argv, "prte_xterm");
+        pmix_argv_append(argc, argv, prte_xterm);
     }
 
     /* pass along any cmd line MCA params provided to mpirun,
      * being sure to "purge" any that would cause problems
      * on backend nodes and ignoring all duplicates
      */
-    cnt = prte_argv_count(prted_cmd_line);
+    cnt = pmix_argv_count(prted_cmd_line);
     for (i = 0; i < cnt; i += 3) {
         /* if the specified option is more than one word, we don't
          * have a generic way of passing it as some environments ignore
@@ -2018,9 +2018,9 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
         }
         if (!ignore) {
             /* pass it along */
-            prte_argv_append(argc, argv, prted_cmd_line[i]);
-            prte_argv_append(argc, argv, prted_cmd_line[i + 1]);
-            prte_argv_append(argc, argv, prted_cmd_line[i + 2]);
+            pmix_argv_append(argc, argv, prted_cmd_line[i]);
+            pmix_argv_append(argc, argv, prted_cmd_line[i + 1]);
+            pmix_argv_append(argc, argv, prted_cmd_line[i + 2]);
         }
     }
 

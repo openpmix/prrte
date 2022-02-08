@@ -19,7 +19,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -175,7 +175,7 @@ PRTE_EXPORT int prte_mca_base_component_find(const char *directory,
                                              bool ignore_requested, bool open_dso_components);
 
 /**
- * Parse the requested component string and return an prte_argv of the requested
+ * Parse the requested component string and return an pmix_argv of the requested
  * (or not requested) components.
  */
 int prte_mca_base_component_parse_requested(const char *requested, bool *include_mode,
