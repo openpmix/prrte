@@ -18,7 +18,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,7 +45,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/runtime/runtime.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/prte_environ.h"
 
@@ -89,21 +89,21 @@ int prte_mca_base_open(void)
             prte_output(0, "Error: Unable to get the user home directory\n");
             return PRTE_ERROR;
         }
-        prte_asprintf(&prte_mca_base_user_default_path,
+        pmix_asprintf(&prte_mca_base_user_default_path,
                       "%s" PRTE_PATH_SEP ".prte" PRTE_PATH_SEP "components", value);
 #else
-        prte_asprintf(&prte_mca_base_system_default_path, "%s", prte_install_dirs.prtelibdir);
+        pmix_asprintf(&prte_mca_base_system_default_path, "%s", prte_install_dirs.prtelibdir);
 #endif
 
         /* see if the user wants to override the defaults */
         if (NULL == prte_mca_base_user_default_path) {
             value = strdup(prte_mca_base_system_default_path);
         } else {
-            prte_asprintf(&value, "%s%c%s", prte_mca_base_system_default_path, PRTE_ENV_SEP,
+            pmix_asprintf(&value, "%s%c%s", prte_mca_base_system_default_path, PRTE_ENV_SEP,
                           prte_mca_base_user_default_path);
         }
     } else {
-        prte_asprintf(&prte_mca_base_system_default_path, "%s", prte_install_dirs.prtelibdir);
+        pmix_asprintf(&prte_mca_base_system_default_path, "%s", prte_install_dirs.prtelibdir);
         value = strdup(prte_mca_base_system_default_path);
     }
 
@@ -160,7 +160,7 @@ int prte_mca_base_open(void)
     } else {
         set_defaults(&lds);
     }
-    prte_asprintf(&lds.lds_prefix, "[%s:%05d] ", prte_process_info.nodename, getpid());
+    pmix_asprintf(&lds.lds_prefix, "[%s:%05d] ", prte_process_info.nodename, getpid());
     prte_output_reopen(0, &lds);
     prte_output_verbose(PRTE_MCA_BASE_VERBOSE_COMPONENT, 0, "mca: base: opening components");
     free(lds.lds_prefix);

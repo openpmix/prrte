@@ -55,7 +55,7 @@
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/prte_environ.h"
 
 #include "src/util/name_fns.h"
@@ -149,7 +149,7 @@ int prte_setup_top_session_dir(void)
             goto exit;
         }
         if (prte_add_pid_to_session_dirname) {
-            if (0 > prte_asprintf(&prte_process_info.top_session_dir, "%s/prte.%s.%lu.%lu",
+            if (0 > pmix_asprintf(&prte_process_info.top_session_dir, "%s/prte.%s.%lu.%lu",
                                   prte_process_info.tmpdir_base, prte_process_info.nodename,
                                   (unsigned long)pid, (unsigned long) uid)) {
                 prte_process_info.top_session_dir = NULL;
@@ -157,7 +157,7 @@ int prte_setup_top_session_dir(void)
                 goto exit;
             }
         } else {
-            if (0 > prte_asprintf(&prte_process_info.top_session_dir, "%s/prte.%s.%lu",
+            if (0 > pmix_asprintf(&prte_process_info.top_session_dir, "%s/prte.%s.%lu",
                                   prte_process_info.tmpdir_base, prte_process_info.nodename,
                                   (unsigned long) uid)) {
                 prte_process_info.top_session_dir = NULL;
@@ -185,7 +185,7 @@ static int _setup_jobfam_session_dir(pmix_proc_t *proc)
             return rc;
         }
 
-        if (0 > prte_asprintf(&prte_process_info.jobfam_session_dir, "%s/dvm.%lu",
+        if (0 > pmix_asprintf(&prte_process_info.jobfam_session_dir, "%s/dvm.%lu",
                               prte_process_info.top_session_dir,
                               (unsigned long) prte_process_info.pid)) {
             rc = PRTE_ERR_OUT_OF_RESOURCE;
@@ -208,7 +208,7 @@ static int _setup_job_session_dir(pmix_proc_t *proc)
             return rc;
         }
         if (!PMIX_NSPACE_INVALID(proc->nspace)) {
-            if (0 > prte_asprintf(&prte_process_info.job_session_dir, "%s/%s",
+            if (0 > pmix_asprintf(&prte_process_info.job_session_dir, "%s/%s",
                                   prte_process_info.jobfam_session_dir,
                                   PRTE_LOCAL_JOBID_PRINT(proc->nspace))) {
                 prte_process_info.job_session_dir = NULL;
@@ -237,7 +237,7 @@ static int _setup_proc_session_dir(pmix_proc_t *proc)
             return rc;
         }
         if (PMIX_RANK_INVALID != proc->rank) {
-            if (0 > prte_asprintf(&prte_process_info.proc_session_dir, "%s/%s",
+            if (0 > pmix_asprintf(&prte_process_info.proc_session_dir, "%s/%s",
                                   prte_process_info.job_session_dir, PRTE_VPID_PRINT(proc->rank))) {
                 prte_process_info.proc_session_dir = NULL;
                 rc = PRTE_ERR_OUT_OF_RESOURCE;

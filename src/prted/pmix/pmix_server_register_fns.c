@@ -307,7 +307,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     PMIX_INFO_LIST_ADD(ret, info, PMIX_TMPDIR, prte_process_info.jobfam_session_dir, PMIX_STRING);
 
     /* create and pass a job-level session directory */
-    if (0 > prte_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
+    if (0 > pmix_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
                           PRTE_LOCAL_JOBID(jdata->nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         PMIX_INFO_LIST_RELEASE(info);
@@ -489,7 +489,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             }
             if (PRTE_PROC_MY_NAME->rank == node->daemon->name.rank) {
                 /* create and pass a proc-level session directory */
-                if (0 > prte_asprintf(&tmp, "%s/%u/%u", prte_process_info.jobfam_session_dir,
+                if (0 > pmix_asprintf(&tmp, "%s/%u/%u", prte_process_info.jobfam_session_dir,
                                       PRTE_LOCAL_JOBID(jdata->nspace), pptr->name.rank)) {
                     PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                     PMIX_INFO_LIST_RELEASE(info);
@@ -726,7 +726,7 @@ int prte_pmix_server_register_tool(pmix_nspace_t nspace)
                        prte_process_info.jobfam_session_dir, PMIX_STRING);
 
     /* create and pass a job-level session directory */
-    if (0 > prte_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
+    if (0 > pmix_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
                           PRTE_LOCAL_JOBID(nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return PRTE_ERR_OUT_OF_RESOURCE;

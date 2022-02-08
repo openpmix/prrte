@@ -41,7 +41,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/show_help.h"
 #include "src/util/show_help_lex.h"
 
@@ -239,11 +239,11 @@ static int open_file(const char *base, const char *topic)
             filename = prte_os_path(false, search_dirs[i], base, NULL);
             prte_show_help_yyin = fopen(filename, "r");
             if (NULL == prte_show_help_yyin) {
-                prte_asprintf(&err_msg, "%s: %s", filename, strerror(errno));
+                pmix_asprintf(&err_msg, "%s: %s", filename, strerror(errno));
                 base_len = strlen(base);
                 if (4 > base_len || 0 != strcmp(base + base_len - 4, ".txt")) {
                     free(filename);
-                    prte_asprintf(&filename, "%s%s%s.txt", search_dirs[i], PRTE_PATH_SEP, base);
+                    pmix_asprintf(&filename, "%s%s%s.txt", search_dirs[i], PRTE_PATH_SEP, base);
                     prte_show_help_yyin = fopen(filename, "r");
                 }
             }
@@ -388,7 +388,7 @@ char *prte_show_help_vstring(const char *filename, const char *topic, int want_e
 
     if (PRTE_SUCCESS == rc) {
         /* Apply the formatting to make the final output string */
-        prte_vasprintf(&output, single_string, arglist);
+        pmix_vasprintf(&output, single_string, arglist);
         free(single_string);
     }
 

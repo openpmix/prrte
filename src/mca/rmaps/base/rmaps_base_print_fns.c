@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -165,26 +165,26 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
         }
     }
     if (0 != strcmp(map, "PPR") && (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(mapping))) {
-        prte_asprintf(&mymap, "%s[PPR]:", map);
+        pmix_asprintf(&mymap, "%s[PPR]:", map);
     } else {
-        prte_asprintf(&mymap, "%s:", map);
+        pmix_asprintf(&mymap, "%s:", map);
     }
     if (PRTE_MAPPING_NO_USE_LOCAL & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        prte_asprintf(&tmp, "%sNO_USE_LOCAL,", mymap);
+        pmix_asprintf(&tmp, "%sNO_USE_LOCAL,", mymap);
         free(mymap);
         mymap = tmp;
     }
     if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        prte_asprintf(&tmp, "%sNOOVERSUBSCRIBE,", mymap);
+        pmix_asprintf(&tmp, "%sNOOVERSUBSCRIBE,", mymap);
         free(mymap);
         mymap = tmp;
     } else if (PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        prte_asprintf(&tmp, "%sOVERSUBSCRIBE,", mymap);
+        pmix_asprintf(&tmp, "%sOVERSUBSCRIBE,", mymap);
         free(mymap);
         mymap = tmp;
     }
     if (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        prte_asprintf(&tmp, "%sSPAN,", mymap);
+        pmix_asprintf(&tmp, "%sSPAN,", mymap);
         free(mymap);
         mymap = tmp;
     }

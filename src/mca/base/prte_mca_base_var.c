@@ -55,7 +55,7 @@
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
 
@@ -333,7 +333,7 @@ int prte_mca_base_var_init(void)
          * overrides anything from the default param files */
         PRTE_LIST_FOREACH(fv, &prte_mca_base_var_file_values, prte_mca_base_var_file_value_t)
         {
-            prte_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+            pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
             prte_setenv(tmp, fv->mbvfv_value, false, &environ);
             free(tmp);
         }
@@ -398,7 +398,7 @@ static int var_set_string(prte_mca_base_var_t *var, char *value)
        in the future. */
     if (0 == strncmp(value, "~/", 2)) {
         if (NULL != home) {
-            ret = prte_asprintf(&value, "%s/%s", home, value + 2);
+            ret = pmix_asprintf(&value, "%s/%s", home, value + 2);
             if (0 > ret) {
                 return PRTE_ERROR;
             }
@@ -417,7 +417,7 @@ static int var_set_string(prte_mca_base_var_t *var, char *value)
         tmp[0] = '\0';
         tmp += 3;
 
-        ret = prte_asprintf(&tmp, "%s:%s%s%s", value, home ? home : "", home ? "/" : "", tmp);
+        ret = pmix_asprintf(&tmp, "%s:%s%s%s", value, home ? home : "", home ? "/" : "", tmp);
 
         free(value);
 
@@ -697,7 +697,7 @@ int prte_mca_base_var_env_name(const char *param_name, char **env_name)
 
     assert(NULL != env_name);
 
-    ret = prte_asprintf(env_name, "%s%s", prte_mca_prefix, param_name);
+    ret = pmix_asprintf(env_name, "%s%s", prte_mca_prefix, param_name);
     if (0 > ret) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
@@ -853,7 +853,7 @@ int prte_mca_base_var_build_env(char ***env, int *num_env, bool internal)
             goto cleanup;
         }
 
-        ret = prte_asprintf(&str, "%s%s=%s", prte_mca_prefix, var->mbv_full_name, value_string);
+        ret = pmix_asprintf(&str, "%s%s=%s", prte_mca_prefix, var->mbv_full_name, value_string);
         free(value_string);
         if (0 > ret) {
             goto cleanup;
@@ -865,11 +865,11 @@ int prte_mca_base_var_build_env(char ***env, int *num_env, bool internal)
         switch (var->mbv_source) {
         case PRTE_MCA_BASE_VAR_SOURCE_FILE:
         case PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE:
-            prte_asprintf(&str, "%sSOURCE_%s=FILE:%s", prte_mca_prefix, var->mbv_full_name,
+            pmix_asprintf(&str, "%sSOURCE_%s=FILE:%s", prte_mca_prefix, var->mbv_full_name,
                           prte_mca_base_var_source_file(var));
             break;
         case PRTE_MCA_BASE_VAR_SOURCE_COMMAND_LINE:
-            prte_asprintf(&str, "%sSOURCE_%s=COMMAND_LINE", prte_mca_prefix, var->mbv_full_name);
+            pmix_asprintf(&str, "%sSOURCE_%s=COMMAND_LINE", prte_mca_prefix, var->mbv_full_name);
             break;
         case PRTE_MCA_BASE_VAR_SOURCE_ENV:
         case PRTE_MCA_BASE_VAR_SOURCE_SET:
@@ -1598,12 +1598,12 @@ static char *source_name(prte_mca_base_var_t *var)
         int rc;
 
         if (fv) {
-            rc = prte_asprintf(&ret, "file (%s:%d)", fv->mbvfv_file, fv->mbvfv_lineno);
+            rc = pmix_asprintf(&ret, "file (%s:%d)", fv->mbvfv_file, fv->mbvfv_lineno);
         } else {
-            rc = prte_asprintf(&ret, "file (%s)", var->mbv_source_file);
+            rc = pmix_asprintf(&ret, "file (%s)", var->mbv_source_file);
         }
 
-        /* some compilers will warn if the return code of prte_asprintf is not checked (even if it
+        /* some compilers will warn if the return code of pmix_asprintf is not checked (even if it
          * is cast to void) */
         if (0 > rc) {
             return NULL;
@@ -1627,7 +1627,7 @@ static int var_value_string(prte_mca_base_var_t *var, char **value_string)
      * as "unset" by default. */
     if ((var->mbv_flags & PRTE_MCA_BASE_VAR_FLAG_DEF_UNSET)
         && (PRTE_MCA_BASE_VAR_SOURCE_DEFAULT == var->mbv_source)) {
-        prte_asprintf(value_string, "%s", "unset");
+        pmix_asprintf(value_string, "%s", "unset");
         return PRTE_SUCCESS;
     }
 
@@ -1639,44 +1639,44 @@ static int var_value_string(prte_mca_base_var_t *var, char **value_string)
     if (NULL == var->mbv_enumerator) {
         switch (var->mbv_type) {
         case PRTE_MCA_BASE_VAR_TYPE_INT:
-            ret = prte_asprintf(value_string, "%d", value->intval);
+            ret = pmix_asprintf(value_string, "%d", value->intval);
             break;
         case PRTE_MCA_BASE_VAR_TYPE_INT32_T:
-            ret = prte_asprintf(value_string, "%" PRId32, value->int32tval);
+            ret = pmix_asprintf(value_string, "%" PRId32, value->int32tval);
             break;
         case PRTE_MCA_BASE_VAR_TYPE_UINT32_T:
-            ret = prte_asprintf(value_string, "%" PRIu32, value->uint32tval);
+            ret = pmix_asprintf(value_string, "%" PRIu32, value->uint32tval);
             break;
         case PRTE_MCA_BASE_VAR_TYPE_INT64_T:
-            ret = prte_asprintf(value_string, "%" PRId64, value->int64tval);
+            ret = pmix_asprintf(value_string, "%" PRId64, value->int64tval);
             break;
         case PRTE_MCA_BASE_VAR_TYPE_UINT64_T:
-            ret = prte_asprintf(value_string, "%" PRIu64, value->uint64tval);
+            ret = pmix_asprintf(value_string, "%" PRIu64, value->uint64tval);
             break;
         case PRTE_MCA_BASE_VAR_TYPE_LONG:
-            ret = prte_asprintf(value_string, "%ld", value->longval);
+            ret = pmix_asprintf(value_string, "%ld", value->longval);
             break;
         case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_INT:
-            ret = prte_asprintf(value_string, "%u", value->uintval);
+            ret = pmix_asprintf(value_string, "%u", value->uintval);
             break;
         case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG:
-            ret = prte_asprintf(value_string, "%lu", value->ulval);
+            ret = pmix_asprintf(value_string, "%lu", value->ulval);
             break;
         case PRTE_MCA_BASE_VAR_TYPE_UNSIGNED_LONG_LONG:
-            ret = prte_asprintf(value_string, "%llu", value->ullval);
+            ret = pmix_asprintf(value_string, "%llu", value->ullval);
             break;
         case PRTE_MCA_BASE_VAR_TYPE_SIZE_T:
-            ret = prte_asprintf(value_string, "%" PRIsize_t, value->sizetval);
+            ret = pmix_asprintf(value_string, "%" PRIsize_t, value->sizetval);
             break;
         case PRTE_MCA_BASE_VAR_TYPE_STRING:
         case PRTE_MCA_BASE_VAR_TYPE_VERSION_STRING:
-            ret = prte_asprintf(value_string, "%s", value->stringval ? value->stringval : "");
+            ret = pmix_asprintf(value_string, "%s", value->stringval ? value->stringval : "");
             break;
         case PRTE_MCA_BASE_VAR_TYPE_BOOL:
-            ret = prte_asprintf(value_string, "%d", value->boolval);
+            ret = pmix_asprintf(value_string, "%d", value->boolval);
             break;
         case PRTE_MCA_BASE_VAR_TYPE_DOUBLE:
-            ret = prte_asprintf(value_string, "%lf", value->lfval);
+            ret = pmix_asprintf(value_string, "%lf", value->lfval);
             break;
         default:
             ret = -1;
@@ -1816,29 +1816,29 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
         }
 
         /* build the message*/
-        prte_asprintf(&tmp, "mca:%s:%s:param:%s:", framework, component, full_name);
+        pmix_asprintf(&tmp, "mca:%s:%s:param:%s:", framework, component, full_name);
 
         /* Output the value */
         char *colon = strchr(value_string, ':');
         if (NULL != colon) {
-            prte_asprintf(out[0] + line++, "%svalue:\"%s\"", tmp, value_string);
+            pmix_asprintf(out[0] + line++, "%svalue:\"%s\"", tmp, value_string);
         } else {
-            prte_asprintf(out[0] + line++, "%svalue:%s", tmp, value_string);
+            pmix_asprintf(out[0] + line++, "%svalue:%s", tmp, value_string);
         }
 
         /* Output the source */
-        prte_asprintf(out[0] + line++, "%ssource:%s", tmp, source_string);
+        pmix_asprintf(out[0] + line++, "%ssource:%s", tmp, source_string);
 
         /* Output whether it's read only or writable */
-        prte_asprintf(out[0] + line++, "%sstatus:%s", tmp,
+        pmix_asprintf(out[0] + line++, "%sstatus:%s", tmp,
                       PRTE_VAR_IS_SETTABLE(var[0]) ? "writeable" : "read-only");
 
         /* Output the info level of this parametere */
-        prte_asprintf(out[0] + line++, "%slevel:%d", tmp, var->mbv_info_lvl + 1);
+        pmix_asprintf(out[0] + line++, "%slevel:%d", tmp, var->mbv_info_lvl + 1);
 
         /* If it has a help message, output the help message */
         if (var->mbv_description) {
-            prte_asprintf(out[0] + line++, "%shelp:%s", tmp, var->mbv_description);
+            pmix_asprintf(out[0] + line++, "%shelp:%s", tmp, var->mbv_description);
         }
 
         if (NULL != var->mbv_enumerator) {
@@ -1852,20 +1852,20 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
                     continue;
                 }
 
-                prte_asprintf(out[0] + line++, "%senumerator:value:%d:%s", tmp, enum_value,
+                pmix_asprintf(out[0] + line++, "%senumerator:value:%d:%s", tmp, enum_value,
                               enum_string);
             }
         }
 
         /* Is this variable deprecated? */
-        prte_asprintf(out[0] + line++, "%sdeprecated:%s", tmp,
+        pmix_asprintf(out[0] + line++, "%sdeprecated:%s", tmp,
                       PRTE_VAR_IS_DEPRECATED(var[0]) ? "yes" : "no");
 
-        prte_asprintf(out[0] + line++, "%stype:%s", tmp, prte_var_type_names[var->mbv_type]);
+        pmix_asprintf(out[0] + line++, "%stype:%s", tmp, prte_var_type_names[var->mbv_type]);
 
         /* Does this parameter have any synonyms or is it a synonym? */
         if (PRTE_VAR_IS_SYNONYM(var[0])) {
-            prte_asprintf(out[0] + line++, "%ssynonym_of:name:%s", tmp, original->mbv_full_name);
+            pmix_asprintf(out[0] + line++, "%ssynonym_of:name:%s", tmp, original->mbv_full_name);
         } else if (prte_value_array_get_size(&var->mbv_synonyms)) {
             for (i = 0; i < synonym_count; ++i) {
                 prte_mca_base_var_t *synonym;
@@ -1875,7 +1875,7 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
                     continue;
                 }
 
-                prte_asprintf(out[0] + line++, "%ssynonym:name:%s", tmp, synonym->mbv_full_name);
+                pmix_asprintf(out[0] + line++, "%ssynonym:name:%s", tmp, synonym->mbv_full_name);
             }
         }
 
@@ -1889,7 +1889,7 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
 
-        prte_asprintf(out[0],
+        pmix_asprintf(out[0],
                       "%s \"%s\" (current value: \"%s\", data source: %s, level: %d %s, type: %s",
                       PRTE_VAR_IS_DEFAULT_ONLY(var[0]) ? "informational" : "parameter", full_name,
                       value_string, source_string, var->mbv_info_lvl + 1,
@@ -1897,17 +1897,17 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
 
         tmp = out[0][0];
         if (PRTE_VAR_IS_DEPRECATED(var[0])) {
-            prte_asprintf(out[0], "%s, deprecated", tmp);
+            pmix_asprintf(out[0], "%s, deprecated", tmp);
             free(tmp);
             tmp = out[0][0];
         }
 
         /* Does this parameter have any synonyms or is it a synonym? */
         if (PRTE_VAR_IS_SYNONYM(var[0])) {
-            prte_asprintf(out[0], "%s, synonym of: %s)", tmp, original->mbv_full_name);
+            pmix_asprintf(out[0], "%s, synonym of: %s)", tmp, original->mbv_full_name);
             free(tmp);
         } else if (synonym_count) {
-            prte_asprintf(out[0], "%s, synonyms: ", tmp);
+            pmix_asprintf(out[0], "%s, synonyms: ", tmp);
             free(tmp);
 
             for (i = 0; i < synonym_count; ++i) {
@@ -1920,21 +1920,21 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
 
                 tmp = out[0][0];
                 if (synonym_count == i + 1) {
-                    prte_asprintf(out[0], "%s%s)", tmp, synonym->mbv_full_name);
+                    pmix_asprintf(out[0], "%s%s)", tmp, synonym->mbv_full_name);
                 } else {
-                    prte_asprintf(out[0], "%s%s, ", tmp, synonym->mbv_full_name);
+                    pmix_asprintf(out[0], "%s%s, ", tmp, synonym->mbv_full_name);
                 }
                 free(tmp);
             }
         } else {
-            prte_asprintf(out[0], "%s)", tmp);
+            pmix_asprintf(out[0], "%s)", tmp);
             free(tmp);
         }
 
         line++;
 
         if (var->mbv_description) {
-            prte_asprintf(out[0] + line++, "%s", var->mbv_description);
+            pmix_asprintf(out[0] + line++, "%s", var->mbv_description);
         }
 
         if (NULL != var->mbv_enumerator) {
@@ -1942,7 +1942,7 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
 
             ret = var->mbv_enumerator->dump(var->mbv_enumerator, &values);
             if (PRTE_SUCCESS == ret) {
-                prte_asprintf(out[0] + line++, "Valid values: %s", values);
+                pmix_asprintf(out[0] + line++, "Valid values: %s", values);
                 free(values);
             }
         }
@@ -1954,7 +1954,7 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
 
-        prte_asprintf(out[0], "%s=%s (%s)", var->mbv_full_name, value_string, source_string);
+        pmix_asprintf(out[0], "%s=%s (%s)", var->mbv_full_name, value_string, source_string);
     }
 
     free(value_string);

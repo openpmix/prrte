@@ -26,7 +26,7 @@
 #include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/mca.h"
 #include "src/util/cmd_line.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "src/runtime/prte_globals.h"
 

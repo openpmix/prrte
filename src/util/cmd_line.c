@@ -146,7 +146,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                     /* format mca params as param:value - the optind value
                      * will have been incremented since the MCA param options
                      * require an argument */
-                    prte_asprintf(&str, "%s=%s", argv[optind-1], argv[optind]);
+                    pmix_asprintf(&str, "%s=%s", argv[optind-1], argv[optind]);
                     mystore(myoptions[option_index].name, str, results);
                     free(str);
                     ++optind;

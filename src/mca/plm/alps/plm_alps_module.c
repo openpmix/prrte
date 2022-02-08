@@ -265,7 +265,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* number of processors needed */
     pmix_argv_append(&argc, &argv, "-n");
-    prte_asprintf(&tmp, "%lu", (unsigned long) map->num_new_daemons);
+    pmix_asprintf(&tmp, "%lu", (unsigned long) map->num_new_daemons);
     pmix_argv_append(&argc, &argv, tmp);
     free(tmp);
     pmix_argv_append(&argc, &argv, "-N");
@@ -580,9 +580,9 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
             /* Reset PATH */
             oldenv = getenv("PATH");
             if (NULL != oldenv) {
-                prte_asprintf(&newenv, "%s/%s:%s", prefix, bin_base, oldenv);
+                pmix_asprintf(&newenv, "%s/%s:%s", prefix, bin_base, oldenv);
             } else {
-                prte_asprintf(&newenv, "%s/%s", prefix, bin_base);
+                pmix_asprintf(&newenv, "%s/%s", prefix, bin_base);
             }
             prte_setenv("PATH", newenv, true, &env);
             if (prte_plm_alps_component.debug) {
@@ -593,9 +593,9 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
             /* Reset LD_LIBRARY_PATH */
             oldenv = getenv("LD_LIBRARY_PATH");
             if (NULL != oldenv) {
-                prte_asprintf(&newenv, "%s/%s:%s", prefix, lib_base, oldenv);
+                pmix_asprintf(&newenv, "%s/%s:%s", prefix, lib_base, oldenv);
             } else {
-                prte_asprintf(&newenv, "%s/%s", prefix, lib_base);
+                pmix_asprintf(&newenv, "%s/%s", prefix, lib_base);
             }
             prte_setenv("LD_LIBRARY_PATH", newenv, true, &env);
             if (prte_plm_alps_component.debug) {

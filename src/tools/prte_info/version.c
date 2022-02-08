@@ -31,7 +31,7 @@
 #include "src/include/version.h"
 #include "src/mca/base/base.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "pmix.h"
 #include "src/tools/prte_info/pinfo.h"
@@ -69,16 +69,16 @@ void prte_info_show_prte_version(const char *scope)
 {
     char *tmp, *tmp2;
 
-    prte_asprintf(&tmp, "%s:version:full", prte_info_type_prte);
+    pmix_asprintf(&tmp, "%s:version:full", prte_info_type_prte);
     tmp2 = make_version_str(scope, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION,
                             PRTE_GREEK_VERSION, PRTE_REPO_REV);
     prte_info_out("PRTE", tmp, tmp2);
     free(tmp);
     free(tmp2);
-    prte_asprintf(&tmp, "%s:version:repo", prte_info_type_prte);
+    pmix_asprintf(&tmp, "%s:version:repo", prte_info_type_prte);
     prte_info_out("PRTE repo revision", tmp, PRTE_REPO_REV);
     free(tmp);
-    prte_asprintf(&tmp, "%s:version:release_date", prte_info_type_prte);
+    pmix_asprintf(&tmp, "%s:version:release_date", prte_info_type_prte);
     prte_info_out("PRTE release date", tmp, PRTE_RELEASE_DATE);
     free(tmp);
 
@@ -261,12 +261,12 @@ static void show_mca_version(const prte_mca_base_component_t *component, const c
                                          component->mca_component_release_version, "", "");
 
     if (prte_info_pretty) {
-        prte_asprintf(&message, "MCA %s", component->mca_type_name);
+        pmix_asprintf(&message, "MCA %s", component->mca_type_name);
         printed = false;
-        prte_asprintf(&content, "%s (", component->mca_component_name);
+        pmix_asprintf(&content, "%s (", component->mca_component_name);
 
         if (want_mca) {
-            prte_asprintf(&tmp, "%sMCA v%s", content, mca_version);
+            pmix_asprintf(&tmp, "%sMCA v%s", content, mca_version);
             free(content);
             content = tmp;
             printed = true;
@@ -274,11 +274,11 @@ static void show_mca_version(const prte_mca_base_component_t *component, const c
 
         if (want_type) {
             if (printed) {
-                prte_asprintf(&tmp, "%s, ", content);
+                pmix_asprintf(&tmp, "%s, ", content);
                 free(content);
                 content = tmp;
             }
-            prte_asprintf(&tmp, "%sAPI v%s", content, api_version);
+            pmix_asprintf(&tmp, "%sAPI v%s", content, api_version);
             free(content);
             content = tmp;
             printed = true;
@@ -286,20 +286,20 @@ static void show_mca_version(const prte_mca_base_component_t *component, const c
 
         if (want_component) {
             if (printed) {
-                prte_asprintf(&tmp, "%s, ", content);
+                pmix_asprintf(&tmp, "%s, ", content);
                 free(content);
                 content = tmp;
             }
-            prte_asprintf(&tmp, "%sComponent v%s", content, component_version);
+            pmix_asprintf(&tmp, "%sComponent v%s", content, component_version);
             free(content);
             content = tmp;
             printed = true;
         }
         if (NULL != content) {
-            prte_asprintf(&tmp, "%s)", content);
+            pmix_asprintf(&tmp, "%s)", content);
             free(content);
         } else {
-            prte_asprintf(&tmp, ")");
+            pmix_asprintf(&tmp, ")");
         }
 
         prte_info_out(message, NULL, tmp);
@@ -307,20 +307,20 @@ static void show_mca_version(const prte_mca_base_component_t *component, const c
         free(tmp);
 
     } else {
-        prte_asprintf(&message, "mca:%s:%s:version", component->mca_type_name,
+        pmix_asprintf(&message, "mca:%s:%s:version", component->mca_type_name,
                       component->mca_component_name);
         if (want_mca) {
-            prte_asprintf(&tmp, "mca:%s", mca_version);
+            pmix_asprintf(&tmp, "mca:%s", mca_version);
             prte_info_out(NULL, message, tmp);
             free(tmp);
         }
         if (want_type) {
-            prte_asprintf(&tmp, "api:%s", api_version);
+            pmix_asprintf(&tmp, "api:%s", api_version);
             prte_info_out(NULL, message, tmp);
             free(tmp);
         }
         if (want_component) {
-            prte_asprintf(&tmp, "component:%s", component_version);
+            pmix_asprintf(&tmp, "component:%s", component_version);
             prte_info_out(NULL, message, tmp);
             free(tmp);
         }
@@ -344,17 +344,17 @@ static char *make_version_str(const char *scope, int major, int minor, int relea
         str = strdup(temp);
         if (release > 0) {
             snprintf(temp, BUFSIZ - 1, ".%d", release);
-            prte_asprintf(&tmp, "%s%s", str, temp);
+            pmix_asprintf(&tmp, "%s%s", str, temp);
             free(str);
             str = tmp;
         }
         if (NULL != greek) {
-            prte_asprintf(&tmp, "%s%s", str, greek);
+            pmix_asprintf(&tmp, "%s%s", str, greek);
             free(str);
             str = tmp;
         }
         if (NULL != repo) {
-            prte_asprintf(&tmp, "%s%s", str, repo);
+            pmix_asprintf(&tmp, "%s%s", str, repo);
             free(str);
             str = tmp;
         }

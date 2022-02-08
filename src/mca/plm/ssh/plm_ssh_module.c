@@ -185,7 +185,7 @@ static int ssh_init(void)
     /* we were selected, so setup the launch agent */
     if (prte_plm_ssh_component.using_qrsh) {
         /* perform base setup for qrsh */
-        prte_asprintf(&tmp, "%s/bin/%s", getenv("SGE_ROOT"), getenv("ARC"));
+        pmix_asprintf(&tmp, "%s/bin/%s", getenv("SGE_ROOT"), getenv("ARC"));
         if (PRTE_SUCCESS != (rc = launch_agent_setup("qrsh", tmp))) {
             PRTE_ERROR_LOG(rc);
             free(tmp);
@@ -450,7 +450,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
 
     /* if they asked us to change directory, do so */
     if (NULL != prte_plm_ssh_component.chdir) {
-        prte_asprintf(&tmp, "cd %s", prte_plm_ssh_component.chdir);
+        pmix_asprintf(&tmp, "cd %s", prte_plm_ssh_component.chdir);
         pmix_argv_append_nosize(&final_argv, tmp);
         free(tmp);
     }
@@ -461,21 +461,21 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
             PRTE_PLM_SSH_SHELL_KSH == remote_shell ||
             PRTE_PLM_SSH_SHELL_ZSH == remote_shell ||
             PRTE_PLM_SSH_SHELL_BASH == remote_shell) {
-            prte_asprintf(&tmp, "PRTE_PREFIX=%s", prefix_dir);
+            pmix_asprintf(&tmp, "PRTE_PREFIX=%s", prefix_dir);
             pmix_argv_append_nosize(&final_argv, tmp);
             pmix_argv_append_nosize(&final_argv, "export PRTE_PREFIX");
             free(tmp);
             if (NULL != (param = getenv("PMIX_PREFIX"))) {
-                prte_asprintf(&tmp, "PMIX_PREFIX=%s", param);
+                pmix_asprintf(&tmp, "PMIX_PREFIX=%s", param);
                 pmix_argv_append_nosize(&final_argv, tmp);
                 pmix_argv_append_nosize(&final_argv, "export PMIX_PREFIX");
                 free(tmp);
             }
-            prte_asprintf(&tmp, "LD_LIBRARY_PATH=%s/%s:$LD_LIBRARY_PATH", prefix_dir, value);
+            pmix_asprintf(&tmp, "LD_LIBRARY_PATH=%s/%s:$LD_LIBRARY_PATH", prefix_dir, value);
             pmix_argv_append_nosize(&final_argv, tmp);
             pmix_argv_append_nosize(&final_argv, "export LD_LIBRARY_PATH");
             free(tmp);
-            prte_asprintf(&tmp, "DYLD_LIBRARY_PATH=%s/%s:$DYLD_LIBRARY_PATH", prefix_dir, value);
+            pmix_asprintf(&tmp, "DYLD_LIBRARY_PATH=%s/%s:$DYLD_LIBRARY_PATH", prefix_dir, value);
             pmix_argv_append_nosize(&final_argv, tmp);
             pmix_argv_append_nosize(&final_argv, "export DYLD_LIBRARY_PATH");
             free(tmp);
@@ -492,19 +492,19 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
              * assemble the cmd with the orted_cmd at the end. Otherwise,
              * we have to insert the orted_prefix in the right place
              */
-            prte_asprintf(&tmp, "setenv PRTE_PREFIX %s", prefix_dir);
+            pmix_asprintf(&tmp, "setenv PRTE_PREFIX %s", prefix_dir);
             pmix_argv_append_nosize(&final_argv, tmp);
             free(tmp);
             if (NULL != (param = getenv("PMIX_PREFIX"))) {
-                prte_asprintf(&tmp, "setenv PMIX_PREFIX %s", param);
+                pmix_asprintf(&tmp, "setenv PMIX_PREFIX %s", param);
                 pmix_argv_append_nosize(&final_argv, tmp);
                 free(tmp);
             }
             pmix_argv_append_nosize(&final_argv, "if ( $?LD_LIBRARY_PATH == 1 ) set PRTE_have_llp");
-            prte_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s/%s", prefix_dir, value);
+            pmix_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s/%s", prefix_dir, value);
             pmix_argv_append_nosize(&final_argv, tmp);
             free(tmp);
-            prte_asprintf(&tmp, "if ( $?PRTE_have_llp == 1 ) setenv LD_LIBRARY_PATH %s/%s:$LD_LIBRARY_PATH", prefix_dir, value);
+            pmix_asprintf(&tmp, "if ( $?PRTE_have_llp == 1 ) setenv LD_LIBRARY_PATH %s/%s:$LD_LIBRARY_PATH", prefix_dir, value);
             pmix_argv_append_nosize(&final_argv, tmp);
             free(tmp);
         }
@@ -519,11 +519,11 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
             PRTE_PLM_SSH_SHELL_KSH == remote_shell ||
             PRTE_PLM_SSH_SHELL_ZSH == remote_shell ||
             PRTE_PLM_SSH_SHELL_BASH == remote_shell) {
-            prte_asprintf(&tmp, "LD_LIBRARY_PATH=%s:$LD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
+            pmix_asprintf(&tmp, "LD_LIBRARY_PATH=%s:$LD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
             pmix_argv_append_nosize(&final_argv, tmp);
             pmix_argv_append_nosize(&final_argv, "export LD_LIBRARY_PATH");
             free(tmp);
-            prte_asprintf(&tmp, "DYLD_LIBRARY_PATH=%s:$DYLD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
+            pmix_asprintf(&tmp, "DYLD_LIBRARY_PATH=%s:$DYLD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
             pmix_argv_append_nosize(&final_argv, tmp);
             pmix_argv_append_nosize(&final_argv, "export DYLD_LIBRARY_PATH");
             free(tmp);
@@ -541,10 +541,10 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
              * we have to insert the orted_prefix in the right place
              */
             pmix_argv_append_nosize(&final_argv, "if ( $?LD_LIBRARY_PATH == 1 ) set PRTE_have_llp");
-            prte_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s", prte_plm_ssh_component.pass_libpath);
+            pmix_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s", prte_plm_ssh_component.pass_libpath);
             pmix_argv_append_nosize(&final_argv, tmp);
             free(tmp);
-            prte_asprintf(&tmp, "if ( $?PRTE_have_llp == 1 ) setenv LD_LIBRARY_PATH %s:$LD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
+            pmix_asprintf(&tmp, "if ( $?PRTE_have_llp == 1 ) setenv LD_LIBRARY_PATH %s:$LD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
             pmix_argv_append_nosize(&final_argv, tmp);
             free(tmp);
         }
@@ -562,9 +562,9 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
             if (0 == strcmp(orted_cmd, "prted")) {
                 /* if the cmd is our standard one, then add the prefix */
                 value = pmix_basename(prte_install_dirs.bindir);
-                prte_asprintf(&tmp, "%s/%s", prefix_dir, value);
+                pmix_asprintf(&tmp, "%s/%s", prefix_dir, value);
                 free(value);
-                prte_asprintf(&full_orted_cmd, "%s/%s", tmp, orted_cmd);
+                pmix_asprintf(&full_orted_cmd, "%s/%s", tmp, orted_cmd);
                 free(tmp);
             } else {
                 /* someone specified something different, so don't prefix it */
@@ -576,7 +576,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
         full_orted_cmd = orted_cmd;
     }
     if (NULL != orted_prefix) {
-        prte_asprintf(&tmp, "%s %s", orted_prefix, full_orted_cmd);
+        pmix_asprintf(&tmp, "%s %s", orted_prefix, full_orted_cmd);
         free(orted_prefix);
     } else {
         tmp = strdup(full_orted_cmd);
@@ -1185,7 +1185,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         username = NULL;
         if (prte_get_attribute(&node->attributes, PRTE_NODE_USERNAME, (void **) &username,
                                PMIX_STRING)) {
-            prte_asprintf(&argv[node_name_index1], "%s@%s", username, nname);
+            pmix_asprintf(&argv[node_name_index1], "%s@%s", username, nname);
             free(username);
         } else {
             argv[node_name_index1] = strdup(nname);

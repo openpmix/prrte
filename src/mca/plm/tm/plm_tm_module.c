@@ -62,7 +62,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
 
@@ -296,7 +296,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* add our umask -- see big note in orted.c */
     current_umask = umask(0);
     umask(current_umask);
-    prte_asprintf(&var, "0%o", current_umask);
+    pmix_asprintf(&var, "0%o", current_umask);
     prte_setenv("PRTE_DAEMON_UMASK_VALUE", var, true, &env);
     free(var);
 
@@ -320,7 +320,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         for (i = 0; NULL != env && NULL != env[i]; ++i) {
             /* Reset PATH */
             if (0 == strncmp("PATH=", env[i], 5)) {
-                prte_asprintf(&newenv, "%s/%s:%s", prefix_dir, bin_base, env[i] + 5);
+                pmix_asprintf(&newenv, "%s/%s:%s", prefix_dir, bin_base, env[i] + 5);
                 PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:tm: resetting PATH: %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
@@ -330,7 +330,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
             /* Reset LD_LIBRARY_PATH */
             else if (0 == strncmp("LD_LIBRARY_PATH=", env[i], 16)) {
-                prte_asprintf(&newenv, "%s/%s:%s", prefix_dir, lib_base, env[i] + 16);
+                pmix_asprintf(&newenv, "%s/%s:%s", prefix_dir, lib_base, env[i] + 16);
                 PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:tm: resetting LD_LIBRARY_PATH: %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));

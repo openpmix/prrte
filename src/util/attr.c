@@ -20,7 +20,7 @@
 
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/string_copy.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -519,7 +519,7 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
         case PRTE_RML_ROUTED_ATTRIB:
             return "RML-DESIRED-ROUTED-MODULES";
         default:
-            prte_snprintf(unknownkey, 180, "UNKNOWN-KEY: %d", key);
+            pmix_snprintf(unknownkey, 180, "UNKNOWN-KEY: %d", key);
             return unknownkey;
         }
     }
@@ -534,7 +534,7 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
     }
 
     /* get here if nobody know what to do */
-    prte_snprintf(unknownkey, 180, "UNKNOWN-KEY: %d", key);
+    pmix_snprintf(unknownkey, 180, "UNKNOWN-KEY: %d", key);
     return unknownkey;
 }
 

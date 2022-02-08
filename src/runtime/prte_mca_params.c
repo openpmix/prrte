@@ -39,7 +39,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
@@ -103,10 +103,10 @@ int prte_register_params(void)
             -1};
         for (j = 0; signals[j] != -1; ++j) {
             if (j == 0) {
-                prte_asprintf(&string, "%d", signals[j]);
+                pmix_asprintf(&string, "%d", signals[j]);
             } else {
                 char *tmp;
-                prte_asprintf(&tmp, "%s,%d", string, signals[j]);
+                pmix_asprintf(&tmp, "%s,%d", string, signals[j]);
                 free(string);
                 string = tmp;
             }
@@ -414,7 +414,7 @@ int prte_register_params(void)
 
     if (NULL == prte_default_hostfile) {
         /* nothing was given, so define the default */
-        prte_asprintf(&prte_default_hostfile, "%s/prte-default-hostfile",
+        pmix_asprintf(&prte_default_hostfile, "%s/prte-default-hostfile",
                       prte_install_dirs.sysconfdir);
         /* flag that nothing was given */
         prte_default_hostfile_given = false;

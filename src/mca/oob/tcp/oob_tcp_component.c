@@ -570,7 +570,7 @@ static char *component_get_addr(void)
         tmp = pmix_argv_join(prte_oob_tcp_component.ipv4conns, ',');
         tp = pmix_argv_join(prte_oob_tcp_component.ipv4ports, ',');
         tm = pmix_argv_join(prte_oob_tcp_component.if_masks, ',');
-        prte_asprintf(&cptr, "tcp://%s:%s:%s", tmp, tp, tm);
+        pmix_asprintf(&cptr, "tcp://%s:%s:%s", tmp, tp, tm);
         free(tmp);
         free(tp);
         free(tm);
@@ -595,9 +595,9 @@ static char *component_get_addr(void)
         tm = pmix_argv_join(prte_oob_tcp_component.if_masks, ',');
         if (NULL == cptr) {
             /* no ipv4 stuff */
-            prte_asprintf(&cptr, "tcp6://[%s]:%s:%s", tmp, tp, tm);
+            pmix_asprintf(&cptr, "tcp6://[%s]:%s:%s", tmp, tp, tm);
         } else {
-            prte_asprintf(&tmp2, "%s;tcp6://[%s]:%s:%s", cptr, tmp, tp, tm);
+            pmix_asprintf(&tmp2, "%s;tcp6://[%s]:%s:%s", cptr, tmp, tp, tm);
             free(cptr);
             cptr = tmp2;
         }

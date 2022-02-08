@@ -47,7 +47,7 @@
 #include "src/include/version.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/show_help.h"
 
 #include "src/tools/prte_info/pinfo.h"
@@ -179,7 +179,7 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
             if (0 == j && prte_info_pretty) {
                 char *message;
 
-                prte_asprintf(&message, "MCA %s", group->group_framework);
+                pmix_asprintf(&message, "MCA %s", group->group_framework);
                 prte_info_out(message, message, strings[j]);
                 free(message);
             } else {
@@ -321,7 +321,7 @@ void prte_info_show_path(const char *type, const char *value)
     pretty = strdup(type);
     pretty[0] = toupper(pretty[0]);
 
-    prte_asprintf(&path, "path:%s", type);
+    pmix_asprintf(&path, "path:%s", type);
     prte_info_out(pretty, path, value);
     free(pretty);
     free(path);

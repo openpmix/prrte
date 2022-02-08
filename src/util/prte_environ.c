@@ -37,7 +37,7 @@
 
 #include "constants.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/prte_environ.h"
 
 #define PRTE_DEFAULT_TMPDIR "/tmp"
@@ -110,9 +110,9 @@ int prte_setenv(const char *name, const char *value, bool overwrite, char ***env
 
     if (NULL == value) {
         value = "";
-        prte_asprintf(&newvalue, "%s=", name);
+        pmix_asprintf(&newvalue, "%s=", name);
     } else {
-        prte_asprintf(&newvalue, "%s=%s", name, value);
+        pmix_asprintf(&newvalue, "%s=%s", name, value);
     }
     if (NULL == newvalue) {
         return PRTE_ERR_OUT_OF_RESOURCE;
@@ -170,7 +170,7 @@ int prte_setenv(const char *name, const char *value, bool overwrite, char ***env
 
     /* Make something easy to compare to */
 
-    prte_asprintf(&compare, "%s=", name);
+    pmix_asprintf(&compare, "%s=", name);
     if (NULL == compare) {
         free(newvalue);
         return PRTE_ERR_OUT_OF_RESOURCE;
@@ -225,7 +225,7 @@ int prte_unsetenv(const char *name, char ***env)
 
     /* Make something easy to compare to */
 
-    prte_asprintf(&compare, "%s=", name);
+    pmix_asprintf(&compare, "%s=", name);
     if (NULL == compare) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }

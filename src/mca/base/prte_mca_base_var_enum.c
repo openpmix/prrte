@@ -37,7 +37,7 @@
 #include "src/mca/base/prte_mca_base_vari.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 static void mca_base_var_enum_constructor(prte_mca_base_var_enum_t *enumerator);
 static void mca_base_var_enum_destructor(prte_mca_base_var_enum_t *enumerator);
@@ -295,7 +295,7 @@ static int mca_base_var_enum_verbose_sfv(prte_mca_base_var_enum_t *self, const i
     }
 
     if (string_value) {
-        ret = prte_asprintf(string_value, "%d", value);
+        ret = pmix_asprintf(string_value, "%d", value);
         if (0 > ret) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
@@ -315,7 +315,7 @@ static int mca_base_var_enum_verbose_dump(prte_mca_base_var_enum_t *self, char *
         return ret;
     }
 
-    ret = prte_asprintf(&tmp, "%s, 0 - 100", *out);
+    ret = pmix_asprintf(&tmp, "%s, 0 - 100", *out);
     free(*out);
     if (0 > ret) {
         *out = NULL;
@@ -443,7 +443,7 @@ static int enum_dump(prte_mca_base_var_enum_t *self, char **out)
 
     tmp = NULL;
     for (i = 0; i < self->enum_value_count && self->enum_values[i].string; ++i) {
-        ret = prte_asprintf(out, "%s%s%d:\"%s\"", tmp ? tmp : "", tmp ? ", " : "",
+        ret = pmix_asprintf(out, "%s%s%d:\"%s\"", tmp ? tmp : "", tmp ? ", " : "",
                             self->enum_values[i].value, self->enum_values[i].string);
         if (tmp)
             free(tmp);
@@ -682,7 +682,7 @@ static int enum_string_from_value_flag(prte_mca_base_var_enum_t *self, const int
 
         tmp = out;
 
-        ret = prte_asprintf(&out, "%s%s%s", tmp ? tmp : "", tmp ? "," : "",
+        ret = pmix_asprintf(&out, "%s%s%s", tmp ? tmp : "", tmp ? "," : "",
                             flag_enum->enum_flags[i].string);
         free(tmp);
 
@@ -732,7 +732,7 @@ static int enum_dump_flag(prte_mca_base_var_enum_t *self, char **out)
     for (int i = 0; i < self->enum_value_count; ++i) {
         tmp = *out;
 
-        ret = prte_asprintf(out, "%s%s0x%x:\"%s\"", tmp, i ? ", " : " ",
+        ret = pmix_asprintf(out, "%s%s0x%x:\"%s\"", tmp, i ? ", " : " ",
                             flag_enum->enum_flags[i].flag, flag_enum->enum_flags[i].string);
         free(tmp);
         if (0 > ret) {

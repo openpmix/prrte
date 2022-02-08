@@ -269,10 +269,10 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                 if (NULL == strstr(app->app.argv[i], prte_install_dirs.libdir)) {
                     /* doesn't appear to - add it to be safe */
                     if (':' == app->app.argv[i][strlen(app->app.argv[i] - 1)]) {
-                        prte_asprintf(&value, "-Djava.library.path=%s%s", dptr,
+                        pmix_asprintf(&value, "-Djava.library.path=%s%s", dptr,
                                       prte_install_dirs.libdir);
                     } else {
-                        prte_asprintf(&value, "-Djava.library.path=%s:%s", dptr,
+                        pmix_asprintf(&value, "-Djava.library.path=%s:%s", dptr,
                                       prte_install_dirs.libdir);
                     }
                     free(app->app.argv[i]);
@@ -283,7 +283,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
         }
         if (!found) {
             /* need to add it right after the java command */
-            prte_asprintf(&value, "-Djava.library.path=%s", prte_install_dirs.libdir);
+            pmix_asprintf(&value, "-Djava.library.path=%s", prte_install_dirs.libdir);
             pmix_argv_insert_element(&app->app.argv, 1, value);
             free(value);
         }
@@ -308,7 +308,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                 }
                 free(value);
                 /* always add the local directory */
-                prte_asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[i + 1]);
+                pmix_asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[i + 1]);
                 free(app->app.argv[i + 1]);
                 app->app.argv[i + 1] = value;
                 break;
@@ -335,7 +335,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                     }
                     free(value);
                     /* always add the local directory */
-                    prte_asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[1]);
+                    pmix_asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[1]);
                     free(app->app.argv[1]);
                     app->app.argv[1] = value;
                     pmix_argv_insert_element(&app->app.argv, 1, "-cp");
@@ -354,7 +354,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                 /* check for mpi.jar */
                 value = prte_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
                 if (access(value, F_OK) != -1) {
-                    prte_asprintf(&str2, "%s:%s", str, value);
+                    pmix_asprintf(&str2, "%s:%s", str, value);
                     free(str);
                     str = str2;
                 }
@@ -362,7 +362,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                 /* check for shmem.jar */
                 value = prte_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
                 if (access(value, F_OK) != -1) {
-                    prte_asprintf(&str2, "%s:%s", str, value);
+                    pmix_asprintf(&str2, "%s:%s", str, value);
                     free(str);
                     str = str2;
                 }
@@ -474,7 +474,7 @@ static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfil
         char *fmt = ':' == app->app.argv[index][strlen(app->app.argv[index] - 1)] ? "%s%s/%s"
                                                                                   : "%s:%s/%s";
         char *str;
-        prte_asprintf(&str, fmt, app->app.argv[index], prte_install_dirs.libdir, jarfile);
+        pmix_asprintf(&str, fmt, app->app.argv[index], prte_install_dirs.libdir, jarfile);
         free(app->app.argv[index]);
         app->app.argv[index] = str;
     }

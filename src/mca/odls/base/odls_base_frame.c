@@ -38,7 +38,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -205,7 +205,7 @@ startup:
         prte_odls_globals.ev_bases = (prte_event_base_t **) malloc(prte_odls_globals.num_threads
                                                                    * sizeof(prte_event_base_t *));
         for (i = 0; i < prte_odls_globals.num_threads; i++) {
-            prte_asprintf(&tmp, "PRTE-ODLS-%d", i);
+            pmix_asprintf(&tmp, "PRTE-ODLS-%d", i);
             prte_odls_globals.ev_bases[i] = prte_progress_thread_init(tmp);
             pmix_argv_append_nosize(&prte_odls_globals.ev_threads, tmp);
             free(tmp);

@@ -70,7 +70,6 @@ headers = \
         output.h \
         parse_options.h \
         path.h \
-        printf.h \
         proc_info.h \
         prte_environ.h \
         prte_getcwd.h \
@@ -110,7 +109,6 @@ libprrteutil_la_SOURCES = \
         output.c \
         parse_options.c \
         path.c \
-        printf.c \
         proc_info.c \
         prte_environ.c \
         prte_getcwd.c \

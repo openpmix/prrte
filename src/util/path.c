@@ -78,7 +78,7 @@
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 /*
  * Sanity check to ensure we have either statfs or statvfs
@@ -148,7 +148,7 @@ char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
                 if (!delimit) {
                     fullpath = prte_path_access(fname, env, mode);
                 } else {
-                    prte_asprintf(&pfix, "%s%s", env, delimit);
+                    pmix_asprintf(&pfix, "%s%s", env, delimit);
                     fullpath = prte_path_access(fname, pfix, mode);
                     free(pfix);
                 }
