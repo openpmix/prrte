@@ -261,7 +261,7 @@ int main(int argc, char *argv[])
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
     if (NULL == (param = getenv("PRTE_BASENAME"))) {
-        prte_tool_basename = prte_basename(argv[0]);
+        prte_tool_basename = pmix_basename(argv[0]);
     } else {
         prte_tool_basename = strdup(param);
     }
@@ -625,17 +625,17 @@ int main(int argc, char *argv[])
         tpath = NULL;
         if ('/' == argv[0][0]) {
             char *tmp_basename = NULL;
-            tpath = prte_dirname(argv[0]);
+            tpath = pmix_dirname(argv[0]);
 
             if (NULL != tpath) {
                 /* Quick sanity check to ensure we got
                    something/bin/<exec_name> and that the installation
                    tree is at least more or less what we expect it to
                    be */
-                tmp_basename = prte_basename(tpath);
+                tmp_basename = pmix_basename(tpath);
                 if (0 == strcmp("bin", tmp_basename)) {
                     char *tmp = tpath;
-                    tpath = prte_dirname(tmp);
+                    tpath = pmix_dirname(tmp);
                     free(tmp);
                 } else {
                     free(tpath);

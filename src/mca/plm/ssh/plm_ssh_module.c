@@ -456,7 +456,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     }
 
     if (NULL != prefix_dir) {
-        value = prte_basename(prte_install_dirs.libdir);
+        value = pmix_basename(prte_install_dirs.libdir);
         if (PRTE_PLM_SSH_SHELL_SH == remote_shell ||
             PRTE_PLM_SSH_SHELL_KSH == remote_shell ||
             PRTE_PLM_SSH_SHELL_ZSH == remote_shell ||
@@ -561,7 +561,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
         if (NULL != orted_cmd) {
             if (0 == strcmp(orted_cmd, "prted")) {
                 /* if the cmd is our standard one, then add the prefix */
-                value = prte_basename(prte_install_dirs.bindir);
+                value = pmix_basename(prte_install_dirs.bindir);
                 prte_asprintf(&tmp, "%s/%s", prefix_dir, value);
                 free(value);
                 prte_asprintf(&full_orted_cmd, "%s/%s", tmp, orted_cmd);
@@ -1384,7 +1384,7 @@ static int launch_agent_setup(const char *agent, char *path)
         return PRTE_ERR_NOT_FOUND;
     }
 
-    bname = prte_basename(ssh_agent_argv[0]);
+    bname = pmix_basename(ssh_agent_argv[0]);
     if (NULL != bname && 0 == strcmp(bname, "ssh")) {
         /* if xterm option was given, add '-X', ensuring we don't do it twice */
         if (NULL != prte_xterm) {

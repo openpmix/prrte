@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
 
     /* initialize the globals */
     PMIX_DATA_BUFFER_CREATE(bucket);
-    prte_tool_basename = prte_basename(argv[0]);
+    prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "prted";
     pargc = argc;
     pargv = prte_argv_copy_strip(argv);  // strip any quoted arguments

@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
      * and then abnormally terminates the pipe early */
     signal(SIGPIPE, SIG_IGN);
 
-    prte_tool_basename = prte_basename(argv[0]);
+    prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "prte_info";
 
     /* Initialize the argv parsing stuff */

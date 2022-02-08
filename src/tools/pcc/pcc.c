@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -440,7 +440,7 @@ int main(int argc, char *argv[])
      *
      ****************************************************/
 
-    base_argv0 = prte_basename(argv[0]);
+    base_argv0 = pmix_basename(argv[0]);
 #if defined(EXEEXT)
     if (0 != strlen(EXEEXT)) {
         char extension[] = EXEEXT;
