@@ -29,7 +29,7 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_var.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 
 #include "ras_pbs.h"
 #include "src/mca/ras/base/ras_private.h"

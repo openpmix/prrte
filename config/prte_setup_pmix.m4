@@ -103,7 +103,14 @@ echo "--> $pmix_ext_install_libdir"
 
     # need to add one level of indirection so that we can
     # access the PMIx headers
-    prte_pmix_CPPFLAGS="$prte_pmix_CPPFLAGS -I$pmix_ext_install_dir/include/pmix"
+    if test ! -z "$pmix_ext_install_dir"; then
+        prte_pmix_CPPFLAGS="$prte_pmix_CPPFLAGS -I$pmix_ext_install_dir/include/pmix"
+    else
+        # need to figure out what to do if PMIx was installed in
+        # a standard location - still need to add the "pmix"
+        # extension, but what do we add it to?
+        prte_pmix_CPPFLAGS="$prte_pmix_CPPFLAGS"
+    fi
 
     prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
     prte_external_pmix_save_LDFLAGS=$LDFLAGS

@@ -71,7 +71,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/mutex.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/fd.h"
 #include "src/util/os_path.h"

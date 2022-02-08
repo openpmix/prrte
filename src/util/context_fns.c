@@ -46,7 +46,7 @@
 #endif
 #include <errno.h>
 
-#include "pmix/src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/path.h"
 #include "src/util/prte_environ.h"
 

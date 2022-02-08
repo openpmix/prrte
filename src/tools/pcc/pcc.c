@@ -48,7 +48,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/runtime/runtime.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/error.h"
 #include "src/util/few.h"
 #include "src/util/keyval_parse.h"
