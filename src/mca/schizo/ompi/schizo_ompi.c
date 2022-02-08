@@ -325,9 +325,8 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
                     prte_enable_recovery = true;
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:ompi:parse_cli pushing OMPI_MCA_mpi_ft_enable into environment",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                     prte_schizo_base_expose("mpi_ft_enable=1", "OMPI_MCA_");
-                    }
                 }
                 else {
                     prte_output(0, "UNRECOGNIZED OPTION: --with-ft %s", p1);
