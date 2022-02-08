@@ -6,7 +6,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +18,7 @@
 
 #include "constants.h"
 #include "src/mca/prtedl/prtedl.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 
 #include "prtedl_dlopen.h"
 
@@ -87,7 +87,7 @@ static int dlopen_component_register(void)
         return ret;
     }
     prte_prtedl_dlopen_component.filename_suffixes
-        = prte_argv_split(prte_prtedl_dlopen_component.filename_suffixes_mca_storage, ',');
+        = pmix_argv_split(prte_prtedl_dlopen_component.filename_suffixes_mca_storage, ',');
 
     return PRTE_SUCCESS;
 }
@@ -100,7 +100,7 @@ static int dlopen_component_open(void)
 static int dlopen_component_close(void)
 {
     if (NULL != prte_prtedl_dlopen_component.filename_suffixes) {
-        prte_argv_free(prte_prtedl_dlopen_component.filename_suffixes);
+        pmix_argv_free(prte_prtedl_dlopen_component.filename_suffixes);
         prte_prtedl_dlopen_component.filename_suffixes = NULL;
     }
 

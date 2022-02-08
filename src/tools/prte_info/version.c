@@ -30,7 +30,7 @@
 
 #include "src/include/version.h"
 #include "src/mca/base/base.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/printf.h"
 
 #include "pmix.h"
@@ -116,7 +116,7 @@ void prte_info_do_version(bool want_all)
     } else {
         opt = prte_cmd_line_get_param(&prte_info_cmd_line, "show-version");
         if (NULL != opt) {
-            tmp = prte_argv_split(opt->values[0], ':');
+            tmp = pmix_argv_split(opt->values[0], ':');
             arg1 = tmp[0];
             if (NULL == tmp[1]) {
                 scope = (char*)prte_info_ver_all;
@@ -149,7 +149,7 @@ void prte_info_do_version(bool want_all)
                 prte_info_show_component_version(arg1, prte_info_component_all, scope,
                                                  prte_info_ver_all);
             }
-            prte_argv_free(tmp);
+            pmix_argv_free(tmp);
         }
     }
 }

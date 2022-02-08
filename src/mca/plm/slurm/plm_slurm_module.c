@@ -54,7 +54,7 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
@@ -251,18 +251,18 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
 
     /* add the srun command */
-    prte_argv_append(&argc, &argv, "srun");
+    pmix_argv_append(&argc, &argv, "srun");
 
     /* start one orted on each node */
-    prte_argv_append(&argc, &argv, "--ntasks-per-node=1");
+    pmix_argv_append(&argc, &argv, "--ntasks-per-node=1");
 
     if (!prte_enable_recovery) {
         /* kill the job if any orteds die */
-        prte_argv_append(&argc, &argv, "--kill-on-bad-exit");
+        pmix_argv_append(&argc, &argv, "--kill-on-bad-exit");
     }
 
     /* our daemons are not an MPI task */
-    prte_argv_append(&argc, &argv, "--mpi=none");
+    pmix_argv_append(&argc, &argv, "--mpi=none");
 
     /* ensure the orteds are not bound to a single processor,
      * just in case the TaskAffinity option is set by default.
@@ -303,12 +303,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* Append user defined arguments to srun */
     if (NULL != prte_plm_slurm_component.custom_args) {
-        custom_strings = prte_argv_split(prte_plm_slurm_component.custom_args, ' ');
-        num_args = prte_argv_count(custom_strings);
+        custom_strings = pmix_argv_split(prte_plm_slurm_component.custom_args, ' ');
+        num_args = pmix_argv_count(custom_strings);
         for (i = 0; i < num_args; ++i) {
-            prte_argv_append(&argc, &argv, custom_strings[i]);
+            pmix_argv_append(&argc, &argv, custom_strings[i]);
         }
-        prte_argv_free(custom_strings);
+        pmix_argv_free(custom_strings);
     }
 
     /* create nodelist */
@@ -328,32 +328,32 @@ static void launch_daemons(int fd, short args, void *cbdata)
         /* otherwise, add it to the list of nodes upon which
          * we need to launch a daemon
          */
-        prte_argv_append_nosize(&nodelist_argv, node->name);
+        pmix_argv_append_nosize(&nodelist_argv, node->name);
     }
-    if (0 == prte_argv_count(nodelist_argv)) {
+    if (0 == pmix_argv_count(nodelist_argv)) {
         prte_show_help("help-plm-slurm.txt", "no-hosts-in-list", true);
         rc = PRTE_ERR_FAILED_TO_START;
         goto cleanup;
     }
-    nodelist_flat = prte_argv_join(nodelist_argv, ',');
-    prte_argv_free(nodelist_argv);
+    nodelist_flat = pmix_argv_join(nodelist_argv, ',');
+    pmix_argv_free(nodelist_argv);
 
     /* if we are using all allocated nodes, then srun doesn't
      * require any further arguments
      */
     if (map->num_new_daemons < prte_num_allocated_nodes) {
         prte_asprintf(&tmp, "--nodes=%lu", (unsigned long) map->num_new_daemons);
-        prte_argv_append(&argc, &argv, tmp);
+        pmix_argv_append(&argc, &argv, tmp);
         free(tmp);
 
         prte_asprintf(&tmp, "--nodelist=%s", nodelist_flat);
-        prte_argv_append(&argc, &argv, tmp);
+        pmix_argv_append(&argc, &argv, tmp);
         free(tmp);
     }
 
     /* tell srun how many tasks to run */
     prte_asprintf(&tmp, "--ntasks=%lu", (unsigned long) map->num_new_daemons);
-    prte_argv_append(&argc, &argv, tmp);
+    pmix_argv_append(&argc, &argv, tmp);
     free(tmp);
 
     PRTE_OUTPUT_VERBOSE((2, prte_plm_base_framework.framework_output,
@@ -431,7 +431,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_base_wrap_args(argv);
 
     if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-        param = prte_argv_join(argv, ' ');
+        param = pmix_argv_join(argv, ' ');
         prte_output(prte_plm_base_framework.framework_output,
                     "%s plm:slurm: final top-level argv:\n\t%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     (NULL == param) ? "NULL" : param);
@@ -454,7 +454,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
 cleanup:
     if (NULL != argv) {
-        prte_argv_free(argv);
+        pmix_argv_free(argv);
     }
     if (NULL != cur_prefix) {
         free(cur_prefix);

@@ -43,7 +43,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/mca/rml/rml.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
@@ -434,12 +434,12 @@ static void prte_app_context_destructor(prte_app_context_t *app_context)
 
     /* argv and env lists created by util/argv copy functions */
     if (NULL != app_context->argv) {
-        prte_argv_free(app_context->argv);
+        pmix_argv_free(app_context->argv);
         app_context->argv = NULL;
     }
 
     if (NULL != app_context->env) {
-        prte_argv_free(app_context->env);
+        pmix_argv_free(app_context->env);
         app_context->env = NULL;
     }
 
@@ -518,7 +518,7 @@ static void prte_job_destruct(prte_job_t *job)
     }
 
     if (NULL != job->personality) {
-        prte_argv_free(job->personality);
+        pmix_argv_free(job->personality);
     }
     for (n = 0; n < job->apps->size; n++) {
         if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(job->apps, n))) {
@@ -581,7 +581,7 @@ static void prte_job_destruct(prte_job_t *job)
         prte_pointer_array_set_item(prte_job_data, job->index, NULL);
     }
     if (NULL != job->traces) {
-        prte_argv_free(job->traces);
+        pmix_argv_free(job->traces);
     }
     PRTE_DESTRUCT(&job->cli);
 }
@@ -630,7 +630,7 @@ static void prte_node_destruct(prte_node_t *node)
         node->rawname = NULL;
     }
     if (NULL != node->aliases) {
-        prte_argv_free(node->aliases);
+        pmix_argv_free(node->aliases);
         node->aliases = NULL;
     }
     if (NULL != node->daemon) {

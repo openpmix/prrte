@@ -18,7 +18,7 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -115,7 +115,7 @@ bool prte_schizo_base_check_qualifiers(char *directive,
             return true;
         }
     }
-    v = prte_argv_join(valid, ',');
+    v = pmix_argv_join(valid, ',');
     prte_show_help("help-prte-rmaps-base.txt",
                    "unrecognized-qualifier", true,
                    directive, qual, v);
@@ -147,14 +147,14 @@ bool prte_schizo_base_check_directives(char *directive,
 
     /* if it starts with a ':', then these are just modifiers */
     if (':' == dir[0]) {
-        qls = prte_argv_split(&dir[1], ',');
+        qls = pmix_argv_split(&dir[1], ',');
         for (m=0; NULL != qls[m]; m++) {
             if (!prte_schizo_base_check_qualifiers(directive, quals, qls[m])) {
-                prte_argv_free(qls);
+                pmix_argv_free(qls);
                 return false;
             }
         }
-        prte_argv_free(qls);
+        pmix_argv_free(qls);
         return true;
     }
 
@@ -165,7 +165,7 @@ bool prte_schizo_base_check_directives(char *directive,
         return true;
     }
 
-    args = prte_argv_split(dir, ':');
+    args = pmix_argv_split(dir, ':');
     /* remove any '=' in the directive */
     if (NULL != (v = strchr(args[0], '='))) {
         *v = '\0';
@@ -191,7 +191,7 @@ bool prte_schizo_base_check_directives(char *directive,
                                        "unrecognized-qualifier", true,
                                        directive, dir, v);
                         free(v);
-                        prte_argv_free(args);
+                        pmix_argv_free(args);
                         return false;
                     }
                     found = false;
@@ -202,45 +202,45 @@ bool prte_schizo_base_check_directives(char *directive,
                         }
                     }
                     if (!found) {
-                        v = prte_argv_join(pproptions, ',');
+                        v = pmix_argv_join(pproptions, ',');
                         prte_asprintf(&q, "ppr:%s:[%s]", args[1], v);
                         free(v);
                         prte_show_help("help-prte-rmaps-base.txt",
                                        "unrecognized-qualifier", true,
                                        directive, dir, q);
                         free(q);
-                        prte_argv_free(args);
+                        pmix_argv_free(args);
                         return false;
                     }
                     if (NULL != args[3]) {
-                        qls = prte_argv_split(args[3], ',');
+                        qls = pmix_argv_split(args[3], ',');
                     } else {
-                        prte_argv_free(args);
+                        pmix_argv_free(args);
                         return true;
                     }
                 } else {
-                    qls = prte_argv_split(args[1], ',');
+                    qls = pmix_argv_split(args[1], ',');
                 }
                for (m=0; NULL != qls[m]; m++) {
                     if (!prte_schizo_base_check_qualifiers(directive, quals, qls[m])) {
-                        prte_argv_free(qls);
-                        prte_argv_free(args);
+                        pmix_argv_free(qls);
+                        pmix_argv_free(args);
                         return false;
                     }
                 }
-                prte_argv_free(qls);
-                prte_argv_free(args);
+                pmix_argv_free(qls);
+                pmix_argv_free(args);
                 return true;
             }
-            prte_argv_free(args);
+            pmix_argv_free(args);
             return true;
         }
     }
-    v = prte_argv_join(valid, ',');
+    v = pmix_argv_join(valid, ',');
     prte_show_help("help-prte-rmaps-base.txt",
                    "unrecognized-directive", true,
                    directive, dir, v);
-    prte_argv_free(args);
+    pmix_argv_free(args);
     return false;
 }
 
@@ -283,9 +283,9 @@ static int check_ndirs(prte_cli_item_t *opt)
 
     for (n=0; NULL != limits[n]; n++) {
         if (0 == strcmp(opt->key, limits[n])) {
-            count = prte_argv_count(opt->values);
+            count = pmix_argv_count(opt->values);
             if (1 > count) {
-                param = prte_argv_join(opt->values, ' ');
+                param = pmix_argv_join(opt->values, ' ');
                 prte_show_help("help-schizo-base.txt", "too-many-instances", true,
                                param, opt->key, count, 1);
                 return PRTE_ERR_SILENT;

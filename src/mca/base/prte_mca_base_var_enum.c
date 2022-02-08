@@ -18,7 +18,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,7 +36,7 @@
 #include "src/mca/base/prte_mca_base_var_enum.h"
 #include "src/mca/base/prte_mca_base_vari.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/printf.h"
 
 static void mca_base_var_enum_constructor(prte_mca_base_var_enum_t *enumerator);
@@ -615,7 +615,7 @@ static int enum_value_from_string_flag(prte_mca_base_var_enum_t *self, const cha
         return ret;
     }
 
-    flags = prte_argv_split(string_value, ',');
+    flags = pmix_argv_split(string_value, ',');
     if (NULL == flags) {
         return PRTE_ERR_BAD_PARAM;
     }
@@ -650,12 +650,12 @@ static int enum_value_from_string_flag(prte_mca_base_var_enum_t *self, const cha
         }
 
         if (!found || conflict || (is_int && value)) {
-            prte_argv_free(flags);
+            pmix_argv_free(flags);
             return !found ? PRTE_ERR_VALUE_OUT_OF_BOUNDS : PRTE_ERR_BAD_PARAM;
         }
     }
 
-    prte_argv_free(flags);
+    pmix_argv_free(flags);
 
     *value_out = flag;
 

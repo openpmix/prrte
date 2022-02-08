@@ -70,7 +70,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/mutex.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/daemon_init.h"
@@ -271,7 +271,7 @@ int main(int argc, char *argv[])
         prte_tool_actual = "prte";
     }
     pargc = argc;
-    pargv = prte_argv_copy_strip(argv); // strip any incoming quoted arguments
+    pargv = pmix_argv_copy_strip(argv); // strip any incoming quoted arguments
 
     /* save a pristine copy of the environment for launch purposes.
      * This MUST be done so that we can pass it to any local procs we
@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
     for (i=0; NULL != environ[i]; i++) {
         if (0 != strncmp(environ[i], "PMIX_", 5) &&
             0 != strncmp(environ[i], "PRTE_", 5)) {
-            prte_argv_append_nosize(&prte_launch_environ, environ[i]);
+            pmix_argv_append_nosize(&prte_launch_environ, environ[i]);
         }
     }
 
@@ -675,7 +675,7 @@ int main(int argc, char *argv[])
     if (prte_persistent) {
         opt = prte_cmd_line_get_param(&results, PRTE_CLI_HOSTFILE);
         if (NULL != opt) {
-            tpath = prte_argv_join(opt->values, ',');
+            tpath = pmix_argv_join(opt->values, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE,
                                PRTE_ATTR_GLOBAL, tpath, PMIX_STRING);
             free(tpath);
@@ -685,7 +685,7 @@ int main(int argc, char *argv[])
         opt = prte_cmd_line_get_param(&results, PRTE_CLI_HOST);
         if (NULL != opt) {
             char *tval;
-            tval = prte_argv_join(opt->values, ',');
+            tval = pmix_argv_join(opt->values, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST,
                                PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
             free(tval);
@@ -694,19 +694,19 @@ int main(int argc, char *argv[])
         /* the directives might be in the app(s) */
         if (NULL != hostfiles) {
             char *tval;
-            tval = prte_argv_join(hostfiles, ',');
+            tval = pmix_argv_join(hostfiles, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE,
                                PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
             free(tval);
-            prte_argv_free(hostfiles);
+            pmix_argv_free(hostfiles);
         }
         if (NULL != hosts) {
             char *tval;
-            tval = prte_argv_join(hosts, ',');
+            tval = pmix_argv_join(hosts, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST,
                                PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
             free(tval);
-            prte_argv_free(hosts);
+            pmix_argv_free(hosts);
         }
     }
 
@@ -782,9 +782,9 @@ int main(int argc, char *argv[])
     opt = prte_cmd_line_get_param(&results, PRTE_CLI_DISPLAY);
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n++) {
-            targv = prte_argv_split(opt->values[n], ',');
+            targv = pmix_argv_split(opt->values[n], ',');
 
-            for (int idx = 0; idx < prte_argv_count(targv); idx++) {
+            for (int idx = 0; idx < pmix_argv_count(targv); idx++) {
                 if (0 == strncasecmp(targv[idx], PRTE_CLI_ALLOC, strlen(targv[idx]))) {
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":"PRTE_CLI_DISPALLOC, PMIX_STRING);
                 }
@@ -801,7 +801,7 @@ int main(int argc, char *argv[])
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":"PRTE_CLI_DISPTOPO, PMIX_STRING);
                 }
             }
-            prte_argv_free(targv);
+            pmix_argv_free(targv);
         }
     }
 
@@ -811,7 +811,7 @@ int main(int argc, char *argv[])
     opt = prte_cmd_line_get_param(&results, PRTE_CLI_OUTPUT);
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n++) {
-            targv = prte_argv_split(opt->values[0], ',');
+            targv = pmix_argv_split(opt->values[0], ',');
             for (int idx = 0; NULL != targv[idx]; idx++) {
                 /* check for qualifiers */
                 cptr = strchr(targv[idx], ':');
@@ -819,7 +819,7 @@ int main(int argc, char *argv[])
                     *cptr = '\0';
                     ++cptr;
                     /* could be multiple qualifiers, so separate them */
-                    options = prte_argv_split(cptr, ',');
+                    options = pmix_argv_split(cptr, ',');
                     for (int m=0; NULL != options[m]; m++) {
                         if (0 == strcasecmp(options[m], PRTE_CLI_NOCOPY)) {
                             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
@@ -831,7 +831,7 @@ int main(int argc, char *argv[])
 #endif
                         }
                     }
-                    prte_argv_free(options);
+                    pmix_argv_free(options);
                 }
                 if (0 == strlen(targv[idx])) {
                     // only qualifiers were given
@@ -906,7 +906,7 @@ int main(int argc, char *argv[])
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
                 }
             }
-            prte_argv_free(targv);
+            pmix_argv_free(targv);
         }
     }
     if (NULL != outdir) {
@@ -1078,8 +1078,8 @@ int main(int argc, char *argv[])
     PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t)
     {
         papps[n].cmd = strdup(app->app.cmd);
-        papps[n].argv = prte_argv_copy(app->app.argv);
-        papps[n].env = prte_argv_copy(app->app.env);
+        papps[n].argv = pmix_argv_copy(app->app.argv);
+        papps[n].env = pmix_argv_copy(app->app.env);
         papps[n].cwd = strdup(app->app.cwd);
         papps[n].maxprocs = app->app.maxprocs;
         PMIX_INFO_LIST_CONVERT(ret, app->info, &darray);
@@ -1308,7 +1308,7 @@ static int prep_singleton(const char *name)
     app = PRTE_NEW(prte_app_context_t);
     app->app = strdup(jdata->nspace);
     app->num_procs = 1;
-    prte_argv_append_nosize(&app->argv, app->app);
+    pmix_argv_append_nosize(&app->argv, app->app);
     getcwd(cwd, sizeof(cwd));
     app->cwd = strdup(cwd);
     prte_pointer_array_set_item(jdata->apps, 0, app);

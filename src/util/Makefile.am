@@ -43,7 +43,6 @@ AM_CPPFLAGS = $(LTDLINCL)
 # Source code files
 
 headers = \
-        argv.h \
         attr.h \
         bipartite_graph.h \
         bipartite_graph_internal.h \
@@ -86,7 +85,6 @@ headers = \
 
 libprrteutil_la_SOURCES = \
         $(headers) \
-        argv.c \
         attr.c \
         bipartite_graph.c \
         cmd_line.c \

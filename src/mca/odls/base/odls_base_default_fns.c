@@ -49,7 +49,7 @@
 #include "prte_stdint.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/path.h"
@@ -292,20 +292,20 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     for (i = 0; i < map->nodes->size; i++) {
         micro = NULL;
         if (NULL != (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, i))) {
-            prte_argv_append_nosize(&list, node->name);
+            pmix_argv_append_nosize(&list, node->name);
             /* assemble all the ranks for this job that are on this node */
             for (k = 0; k < node->procs->size; k++) {
                 if (NULL != (pptr = (prte_proc_t *) prte_pointer_array_get_item(node->procs, k))) {
                     if (PMIX_CHECK_NSPACE(jdata->nspace, pptr->name.nspace)) {
-                        prte_argv_append_nosize(&micro, PRTE_VPID_PRINT(pptr->name.rank));
+                        pmix_argv_append_nosize(&micro, PRTE_VPID_PRINT(pptr->name.rank));
                     }
                 }
             }
             /* assemble the rank/node map */
             if (NULL != micro) {
-                tmp = prte_argv_join(micro, ',');
-                prte_argv_free(micro);
-                prte_argv_append_nosize(&procs, tmp);
+                tmp = pmix_argv_join(micro, ',');
+                pmix_argv_free(micro);
+                pmix_argv_append_nosize(&procs, tmp);
                 free(tmp);
             }
         }
@@ -313,8 +313,8 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
 
     /* let the PMIx server generate the nodemap regex */
     if (NULL != list) {
-        tmp = prte_argv_join(list, ',');
-        prte_argv_free(list);
+        tmp = pmix_argv_join(list, ',');
+        pmix_argv_free(list);
         list = NULL;
         if (PMIX_SUCCESS != (ret = PMIx_generate_regex(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
@@ -329,8 +329,8 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
 
     /* let the PMIx server generate the procmap regex */
     if (NULL != procs) {
-        tmp = prte_argv_join(procs, ';');
-        prte_argv_free(procs);
+        tmp = pmix_argv_join(procs, ';');
+        pmix_argv_free(procs);
         procs = NULL;
         if (PMIX_SUCCESS != (ret = PMIx_generate_ppn(tmp, &regex))) {
             PMIX_ERROR_LOG(ret);
@@ -345,7 +345,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
 
     /* add in the personality */
     if (NULL != jdata->personality) {
-        tmp = prte_argv_join(jdata->personality, ',');
+        tmp = pmix_argv_join(jdata->personality, ',');
         PMIX_INFO_LIST_ADD(ret, ilist, PMIX_PERSONALITY, tmp, PMIX_STRING);
         free(tmp);
     }
@@ -584,7 +584,7 @@ next:
     }
     /* get the associated schizo module */
     if (NULL != jdata->personality) {
-        tmp = prte_argv_join(jdata->personality, ',');
+        tmp = pmix_argv_join(jdata->personality, ',');
     } else {
         tmp = NULL;
     }
@@ -977,7 +977,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     PRTE_ACQUIRE_OBJECT(cd);
 
     /* thread-protect common values */
-    cd->env = prte_argv_copy(prte_launch_environ);
+    cd->env = pmix_argv_copy(prte_launch_environ);
     if (NULL != app->env) {
         for (i = 0; NULL != app->env[i]; i++) {
             /* find the '=' sign.
@@ -1042,13 +1042,13 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
             if (PMIX_RANK_WILDCARD == nm->name.rank || child->name.rank == nm->name.rank) {
                 /* we want this one - modify the app's command to include
                  * the prte xterm cmd that starts with the xtermcmd */
-                cd->argv = prte_argv_copy(prte_odls_globals.xtermcmd);
+                cd->argv = pmix_argv_copy(prte_odls_globals.xtermcmd);
                 /* insert the rank into the correct place as a window title */
                 free(cd->argv[2]);
                 prte_asprintf(&cd->argv[2], "Rank %s", PRTE_VPID_PRINT(child->name.rank));
                 /* add in the argv from the app */
                 for (i = 0; NULL != app->argv[i]; i++) {
-                    prte_argv_append_nosize(&cd->argv, app->argv[i]);
+                    pmix_argv_append_nosize(&cd->argv, app->argv[i]);
                 }
                 /* use the xterm cmd as the app string */
                 cd->cmd = strdup(prte_odls_globals.xtermcmd[0]);
@@ -1064,14 +1064,14 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         }
         if (!found) {
             cd->cmd = strdup(app->app);
-            cd->argv = prte_argv_copy(app->argv);
+            cd->argv = pmix_argv_copy(app->argv);
         }
     } else if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_EXEC_AGENT, (void**)&ptr, PMIX_STRING)) {
         /* we were given a fork agent - use it */
-        cd->argv = prte_argv_split(ptr, ' ');
+        cd->argv = pmix_argv_split(ptr, ' ');
         /* add in the argv from the app */
         for (i = 0; NULL != app->argv[i]; i++) {
-            prte_argv_append_nosize(&cd->argv, app->argv[i]);
+            pmix_argv_append_nosize(&cd->argv, app->argv[i]);
         }
         cd->cmd = prte_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
         if (NULL == cd->cmd) {
@@ -1084,10 +1084,10 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         free(ptr);
     } else if (NULL != prte_fork_agent_string) {
         /* we were given a fork agent - use it */
-        cd->argv = prte_argv_split(prte_fork_agent_string, ' ');
+        cd->argv = pmix_argv_split(prte_fork_agent_string, ' ');
         /* add in the argv from the app */
         for (i = 0; NULL != app->argv[i]; i++) {
-            prte_argv_append_nosize(&cd->argv, app->argv[i]);
+            pmix_argv_append_nosize(&cd->argv, app->argv[i]);
         }
         cd->cmd = prte_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
         if (NULL == cd->cmd) {
@@ -1098,7 +1098,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         }
     } else {
         cd->cmd = strdup(app->app);
-        cd->argv = prte_argv_copy(app->argv);
+        cd->argv = pmix_argv_copy(app->argv);
     }
 
     /* if we are indexing the argv by rank, do so now */
@@ -1373,7 +1373,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         rc = prte_util_check_context_app(app, argvptr);
         /* do not ERROR_LOG - it will be reported elsewhere */
         if (NULL != mpiexec_pathenv) {
-            prte_argv_free(argvptr);
+            pmix_argv_free(argvptr);
         }
         if (PRTE_SUCCESS != rc) {
             /* cycle through children to find those for this jobid */

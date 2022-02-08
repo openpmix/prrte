@@ -37,7 +37,7 @@
 #include "src/class/prte_list.h"
 #include "src/event/event-internal.h"
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
@@ -282,7 +282,7 @@ static int raw_preposition_files(prte_job_t *jdata,
         }
         if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void **) &filestring,
                                PMIX_STRING)) {
-            files = prte_argv_split(filestring, ',');
+            files = pmix_argv_split(filestring, ',');
             free(filestring);
             for (j = 0; NULL != files[j]; j++) {
                 fs = PRTE_NEW(prte_filem_base_file_set_t);
@@ -371,11 +371,11 @@ static int raw_preposition_files(prte_job_t *jdata,
             /* replace the app's file list with the revised one so we
              * can find them on the remote end
              */
-            filestring = prte_argv_join(files, ',');
+            filestring = pmix_argv_join(files, ',');
             prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, PRTE_ATTR_GLOBAL,
                                filestring, PMIX_STRING);
             /* cleanup for the next app */
-            prte_argv_free(files);
+            pmix_argv_free(files);
             free(filestring);
         }
     }
@@ -623,13 +623,13 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
     /* get the list of files this app wants */
     if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, (void **) &filestring,
                            PMIX_STRING)) {
-        files = prte_argv_split(filestring, ',');
+        files = pmix_argv_split(filestring, ',');
         free(filestring);
     }
     if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PMIX_BOOL)) {
         /* add the app itself to the list */
         bname = pmix_basename(app->app);
-        prte_argv_append_nosize(&files, bname);
+        pmix_argv_append_nosize(&files, bname);
         free(bname);
     }
 
@@ -717,7 +717,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
             }
         }
     }
-    prte_argv_free(files);
+    pmix_argv_free(files);
     return PRTE_SUCCESS;
 }
 
@@ -909,7 +909,7 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
         PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                              "%s filem:raw: adding path %s to link points",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), path));
-        prte_argv_append_nosize(&inbnd->link_pts, path);
+        pmix_argv_append_nosize(&inbnd->link_pts, path);
     }
     /* close */
     pclose(fp);
@@ -1108,7 +1108,7 @@ static void write_handler(int fd, short event, void *cbdata)
                 /* just link to the top as this will be the
                  * name we will want in each proc's session dir
                  */
-                prte_argv_append_nosize(&sink->link_pts, sink->top);
+                pmix_argv_append_nosize(&sink->link_pts, sink->top);
                 send_complete(sink->file, PRTE_SUCCESS);
             } else {
                 /* unarchive the file */
@@ -1275,7 +1275,7 @@ static void in_destruct(prte_filem_raw_incoming_t *ptr)
     if (NULL != ptr->fullpath) {
         free(ptr->fullpath);
     }
-    prte_argv_free(ptr->link_pts);
+    pmix_argv_free(ptr->link_pts);
     PRTE_LIST_DESTRUCT(&ptr->outputs);
 }
 PRTE_CLASS_INSTANCE(prte_filem_raw_incoming_t,

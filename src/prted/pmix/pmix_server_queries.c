@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,7 +36,7 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -163,13 +163,13 @@ static void _query(int sd, short args, void *cbdata)
                     }
                     /* don't show the requestor's job */
                     if (!PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace)) {
-                        prte_argv_append_nosize(&nspaces, jdata->nspace);
+                        pmix_argv_append_nosize(&nspaces, jdata->nspace);
                     }
                 }
                 /* join the results into a single comma-delimited string */
                 kv = PRTE_NEW(prte_info_item_t);
-                tmp = prte_argv_join(nspaces, ',');
-                prte_argv_free(nspaces);
+                tmp = pmix_argv_join(nspaces, ',');
+                pmix_argv_free(nspaces);
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_NAMESPACES, tmp, PMIX_STRING);
                 free(tmp);
                 prte_list_append(&results, &kv->super);
@@ -199,7 +199,7 @@ static void _query(int sd, short args, void *cbdata)
                             ret = PMIX_ERR_NOT_FOUND;
                             goto done;
                         }
-                        cmdline = prte_argv_join(app->argv, ' ');
+                        cmdline = pmix_argv_join(app->argv, ' ');
                         PMIX_INFO_LOAD(&info[1], PMIX_CMD_LINE, cmdline, PMIX_STRING);
                         free(cmdline);
                     }
@@ -222,37 +222,37 @@ static void _query(int sd, short args, void *cbdata)
                 PRTE_LIST_DESTRUCT(&stack);
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_SPAWN_SUPPORT)) {
                 ans = NULL;
-                prte_argv_append_nosize(&ans, PMIX_HOST);
-                prte_argv_append_nosize(&ans, PMIX_HOSTFILE);
-                prte_argv_append_nosize(&ans, PMIX_ADD_HOST);
-                prte_argv_append_nosize(&ans, PMIX_ADD_HOSTFILE);
-                prte_argv_append_nosize(&ans, PMIX_PREFIX);
-                prte_argv_append_nosize(&ans, PMIX_WDIR);
-                prte_argv_append_nosize(&ans, PMIX_MAPPER);
-                prte_argv_append_nosize(&ans, PMIX_PPR);
-                prte_argv_append_nosize(&ans, PMIX_MAPBY);
-                prte_argv_append_nosize(&ans, PMIX_RANKBY);
-                prte_argv_append_nosize(&ans, PMIX_BINDTO);
-                prte_argv_append_nosize(&ans, PMIX_COSPAWN_APP);
+                pmix_argv_append_nosize(&ans, PMIX_HOST);
+                pmix_argv_append_nosize(&ans, PMIX_HOSTFILE);
+                pmix_argv_append_nosize(&ans, PMIX_ADD_HOST);
+                pmix_argv_append_nosize(&ans, PMIX_ADD_HOSTFILE);
+                pmix_argv_append_nosize(&ans, PMIX_PREFIX);
+                pmix_argv_append_nosize(&ans, PMIX_WDIR);
+                pmix_argv_append_nosize(&ans, PMIX_MAPPER);
+                pmix_argv_append_nosize(&ans, PMIX_PPR);
+                pmix_argv_append_nosize(&ans, PMIX_MAPBY);
+                pmix_argv_append_nosize(&ans, PMIX_RANKBY);
+                pmix_argv_append_nosize(&ans, PMIX_BINDTO);
+                pmix_argv_append_nosize(&ans, PMIX_COSPAWN_APP);
                 /* create the return kv */
                 kv = PRTE_NEW(prte_info_item_t);
-                tmp = prte_argv_join(ans, ',');
-                prte_argv_free(ans);
+                tmp = pmix_argv_join(ans, ',');
+                pmix_argv_free(ans);
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_SPAWN_SUPPORT, tmp, PMIX_STRING);
                 free(tmp);
                 prte_list_append(&results, &kv->super);
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_DEBUG_SUPPORT)) {
                 ans = NULL;
-                prte_argv_append_nosize(&ans, PMIX_DEBUG_STOP_IN_INIT);
-                prte_argv_append_nosize(&ans, PMIX_DEBUG_STOP_IN_APP);
+                pmix_argv_append_nosize(&ans, PMIX_DEBUG_STOP_IN_INIT);
+                pmix_argv_append_nosize(&ans, PMIX_DEBUG_STOP_IN_APP);
 #if PRTE_HAVE_STOP_ON_EXEC
-                prte_argv_append_nosize(&ans, PMIX_DEBUG_STOP_ON_EXEC);
+                pmix_argv_append_nosize(&ans, PMIX_DEBUG_STOP_ON_EXEC);
 #endif
-                prte_argv_append_nosize(&ans, PMIX_DEBUG_TARGET);
+                pmix_argv_append_nosize(&ans, PMIX_DEBUG_TARGET);
                 /* create the return kv */
                 kv = PRTE_NEW(prte_info_item_t);
-                tmp = prte_argv_join(ans, ',');
-                prte_argv_free(ans);
+                tmp = pmix_argv_join(ans, ',');
+                pmix_argv_free(ans);
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_DEBUG_SUPPORT, tmp, PMIX_STRING);
                 free(tmp);
                 prte_list_append(&results, &kv->super);
@@ -459,10 +459,10 @@ static void _query(int sd, short args, void *cbdata)
                 ans = NULL;
                 PRTE_LIST_FOREACH(ps, &prte_pmix_server_globals.psets, pmix_server_pset_t)
                 {
-                    prte_argv_append_nosize(&ans, ps->name);
+                    pmix_argv_append_nosize(&ans, ps->name);
                 }
-                tmp = prte_argv_join(ans, ',');
-                prte_argv_free(ans);
+                tmp = pmix_argv_join(ans, ',');
+                pmix_argv_free(ans);
                 ans = NULL;
                 kv = PRTE_NEW(prte_info_item_t);
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_PSET_NAMES, tmp, PMIX_STRING);

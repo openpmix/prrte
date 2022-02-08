@@ -13,7 +13,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,7 +55,7 @@ BEGIN_C_DECLS
  * arrays (i.e., terminated with a NULL pointer).
  *
  * The array that is returned is an unencumbered array that should
- * later be freed with a call to prte_argv_free().
+ * later be freed with a call to pmix_argv_free().
  *
  * Either (or both) of \em major and \em minor can be NULL.  If
  * one of the two is NULL, the other list is simply copied to the

@@ -35,7 +35,7 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
@@ -239,10 +239,10 @@ static void interim(int sd, short args, void *cbdata)
             app->app = strdup(papp->argv[0]);
         }
         if (NULL != papp->argv) {
-            app->argv = prte_argv_copy(papp->argv);
+            app->argv = pmix_argv_copy(papp->argv);
         }
         if (NULL != papp->env) {
-            app->env = prte_argv_copy(papp->env);
+            app->env = pmix_argv_copy(papp->env);
         }
         if (NULL != papp->cwd) {
             app->cwd = strdup(papp->cwd);
@@ -337,7 +337,7 @@ static void interim(int sd, short args, void *cbdata)
         info = &cd->info[m];
         /***   PERSONALITY   ***/
         if (PMIX_CHECK_KEY(info, PMIX_PERSONALITY)) {
-            jdata->personality = prte_argv_split(info->value.data.string, ',');
+            jdata->personality = pmix_argv_split(info->value.data.string, ',');
             pmix_server_cache_job_info(jdata, info);
 
             /***   REQUESTED MAPPER   ***/
@@ -1026,7 +1026,7 @@ static void _cnct(int sd, short args, void *cbdata)
             }
             /* ask the global data server for the data - if we get it,
              * then we can complete the request */
-            prte_argv_append_nosize(&keys, cd->procs[n].nspace);
+            pmix_argv_append_nosize(&keys, cd->procs[n].nspace);
             /* we have to add the user's id to the directives */
             cd->ndirs = 1;
             PMIX_INFO_CREATE(cd->directives, cd->ndirs);
@@ -1035,11 +1035,11 @@ static void _cnct(int sd, short args, void *cbdata)
             if (PRTE_SUCCESS
                 != (rc = pmix_server_lookup_fn(&cd->procs[n], keys, cd->directives, cd->ndirs,
                                                _cnlk, cd))) {
-                prte_argv_free(keys);
+                pmix_argv_free(keys);
                 PMIX_INFO_FREE(cd->directives, cd->ndirs);
                 goto release;
             }
-            prte_argv_free(keys);
+            pmix_argv_free(keys);
             /* the callback function on this lookup will return us to this
              * routine so we can continue the process */
             return;

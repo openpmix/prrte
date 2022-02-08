@@ -19,7 +19,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -66,7 +66,7 @@
 #include "constants.h"
 #include "src/class/prte_list.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
@@ -509,13 +509,13 @@ void prte_ifgetaliases(char ***aliases)
             if (0 == strcmp(ipv4, "localhost") || 0 == strcmp(ipv4, "127.0.0.1")) {
                 continue;
             }
-            prte_argv_append_nosize(aliases, ipv4);
+            pmix_argv_append_nosize(aliases, ipv4);
         }
 #    if PRTE_ENABLE_IPV6
         else {
             addr6 = (struct sockaddr_in6 *) &intf->if_addr;
             inet_ntop(AF_INET6, &(addr6->sin6_addr), ipv6, INET6_ADDRSTRLEN);
-            prte_argv_append_nosize(aliases, ipv6);
+            pmix_argv_append_nosize(aliases, ipv6);
         }
 #    endif
     }

@@ -20,7 +20,7 @@
  *                         reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -67,7 +67,7 @@
 #include "constants.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/tsd.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
@@ -152,13 +152,13 @@ int prte_net_init(void)
     uint32_t a, b, c, d, bits, addr;
     int i, count, found_bad = 0;
 
-    args = prte_argv_split(prte_net_private_ipv4, ';');
+    args = pmix_argv_split(prte_net_private_ipv4, ';');
     if (NULL != args) {
-        count = prte_argv_count(args);
+        count = pmix_argv_count(args);
         private_ipv4 = (private_ipv4_t *) malloc((count + 1) * sizeof(private_ipv4_t));
         if (NULL == private_ipv4) {
             prte_output(0, "Unable to allocate memory for the private addresses array");
-            prte_argv_free(args);
+            pmix_argv_free(args);
             goto do_local_init;
         }
         for (i = 0; i < count; i++) {
@@ -180,7 +180,7 @@ int prte_net_init(void)
         }
         private_ipv4[i].addr = 0;
         private_ipv4[i].netmask_bits = 0;
-        prte_argv_free(args);
+        pmix_argv_free(args);
     }
 
 do_local_init:

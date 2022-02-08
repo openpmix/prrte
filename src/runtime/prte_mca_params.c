@@ -37,7 +37,7 @@
 
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
 #include "src/util/proc_info.h"

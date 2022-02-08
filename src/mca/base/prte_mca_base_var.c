@@ -20,7 +20,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -49,7 +49,7 @@
 #include "src/mca/mca.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/error.h"
 #include "src/util/keyval_parse.h"
 #include "src/util/os_path.h"
@@ -199,9 +199,9 @@ static char *append_filename_to_list(const char *filename)
 {
     int i, count;
 
-    (void) prte_argv_append_unique_nosize(&prte_mca_base_var_file_list, filename);
+    (void) pmix_argv_append_unique_nosize(&prte_mca_base_var_file_list, filename);
 
-    count = prte_argv_count(prte_mca_base_var_file_list);
+    count = pmix_argv_count(prte_mca_base_var_file_list);
 
     for (i = count - 1; i >= 0; --i) {
         if (0 == strcmp(prte_mca_base_var_file_list[i], filename)) {
@@ -298,35 +298,35 @@ int prte_mca_base_var_init(void)
 
         /* start with the system default param file */
         tmp = prte_os_path(false, prte_install_dirs.sysconfdir, "prte-mca-params.conf", NULL);
-        prte_argv_append_nosize(&filelist, tmp);
+        pmix_argv_append_nosize(&filelist, tmp);
         free(tmp);
 #if PRTE_WANT_HOME_CONFIG_FILES
         /* do the user's home default param files */
         tmp = prte_os_path(false, home, ".prte", "mca-params.conf", NULL);
-        prte_argv_append_nosize(&filelist, tmp);
+        pmix_argv_append_nosize(&filelist, tmp);
         free(tmp);
 #endif
 
         /* Initialize a parameter that says where MCA param files can be found.
          We may change this value so set the scope to PMIX_MCA_BASE_VAR_SCOPE_READONLY */
-        prte_mca_base_var_files = prte_argv_join(filelist, ';');
-        prte_argv_free(filelist);
+        prte_mca_base_var_files = pmix_argv_join(filelist, ';');
+        pmix_argv_free(filelist);
         ret = prte_mca_base_var_register("prte", "mca", "base", "param_files",
                                          "Path for MCA configuration files containing variable values",
                                          PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                          PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
                                          PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_mca_base_var_files);
 
-        filelist = prte_argv_split(prte_mca_base_var_files, ';');
+        filelist = pmix_argv_split(prte_mca_base_var_files, ';');
         for (n=0; NULL != filelist[n]; n++) {
             ret = prte_util_keyval_parse(filelist[n], save_value);
             if (PRTE_SUCCESS != ret && PRTE_ERR_NOT_FOUND != ret) {
                 PRTE_ERROR_LOG(ret);
-                prte_argv_free(filelist);
+                pmix_argv_free(filelist);
                 return ret;
             }
         }
-        prte_argv_free(filelist);
+        pmix_argv_free(filelist);
 
         /* push the results into our environment, but do not overwrite
          * a value if the user already has it set as their environment
@@ -859,7 +859,7 @@ int prte_mca_base_var_build_env(char ***env, int *num_env, bool internal)
             goto cleanup;
         }
 
-        prte_argv_append(num_env, env, str);
+        pmix_argv_append(num_env, env, str);
         free(str);
 
         switch (var->mbv_source) {
@@ -881,7 +881,7 @@ int prte_mca_base_var_build_env(char ***env, int *num_env, bool internal)
         }
 
         if (NULL != str) {
-            prte_argv_append(num_env, env, str);
+            pmix_argv_append(num_env, env, str);
             free(str);
         }
     }
@@ -894,7 +894,7 @@ int prte_mca_base_var_build_env(char ***env, int *num_env, bool internal)
 
 cleanup:
     if (*num_env > 0) {
-        prte_argv_free(*env);
+        pmix_argv_free(*env);
         *num_env = 0;
         *env = NULL;
     }
@@ -935,7 +935,7 @@ void prte_mca_base_var_finalize(void)
         prte_mca_base_var_count = 0;
 
         if (NULL != prte_mca_base_var_file_list) {
-            prte_argv_free(prte_mca_base_var_file_list);
+            pmix_argv_free(prte_mca_base_var_file_list);
         }
         prte_mca_base_var_file_list = NULL;
 

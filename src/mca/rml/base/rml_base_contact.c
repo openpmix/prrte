@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,7 +24,7 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -59,7 +59,7 @@ int prte_rml_base_parse_uris(const char *uri, pmix_proc_t *peer, char ***uris)
 
     if (NULL != uris) {
         /* parse the remainder of the string into an array of uris */
-        *uris = prte_argv_split(ptr, ';');
+        *uris = pmix_argv_split(ptr, ';');
     }
     free(cinfo);
     return PRTE_SUCCESS;

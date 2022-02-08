@@ -21,7 +21,7 @@
 #include "src/mca/schizo/schizo.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/tsd.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 
@@ -638,7 +638,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
     if (NULL != ptr) {
         *ptr = '\0';
         ++ptr;
-        quals = prte_argv_split(ptr, ':');
+        quals = pmix_argv_split(ptr, ':');
         for (i = 0; NULL != quals[i]; i++) {
             if (0 == strcasecmp(quals[i], "if-supported")) {
                 tmp |= PRTE_BIND_IF_SUPPORTED;
@@ -661,12 +661,12 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
             } else {
                 /* unknown option */
                 prte_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
-                prte_argv_free(quals);
+                pmix_argv_free(quals);
                 free(myspec);
                 return PRTE_ERR_BAD_PARAM;
             }
         }
-        prte_argv_free(quals);
+        pmix_argv_free(quals);
     }
 
     len = strlen(myspec);

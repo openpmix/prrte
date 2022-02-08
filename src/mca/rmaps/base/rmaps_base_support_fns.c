@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2021 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +35,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/threads/tsd.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/if.h"
 #include "src/util/output.h"
 

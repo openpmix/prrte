@@ -21,7 +21,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
 #include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
@@ -94,8 +94,8 @@ int prte_schizo_base_add_directive(prte_cli_result_t *results,
         // does it already have a value?
         if (NULL == opt->values) {
             // technically this should never happen, but...
-            prte_argv_append_nosize(&opt->values, directive);
-        } else if (1 < prte_argv_count(opt->values)) {
+            pmix_argv_append_nosize(&opt->values, directive);
+        } else if (1 < pmix_argv_count(opt->values)) {
             // cannot use this function
             ptr = prte_show_help_string("help-schizo-base.txt", "too-many-values",
                                         true, target);
@@ -138,7 +138,7 @@ int prte_schizo_base_add_directive(prte_cli_result_t *results,
         // add the new option
         opt = PRTE_NEW(prte_cli_item_t);
         opt->key = strdup(target);
-        prte_argv_append_nosize(&opt->values, directive);
+        pmix_argv_append_nosize(&opt->values, directive);
         prte_list_append(&results->instances, &opt->super);
     }
 
@@ -169,9 +169,9 @@ int prte_schizo_base_add_qualifier(prte_cli_result_t *results,
         if (NULL == opt->values) {
             // technically this should never happen, but...
             prte_asprintf(&tmp, ":%s", qualifier);
-            prte_argv_append_nosize(&opt->values, tmp);
+            pmix_argv_append_nosize(&opt->values, tmp);
             free(tmp);
-        } else if (1 < prte_argv_count(opt->values)) {
+        } else if (1 < pmix_argv_count(opt->values)) {
             // cannot use this function
             ptr = prte_show_help_string("help-schizo-base.txt", "too-many-values",
                                         true, target);
@@ -196,7 +196,7 @@ int prte_schizo_base_add_qualifier(prte_cli_result_t *results,
         opt = PRTE_NEW(prte_cli_item_t);
         opt->key = strdup(target);
         prte_asprintf(&tmp, ":%s", qualifier);
-        prte_argv_append_nosize(&opt->values, tmp);
+        pmix_argv_append_nosize(&opt->values, tmp);
         free(tmp);
         prte_list_append(&results->instances, &opt->super);
     }
@@ -279,14 +279,14 @@ bool prte_schizo_base_check_prte_param(char *param)
     char **tmp;
     size_t n;
 
-    tmp = prte_argv_split(param, '_');
+    tmp = pmix_argv_split(param, '_');
     for (n=0; NULL != prte_frameworks[n]; n++) {
         if (0 == strncmp(tmp[0], prte_frameworks[n], strlen(prte_frameworks[n]))) {
-            prte_argv_free(tmp);
+            pmix_argv_free(tmp);
             return true;
         }
     }
-    prte_argv_free(tmp);
+    pmix_argv_free(tmp);
     return false;
 }
 
@@ -313,9 +313,9 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                 setenv(param, p2, true);
                 free(param);
             } else {
-                prte_argv_append_nosize(target, "--prtemca");
-                prte_argv_append_nosize(target, p1);
-                prte_argv_append_nosize(target, p2);
+                pmix_argv_append_nosize(target, "--prtemca");
+                pmix_argv_append_nosize(target, p1);
+                pmix_argv_append_nosize(target, p2);
             }
             free(p1);
             free(p2);
@@ -374,9 +374,9 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:prte:parse_cli adding %s to target",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1);
-                    prte_argv_append_nosize(target, "--prtemca");
-                    prte_argv_append_nosize(target, p1);
-                    prte_argv_append_nosize(target, p2);
+                    pmix_argv_append_nosize(target, "--prtemca");
+                    pmix_argv_append_nosize(target, p1);
+                    pmix_argv_append_nosize(target, p2);
                 }
                 i += 2;
             }
@@ -416,14 +416,14 @@ bool prte_schizo_base_check_pmix_param(char *param)
     char **tmp;
     size_t n;
 
-    tmp = prte_argv_split(param, '_');
+    tmp = pmix_argv_split(param, '_');
     for (n=0; NULL != pmix_frameworks[n]; n++) {
         if (0 == strncmp(tmp[0], pmix_frameworks[n], strlen(pmix_frameworks[n]))) {
-            prte_argv_free(tmp);
+            pmix_argv_free(tmp);
             return true;
         }
     }
-    prte_argv_free(tmp);
+    pmix_argv_free(tmp);
     return false;
 }
 
@@ -452,9 +452,9 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
                 setenv(param, p2, true);
                 free(param);
             } else {
-                prte_argv_append_nosize(target, argv[i]);
-                prte_argv_append_nosize(target, p1);
-                prte_argv_append_nosize(target, p2);
+                pmix_argv_append_nosize(target, argv[i]);
+                pmix_argv_append_nosize(target, p1);
+                pmix_argv_append_nosize(target, p2);
             }
             free(p1);
             free(p2);
@@ -510,9 +510,9 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
                     setenv(param, p2, true);
                     free(param);
                 } else {
-                    prte_argv_append_nosize(target, "--pmixmca");
-                    prte_argv_append_nosize(target, p1);
-                    prte_argv_append_nosize(target, p2);
+                    pmix_argv_append_nosize(target, "--pmixmca");
+                    pmix_argv_append_nosize(target, p1);
+                    pmix_argv_append_nosize(target, p2);
                 }
             }
             free(p1);

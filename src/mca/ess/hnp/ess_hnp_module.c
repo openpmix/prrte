@@ -47,7 +47,7 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/fd.h"
 #include "src/util/if.h"
@@ -333,7 +333,7 @@ static int rte_init(int argc, char **argv)
     /* every job requires at least one app */
     app = PRTE_NEW(prte_app_context_t);
     app->app = strdup(argv[0]);
-    app->argv = prte_argv_copy(argv);
+    app->argv = pmix_argv_copy(argv);
     prte_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps++;
     /* create and store a node object where we are */
@@ -377,7 +377,7 @@ static int rte_init(int argc, char **argv)
     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
     node->state = PRTE_NODE_STATE_UP;
     /* get our aliases - will include all the interface aliases captured in prte_init */
-    node->aliases = prte_argv_copy(prte_process_info.aliases);
+    node->aliases = pmix_argv_copy(prte_process_info.aliases);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
     jdata->state = PRTE_JOB_STATE_RUNNING;
@@ -465,7 +465,7 @@ static int rte_init(int argc, char **argv)
         /* separate the serial numbers of the coprocessors
          * on this host
          */
-        sns = prte_argv_split(coprocessors, ',');
+        sns = pmix_argv_split(coprocessors, ',');
         for (idx = 0; NULL != sns[idx]; idx++) {
             /* compute the hash */
             PRTE_HASH_STR(sns[idx], h);
@@ -473,7 +473,7 @@ static int rte_init(int argc, char **argv)
             prte_hash_table_set_value_uint32(prte_coprocessors, h,
                                              (void *) &(PRTE_PROC_MY_NAME->rank));
         }
-        prte_argv_free(sns);
+        pmix_argv_free(sns);
         free(coprocessors);
         prte_coprocessors_detected = true;
     }

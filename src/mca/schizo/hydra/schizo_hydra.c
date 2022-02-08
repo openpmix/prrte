@@ -18,7 +18,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2021 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +40,7 @@
 #    include <sys/utsname.h>
 #endif
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/keyval_parse.h"
 #include "src/util/name_fns.h"
 #include "src/util/os_dirpath.h"
@@ -712,12 +712,12 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
                     prte_setenv("PRTE_MCA_rmaps_default_mapping_policy", argv[i + 1], true,
                                 &environ);
                 } else {
-                    prte_argv_append_nosize(target, "--prtemca");
-                    prte_argv_append_nosize(target, "rmaps_default_inherit");
-                    prte_argv_append_nosize(target, "1");
-                    prte_argv_append_nosize(target, "--prtemca");
-                    prte_argv_append_nosize(target, "rmaps_default_mapping_policy");
-                    prte_argv_append_nosize(target, argv[i + 1]);
+                    pmix_argv_append_nosize(target, "--prtemca");
+                    pmix_argv_append_nosize(target, "rmaps_default_inherit");
+                    pmix_argv_append_nosize(target, "1");
+                    pmix_argv_append_nosize(target, "--prtemca");
+                    pmix_argv_append_nosize(target, "rmaps_default_mapping_policy");
+                    pmix_argv_append_nosize(target, argv[i + 1]);
                 }
             }
              break;
