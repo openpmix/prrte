@@ -584,7 +584,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
             } else {
                 pmix_asprintf(&newenv, "%s/%s", prefix, bin_base);
             }
-            prte_setenv("PATH", newenv, true, &env);
+            pmix_setenv("PATH", newenv, true, &env);
             if (prte_plm_alps_component.debug) {
                 prte_output(0, "plm:alps: reset PATH: %s", newenv);
             }
@@ -597,7 +597,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
             } else {
                 pmix_asprintf(&newenv, "%s/%s", prefix, lib_base);
             }
-            prte_setenv("LD_LIBRARY_PATH", newenv, true, &env);
+            pmix_setenv("LD_LIBRARY_PATH", newenv, true, &env);
             if (prte_plm_alps_component.debug) {
                 prte_output(0, "plm:alps: reset LD_LIBRARY_PATH: %s", newenv);
             }

@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
 #endif
 
     /* ensure we silence any compression warnings */
-    prte_setenv("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
+    pmix_setenv("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
 
     if (PRTE_SUCCESS != (ret = prte_init(&argc, &argv, PRTE_PROC_DAEMON))) {
         PRTE_ERROR_LOG(ret);

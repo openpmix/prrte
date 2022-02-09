@@ -918,7 +918,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     /* add the -x values */
     if (NULL != xparams) {
         for (i = 0; NULL != xparams[i]; i++) {
-            prte_setenv(xparams[i], xvals[i], true, dstenv);
+            pmix_setenv(xparams[i], xvals[i], true, dstenv);
         }
         pmix_argv_free(xparams);
         pmix_argv_free(xvals);
@@ -935,7 +935,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     int i;
 
     /* flag that we started this job */
-    prte_setenv("PRTE_LAUNCHED", "1", true, &app->env);
+    pmix_setenv("PRTE_LAUNCHED", "1", true, &app->env);
 
     /* now process any envar attributes - we begin with the job-level
      * ones as the app-specific ones can override them. We have to
@@ -944,11 +944,11 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     PRTE_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t)
     {
         if (PRTE_JOB_SET_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
         } else if (PRTE_JOB_ADD_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
         } else if (PRTE_JOB_UNSET_ENVAR == attr->key) {
-            prte_unsetenv(attr->data.data.string, &app->env);
+            pmix_unsetenv(attr->data.data.string, &app->env);
         } else if (PRTE_JOB_PREPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
             exists = false;
@@ -962,7 +962,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -972,7 +972,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         } else if (PRTE_JOB_APPEND_ENVAR == attr->key) {
@@ -988,7 +988,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -998,7 +998,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         }
@@ -1008,11 +1008,11 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     PRTE_LIST_FOREACH(attr, &app->attributes, prte_attribute_t)
     {
         if (PRTE_APP_SET_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
         } else if (PRTE_APP_ADD_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
         } else if (PRTE_APP_UNSET_ENVAR == attr->key) {
-            prte_unsetenv(attr->data.data.string, &app->env);
+            pmix_unsetenv(attr->data.data.string, &app->env);
         } else if (PRTE_APP_PREPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
             exists = false;
@@ -1026,7 +1026,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1036,7 +1036,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         } else if (PRTE_APP_APPEND_ENVAR == attr->key) {
@@ -1052,7 +1052,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1062,7 +1062,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         }
