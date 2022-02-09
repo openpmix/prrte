@@ -61,7 +61,6 @@ headers = \
         listener.h \
         malloc.h \
         name_fns.h \
-        net.h \
         nidmap.h \
         numtostr.h \
         output.h \
@@ -95,7 +94,6 @@ libprrteutil_la_SOURCES = \
         listener.c \
         malloc.c \
         name_fns.c \
-        net.c \
         nidmap.c \
         numtostr.c \
         output.c \

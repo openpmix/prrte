@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,7 +60,7 @@
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/util/error.h"
 #include "src/util/if.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 
 #include "oob_tcp_common.h"

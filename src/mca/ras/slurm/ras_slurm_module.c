@@ -46,7 +46,7 @@
 
 #include "src/include/prte_socket_errno.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -168,7 +168,7 @@ static int init(void)
         /* connect to the Slurm dynamic allocation port */
         bzero(&address, sizeof(address));
         address.sin_family = AF_INET;
-        if (!prte_net_isaddr(slurm_host)) {
+        if (!pmix_net_isaddr(slurm_host)) {
             /* if the ControlMachine was not specified as an IP address,
              * we need to resolve it here
              */

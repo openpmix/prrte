@@ -70,7 +70,7 @@
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/nidmap.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
@@ -1487,7 +1487,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             goto CLEANUP;
         }
 
-        if (!prte_net_isaddr(nodename) &&
+        if (!pmix_net_isaddr(nodename) &&
             NULL != (ptr = strchr(nodename, '.'))) {
             /* retain the non-fqdn name as an alias */
             *ptr = '\0';

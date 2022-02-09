@@ -51,7 +51,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
 #include "src/util/if.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 
@@ -94,7 +94,7 @@ static void accept_connection(const int accepted_fd, const struct sockaddr *addr
 {
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s accept_connection: %s:%d\n", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        prte_net_get_hostname(addr), prte_net_get_port(addr));
+                        pmix_net_get_hostname(addr), pmix_net_get_port(addr));
 
     /* setup socket options */
     prte_oob_tcp_set_socket_options(accepted_fd);

@@ -61,7 +61,7 @@
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/util/error.h"
 #include "src/util/pmix_fd.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 #include "types.h"
@@ -256,22 +256,22 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                             "%s prte_tcp_peer_try_connect: "
                             "attempting to connect to proc %s on %s:%d - %d retries",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
-                            prte_net_get_hostname((struct sockaddr *) &addr->addr),
-                            prte_net_get_port((struct sockaddr *) &addr->addr), addr->retries);
+                            pmix_net_get_hostname((struct sockaddr *) &addr->addr),
+                            pmix_net_get_port((struct sockaddr *) &addr->addr), addr->retries);
         if (MCA_OOB_TCP_FAILED == addr->state) {
             prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                 "%s prte_tcp_peer_try_connect: %s:%d is down",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                prte_net_get_hostname((struct sockaddr *) &addr->addr),
-                                prte_net_get_port((struct sockaddr *) &addr->addr));
+                                pmix_net_get_hostname((struct sockaddr *) &addr->addr),
+                                pmix_net_get_port((struct sockaddr *) &addr->addr));
             continue;
         }
         if (prte_oob_tcp_component.max_retries < addr->retries) {
             prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                 "%s prte_tcp_peer_try_connect: %s:%d retries exceeded",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                prte_net_get_hostname((struct sockaddr *) &addr->addr),
-                                prte_net_get_port((struct sockaddr *) &addr->addr));
+                                pmix_net_get_hostname((struct sockaddr *) &addr->addr),
+                                pmix_net_get_port((struct sockaddr *) &addr->addr));
             continue;
         }
         addrlen = addr->addr.ss_family == AF_INET6 ? sizeof(struct sockaddr_in6)
@@ -406,7 +406,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         peer->state = MCA_OOB_TCP_FAILED;
         host = prte_get_proc_hostname(&(peer->name));
         if (NULL == host && NULL != peer->active_addr) {
-            host = prte_net_get_hostname((struct sockaddr *) &(peer->active_addr->addr));
+            host = pmix_net_get_hostname((struct sockaddr *) &(peer->active_addr->addr));
         }
         /* use an prte_output here instead of show_help as we may well
          * not be connected to the HNP at this point */
@@ -474,8 +474,8 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                     "%s prte_tcp_peer_try_connect: "
                     "tcp_peer_send_connect_ack to proc %s on %s:%d failed: %s (%d)",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
-                    prte_net_get_hostname((struct sockaddr *) &addr->addr),
-                    prte_net_get_port((struct sockaddr *) &addr->addr), prte_strerror(rc), rc);
+                    pmix_net_get_hostname((struct sockaddr *) &addr->addr),
+                    pmix_net_get_port((struct sockaddr *) &addr->addr), prte_strerror(rc), rc);
         /* close the socket */
         CLOSE_THE_SOCKET(peer->sd);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
@@ -1214,14 +1214,14 @@ void prte_oob_tcp_peer_dump(prte_oob_tcp_peer_t *peer, const char *msg)
                     strerror(prte_socket_errno), prte_socket_errno);
         snprintf(src, sizeof(src), "%s", "unknown");
     } else {
-        snprintf(src, sizeof(src), "%s", prte_net_get_hostname((struct sockaddr *) &inaddr));
+        snprintf(src, sizeof(src), "%s", pmix_net_get_hostname((struct sockaddr *) &inaddr));
     }
     if (getpeername(peer->sd, (struct sockaddr *) &inaddr, &addrlen) < 0) {
         prte_output(0, "tcp_peer_dump: getpeername error: %s (%d)\n",
                     strerror(prte_socket_errno), prte_socket_errno);
         snprintf(dst, sizeof(dst), "%s", "unknown");
     } else {
-        snprintf(dst, sizeof(dst), "%s", prte_net_get_hostname((struct sockaddr *) &inaddr));
+        snprintf(dst, sizeof(dst), "%s", pmix_net_get_hostname((struct sockaddr *) &inaddr));
     }
 
     if ((flags = fcntl(peer->sd, F_GETFL, 0)) < 0) {

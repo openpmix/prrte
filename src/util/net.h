@@ -16,7 +16,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -54,7 +54,7 @@ BEGIN_C_DECLS
  * @retval PRTE_ERR_TEMP_OUT_OF_RESOURCE Not enough memory for static
  *                        buffer creation
  */
-PRTE_EXPORT int prte_net_init(void);
+PRTE_EXPORT int pmix_net_init(void);
 PRTE_EXPORT void prte_net_finalize(void);
 
 /**
@@ -90,7 +90,7 @@ PRTE_EXPORT bool prte_net_islocalhost(const struct sockaddr *addr);
  * @return                  true if \c addr1 and \c addr2 are on the
  *                          same net, false otherwise.
  */
-PRTE_EXPORT bool prte_net_samenetwork(const struct sockaddr_storage *addr1,
+PRTE_EXPORT bool pmix_net_samenetwork(const struct sockaddr_storage *addr1,
                                       const struct sockaddr_storage *addr2,
                                       uint32_t prefixlen);
 
@@ -101,7 +101,7 @@ PRTE_EXPORT bool prte_net_samenetwork(const struct sockaddr_storage *addr1,
  * @param addr      address as struct sockaddr
  * @return          true, if \c addr is IPv4 public, false otherwise
  */
-PRTE_EXPORT bool prte_net_addr_isipv4public(const struct sockaddr *addr);
+PRTE_EXPORT bool pmix_net_addr_isipv4public(const struct sockaddr *addr);
 
 /**
  * Is the given address a link-local IPv6 address?  Returns false for IPv4
@@ -122,7 +122,7 @@ PRTE_EXPORT bool prte_net_addr_isipv6linklocal(const struct sockaddr *addr);
  * @param addr              struct sockaddr of address
  * @return                  literal representation of \c addr
  */
-PRTE_EXPORT char *prte_net_get_hostname(const struct sockaddr *addr);
+PRTE_EXPORT char *pmix_net_get_hostname(const struct sockaddr *addr);
 
 /**
  * Get port number from struct sockaddr
@@ -133,14 +133,14 @@ PRTE_EXPORT char *prte_net_get_hostname(const struct sockaddr *addr);
  * @param addr             struct sockaddr containing address
  * @return                 port number from \addr
  */
-PRTE_EXPORT int prte_net_get_port(const struct sockaddr *addr);
+PRTE_EXPORT int pmix_net_get_port(const struct sockaddr *addr);
 
 /**
  * Test if a string is actually an IP address
  *
  * Returns true if the string is of IPv4 or IPv6 address form
  */
-PRTE_EXPORT bool prte_net_isaddr(const char *name);
+PRTE_EXPORT bool pmix_net_isaddr(const char *name);
 
 END_C_DECLS
 

@@ -29,7 +29,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/show_help.h"
 
