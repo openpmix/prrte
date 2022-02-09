@@ -50,7 +50,7 @@
 #include "src/mca/base/base.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
-#include "src/util/os_dirpath.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/pmix_environ.h"
@@ -520,7 +520,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
             ret = PRTE_ERR_OUT_OF_RESOURCE;
             goto CLEANUP;
         }
-        prte_os_dirpath_destroy(cmd_str, true, NULL);
+        pmix_os_dirpath_destroy(cmd_str, true, NULL);
         free(cmd_str);
         cmd_str = NULL;
         PRTE_RELEASE(jdata);

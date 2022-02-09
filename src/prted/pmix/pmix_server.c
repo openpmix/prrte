@@ -55,7 +55,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
-#include "src/util/os_dirpath.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
@@ -530,7 +530,7 @@ static void lost_connection_hdlr(size_t evhdlr_registration_id, pmix_status_t st
         if (PMIX_CHECK_PROCID(&tl->name, source)) {
             /* remove the session directory we created for it */
             if (NULL != tl->nsdir) {
-                prte_os_dirpath_destroy(tl->nsdir, true, NULL);
+                pmix_os_dirpath_destroy(tl->nsdir, true, NULL);
             }
             /* take this tool off the list */
             prte_list_remove_item(&prte_pmix_server_globals.tools, &tl->super);

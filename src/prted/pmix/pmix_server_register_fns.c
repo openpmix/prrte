@@ -41,7 +41,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
-#include "src/util/os_dirpath.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
 #include "types.h"
 
@@ -313,7 +313,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         PMIX_INFO_LIST_RELEASE(info);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
-    rc = prte_os_dirpath_create(prte_process_info.jobfam_session_dir, S_IRWXU);
+    rc = pmix_os_dirpath_create(prte_process_info.jobfam_session_dir, S_IRWXU);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_INFO_LIST_RELEASE(info);
@@ -496,7 +496,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                     PMIX_INFO_LIST_RELEASE(pmap);
                     return PRTE_ERR_OUT_OF_RESOURCE;
                 }
-                if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(tmp, S_IRWXU))) {
+                if (PRTE_SUCCESS != (rc = pmix_os_dirpath_create(tmp, S_IRWXU))) {
                     PRTE_ERROR_LOG(rc);
                     PMIX_INFO_LIST_RELEASE(info);
                     PMIX_INFO_LIST_RELEASE(pmap);
@@ -731,7 +731,7 @@ int prte_pmix_server_register_tool(pmix_nspace_t nspace)
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
-    rc = prte_os_dirpath_create(tmp, S_IRWXU);
+    rc = pmix_os_dirpath_create(tmp, S_IRWXU);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         free(tmp);

@@ -41,14 +41,14 @@
 
 #include "constants.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/os_dirpath.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 
 static const char path_sep[] = PRTE_PATH_SEP;
 
-int prte_os_dirpath_create(const char *path, const mode_t mode)
+int pmix_os_dirpath_create(const char *path, const mode_t mode)
 {
     struct stat buf;
     char **parts, *tmp;
@@ -146,8 +146,8 @@ int prte_os_dirpath_create(const char *path, const mode_t mode)
  * removed.  If the callback returns non-zero, then no removal is
  * done.
  */
-int prte_os_dirpath_destroy(const char *path, bool recursive,
-                            prte_os_dirpath_destroy_callback_fn_t cbfunc)
+int pmix_os_dirpath_destroy(const char *path, bool recursive,
+                            pmix_os_dirpath_destroy_callback_fn_t cbfunc)
 {
     int rc, exit_status = PRTE_SUCCESS;
     bool is_dir = false;
@@ -163,7 +163,7 @@ int prte_os_dirpath_destroy(const char *path, bool recursive,
     /*
      * Make sure we have access to the the base directory
      */
-    if (PRTE_SUCCESS != (rc = prte_os_dirpath_access(path, 0))) {
+    if (PRTE_SUCCESS != (rc = pmix_os_dirpath_access(path, 0))) {
         exit_status = rc;
         goto cleanup;
     }
@@ -232,7 +232,7 @@ int prte_os_dirpath_destroy(const char *path, bool recursive,
         }
         /* Directories are recursively destroyed */
         if (is_dir) {
-            rc = prte_os_dirpath_destroy(filenm, recursive, cbfunc);
+            rc = pmix_os_dirpath_destroy(filenm, recursive, cbfunc);
             free(filenm);
             if (PRTE_SUCCESS != rc) {
                 exit_status = rc;
@@ -256,14 +256,14 @@ cleanup:
     /*
      * If the directory is empty, them remove it
      */
-    if (prte_os_dirpath_is_empty(path)) {
+    if (pmix_os_dirpath_is_empty(path)) {
         rmdir(path);
     }
 
     return exit_status;
 }
 
-bool prte_os_dirpath_is_empty(const char *path)
+bool pmix_os_dirpath_is_empty(const char *path)
 {
     DIR *dp;
     struct dirent *ep;
@@ -286,7 +286,7 @@ bool prte_os_dirpath_is_empty(const char *path)
     return true;
 }
 
-int prte_os_dirpath_access(const char *path, const mode_t in_mode)
+int pmix_os_dirpath_access(const char *path, const mode_t in_mode)
 {
     struct stat buf;
     mode_t loc_mode = S_IRWXU; /* looking for full rights */

@@ -25,7 +25,7 @@
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/nidmap.h"
-#include "src/util/os_dirpath.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 
@@ -767,7 +767,7 @@ release:
                           PRTE_LOCAL_JOBID(jdata->nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
     } else {
-        prte_os_dirpath_destroy(tmp, true, NULL);
+        pmix_os_dirpath_destroy(tmp, true, NULL);
         free(tmp);
     }
 

@@ -39,7 +39,7 @@
 
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/os_dirpath.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
@@ -574,7 +574,7 @@ static int create_link(char *my_dir, char *path, char *link_pt)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), link_pt, mypath, fullname));
         /* create any required path to the link location */
         basedir = pmix_dirname(fullname);
-        if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(basedir, S_IRWXU))) {
+        if (PRTE_SUCCESS != (rc = pmix_os_dirpath_create(basedir, S_IRWXU))) {
             PRTE_ERROR_LOG(rc);
             prte_output(0, "%s Failed to symlink %s to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         mypath, fullname);
@@ -673,7 +673,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
         path = prte_process_info.proc_session_dir;
 
         /* create it, if it doesn't already exist */
-        if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(path, S_IRWXU))) {
+        if (PRTE_SUCCESS != (rc = pmix_os_dirpath_create(path, S_IRWXU))) {
             PRTE_ERROR_LOG(rc);
             /* doesn't exist with correct permissions, and/or we can't
              * create it - either way, we are done
@@ -1017,7 +1017,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), incoming->fullpath));
         /* create the path to the target, if not already existing */
         tmp = pmix_dirname(incoming->fullpath);
-        if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(tmp, S_IRWXU))) {
+        if (PRTE_SUCCESS != (rc = pmix_os_dirpath_create(tmp, S_IRWXU))) {
             PRTE_ERROR_LOG(rc);
             send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
             free(file);

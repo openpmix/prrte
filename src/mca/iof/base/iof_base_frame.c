@@ -33,7 +33,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/os_dirpath.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
 
 #include "src/mca/rml/rml.h"
