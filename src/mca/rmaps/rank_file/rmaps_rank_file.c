@@ -41,7 +41,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/if.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -541,7 +541,7 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                 pmix_argv_free(argv);
 
                 // Strip off the FQDN if present, ignore IP addresses
-                if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(node_name)) {
+                if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(node_name)) {
                     char *ptr;
                     if (NULL != (ptr = strchr(node_name, '.'))) {
                         *ptr = '\0';

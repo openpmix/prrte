@@ -32,7 +32,7 @@
 
 #include "src/util/pmix_argv.h"
 #include "src/util/if.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 
@@ -276,7 +276,7 @@ int prte_util_add_dash_host_nodes(prte_list_t *nodes, char *hosts, bool allocati
             ndname = mini_map[i];
             /* compute the non-fqdn version */
             if (!prte_keep_fqdn_hostnames &&
-                !prte_net_isaddr(ndname)) {
+                !pmix_net_isaddr(ndname)) {
                 cptr = strchr(ndname, '.');
                 if (NULL != cptr) {
                     rawname = strdup(ndname);

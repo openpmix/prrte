@@ -8,7 +8,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +32,7 @@
 
 #include "reachable_weighted.h"
 #include "src/mca/prtereachable/base/base.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/string_copy.h"
 
 static int weighted_init(void);
@@ -116,11 +116,11 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
     local_sockaddr = (struct sockaddr *) &local_if->if_addr;
     remote_sockaddr = (struct sockaddr *) &remote_if->if_addr;
 
-    /* prte_net_get_hostname returns a static buffer.  Great for
+    /* pmix_net_get_hostname returns a static buffer.  Great for
        single address printfs, need to copy in this case */
-    prte_string_copy(str_local, prte_net_get_hostname(local_sockaddr), sizeof(str_local));
+    prte_string_copy(str_local, pmix_net_get_hostname(local_sockaddr), sizeof(str_local));
     str_local[sizeof(str_local) - 1] = '\0';
-    prte_string_copy(str_remote, prte_net_get_hostname(remote_sockaddr), sizeof(str_remote));
+    prte_string_copy(str_remote, pmix_net_get_hostname(remote_sockaddr), sizeof(str_remote));
     str_remote[sizeof(str_remote) - 1] = '\0';
 
     /*  initially, assume no connection is possible */
@@ -132,9 +132,9 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
         memset(&raddr, 0, sizeof(raddr));
         memcpy(&raddr, remote_sockaddr, sizeof(struct sockaddr));
 
-        if (prte_net_addr_isipv4public(local_sockaddr)
-            && prte_net_addr_isipv4public(remote_sockaddr)) {
-            if (prte_net_samenetwork(&laddr, &raddr, local_if->if_mask)) {
+        if (pmix_net_addr_isipv4public(local_sockaddr)
+            && pmix_net_addr_isipv4public(remote_sockaddr)) {
+            if (pmix_net_samenetwork(&laddr, &raddr, local_if->if_mask)) {
                 conn_type = "IPv4 PUBLIC SAME NETWORK";
                 weight = calculate_weight(local_if->if_bandwidth, remote_if->if_bandwidth,
                                           CQ_PUBLIC_SAME_NETWORK);
@@ -143,9 +143,9 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
                 weight = calculate_weight(local_if->if_bandwidth, remote_if->if_bandwidth,
                                           CQ_PUBLIC_DIFFERENT_NETWORK);
             }
-        } else if (!prte_net_addr_isipv4public(local_sockaddr)
-                   && !prte_net_addr_isipv4public(remote_sockaddr)) {
-            if (prte_net_samenetwork(&laddr, &raddr, local_if->if_mask)) {
+        } else if (!pmix_net_addr_isipv4public(local_sockaddr)
+                   && !pmix_net_addr_isipv4public(remote_sockaddr)) {
+            if (pmix_net_samenetwork(&laddr, &raddr, local_if->if_mask)) {
                 conn_type = "IPv4 PRIVATE SAME NETWORK";
                 weight = calculate_weight(local_if->if_bandwidth, remote_if->if_bandwidth,
                                           CQ_PRIVATE_SAME_NETWORK);
@@ -187,7 +187,7 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
                                       CQ_PRIVATE_SAME_NETWORK);
         } else if (!prte_net_addr_isipv6linklocal(local_sockaddr)
                    && !prte_net_addr_isipv6linklocal(remote_sockaddr)) {
-            if (prte_net_samenetwork(&laddr, &raddr, local_if->if_mask)) {
+            if (pmix_net_samenetwork(&laddr, &raddr, local_if->if_mask)) {
                 conn_type = "IPv6 PUBLIC SAME NETWORK";
                 weight = calculate_weight(local_if->if_bandwidth, remote_if->if_bandwidth,
                                           CQ_PUBLIC_SAME_NETWORK);

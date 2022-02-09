@@ -56,7 +56,7 @@
 #include "src/util/error.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/if.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 
@@ -683,9 +683,9 @@ static void *listen_thread(prte_object_t *obj)
                                     "(%d, %d) %s:%d\n",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), pending_connection->fd,
                                     prte_socket_errno,
-                                    prte_net_get_hostname(
+                                    pmix_net_get_hostname(
                                         (struct sockaddr *) &pending_connection->addr),
-                                    prte_net_get_port(
+                                    pmix_net_get_port(
                                         (struct sockaddr *) &pending_connection->addr));
 
                 /* if we are on a privileged port, we only accept connections
@@ -693,13 +693,13 @@ static void *listen_thread(prte_object_t *obj)
                  * whose port is less than 1024 on Linux, so we'll check for that. */
                 if (1024 >= listener->port) {
                     uint16_t inport;
-                    inport = prte_net_get_port((struct sockaddr *) &pending_connection->addr);
+                    inport = pmix_net_get_port((struct sockaddr *) &pending_connection->addr);
                     if (1024 < inport) {
                         /* someone tried to cross-connect privileges,
                          * say something */
                         prte_show_help("help-oob-tcp.txt", "privilege failure", true,
                                        prte_process_info.nodename, listener->port,
-                                       prte_net_get_hostname(
+                                       pmix_net_get_hostname(
                                            (struct sockaddr *) &pending_connection->addr),
                                        inport);
                         CLOSE_THE_SOCKET(pending_connection->fd);
@@ -758,8 +758,8 @@ static void connection_handler(int sd, short flags, void *cbdata)
                         "%s connection_handler: working connection "
                         "(%d, %d) %s:%d\n",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), new_connection->fd, prte_socket_errno,
-                        prte_net_get_hostname((struct sockaddr *) &new_connection->addr),
-                        prte_net_get_port((struct sockaddr *) &new_connection->addr));
+                        pmix_net_get_hostname((struct sockaddr *) &new_connection->addr),
+                        pmix_net_get_port((struct sockaddr *) &new_connection->addr));
 
     /* process the connection */
     prte_oob_tcp_module.accept_connection(new_connection->fd,
@@ -782,8 +782,8 @@ static void connection_event_handler(int incoming_sd, short flags, void *cbdata)
                         "%s connection_event_handler: working connection "
                         "(%d, %d) %s:%d\n",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sd, prte_socket_errno,
-                        prte_net_get_hostname((struct sockaddr *) &addr),
-                        prte_net_get_port((struct sockaddr *) &addr));
+                        pmix_net_get_hostname((struct sockaddr *) &addr),
+                        pmix_net_get_port((struct sockaddr *) &addr));
     if (sd < 0) {
         /* Non-fatal errors */
         if (EINTR == prte_socket_errno || EAGAIN == prte_socket_errno

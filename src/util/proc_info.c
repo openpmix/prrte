@@ -43,7 +43,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/attr.h"
 #include "src/util/if.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 
@@ -109,7 +109,7 @@ void prte_setup_hostname(void)
     /* we have to strip node names here, if user directs, to ensure that
      * the names exchanged in the modex match the names found locally
      */
-    if (NULL != prte_strip_prefix && !prte_net_isaddr(hostname)) {
+    if (NULL != prte_strip_prefix && !pmix_net_isaddr(hostname)) {
         prefixes = pmix_argv_split(prte_strip_prefix, ',');
         match = false;
         for (i = 0; NULL != prefixes[i]; i++) {
@@ -142,7 +142,7 @@ void prte_setup_hostname(void)
     }
 
     // if we are not keeping FQDN, then strip it off if not an IP address
-    if (!prte_net_isaddr(prte_process_info.nodename) &&
+    if (!pmix_net_isaddr(prte_process_info.nodename) &&
         NULL != (ptr = strchr(prte_process_info.nodename, '.'))) {
         if (prte_keep_fqdn_hostnames) {
             /* retain the non-fqdn name as an alias */

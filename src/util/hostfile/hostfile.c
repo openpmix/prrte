@@ -39,7 +39,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/if.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -140,7 +140,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         pmix_argv_free(argv);
 
         // Strip off the FQDN if present, ignore IP addresses
-        if (!prte_net_isaddr(node_name)) {
+        if (!pmix_net_isaddr(node_name)) {
             char *ptr;
             alias = strdup(node_name);
             if (NULL != (ptr = strchr(alias, '.'))) {
@@ -254,7 +254,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         /* store this for later processing */
         node = PRTE_NEW(prte_node_t);
         // Strip off the FQDN if present, ignore IP addresses
-        if (!prte_net_isaddr(prte_util_hostfile_value.sval)) {
+        if (!pmix_net_isaddr(prte_util_hostfile_value.sval)) {
             char *ptr;
             alias = strdup(prte_util_hostfile_value.sval);
             if (NULL != (ptr = strchr(alias, '.'))) {
@@ -311,7 +311,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         pmix_argv_free(argv);
 
         // Strip off the FQDN if present, ignore IP addresses
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(node_name)) {
+        if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(node_name)) {
             char *ptr;
             alias = strdup(node_name);
             if (NULL != (ptr = strchr(alias, '.'))) {

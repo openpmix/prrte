@@ -68,12 +68,12 @@
 #include "src/runtime/prte_globals.h"
 #include "src/threads/tsd.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 
 /* this function doesn't depend on sockaddr_h */
-bool prte_net_isaddr(const char *name)
+bool pmix_net_isaddr(const char *name)
 {
     struct addrinfo hint, *res = NULL;
 
@@ -146,7 +146,7 @@ void prte_net_finalize(void)
     private_ipv4 = NULL;
 }
 
-int prte_net_init(void)
+int pmix_net_init(void)
 {
     char **args, *arg;
     uint32_t a, b, c, d, bits, addr;
@@ -225,7 +225,7 @@ bool prte_net_islocalhost(const struct sockaddr *addr)
     }
 }
 
-bool prte_net_samenetwork(const struct sockaddr_storage *addr1,
+bool pmix_net_samenetwork(const struct sockaddr_storage *addr1,
                           const struct sockaddr_storage *addr2,
                           uint32_t plen)
 {
@@ -297,7 +297,7 @@ bool prte_net_samenetwork(const struct sockaddr_storage *addr1,
 /**
  * Returns true if the given address is a public IPv4 address.
  */
-bool prte_net_addr_isipv4public(const struct sockaddr *addr)
+bool pmix_net_addr_isipv4public(const struct sockaddr *addr)
 {
     switch (addr->sa_family) {
 #    if PRTE_ENABLE_IPV6
@@ -321,7 +321,7 @@ bool prte_net_addr_isipv4public(const struct sockaddr *addr)
     }
         return true;
     default:
-        prte_output(0, "unhandled sa_family %d passed to prte_net_addr_isipv4public\n",
+        prte_output(0, "unhandled sa_family %d passed to pmix_net_addr_isipv4public\n",
                     addr->sa_family);
     }
 
@@ -341,7 +341,7 @@ bool prte_net_addr_isipv6linklocal(const struct sockaddr *addr)
         if (1 != inet_pton(AF_INET6, "fe80::0000", &if_addr.sin6_addr)) {
             return false;
         }
-        return prte_net_samenetwork(addr, (struct sockaddr *) &if_addr, 64);
+        return pmix_net_samenetwork(addr, (struct sockaddr *) &if_addr, 64);
 #    endif
     case AF_INET:
         return false;
@@ -353,7 +353,7 @@ bool prte_net_addr_isipv6linklocal(const struct sockaddr *addr)
     return false;
 }
 
-char *prte_net_get_hostname(const struct sockaddr *addr)
+char *pmix_net_get_hostname(const struct sockaddr *addr)
 {
 #    if PRTE_ENABLE_IPV6
     char *name = get_hostname_buffer();
@@ -405,7 +405,7 @@ char *prte_net_get_hostname(const struct sockaddr *addr)
 #    endif
 }
 
-int prte_net_get_port(const struct sockaddr *addr)
+int pmix_net_get_port(const struct sockaddr *addr)
 {
     switch (addr->sa_family) {
     case AF_INET:
@@ -421,7 +421,7 @@ int prte_net_get_port(const struct sockaddr *addr)
 
 #else /* HAVE_STRUCT_SOCKADDR_IN */
 
-int prte_net_init()
+int pmix_net_init()
 {
     return PRTE_SUCCESS;
 }
@@ -441,23 +441,23 @@ bool prte_net_islocalhost(const struct sockaddr *addr)
     return false;
 }
 
-bool prte_net_samenetwork(const struct sockaddr *addr1, const struct sockaddr *addr2,
+bool pmix_net_samenetwork(const struct sockaddr *addr1, const struct sockaddr *addr2,
                           uint32_t prefixlen)
 {
     return false;
 }
 
-bool prte_net_addr_isipv4public(const struct sockaddr *addr)
+bool pmix_net_addr_isipv4public(const struct sockaddr *addr)
 {
     return false;
 }
 
-char *prte_net_get_hostname(const struct sockaddr *addr)
+char *pmix_net_get_hostname(const struct sockaddr *addr)
 {
     return NULL;
 }
 
-int prte_net_get_port(const struct sockaddr *addr)
+int pmix_net_get_port(const struct sockaddr *addr)
 {
     return -1;
 }

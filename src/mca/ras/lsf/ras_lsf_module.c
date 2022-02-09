@@ -33,7 +33,7 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -76,7 +76,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 
     /* step through the list */
     for (i = 0; i < num_nodes; i++) {
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(nodelist[i])) {
+        if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(nodelist[i])) {
             if (NULL != (ptr = strchr(nodelist[i], '.'))) {
                 *ptr = '\0';
             }

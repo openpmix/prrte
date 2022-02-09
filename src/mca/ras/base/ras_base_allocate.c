@@ -48,7 +48,7 @@
 #include "src/util/error_strings.h"
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
@@ -280,7 +280,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         /* if we are not retaining FQDN hostnames, then record
          * aliases where appropriate */
         PRTE_LIST_FOREACH(node, &nodes, prte_node_t) {
-            if (!prte_net_isaddr(node->name) &&
+            if (!pmix_net_isaddr(node->name) &&
                 NULL != (ptr = strchr(node->name, '.'))) {
                 node->rawname = strdup(node->name);
                 if (prte_keep_fqdn_hostnames) {

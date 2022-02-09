@@ -4,7 +4,7 @@
  * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017 Amazon.com, Inc. or its affiliates.
  *                    All Rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +23,7 @@
 #include "libnl_utils.h"
 #include "reachable_netlink.h"
 #include "src/mca/prtereachable/base/base.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/string_copy.h"
 
 enum connection_quality { CQ_NO_CONNECTION = 0, CQ_DIFFERENT_NETWORK = 50, CQ_SAME_NETWORK = 100 };
@@ -87,12 +87,12 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
     char str_local[128], str_remote[128], *conn_type;
     int outgoing_interface, ret, weight, has_gateway;
 
-    /* prte_net_get_hostname returns a static buffer.  Great for
+    /* pmix_net_get_hostname returns a static buffer.  Great for
        single address printfs, need to copy in this case */
-    prte_string_copy(str_local, prte_net_get_hostname((struct sockaddr *) &local_if->if_addr),
+    prte_string_copy(str_local, pmix_net_get_hostname((struct sockaddr *) &local_if->if_addr),
                      sizeof(str_local));
     str_local[sizeof(str_local) - 1] = '\0';
-    prte_string_copy(str_remote, prte_net_get_hostname((struct sockaddr *) &remote_if->if_addr),
+    prte_string_copy(str_remote, pmix_net_get_hostname((struct sockaddr *) &remote_if->if_addr),
                      sizeof(str_remote));
     str_remote[sizeof(str_remote) - 1] = '\0';
 

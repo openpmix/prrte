@@ -42,7 +42,7 @@
 #include "src/util/listener.h"
 #include "src/util/malloc.h"
 #include "src/util/name_fns.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
@@ -161,8 +161,8 @@ int prte_init_util(prte_proc_type_t flags)
     /* load the output verbose stream */
     prte_output_setup_stream_prefix();
 
-    if (PRTE_SUCCESS != (ret = prte_net_init())) {
-        error = "prte_net_init";
+    if (PRTE_SUCCESS != (ret = pmix_net_init())) {
+        error = "pmix_net_init";
         goto error;
     }
 

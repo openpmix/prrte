@@ -23,7 +23,7 @@
 #include "src/mca/prteif/prteif.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 
@@ -278,7 +278,7 @@ static char **split_and_resolve(const char *orig_str,
         prte_output_verbose(20, prte_prteif_base_framework.framework_output,
                             "%s if: Searching for %s address+prefix: %s / %u",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), name,
-                            prte_net_get_hostname((struct sockaddr *) &argv_inaddr), argv_prefix);
+                            pmix_net_get_hostname((struct sockaddr *) &argv_inaddr), argv_prefix);
 
 
         /* Go through all interfaces to see if we can find one or more matches */
@@ -288,7 +288,7 @@ static char **split_and_resolve(const char *orig_str,
             prte_ifindextoaddr(if_index,
                                (struct sockaddr*) &if_inaddr,
                                sizeof(if_inaddr));
-            if (prte_net_samenetwork(&argv_inaddr, &if_inaddr, argv_prefix)) {
+            if (pmix_net_samenetwork(&argv_inaddr, &if_inaddr, argv_prefix)) {
                 /* We found a match. If it's not already in the interfaces array,
                    add it. If it's already in the array, treat it as a match */
                 found = true;
@@ -297,7 +297,7 @@ static char **split_and_resolve(const char *orig_str,
                     prte_output_verbose(20,
                                         prte_prteif_base_framework.framework_output,
                                         "prteif:base: Found match: %s (%s)",
-                                        prte_net_get_hostname((struct sockaddr*) &if_inaddr),
+                                        pmix_net_get_hostname((struct sockaddr*) &if_inaddr),
                                         if_name);
             }
         }

@@ -35,7 +35,7 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/ras/base/ras_private.h"
@@ -201,7 +201,7 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
             /* update the total slots in the job */
             prte_ras_base.total_slots_alloc += node->slots;
             /* check if we have fqdn names in the allocation */
-            if (!prte_net_isaddr(node->name) && NULL != strchr(node->name, '.')) {
+            if (!pmix_net_isaddr(node->name) && NULL != strchr(node->name, '.')) {
                 prte_have_fqdn_allocation = true;
             }
             /* duplicate the node if requested */

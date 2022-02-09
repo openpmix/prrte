@@ -64,7 +64,7 @@
 #include "src/runtime/prte_progress_threads.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 
@@ -434,25 +434,25 @@ static int component_available(void)
             prte_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init adding %s to our list of %s connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                prte_net_get_hostname((struct sockaddr *) &my_ss),
+                                pmix_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
             pmix_argv_append_nosize(&prte_oob_tcp_component.ipv4conns,
-                                    prte_net_get_hostname((struct sockaddr *) &my_ss));
+                                    pmix_net_get_hostname((struct sockaddr *) &my_ss));
         } else if (AF_INET6 == my_ss.ss_family) {
 #if PRTE_ENABLE_IPV6
             prte_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init adding %s to our list of %s connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                prte_net_get_hostname((struct sockaddr *) &my_ss),
+                                pmix_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
             pmix_argv_append_nosize(&prte_oob_tcp_component.ipv6conns,
-                                    prte_net_get_hostname((struct sockaddr *) &my_ss));
+                                    pmix_net_get_hostname((struct sockaddr *) &my_ss));
 #endif // PRTE_ENABLE_IPV6
         } else {
             prte_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init ignoring %s from out list of connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                prte_net_get_hostname((struct sockaddr *) &my_ss));
+                                pmix_net_get_hostname((struct sockaddr *) &my_ss));
             continue;
         }
         copied_interface = PRTE_NEW(prte_if_t);
