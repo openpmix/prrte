@@ -53,7 +53,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
@@ -553,7 +553,7 @@ static bool prte_dir_check_file(const char *root, const char *path)
      *  - non-zero files starting with "output-"
      */
     if (0 == strncmp(path, "output-", strlen("output-"))) {
-        fullpath = prte_os_path(false, &fullpath, root, path, NULL);
+        fullpath = pmix_os_path(false, &fullpath, root, path, NULL);
         stat(fullpath, &st);
         free(fullpath);
         if (0 == st.st_size) {

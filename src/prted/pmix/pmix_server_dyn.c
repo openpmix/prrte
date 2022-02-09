@@ -36,7 +36,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/prte_getcwd.h"
@@ -278,7 +278,7 @@ static void interim(int sd, short args, void *cbdata)
                             goto complete;
                         }
                         /* construct the absolute path */
-                        app->cwd = prte_os_path(false, cwd, info->value.data.string, NULL);
+                        app->cwd = pmix_os_path(false, cwd, info->value.data.string, NULL);
                     }
                 } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_BIN)) {
                     flag = PMIX_INFO_TRUE(info);

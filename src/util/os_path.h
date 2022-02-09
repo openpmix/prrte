@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,7 +22,7 @@
 /** @file:
  * Creates an operating system-acceptable path name.
  *
- * The prte_os_path() function takes a variable number of string arguments and
+ * The pmix_os_path() function takes a variable number of string arguments and
  * concatenates them into a path name using the path separator character appropriate
  * to the local operating system. NOTE: the string returned by this function has been
  * malloc'd - thus, the user is responsible for free'ing the memory used by
@@ -71,14 +71,14 @@ BEGIN_C_DECLS
  * va_start() has undefined behavior (according to clang warnings on
  * MacOS High Sierra).
  */
-PRTE_EXPORT char *prte_os_path(int relative, ...)
+PRTE_EXPORT char *pmix_os_path(int relative, ...)
     __prte_attribute_malloc__ __prte_attribute_sentinel__ __prte_attribute_warn_unused_result__;
 
 /**
  * Convert the path to be OS friendly. On UNIX this function will
  * be empty.
  */
-#define prte_make_filename_os_friendly(PATH) (PATH)
+#define pmix_make_filename_os_friendly(PATH) (PATH)
 
 END_C_DECLS
 

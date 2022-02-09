@@ -74,7 +74,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/pmix_fd.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/pmix_printf.h"
@@ -717,7 +717,7 @@ int prun(int argc, char *argv[])
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
                             goto DONE;
                         }
-                        outdir = prte_os_path(false, cwd, ptr, NULL);
+                        outdir = pmix_os_path(false, cwd, ptr, NULL);
                     } else {
                         outdir = strdup(ptr);
                     }
@@ -744,7 +744,7 @@ int prun(int argc, char *argv[])
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
                             goto DONE;
                         }
-                        outfile = prte_os_path(false, cwd, ptr, NULL);
+                        outfile = pmix_os_path(false, cwd, ptr, NULL);
                     } else {
                         outfile = strdup(ptr);
                     }

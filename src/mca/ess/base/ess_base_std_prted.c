@@ -44,7 +44,7 @@
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/base/base.h"
@@ -266,7 +266,7 @@ int prte_ess_base_prted_setup(void)
             /* define a log file name in the session directory */
             snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log", prte_process_info.myproc.nspace,
                      prte_process_info.nodename);
-            log_path = prte_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
+            log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
 
             fd = open(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
             if (fd < 0) {

@@ -39,7 +39,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/show_help.h"
@@ -236,7 +236,7 @@ static int open_file(const char *base, const char *topic)
          * extension.
          */
         for (i = 0; NULL != search_dirs[i]; i++) {
-            filename = prte_os_path(false, search_dirs[i], base, NULL);
+            filename = pmix_os_path(false, search_dirs[i], base, NULL);
             prte_show_help_yyin = fopen(filename, "r");
             if (NULL == prte_show_help_yyin) {
                 pmix_asprintf(&err_msg, "%s: %s", filename, strerror(errno));

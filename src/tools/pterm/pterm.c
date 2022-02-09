@@ -82,7 +82,7 @@
 
 #include "src/class/prte_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/path.h"
 
 #include "src/mca/errmgr/errmgr.h"

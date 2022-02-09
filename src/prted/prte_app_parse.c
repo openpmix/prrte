@@ -42,7 +42,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/proc_info.h"
@@ -138,10 +138,10 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
             value = strdup(param);
         } else {
             /* construct the absolute path */
-            value = prte_os_path(false, cwd, param, NULL);
+            value = pmix_os_path(false, cwd, param, NULL);
         }
         /* construct the new argv[0] */
-        ptr = prte_os_path(false, value, app->app.argv[0], NULL);
+        ptr = pmix_os_path(false, value, app->app.argv[0], NULL);
         free(value);
         free(app->app.argv[0]);
         app->app.argv[0] = ptr;
@@ -156,7 +156,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
             app->app.cwd = strdup(param);
         } else {
             /* construct the absolute path */
-            app->app.cwd = prte_os_path(false, cwd, param, NULL);
+            app->app.cwd = pmix_os_path(false, cwd, param, NULL);
         }
     } else if (prte_cmd_line_is_taken(&results, "set-cwd-to-session-dir")) {
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
@@ -296,13 +296,13 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                 /* yep - but does it include the path to the mpi libs? */
                 found = true;
                 /* check if mpi.jar exists - if so, add it */
-                value = prte_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
+                value = pmix_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
                 if (access(value, F_OK) != -1) {
                     set_classpath_jar_file(app, i + 1, "mpi.jar");
                 }
                 free(value);
                 /* check for oshmem support */
-                value = prte_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
+                value = pmix_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
                 if (access(value, F_OK) != -1) {
                     set_classpath_jar_file(app, i + 1, "shmem.jar");
                 }
@@ -323,13 +323,13 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                     ++value; /* step over the = */
                     pmix_argv_insert_element(&app->app.argv, 1, value);
                     /* check for mpi.jar */
-                    value = prte_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
+                    value = pmix_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
                     if (access(value, F_OK) != -1) {
                         set_classpath_jar_file(app, 1, "mpi.jar");
                     }
                     free(value);
                     /* check for shmem.jar */
-                    value = prte_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
+                    value = pmix_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
                     if (access(value, F_OK) != -1) {
                         set_classpath_jar_file(app, 1, "shmem.jar");
                     }
@@ -352,7 +352,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                 /* always start with the working directory */
                 str = strdup(app->app.cwd);
                 /* check for mpi.jar */
-                value = prte_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
+                value = pmix_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
                 if (access(value, F_OK) != -1) {
                     pmix_asprintf(&str2, "%s:%s", str, value);
                     free(str);
@@ -360,7 +360,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                 }
                 free(value);
                 /* check for shmem.jar */
-                value = prte_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
+                value = pmix_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
                 if (access(value, F_OK) != -1) {
                     pmix_asprintf(&str2, "%s:%s", str, value);
                     free(str);

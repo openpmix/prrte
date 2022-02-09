@@ -52,7 +52,7 @@
 #include "src/util/pmix_fd.h"
 #include "src/util/if.h"
 #include "src/util/malloc.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/pmix_environ.h"
 
@@ -565,7 +565,7 @@ error:
     }
     /* remove my contact info file, if we have session directories */
     if (NULL != prte_process_info.jobfam_session_dir) {
-        contact_path = prte_os_path(false, prte_process_info.jobfam_session_dir, "contact.txt",
+        contact_path = pmix_os_path(false, prte_process_info.jobfam_session_dir, "contact.txt",
                                     NULL);
         unlink(contact_path);
         free(contact_path);
@@ -596,7 +596,7 @@ static int rte_finalize(void)
 
     /* remove my contact info file, if we have session directories */
     if (NULL != prte_process_info.jobfam_session_dir) {
-        contact_path = prte_os_path(false, prte_process_info.jobfam_session_dir, "contact.txt",
+        contact_path = pmix_os_path(false, prte_process_info.jobfam_session_dir, "contact.txt",
                                     NULL);
         unlink(contact_path);
         free(contact_path);

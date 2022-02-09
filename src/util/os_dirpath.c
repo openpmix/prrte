@@ -42,7 +42,7 @@
 #include "constants.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 
@@ -189,7 +189,7 @@ int pmix_os_dirpath_destroy(const char *path, bool recursive,
          * for cleaner code just to create it here.  Note that we are
          * allocating memory here, so we need to free it later on.
          */
-        filenm = prte_os_path(false, path, ep->d_name, NULL);
+        filenm = pmix_os_path(false, path, ep->d_name, NULL);
 
         /* coverity[TOCTOU] */
         rc = stat(filenm, &buf);

@@ -52,7 +52,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
 #include "src/util/keyval_parse.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/pmix_printf.h"
@@ -297,12 +297,12 @@ int prte_mca_base_var_init(void)
         home = (char *) pmix_home_directory(-1);
 
         /* start with the system default param file */
-        tmp = prte_os_path(false, prte_install_dirs.sysconfdir, "prte-mca-params.conf", NULL);
+        tmp = pmix_os_path(false, prte_install_dirs.sysconfdir, "prte-mca-params.conf", NULL);
         pmix_argv_append_nosize(&filelist, tmp);
         free(tmp);
 #if PRTE_WANT_HOME_CONFIG_FILES
         /* do the user's home default param files */
-        tmp = prte_os_path(false, home, ".prte", "mca-params.conf", NULL);
+        tmp = pmix_os_path(false, home, ".prte", "mca-params.conf", NULL);
         pmix_argv_append_nosize(&filelist, tmp);
         free(tmp);
 #endif

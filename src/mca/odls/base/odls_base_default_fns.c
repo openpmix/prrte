@@ -51,7 +51,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"

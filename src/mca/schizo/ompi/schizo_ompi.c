@@ -44,7 +44,7 @@
 #include "src/util/keyval_parse.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/path.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/session_dir.h"
@@ -889,7 +889,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         if (NULL == fp) {
             /* if the file given wasn't absolute, check in the default location */
             if (!prte_path_is_absolute(tmp[i])) {
-                p1 = prte_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
+                p1 = pmix_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
                 fp = fopen(p1, "r");
                 if (NULL == fp) {
                     prte_show_help("help-schizo-base.txt", "missing-param-file-def", true, tmp[i], p1);;
@@ -1774,7 +1774,7 @@ weareit:
     /* try to get their home directory */
     home = pmix_home_directory(uid);
     if (NULL != home) {
-        file = prte_os_path(false, home, ".openmpi", "mca-params.conf", NULL);
+        file = pmix_os_path(false, home, ".openmpi", "mca-params.conf", NULL);
         PRTE_CONSTRUCT(&params, prte_list_t);
         prte_mca_base_parse_paramfile(file, &params);
         free(file);
@@ -1806,7 +1806,7 @@ weareit:
     /* check if the user has set OMPIHOME in their environment */
     if (NULL != (evar = getenv("OMPIHOME"))) {
         /* look for the default MCA param file */
-        file = prte_os_path(false, evar, "etc", "openmpi-mca-params.conf", NULL);
+        file = pmix_os_path(false, evar, "etc", "openmpi-mca-params.conf", NULL);
         PRTE_CONSTRUCT(&params, prte_list_t);
         prte_mca_base_parse_paramfile(file, &params);
         free(file);

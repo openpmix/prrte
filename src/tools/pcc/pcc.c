@@ -52,7 +52,7 @@
 #include "src/util/error.h"
 #include "src/util/few.h"
 #include "src/util/keyval_parse.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
@@ -516,7 +516,7 @@ int main(int argc, char *argv[])
         if (options_data[user_data_idx].req_file[0] != '\0') {
             char *filename;
             struct stat buf;
-            filename = prte_os_path(false, options_data[user_data_idx].path_libdir,
+            filename = pmix_os_path(false, options_data[user_data_idx].path_libdir,
                                     options_data[user_data_idx].req_file, NULL);
             if (0 != stat(filename, &buf)) {
                 prte_show_help("help-pcc.txt", "file-not-found", true, base_argv0,
@@ -741,7 +741,7 @@ int main(int argc, char *argv[])
 
         */
 
-        filename1 = prte_os_path(false, options_data[user_data_idx].path_libdir,
+        filename1 = pmix_os_path(false, options_data[user_data_idx].path_libdir,
                                  options_data[user_data_idx].static_lib_file, NULL);
         if (0 == stat(filename1, &buf)) {
             have_static_lib = true;
@@ -749,7 +749,7 @@ int main(int argc, char *argv[])
             have_static_lib = false;
         }
 
-        filename2 = prte_os_path(false, options_data[user_data_idx].path_libdir,
+        filename2 = pmix_os_path(false, options_data[user_data_idx].path_libdir,
                                  options_data[user_data_idx].dyn_lib_file, NULL);
         if (0 == stat(filename2, &buf)) {
             have_dyn_lib = true;
