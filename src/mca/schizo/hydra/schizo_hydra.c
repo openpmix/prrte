@@ -44,7 +44,7 @@
 #include "src/util/keyval_parse.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/path.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/session_dir.h"

@@ -70,7 +70,7 @@
 #include "src/util/pmix_fd.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"

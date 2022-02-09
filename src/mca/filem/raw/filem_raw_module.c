@@ -40,7 +40,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/pmix_environ.h"
@@ -562,9 +562,9 @@ static int create_link(char *my_dir, char *path, char *link_pt)
     int rc = PRTE_SUCCESS;
 
     /* form the full source path name */
-    mypath = prte_os_path(false, my_dir, link_pt, NULL);
+    mypath = pmix_os_path(false, my_dir, link_pt, NULL);
     /* form the full target path name */
-    fullname = prte_os_path(false, path, link_pt, NULL);
+    fullname = pmix_os_path(false, path, link_pt, NULL);
     /* there may have been multiple files placed under the
      * same directory, so check for existence first
      */
@@ -1010,7 +1010,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         /* define the full path to where we will put it */
         session_dir = filem_session_dir();
 
-        incoming->fullpath = prte_os_path(false, session_dir, file, NULL);
+        incoming->fullpath = pmix_os_path(false, session_dir, file, NULL);
 
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: opening target file %s",

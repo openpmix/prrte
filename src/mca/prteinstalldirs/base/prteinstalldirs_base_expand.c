@@ -21,7 +21,7 @@
 
 #include "src/mca/prteinstalldirs/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/pmix_printf.h"
 
 /* Support both ${name} and @{name} forms.  The latter allows us to
@@ -150,7 +150,7 @@ static char *prte_install_dirs_expand_internal(const char *input, bool is_setup)
 
     if (NULL != destdir) {
         char *tmp = retval;
-        retval = prte_os_path(false, destdir, tmp, NULL);
+        retval = pmix_os_path(false, destdir, tmp, NULL);
         free(tmp);
     }
 

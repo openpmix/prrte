@@ -64,7 +64,6 @@ headers = \
         net.h \
         nidmap.h \
         numtostr.h \
-        os_path.h \
         output.h \
         parse_options.h \
         path.h \
@@ -100,7 +99,6 @@ libprrteutil_la_SOURCES = \
         net.c \
         nidmap.c \
         numtostr.c \
-        os_path.c \
         output.c \
         parse_options.c \
         path.c \

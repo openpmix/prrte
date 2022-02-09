@@ -75,7 +75,7 @@
 #include "prte_stdint.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/pmix_printf.h"
@@ -158,7 +158,7 @@ char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
         }
         i++;
     }
-    return prte_make_filename_os_friendly(fullpath);
+    return pmix_make_filename_os_friendly(fullpath);
 }
 
 /*
@@ -232,10 +232,10 @@ char *prte_path_access(char *fname, char *path, int mode)
 
     /* Allocate space for the full pathname. */
     if (NULL == path) {
-        fullpath = prte_os_path(false, fname, NULL);
+        fullpath = pmix_os_path(false, fname, NULL);
     } else {
         relative = !prte_path_is_absolute(path);
-        fullpath = prte_os_path(relative, path, fname, NULL);
+        fullpath = pmix_os_path(relative, path, fname, NULL);
     }
     if (NULL == fullpath) {
         return NULL;
@@ -386,7 +386,7 @@ char *prte_find_absolute_path(char *app_name)
             /* too bad there is no way we can get the app absolute name */
             return NULL;
         }
-        abs_app_name = prte_os_path(false, pcwd, app_name, NULL);
+        abs_app_name = pmix_os_path(false, pcwd, app_name, NULL);
     } else {
         /* Otherwise try to search for the application in the PATH ... */
         abs_app_name = prte_path_findv(app_name, X_OK, NULL, NULL);

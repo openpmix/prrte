@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,11 +31,11 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 
 static const char *path_sep = PRTE_PATH_SEP;
 
-char *prte_os_path(int relative, ...)
+char *pmix_os_path(int relative, ...)
 {
     va_list ap;
     char *element, *path;
@@ -101,5 +101,5 @@ char *prte_os_path(int relative, ...)
     }
 
     va_end(ap);
-    return prte_make_filename_os_friendly(path);
+    return pmix_make_filename_os_friendly(path);
 }

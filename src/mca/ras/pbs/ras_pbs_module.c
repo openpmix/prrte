@@ -30,7 +30,7 @@
 #include <unistd.h>
 
 #include "src/util/net.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
