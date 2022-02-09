@@ -1082,10 +1082,10 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         for (i = 0; NULL != cache[i]; i++) {
             if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
                 pmix_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
-                prte_setenv(p1, cachevals[i], true, dstenv);
+                pmix_setenv(p1, cachevals[i], true, dstenv);
                 free(p1);
             } else {
-                prte_setenv(cache[i], cachevals[i], true, dstenv);
+                pmix_setenv(cache[i], cachevals[i], true, dstenv);
             }
         }
         pmix_argv_free(cache);
@@ -1095,7 +1095,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
     /* add the -x values */
     if (NULL != xparams) {
         for (i = 0; NULL != xparams[i]; i++) {
-            prte_setenv(xparams[i], xvals[i], true, dstenv);
+            pmix_setenv(xparams[i], xvals[i], true, dstenv);
         }
         pmix_argv_free(xparams);
         pmix_argv_free(xvals);
@@ -1208,7 +1208,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     /* process the resulting cache into the dstenv */
     if (NULL != xparams) {
         for (i = 0; NULL != xparams[i]; i++) {
-            prte_setenv(xparams[i], xvals[i], true, dstenv);
+            pmix_setenv(xparams[i], xvals[i], true, dstenv);
         }
         pmix_argv_free(xparams);
         xparams = NULL;
@@ -1238,11 +1238,11 @@ static int parse_env(char **srcenv, char ***dstenv,
 
     if (prte_cmd_line_is_taken(results, "display-comm") &&
         prte_cmd_line_is_taken(results, "display-comm-finalize")) {
-        prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_init,mpi_finalize", true, dstenv);
+        pmix_setenv("OMPI_MCA_ompi_display_comm", "mpi_init,mpi_finalize", true, dstenv);
     } else if (prte_cmd_line_is_taken(results, "display-comm")) {
-        prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_init", true, dstenv);
+        pmix_setenv("OMPI_MCA_ompi_display_comm", "mpi_init", true, dstenv);
     } else if (prte_cmd_line_is_taken(results, "display-comm-finalize")) {
-        prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_finalize", true, dstenv);
+        pmix_setenv("OMPI_MCA_ompi_display_comm", "mpi_finalize", true, dstenv);
     }
 
     /* now look for any "--mca" options - note that it is an error
@@ -1422,10 +1422,10 @@ static int parse_env(char **srcenv, char ***dstenv,
         for (i = 0; NULL != cache[i]; i++) {
             if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
                 pmix_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
-                prte_setenv(p1, cachevals[i], true, dstenv);
+                pmix_setenv(p1, cachevals[i], true, dstenv);
                 free(p1);
             } else {
-                prte_setenv(cache[i], cachevals[i], true, dstenv);
+                pmix_setenv(cache[i], cachevals[i], true, dstenv);
             }
         }
     }
@@ -1435,7 +1435,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     /* add the -x values */
     if (NULL != xparams) {
         for (i = 0; NULL != xparams[i]; i++) {
-            prte_setenv(xparams[i], xvals[i], true, dstenv);
+            pmix_setenv(xparams[i], xvals[i], true, dstenv);
         }
         pmix_argv_free(xparams);
         pmix_argv_free(xvals);
@@ -1543,7 +1543,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     int i;
 
     /* flag that we started this job */
-    prte_setenv("PRTE_LAUNCHED", "1", true, &app->env);
+    pmix_setenv("PRTE_LAUNCHED", "1", true, &app->env);
 
     /* now process any envar attributes - we begin with the job-level
      * ones as the app-specific ones can override them. We have to
@@ -1552,11 +1552,11 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     PRTE_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t)
     {
         if (PRTE_JOB_SET_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
         } else if (PRTE_JOB_ADD_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
         } else if (PRTE_JOB_UNSET_ENVAR == attr->key) {
-            prte_unsetenv(attr->data.data.string, &app->env);
+            pmix_unsetenv(attr->data.data.string, &app->env);
         } else if (PRTE_JOB_PREPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
             exists = false;
@@ -1570,7 +1570,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1580,7 +1580,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         } else if (PRTE_JOB_APPEND_ENVAR == attr->key) {
@@ -1596,7 +1596,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1606,7 +1606,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         }
@@ -1616,11 +1616,11 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     PRTE_LIST_FOREACH(attr, &app->attributes, prte_attribute_t)
     {
         if (PRTE_APP_SET_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
         } else if (PRTE_APP_ADD_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
         } else if (PRTE_APP_UNSET_ENVAR == attr->key) {
-            prte_unsetenv(attr->data.data.string, &app->env);
+            pmix_unsetenv(attr->data.data.string, &app->env);
         } else if (PRTE_APP_PREPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
             exists = false;
@@ -1634,7 +1634,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1644,7 +1644,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         } else if (PRTE_APP_APPEND_ENVAR == attr->key) {
@@ -1660,7 +1660,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1670,7 +1670,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         }

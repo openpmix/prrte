@@ -334,7 +334,7 @@ int prte_mca_base_var_init(void)
         PRTE_LIST_FOREACH(fv, &prte_mca_base_var_file_values, prte_mca_base_var_file_value_t)
         {
             pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
-            prte_setenv(tmp, fv->mbvfv_value, false, &environ);
+            pmix_setenv(tmp, fv->mbvfv_value, false, &environ);
             free(tmp);
         }
     }

@@ -879,7 +879,7 @@ static int setup_path(prte_app_context_t *app, char **wdir)
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
         *wdir = strdup(dir);
-        prte_setenv("PWD", dir, true, &app->env);
+        pmix_setenv("PWD", dir, true, &app->env);
     } else {
         /* Try to change to the app's cwd and check that the app
            exists and is executable The function will
@@ -907,7 +907,7 @@ static int setup_path(prte_app_context_t *app, char **wdir)
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
         *wdir = strdup(dir);
-        prte_setenv("PWD", dir, true, &app->env);
+        pmix_setenv("PWD", dir, true, &app->env);
     }
 
 CLEANUP:
@@ -995,7 +995,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
             }
             *ptr = '\0';
             ++ptr;
-            prte_setenv(tmp, ptr, true, &cd->env);
+            pmix_setenv(tmp, ptr, true, &cd->env);
             free(tmp);
         }
     }
@@ -1364,7 +1364,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             } else {
                 pmix_asprintf(&full_search, "%s", mpiexec_pathenv);
             }
-            prte_setenv("PATH", full_search, true, &argvptr);
+            pmix_setenv("PATH", full_search, true, &argvptr);
             free(full_search);
         } else {
             argvptr = app->env;

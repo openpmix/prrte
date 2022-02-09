@@ -290,14 +290,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* enable local launch by the orteds */
     (void) prte_mca_base_var_env_name("plm", &var);
-    prte_setenv(var, "ssh", true, &env);
+    pmix_setenv(var, "ssh", true, &env);
     free(var);
 
     /* add our umask -- see big note in orted.c */
     current_umask = umask(0);
     umask(current_umask);
     pmix_asprintf(&var, "0%o", current_umask);
-    prte_setenv("PRTE_DAEMON_UMASK_VALUE", var, true, &env);
+    pmix_setenv("PRTE_DAEMON_UMASK_VALUE", var, true, &env);
     free(var);
 
     /* If we have a prefix, then modify the PATH and
@@ -324,7 +324,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                 PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:tm: resetting PATH: %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
-                prte_setenv("PATH", newenv, true, &env);
+                pmix_setenv("PATH", newenv, true, &env);
                 free(newenv);
             }
 
@@ -334,7 +334,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                 PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:tm: resetting LD_LIBRARY_PATH: %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
-                prte_setenv("LD_LIBRARY_PATH", newenv, true, &env);
+                pmix_setenv("LD_LIBRARY_PATH", newenv, true, &env);
                 free(newenv);
             }
         }

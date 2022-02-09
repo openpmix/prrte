@@ -412,7 +412,7 @@ int main(int argc, char *argv[])
     /* if we were given a keepalive pipe, set up to monitor it now */
     opt = prte_cmd_line_get_param(&results, PRTE_CLI_KEEPALIVE);
     if (NULL != opt) {
-        prte_setenv("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
+        pmix_setenv("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
     }
 
     /* detach from controlling terminal
@@ -438,17 +438,17 @@ int main(int argc, char *argv[])
 
     if (prte_cmd_line_is_taken(&results, PRTE_CLI_SYSTEM_SERVER)) {
         /* we should act as system-level PMIx server */
-        prte_setenv("PRTE_MCA_pmix_system_server", "1", true, &environ);
+        pmix_setenv("PRTE_MCA_pmix_system_server", "1", true, &environ);
     }
     /* always act as session-level PMIx server */
-    prte_setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
+    pmix_setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
     /* if we were asked to report a uri, set the MCA param to do so */
     opt = prte_cmd_line_get_param(&results, PRTE_CLI_REPORT_URI);
     if (NULL != opt) {
         prte_pmix_server_globals.report_uri = strdup(opt->values[0]);
     }
     /* don't aggregate help messages as that will apply job-to-job */
-    prte_setenv("PRTE_MCA_prte_base_help_aggregate", "0", true, &environ);
+    pmix_setenv("PRTE_MCA_prte_base_help_aggregate", "0", true, &environ);
 
     /* if we are supporting a singleton, push its ID into the environ
      * so it can get picked up and registered by server init */

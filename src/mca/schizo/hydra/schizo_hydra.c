@@ -708,8 +708,8 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
                 && NULL == strcasestr(argv[i + 1], "noinherit")) {
                 if (NULL == target) {
                     /* push it into our environment */
-                    prte_setenv("PRTE_MCA_rmaps_default_inherit", "1", true, &environ);
-                    prte_setenv("PRTE_MCA_rmaps_default_mapping_policy", argv[i + 1], true,
+                    pmix_setenv("PRTE_MCA_rmaps_default_inherit", "1", true, &environ);
+                    pmix_setenv("PRTE_MCA_rmaps_default_mapping_policy", argv[i + 1], true,
                                 &environ);
                 } else {
                     pmix_argv_append_nosize(target, "--prtemca");
@@ -751,7 +751,7 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
             /* next value on the list is the value */
             pval = prte_cmd_line_get_param(cmd_line, "genv", i, 1);
             p2 = prte_schizo_base_strip_quotes(pval->value.data.string);
-            prte_setenv(p1, p2, true, dstenv);
+            pmix_setenv(p1, p2, true, dstenv);
             free(p1);
             free(p2);
         }
