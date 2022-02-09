@@ -116,7 +116,7 @@
 
 #include "src/class/prte_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/util/fd.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/show_help.h"
 #include "src/util/sys_limits.h"
@@ -250,18 +250,18 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
     msg->msg_str_len = (int) strlen(str);
 
     /* Only keep writing if each write() succeeds */
-    if (PRTE_SUCCESS != (ret = prte_fd_write(fd, sizeof(*msg), msg))) {
+    if (PRTE_SUCCESS != (ret = pmix_fd_write(fd, sizeof(*msg), msg))) {
         goto out;
     }
     if (msg->file_str_len > 0
-        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->file_str_len, file))) {
+        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->file_str_len, file))) {
         goto out;
     }
     if (msg->topic_str_len > 0
-        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->topic_str_len, topic))) {
+        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->topic_str_len, topic))) {
         goto out;
     }
-    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->msg_str_len, str))) {
+    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->msg_str_len, str))) {
         goto out;
     }
 
@@ -301,7 +301,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
 #endif
 
     /* Setup the pipe to be close-on-exec */
-    i = prte_fd_set_cloexec(write_fd);
+    i = pmix_fd_set_cloexec(write_fd);
     if (0 != i) {
         PRTE_ERROR_LOG(i);
         send_error_show_help(write_fd, 1, "help-prte-odls-default.txt", "iof setup failed",
@@ -350,7 +350,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     /* close all open file descriptors w/ exception of stdin/stdout/stderr,
        the pipe used for the IOF INTERNAL messages, and the pipe up to
        the parent. */
-    prte_close_open_file_descriptors(write_fd);
+    pmix_close_open_file_descriptors(write_fd);
 
     if (cd->argv == NULL) {
         cd->argv = malloc(sizeof(char *) * 2);
@@ -488,7 +488,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
 
     /* Block reading a message from the pipe */
     while (1) {
-        rc = prte_fd_read(read_fd, sizeof(msg), &msg);
+        rc = pmix_fd_read(read_fd, sizeof(msg), &msg);
 
         /* If the pipe closed, then the child successfully launched */
         if (PRTE_ERR_TIMEOUT == rc) {
@@ -517,10 +517,10 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
 
         /* Read in the strings; ensure to terminate them with \0 */
         if (msg.file_str_len > 0) {
-            rc = prte_fd_read(read_fd, msg.file_str_len, file);
+            rc = pmix_fd_read(read_fd, msg.file_str_len, file);
             if (PRTE_SUCCESS != rc) {
                 prte_show_help("help-prte-odls-default.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app->app, "prte_fd_read", __FILE__,
+                               prte_process_info.nodename, cd->app->app, "pmix_fd_read", __FILE__,
                                __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
@@ -530,10 +530,10 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
             file[msg.file_str_len] = '\0';
         }
         if (msg.topic_str_len > 0) {
-            rc = prte_fd_read(read_fd, msg.topic_str_len, topic);
+            rc = pmix_fd_read(read_fd, msg.topic_str_len, topic);
             if (PRTE_SUCCESS != rc) {
                 prte_show_help("help-prte-odls-default.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app->app, "prte_fd_read", __FILE__,
+                               prte_process_info.nodename, cd->app->app, "pmix_fd_read", __FILE__,
                                __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
@@ -546,14 +546,14 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
             str = calloc(1, msg.msg_str_len + 1);
             if (NULL == str) {
                 prte_show_help("help-prte-odls-default.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app->app, "prte_fd_read", __FILE__,
+                               prte_process_info.nodename, cd->app->app, "pmix_fd_read", __FILE__,
                                __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
                 return rc;
             }
-            rc = prte_fd_read(read_fd, msg.msg_str_len, str);
+            rc = pmix_fd_read(read_fd, msg.msg_str_len, str);
         }
 
         /* Print out what we got.  We already have a rendered string,

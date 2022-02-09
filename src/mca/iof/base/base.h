@@ -17,7 +17,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -53,7 +53,7 @@
 #include "src/event/event-internal.h"
 #include "src/mca/mca.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/fd.h"
+#include "src/util/pmix_fd.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/iof/iof.h"
@@ -145,8 +145,8 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_deliver_t);
 
 static inline bool prte_iof_base_fd_always_ready(int fd)
 {
-    return prte_fd_is_regular(fd) || (prte_fd_is_chardev(fd) && !isatty(fd))
-           || prte_fd_is_blkdev(fd);
+    return pmix_fd_is_regular(fd) || (pmix_fd_is_chardev(fd) && !isatty(fd))
+           || pmix_fd_is_blkdev(fd);
 }
 
 #define PRTE_IOF_SINK_BLOCKSIZE (1024)

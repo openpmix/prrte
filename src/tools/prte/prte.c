@@ -74,7 +74,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/daemon_init.h"
-#include "src/util/fd.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
@@ -331,8 +331,8 @@ int main(int argc, char *argv[])
 
     /* Set both ends of this pipe to be close-on-exec so that no
      children inherit it */
-    if (prte_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS
-        || prte_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
+    if (pmix_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS
+        || pmix_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
         fprintf(stderr, "unable to set the pipe to CLOEXEC\n");
         prte_progress_thread_finalize(NULL);
         exit(1);
@@ -736,7 +736,7 @@ int main(int argc, char *argv[])
                 /* stitch together the var names and URI */
                 pmix_asprintf(&leftover, "%lu", (unsigned long) getpid());
                 /* output to the pipe */
-                rc = prte_fd_write(outpipe, strlen(leftover) + 1, leftover);
+                rc = pmix_fd_write(outpipe, strlen(leftover) + 1, leftover);
                 free(leftover);
                 close(outpipe);
             } else {

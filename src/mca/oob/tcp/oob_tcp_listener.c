@@ -54,7 +54,7 @@
 #include "src/include/prte_socket_errno.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
-#include "src/util/fd.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
@@ -135,8 +135,8 @@ int prte_oob_tcp_start_listening(void)
 
         /* Make sure the pipe FDs are set to close-on-exec so that
            they don't leak into children */
-        if (prte_fd_set_cloexec(prte_oob_tcp_component.stop_thread[0]) != PRTE_SUCCESS
-            || prte_fd_set_cloexec(prte_oob_tcp_component.stop_thread[1]) != PRTE_SUCCESS) {
+        if (pmix_fd_set_cloexec(prte_oob_tcp_component.stop_thread[0]) != PRTE_SUCCESS
+            || pmix_fd_set_cloexec(prte_oob_tcp_component.stop_thread[1]) != PRTE_SUCCESS) {
             close(prte_oob_tcp_component.stop_thread[0]);
             close(prte_oob_tcp_component.stop_thread[1]);
             PRTE_ERROR_LOG(PRTE_ERR_IN_ERRNO);
@@ -265,7 +265,7 @@ static int create_listen(void)
 
         /* Set the socket to close-on-exec so that no children inherit
            this FD */
-        if (prte_fd_set_cloexec(sd) != PRTE_SUCCESS) {
+        if (pmix_fd_set_cloexec(sd) != PRTE_SUCCESS) {
             prte_output(0,
                         "prte_oob_tcp_create_listen: unable to set the "
                         "listening socket to CLOEXEC (%s:%d)\n",
@@ -458,7 +458,7 @@ static int create_listen6(void)
         }
         /* Set the socket to close-on-exec so that no children inherit
            this FD */
-        if (prte_fd_set_cloexec(sd) != PRTE_SUCCESS) {
+        if (pmix_fd_set_cloexec(sd) != PRTE_SUCCESS) {
             prte_output(0,
                         "prte_oob_tcp_create_listen6: unable to set the "
                         "listening socket to CLOEXEC (%s:%d)\n",

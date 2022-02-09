@@ -60,7 +60,7 @@
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/util/error.h"
-#include "src/util/fd.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
@@ -114,7 +114,7 @@ static int tcp_peer_create_socket(prte_oob_tcp_peer_t *peer, sa_family_t family)
     }
 
     /* Set this fd to be close-on-exec so that any subsequent children don't see it */
-    if (prte_fd_set_cloexec(peer->sd) != PRTE_SUCCESS) {
+    if (pmix_fd_set_cloexec(peer->sd) != PRTE_SUCCESS) {
         prte_output(0, "%s unable to set socket to CLOEXEC", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         close(peer->sd);
         peer->sd = -1;
@@ -980,7 +980,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
     if (0 != strcmp(version, prte_version_string)) {
         prte_show_help("help-oob-tcp.txt", "version mismatch", true, prte_process_info.nodename,
                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_version_string,
-                       prte_fd_get_peer_name(peer->sd), PRTE_NAME_PRINT(&(peer->name)), version);
+                       pmix_fd_get_peer_name(peer->sd), PRTE_NAME_PRINT(&(peer->name)), version);
 
         peer->state = MCA_OOB_TCP_FAILED;
         prte_oob_tcp_peer_close(peer);

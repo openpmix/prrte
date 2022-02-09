@@ -55,7 +55,6 @@ headers = \
         error_strings.h \
         ethtool.h \
         error.h \
-        fd.h \
         few.h \
         if.h \
         keyval_parse.h \
@@ -93,7 +92,6 @@ libprrteutil_la_SOURCES = \
         error_strings.c \
         ethtool.c \
         error.c \
-        fd.c \
         few.c \
         if.c \
         keyval_parse.c \

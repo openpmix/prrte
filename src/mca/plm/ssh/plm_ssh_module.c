@@ -78,7 +78,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/threads/threads.h"
-#include "src/util/fd.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
@@ -691,7 +691,7 @@ static void ssh_child(int argc, char **argv)
     close(fdin);
 
     /* close all file descriptors w/ exception of stdin/stdout/stderr */
-    prte_close_open_file_descriptors(-1);
+    pmix_close_open_file_descriptors(-1);
 
     /* Set signal handlers back to the default.  Do this close
      to the execve() because the event library may (and likely
