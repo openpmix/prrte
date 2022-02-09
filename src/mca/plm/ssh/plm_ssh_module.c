@@ -72,7 +72,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 
 #include "src/runtime/prte_globals.h"
@@ -1376,7 +1376,7 @@ static int launch_agent_setup(const char *agent, char *path)
     }
 
     /* see if we can find the agent in the path */
-    ssh_agent_path = prte_path_findv(ssh_agent_argv[0], X_OK, environ, path);
+    ssh_agent_path = pmix_path_findv(ssh_agent_argv[0], X_OK, environ, path);
 
     if (NULL == ssh_agent_path) {
         /* not an error - just report not found */

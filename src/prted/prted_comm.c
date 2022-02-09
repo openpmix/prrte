@@ -52,7 +52,7 @@
 #include "src/prted/pmix/pmix_server.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 
 #include "src/util/name_fns.h"
@@ -620,7 +620,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         // expects to have the process name, hostname, and PID in the
         // buffer before finding an error message.
         char *gstack_exec;
-        gstack_exec = prte_find_absolute_path("gstack");
+        gstack_exec = pmix_find_absolute_path("gstack");
 
         /* we have to at least include the nspace of this job
          * in the reply to ensure the DVM master knows which

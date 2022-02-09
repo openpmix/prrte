@@ -77,7 +77,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 
 /*
@@ -100,7 +100,7 @@
 static void path_env_load(char *path, int *pargc, char ***pargv);
 static char *list_env_get(char *var, char **list);
 
-bool prte_path_is_absolute(const char *path)
+bool pmix_path_is_absolute(const char *path)
 {
     if (PRTE_PATH_SEP[0] == *path) {
         return true;
@@ -111,7 +111,7 @@ bool prte_path_is_absolute(const char *path)
 /**
  *  Locates a file with certain permissions
  */
-char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
+char *pmix_path_find(char *fname, char **pathv, int mode, char **envv)
 {
     char *fullpath;
     char *delimit;
@@ -120,8 +120,8 @@ char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
     int i;
 
     /* If absolute path is given, return it without searching. */
-    if (prte_path_is_absolute(fname)) {
-        return prte_path_access(fname, NULL, mode);
+    if (pmix_path_is_absolute(fname)) {
+        return pmix_path_access(fname, NULL, mode);
     }
 
     /* Initialize. */
@@ -146,15 +146,15 @@ char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
             }
             if (NULL != env) {
                 if (!delimit) {
-                    fullpath = prte_path_access(fname, env, mode);
+                    fullpath = pmix_path_access(fname, env, mode);
                 } else {
                     pmix_asprintf(&pfix, "%s%s", env, delimit);
-                    fullpath = prte_path_access(fname, pfix, mode);
+                    fullpath = pmix_path_access(fname, pfix, mode);
                     free(pfix);
                 }
             }
         } else {
-            fullpath = prte_path_access(fname, pathv[i], mode);
+            fullpath = pmix_path_access(fname, pathv[i], mode);
         }
         i++;
     }
@@ -164,7 +164,7 @@ char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
 /*
  * Locates a file with certain permissions from a list of search paths
  */
-char *prte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
+char *pmix_path_findv(char *fname, int mode, char **envv, char *wrkdir)
 {
     char **dirv;
     char *fullpath;
@@ -206,7 +206,7 @@ char *prte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
 
     if (NULL == dirv)
         return NULL;
-    fullpath = prte_path_find(fname, dirv, mode, envv);
+    fullpath = pmix_path_find(fname, dirv, mode, envv);
     pmix_argv_free(dirv);
     return fullpath;
 }
@@ -224,7 +224,7 @@ char *prte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
  *      -Full pathname of located file Success
  *      -NULL Failure
  */
-char *prte_path_access(char *fname, char *path, int mode)
+char *pmix_path_access(char *fname, char *path, int mode)
 {
     char *fullpath = NULL;
     struct stat buf;
@@ -234,7 +234,7 @@ char *prte_path_access(char *fname, char *path, int mode)
     if (NULL == path) {
         fullpath = pmix_os_path(false, fname, NULL);
     } else {
-        relative = !prte_path_is_absolute(path);
+        relative = !pmix_path_is_absolute(path);
         fullpath = pmix_os_path(relative, path, fname, NULL);
     }
     if (NULL == fullpath) {
@@ -372,12 +372,12 @@ static char *list_env_get(char *var, char **list)
  * function will return NULL. Otherwise, an newly allocated string
  * will be returned.
  */
-char *prte_find_absolute_path(char *app_name)
+char *pmix_find_absolute_path(char *app_name)
 {
     char *abs_app_name;
     char cwd[PRTE_PATH_MAX], *pcwd;
 
-    if (prte_path_is_absolute(app_name)) { /* already absolute path */
+    if (pmix_path_is_absolute(app_name)) { /* already absolute path */
         abs_app_name = app_name;
     } else if ('.' == app_name[0] || NULL != strchr(app_name, PRTE_PATH_SEP[0])) {
         /* the app is in the current directory or below it */
@@ -389,7 +389,7 @@ char *prte_find_absolute_path(char *app_name)
         abs_app_name = pmix_os_path(false, pcwd, app_name, NULL);
     } else {
         /* Otherwise try to search for the application in the PATH ... */
-        abs_app_name = prte_path_findv(app_name, X_OK, NULL, NULL);
+        abs_app_name = pmix_path_findv(app_name, X_OK, NULL, NULL);
     }
 
     if (NULL != abs_app_name) {
@@ -497,7 +497,7 @@ static char *prte_check_mtab(char *dev_path)
 #define MASK2 0xffff
 #define MASK4 0xffffffff
 
-bool prte_path_nfs(char *fname, char **ret_fstype)
+bool pmix_path_nfs(char *fname, char **ret_fstype)
 {
     int i;
     int fsrc = -1;
@@ -511,7 +511,7 @@ bool prte_path_nfs(char *fname, char **ret_fstype)
     struct statvfs vfsbuf;
 #endif
     /*
-     * Be sure to update the test (test/util/prte_path_nfs.c)
+     * Be sure to update the test (test/util/pmix_path_nfs.c)
      * while adding a new Network/Cluster Filesystem here
      */
     static struct fs_types_t {
@@ -528,7 +528,7 @@ bool prte_path_nfs(char *fname, char **ret_fstype)
 
     /*
      * First, get the OS-dependent struct stat(v)fs buf.  This may
-     * return the ESTALE error on NFS, if the underlying file/path has
+     * return the ESTALE error on NFS, if the underlying file/pmix_path.has
      * changed.
      */
 again:
@@ -551,7 +551,7 @@ again:
         char *last_sep;
 
         PRTE_OUTPUT_VERBOSE((10, 0,
-                             "prte_path_nfs: stat(v)fs on file:%s failed errno:%d directory:%s\n",
+                             "pmix_path_nfs: stat(v)fs on file:%s failed errno:%d directory:%s\n",
                              fname, errno, file));
         if (EPERM == errno) {
             free(file);
@@ -634,7 +634,7 @@ found:
                 }
                 if (0 == strcasecmp(fs_types[x].f_fsname, fs_type)) {
                     PRTE_OUTPUT_VERBOSE(
-                        (10, 0, "prte_path_nfs: file:%s on fs:%s\n", fname, fs_type));
+                        (10, 0, "pmix_path_nfs: file:%s on fs:%s\n", fname, fs_type));
                     free(fs_type);
                     if (NULL != ret_fstype) {
                         *ret_fstype = strdup(fs_types[x].f_fsname);
@@ -650,7 +650,7 @@ found:
         }
     }
 
-    PRTE_OUTPUT_VERBOSE((10, 0, "prte_path_nfs: file:%s on fs:%s\n", fname, fs_types[i].f_fsname));
+    PRTE_OUTPUT_VERBOSE((10, 0, "pmix_path_nfs: file:%s on fs:%s\n", fname, fs_types[i].f_fsname));
     if (NULL != ret_fstype) {
         *ret_fstype = strdup(fs_types[i].f_fsname);
     }
@@ -659,7 +659,7 @@ found:
 #undef FS_TYPES_NUM
 }
 
-int prte_path_df(const char *path, uint64_t *out_avail)
+int pmix_path_df(const char *path, uint64_t *out_avail)
 {
     int rc = -1;
     int trials = 5;
@@ -686,7 +686,7 @@ int prte_path_df(const char *path, uint64_t *out_avail)
 
     if (-1 == rc) {
         PRTE_OUTPUT_VERBOSE((10, 2,
-                             "prte_path_df: stat(v)fs on "
+                             "pmix_path_df: stat(v)fs on "
                              "path: %s failed with errno: %d (%s)\n",
                              path, err, strerror(err)));
         return PRTE_ERROR;
@@ -697,7 +697,7 @@ int prte_path_df(const char *path, uint64_t *out_avail)
     *out_avail = (uint64_t) buf.f_bsize * (uint64_t)((long) buf.f_bavail < 0 ? 0 : buf.f_bavail);
 
     PRTE_OUTPUT_VERBOSE((10, 2,
-                         "prte_path_df: stat(v)fs states "
+                         "pmix_path_df: stat(v)fs states "
                          "path: %s has %" PRIu64 " B of free space.",
                          path, *out_avail));
 

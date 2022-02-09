@@ -57,7 +57,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 
 #include "constants.h"
@@ -588,7 +588,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
 {
     int fd;
     int srun_pid;
-    char *exec_argv = prte_path_findv(argv[0], 0, environ, NULL);
+    char *exec_argv = pmix_path_findv(argv[0], 0, environ, NULL);
     prte_proc_t *dummy;
 
     if (NULL == exec_argv) {

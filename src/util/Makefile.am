@@ -66,7 +66,6 @@ headers = \
         numtostr.h \
         output.h \
         parse_options.h \
-        path.h \
         proc_info.h \
         prte_getcwd.h \
         prte_pty.h \
@@ -101,7 +100,6 @@ libprrteutil_la_SOURCES = \
         numtostr.c \
         output.c \
         parse_options.c \
-        path.c \
         proc_info.c \
         prte_getcwd.c \
         prte_pty.c \
