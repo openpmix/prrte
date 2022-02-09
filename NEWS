@@ -35,6 +35,18 @@ This file contains the main features as well as overviews of specific
 bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
+2.0.2: 11 Feb 2022
+-------------------
+**** NOTE: This release contains a workaround that resolves the prior
+**** conflict with HWLOC versions 2.5.0 through 2.7.0 (inclusive).
+**** Those versions of HWLOC are now supported.
+
+PR #1197: Cleanup a bit in prep for PMIx v5 release
+PR #1195: Remove HWLOC version block
+PR #1190: Add missing examples to tarball
+PR #1189: Ensure an error gets reported when rankfile fails
+
+
 2.0.1: 1 Feb 2022
 ------------------------------------
 +**** NOTE: As of v2.0.1, PRRTE no longer has a dependency on "pandoc"

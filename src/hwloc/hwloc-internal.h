@@ -389,7 +389,8 @@ PRTE_EXPORT int prte_hwloc_base_memory_set(prte_hwloc_base_memory_segment_t *seg
  * Make a prettyprint string for a hwloc_cpuset_t (e.g., "package
  * 2[core 3]").
  */
-PRTE_EXPORT char *prte_hwloc_base_cset2str(hwloc_cpuset_t cpuset, bool use_hwthread_cpus,
+PRTE_EXPORT char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
+                                           bool use_hwthread_cpus,
                                            hwloc_topology_t topo);
 
 /* get the hwloc object that corresponds to the given processor id  and type */
