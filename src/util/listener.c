@@ -17,7 +17,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -58,7 +58,7 @@
 #include "src/class/prte_list.h"
 #include "src/include/prte_socket_errno.h"
 #include "src/util/error.h"
-#include "src/util/fd.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
@@ -101,8 +101,8 @@ int prte_register_listener(struct sockaddr *address, prte_socklen_t addrlen,
         }
         /* Make sure the pipe FDs are set to close-on-exec so that
            they don't leak into children */
-        if (prte_fd_set_cloexec(stop_thread[0]) != PRTE_SUCCESS
-            || prte_fd_set_cloexec(stop_thread[1]) != PRTE_SUCCESS) {
+        if (pmix_fd_set_cloexec(stop_thread[0]) != PRTE_SUCCESS
+            || pmix_fd_set_cloexec(stop_thread[1]) != PRTE_SUCCESS) {
             close(stop_thread[0]);
             close(stop_thread[1]);
             PRTE_ERROR_LOG(PRTE_ERR_IN_ERRNO);
@@ -124,7 +124,7 @@ int prte_register_listener(struct sockaddr *address, prte_socklen_t addrlen,
     }
     /* Set the socket to close-on-exec so that no children inherit
        this FD */
-    if (prte_fd_set_cloexec(sd) != PRTE_SUCCESS) {
+    if (pmix_fd_set_cloexec(sd) != PRTE_SUCCESS) {
         prte_output(0,
                     "pmix_server: unable to set the "
                     "listening socket to CLOEXEC (%s:%d)\n",

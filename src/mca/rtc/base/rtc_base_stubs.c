@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -11,7 +11,7 @@
 
 #include "prte_config.h"
 
-#include "src/util/fd.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -83,18 +83,18 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
     msg->msg_str_len = (int) strlen(str);
 
     /* Only keep writing if each write() succeeds */
-    if (PRTE_SUCCESS != (ret = prte_fd_write(fd, sizeof(*msg), msg))) {
+    if (PRTE_SUCCESS != (ret = pmix_fd_write(fd, sizeof(*msg), msg))) {
         goto out;
     }
     if (msg->file_str_len > 0
-        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->file_str_len, file))) {
+        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->file_str_len, file))) {
         goto out;
     }
     if (msg->topic_str_len > 0
-        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->topic_str_len, topic))) {
+        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->topic_str_len, topic))) {
         goto out;
     }
-    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->msg_str_len, str))) {
+    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->msg_str_len, str))) {
         goto out;
     }
 

@@ -23,7 +23,7 @@
 #include "src/threads/threads.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
-#include "src/util/fd.h"
+#include "src/util/pmix_fd.h"
 
 #include "src/runtime/prte_progress_threads.h"
 

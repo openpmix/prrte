@@ -67,7 +67,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/daemon_init.h"
-#include "src/util/fd.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
 #include "src/util/os_path.h"

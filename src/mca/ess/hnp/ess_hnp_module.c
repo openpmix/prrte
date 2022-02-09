@@ -49,7 +49,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/fd.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/if.h"
 #include "src/util/malloc.h"
 #include "src/util/os_path.h"
