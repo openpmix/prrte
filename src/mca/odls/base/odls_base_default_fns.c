@@ -52,7 +52,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/sys_limits.h"
@@ -1073,7 +1073,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         for (i = 0; NULL != app->argv[i]; i++) {
             pmix_argv_append_nosize(&cd->argv, app->argv[i]);
         }
-        cd->cmd = prte_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
+        cd->cmd = pmix_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
         if (NULL == cd->cmd) {
             prte_show_help("help-prte-odls-base.txt", "prte-odls-base:fork-agent-not-found", true,
                            prte_process_info.nodename, ptr);
@@ -1089,7 +1089,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         for (i = 0; NULL != app->argv[i]; i++) {
             pmix_argv_append_nosize(&cd->argv, app->argv[i]);
         }
-        cd->cmd = prte_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
+        cd->cmd = pmix_path_findv(cd->argv[0], X_OK, prte_launch_environ, NULL);
         if (NULL == cd->cmd) {
             prte_show_help("help-prte-odls-base.txt", "prte-odls-base:fork-agent-not-found", true,
                            prte_process_info.nodename, cd->argv[0]);

@@ -53,7 +53,7 @@
 #include "src/util/few.h"
 #include "src/util/keyval_parse.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/show_help.h"
@@ -823,7 +823,7 @@ int main(int argc, char *argv[])
         printf("command: %s\n", exec_command);
 #endif
 
-        tmp = prte_path_findv(exec_argv[0], 0, environ, NULL);
+        tmp = pmix_path_findv(exec_argv[0], 0, environ, NULL);
         if (NULL == tmp) {
             prte_show_help("help-pcc.txt", "no-compiler-found", true, exec_argv[0], NULL);
             errno = 0;

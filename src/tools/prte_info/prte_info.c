@@ -51,7 +51,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/error.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 

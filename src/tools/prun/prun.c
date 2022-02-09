@@ -76,7 +76,7 @@
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/prte_getcwd.h"
@@ -711,7 +711,7 @@ int prun(int argc, char *argv[])
                      * convert it to one so the name will be relative to
                      * the directory where prun was given as that is what
                      * the user will have seen */
-                    if (!prte_path_is_absolute(ptr)) {
+                    if (!pmix_path_is_absolute(ptr)) {
                         char cwd[PRTE_PATH_MAX];
                         if (NULL == getcwd(cwd, sizeof(cwd))) {
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
@@ -738,7 +738,7 @@ int prun(int argc, char *argv[])
                      * convert it to one so the name will be relative to
                      * the directory where prun was given as that is what
                      * the user will have seen */
-                    if (!prte_path_is_absolute(ptr)) {
+                    if (!pmix_path_is_absolute(ptr)) {
                         char cwd[PRTE_PATH_MAX];
                         if (NULL == getcwd(cwd, sizeof(cwd))) {
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);

@@ -45,7 +45,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
@@ -888,7 +888,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         fp = fopen(tmp[i], "r");
         if (NULL == fp) {
             /* if the file given wasn't absolute, check in the default location */
-            if (!prte_path_is_absolute(tmp[i])) {
+            if (!pmix_path_is_absolute(tmp[i])) {
                 p1 = pmix_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
                 fp = fopen(p1, "r");
                 if (NULL == fp) {

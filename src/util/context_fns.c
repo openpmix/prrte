@@ -47,7 +47,7 @@
 #include <errno.h>
 
 #include "src/util/pmix_basename.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 
 #include "src/runtime/prte_globals.h"
@@ -135,7 +135,7 @@ int prte_util_check_context_app(prte_app_context_t *context, char **env)
         /* If this is a naked executable -- no relative or absolute
         pathname -- then search the PATH for it */
         free(tmp);
-        tmp = prte_path_findv(context->app, X_OK, env, context->cwd);
+        tmp = pmix_path_findv(context->app, X_OK, env, context->cwd);
         if (NULL == tmp) {
             return PRTE_ERR_EXE_NOT_FOUND;
         }

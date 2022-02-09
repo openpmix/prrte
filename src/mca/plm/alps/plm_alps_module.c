@@ -59,7 +59,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -542,7 +542,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
 {
     int fd;
     pid_t alps_pid;
-    char *exec_argv = prte_path_findv(argv[0], 0, env, NULL);
+    char *exec_argv = pmix_path_findv(argv[0], 0, env, NULL);
 
     if (NULL == exec_argv) {
         return PRTE_ERR_NOT_FOUND;

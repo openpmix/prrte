@@ -46,7 +46,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/string_copy.h"
 
@@ -386,7 +386,7 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
         tokens = pmix_argv_split(line, ' ');
 
         /* Look for the first token in the PATH */
-        tmp = prte_path_findv(tokens[0], X_OK, environ, cwd);
+        tmp = pmix_path_findv(tokens[0], X_OK, environ, cwd);
         if (NULL != tmp) {
             free(tokens[0]);
             tokens[0] = tmp;

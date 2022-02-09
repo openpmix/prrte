@@ -38,7 +38,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/prte_getcwd.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -268,7 +268,7 @@ static void interim(int sd, short args, void *cbdata)
                                        info->value.data.string, PMIX_STRING);
                 } else if (PMIX_CHECK_KEY(info, PMIX_WDIR)) {
                     /* if this is a relative path, convert it to an absolute path */
-                    if (prte_path_is_absolute(info->value.data.string)) {
+                    if (pmix_path_is_absolute(info->value.data.string)) {
                         app->cwd = strdup(info->value.data.string);
                     } else {
                         /* get the cwd */

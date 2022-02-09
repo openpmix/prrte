@@ -37,7 +37,7 @@
 #include "src/runtime/prte_progress_threads.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -311,7 +311,7 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
         pmix_argv_free(ranks);
         /* construct the xtermcmd */
         prte_odls_globals.xtermcmd = NULL;
-        tmp = prte_find_absolute_path("xterm");
+        tmp = pmix_find_absolute_path("xterm");
         if (NULL == tmp) {
             return PRTE_ERROR;
         }

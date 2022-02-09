@@ -54,7 +54,7 @@
 #include "src/util/keyval_parse.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/show_help.h"

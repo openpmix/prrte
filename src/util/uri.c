@@ -24,7 +24,7 @@
 #endif
 
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/show_help.h"
 
@@ -52,7 +52,7 @@ char *prte_filename_to_uri(const char *filename, const char *hostname)
     size_t i, j, k, n;
 
     /* filename must be an absolute path */
-    if (!prte_path_is_absolute(filename)) {
+    if (!pmix_path_is_absolute(filename)) {
         prte_show_help("help-prte-util.txt", "relative-path", true, filename);
         return NULL;
     }

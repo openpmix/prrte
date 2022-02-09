@@ -42,7 +42,7 @@
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/show_help.h"
 
@@ -322,7 +322,7 @@ static int raw_preposition_files(prte_job_t *jdata,
                      * due to the potential for unintentional overwriting
                      * of files
                      */
-                    if (prte_path_is_absolute(files[j])) {
+                    if (pmix_path_is_absolute(files[j])) {
                         fs->remote_target = strdup(&files[j][1]);
                     } else {
                         fs->remote_target = strdup(files[j]);

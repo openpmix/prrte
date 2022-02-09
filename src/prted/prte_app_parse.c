@@ -44,7 +44,7 @@
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/prte_getcwd.h"
@@ -134,7 +134,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
     if (NULL != opt) {
         param = opt->values[0];
         /* if this is a relative path, convert it to an absolute path */
-        if (prte_path_is_absolute(param)) {
+        if (pmix_path_is_absolute(param)) {
             value = strdup(param);
         } else {
             /* construct the absolute path */
@@ -152,7 +152,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
     if (NULL != opt) {
         param = opt->values[0];
         /* if this is a relative path, convert it to an absolute path */
-        if (prte_path_is_absolute(param)) {
+        if (pmix_path_is_absolute(param)) {
             app->app.cwd = strdup(param);
         } else {
             /* construct the absolute path */
