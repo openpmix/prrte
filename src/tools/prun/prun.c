@@ -78,7 +78,7 @@
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/prte_getcwd.h"
 #include "src/util/show_help.h"
 
@@ -548,7 +548,7 @@ int prun(int argc, char *argv[])
     /* set our session directory to something hopefully unique so
      * our rendezvous files don't conflict with other prun/prte
      * instances */
-    pmix_asprintf(&ptr, "%s/%s.session.%s.%lu.%lu", prte_tmp_directory(), prte_tool_basename,
+    pmix_asprintf(&ptr, "%s/%s.session.%s.%lu.%lu", pmix_tmp_directory(), prte_tool_basename,
                   prte_process_info.nodename, (unsigned long) geteuid(), (unsigned long) getpid());
     PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_TMPDIR, ptr, PMIX_STRING);
     free(ptr);

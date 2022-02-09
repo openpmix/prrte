@@ -46,7 +46,7 @@
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/path.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
@@ -1772,7 +1772,7 @@ weareit:
     uid = geteuid();
 
     /* try to get their home directory */
-    home = prte_home_directory(uid);
+    home = pmix_home_directory(uid);
     if (NULL != home) {
         file = prte_os_path(false, home, ".openmpi", "mca-params.conf", NULL);
         PRTE_CONSTRUCT(&params, prte_list_t);

@@ -41,7 +41,7 @@
 #include "src/mca/mca.h"
 #include "src/threads/threads.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "constants.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -278,7 +278,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                 if (NULL == app) {
                     continue;
                 }
-                env = prte_environ_merge(prte_forwarded_envars, app->env);
+                env = pmix_environ_merge(prte_forwarded_envars, app->env);
                 pmix_argv_free(app->env);
                 app->env = env;
             }

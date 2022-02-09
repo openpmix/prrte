@@ -58,7 +58,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/show_help.h"
 
 #if PRTE_HAVE_DL_SUPPORT

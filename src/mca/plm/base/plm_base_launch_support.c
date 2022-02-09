@@ -74,7 +74,7 @@
 #include "src/util/nidmap.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 

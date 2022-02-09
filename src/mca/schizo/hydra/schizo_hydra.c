@@ -46,7 +46,7 @@
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/path.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
