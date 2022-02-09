@@ -47,7 +47,7 @@
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 /*
  * Public variables
@@ -84,7 +84,7 @@ int prte_mca_base_open(void)
         /* define the system and user default paths */
 #if PRTE_WANT_HOME_CONFIG_FILES
         prte_mca_base_system_default_path = strdup(prte_install_dirs.prtelibdir);
-        value = (char *) prte_home_directory(-1);
+        value = (char *) pmix_home_directory(-1);
         if (NULL == value) {
             prte_output(0, "Error: Unable to get the user home directory\n");
             return PRTE_ERROR;

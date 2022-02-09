@@ -71,7 +71,6 @@ headers = \
         parse_options.h \
         path.h \
         proc_info.h \
-        prte_environ.h \
         prte_getcwd.h \
         prte_pty.h \
         session_dir.h \
@@ -110,7 +109,6 @@ libprrteutil_la_SOURCES = \
         parse_options.c \
         path.c \
         proc_info.c \
-        prte_environ.c \
         prte_getcwd.c \
         prte_pty.c \
         session_dir.c \

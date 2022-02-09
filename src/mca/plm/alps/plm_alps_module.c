@@ -60,7 +60,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"

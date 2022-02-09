@@ -53,7 +53,7 @@
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/string_copy.h"
 
 /*
@@ -213,7 +213,7 @@ bool prte_output_init(void)
     /* Set some defaults */
 
     pmix_asprintf(&output_prefix, "prte-output-pid%d-", getpid());
-    output_dir = strdup(prte_tmp_directory());
+    output_dir = strdup(pmix_tmp_directory());
 
     /* Open the default verbose stream */
     verbose_stream = prte_output_open(&verbose);

@@ -56,7 +56,7 @@
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
@@ -118,7 +118,7 @@ static int _setup_tmpdir_base(void)
      * if we need it
      */
     if (NULL == prte_process_info.tmpdir_base) {
-        prte_process_info.tmpdir_base = strdup(prte_tmp_directory());
+        prte_process_info.tmpdir_base = strdup(pmix_tmp_directory());
         if (NULL == prte_process_info.tmpdir_base) {
             rc = PRTE_ERR_OUT_OF_RESOURCE;
             goto exit;

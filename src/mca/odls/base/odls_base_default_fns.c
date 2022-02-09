@@ -54,7 +54,7 @@
 #include "src/util/os_path.h"
 #include "src/util/path.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/sys_limits.h"
 
 #include "src/mca/errmgr/errmgr.h"

@@ -73,7 +73,7 @@
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/rml/base/rml_contact.h"
 #include "src/threads/threads.h"

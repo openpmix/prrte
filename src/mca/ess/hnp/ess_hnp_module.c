@@ -54,7 +54,7 @@
 #include "src/util/malloc.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/filem/base/base.h"

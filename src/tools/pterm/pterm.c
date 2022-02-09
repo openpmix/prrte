@@ -76,7 +76,7 @@
 #include "src/util/fd.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/prte_getcwd.h"
 #include "src/util/show_help.h"
 

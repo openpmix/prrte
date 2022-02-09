@@ -32,7 +32,7 @@
 #include <string.h>
 
 #include "src/util/pmix_argv.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/pmix/pmix-internal.h"
