@@ -53,7 +53,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/threads/tsd.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/os_dirpath.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
@@ -1366,7 +1366,7 @@ char *prte_hwloc_base_check_on_coprocessor(void)
     FILE *fp;
     char *t, *cptr, *e, *cp = NULL;
 
-    if (PRTE_SUCCESS != prte_os_dirpath_access("/proc/elog", S_IRUSR)) {
+    if (PRTE_SUCCESS != pmix_os_dirpath_access("/proc/elog", S_IRUSR)) {
         /* if the file isn't there, or we don't have permission
          * to read it, then we are not on a coprocessor so far
          * as we can tell

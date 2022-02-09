@@ -75,7 +75,7 @@
 #include "src/util/cmd_line.h"
 #include "src/util/daemon_init.h"
 #include "src/util/pmix_fd.h"
-#include "src/util/os_dirpath.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
@@ -1274,7 +1274,7 @@ static void abort_signal_callback(int fd)
         second = false;
     } else {
         surekill();  // ensure we attempt to kill everything
-        prte_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, NULL);
+        pmix_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, NULL);
         exit(1);
     }
 }

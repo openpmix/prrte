@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,14 +22,14 @@
 /** @file:
  * Creates a directory tree set to the specified permissions.
  *
- * The prte_os_dirpath_create() function creates a directory
+ * The pmix_os_dirpath_create() function creates a directory
  * tree, with each directory that is created in the tree having the specified
  * access permissions. Existing directories within the tree are left
  * untouched - however, if they do not permit the user to create a directory
  * within them, the function will return an error condition.
  *
  * If the specified full path name already exists, the
- * prte_os_dirpath_create() function will check to ensure that
+ * pmix_os_dirpath_create() function will check to ensure that
  * the final directory in the tree has at least the specified access permission. In other
  * words, if the directory has read-write-execute for all, and the user
  * has requested read-write access for just the user, then the function
@@ -60,7 +60,7 @@ BEGIN_C_DECLS
  * specified access permissions.
  */
 
-PRTE_EXPORT int prte_os_dirpath_create(const char *path, const mode_t mode);
+PRTE_EXPORT int pmix_os_dirpath_create(const char *path, const mode_t mode);
 
 /**
  * Check to see if a directory is empty
@@ -70,7 +70,7 @@ PRTE_EXPORT int prte_os_dirpath_create(const char *path, const mode_t mode);
  * @retval true If the directory is empty
  * @retval false If the directory is not empty
  */
-PRTE_EXPORT bool prte_os_dirpath_is_empty(const char *path);
+PRTE_EXPORT bool pmix_os_dirpath_is_empty(const char *path);
 
 /**
  * Check access to the directory
@@ -83,10 +83,10 @@ PRTE_EXPORT bool prte_os_dirpath_is_empty(const char *path);
  * @retval PRTE_ERR_NOT_FOUND If directory does not exist
  * @retval PRTE_ERROR   If directory exists, and permissions do not match
  */
-PRTE_EXPORT int prte_os_dirpath_access(const char *path, const mode_t mode);
+PRTE_EXPORT int pmix_os_dirpath_access(const char *path, const mode_t mode);
 
 /**
- * Callback for prte_os_dirpath_destroy(). Call for every file/directory before
+ * Callback for pmix_os_dirpath_destroy(). Call for every file/directory before
  * taking action to remove/unlink it.
  *
  * @param root A pointer to a string that contains the base path name (e.g., /tmp/foo from
@@ -97,7 +97,7 @@ PRTE_EXPORT int prte_os_dirpath_access(const char *path, const mode_t mode);
  * @retval true  Allow the program to remove the file/directory
  * @retval false Do not allow the program to remove the file/directory
  */
-typedef bool (*prte_os_dirpath_destroy_callback_fn_t)(const char *root, const char *path);
+typedef bool (*pmix_os_dirpath_destroy_callback_fn_t)(const char *root, const char *path);
 
 /**
  * Destroy a directory
@@ -114,8 +114,8 @@ typedef bool (*prte_os_dirpath_destroy_callback_fn_t)(const char *root, const ch
  * @retval PRTE_ERROR If the directory cannnot be removed, accessed properly, or contains
  *                    directories that could not be removed..
  */
-PRTE_EXPORT int prte_os_dirpath_destroy(const char *path, bool recursive,
-                                        prte_os_dirpath_destroy_callback_fn_t cbfunc);
+PRTE_EXPORT int pmix_os_dirpath_destroy(const char *path, bool recursive,
+                                        pmix_os_dirpath_destroy_callback_fn_t cbfunc);
 
 END_C_DECLS
 
