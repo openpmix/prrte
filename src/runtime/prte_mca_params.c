@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2008 The University of Tennessee and The University
+ * Copyright (c) 2004-2022 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -689,8 +689,8 @@ int prte_register_params(void)
                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                       PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ftm);
     if (NULL != prte_ftm) {
-        if (0 == strcasecmp(prte_ftm, "utk")) {
-            prte_enable_ft.utk = true;
+        if (0 == strcasecmp(prte_ftm, "detector")) {
+            prte_enable_ft.detector = true;
         } else if (0 == strcasecmp(prte_ftm, "rcm")) {
             prte_enable_ft.rcm = true;
         } else {

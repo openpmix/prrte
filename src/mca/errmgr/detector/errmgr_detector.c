@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2021 The University of Tennessee and The University
+ * Copyright (c) 2016-2022 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
@@ -298,9 +298,9 @@ static void enable_detector(void)
 {
     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:detector report detector_enable_status %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_enable_ft.utk));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_enable_ft.detector));
 
-    if (prte_enable_ft.utk) {
+    if (prte_enable_ft.detector) {
         prte_errmgr_detector_t *detector = &prte_errmgr_world_detector;
         int ndmns, i;
         uint32_t vpid;

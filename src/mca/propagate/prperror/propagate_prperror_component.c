@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The University of Tennessee and The University
+ * Copyright (c) 2016-2022 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
@@ -89,7 +89,7 @@ static int propagate_prperror_close(void)
 static int propagate_prperror_component_query(prte_mca_base_module_t **module, int *priority)
 {
     /* only daemon propagate */
-    if (prte_enable_ft.utk) {
+    if (prte_enable_ft.detector) {
         *priority = my_priority;
         *module = (prte_mca_base_module_t *) &prte_propagate_prperror_module;
         return PRTE_SUCCESS;

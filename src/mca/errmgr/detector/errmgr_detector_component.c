@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The University of Tennessee and The University
+ * Copyright (c) 2016-2022 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
@@ -102,7 +102,7 @@ static int errmgr_detector_close(void)
 
 static int errmgr_detector_component_query(prte_mca_base_module_t **module, int *priority)
 {
-    if (prte_enable_ft.utk && PRTE_PROC_IS_DAEMON) {
+    if (prte_enable_ft.detector && PRTE_PROC_IS_DAEMON) {
         *priority = my_priority;
         *module = (prte_mca_base_module_t *) &prte_errmgr_detector_module;
         return PRTE_SUCCESS;

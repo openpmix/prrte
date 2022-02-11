@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2018 The University of Tennessee and The University
+ * Copyright (c) 2004-2022 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -151,7 +151,7 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
-#if PRTE_ENABLE_UTK
+#if PRTE_ENABLE_FT_DETECTOR
     /* open the propagator */
     if (PRTE_SUCCESS
         != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework,
@@ -303,7 +303,7 @@ static int rte_init(int argc, char **argv)
         error = "prte_errmgr_base_select";
         goto error;
     }
-#if PRTE_ENABLE_UTK
+#if PRTE_ENABLE_FT_DETECTOR
     /* setup the propagate */
     if (PRTE_SUCCESS != (ret = prte_propagate_base_select())) {
         error = "prte_propagate_base_select";
@@ -581,7 +581,7 @@ static int rte_finalize(void)
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
     prte_errmgr.finalize();
-#if PRTE_ENABLE_UTK
+#if PRTE_ENABLE_FT_DETECTOR
     (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
 #endif
 

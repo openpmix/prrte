@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018 The University of Tennessee and The University
+ * Copyright (c) 2016-2022 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  *
@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef MCA_ERRMGR_UTK_PRTED_EXPORT_H
-#define MCA_ERRMGR_UTK_PRTED_EXPORT_H
+#ifndef MCA_ERRMGR_DETECTOR_PRTED_EXPORT_H
+#define MCA_ERRMGR_DETECTOR_PRTED_EXPORT_H
 
 #include "prte_config.h"
 
@@ -63,4 +63,4 @@ bool errmgr_get_daemon_status(pmix_proc_t daemon);
 void errmgr_set_daemon_status(pmix_proc_t daemon);
 END_C_DECLS
 
-#endif /* MCA_ERRMGR_UTK_PRTED_EXPORT_H */
+#endif /* MCA_ERRMGR_DETECTOR_PRTED_EXPORT_H */

@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2021 The University of Tennessee and The University
+ * Copyright (c) 2004-2022 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -194,7 +194,7 @@ int prte_ess_base_prted_setup(void)
         error = "prte_errmgr_base_open";
         goto error;
     }
-#if PRTE_ENABLE_UTK
+#if PRTE_ENABLE_FT_DETECTOR
     /* open the propagate */
     if (PRTE_SUCCESS
         != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework,
@@ -402,7 +402,7 @@ int prte_ess_base_prted_setup(void)
         error = "prte_errmgr_base_select";
         goto error;
     }
-#if PRTE_ENABLE_UTK
+#if PRTE_ENABLE_FT_DETECTOR
     /* select the propagate */
     if (PRTE_SUCCESS != (ret = prte_propagate_base_select())) {
         PRTE_ERROR_LOG(ret);
@@ -570,7 +570,7 @@ int prte_ess_base_prted_finalize(void)
         unlink(log_path);
     }
 
-#if PRTE_ENABLE_UTK
+#if PRTE_ENABLE_FT_DETECTOR
     if (NULL != prte_propagate.finalize) {
         prte_propagate.finalize();
     }

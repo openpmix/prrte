@@ -3,7 +3,7 @@ dnl
 dnl Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
 dnl                         University Research and Technology
 dnl                         Corporation.  All rights reserved.
-dnl Copyright (c) 2004-2005 The University of Tennessee and The University
+dnl Copyright (c) 2004-2022 The University of Tennessee and The University
 dnl                         of Tennessee Research Foundation.  All rights
 dnl                         reserved.
 dnl Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -379,8 +379,8 @@ dnl Check for FT
 AC_MSG_CHECKING([if want fault tolerance support])
 AC_ARG_WITH([prte-ft],
             [AS_HELP_STRING([--with-prte-ft],
-                            [Enable PRRTE fault tolerance support using the specified method(s). Current options: utk, rcm, all (default: utk enabled) ])])
-prte_build_ft_method_utk=no
+                            [Enable PRRTE fault tolerance support using the specified method(s). Current options: detector, rcm, all (default: detector enabled) ])])
+prte_build_ft_method_detector=no
 prte_build_ft_method_rcm=no
 if test "$with_prte_ft" = "no"; then
     AC_MSG_RESULT([no])
@@ -388,16 +388,16 @@ if test "$with_prte_ft" = "no"; then
     prte_ft_method=""
 elif test -z "$with_prte_ft" || test "$with_prte_ft" = "yes"; then
     prte_ft_enabled=yes
-    prte_ft_method="utk (default)"
-    prte_build_ft_method_utk=yes
-    AC_DEFINE_UNQUOTED([PRTE_ENABLE_UTK], [1], [UTK fault tolerance enabled])
+    prte_ft_method="detector (default)"
+    prte_build_ft_method_detector=yes
+    AC_DEFINE_UNQUOTED([PRTE_ENABLE_FT_DETECTOR], [1], [PRTE Ring+BMG Detector enabled])
 elif test "$with_prte_ft" = "all"; then
     AC_MSG_RESULT([yes])
     prte_ft_enabled=yes
     prte_build_ft_method_rcm=yes
     AC_DEFINE_UNQUOTED([PRTE_ENABLE_PRCM], [1], [PRRTE Resilient Cluster Manager enabled])
-    prte_build_ft_method_utk=yes
-    AC_DEFINE_UNQUOTED([PRTE_ENABLE_UTK], [1], [UTK fault tolerance enabled])
+    prte_build_ft_method_detector=yes
+    AC_DEFINE_UNQUOTED([PRTE_ENABLE_FT_DETECTOR], [1], [PRTE Ring+BMG Detector enabled])
 else
     AC_MSG_RESULT([yes])
     prte_ft_enabled=yes
@@ -408,9 +408,9 @@ else
         if test "$item" = "rcm"; then
             AC_DEFINE_UNQUOTED([PRTE_ENABLE_PRCM], [1], [PRRTE Resilient Cluster Manager enabled])
             prte_build_ft_method_rcm=yes
-        elif test "$item" = "utk"; then
-            AC_DEFINE_UNQUOTED([PRTE_ENABLE_UTK], [1], [UTK fault tolerance enabled])
-            prte_build_ft_method_utk=yes
+        elif test "$item" = "detector"; then
+            AC_DEFINE_UNQUOTED([PRTE_ENABLE_FT_DETECTOR], [1], [PRTE Ring+BMG Detector enabled])
+            prte_build_ft_method_detector=yes
         fi
     done
     IFS=$ifs_save

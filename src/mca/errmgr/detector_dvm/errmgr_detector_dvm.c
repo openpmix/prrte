@@ -3,7 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010-2017 Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2004-2011 The University of Tennessee and The University
+ * Copyright (c) 2004-2022 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2011      Oracle and/or all its affiliates.  All rights reserved.
@@ -64,7 +64,7 @@
 #include "src/mca/errmgr/base/errmgr_private.h"
 #include "src/mca/errmgr/errmgr.h"
 
-#include "errmgr_utk_dvm.h"
+#include "errmgr_detector_dvm.h"
 #include "src/mca/propagate/propagate.h"
 
 static int init(void);
@@ -73,7 +73,7 @@ static int finalize(void);
 /******************
  * dvm module
  ******************/
-prte_errmgr_base_module_t prte_errmgr_utk_dvm_module = {
+prte_errmgr_base_module_t prte_errmgr_detector_dvm_module = {
     .init = init,
     .finalize = finalize,
     .logfn = prte_errmgr_base_log,
@@ -153,7 +153,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
                 }
                 PRTE_OUTPUT_VERBOSE(
                     (5, prte_errmgr_base_framework.framework_output,
-                     "%s errmgr: utk_dvm: error proc %s with key-value %s notified from %s",
+                     "%s errmgr: detector_dvm: error proc %s with key-value %s notified from %s",
                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc), info[n].key,
                      PRTE_NAME_PRINT(source)));
 
@@ -161,7 +161,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
                     /* must already be complete */
                     PRTE_OUTPUT_VERBOSE(
                         (5, prte_errmgr_base_framework.framework_output,
-                         "%s errmgr:utk_dvm:error_notify_callback NULL jdata - ignoring error",
+                         "%s errmgr:detector_dvm:error_notify_callback NULL jdata - ignoring error",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                     return;
                 }
@@ -201,7 +201,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
                 if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
                                                       prte_rml_send_callback, NULL))) {
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                                         "%s errmgr:utk_dvm: send to hnp failed",
+                                         "%s errmgr:detector_dvm: send to hnp failed",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                     PRTE_ERROR_LOG(rc);
                     PRTE_RELEASE(alert);
@@ -236,7 +236,7 @@ static int init(void)
     pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
 
     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                         "%s errmgr:utk_dvm: register evhandler in errmgr",
+                         "%s errmgr:detector_dvm: register evhandler in errmgr",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     PMIx_Register_event_handler(&pcode, 1, NULL, 0, error_notify_cbfunc, register_cbfunc, NULL);
 
@@ -294,7 +294,7 @@ static void job_errors(int fd, short args, void *cbdata)
     jdata->state = jobstate;
 
     PRTE_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
-                         "%s errmgr:utk_dvm: job %s reported state %s",
+                         "%s errmgr:detector_dvm: job %s reported state %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
                          prte_job_state_to_str(jobstate)));
 
@@ -331,7 +331,7 @@ static void job_errors(int fd, short args, void *cbdata)
      * the DVM itself */
 
     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                         "%s errmgr:utk_dvm sending notification of job %s failure to %s",
+                         "%s errmgr:detector_dvm sending notification of job %s failure to %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
                          PRTE_NAME_PRINT(&jdata->originator)));
 
@@ -378,7 +378,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     PRTE_ACQUIRE_OBJECT(caddy);
 
     PRTE_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
-                         "%s errmgr:utk_dvm: for proc %s state %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         "%s errmgr:detector_dvm: for proc %s state %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(proc), prte_proc_state_to_str(state)));
 
     /* get the job object */
@@ -446,7 +446,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                 }
                 /* call our appropriate exit procedure */
                 PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                                     "%s errmgr_utk_dvm: all routes and children gone - ordering exit",
+                                     "%s errmgr_detector_dvm: all routes and children gone - ordering exit",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             } else {
@@ -508,7 +508,7 @@ static void proc_errors(int fd, short args, void *cbdata)
            ourselves nicely (i.e., this is a normal termination) */
         if (0 == prte_routed.num_routes()) {
             PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
-                                 "%s errmgr:utk:dvm all routes gone - exiting",
+                                 "%s errmgr:detector:dvm all routes gone - exiting",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
         }
@@ -537,7 +537,7 @@ keep_going:
     switch (state) {
     case PRTE_PROC_STATE_KILLED_BY_CMD:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk:dvm: proc %s killed by cmd",
+                             "%s errmgr:detector:dvm: proc %s killed by cmd",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
         /* we ordered this proc to die, so it isn't an abnormal termination
          * and we don't flag it as such
@@ -551,7 +551,7 @@ keep_going:
 
     case PRTE_PROC_STATE_ABORTED:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk:dvm: proc %s aborted", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             "%s errmgr:detector:dvm: proc %s aborted", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_NAME_PRINT(proc)));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             jdata->state = PRTE_JOB_STATE_ABORTED;
@@ -569,7 +569,7 @@ keep_going:
 
     case PRTE_PROC_STATE_ABORTED_BY_SIG:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk:dvm: proc %s aborted by signal",
+                             "%s errmgr:detector:dvm: proc %s aborted by signal",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             jdata->state = PRTE_JOB_STATE_ABORTED_BY_SIG;
@@ -585,7 +585,7 @@ keep_going:
 
     case PRTE_PROC_STATE_TERM_WO_SYNC:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk:dvm: proc %s terminated without sync",
+                             "%s errmgr:detector:dvm: proc %s terminated without sync",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             jdata->state = PRTE_JOB_STATE_ABORTED_WO_SYNC;
@@ -612,7 +612,7 @@ keep_going:
     case PRTE_PROC_STATE_FAILED_TO_START:
     case PRTE_PROC_STATE_FAILED_TO_LAUNCH:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk:dvm: proc %s %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             "%s errmgr:detector:dvm: proc %s %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_NAME_PRINT(proc), prte_proc_state_to_str(state)));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             if (PRTE_PROC_STATE_FAILED_TO_START) {
@@ -646,7 +646,7 @@ keep_going:
 
     case PRTE_PROC_STATE_CALLED_ABORT:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk:dvm: proc %s called abort with exit code %d",
+                             "%s errmgr:detector:dvm: proc %s called abort with exit code %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
                              pptr->exit_code));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
@@ -665,7 +665,7 @@ keep_going:
 
     case PRTE_PROC_STATE_TERM_NON_ZERO:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk:dvm: proc %s exited with non-zero status %d",
+                             "%s errmgr:detector:dvm: proc %s exited with non-zero status %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
                              pptr->exit_code));
         jdata->exit_code = pptr->exit_code;
@@ -700,7 +700,7 @@ keep_going:
 
     case PRTE_PROC_STATE_HEARTBEAT_FAILED:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk:dvm: proc %s heartbeat failed",
+                             "%s errmgr:detector:dvm: proc %s heartbeat failed",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             jdata->state = PRTE_JOB_STATE_HEARTBEAT_FAILED;
@@ -720,7 +720,7 @@ keep_going:
 
     case PRTE_PROC_STATE_UNABLE_TO_SEND_MSG:
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk:dvm: unable to send message to proc %s",
+                             "%s errmgr:detector:dvm: unable to send message to proc %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
         /* if this proc is one of my daemons, then we are truly
          * hosed - so just exit out
@@ -733,7 +733,7 @@ keep_going:
     default:
         /* shouldn't get this, but terminate job if required */
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
-                             "%s errmgr:utk:dvm: proc %s default error %s",
+                             "%s errmgr:detector:dvm: proc %s default error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
                              prte_proc_state_to_str(state)));
         if (jdata->num_terminated == jdata->num_procs) {

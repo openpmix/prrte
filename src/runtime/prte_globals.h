@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2021 The University of Tennessee and The University
+ * Copyright (c) 2004-2022 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -620,7 +620,7 @@ extern char *prte_if_exclude;
 
 /* Enable/disable ft */
 typedef struct {
-    bool utk;
+    bool detector;
     bool rcm;
 } prte_enable_ft_t;
 PRTE_EXPORT extern prte_enable_ft_t prte_enable_ft;

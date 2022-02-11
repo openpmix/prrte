@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The University of Tennessee and The University
+ * Copyright (c) 2017-2022 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
@@ -29,7 +29,7 @@ int prte_propagate_base_select(void)
     prte_propagate_base_module_t *best_module = NULL;
     
     /* early bailout. */
-    if (!prte_enable_ft.utk) {
+    if (!prte_enable_ft.detector) {
         return PRTE_SUCCESS;
     }
     /*
