@@ -47,7 +47,7 @@
 #include "src/util/pmix_path.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/prte_getcwd.h"
+#include "src/util/pmix_getcwd.h"
 #include "src/util/show_help.h"
 
 #include "src/runtime/prte_globals.h"
@@ -124,7 +124,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
     app->app.cmd = strdup(app->app.argv[0]);
 
     /* get the cwd - we may need it in several places */
-    if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
+    if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
         prte_show_help("help-prun.txt", "prun:init-failure", true, "get the cwd", rc);
         goto cleanup;
     }

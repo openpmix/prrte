@@ -26,7 +26,7 @@
 
 #include "constants.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/prte_getcwd.h"
+#include "src/util/pmix_getcwd.h"
 #include "src/util/string_copy.h"
 
 /*
@@ -34,7 +34,7 @@
  * synonym for the results from getcwd(). If both of these conditions
  * are not met, just fall back and use the results of getcwd().
  */
-int prte_getcwd(char *buf, size_t size)
+int pmix_getcwd(char *buf, size_t size)
 {
     char cwd[PRTE_PATH_MAX];
     char *pwd = getenv("PWD");

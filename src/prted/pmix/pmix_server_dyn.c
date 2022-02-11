@@ -39,7 +39,7 @@
 #include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/pmix_path.h"
-#include "src/util/prte_getcwd.h"
+#include "src/util/pmix_getcwd.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -272,7 +272,7 @@ static void interim(int sd, short args, void *cbdata)
                         app->cwd = strdup(info->value.data.string);
                     } else {
                         /* get the cwd */
-                        if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
+                        if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
                             prte_show_help("help-prted.txt", "cwd", true, "spawn", rc);
                             PRTE_RELEASE(jdata);
                             goto complete;
