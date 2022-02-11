@@ -50,7 +50,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/error.h"
-#include "src/util/few.h"
+#include "src/util/pmix_few.h"
 #include "src/util/keyval_parse.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_path.h"
