@@ -66,7 +66,6 @@ headers = \
         output.h \
         parse_options.h \
         proc_info.h \
-        prte_pty.h \
         session_dir.h \
         show_help_lex.h \
         show_help.h \
@@ -98,7 +97,6 @@ libprrteutil_la_SOURCES = \
         output.c \
         parse_options.c \
         proc_info.c \
-        prte_pty.c \
         session_dir.c \
         show_help.c \
         show_help_lex.l \
