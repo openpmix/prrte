@@ -105,7 +105,7 @@ int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts)
             wp = &ws;
         }
 #endif
-        ret = prte_openpty(&(opts->p_stdout[0]), &(opts->p_stdout[1]), (char *) NULL,
+        ret = pmix_openpty(&(opts->p_stdout[0]), &(opts->p_stdout[1]), (char *) NULL,
                            (struct termios *) NULL, wp);
     }
 #else
