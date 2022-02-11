@@ -81,7 +81,7 @@
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/prte_getcwd.h"
+#include "src/util/pmix_getcwd.h"
 #include "src/util/show_help.h"
 
 #include "src/class/prte_pointer_array.h"
