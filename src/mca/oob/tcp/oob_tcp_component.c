@@ -78,7 +78,7 @@
 #include "src/threads/threads.h"
 #include "src/util/attr.h"
 #include "src/util/name_fns.h"
-#include "src/util/parse_options.h"
+#include "src/util/pmix_parse_options.h"
 #include "src/util/show_help.h"
 
 #include "oob_tcp_peer.h"
@@ -239,7 +239,7 @@ static int tcp_component_register(void)
 
     /* if ports were provided, parse the provided range */
     if (NULL != static_port_string) {
-        prte_util_parse_range_options(static_port_string, &prte_oob_tcp_component.tcp_static_ports);
+        pmix_util_parse_range_options(static_port_string, &prte_oob_tcp_component.tcp_static_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp_static_ports[0], "-1")) {
             pmix_argv_free(prte_oob_tcp_component.tcp_static_ports);
             prte_oob_tcp_component.tcp_static_ports = NULL;
@@ -259,7 +259,7 @@ static int tcp_component_register(void)
 
     /* if ports were provided, parse the provided range */
     if (NULL != static_port_string6) {
-        prte_util_parse_range_options(static_port_string6,
+        pmix_util_parse_range_options(static_port_string6,
                                       &prte_oob_tcp_component.tcp6_static_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp6_static_ports[0], "-1")) {
             pmix_argv_free(prte_oob_tcp_component.tcp6_static_ports);
@@ -290,7 +290,7 @@ static int tcp_component_register(void)
             free(err);
             return PRTE_ERROR;
         }
-        prte_util_parse_range_options(dyn_port_string, &prte_oob_tcp_component.tcp_dyn_ports);
+        pmix_util_parse_range_options(dyn_port_string, &prte_oob_tcp_component.tcp_dyn_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp_dyn_ports[0], "-1")) {
             pmix_argv_free(prte_oob_tcp_component.tcp_dyn_ports);
             prte_oob_tcp_component.tcp_dyn_ports = NULL;
@@ -328,7 +328,7 @@ static int tcp_component_register(void)
             }
             return PRTE_ERROR;
         }
-        prte_util_parse_range_options(dyn_port_string6, &prte_oob_tcp_component.tcp6_dyn_ports);
+        pmix_util_parse_range_options(dyn_port_string6, &prte_oob_tcp_component.tcp6_dyn_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp6_dyn_ports[0], "-1")) {
             pmix_argv_free(prte_oob_tcp_component.tcp6_dyn_ports);
             prte_oob_tcp_component.tcp6_dyn_ports = NULL;

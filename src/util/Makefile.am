@@ -63,7 +63,6 @@ headers = \
         nidmap.h \
         numtostr.h \
         output.h \
-        parse_options.h \
         proc_info.h \
         session_dir.h \
         show_help_lex.h \
@@ -93,7 +92,6 @@ libprrteutil_la_SOURCES = \
         nidmap.c \
         numtostr.c \
         output.c \
-        parse_options.c \
         proc_info.c \
         session_dir.c \
         show_help.c \

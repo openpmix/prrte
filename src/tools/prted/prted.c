@@ -79,7 +79,7 @@
 #include "src/threads/threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"
-#include "src/util/parse_options.h"
+#include "src/util/pmix_parse_options.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
@@ -344,7 +344,7 @@ int main(int argc, char *argv[])
         /* could be a collection of comma-delimited ranges, so
          * use our handy utility to parse it
          */
-        prte_util_parse_range_options(prte_daemon_cores, &cores);
+        pmix_util_parse_range_options(prte_daemon_cores, &cores);
         if (NULL != cores) {
             ours = hwloc_bitmap_alloc();
             hwloc_bitmap_zero(ours);

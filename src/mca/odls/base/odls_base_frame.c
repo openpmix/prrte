@@ -46,7 +46,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/threads/threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/parse_options.h"
+#include "src/util/pmix_parse_options.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/odls/base/base.h"
@@ -283,7 +283,7 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
     if (NULL != prte_xterm) {
         /* construct a list of ranks to be displayed */
         xterm_hold = false;
-        prte_util_parse_range_options(prte_xterm, &ranks);
+        pmix_util_parse_range_options(prte_xterm, &ranks);
         for (i = 0; i < pmix_argv_count(ranks); i++) {
             if (0 == strcmp(ranks[i], "BANG")) {
                 xterm_hold = true;
