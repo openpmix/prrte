@@ -18,7 +18,7 @@
 #include "constants.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/util/output.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 static int if_solaris_ipv6_open(void);
 
@@ -88,7 +88,7 @@ static int if_solaris_ipv6_open(void)
     for (i = 0; i + sizeof(struct lifreq) <= lifconf.lifc_len; i += sizeof(*lifreq)) {
 
         lifreq = (struct lifreq *) ((caddr_t) lifconf.lifc_buf + i);
-        prte_string_copy(lifquery.lifr_name, lifreq->lifr_name, sizeof(lifquery.lifr_name));
+        pmix_string_copy(lifquery.lifr_name, lifreq->lifr_name, sizeof(lifquery.lifr_name));
 
         /* lookup kernel index */
         error = ioctl(sd, SIOCGLIFINDEX, &lifquery);
@@ -127,7 +127,7 @@ static int if_solaris_ipv6_open(void)
                 }
                 intf->af_family = AF_INET6;
 
-                prte_string_copy(intf->if_name, lifreq->lifr_name, PMIX_IF_NAMESIZE);
+                pmix_string_copy(intf->if_name, lifreq->lifr_name, PMIX_IF_NAMESIZE);
                 intf->if_index = prte_list_get_size(&prte_if_list) + 1;
                 memcpy(&intf->if_addr, my_addr, sizeof(*my_addr));
                 intf->if_mask = 64;

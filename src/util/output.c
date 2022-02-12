@@ -54,7 +54,7 @@
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 /*
  * Private data
@@ -749,7 +749,7 @@ static int open_file(int i)
         if (NULL == filename) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        prte_string_copy(filename, output_dir, PRTE_PATH_MAX);
+        pmix_string_copy(filename, output_dir, PRTE_PATH_MAX);
         strcat(filename, "/");
         if (NULL != output_prefix) {
             strcat(filename, output_prefix);

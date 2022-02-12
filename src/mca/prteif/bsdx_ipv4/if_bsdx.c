@@ -18,7 +18,7 @@
 #include "constants.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/util/output.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 static int if_bsdx_open(void);
 
@@ -117,7 +117,7 @@ static int if_bsdx_open(void)
         /* fill values into the prte_if_t */
         memcpy(&a4, &(sin_addr->sin_addr), sizeof(struct in_addr));
 
-        prte_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PMIX_IF_NAMESIZE);
+        pmix_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PMIX_IF_NAMESIZE);
         intf->if_index = prte_list_get_size(&prte_if_list) + 1;
         ((struct sockaddr_in *) &intf->if_addr)->sin_addr = a4;
         ((struct sockaddr_in *) &intf->if_addr)->sin_family = AF_INET;

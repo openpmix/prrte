@@ -24,7 +24,7 @@
 #include "reachable_netlink.h"
 #include "src/mca/prtereachable/base/base.h"
 #include "src/util/pmix_net.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 enum connection_quality { CQ_NO_CONNECTION = 0, CQ_DIFFERENT_NETWORK = 50, CQ_SAME_NETWORK = 100 };
 
@@ -89,10 +89,10 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
 
     /* pmix_net_get_hostname returns a static buffer.  Great for
        single address printfs, need to copy in this case */
-    prte_string_copy(str_local, pmix_net_get_hostname((struct sockaddr *) &local_if->if_addr),
+    pmix_string_copy(str_local, pmix_net_get_hostname((struct sockaddr *) &local_if->if_addr),
                      sizeof(str_local));
     str_local[sizeof(str_local) - 1] = '\0';
-    prte_string_copy(str_remote, pmix_net_get_hostname((struct sockaddr *) &remote_if->if_addr),
+    pmix_string_copy(str_remote, pmix_net_get_hostname((struct sockaddr *) &remote_if->if_addr),
                      sizeof(str_remote));
     str_remote[sizeof(str_remote) - 1] = '\0';
 

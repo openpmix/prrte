@@ -42,7 +42,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/ethtool.h"
 #include "src/util/pmix_if.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 /*
  * Obtain an appropriate bandwidth for the interface if_name. On Linux, we
@@ -66,7 +66,7 @@ unsigned int prte_ethtool_get_speed(const char *if_name)
     }
 
     memset(&ifr, 0, sizeof(struct ifreq));
-    prte_string_copy(ifr.ifr_name, if_name, PMIX_IF_NAMESIZE);
+    pmix_string_copy(ifr.ifr_name, if_name, PMIX_IF_NAMESIZE);
     ifr.ifr_data = (char *) &edata;
 
     if (ioctl(sockfd, SIOCETHTOOL, &ifr) < 0) {

@@ -16,7 +16,7 @@
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +32,7 @@
 #include "src/util/keyval/keyval_lex.h"
 #include "src/util/keyval_parse.h"
 #include "src/util/output.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 #include <ctype.h>
 #include <string.h>
 
@@ -140,7 +140,7 @@ static int parse_line(const char *filename, prte_keyval_parse_fn_t callback)
         key_buffer = tmp;
     }
 
-    prte_string_copy(key_buffer, prte_util_keyval_yytext, key_buffer_len);
+    pmix_string_copy(key_buffer, prte_util_keyval_yytext, key_buffer_len);
 
     /* The first thing we have to see is an "=" */
 
@@ -249,7 +249,7 @@ static int save_param_name(void)
         key_buffer = tmp;
     }
 
-    prte_string_copy(key_buffer, prte_util_keyval_yytext, key_buffer_len);
+    pmix_string_copy(key_buffer, prte_util_keyval_yytext, key_buffer_len);
 
     return PRTE_SUCCESS;
 }

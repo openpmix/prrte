@@ -15,7 +15,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,7 +29,7 @@
 #include "prte_config.h"
 
 #include "src/class/prte_list.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "oob_tcp.h"
 #include "oob_tcp_hdr.h"
@@ -171,7 +171,7 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
         PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->hdr.dst);                                          \
         _s->hdr.type = MCA_OOB_TCP_USER;                                                        \
         _s->hdr.tag = (m)->hdr.tag;                                                             \
-        (void) prte_string_copy(_s->hdr.routed, (m)->hdr.routed, PRTE_MAX_RTD_SIZE);            \
+        (void) pmix_string_copy(_s->hdr.routed, (m)->hdr.routed, PRTE_MAX_RTD_SIZE);            \
         /* point to the actual message */                                                       \
         _s->data = (m)->data;                                                                   \
         /* set the total number of bytes to be sent */                                          \

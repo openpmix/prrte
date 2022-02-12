@@ -56,7 +56,7 @@
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 #define LOG_PREFIX "mca: prteif: linux_ipv6: "
 
@@ -151,7 +151,7 @@ static int if_linux_ipv6_open(void)
             intf->af_family = AF_INET6;
 
             /* now construct the prte_if_t */
-            prte_string_copy(intf->if_name, ifname, PMIX_IF_NAMESIZE);
+            pmix_string_copy(intf->if_name, ifname, PMIX_IF_NAMESIZE);
             intf->if_index = prte_list_get_size(&prte_if_list) + 1;
             intf->if_kernel_index = (uint16_t) idx;
             ((struct sockaddr_in6 *) &intf->if_addr)->sin6_addr = a6;

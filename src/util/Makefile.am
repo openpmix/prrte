@@ -67,7 +67,6 @@ headers = \
         show_help_lex.h \
         show_help.h \
         stacktrace.h \
-        string_copy.h \
         sys_limits.h \
         uri.h
 
@@ -95,7 +94,6 @@ libprrteutil_la_SOURCES = \
         show_help.c \
         show_help_lex.l \
         stacktrace.c \
-        string_copy.c \
         sys_limits.c \
         uri.c
 

@@ -35,7 +35,7 @@
 #include "src/mca/mca.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ras/base/base.h"
