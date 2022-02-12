@@ -29,7 +29,7 @@
 #include <string.h>
 
 #include "src/util/pmix_argv.h"
-#include "src/util/if.h"
+#include "src/util/pmix_if.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"

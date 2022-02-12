@@ -42,7 +42,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/attr.h"
-#include "src/util/if.h"
+#include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
@@ -177,7 +177,7 @@ bool prte_check_host_is_local(const char *name)
     /* if it wasn't one of those and we are allowed
      * to resolve addresses, then try that too */
     if (!prte_do_not_resolve) {
-        if (prte_ifislocal(name)) {
+        if (pmix_ifislocal(name)) {
             /* add to our aliases */
             pmix_argv_append_nosize(&prte_process_info.aliases, name);
             return true;

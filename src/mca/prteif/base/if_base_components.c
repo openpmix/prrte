@@ -113,7 +113,7 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
         /* handle include/exclude directives */
         if (NULL != interfaces) {
             /* check for match */
-            rc = prte_ifmatches(kindex, interfaces);
+            rc = pmix_ifmatches(kindex, interfaces);
             /* if one of the network specifications isn't parseable, then
              * error out as we can't do what was requested
              */
@@ -149,7 +149,7 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
             /* if no specific interfaces were provided, we remove the loopback
              * interface unless nothing else is available
              */
-            if (1 < prte_ifcount() && prte_ifisloopback(i)) {
+            if (1 < pmix_ifcount() && pmix_ifisloopback(i)) {
                 prte_output_verbose(20, prte_prteif_base_framework.framework_output,
                                     "%s if: rejecting loopback interface %s",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -232,7 +232,7 @@ static char **split_and_resolve(const char *orig_str,
     char **argv, **interfaces, *str;
     struct sockaddr_storage argv_inaddr, if_inaddr;
     uint32_t argv_prefix;
-    char if_name[PRTE_IF_NAMESIZE];
+    char if_name[PMIX_IF_NAMESIZE];
     bool found;
 
     /* Sanity check */
@@ -283,16 +283,16 @@ static char **split_and_resolve(const char *orig_str,
 
         /* Go through all interfaces to see if we can find one or more matches */
         found = false;
-        for (if_index = prte_ifbegin(); if_index >= 0;
-             if_index = prte_ifnext(if_index)) {
-            prte_ifindextoaddr(if_index,
+        for (if_index = pmix_ifbegin(); if_index >= 0;
+             if_index = pmix_ifnext(if_index)) {
+            pmix_ifindextoaddr(if_index,
                                (struct sockaddr*) &if_inaddr,
                                sizeof(if_inaddr));
             if (pmix_net_samenetwork(&argv_inaddr, &if_inaddr, argv_prefix)) {
                 /* We found a match. If it's not already in the interfaces array,
                    add it. If it's already in the array, treat it as a match */
                 found = true;
-                prte_ifindextoname(if_index, if_name, sizeof(if_name));
+                pmix_ifindextoname(if_index, if_name, sizeof(if_name));
                 pmix_argv_append_unique_nosize(&interfaces, if_name);
                     prte_output_verbose(20,
                                         prte_prteif_base_framework.framework_output,

@@ -67,7 +67,7 @@
 #include "src/class/prte_list.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/if.h"
+#include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
@@ -181,7 +181,7 @@ static int prte_ifaddrtoname(const char *if_addr, char *if_name, int length)
  *  Return the number of discovered interface.
  */
 
-int prte_ifcount(void)
+int pmix_ifcount(void)
 {
     return prte_list_get_size(&prte_if_list);
 }
@@ -191,7 +191,7 @@ int prte_ifcount(void)
  *  interface in our list.
  */
 
-int prte_ifbegin(void)
+int pmix_ifbegin(void)
 {
     prte_if_t *intf;
 
@@ -207,7 +207,7 @@ int prte_ifbegin(void)
  *  (if it exists).
  */
 
-int prte_ifnext(int if_index)
+int pmix_ifnext(int if_index)
 {
     prte_if_t *intf;
 
@@ -233,7 +233,7 @@ int prte_ifnext(int if_index)
  *  primary address assigned to the interface.
  */
 
-int prte_ifindextoaddr(int if_index, struct sockaddr *if_addr, unsigned int length)
+int pmix_ifindextoaddr(int if_index, struct sockaddr *if_addr, unsigned int length)
 {
     prte_if_t *intf;
 
@@ -270,7 +270,7 @@ int prte_ifkindextoaddr(int if_kindex, struct sockaddr *if_addr, unsigned int le
  *  the associated name.
  */
 
-int prte_ifindextoname(int if_index, char *if_name, int length)
+int pmix_ifindextoname(int if_index, char *if_name, int length)
 {
     prte_if_t *intf;
 
@@ -304,7 +304,7 @@ int prte_ifindextoflags(int if_index, uint32_t *if_flags)
 }
 
 #    define ADDRLEN 100
-bool prte_ifislocal(const char *hostname)
+bool pmix_ifislocal(const char *hostname)
 {
 #    if PRTE_ENABLE_IPV6
     char addrname[NI_MAXHOST]; /* should be larger than ADDRLEN, but I think
@@ -419,7 +419,7 @@ int prte_iftupletoaddr(const char *inaddr, uint32_t *net, uint32_t *mask)
  *  Determine if the specified interface is loopback
  */
 
-bool prte_ifisloopback(int if_index)
+bool pmix_ifisloopback(int if_index)
 {
     prte_if_t *intf;
 
@@ -438,7 +438,7 @@ bool prte_ifisloopback(int if_index)
  * into account that the list entries could be given as named interfaces,
  * IP addrs, or subnet+mask
  */
-int prte_ifmatches(int kidx, char **nets)
+int pmix_ifmatches(int kidx, char **nets)
 {
     bool named_if;
     int i, rc;
@@ -486,7 +486,7 @@ int prte_ifmatches(int kidx, char **nets)
     return PRTE_ERR_NOT_FOUND;
 }
 
-void prte_ifgetaliases(char ***aliases)
+void pmix_ifgetaliases(char ***aliases)
 {
     prte_if_t *intf;
     char ipv4[INET_ADDRSTRLEN];
@@ -536,27 +536,27 @@ int prte_ifnametokindex(const char *if_name)
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
-int prte_ifcount(void)
+int pmix_ifcount(void)
 {
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
-int prte_ifbegin(void)
+int pmix_ifbegin(void)
 {
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
-int prte_ifnext(int if_index)
+int pmix_ifnext(int if_index)
 {
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
-int prte_ifindextoname(int if_index, char *if_name, int length)
+int pmix_ifindextoname(int if_index, char *if_name, int length)
 {
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
-int prte_ifindextoaddr(int if_index, struct sockaddr *if_addr, unsigned int length)
+int pmix_ifindextoaddr(int if_index, struct sockaddr *if_addr, unsigned int length)
 {
     return PRTE_ERR_NOT_SUPPORTED;
 }
@@ -571,7 +571,7 @@ int prte_ifindextoflags(int if_index, uint32_t *if_flags)
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
-bool prte_ifislocal(const char *hostname)
+bool pmix_ifislocal(const char *hostname)
 {
     return false;
 }
@@ -581,17 +581,17 @@ int prte_iftupletoaddr(const char *inaddr, uint32_t *net, uint32_t *mask)
     return 0;
 }
 
-bool prte_ifisloopback(int if_index)
+bool pmix_ifisloopback(int if_index)
 {
     return false;
 }
 
-int prte_ifmatches(int idx, char **nets)
+int pmix_ifmatches(int idx, char **nets)
 {
     return PRTE_ERR_NOT_SUPPORTED;
 }
 
-void prte_ifgetaliases(char ***aliases)
+void pmix_ifgetaliases(char ***aliases)
 {
     return;
 }

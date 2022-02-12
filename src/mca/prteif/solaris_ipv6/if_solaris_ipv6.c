@@ -2,7 +2,7 @@
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -127,7 +127,7 @@ static int if_solaris_ipv6_open(void)
                 }
                 intf->af_family = AF_INET6;
 
-                prte_string_copy(intf->if_name, lifreq->lifr_name, PRTE_IF_NAMESIZE);
+                prte_string_copy(intf->if_name, lifreq->lifr_name, PMIX_IF_NAMESIZE);
                 intf->if_index = prte_list_get_size(&prte_if_list) + 1;
                 memcpy(&intf->if_addr, my_addr, sizeof(*my_addr));
                 intf->if_mask = 64;

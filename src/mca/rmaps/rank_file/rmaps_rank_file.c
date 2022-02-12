@@ -40,7 +40,7 @@
 #include "src/class/prte_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/if.h"
+#include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/proc_info.h"
 
