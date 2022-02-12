@@ -47,7 +47,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 #if PRTE_HAVE_DL_SUPPORT
 
@@ -174,8 +174,8 @@ static int process_repository_item(const char *filename, void *data)
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    prte_string_copy(ri->ri_type, type, PRTE_MCA_BASE_MAX_TYPE_NAME_LEN);
-    prte_string_copy(ri->ri_name, name, PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN);
+    pmix_string_copy(ri->ri_type, type, PRTE_MCA_BASE_MAX_TYPE_NAME_LEN);
+    pmix_string_copy(ri->ri_name, name, PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN);
 
     prte_list_append(component_list, &ri->super);
 

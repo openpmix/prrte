@@ -72,7 +72,7 @@
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/mca/prteif/base/base.h"
 
@@ -152,7 +152,7 @@ static int prte_ifaddrtoname(const char *if_addr, char *if_name, int length)
                 memcpy(&ipv4, r->ai_addr, r->ai_addrlen);
 
                 if (inaddr->sin_addr.s_addr == ipv4.sin_addr.s_addr) {
-                    prte_string_copy(if_name, intf->if_name, length);
+                    pmix_string_copy(if_name, intf->if_name, length);
                     freeaddrinfo(res);
                     return PRTE_SUCCESS;
                 }
@@ -161,7 +161,7 @@ static int prte_ifaddrtoname(const char *if_addr, char *if_name, int length)
             else {
                 if (IN6_ARE_ADDR_EQUAL(&((struct sockaddr_in6 *) &intf->if_addr)->sin6_addr,
                                        &((struct sockaddr_in6 *) r->ai_addr)->sin6_addr)) {
-                    prte_string_copy(if_name, intf->if_name, length);
+                    pmix_string_copy(if_name, intf->if_name, length);
                     freeaddrinfo(res);
                     return PRTE_SUCCESS;
                 }
@@ -277,7 +277,7 @@ int pmix_ifindextoname(int if_index, char *if_name, int length)
     PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
     {
         if (intf->if_index == if_index) {
-            prte_string_copy(if_name, intf->if_name, length);
+            pmix_string_copy(if_name, intf->if_name, length);
             return PRTE_SUCCESS;
         }
     }

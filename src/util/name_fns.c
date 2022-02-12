@@ -30,7 +30,7 @@
 
 #include "src/threads/tsd.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/mca/errmgr/errmgr.h"
 
 #include "src/util/name_fns.h"

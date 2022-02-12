@@ -48,7 +48,7 @@
 #include "src/util/output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
@@ -361,7 +361,7 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
     if (NULL == path) {
         getcwd(cwd, PRTE_PATH_MAX);
     } else {
-        prte_string_copy(cwd, path, PRTE_PATH_MAX);
+        pmix_string_copy(cwd, path, PRTE_PATH_MAX);
     }
     if (NULL == agent_list) {
         lines = pmix_argv_split(prte_plm_ssh_component.agent, ':');

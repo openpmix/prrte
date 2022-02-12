@@ -21,7 +21,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/mca/errmgr/errmgr.h"
 
@@ -191,7 +191,7 @@ int prte_attr_register(const char *project, prte_attribute_key_t key_base,
     for (i = 0; i < MAX_CONVERTERS; ++i) {
         if (0 == converters[i].init) {
             converters[i].init = 1;
-            prte_string_copy(converters[i].project, project, MAX_CONVERTER_PROJECT_LEN);
+            pmix_string_copy(converters[i].project, project, MAX_CONVERTER_PROJECT_LEN);
             converters[i].project[MAX_CONVERTER_PROJECT_LEN - 1] = '\0';
             converters[i].key_base = key_base;
             converters[i].key_max = key_max;

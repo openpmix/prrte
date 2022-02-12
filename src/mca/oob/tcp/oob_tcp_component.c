@@ -459,7 +459,7 @@ static int component_available(void)
         if (NULL == copied_interface) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        prte_string_copy(copied_interface->if_name, selected_interface->if_name, sizeof(name));
+        pmix_string_copy(copied_interface->if_name, selected_interface->if_name, sizeof(name));
         copied_interface->if_index = i;
         copied_interface->if_kernel_index = kindex;
         copied_interface->af_family = my_ss.ss_family;
