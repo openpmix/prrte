@@ -32,7 +32,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/threads/tsd.h"
-#include "src/util/if.h"
+#include "src/util/pmix_if.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"

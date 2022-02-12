@@ -59,7 +59,7 @@
 #include "src/include/prte_socket_errno.h"
 #include "src/util/error.h"
 #include "src/util/pmix_fd.h"
-#include "src/util/if.h"
+#include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
 

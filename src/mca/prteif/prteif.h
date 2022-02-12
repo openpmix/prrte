@@ -54,7 +54,7 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
-#include "src/util/if.h"
+#include "src/util/pmix_if.h"
 
 BEGIN_C_DECLS
 
@@ -75,7 +75,7 @@ BEGIN_C_DECLS
 
 typedef struct prte_if_t {
     prte_list_item_t super;
-    char if_name[PRTE_IF_NAMESIZE];
+    char if_name[PMIX_IF_NAMESIZE];
     int if_index;
     uint16_t if_kernel_index;
     uint16_t af_family;

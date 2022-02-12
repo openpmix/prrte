@@ -203,7 +203,7 @@ int prte_init_util(prte_proc_type_t flags)
         return ret;
     }
     /* add network aliases to our list of alias hostnames */
-    prte_ifgetaliases(&prte_process_info.aliases);
+    pmix_ifgetaliases(&prte_process_info.aliases);
 
     if (PRTE_SUCCESS
         != (ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework,

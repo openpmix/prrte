@@ -404,7 +404,7 @@ static int component_available(void)
 {
     prte_if_t *copied_interface, *selected_interface;
     struct sockaddr_storage my_ss;
-    char name[PRTE_IF_NAMESIZE];
+    char name[PMIX_IF_NAMESIZE];
     /* Larger than necessary, used for copying mask */
     char string[50];
     int kindex;

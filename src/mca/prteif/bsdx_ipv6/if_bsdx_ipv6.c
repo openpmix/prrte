@@ -4,7 +4,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -176,7 +176,7 @@ static int if_bsdx_ipv6_open(void)
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
         intf->af_family = AF_INET6;
-        prte_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PRTE_IF_NAMESIZE);
+        prte_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PMIX_IF_NAMESIZE);
         intf->if_index = prte_list_get_size(&prte_if_list) + 1;
         ((struct sockaddr_in6 *) &intf->if_addr)->sin6_addr = a6;
         ((struct sockaddr_in6 *) &intf->if_addr)->sin6_family = AF_INET6;

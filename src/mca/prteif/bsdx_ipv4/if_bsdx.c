@@ -2,7 +2,7 @@
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -117,7 +117,7 @@ static int if_bsdx_open(void)
         /* fill values into the prte_if_t */
         memcpy(&a4, &(sin_addr->sin_addr), sizeof(struct in_addr));
 
-        prte_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PRTE_IF_NAMESIZE);
+        prte_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PMIX_IF_NAMESIZE);
         intf->if_index = prte_list_get_size(&prte_if_list) + 1;
         ((struct sockaddr_in *) &intf->if_addr)->sin_addr = a4;
         ((struct sockaddr_in *) &intf->if_addr)->sin_family = AF_INET;

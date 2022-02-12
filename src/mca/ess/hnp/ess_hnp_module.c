@@ -50,7 +50,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_fd.h"
-#include "src/util/if.h"
+#include "src/util/pmix_if.h"
 #include "src/util/malloc.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
