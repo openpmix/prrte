@@ -3,7 +3,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,8 +18,8 @@
 
 #include "constants.h"
 #include "prte_stdint.h"
-#include "src/class/prte_list.h"
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
@@ -60,18 +60,18 @@ static inline void check_add64_overflow(int64_t a, int64_t b)
 
 static void edge_constructor(prte_bp_graph_edge_t *e)
 {
-    PRTE_CONSTRUCT(&e->outbound_li, prte_list_item_t);
-    PRTE_CONSTRUCT(&e->inbound_li, prte_list_item_t);
+    PMIX_CONSTRUCT(&e->outbound_li, pmix_list_item_t);
+    PMIX_CONSTRUCT(&e->inbound_li, pmix_list_item_t);
 }
 
 static void edge_destructor(prte_bp_graph_edge_t *e)
 {
-    PRTE_DESTRUCT(&e->outbound_li);
-    PRTE_DESTRUCT(&e->inbound_li);
+    PMIX_DESTRUCT(&e->outbound_li);
+    PMIX_DESTRUCT(&e->inbound_li);
 }
 
-PRTE_CLASS_DECLARATION(prte_bp_graph_edge_t);
-PRTE_CLASS_INSTANCE(prte_bp_graph_edge_t, prte_object_t, edge_constructor, edge_destructor);
+PMIX_CLASS_DECLARATION(prte_bp_graph_edge_t);
+PMIX_CLASS_INSTANCE(prte_bp_graph_edge_t, pmix_object_t, edge_constructor, edge_destructor);
 
 #if GRAPH_DEBUG
 static void dump_vec(const char *name, int *vec, int n) __prte_attribute_unused__;
@@ -188,8 +188,8 @@ int prte_bp_graph_create(prte_bp_graph_cleanup_fn_t v_data_cleanup_fn,
     g->e_data_cleanup_fn = e_data_cleanup_fn;
 
     /* now that we essentially have an empty graph, add vertices to it */
-    PRTE_CONSTRUCT(&g->vertices, prte_pointer_array_t);
-    err = prte_pointer_array_init(&g->vertices, 0, INT_MAX, 32);
+    PMIX_CONSTRUCT(&g->vertices, pmix_pointer_array_t);
+    err = pmix_pointer_array_init(&g->vertices, 0, INT_MAX, 32);
     if (PRTE_SUCCESS != err) {
         goto out_free_g;
     }
@@ -213,8 +213,8 @@ int prte_bp_graph_free(prte_bp_graph_t *g)
         v = V_ID_TO_PTR(g, i);
         LIST_FOREACH_SAFE_CONTAINED(e, next, &v->out_edges, prte_bp_graph_edge_t, outbound_li)
         {
-            prte_list_remove_item(&v->out_edges, &e->outbound_li);
-            PRTE_RELEASE(e);
+            pmix_list_remove_item(&v->out_edges, &e->outbound_li);
+            PMIX_RELEASE(e);
         }
     }
     /* now remove from all in_edges lists and free the edge */
@@ -222,20 +222,20 @@ int prte_bp_graph_free(prte_bp_graph_t *g)
         v = V_ID_TO_PTR(g, i);
         LIST_FOREACH_SAFE_CONTAINED(e, next, &v->in_edges, prte_bp_graph_edge_t, inbound_li)
         {
-            prte_list_remove_item(&v->in_edges, &e->inbound_li);
+            pmix_list_remove_item(&v->in_edges, &e->inbound_li);
 
             if (NULL != g->e_data_cleanup_fn && NULL != e->e_data) {
                 g->e_data_cleanup_fn(e->e_data);
             }
-            PRTE_RELEASE(e);
+            PMIX_RELEASE(e);
         }
 
         free_vertex(g, V_ID_TO_PTR(g, i));
-        prte_pointer_array_set_item(&g->vertices, i, NULL);
+        pmix_pointer_array_set_item(&g->vertices, i, NULL);
     }
     g->num_vertices = 0;
 
-    PRTE_DESTRUCT(&g->vertices);
+    PMIX_DESTRUCT(&g->vertices);
     free(g);
 
     return PRTE_SUCCESS;
@@ -316,7 +316,7 @@ int prte_bp_graph_indegree(const prte_bp_graph_t *g, int vertex)
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
-    return prte_list_get_size(&v->in_edges);
+    return pmix_list_get_size(&v->in_edges);
 }
 
 int prte_bp_graph_outdegree(const prte_bp_graph_t *g, int vertex)
@@ -324,7 +324,7 @@ int prte_bp_graph_outdegree(const prte_bp_graph_t *g, int vertex)
     prte_bp_graph_vertex_t *v;
 
     v = V_ID_TO_PTR(g, vertex);
-    return prte_list_get_size(&v->out_edges);
+    return pmix_list_get_size(&v->out_edges);
 }
 
 int prte_bp_graph_add_edge(prte_bp_graph_t *g, int from, int to, int64_t cost, int capacity,
@@ -356,7 +356,7 @@ int prte_bp_graph_add_edge(prte_bp_graph_t *g, int from, int to, int64_t cost, i
     }
 
     /* this reference is owned by the out_edges list */
-    e = PRTE_NEW(prte_bp_graph_edge_t);
+    e = PMIX_NEW(prte_bp_graph_edge_t);
     if (NULL == e) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return PRTE_ERR_OUT_OF_RESOURCE;
@@ -373,11 +373,11 @@ int prte_bp_graph_add_edge(prte_bp_graph_t *g, int from, int to, int64_t cost, i
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
-    prte_list_append(&v_from->out_edges, &e->outbound_li);
+    pmix_list_append(&v_from->out_edges, &e->outbound_li);
 
-    PRTE_RETAIN(e); /* ref owned by in_edges list */
+    PMIX_RETAIN(e); /* ref owned by in_edges list */
     v_to = V_ID_TO_PTR(g, to);
-    prte_list_append(&v_to->in_edges, &e->inbound_li);
+    pmix_list_append(&v_to->in_edges, &e->inbound_li);
 
     return PRTE_SUCCESS;
 }
@@ -394,7 +394,7 @@ int prte_bp_graph_add_vertex(prte_bp_graph_t *g, void *v_data, int *index_out)
 
     /* add to the ptr array early to simplify cleanup in the incredibly rare
      * chance that adding fails */
-    v->v_index = prte_pointer_array_add(&g->vertices, v);
+    v->v_index = pmix_pointer_array_add(&g->vertices, v);
     if (-1 == v->v_index) {
         free(v);
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
@@ -405,8 +405,8 @@ int prte_bp_graph_add_vertex(prte_bp_graph_t *g, void *v_data, int *index_out)
     ++g->num_vertices;
 
     v->v_data = v_data;
-    PRTE_CONSTRUCT(&v->out_edges, prte_list_t);
-    PRTE_CONSTRUCT(&v->in_edges, prte_list_t);
+    PMIX_CONSTRUCT(&v->out_edges, pmix_list_t);
+    PMIX_CONSTRUCT(&v->in_edges, pmix_list_t);
 
     if (NULL != index_out) {
         *index_out = v->v_index;

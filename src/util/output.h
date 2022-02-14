@@ -17,7 +17,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -74,7 +74,7 @@
 
 #include <stdarg.h>
 
-#include "src/class/prte_object.h"
+#include "src/class/pmix_object.h"
 
 BEGIN_C_DECLS
 
@@ -116,7 +116,7 @@ PRTE_EXPORT extern int prte_output_redirected_syslog_pri;
  */
 struct prte_output_stream_t {
     /** Class parent */
-    prte_object_t super;
+    pmix_object_t super;
 
     /**
      * Indicate the starting verbosity level of the stream.
@@ -555,7 +555,7 @@ PRTE_EXPORT void prte_output_setup_stream_prefix(void);
  * The intended usage is to invoke the constructor and then enable
  * the output fields that you want.
  */
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_output_stream_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_output_stream_t);
 
 END_C_DECLS
 

@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,11 +43,11 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_hash_table.h"
-#include "src/class/prte_list.h"
-#include "src/class/prte_object.h"
-#include "src/class/prte_pointer_array.h"
-#include "src/class/prte_value_array.h"
+#include "src/class/pmix_hash_table.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_object.h"
+#include "src/class/pmix_pointer_array.h"
+#include "src/class/pmix_value_array.h"
 #include "src/mca/base/prte_mca_base_var.h"
 
 BEGIN_C_DECLS
@@ -84,7 +84,7 @@ PRTE_EXPORT extern bool prte_mca_base_var_initialized;
  */
 struct prte_mca_base_var_file_value_t {
     /** Allow this to be an PRTE OBJ */
-    prte_list_item_t super;
+    pmix_list_item_t super;
 
     /** Parameter name */
     char *mbvfv_var;
@@ -106,7 +106,7 @@ typedef struct prte_mca_base_var_file_value_t prte_mca_base_var_file_value_t;
 /**
  * Object declaration for mca_base_var_file_value_t
  */
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_var_file_value_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_mca_base_var_file_value_t);
 
 /**
  * \internal
@@ -121,7 +121,7 @@ PRTE_EXPORT int prte_mca_base_var_group_get_internal(const int group_index,
                                                      prte_mca_base_var_group_t **group,
                                                      bool invalidok);
 
-PRTE_EXPORT int prte_mca_base_parse_paramfile(const char *paramfile, prte_list_t *list);
+PRTE_EXPORT int prte_mca_base_parse_paramfile(const char *paramfile, pmix_list_t *list);
 
 /**
  * \internal

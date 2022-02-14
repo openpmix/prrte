@@ -54,8 +54,8 @@
 #endif
 #include <ctype.h>
 
-#include "src/class/prte_hash_table.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_hash_table.h"
+#include "src/class/pmix_list.h"
 #include "src/include/prte_socket_errno.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
@@ -95,7 +95,7 @@ PRTE_MODULE_EXPORT prte_oob_base_component_t prte_oob_alps_component = {
         PRTE_OOB_BASE_VERSION_2_0_0,
         .mca_component_name = "alps",
         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PRTE_RELEASE_VERSION),
+                                    PMIX_RELEASE_VERSION),
         .mca_open_component = alps_component_open,
         .mca_close_component = alps_component_close,
     },

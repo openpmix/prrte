@@ -80,8 +80,8 @@ static int ppr_mapper(prte_job_t *jdata)
     ;
     bool pruning_reqd = false;
     prte_hwloc_level_t level;
-    prte_list_t node_list;
-    prte_list_item_t *item;
+    pmix_list_t node_list;
+    pmix_list_item_t *item;
     int32_t num_slots;
     prte_app_idx_t idx;
     char **ppr_req, **ck, *jobppr = NULL;
@@ -261,7 +261,7 @@ static int ppr_mapper(prte_job_t *jdata)
     lowest = prte_hwloc_levels[start];
 
     for (idx = 0; idx < (prte_app_idx_t) jdata->apps->size; idx++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, idx))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, idx))) {
             continue;
         }
 
@@ -276,7 +276,7 @@ static int ppr_mapper(prte_job_t *jdata)
         }
 
         /* get the available nodes */
-        PRTE_CONSTRUCT(&node_list, prte_list_t);
+        PMIX_CONSTRUCT(&node_list, pmix_list_t);
         rc = prte_rmaps_base_get_target_nodes(&node_list, &num_slots, app,
                                               jdata->map->mapping, initial_map, false);
         if (PRTE_SUCCESS != rc) {
@@ -291,8 +291,8 @@ static int ppr_mapper(prte_job_t *jdata)
 
         /* cycle across the nodes */
         nprocs_mapped = 0;
-        for (item = prte_list_get_first(&node_list); item != prte_list_get_end(&node_list);
-             item = prte_list_get_next(item)) {
+        for (item = pmix_list_get_first(&node_list); item != pmix_list_get_end(&node_list);
+             item = pmix_list_get_next(item)) {
             node = (prte_node_t *) item;
             /* bozo check */
             if (NULL == node->topology || NULL == node->topology->topo) {
@@ -303,8 +303,8 @@ static int ppr_mapper(prte_job_t *jdata)
             /* add the node to the map, if needed */
             if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-                PRTE_RETAIN(node);
-                prte_pointer_array_add(jdata->map->nodes, node);
+                PMIX_RETAIN(node);
+                pmix_pointer_array_add(jdata->map->nodes, node);
                 jdata->map->num_nodes++;
             }
             /* if we are mapping solely at the node level, just put
@@ -439,13 +439,13 @@ static int ppr_mapper(prte_job_t *jdata)
          */
         jdata->num_procs += app->num_procs;
 
-        PRTE_LIST_DESTRUCT(&node_list);
+        PMIX_LIST_DESTRUCT(&node_list);
     }
     free(jobppr);
     return PRTE_SUCCESS;
 
 error:
-    PRTE_LIST_DESTRUCT(&node_list);
+    PMIX_LIST_DESTRUCT(&node_list);
     free(jobppr);
     return rc;
 }
@@ -532,7 +532,7 @@ static void prune(pmix_nspace_t jobid, prte_app_idx_t app_idx, prte_node_t *node
          */
         nprocs = 0;
         for (n = 0; n < node->procs->size; n++) {
-            if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, n))) {
+            if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, n))) {
                 continue;
             }
             if (!PMIX_CHECK_NSPACE(proc->name.nspace, jobid) || proc->app_idx != app_idx) {
@@ -582,7 +582,7 @@ static void prune(pmix_nspace_t jobid, prte_app_idx_t app_idx, prte_node_t *node
                 nunder = 0;
                 pptr = NULL;
                 for (n = 0; n < node->procs->size; n++) {
-                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, n);
+                    proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, n);
                     if (NULL == proc) {
                         continue;
                     }
@@ -620,7 +620,7 @@ static void prune(pmix_nspace_t jobid, prte_app_idx_t app_idx, prte_node_t *node
             /* remove it */
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:ppr: removing proc at posn %d", idxmax);
-            prte_pointer_array_set_item(node->procs, idxmax, NULL);
+            pmix_pointer_array_set_item(node->procs, idxmax, NULL);
             node->num_procs--;
             node->slots_inuse--;
             if (node->slots_inuse < 0) {
@@ -628,7 +628,7 @@ static void prune(pmix_nspace_t jobid, prte_app_idx_t app_idx, prte_node_t *node
             }
             nprocs--;
             *nmapped -= 1;
-            PRTE_RELEASE(procmax);
+            PMIX_RELEASE(procmax);
         }
     }
     /* finished with this level - move up if necessary */
@@ -712,12 +712,12 @@ static int assign_locations(prte_job_t *jdata)
     /* start assigning procs to objects, filling each object as we go until
      * all procs are assigned. */
     for (n = 0; n < jdata->apps->size; n++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n))) {
             continue;
         }
         nprocs_mapped = 0;
         for (m = 0; m < jdata->map->nodes->size; m++) {
-            node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+            node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m);
             if (NULL == node) {
                 continue;
             }
@@ -728,7 +728,7 @@ static int assign_locations(prte_job_t *jdata)
             if (HWLOC_OBJ_MACHINE == level) {
                 obj = hwloc_get_root_obj(node->topology->topo);
                 for (j = 0; j < node->procs->size; j++) {
-                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                    proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j);
                     if (NULL == proc) {
                         continue;
                     }
@@ -753,7 +753,7 @@ static int assign_locations(prte_job_t *jdata)
                     for (j = 0;
                          j < node->procs->size && cnt < ppr && nprocs_mapped < app->num_procs;
                          j++) {
-                        proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                        proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j);
                         if (NULL == proc) {
                             continue;
                         }

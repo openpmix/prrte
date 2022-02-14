@@ -72,7 +72,7 @@ PRTE_EXPORT int prte_filem_base_none_get_nb(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_rm(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_rm_nb(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_wait(prte_filem_base_request_t *request);
-PRTE_EXPORT int prte_filem_base_none_wait_all(prte_list_t *request_list);
+PRTE_EXPORT int prte_filem_base_none_wait_all(pmix_list_t *request_list);
 int prte_filem_base_none_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
                                            void *cbdata);
 int prte_filem_base_none_link_local_files(prte_job_t *jdata, prte_app_context_t *app);

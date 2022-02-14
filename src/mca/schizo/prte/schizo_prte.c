@@ -57,12 +57,12 @@
 #include "schizo_prte.h"
 #include "src/mca/schizo/base/base.h"
 
-static int parse_cli(char **argv, prte_cli_result_t *results, bool silent);
+static int parse_cli(char **argv, pmix_cli_result_t *results, bool silent);
 static int detect_proxy(char *argv);
-static int parse_env(char **srcenv, char ***dstenv, prte_cli_result_t *cli);
-static void allow_run_as_root(prte_cli_result_t *results);
+static int parse_env(char **srcenv, char ***dstenv, pmix_cli_result_t *cli);
+static void allow_run_as_root(pmix_cli_result_t *results);
 static int setup_fork(prte_job_t *jdata, prte_app_context_t *context);
-static void job_info(prte_cli_result_t *results,
+static void job_info(pmix_cli_result_t *results,
                      void *jobinfo);
 
 prte_schizo_base_module_t prte_schizo_prte_module = {
@@ -423,16 +423,16 @@ static struct option pinfooptions[] = {
 };
 static char *pinfoshorts = "hVac";
 
-static int convert_deprecated_cli(prte_cli_result_t *results,
+static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent);
 
-static int parse_cli(char **argv, prte_cli_result_t *results,
+static int parse_cli(char **argv, pmix_cli_result_t *results,
                      bool silent)
 {
     char *shorts, *helpfile;
     struct option *myoptions;
     int rc, n;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     if (0 == strcmp(prte_tool_actual, "prte")) {
         myoptions = prteoptions;
@@ -472,7 +472,7 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
     }
 
     // handle relevant MCA params
-    PRTE_LIST_FOREACH(opt, &results->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH(opt, &results->instances, pmix_cli_item_t) {
         if (0 == strcmp(opt->key, PRTE_CLI_PRTEMCA)) {
             for (n=0; NULL != opt->values[n]; n++) {
                 prte_schizo_base_expose(opt->values[n], "PRTE_MCA_");
@@ -486,12 +486,12 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
     return PRTE_SUCCESS;
 };
 
-static int convert_deprecated_cli(prte_cli_result_t *results,
+static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent)
 {
     char *option, *p1, *p2, *tmp, *tmp2, *output, *modifier;
     int rc = PRTE_SUCCESS;
-    prte_cli_item_t *opt, *nxt;
+    pmix_cli_item_t *opt, *nxt;
     prte_value_t *pval, val;
     bool warn;
 
@@ -501,7 +501,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         warn = prte_schizo_prte_component.warn_deprecations;
     }
 
-    PRTE_LIST_FOREACH_SAFE(opt, nxt, &results->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH_SAFE(opt, nxt, &results->instances, pmix_cli_item_t) {
         option = opt->key;
         if (0 == strcmp(option, "n")) {
             /* if they passed a "--n" option, we need to convert it
@@ -835,7 +835,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
 }
 
 static int parse_env(char **srcenv, char ***dstenv,
-                     prte_cli_result_t *cli)
+                     pmix_cli_result_t *cli)
 {
     int i, j, n;
     char *p1, *p2;
@@ -843,7 +843,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     prte_value_t *pval;
     char **xparams = NULL, **xvals = NULL;
     char *param, *value;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:prte: parse_env",
@@ -941,7 +941,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
      * ones as the app-specific ones can override them. We have to
      * process them in the order they were given to ensure we wind
      * up in the desired final state */
-    PRTE_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t)
+    PMIX_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t)
     {
         if (PRTE_JOB_SET_ENVAR == attr->key) {
             pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
@@ -1005,7 +1005,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     }
 
     /* now do the same thing for any app-level attributes */
-    PRTE_LIST_FOREACH(attr, &app->attributes, prte_attribute_t)
+    PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t)
     {
         if (PRTE_APP_SET_ENVAR == attr->key) {
             pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
@@ -1107,7 +1107,7 @@ static int detect_proxy(char *personalities)
     return prte_schizo_prte_component.priority;
 }
 
-static void allow_run_as_root(prte_cli_result_t *cli)
+static void allow_run_as_root(pmix_cli_result_t *cli)
 {
     char *r1, *r2;
 
@@ -1125,7 +1125,7 @@ static void allow_run_as_root(prte_cli_result_t *cli)
     prte_schizo_base_root_error_msg();
 }
 
-static void job_info(prte_cli_result_t *results,
+static void job_info(pmix_cli_result_t *results,
                      void *jobinfo)
 {
     return;

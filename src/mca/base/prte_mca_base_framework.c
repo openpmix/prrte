@@ -19,6 +19,7 @@
 #include "src/include/prte_config.h"
 
 #include "src/include/constants.h"
+#include "src/include/pmix_prefetch.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 
@@ -71,8 +72,8 @@ int prte_mca_base_framework_register(struct prte_mca_base_framework_t *framework
         return PRTE_SUCCESS;
     }
 
-    PRTE_CONSTRUCT(&framework->framework_components, prte_list_t);
-    PRTE_CONSTRUCT(&framework->framework_failed_components, prte_list_t);
+    PMIX_CONSTRUCT(&framework->framework_components, pmix_list_t);
+    PMIX_CONSTRUCT(&framework->framework_failed_components, pmix_list_t);
 
     if (framework->framework_flags & PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO) {
         flags |= PRTE_MCA_BASE_REGISTER_STATIC_ONLY;
@@ -154,7 +155,7 @@ int prte_mca_base_framework_register_list(prte_mca_base_framework_t **frameworks
 
     for (int i = 0; frameworks[i]; ++i) {
         int ret = prte_mca_base_framework_register(frameworks[i], flags);
-        if (PRTE_UNLIKELY(PRTE_SUCCESS != ret && PRTE_ERR_NOT_AVAILABLE != ret)) {
+        if (PMIX_UNLIKELY(PRTE_SUCCESS != ret && PRTE_ERR_NOT_AVAILABLE != ret)) {
             return ret;
         }
     }
@@ -220,7 +221,7 @@ int prte_mca_base_framework_open_list(prte_mca_base_framework_t **frameworks,
 
     for (int i = 0; frameworks[i]; ++i) {
         int ret = prte_mca_base_framework_open(frameworks[i], flags);
-        if (PRTE_UNLIKELY(PRTE_SUCCESS != ret && PRTE_ERR_NOT_AVAILABLE != ret)) {
+        if (PMIX_UNLIKELY(PRTE_SUCCESS != ret && PRTE_ERR_NOT_AVAILABLE != ret)) {
             return ret;
         }
     }
@@ -264,15 +265,15 @@ int prte_mca_base_framework_close(struct prte_mca_base_framework_t *framework)
             return ret;
         }
     } else {
-        prte_list_item_t *item;
-        while (NULL != (item = prte_list_remove_first(&framework->framework_components))) {
+        pmix_list_item_t *item;
+        while (NULL != (item = pmix_list_remove_first(&framework->framework_components))) {
             prte_mca_base_component_list_item_t *cli;
             cli = (prte_mca_base_component_list_item_t *) item;
             prte_mca_base_component_unload(cli->cli_component, framework->framework_output);
-            PRTE_RELEASE(item);
+            PMIX_RELEASE(item);
         }
-        while (NULL != (item = prte_list_remove_first(&framework->framework_failed_components))) {
-            PRTE_RELEASE(item);
+        while (NULL != (item = pmix_list_remove_first(&framework->framework_failed_components))) {
+            PMIX_RELEASE(item);
         }
         ret = PRTE_SUCCESS;
     }
@@ -280,8 +281,8 @@ int prte_mca_base_framework_close(struct prte_mca_base_framework_t *framework)
     framework->framework_flags &= ~(PRTE_MCA_BASE_FRAMEWORK_FLAG_REGISTERED
                                     | PRTE_MCA_BASE_FRAMEWORK_FLAG_OPEN);
 
-    PRTE_DESTRUCT(&framework->framework_components);
-    PRTE_DESTRUCT(&framework->framework_failed_components);
+    PMIX_DESTRUCT(&framework->framework_components);
+    PMIX_DESTRUCT(&framework->framework_failed_components);
 
     framework_close_output(framework);
 
@@ -296,7 +297,7 @@ int prte_mca_base_framework_close_list(prte_mca_base_framework_t **frameworks)
 
     for (int i = 0; frameworks[i]; ++i) {
         int ret = prte_mca_base_framework_close(frameworks[i]);
-        if (PRTE_UNLIKELY(PRTE_SUCCESS != ret)) {
+        if (PMIX_UNLIKELY(PRTE_SUCCESS != ret)) {
             return ret;
         }
     }

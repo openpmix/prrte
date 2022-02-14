@@ -60,10 +60,10 @@ BEGIN_C_DECLS
         | ((n4) &0x000000FF)
 
 /**
- *  Lookup an interface by name and return its prte_list index.
+ *  Lookup an interface by name and return its pmix_list index.
  *
  *  @param if_name (IN)  Interface name
- *  @return              Interface prte_list index
+ *  @return              Interface pmix_list index
  */
 PRTE_EXPORT int prte_ifnametoindex(const char *if_name);
 

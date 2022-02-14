@@ -37,7 +37,7 @@
 
 static int weighted_init(void);
 static int weighted_fini(void);
-static prte_reachable_t *weighted_reachable(prte_list_t *local_ifs, prte_list_t *remote_ifs);
+static prte_reachable_t *weighted_reachable(pmix_list_t *local_ifs, pmix_list_t *remote_ifs);
 
 static int get_weights(prte_if_t *local_if, prte_if_t *remote_if);
 static int calculate_weight(int bandwidth_local, int bandwidth_remote, int connection_quality);
@@ -79,23 +79,23 @@ static int weighted_fini(void)
     return PRTE_SUCCESS;
 }
 
-static prte_reachable_t *weighted_reachable(prte_list_t *local_ifs, prte_list_t *remote_ifs)
+static prte_reachable_t *weighted_reachable(pmix_list_t *local_ifs, pmix_list_t *remote_ifs)
 {
     prte_reachable_t *reachable_results = NULL;
     int i, j;
     prte_if_t *local_iter, *remote_iter;
 
-    reachable_results = prte_reachable_allocate(prte_list_get_size(local_ifs),
-                                                prte_list_get_size(remote_ifs));
+    reachable_results = prte_reachable_allocate(pmix_list_get_size(local_ifs),
+                                                pmix_list_get_size(remote_ifs));
     if (NULL == reachable_results) {
         return NULL;
     }
 
     i = 0;
-    PRTE_LIST_FOREACH(local_iter, local_ifs, prte_if_t)
+    PMIX_LIST_FOREACH(local_iter, local_ifs, prte_if_t)
     {
         j = 0;
-        PRTE_LIST_FOREACH(remote_iter, remote_ifs, prte_if_t)
+        PMIX_LIST_FOREACH(remote_iter, remote_ifs, prte_if_t)
         {
             reachable_results->weights[i][j] = get_weights(local_iter, remote_iter);
             j++;

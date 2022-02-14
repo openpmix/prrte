@@ -27,7 +27,7 @@
 
 #include <time.h>
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/schizo/schizo.h"
 
@@ -45,7 +45,7 @@ PRTE_EXPORT void prte_daemon_cmd_processor(int fd, short event, void *data);
 PRTE_EXPORT int prte_daemon_process_commands(pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                                              prte_rml_tag_t tag);
 
-PRTE_EXPORT int prte_parse_locals(prte_schizo_base_module_t *schizo, prte_list_t *jdata,
+PRTE_EXPORT int prte_parse_locals(prte_schizo_base_module_t *schizo, pmix_list_t *jdata,
                                   char **argv, char ***hostfiles, char ***hosts);
 
 END_C_DECLS

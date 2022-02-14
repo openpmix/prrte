@@ -16,7 +16,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,7 +44,7 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/mca/mca.h"
 
 #include "src/mca/routed/routed.h"
@@ -67,15 +67,15 @@ PRTE_EXPORT int prte_rml_base_select(void);
 
 /* a global struct containing framework-level values */
 typedef struct {
-    prte_list_t posted_recvs;
-    prte_list_t unmatched_msgs;
+    pmix_list_t posted_recvs;
+    pmix_list_t unmatched_msgs;
     int max_retries;
 } prte_rml_base_t;
 PRTE_EXPORT extern prte_rml_base_t prte_rml_base;
 
 /* structure to send RML messages - used internally */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     pmix_proc_t dst; // targeted recipient
     pmix_proc_t origin;
     int status;         // returned status on send
@@ -91,29 +91,29 @@ typedef struct {
     /* msg seq number */
     uint32_t seq_num;
 } prte_rml_send_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_rml_send_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rml_send_t);
 
 /* define an object for transferring send requests to the event lib */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_event_t ev;
     prte_rml_send_t send;
 } prte_rml_send_request_t;
-PRTE_CLASS_DECLARATION(prte_rml_send_request_t);
+PMIX_CLASS_DECLARATION(prte_rml_send_request_t);
 
 /* structure to recv RML messages - used internally */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     prte_event_t ev;
     pmix_proc_t sender;      // sender
     prte_rml_tag_t tag;      // targeted tag
     uint32_t seq_num;        // sequence number
     pmix_data_buffer_t dbuf; // the recvd data
 } prte_rml_recv_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_rml_recv_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rml_recv_t);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     bool buffer_data;
     pmix_proc_t peer;
     prte_rml_tag_t tag;
@@ -121,27 +121,27 @@ typedef struct {
     prte_rml_buffer_callback_fn_t cbfunc;
     void *cbdata;
 } prte_rml_posted_recv_t;
-PRTE_CLASS_DECLARATION(prte_rml_posted_recv_t);
+PMIX_CLASS_DECLARATION(prte_rml_posted_recv_t);
 
 /* define an object for transferring recv requests to the list of posted recvs */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_event_t ev;
     bool cancel;
     prte_rml_posted_recv_t *post;
 } prte_rml_recv_request_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_rml_recv_request_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rml_recv_request_t);
 
 /* define a structure for sending a message to myself */
 typedef struct {
-    prte_object_t object;
+    pmix_object_t object;
     prte_event_t ev;
     prte_rml_tag_t tag;
     pmix_data_buffer_t dbuf;
     prte_rml_buffer_callback_fn_t cbfunc;
     void *cbdata;
 } prte_self_send_xfer_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_self_send_xfer_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_self_send_xfer_t);
 
 #define PRTE_RML_POST_MESSAGE(p, t, s, b, l)                                                    \
     do {                                                                                        \
@@ -151,7 +151,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_self_send_xfer_t);
         prte_output_verbose(5, prte_rml_base_framework.framework_output,                        \
                             "%s Message posted at %s:%d for tag %d",                            \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__, (t));       \
-        msg = PRTE_NEW(prte_rml_recv_t);                                                        \
+        msg = PMIX_NEW(prte_rml_recv_t);                                                        \
         PMIX_XFER_PROCID(&msg->sender, (p));                                                    \
         msg->tag = (t);                                                                         \
         msg->seq_num = (s);                                                                     \
@@ -187,7 +187,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_self_send_xfer_t);
             /* non-blocking buffer send */                                                    \
             (m)->cbfunc((m)->status, &((m)->dst), &(m)->dbuf, (m)->tag, (m)->cbdata);         \
         }                                                                                     \
-        PRTE_RELEASE(m);                                                                      \
+        PMIX_RELEASE(m);                                                                      \
     } while (0);
 
 /* common implementations */

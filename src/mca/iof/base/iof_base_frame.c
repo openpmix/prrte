@@ -111,23 +111,23 @@ static void prte_iof_base_proc_construct(prte_iof_proc_t *ptr)
 static void prte_iof_base_proc_destruct(prte_iof_proc_t *ptr)
 {
     if (NULL != ptr->stdinev) {
-        PRTE_RELEASE(ptr->stdinev);
+        PMIX_RELEASE(ptr->stdinev);
     }
     if (NULL != ptr->revstdout) {
-        PRTE_RELEASE(ptr->revstdout);
+        PMIX_RELEASE(ptr->revstdout);
     }
     if (NULL != ptr->revstderr) {
-        PRTE_RELEASE(ptr->revstderr);
+        PMIX_RELEASE(ptr->revstderr);
     }
 }
-PRTE_CLASS_INSTANCE(prte_iof_proc_t, prte_list_item_t,
+PMIX_CLASS_INSTANCE(prte_iof_proc_t, pmix_list_item_t,
                     prte_iof_base_proc_construct,
                     prte_iof_base_proc_destruct);
 
 static void prte_iof_base_sink_construct(prte_iof_sink_t *ptr)
 {
     PMIX_LOAD_PROCID(&ptr->daemon, NULL, PMIX_RANK_INVALID);
-    ptr->wev = PRTE_NEW(prte_iof_write_event_t);
+    ptr->wev = PMIX_NEW(prte_iof_write_event_t);
     ptr->xoff = false;
     ptr->exclusive = false;
     ptr->closed = false;
@@ -139,10 +139,10 @@ static void prte_iof_base_sink_destruct(prte_iof_sink_t *ptr)
                              "%s iof: closing sink for process %s on fd %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&ptr->name),
                              ptr->wev->fd));
-        PRTE_RELEASE(ptr->wev);
+        PMIX_RELEASE(ptr->wev);
     }
 }
-PRTE_CLASS_INSTANCE(prte_iof_sink_t, prte_list_item_t,
+PMIX_CLASS_INSTANCE(prte_iof_sink_t, pmix_list_item_t,
                     prte_iof_base_sink_construct,
                     prte_iof_base_sink_destruct);
 
@@ -174,13 +174,13 @@ static void prte_iof_base_read_event_destruct(prte_iof_read_event_t *rev)
         free(rev->ev);
     }
     if (NULL != rev->sink) {
-        PRTE_RELEASE(rev->sink);
+        PMIX_RELEASE(rev->sink);
     }
     if (NULL != proct) {
-        PRTE_RELEASE(proct);
+        PMIX_RELEASE(proct);
     }
 }
-PRTE_CLASS_INSTANCE(prte_iof_read_event_t, prte_object_t,
+PMIX_CLASS_INSTANCE(prte_iof_read_event_t, pmix_object_t,
                     prte_iof_base_read_event_construct,
                     prte_iof_base_read_event_destruct);
 
@@ -189,7 +189,7 @@ static void prte_iof_base_write_event_construct(prte_iof_write_event_t *wev)
     wev->pending = false;
     wev->always_writable = false;
     wev->fd = -1;
-    PRTE_CONSTRUCT(&wev->outputs, prte_list_t);
+    PMIX_CONSTRUCT(&wev->outputs, pmix_list_t);
     wev->ev = prte_event_alloc();
     wev->tv.tv_sec = 0;
     wev->tv.tv_usec = 0;
@@ -207,13 +207,13 @@ static void prte_iof_base_write_event_destruct(prte_iof_write_event_t *wev)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
         close(wev->fd);
     }
-    PRTE_DESTRUCT(&wev->outputs);
+    PMIX_DESTRUCT(&wev->outputs);
 }
-PRTE_CLASS_INSTANCE(prte_iof_write_event_t, prte_list_item_t,
+PMIX_CLASS_INSTANCE(prte_iof_write_event_t, pmix_list_item_t,
                     prte_iof_base_write_event_construct,
                     prte_iof_base_write_event_destruct);
 
-PRTE_CLASS_INSTANCE(prte_iof_write_output_t, prte_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_iof_write_output_t, pmix_list_item_t, NULL, NULL);
 
 static void pdcon(prte_iof_deliver_t *p)
 {
@@ -226,5 +226,5 @@ static void pddes(prte_iof_deliver_t *p)
         free(p->bo.bytes);
     }
 }
-PRTE_CLASS_INSTANCE(prte_iof_deliver_t, prte_object_t,
+PMIX_CLASS_INSTANCE(prte_iof_deliver_t, pmix_object_t,
                     pdcon, pddes);

@@ -3,7 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,11 +27,11 @@
 /* C code */
 
 #if PRTE_C_HAVE_BUILTIN_EXPECT
-#    define PRTE_LIKELY(expression)   __builtin_expect(!!(expression), 1)
-#    define PRTE_UNLIKELY(expression) __builtin_expect(!!(expression), 0)
+#    define PMIX_LIKELY(expression)   __builtin_expect(!!(expression), 1)
+#    define PMIX_UNLIKELY(expression) __builtin_expect(!!(expression), 0)
 #else
-#    define PRTE_LIKELY(expression)   (expression)
-#    define PRTE_UNLIKELY(expression) (expression)
+#    define PMIX_LIKELY(expression)   (expression)
+#    define PMIX_UNLIKELY(expression) (expression)
 #endif
 
 #if PRTE_C_HAVE_BUILTIN_PREFETCH

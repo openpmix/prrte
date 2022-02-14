@@ -15,7 +15,7 @@
  *                         reserved.
  * Copyright (c) 2017 IBM Corporation.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,7 +46,7 @@
 
 BEGIN_C_DECLS
 struct prte_mca_base_component_repository_item_t {
-    prte_list_item_t super;
+    pmix_list_item_t super;
 
     char ri_type[PRTE_MCA_BASE_MAX_TYPE_NAME_LEN + 1];
     char ri_name[PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN + 1];
@@ -61,18 +61,18 @@ struct prte_mca_base_component_repository_item_t {
 };
 typedef struct prte_mca_base_component_repository_item_t prte_mca_base_component_repository_item_t;
 
-PRTE_CLASS_DECLARATION(prte_mca_base_component_repository_item_t);
+PMIX_CLASS_DECLARATION(prte_mca_base_component_repository_item_t);
 
 /*
  * Structure to track information about why a component failed to load.
  */
 struct prte_mca_base_failed_component_t {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     prte_mca_base_component_repository_item_t *comp;
     char *error_msg;
 };
 typedef struct prte_mca_base_failed_component_t prte_mca_base_failed_component_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_failed_component_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_mca_base_failed_component_t);
 
 /**
  * @brief initialize the component repository
@@ -103,7 +103,7 @@ PRTE_EXPORT int prte_mca_base_component_repository_add(const char *path);
  */
 PRTE_EXPORT int
 prte_mca_base_component_repository_get_components(prte_mca_base_framework_t *framework,
-                                                  prte_list_t **framework_components);
+                                                  pmix_list_t **framework_components);
 
 /**
  * @brief finalize the mca component repository

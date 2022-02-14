@@ -3,7 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,7 +46,7 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
 
 #include "src/mca/plm/plm_types.h"
@@ -57,24 +57,24 @@ BEGIN_C_DECLS
 typedef void (*prte_state_cbfunc_t)(int fd, short args, void *cb);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     prte_job_state_t job_state;
     prte_proc_state_t proc_state;
     prte_state_cbfunc_t cbfunc;
     int priority;
 } prte_state_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_state_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_state_t);
 
 /* caddy for passing job and proc data to state event handlers */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_event_t ev;
     prte_job_t *jdata;
     prte_job_state_t job_state;
     pmix_proc_t name;
     prte_proc_state_t proc_state;
 } prte_state_caddy_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_state_caddy_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_state_caddy_t);
 
 END_C_DECLS
 #endif

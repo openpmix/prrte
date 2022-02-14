@@ -27,7 +27,7 @@
 #include <pmix.h>
 #include <pmix_server.h>
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
@@ -43,7 +43,7 @@
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
@@ -52,12 +52,12 @@
 
 void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t state)
 {
-    prte_list_item_t *itm, *any = NULL, *error = NULL;
+    pmix_list_item_t *itm, *any = NULL, *error = NULL;
     prte_state_t *s;
     prte_state_caddy_t *caddy;
 
-    for (itm = prte_list_get_first(&prte_job_states); itm != prte_list_get_end(&prte_job_states);
-         itm = prte_list_get_next(itm)) {
+    for (itm = pmix_list_get_first(&prte_job_states); itm != pmix_list_get_end(&prte_job_states);
+         itm = pmix_list_get_next(itm)) {
         s = (prte_state_t *) itm;
         if (s->job_state == PRTE_JOB_STATE_ANY) {
             /* save this place */
@@ -76,11 +76,11 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
                                      prte_job_state_to_str(state)));
                 return;
             }
-            caddy = PRTE_NEW(prte_state_caddy_t);
+            caddy = PMIX_NEW(prte_state_caddy_t);
             if (NULL != jdata) {
                 caddy->jdata = jdata;
                 caddy->job_state = state;
-                PRTE_RETAIN(jdata);
+                PMIX_RETAIN(jdata);
             }
             PRTE_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
             return;
@@ -104,11 +104,11 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
                              "ACTIVATE: ANY STATE HANDLER NOT DEFINED"));
         return;
     }
-    caddy = PRTE_NEW(prte_state_caddy_t);
+    caddy = PMIX_NEW(prte_state_caddy_t);
     if (NULL != jdata) {
         caddy->jdata = jdata;
         caddy->job_state = state;
-        PRTE_RETAIN(jdata);
+        PMIX_RETAIN(jdata);
     }
     PRTE_REACHING_JOB_STATE(jdata, state, s->priority);
     PRTE_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
@@ -116,12 +116,12 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
 
 int prte_state_base_add_job_state(prte_job_state_t state, prte_state_cbfunc_t cbfunc, int priority)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_state_t *st;
 
     /* check for uniqueness */
-    for (item = prte_list_get_first(&prte_job_states); item != prte_list_get_end(&prte_job_states);
-         item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&prte_job_states); item != pmix_list_get_end(&prte_job_states);
+         item = pmix_list_get_next(item)) {
         st = (prte_state_t *) item;
         if (st->job_state == state) {
             PRTE_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
@@ -130,22 +130,22 @@ int prte_state_base_add_job_state(prte_job_state_t state, prte_state_cbfunc_t cb
         }
     }
 
-    st = PRTE_NEW(prte_state_t);
+    st = PMIX_NEW(prte_state_t);
     st->job_state = state;
     st->cbfunc = cbfunc;
     st->priority = priority;
-    prte_list_append(&prte_job_states, &(st->super));
+    pmix_list_append(&prte_job_states, &(st->super));
 
     return PRTE_SUCCESS;
 }
 
 int prte_state_base_set_job_state_callback(prte_job_state_t state, prte_state_cbfunc_t cbfunc)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_state_t *st;
 
-    for (item = prte_list_get_first(&prte_job_states); item != prte_list_get_end(&prte_job_states);
-         item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&prte_job_states); item != pmix_list_get_end(&prte_job_states);
+         item = pmix_list_get_next(item)) {
         st = (prte_state_t *) item;
         if (st->job_state == state) {
             st->cbfunc = cbfunc;
@@ -154,22 +154,22 @@ int prte_state_base_set_job_state_callback(prte_job_state_t state, prte_state_cb
     }
 
     /* if not found, assume SYS priority and install it */
-    st = PRTE_NEW(prte_state_t);
+    st = PMIX_NEW(prte_state_t);
     st->job_state = state;
     st->cbfunc = cbfunc;
     st->priority = PRTE_SYS_PRI;
-    prte_list_append(&prte_job_states, &(st->super));
+    pmix_list_append(&prte_job_states, &(st->super));
 
     return PRTE_SUCCESS;
 }
 
 int prte_state_base_set_job_state_priority(prte_job_state_t state, int priority)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_state_t *st;
 
-    for (item = prte_list_get_first(&prte_job_states); item != prte_list_get_end(&prte_job_states);
-         item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&prte_job_states); item != pmix_list_get_end(&prte_job_states);
+         item = pmix_list_get_next(item)) {
         st = (prte_state_t *) item;
         if (st->job_state == state) {
             st->priority = priority;
@@ -181,15 +181,15 @@ int prte_state_base_set_job_state_priority(prte_job_state_t state, int priority)
 
 int prte_state_base_remove_job_state(prte_job_state_t state)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_state_t *st;
 
-    for (item = prte_list_get_first(&prte_job_states); item != prte_list_get_end(&prte_job_states);
-         item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&prte_job_states); item != pmix_list_get_end(&prte_job_states);
+         item = pmix_list_get_next(item)) {
         st = (prte_state_t *) item;
         if (st->job_state == state) {
-            prte_list_remove_item(&prte_job_states, item);
-            PRTE_RELEASE(item);
+            pmix_list_remove_item(&prte_job_states, item);
+            PMIX_RELEASE(item);
             return PRTE_SUCCESS;
         }
     }
@@ -198,12 +198,12 @@ int prte_state_base_remove_job_state(prte_job_state_t state)
 
 void prte_state_base_print_job_state_machine(void)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_state_t *st;
 
     prte_output(0, "PRTE_JOB_STATE_MACHINE:");
-    for (item = prte_list_get_first(&prte_job_states); item != prte_list_get_end(&prte_job_states);
-         item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&prte_job_states); item != pmix_list_get_end(&prte_job_states);
+         item = pmix_list_get_next(item)) {
         st = (prte_state_t *) item;
         prte_output(0, "\tState: %s cbfunc: %s", prte_job_state_to_str(st->job_state),
                     (NULL == st->cbfunc) ? "NULL" : "DEFINED");
@@ -213,12 +213,12 @@ void prte_state_base_print_job_state_machine(void)
 /****    PROC STATE MACHINE    ****/
 void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t state)
 {
-    prte_list_item_t *itm, *any = NULL, *error = NULL;
+    pmix_list_item_t *itm, *any = NULL, *error = NULL;
     prte_state_t *s;
     prte_state_caddy_t *caddy;
 
-    for (itm = prte_list_get_first(&prte_proc_states); itm != prte_list_get_end(&prte_proc_states);
-         itm = prte_list_get_next(itm)) {
+    for (itm = pmix_list_get_first(&prte_proc_states); itm != pmix_list_get_end(&prte_proc_states);
+         itm = pmix_list_get_next(itm)) {
         s = (prte_state_t *) itm;
         if (s->proc_state == PRTE_PROC_STATE_ANY) {
             /* save this place */
@@ -236,7 +236,7 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
                                      prte_proc_state_to_str(state)));
                 return;
             }
-            caddy = PRTE_NEW(prte_state_caddy_t);
+            caddy = PMIX_NEW(prte_state_caddy_t);
             caddy->name = *proc;
             caddy->proc_state = state;
             PRTE_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
@@ -260,7 +260,7 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
                              "ACTIVATE: ANY STATE HANDLER NOT DEFINED"));
         return;
     }
-    caddy = PRTE_NEW(prte_state_caddy_t);
+    caddy = PMIX_NEW(prte_state_caddy_t);
     caddy->name = *proc;
     caddy->proc_state = state;
     PRTE_REACHING_PROC_STATE(proc, state, s->priority);
@@ -270,12 +270,12 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
 int prte_state_base_add_proc_state(prte_proc_state_t state, prte_state_cbfunc_t cbfunc,
                                    int priority)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_state_t *st;
 
     /* check for uniqueness */
-    for (item = prte_list_get_first(&prte_proc_states);
-         item != prte_list_get_end(&prte_proc_states); item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&prte_proc_states);
+         item != pmix_list_get_end(&prte_proc_states); item = pmix_list_get_next(item)) {
         st = (prte_state_t *) item;
         if (st->proc_state == state) {
             PRTE_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
@@ -284,22 +284,22 @@ int prte_state_base_add_proc_state(prte_proc_state_t state, prte_state_cbfunc_t 
         }
     }
 
-    st = PRTE_NEW(prte_state_t);
+    st = PMIX_NEW(prte_state_t);
     st->proc_state = state;
     st->cbfunc = cbfunc;
     st->priority = priority;
-    prte_list_append(&prte_proc_states, &(st->super));
+    pmix_list_append(&prte_proc_states, &(st->super));
 
     return PRTE_SUCCESS;
 }
 
 int prte_state_base_set_proc_state_callback(prte_proc_state_t state, prte_state_cbfunc_t cbfunc)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_state_t *st;
 
-    for (item = prte_list_get_first(&prte_proc_states);
-         item != prte_list_get_end(&prte_proc_states); item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&prte_proc_states);
+         item != pmix_list_get_end(&prte_proc_states); item = pmix_list_get_next(item)) {
         st = (prte_state_t *) item;
         if (st->proc_state == state) {
             st->cbfunc = cbfunc;
@@ -311,11 +311,11 @@ int prte_state_base_set_proc_state_callback(prte_proc_state_t state, prte_state_
 
 int prte_state_base_set_proc_state_priority(prte_proc_state_t state, int priority)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_state_t *st;
 
-    for (item = prte_list_get_first(&prte_proc_states);
-         item != prte_list_get_end(&prte_proc_states); item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&prte_proc_states);
+         item != pmix_list_get_end(&prte_proc_states); item = pmix_list_get_next(item)) {
         st = (prte_state_t *) item;
         if (st->proc_state == state) {
             st->priority = priority;
@@ -327,15 +327,15 @@ int prte_state_base_set_proc_state_priority(prte_proc_state_t state, int priorit
 
 int prte_state_base_remove_proc_state(prte_proc_state_t state)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_state_t *st;
 
-    for (item = prte_list_get_first(&prte_proc_states);
-         item != prte_list_get_end(&prte_proc_states); item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&prte_proc_states);
+         item != pmix_list_get_end(&prte_proc_states); item = pmix_list_get_next(item)) {
         st = (prte_state_t *) item;
         if (st->proc_state == state) {
-            prte_list_remove_item(&prte_proc_states, item);
-            PRTE_RELEASE(item);
+            pmix_list_remove_item(&prte_proc_states, item);
+            PMIX_RELEASE(item);
             return PRTE_SUCCESS;
         }
     }
@@ -344,12 +344,12 @@ int prte_state_base_remove_proc_state(prte_proc_state_t state)
 
 void prte_state_base_print_proc_state_machine(void)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_state_t *st;
 
     prte_output(0, "PRTE_PROC_STATE_MACHINE:");
-    for (item = prte_list_get_first(&prte_proc_states);
-         item != prte_list_get_end(&prte_proc_states); item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&prte_proc_states);
+         item != pmix_list_get_end(&prte_proc_states); item = pmix_list_get_next(item)) {
         st = (prte_state_t *) item;
         prte_output(0, "\tState: %s cbfunc: %s", prte_proc_state_to_str(st->proc_state),
                     (NULL == st->cbfunc) ? "NULL" : "DEFINED");
@@ -368,7 +368,7 @@ void prte_state_base_local_launch_complete(int fd, short argc, void *cbdata)
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_REPORT_PROGRESS);
         }
     }
-    PRTE_RELEASE(state);
+    PMIX_RELEASE(state);
 }
 
 void prte_state_base_cleanup_job(int fd, short argc, void *cbdata)
@@ -377,7 +377,7 @@ void prte_state_base_cleanup_job(int fd, short argc, void *cbdata)
     prte_job_t *jdata;
     PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
 
     PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
@@ -388,7 +388,7 @@ void prte_state_base_cleanup_job(int fd, short argc, void *cbdata)
     jdata->state = PRTE_JOB_STATE_NOTIFIED;
     /* send us back thru job complete */
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
-    PRTE_RELEASE(caddy);
+    PMIX_RELEASE(caddy);
 }
 
 void prte_state_base_report_progress(int fd, short argc, void *cbdata)
@@ -397,14 +397,14 @@ void prte_state_base_report_progress(int fd, short argc, void *cbdata)
     prte_job_t *jdata;
     PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
 
     prte_output(prte_clean_output,
                 "App launch reported: %d (out of %d) daemons - %d (out of %d) procs",
                 (int) jdata->num_daemons_reported, (int) prte_process_info.num_daemons,
                 (int) jdata->num_launched, (int) jdata->num_procs);
-    PRTE_RELEASE(caddy);
+    PMIX_RELEASE(caddy);
 }
 
 void prte_state_base_notify_data_server(pmix_proc_t *target)
@@ -448,7 +448,7 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
     rc = prte_rml.send_buffer_nb(&prte_pmix_server_globals.server, buf, PRTE_RML_TAG_DATA_SERVER,
                                  prte_rml_send_callback, NULL);
     if (PRTE_SUCCESS != rc) {
-        PRTE_RELEASE(buf);
+        PMIX_RELEASE(buf);
     }
 }
 
@@ -526,7 +526,7 @@ static void _send_notification(int status, prte_proc_state_t state, pmix_proc_t 
 
     if (PMIX_RANK_WILDCARD == target->rank) {
         /* xcast it to everyone */
-        PRTE_CONSTRUCT(&sig, prte_grpcomm_signature_t);
+        PMIX_CONSTRUCT(&sig, prte_grpcomm_signature_t);
         sig.signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
         PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
         sig.sz = 1;
@@ -534,7 +534,7 @@ static void _send_notification(int status, prte_proc_state_t state, pmix_proc_t 
         if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(&sig, PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
             PRTE_ERROR_LOG(rc);
         }
-        PRTE_DESTRUCT(&sig);
+        PMIX_DESTRUCT(&sig);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
     } else {
         /* get the daemon hosting the proc to be notified */
@@ -574,7 +574,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
     pmix_rank_t threshold;
     PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
     proc = &caddy->name;
     state = caddy->proc_state;
 
@@ -617,7 +617,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
         goto cleanup;
     }
 
-    pdata = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank);
+    pdata = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, proc->rank);
     if (NULL == pdata) {
         goto cleanup;
     }
@@ -699,7 +699,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
         if (prte_prteds_term_ordered && 0 == prte_routed.num_routes()) {
             for (i = 0; i < prte_local_children->size; i++) {
                 if (NULL
-                        != (pdata = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
+                        != (pdata = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
                                                                                 i))
                     && PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
                     /* at least one is still alive */
@@ -740,7 +740,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
     }
 
 cleanup:
-    PRTE_RELEASE(caddy);
+    PMIX_RELEASE(caddy);
 }
 
 void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
@@ -761,7 +761,7 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
     prte_app_context_t *app;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
 
     prte_output_verbose(2, prte_state_base_framework.framework_output,
@@ -852,10 +852,10 @@ CHECK_DAEMONS:
                 jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
             }
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
-            PRTE_RELEASE(caddy);
+            PMIX_RELEASE(caddy);
             return;
         }
-        PRTE_RELEASE(caddy);
+        PMIX_RELEASE(caddy);
         return;
     }
 
@@ -870,7 +870,7 @@ CHECK_DAEMONS:
     if (NULL != jdata->map && jdata->state == PRTE_JOB_STATE_TERMINATED) {
         map = jdata->map;
         for (index = 0; index < map->nodes->size; index++) {
-            node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, index);
+            node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, index);
             if (NULL == node) {
                 continue;
             }
@@ -879,11 +879,11 @@ CHECK_DAEMONS:
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_JOBID_PRINT(jdata->nspace), node->name));
             for (i = 0; i < node->procs->size; i++) {
-                proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i);
+                proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, i);
                 if (NULL == proc) {
                     continue;
                 }
-                app = (prte_app_context_t*) prte_pointer_array_get_item(jdata->apps, proc->app_idx);
+                app = (prte_app_context_t*) pmix_pointer_array_get_item(jdata->apps, proc->app_idx);
                 if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
                     /* skip procs from another job */
                     continue;
@@ -898,16 +898,16 @@ CHECK_DAEMONS:
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&proc->name), node->name));
                 /* set the entry in the node array to NULL */
-                prte_pointer_array_set_item(node->procs, i, NULL);
+                pmix_pointer_array_set_item(node->procs, i, NULL);
                 /* release the proc once for the map entry */
-                PRTE_RELEASE(proc);
+                PMIX_RELEASE(proc);
             }
             /* set the node location to NULL */
-            prte_pointer_array_set_item(map->nodes, index, NULL);
+            pmix_pointer_array_set_item(map->nodes, index, NULL);
             /* maintain accounting */
-            PRTE_RELEASE(node);
+            PMIX_RELEASE(node);
         }
-        PRTE_RELEASE(map);
+        PMIX_RELEASE(map);
         jdata->map = NULL;
     }
 
@@ -917,7 +917,7 @@ CHECK_ALIVE:
      */
     one_still_alive = false;
     for (j = 0; j < prte_job_data->size; j++) {
-        job = (prte_job_t *) prte_pointer_array_get_item(prte_job_data, j);
+        job = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, j);
         if (NULL == job) {
             continue;
         }
@@ -954,8 +954,8 @@ CHECK_ALIVE:
                  * pointer array internal accounting
                  * is maintained!
                  */
-                prte_pointer_array_set_item(prte_job_data, j, NULL);
-                PRTE_RELEASE(jdata);
+                pmix_pointer_array_set_item(prte_job_data, j, NULL);
+                PMIX_RELEASE(jdata);
             }
             continue;
         }
@@ -992,7 +992,7 @@ CHECK_ALIVE:
         PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                              "%s state:base:check_job_completed at least one job is not terminated",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        PRTE_RELEASE(caddy);
+        PMIX_RELEASE(caddy);
         return;
     }
     /* if we get here, then all jobs are done, so terminate */
@@ -1002,7 +1002,7 @@ CHECK_ALIVE:
 
     /* stop the job timeout event, if set */
     if (NULL != prte_mpiexec_timeout) {
-        PRTE_RELEASE(prte_mpiexec_timeout);
+        PMIX_RELEASE(prte_mpiexec_timeout);
         prte_mpiexec_timeout = NULL;
     }
 
@@ -1017,7 +1017,7 @@ CHECK_ALIVE:
      */
     prte_plm.terminate_orteds();
 
-    PRTE_RELEASE(caddy);
+    PMIX_RELEASE(caddy);
 }
 
 void prte_state_base_check_fds(prte_job_t *jdata)

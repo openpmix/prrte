@@ -40,7 +40,7 @@
 #include "src/mca/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -175,7 +175,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
                     continue;
                 }
                 if (NULL
-                    == (temp_prte_proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs,
+                    == (temp_prte_proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs,
                                                                                      proc.rank))) {
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                          "%s errmgr:detector:error_notify_callback NULL "

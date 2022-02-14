@@ -30,7 +30,7 @@
  */
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_printf.h"

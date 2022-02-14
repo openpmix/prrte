@@ -55,7 +55,7 @@ prte_prtedl_libltdl_component_t prte_prtedl_libltdl_component = {
             /* Component name and version */
             .mca_component_name = "libltdl",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
 
             /* Component functions */
             .mca_register_component_params = libltdl_component_register,

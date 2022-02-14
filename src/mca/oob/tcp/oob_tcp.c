@@ -59,7 +59,7 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/routed/routed.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_parse_options.h"
 #include "src/util/show_help.h"
@@ -222,7 +222,7 @@ static void recv_handler(int sd, short flg, void *cbdata)
     prte_oob_tcp_hdr_t hdr;
     prte_oob_tcp_peer_t *peer;
 
-    PRTE_ACQUIRE_OBJECT(op);
+    PMIX_ACQUIRE_OBJECT(op);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s:tcp:recv:handler called", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -268,5 +268,5 @@ static void recv_handler(int sd, short flg, void *cbdata)
     }
 
 cleanup:
-    PRTE_RELEASE(op);
+    PMIX_RELEASE(op);
 }

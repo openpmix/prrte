@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +30,7 @@
 #include "src/mca/mca.h"
 
 struct prte_mca_base_var_group_t {
-    prte_list_item_t super;
+    pmix_list_item_t super;
 
     /** Index of group */
     int group_index;
@@ -49,13 +49,13 @@ struct prte_mca_base_var_group_t {
     char *group_description;
 
     /** Integer value array of subgroup indices */
-    prte_value_array_t group_subgroups;
+    pmix_value_array_t group_subgroups;
 
     /** Integer array of group variables */
-    prte_value_array_t group_vars;
+    pmix_value_array_t group_vars;
 
     /** Pointer array of group enums */
-    prte_value_array_t group_enums;
+    pmix_value_array_t group_enums;
 };
 
 typedef struct prte_mca_base_var_group_t prte_mca_base_var_group_t;
@@ -63,7 +63,7 @@ typedef struct prte_mca_base_var_group_t prte_mca_base_var_group_t;
 /**
  * Object declaration for mca_base_var_group_t
  */
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_var_group_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_mca_base_var_group_t);
 
 /**
  * Register an MCA variable group

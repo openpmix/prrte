@@ -30,7 +30,7 @@
 #include <signal.h>
 #include <string.h>
 
-#include "src/class/prte_ring_buffer.h"
+#include "src/class/pmix_ring_buffer.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
@@ -44,7 +44,7 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_parse_options.h"
 #include "src/util/show_help.h"
@@ -71,7 +71,7 @@ prte_odls_base_module_t prte_odls = {0};
 prte_odls_globals_t prte_odls_globals = {
     .output = 0,
     .timeout_before_sigkill = 0,
-    .xterm_ranks = PRTE_LIST_STATIC_INIT,
+    .xterm_ranks = PMIX_LIST_STATIC_INIT,
     .xtermcmd = NULL,
     .max_threads = 0,
     .num_threads = 0,
@@ -80,7 +80,7 @@ prte_odls_globals_t prte_odls_globals = {
     .ev_threads = NULL,
     .next_base = 0,
     .signal_direct_children_only = false,
-    .lock = PRTE_LOCK_STATIC_INIT
+    .lock = PMIX_LOCK_STATIC_INIT
 };
 
 static prte_event_base_t **prte_event_base_ptr = NULL;
@@ -134,7 +134,7 @@ void prte_odls_base_harvest_threads(void)
 {
     int i;
 
-    PRTE_ACQUIRE_THREAD(&prte_odls_globals.lock);
+    PMIX_ACQUIRE_THREAD(&prte_odls_globals.lock);
     if (0 < prte_odls_globals.num_threads) {
         /* stop the progress threads */
         if (NULL != prte_odls_globals.ev_threads) {
@@ -152,7 +152,7 @@ void prte_odls_base_harvest_threads(void)
             prte_odls_globals.ev_threads = NULL;
         }
     }
-    PRTE_RELEASE_THREAD(&prte_odls_globals.lock);
+    PMIX_RELEASE_THREAD(&prte_odls_globals.lock);
 }
 
 void prte_odls_base_start_threads(prte_job_t *jdata)
@@ -160,10 +160,10 @@ void prte_odls_base_start_threads(prte_job_t *jdata)
     int i;
     char *tmp;
 
-    PRTE_ACQUIRE_THREAD(&prte_odls_globals.lock);
+    PMIX_ACQUIRE_THREAD(&prte_odls_globals.lock);
     /* only do this once */
     if (NULL != prte_odls_globals.ev_threads) {
-        PRTE_RELEASE_THREAD(&prte_odls_globals.lock);
+        PMIX_RELEASE_THREAD(&prte_odls_globals.lock);
         return;
     }
 
@@ -211,32 +211,32 @@ startup:
             free(tmp);
         }
     }
-    PRTE_RELEASE_THREAD(&prte_odls_globals.lock);
+    PMIX_RELEASE_THREAD(&prte_odls_globals.lock);
 }
 
 static int prte_odls_base_close(void)
 {
     int i;
     prte_proc_t *proc;
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
 
     /* cleanup ODLS globals */
-    while (NULL != (item = prte_list_remove_first(&prte_odls_globals.xterm_ranks))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&prte_odls_globals.xterm_ranks))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&prte_odls_globals.xterm_ranks);
+    PMIX_DESTRUCT(&prte_odls_globals.xterm_ranks);
 
     /* cleanup the global list of local children and job data */
     for (i = 0; i < prte_local_children->size; i++) {
-        if (NULL != (proc = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
-            PRTE_RELEASE(proc);
+        if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
+            PMIX_RELEASE(proc);
         }
     }
-    PRTE_RELEASE(prte_local_children);
+    PMIX_RELEASE(prte_local_children);
 
     prte_odls_base_harvest_threads();
 
-    PRTE_DESTRUCT_LOCK(&prte_odls_globals.lock);
+    PMIX_DESTRUCT_LOCK(&prte_odls_globals.lock);
 
     return prte_mca_base_framework_components_close(&prte_odls_base_framework, NULL);
 }
@@ -253,19 +253,19 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
     bool xterm_hold;
     sigset_t unblock;
 
-    PRTE_CONSTRUCT_LOCK(&prte_odls_globals.lock);
+    PMIX_CONSTRUCT_LOCK(&prte_odls_globals.lock);
     prte_odls_globals.lock.active = false; // start with nobody having the thread
 
     /* initialize the global array of local children */
-    prte_local_children = PRTE_NEW(prte_pointer_array_t);
+    prte_local_children = PMIX_NEW(pmix_pointer_array_t);
     if (PRTE_SUCCESS
-        != (rc = prte_pointer_array_init(prte_local_children, 1, PRTE_GLOBAL_ARRAY_MAX_SIZE, 1))) {
+        != (rc = pmix_pointer_array_init(prte_local_children, 1, PRTE_GLOBAL_ARRAY_MAX_SIZE, 1))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
 
     /* initialize ODLS globals */
-    PRTE_CONSTRUCT(&prte_odls_globals.xterm_ranks, prte_list_t);
+    PMIX_CONSTRUCT(&prte_odls_globals.xterm_ranks, pmix_list_t);
     prte_odls_globals.xtermcmd = NULL;
 
     /* ensure that SIGCHLD is unblocked as we need to capture it */
@@ -289,7 +289,7 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
                 xterm_hold = true;
                 continue;
             }
-            nm = PRTE_NEW(prte_namelist_t);
+            nm = PMIX_NEW(prte_namelist_t);
             rank = strtol(ranks[i], NULL, 10);
             if (-1 == rank) {
                 /* wildcard */
@@ -306,7 +306,7 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
                  */
                 nm->name.rank = rank;
             }
-            prte_list_append(&prte_odls_globals.xterm_ranks, &nm->super);
+            pmix_list_append(&prte_odls_globals.xterm_ranks, &nm->super);
         }
         pmix_argv_free(ranks);
         /* construct the xtermcmd */
@@ -345,7 +345,7 @@ static void launch_local_dest(prte_odls_launch_local_t *ptr)
 {
     prte_event_free(ptr->ev);
 }
-PRTE_CLASS_INSTANCE(prte_odls_launch_local_t, prte_object_t, launch_local_const, launch_local_dest);
+PMIX_CLASS_INSTANCE(prte_odls_launch_local_t, pmix_object_t, launch_local_const, launch_local_dest);
 
 static void sccon(prte_odls_spawn_caddy_t *p)
 {
@@ -370,4 +370,4 @@ static void scdes(prte_odls_spawn_caddy_t *p)
         pmix_argv_free(p->env);
     }
 }
-PRTE_CLASS_INSTANCE(prte_odls_spawn_caddy_t, prte_object_t, sccon, scdes);
+PMIX_CLASS_INSTANCE(prte_odls_spawn_caddy_t, pmix_object_t, sccon, scdes);

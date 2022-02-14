@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,15 +28,15 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 
 BEGIN_C_DECLS
 
-PRTE_EXPORT int prte_util_add_hostfile_nodes(prte_list_t *nodes, char *hostfile);
+PRTE_EXPORT int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile);
 
-PRTE_EXPORT int prte_util_filter_hostfile_nodes(prte_list_t *nodes, char *hostfile, bool remove);
+PRTE_EXPORT int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool remove);
 
-PRTE_EXPORT int prte_util_get_ordered_host_list(prte_list_t *nodes, char *hostfile);
+PRTE_EXPORT int prte_util_get_ordered_host_list(pmix_list_t *nodes, char *hostfile);
 
 END_C_DECLS
 

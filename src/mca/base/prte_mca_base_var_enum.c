@@ -41,12 +41,12 @@
 
 static void mca_base_var_enum_constructor(prte_mca_base_var_enum_t *enumerator);
 static void mca_base_var_enum_destructor(prte_mca_base_var_enum_t *enumerator);
-PRTE_CLASS_INSTANCE(prte_mca_base_var_enum_t, prte_object_t, mca_base_var_enum_constructor,
+PMIX_CLASS_INSTANCE(prte_mca_base_var_enum_t, pmix_object_t, mca_base_var_enum_constructor,
                     mca_base_var_enum_destructor);
 
 static void mca_base_var_enum_flag_constructor(prte_mca_base_var_enum_flag_t *enumerator);
 static void mca_base_var_enum_flag_destructor(prte_mca_base_var_enum_flag_t *enumerator);
-static PRTE_CLASS_INSTANCE(prte_mca_base_var_enum_flag_t, prte_object_t,
+static PMIX_CLASS_INSTANCE(prte_mca_base_var_enum_flag_t, pmix_object_t,
                            mca_base_var_enum_flag_constructor, mca_base_var_enum_flag_destructor);
 
 static int enum_dump(prte_mca_base_var_enum_t *self, char **out);
@@ -126,7 +126,7 @@ static int mca_base_var_enum_bool_dump(prte_mca_base_var_enum_t *self, char **ou
 }
 
 prte_mca_base_var_enum_t prte_mca_base_var_enum_bool
-    = {.super = PRTE_OBJ_STATIC_INIT(prte_object_t),
+    = {.super = PMIX_OBJ_STATIC_INIT(pmix_object_t),
        .enum_is_static = true,
        .enum_name = "boolean",
        .get_count = mca_base_var_enum_bool_get_count,
@@ -223,7 +223,7 @@ static int mca_base_var_enum_auto_bool_dump(prte_mca_base_var_enum_t *self, char
 }
 
 prte_mca_base_var_enum_t prte_mca_base_var_enum_auto_bool
-    = {.super = PRTE_OBJ_STATIC_INIT(prte_object_t),
+    = {.super = PMIX_OBJ_STATIC_INIT(pmix_object_t),
        .enum_is_static = true,
        .enum_name = "auto_boolean",
        .get_count = mca_base_var_enum_auto_bool_get_count,
@@ -328,7 +328,7 @@ static int mca_base_var_enum_verbose_dump(prte_mca_base_var_enum_t *self, char *
 }
 
 prte_mca_base_var_enum_t prte_mca_base_var_enum_verbose = {
-    .super = PRTE_OBJ_STATIC_INIT(prte_object_t),
+    .super = PMIX_OBJ_STATIC_INIT(pmix_object_t),
     .enum_is_static = true,
     .enum_name = "verbosity",
     .get_count = enum_get_count,
@@ -348,7 +348,7 @@ int prte_mca_base_var_enum_create(const char *name, const prte_mca_base_var_enum
 
     *enumerator = NULL;
 
-    new_enum = PRTE_NEW(prte_mca_base_var_enum_t);
+    new_enum = PMIX_NEW(prte_mca_base_var_enum_t);
     if (NULL == new_enum) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
@@ -365,7 +365,7 @@ int prte_mca_base_var_enum_create(const char *name, const prte_mca_base_var_enum
     /* make a copy of the values */
     new_enum->enum_values = calloc(new_enum->enum_value_count + 1, sizeof(*new_enum->enum_values));
     if (NULL == new_enum->enum_values) {
-        PRTE_RELEASE(new_enum);
+        PMIX_RELEASE(new_enum);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
@@ -388,7 +388,7 @@ int prte_mca_base_var_enum_create_flag(const char *name,
 
     *enumerator = NULL;
 
-    new_enum = PRTE_NEW(prte_mca_base_var_enum_flag_t);
+    new_enum = PMIX_NEW(prte_mca_base_var_enum_flag_t);
     if (NULL == new_enum) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
@@ -406,7 +406,7 @@ int prte_mca_base_var_enum_create_flag(const char *name,
     new_enum->enum_flags = calloc(new_enum->super.enum_value_count + 1,
                                   sizeof(*new_enum->enum_flags));
     if (NULL == new_enum->enum_flags) {
-        PRTE_RELEASE(new_enum);
+        PMIX_RELEASE(new_enum);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 

@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,11 +48,11 @@ struct prte_oob_tcp_msg_error_t;
 
 /* define a struct for tracking NIC addresses */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     uint16_t af_family;
     struct sockaddr addr;
 } prte_oob_tcp_nicaddr_t;
-PRTE_CLASS_DECLARATION(prte_oob_tcp_nicaddr_t);
+PMIX_CLASS_DECLARATION(prte_oob_tcp_nicaddr_t);
 
 /* Module definition */
 typedef void (*prte_oob_tcp_module_accept_connection_fn_t)(const int accepted_fd,

@@ -12,7 +12,7 @@
 # Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -35,7 +35,7 @@ AM_CFLAGS = \
             -DPRTE_CC_ABSOLUTE="\"@PRTE_CC_ABSOLUTE@\"" \
             -DPRTE_GREEK_VERSION="\"@PRTE_GREEK_VERSION@\"" \
             -DPRTE_REPO_REV="\"@PRTE_REPO_REV@\"" \
-            -DPRTE_RELEASE_DATE="\"@PRTE_RELEASE_DATE@\""
+            -DPMIX_RELEASE_DATE="\"@PMIX_RELEASE_DATE@\""
 
 bin_PROGRAMS = prted
 

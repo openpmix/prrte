@@ -29,7 +29,7 @@ prte_if_base_component_t prte_prteif_solaris_ipv6_component = {
     {PRTE_IF_BASE_VERSION_2_0_0,
 
      /* Component name and version */
-     "solaris_ipv6", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION,
+     "solaris_ipv6", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PMIX_RELEASE_VERSION,
 
      /* Component open and close functions */
      if_solaris_ipv6_open, NULL},
@@ -120,7 +120,7 @@ static int if_solaris_ipv6_open(void)
                 /* create interface for newly found address */
                 prte_if_t *intf;
 
-                intf = PRTE_NEW(prte_if_t);
+                intf = PMIX_NEW(prte_if_t);
                 if (NULL == intf) {
                     prte_output(0, "prte_ifinit: unable to allocate %d bytes\n", sizeof(prte_if_t));
                     return PRTE_ERR_OUT_OF_RESOURCE;
@@ -128,14 +128,14 @@ static int if_solaris_ipv6_open(void)
                 intf->af_family = AF_INET6;
 
                 pmix_string_copy(intf->if_name, lifreq->lifr_name, PMIX_IF_NAMESIZE);
-                intf->if_index = prte_list_get_size(&prte_if_list) + 1;
+                intf->if_index = pmix_list_get_size(&prte_if_list) + 1;
                 memcpy(&intf->if_addr, my_addr, sizeof(*my_addr));
                 intf->if_mask = 64;
                 /* lifrq flags are uint64_t */
                 intf->if_flags = (uint32_t)(0x00000000ffffffff) & lifquery.lifr_flags;
 
                 /* append to list */
-                prte_list_append(&prte_if_list, &(intf->super));
+                pmix_list_append(&prte_if_list, &(intf->super));
             }
         }
     } /* for */

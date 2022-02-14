@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,8 +48,8 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
 {
     prte_app_context_t *app;
     int i;
-    prte_list_t node_list;
-    prte_list_item_t *item;
+    pmix_list_t node_list;
+    pmix_list_item_t *item;
     int32_t num_slots;
     int rc;
     prte_mca_base_component_t *c = &prte_rmaps_round_robin_component.base_version;
@@ -97,12 +97,12 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
     for (i = 0; i < jdata->apps->size; i++) {
         hwloc_obj_type_t target;
         unsigned cache_level;
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
 
         /* setup the nodelist here in case we jump to error */
-        PRTE_CONSTRUCT(&node_list, prte_list_t);
+        PMIX_CONSTRUCT(&node_list, pmix_list_t);
 
         /* if the number of processes wasn't specified, then we know there can be only
          * one app_context allowed in the launch, and that we are to launch it across
@@ -250,19 +250,19 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
         /* cleanup the node list - it can differ from one app_context
          * to another, so we have to get it every time
          */
-        while (NULL != (item = prte_list_remove_first(&node_list))) {
-            PRTE_RELEASE(item);
+        while (NULL != (item = pmix_list_remove_first(&node_list))) {
+            PMIX_RELEASE(item);
         }
-        PRTE_DESTRUCT(&node_list);
+        PMIX_DESTRUCT(&node_list);
     }
 
     return PRTE_SUCCESS;
 
 error:
-    while (NULL != (item = prte_list_remove_first(&node_list))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&node_list))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&node_list);
+    PMIX_DESTRUCT(&node_list);
 
     return rc;
 }

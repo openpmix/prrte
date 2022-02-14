@@ -12,7 +12,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +23,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/class/prte_bitmap.h"
+#include "src/class/pmix_bitmap.h"
 #include "src/mca/base/prte_mca_base_component_repository.h"
 #include "src/mca/mca.h"
 #include "src/util/output.h"
@@ -95,10 +95,10 @@ int prte_routed_base_select(void)
 static void construct(prte_routed_tree_t *rt)
 {
     rt->rank = PMIX_RANK_INVALID;
-    PRTE_CONSTRUCT(&rt->relatives, prte_bitmap_t);
+    PMIX_CONSTRUCT(&rt->relatives, pmix_bitmap_t);
 }
 static void destruct(prte_routed_tree_t *rt)
 {
-    PRTE_DESTRUCT(&rt->relatives);
+    PMIX_DESTRUCT(&rt->relatives);
 }
-PRTE_CLASS_INSTANCE(prte_routed_tree_t, prte_list_item_t, construct, destruct);
+PMIX_CLASS_INSTANCE(prte_routed_tree_t, pmix_list_item_t, construct, destruct);

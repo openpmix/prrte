@@ -70,7 +70,7 @@ void prte_info_show_prte_version(const char *scope)
     char *tmp, *tmp2;
 
     pmix_asprintf(&tmp, "%s:version:full", prte_info_type_prte);
-    tmp2 = make_version_str(scope, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION,
+    tmp2 = make_version_str(scope, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PMIX_RELEASE_VERSION,
                             PRTE_GREEK_VERSION, PRTE_REPO_REV);
     prte_info_out("PRTE", tmp, tmp2);
     free(tmp);
@@ -79,7 +79,7 @@ void prte_info_show_prte_version(const char *scope)
     prte_info_out("PRTE repo revision", tmp, PRTE_REPO_REV);
     free(tmp);
     pmix_asprintf(&tmp, "%s:version:release_date", prte_info_type_prte);
-    prte_info_out("PRTE release date", tmp, PRTE_RELEASE_DATE);
+    prte_info_out("PRTE release date", tmp, PMIX_RELEASE_DATE);
     free(tmp);
 
     prte_info_out("PMIx", "pmix:version:full", PMIx_Get_version());
@@ -100,14 +100,14 @@ void prte_info_do_version(bool want_all)
     char *arg1, *scope, **tmp;
     char *pos = NULL;
     int j;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     prte_info_components_open();
 
     if (want_all) {
         prte_info_show_prte_version(prte_info_ver_full);
         for (j = 0; j < mca_types.size; ++j) {
-            if (NULL == (pos = (char *) prte_pointer_array_get_item(&mca_types, j))) {
+            if (NULL == (pos = (char *) pmix_pointer_array_get_item(&mca_types, j))) {
                 continue;
             }
             prte_info_show_component_version(pos, prte_info_component_all, prte_info_ver_full,
@@ -163,10 +163,10 @@ void prte_info_show_component_version(const char *type_name, const char *compone
 {
     bool want_all_components = false;
     bool found;
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_mca_base_component_list_item_t *cli;
     const prte_mca_base_component_t *component;
-    prte_list_t *components;
+    pmix_list_t *components;
     int j;
     char *pos;
     prte_info_component_map_t *map;
@@ -178,7 +178,7 @@ void prte_info_show_component_version(const char *type_name, const char *compone
 
     /* Check to see if the type is valid */
     for (found = false, j = 0; j < mca_types.size; ++j) {
-        if (NULL == (pos = (char *) prte_pointer_array_get_item(&mca_types, j))) {
+        if (NULL == (pos = (char *) pmix_pointer_array_get_item(&mca_types, j))) {
             continue;
         }
         if (0 == strcmp(pos, type_name)) {
@@ -195,7 +195,7 @@ void prte_info_show_component_version(const char *type_name, const char *compone
     components = NULL;
     for (j = 0; j < prte_component_map.size; j++) {
         if (NULL
-            == (map = (prte_info_component_map_t *) prte_pointer_array_get_item(&prte_component_map,
+            == (map = (prte_info_component_map_t *) pmix_pointer_array_get_item(&prte_component_map,
                                                                                 j))) {
             continue;
         }
@@ -207,9 +207,9 @@ void prte_info_show_component_version(const char *type_name, const char *compone
     }
 
     if (NULL != components) {
-        if (prte_list_get_size(components) > 0) {
-            for (item = prte_list_get_first(components); prte_list_get_end(components) != item;
-                 item = prte_list_get_next(item)) {
+        if (pmix_list_get_size(components) > 0) {
+            for (item = pmix_list_get_first(components); pmix_list_get_end(components) != item;
+                 item = pmix_list_get_next(item)) {
                 cli = (prte_mca_base_component_list_item_t *) item;
                 component = cli->cli_component;
                 if (want_all_components

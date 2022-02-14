@@ -35,7 +35,7 @@
 #    include <sys/types.h>
 #endif
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 
@@ -52,7 +52,7 @@
  * Globals
  */
 prte_errmgr_base_t prte_errmgr_base = {
-    .error_cbacks = PRTE_LIST_STATIC_INIT
+    .error_cbacks = PMIX_LIST_STATIC_INIT
 };
 
 /* Public module provides a wrapper around previous functions */
@@ -81,7 +81,7 @@ static int prte_errmgr_base_close(void)
     prte_errmgr = prte_errmgr_default_fns;
 
     /* destruct the callback list */
-    PRTE_LIST_DESTRUCT(&prte_errmgr_base.error_cbacks);
+    PMIX_LIST_DESTRUCT(&prte_errmgr_base.error_cbacks);
 
     return prte_mca_base_framework_components_close(&prte_errmgr_base_framework, NULL);
 }
@@ -96,7 +96,7 @@ static int prte_errmgr_base_open(prte_mca_base_open_flag_t flags)
     prte_errmgr = prte_errmgr_default_fns;
 
     /* initialize the error callback list */
-    PRTE_CONSTRUCT(&prte_errmgr_base.error_cbacks, prte_list_t);
+    PMIX_CONSTRUCT(&prte_errmgr_base.error_cbacks, pmix_list_t);
 
     /* Open up all available components */
     return prte_mca_base_framework_components_open(&prte_errmgr_base_framework, flags);

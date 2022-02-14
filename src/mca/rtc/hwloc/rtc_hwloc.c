@@ -35,7 +35,7 @@
 #    include <fcntl.h>
 #endif
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/hwloc/hwloc-internal.h"
 #if HWLOC_API_VERSION >= 0x20000
 #    include "hwloc/shmem.h"

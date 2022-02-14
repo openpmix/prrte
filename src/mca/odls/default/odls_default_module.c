@@ -114,7 +114,7 @@
 #    include <sys/ptrace.h>
 #endif
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_environ.h"
@@ -129,7 +129,7 @@
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/show_help.h"
 
@@ -142,7 +142,7 @@
  * Module functions (function pointers used in a struct)
  */
 static int prte_odls_default_launch_local_procs(pmix_data_buffer_t *data);
-static int prte_odls_default_kill_local_procs(prte_pointer_array_t *procs);
+static int prte_odls_default_kill_local_procs(pmix_pointer_array_t *procs);
 static int prte_odls_default_signal_local_procs(const pmix_proc_t *proc, int32_t signal);
 static int prte_odls_default_restart_proc(prte_proc_t *child);
 
@@ -198,7 +198,7 @@ static int odls_default_kill_local(pid_t pid, int signum)
     return 0;
 }
 
-int prte_odls_default_kill_local_procs(prte_pointer_array_t *procs)
+int prte_odls_default_kill_local_procs(pmix_pointer_array_t *procs)
 {
     int rc;
 
@@ -491,18 +491,19 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         rc = pmix_fd_read(read_fd, sizeof(msg), &msg);
 
         /* If the pipe closed, then the child successfully launched */
-        if (PRTE_ERR_TIMEOUT == rc) {
+        if (PMIX_ERR_TIMEOUT == rc) {
             break;
         }
 
         /* If Something Bad happened in the read, error out */
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             close(read_fd);
 
             if (NULL != cd->child) {
                 cd->child->state = PRTE_PROC_STATE_UNDEF;
             }
+            rc = prte_pmix_convert_status(rc);
             return rc;
         }
 
@@ -518,26 +519,28 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         /* Read in the strings; ensure to terminate them with \0 */
         if (msg.file_str_len > 0) {
             rc = pmix_fd_read(read_fd, msg.file_str_len, file);
-            if (PRTE_SUCCESS != rc) {
+            if (PMIX_SUCCESS != rc) {
                 prte_show_help("help-prte-odls-default.txt", "syscall fail", true,
                                prte_process_info.nodename, cd->app->app, "pmix_fd_read", __FILE__,
                                __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
+                rc = prte_pmix_convert_status(rc);
                 return rc;
             }
             file[msg.file_str_len] = '\0';
         }
         if (msg.topic_str_len > 0) {
             rc = pmix_fd_read(read_fd, msg.topic_str_len, topic);
-            if (PRTE_SUCCESS != rc) {
+            if (PMIX_SUCCESS != rc) {
                 prte_show_help("help-prte-odls-default.txt", "syscall fail", true,
                                prte_process_info.nodename, cd->app->app, "pmix_fd_read", __FILE__,
                                __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
+                rc = prte_pmix_convert_status(rc);
                 return rc;
             }
             topic[msg.topic_str_len] = '\0';
@@ -551,6 +554,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
+                rc = prte_pmix_convert_status(rc);
                 return rc;
             }
             rc = pmix_fd_read(read_fd, msg.msg_str_len, str);

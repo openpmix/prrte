@@ -121,7 +121,7 @@ int prte_ess_base_prted_setup(void)
     setup_sighandler(SIGTERM, &term_handler, shutdown_signal);
     setup_sighandler(SIGINT, &int_handler, shutdown_signal);
     /** setup callbacks for signals we should forward */
-    if (0 < (idx = prte_list_get_size(&prte_ess_base_signals))) {
+    if (0 < (idx = pmix_list_get_size(&prte_ess_base_signals))) {
         forward_signals_events = (prte_event_t *) malloc(sizeof(prte_event_t) * idx);
         if (NULL == forward_signals_events) {
             ret = PRTE_ERR_OUT_OF_RESOURCE;
@@ -129,7 +129,7 @@ int prte_ess_base_prted_setup(void)
             goto error;
         }
         idx = 0;
-        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+        PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
         {
             setup_sighandler(sig->signal, forward_signals_events + idx, signal_forward_callback);
             ++idx;
@@ -285,7 +285,7 @@ int prte_ess_base_prted_setup(void)
     }
     /* Setup the job data object for the daemons */
     /* create and store the job data object */
-    jdata = PRTE_NEW(prte_job_t);
+    jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
     prte_set_job_data_object(jdata);
     /* set the schizo personality to "prte" by default */
@@ -298,18 +298,18 @@ int prte_ess_base_prted_setup(void)
     }
 
     /* every job requires at least one app */
-    app = PRTE_NEW(prte_app_context_t);
-    prte_pointer_array_set_item(jdata->apps, 0, app);
+    app = PMIX_NEW(prte_app_context_t);
+    pmix_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps++;
 
     /* create and store a proc object for us */
-    proc = PRTE_NEW(prte_proc_t);
+    proc = PMIX_NEW(prte_proc_t);
     PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
     proc->job = jdata;
     proc->rank = proc->name.rank;
     proc->pid = prte_process_info.pid;
     proc->state = PRTE_PROC_STATE_RUNNING;
-    prte_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+    pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
     jdata->state = PRTE_JOB_STATE_RUNNING;
@@ -477,13 +477,13 @@ int prte_ess_base_prted_setup(void)
      * will have reset our topology. Ensure we always get the right
      * one by setting our node topology afterwards
      */
-    t = PRTE_NEW(prte_topology_t);
+    t = PMIX_NEW(prte_topology_t);
     t->topo = prte_hwloc_topology;
     /* save the signature */
     t->sig = strdup(prte_topo_signature);
     /* save the topology - note that this may have to be moved later
      * to ensure a common array position with the DVM master */
-    prte_pointer_array_add(prte_node_topologies, t);
+    pmix_pointer_array_add(prte_node_topologies, t);
     if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         char *output = NULL;
         pmix_topology_t topo;
@@ -564,7 +564,7 @@ int prte_ess_base_prted_finalize(void)
         prte_event_del(&int_handler);
         /** Remove the USR signal handlers */
         i = 0;
-        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+        PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
         {
             prte_event_signal_del(forward_signals_events + i);
             ++i;

@@ -6,7 +6,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +40,7 @@ prte_grpcomm_base_component_t prte_grpcomm_direct_component = {
 
         .mca_component_name = "direct",
         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PRTE_RELEASE_VERSION),
+                                    PMIX_RELEASE_VERSION),
         .mca_open_component = direct_open,
         .mca_close_component = direct_close,
         .mca_query_component = direct_query,

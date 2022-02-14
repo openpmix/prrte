@@ -177,7 +177,7 @@ static void set_defaults(prte_output_stream_t *lds)
 
     /* Load up defaults */
 
-    PRTE_CONSTRUCT(lds, prte_output_stream_t);
+    PMIX_CONSTRUCT(lds, prte_output_stream_t);
 #if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
     lds->lds_syslog_priority = LOG_INFO;
     lds->lds_syslog_ident = "prte";

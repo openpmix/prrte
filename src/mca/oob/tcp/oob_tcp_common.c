@@ -179,7 +179,7 @@ prte_oob_tcp_peer_t *prte_oob_tcp_peer_lookup(const pmix_proc_t *name)
 {
     prte_oob_tcp_peer_t *peer;
 
-    PRTE_LIST_FOREACH(peer, &prte_oob_tcp_component.peers, prte_oob_tcp_peer_t)
+    PMIX_LIST_FOREACH(peer, &prte_oob_tcp_component.peers, prte_oob_tcp_peer_t)
     {
         if (PMIX_CHECK_PROCID(name, &peer->name)) {
             return peer;

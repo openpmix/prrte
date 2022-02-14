@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,7 +61,7 @@ static void failed_cmd(int fd, short event, void *cbdata)
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:orted_cmd command timed out",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-    PRTE_RELEASE(tm);
+    PMIX_RELEASE(tm);
     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
 }
 #endif
@@ -106,7 +106,7 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
         return rc;
     }
     /* goes to all daemons */
-    sig = PRTE_NEW(prte_grpcomm_signature_t);
+    sig = PMIX_NEW(prte_grpcomm_signature_t);
     sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     sig->sz = 1;
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
@@ -114,7 +114,7 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
         PRTE_ERROR_LOG(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&cmd);
-    PRTE_RELEASE(sig);
+    PMIX_RELEASE(sig);
 
 #if 0
     /* if we are abnormally ordering the termination, then
@@ -129,7 +129,7 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
 
 int prte_plm_base_prted_terminate_job(pmix_nspace_t jobid)
 {
-    prte_pointer_array_t procs;
+    pmix_pointer_array_t procs;
     prte_proc_t proc;
     int rc;
 
@@ -137,20 +137,20 @@ int prte_plm_base_prted_terminate_job(pmix_nspace_t jobid)
                          "%s plm:base:prted_terminate job %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_JOBID_PRINT(jobid)));
 
-    PRTE_CONSTRUCT(&procs, prte_pointer_array_t);
-    prte_pointer_array_init(&procs, 1, 1, 1);
-    PRTE_CONSTRUCT(&proc, prte_proc_t);
+    PMIX_CONSTRUCT(&procs, pmix_pointer_array_t);
+    pmix_pointer_array_init(&procs, 1, 1, 1);
+    PMIX_CONSTRUCT(&proc, prte_proc_t);
     PMIX_LOAD_PROCID(&proc.name, jobid, PMIX_RANK_WILDCARD);
-    prte_pointer_array_add(&procs, &proc);
+    pmix_pointer_array_add(&procs, &proc);
     if (PRTE_SUCCESS != (rc = prte_plm_base_prted_kill_local_procs(&procs))) {
         PRTE_ERROR_LOG(rc);
     }
-    PRTE_DESTRUCT(&procs);
-    PRTE_DESTRUCT(&proc);
+    PMIX_DESTRUCT(&procs);
+    PMIX_DESTRUCT(&proc);
     return rc;
 }
 
-int prte_plm_base_prted_kill_local_procs(prte_pointer_array_t *procs)
+int prte_plm_base_prted_kill_local_procs(pmix_pointer_array_t *procs)
 {
     int rc;
     pmix_data_buffer_t cmd;
@@ -175,7 +175,7 @@ int prte_plm_base_prted_kill_local_procs(prte_pointer_array_t *procs)
     /* pack the proc names */
     if (NULL != procs) {
         for (v = 0; v < procs->size; v++) {
-            if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(procs, v))) {
+            if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(procs, v))) {
                 continue;
             }
             rc = PMIx_Data_pack(NULL, &cmd, &proc->name, 1, PMIX_PROC);
@@ -187,7 +187,7 @@ int prte_plm_base_prted_kill_local_procs(prte_pointer_array_t *procs)
         }
     }
     /* goes to all daemons */
-    sig = PRTE_NEW(prte_grpcomm_signature_t);
+    sig = PMIX_NEW(prte_grpcomm_signature_t);
     sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     sig->sz = 1;
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
@@ -195,7 +195,7 @@ int prte_plm_base_prted_kill_local_procs(prte_pointer_array_t *procs)
         PRTE_ERROR_LOG(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&cmd);
-    PRTE_RELEASE(sig);
+    PMIX_RELEASE(sig);
 
     /* we're done! */
     return rc;
@@ -239,7 +239,7 @@ int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
     }
 
     /* goes to all daemons */
-    sig = PRTE_NEW(prte_grpcomm_signature_t);
+    sig = PMIX_NEW(prte_grpcomm_signature_t);
     sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     sig->sz = 1;
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
@@ -247,7 +247,7 @@ int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
         PRTE_ERROR_LOG(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&cmd);
-    PRTE_RELEASE(sig);
+    PMIX_RELEASE(sig);
 
     /* we're done! */
     return PRTE_SUCCESS;

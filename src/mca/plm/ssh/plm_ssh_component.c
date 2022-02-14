@@ -91,7 +91,7 @@ prte_plm_ssh_component_t prte_plm_ssh_component = {
             /* Component name and version */
             .mca_component_name = "ssh",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
 
             /* Component open and close functions */
             .mca_open_component = ssh_component_open,

@@ -158,7 +158,7 @@ typedef void (*prte_routed_module_update_routing_plan_fn_t)(void);
  * the grpcomm framework will know who to send xcast to
  * next
  */
-typedef void (*prte_routed_module_get_routing_list_fn_t)(prte_list_t *coll);
+typedef void (*prte_routed_module_get_routing_list_fn_t)(pmix_list_t *coll);
 
 /*
  * Set lifeline process

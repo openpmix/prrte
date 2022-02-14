@@ -17,7 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,9 +34,9 @@
 #    include <sys/time.h>
 #endif
 
-#include "src/class/prte_bitmap.h"
-#include "src/class/prte_list.h"
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_bitmap.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/event/event-internal.h"
 
 #include "oob_tcp.h"
@@ -50,9 +50,9 @@ typedef struct {
     uint32_t addr_count;             /**< total number of addresses */
     int num_links;                   /**< number of logical links per physical device */
     int max_retries;                 /**< max number of retries before declaring peer gone */
-    prte_list_t events;              /**< events for monitoring connections */
+    pmix_list_t events;              /**< events for monitoring connections */
     int peer_limit;                  /**< max size of tcp peer cache */
-    prte_list_t peers;               // connection addresses for peers
+    pmix_list_t peers;               // connection addresses for peers
 
     /* Port specifications */
     int tcp_sndbuf;   /**< socket send buffer size */
@@ -73,12 +73,12 @@ typedef struct {
     char **ipv6ports;
 
     /* connection support */
-    prte_list_t local_ifs; /**< prte list of local prte_if_t interfaces */
+    pmix_list_t local_ifs; /**< prte list of local prte_if_t interfaces */
     char **if_masks;
     char *my_uri;                /**< uri for connecting to the TCP module */
     int num_hnp_ports;           /**< number of ports the HNP should listen on */
-    prte_list_t listeners;       /**< List of sockets being monitored by event or thread */
-    prte_thread_t listen_thread; /**< handle to the listening thread */
+    pmix_list_t listeners;       /**< List of sockets being monitored by event or thread */
+    pmix_thread_t listen_thread; /**< handle to the listening thread */
     bool listen_thread_active;
     struct timeval listen_thread_tv; /**< Timeout when using listen thread */
     int stop_thread[2];              /**< pipe used to exit the listen thread */

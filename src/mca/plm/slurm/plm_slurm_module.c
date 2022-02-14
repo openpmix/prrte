@@ -68,7 +68,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/show_help.h"
 #include "types.h"
@@ -191,7 +191,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
 
-    PRTE_ACQUIRE_OBJECT(state);
+    PMIX_ACQUIRE_OBJECT(state);
 
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                          "%s plm:slurm: LAUNCH DAEMONS CALLED",
@@ -215,7 +215,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          */
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -236,7 +236,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -315,7 +315,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     nodelist_argv = NULL;
 
     for (n = 0; n < map->nodes->size; n++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, n))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, n))) {
             continue;
         }
         /* if the daemon already exists on this node, then
@@ -393,7 +393,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     cur_prefix = NULL;
     for (n = 0; n < state->jdata->apps->size; n++) {
         char *app_prefix_dir;
-        app = (prte_app_context_t *) prte_pointer_array_get_item(state->jdata->apps, n);
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(state->jdata->apps, n);
         if (NULL == app) {
             continue;
         }
@@ -465,7 +465,7 @@ cleanup:
     }
 
     /* cleanup the caddy */
-    PRTE_RELEASE(state);
+    PMIX_RELEASE(state);
 }
 
 /**
@@ -581,7 +581,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
     }
 
     /* done with this dummy */
-    PRTE_RELEASE(t2);
+    PMIX_RELEASE(t2);
 }
 
 static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
@@ -611,7 +611,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
     }
 
     /* setup a dummy proc object to track the srun */
-    dummy = PRTE_NEW(prte_proc_t);
+    dummy = PMIX_NEW(prte_proc_t);
     dummy->pid = srun_pid;
     /* be sure to mark it as alive so we don't instantly fire */
     PRTE_FLAG_SET(dummy, PRTE_PROC_FLAG_ALIVE);

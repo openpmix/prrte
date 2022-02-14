@@ -64,7 +64,7 @@
 #include <ctype.h>
 
 #include "constants.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_if.h"
@@ -84,14 +84,14 @@
 
 /*
  *  Look for interface by name and returns its
- *  corresponding prte_list index.
+ *  corresponding pmix_list index.
  */
 
 int prte_ifnametoindex(const char *if_name)
 {
     prte_if_t *intf;
 
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
     {
         if (strcmp(intf->if_name, if_name) == 0) {
             return intf->if_index;
@@ -109,7 +109,7 @@ int prte_ifnametokindex(const char *if_name)
 {
     prte_if_t *intf;
 
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
     {
         if (strcmp(intf->if_name, if_name) == 0) {
             return intf->if_kernel_index;
@@ -142,7 +142,7 @@ static int prte_ifaddrtoname(const char *if_addr, char *if_name, int length)
     }
 
     for (r = res; r != NULL; r = r->ai_next) {
-        PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
+        PMIX_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
         {
             if (AF_INET == r->ai_family) {
                 struct sockaddr_in ipv4;
@@ -183,11 +183,11 @@ static int prte_ifaddrtoname(const char *if_addr, char *if_name, int length)
 
 int pmix_ifcount(void)
 {
-    return prte_list_get_size(&prte_if_list);
+    return pmix_list_get_size(&prte_if_list);
 }
 
 /*
- *  Return the prte_list interface index for the first
+ *  Return the pmix_list interface index for the first
  *  interface in our list.
  */
 
@@ -195,7 +195,7 @@ int pmix_ifbegin(void)
 {
     prte_if_t *intf;
 
-    intf = (prte_if_t *) prte_list_get_first(&prte_if_list);
+    intf = (prte_if_t *) pmix_list_get_first(&prte_if_list);
     if (NULL != intf)
         return intf->if_index;
     return (-1);
@@ -211,12 +211,12 @@ int pmix_ifnext(int if_index)
 {
     prte_if_t *intf;
 
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
     {
         if (intf->if_index == if_index) {
             do {
-                prte_if_t *if_next = (prte_if_t *) prte_list_get_next(intf);
-                prte_if_t *if_end = (prte_if_t *) prte_list_get_end(&prte_if_list);
+                prte_if_t *if_next = (prte_if_t *) pmix_list_get_next(intf);
+                prte_if_t *if_end = (prte_if_t *) pmix_list_get_end(&prte_if_list);
                 if (if_next == if_end) {
                     return -1;
                 }
@@ -229,7 +229,7 @@ int pmix_ifnext(int if_index)
 }
 
 /*
- *  Lookup the interface by prte_list index and return the
+ *  Lookup the interface by pmix_list index and return the
  *  primary address assigned to the interface.
  */
 
@@ -237,7 +237,7 @@ int pmix_ifindextoaddr(int if_index, struct sockaddr *if_addr, unsigned int leng
 {
     prte_if_t *intf;
 
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
     {
         if (intf->if_index == if_index) {
             memcpy(if_addr, &intf->if_addr, MIN(length, sizeof(intf->if_addr)));
@@ -248,14 +248,14 @@ int pmix_ifindextoaddr(int if_index, struct sockaddr *if_addr, unsigned int leng
 }
 
 /*
- *  Lookup the interface by prte_list kindex and return the
+ *  Lookup the interface by pmix_list kindex and return the
  *  primary address assigned to the interface.
  */
 int prte_ifkindextoaddr(int if_kindex, struct sockaddr *if_addr, unsigned int length)
 {
     prte_if_t *intf;
 
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
     {
         if (intf->if_kernel_index == if_kindex) {
             memcpy(if_addr, &intf->if_addr, MIN(length, sizeof(intf->if_addr)));
@@ -266,7 +266,7 @@ int prte_ifkindextoaddr(int if_kindex, struct sockaddr *if_addr, unsigned int le
 }
 
 /*
- *  Lookup the interface by prte_list index and return
+ *  Lookup the interface by pmix_list index and return
  *  the associated name.
  */
 
@@ -274,7 +274,7 @@ int pmix_ifindextoname(int if_index, char *if_name, int length)
 {
     prte_if_t *intf;
 
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
     {
         if (intf->if_index == if_index) {
             pmix_string_copy(if_name, intf->if_name, length);
@@ -285,7 +285,7 @@ int pmix_ifindextoname(int if_index, char *if_name, int length)
 }
 
 /*
- *  Lookup the interface by prte_list index and return the
+ *  Lookup the interface by pmix_list index and return the
  *  flags assigned to the interface.
  */
 
@@ -293,7 +293,7 @@ int prte_ifindextoflags(int if_index, uint32_t *if_flags)
 {
     prte_if_t *intf;
 
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
     {
         if (intf->if_index == if_index) {
             memcpy(if_flags, &intf->if_flags, sizeof(uint32_t));
@@ -423,7 +423,7 @@ bool pmix_ifisloopback(int if_index)
 {
     prte_if_t *intf;
 
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
     {
         if (intf->if_index == if_index) {
             if ((intf->if_flags & IFF_LOOPBACK) != 0) {
@@ -496,7 +496,7 @@ void pmix_ifgetaliases(char ***aliases)
     struct sockaddr_in6 *addr6;
 #    endif
 
-    PRTE_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH(intf, &prte_if_list, prte_if_t)
     {
         addr = (struct sockaddr_in *) &intf->if_addr;
         /* ignore purely loopback interfaces */

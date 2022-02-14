@@ -74,7 +74,7 @@ BEGIN_C_DECLS
 #define MAX_IFCONF_SIZE           10485760
 
 typedef struct prte_if_t {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     char if_name[PMIX_IF_NAMESIZE];
     int if_index;
     uint16_t if_kernel_index;
@@ -88,10 +88,10 @@ typedef struct prte_if_t {
     int ifmtu; /* Can't use if_mtu because of a
                   #define collision on some BSDs */
 } prte_if_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_if_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_if_t);
 
 /* "global" list of available interfaces */
-PRTE_EXPORT extern prte_list_t prte_if_list;
+PRTE_EXPORT extern pmix_list_t prte_if_list;
 
 /* global flags */
 PRTE_EXPORT extern bool prte_if_retain_loopback;

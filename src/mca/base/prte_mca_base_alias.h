@@ -1,7 +1,7 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
  * Copyright (c) 2020      Google, LLC. All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -13,7 +13,7 @@
 #define PRTE_MCA_BASE_ALIAS_H
 
 #include "prte_config.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 
 BEGIN_C_DECLS
 
@@ -26,7 +26,7 @@ enum prte_mca_base_alias_flags_t {
 typedef enum prte_mca_base_alias_flags_t prte_mca_base_alias_flags_t;
 
 struct prte_mca_base_alias_item_t {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     /** Name aias. */
     char *component_alias;
     /** Alias flags. */
@@ -35,17 +35,17 @@ struct prte_mca_base_alias_item_t {
 
 typedef struct prte_mca_base_alias_item_t prte_mca_base_alias_item_t;
 
-PRTE_CLASS_DECLARATION(prte_mca_base_alias_item_t);
+PMIX_CLASS_DECLARATION(prte_mca_base_alias_item_t);
 
 struct prte_mca_base_alias_t {
-    prte_object_t super;
+    pmix_object_t super;
     /** List of name aliases. */
-    prte_list_t component_aliases;
+    pmix_list_t component_aliases;
 };
 
 typedef struct prte_mca_base_alias_t prte_mca_base_alias_t;
 
-PRTE_CLASS_DECLARATION(prte_mca_base_alias_t);
+PMIX_CLASS_DECLARATION(prte_mca_base_alias_t);
 
 /**
  * @brief Create a alias for a component name.

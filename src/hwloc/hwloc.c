@@ -20,7 +20,7 @@
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/schizo/schizo.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/tsd.h"
+#include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
@@ -129,7 +129,7 @@ int prte_hwloc_base_register(void)
                                      PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0,
                                      PRTE_MCA_BASE_VAR_FLAG_DEPRECATED, PRTE_INFO_LVL_9,
                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_map);
-    PRTE_RELEASE(new_enum);
+    PMIX_RELEASE(new_enum);
     if (0 > ret) {
         return ret;
     }
@@ -151,7 +151,7 @@ int prte_hwloc_base_register(void)
                                      PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0,
                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_mbfa);
-    PRTE_RELEASE(new_enum);
+    PMIX_RELEASE(new_enum);
     if (0 > ret) {
         return ret;
     }
@@ -438,7 +438,7 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
 }
 
 static bool fns_init = false;
-static prte_tsd_key_t print_tsd_key;
+static pmix_tsd_key_t print_tsd_key;
 char *prte_hwloc_print_null = "NULL";
 
 static void buffer_cleanup(void *value)
@@ -462,13 +462,13 @@ prte_hwloc_print_buffers_t *prte_hwloc_get_print_buffer(void)
 
     if (!fns_init) {
         /* setup the print_args function */
-        if (PRTE_SUCCESS != (ret = prte_tsd_key_create(&print_tsd_key, buffer_cleanup))) {
+        if (PRTE_SUCCESS != (ret = pmix_tsd_key_create(&print_tsd_key, buffer_cleanup))) {
             return NULL;
         }
         fns_init = true;
     }
 
-    ret = prte_tsd_getspecific(print_tsd_key, (void **) &ptr);
+    ret = pmix_tsd_getspecific(print_tsd_key, (void **) &ptr);
     if (PRTE_SUCCESS != ret)
         return NULL;
 
@@ -478,7 +478,7 @@ prte_hwloc_print_buffers_t *prte_hwloc_get_print_buffer(void)
             ptr->buffers[i] = (char *) malloc((PRTE_HWLOC_PRINT_MAX_SIZE + 1) * sizeof(char));
         }
         ptr->cntr = 0;
-        ret = prte_tsd_setspecific(print_tsd_key, (void *) ptr);
+        ret = pmix_tsd_setspecific(print_tsd_key, (void *) ptr);
     }
 
     return (prte_hwloc_print_buffers_t *) ptr;
@@ -573,47 +573,47 @@ static void obj_data_const(prte_hwloc_obj_data_t *ptr)
     ptr->idx = UINT_MAX;
     ptr->num_bound = 0;
 }
-PRTE_CLASS_INSTANCE(prte_hwloc_obj_data_t, prte_object_t, obj_data_const, NULL);
+PMIX_CLASS_INSTANCE(prte_hwloc_obj_data_t, pmix_object_t, obj_data_const, NULL);
 
 static void sum_const(prte_hwloc_summary_t *ptr)
 {
     ptr->num_objs = 0;
-    PRTE_CONSTRUCT(&ptr->sorted_by_dist_list, prte_list_t);
+    PMIX_CONSTRUCT(&ptr->sorted_by_dist_list, pmix_list_t);
 }
 static void sum_dest(prte_hwloc_summary_t *ptr)
 {
-    prte_list_item_t *item;
-    while (NULL != (item = prte_list_remove_first(&ptr->sorted_by_dist_list))) {
-        PRTE_RELEASE(item);
+    pmix_list_item_t *item;
+    while (NULL != (item = pmix_list_remove_first(&ptr->sorted_by_dist_list))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&ptr->sorted_by_dist_list);
+    PMIX_DESTRUCT(&ptr->sorted_by_dist_list);
 }
-PRTE_CLASS_INSTANCE(prte_hwloc_summary_t, prte_list_item_t, sum_const, sum_dest);
+PMIX_CLASS_INSTANCE(prte_hwloc_summary_t, pmix_list_item_t, sum_const, sum_dest);
 static void topo_data_const(prte_hwloc_topo_data_t *ptr)
 {
     ptr->available = NULL;
-    PRTE_CONSTRUCT(&ptr->summaries, prte_list_t);
+    PMIX_CONSTRUCT(&ptr->summaries, pmix_list_t);
     ptr->numas = NULL;
     ptr->num_numas = 0;
 }
 static void topo_data_dest(prte_hwloc_topo_data_t *ptr)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
 
     if (NULL != ptr->available) {
         hwloc_bitmap_free(ptr->available);
     }
-    while (NULL != (item = prte_list_remove_first(&ptr->summaries))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&ptr->summaries))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&ptr->summaries);
+    PMIX_DESTRUCT(&ptr->summaries);
     if (NULL != ptr->numas) {
         free(ptr->numas);
     }
 }
-PRTE_CLASS_INSTANCE(prte_hwloc_topo_data_t, prte_object_t, topo_data_const, topo_data_dest);
+PMIX_CLASS_INSTANCE(prte_hwloc_topo_data_t, pmix_object_t, topo_data_const, topo_data_dest);
 
-PRTE_CLASS_INSTANCE(prte_rmaps_numa_node_t, prte_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_rmaps_numa_node_t, pmix_list_item_t, NULL, NULL);
 
 int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 {

@@ -55,23 +55,23 @@ static int netlink_fini(void)
  * Higher weightings are given to connections on the same
  * network.
  */
-static prte_reachable_t *netlink_reachable(prte_list_t *local_ifs, prte_list_t *remote_ifs)
+static prte_reachable_t *netlink_reachable(pmix_list_t *local_ifs, pmix_list_t *remote_ifs)
 {
     prte_reachable_t *reachable_results = NULL;
     int i, j;
     prte_if_t *local_iter, *remote_iter;
 
-    reachable_results = prte_reachable_allocate(local_ifs->prte_list_length,
-                                                remote_ifs->prte_list_length);
+    reachable_results = prte_reachable_allocate(local_ifs->pmix_list_length,
+                                                remote_ifs->pmix_list_length);
     if (NULL == reachable_results) {
         return NULL;
     }
 
     i = 0;
-    PRTE_LIST_FOREACH(local_iter, local_ifs, prte_if_t)
+    PMIX_LIST_FOREACH(local_iter, local_ifs, prte_if_t)
     {
         j = 0;
-        PRTE_LIST_FOREACH(remote_iter, remote_ifs, prte_if_t)
+        PMIX_LIST_FOREACH(remote_iter, remote_ifs, prte_if_t)
         {
             reachable_results->weights[i][j] = get_weights(local_iter, remote_iter);
             j++;

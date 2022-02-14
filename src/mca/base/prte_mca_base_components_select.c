@@ -7,7 +7,7 @@
  *                         reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,13 +25,13 @@
 #endif
 
 #include "constants.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_component_repository.h"
 #include "src/mca/mca.h"
 #include "src/util/output.h"
 
-int prte_mca_base_select(const char *type_name, int output_id, prte_list_t *components_available,
+int prte_mca_base_select(const char *type_name, int output_id, pmix_list_t *components_available,
                          prte_mca_base_module_t **best_module,
                          prte_mca_base_component_t **best_component, int *priority_out)
 {
@@ -51,7 +51,7 @@ int prte_mca_base_select(const char *type_name, int output_id, prte_list_t *comp
      * Traverse the list of available components.
      * For each call their 'query' functions to determine relative priority.
      */
-    PRTE_LIST_FOREACH(cli, components_available, prte_mca_base_component_list_item_t)
+    PMIX_LIST_FOREACH(cli, components_available, prte_mca_base_component_list_item_t)
     {
         component = (prte_mca_base_component_t *) cli->cli_component;
 

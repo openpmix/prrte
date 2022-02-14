@@ -22,7 +22,7 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/mca.h"
 #include "src/util/cmd_line.h"
@@ -46,7 +46,7 @@ PRTE_EXPORT int prte_schizo_base_select(void);
  */
 typedef struct {
     /* list of active modules */
-    prte_list_t active_modules;
+    pmix_list_t active_modules;
     bool test_proxy_launch;
 } prte_schizo_base_t;
 
@@ -59,12 +59,12 @@ PRTE_EXPORT extern prte_schizo_base_t prte_schizo_base;
  * Active schizo component / module
  */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     int pri;
     prte_schizo_base_module_t *module;
     prte_mca_base_component_t *component;
 } prte_schizo_base_active_module_t;
-PRTE_CLASS_DECLARATION(prte_schizo_base_active_module_t);
+PMIX_CLASS_DECLARATION(prte_schizo_base_active_module_t);
 
 typedef struct {
     char *name;
@@ -72,7 +72,7 @@ typedef struct {
 } prte_schizo_conflicts_t;
 
 /* base support functions */
-PRTE_EXPORT int prte_schizo_base_convert(prte_cli_result_t *results,
+PRTE_EXPORT int prte_schizo_base_convert(pmix_cli_result_t *results,
                                          char *deprecated,
                                          char *key, char *option,
                                          prte_schizo_conflicts_t *conflicts,
@@ -87,7 +87,7 @@ PRTE_EXPORT char *prte_schizo_base_getline(FILE *fp);
 PRTE_EXPORT char *prte_schizo_base_strip_quotes(char *p);
 PRTE_EXPORT int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target);
 PRTE_EXPORT int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target);
-PRTE_EXPORT int prte_schizo_base_sanity(prte_cli_result_t *cmd_line);
+PRTE_EXPORT int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line);
 PRTE_EXPORT bool prte_schizo_base_check_directives(char *directive,
                                                    char **valid,
                                                    char **quals,
@@ -98,10 +98,10 @@ PRTE_EXPORT bool prte_schizo_base_check_qualifiers(char *directive,
 PRTE_EXPORT bool prte_schizo_base_check_prte_param(char *param);
 PRTE_EXPORT bool prte_schizo_base_check_pmix_param(char *param);
 PRTE_EXPORT void prte_schizo_base_expose(char *param, char *prefix);
-PRTE_EXPORT int prte_schizo_base_add_directive(prte_cli_result_t *results,
+PRTE_EXPORT int prte_schizo_base_add_directive(pmix_cli_result_t *results,
                                                const char *deprecated, const char *target,
                                                char *directive, bool report);
-PRTE_EXPORT int prte_schizo_base_add_qualifier(prte_cli_result_t *results,
+PRTE_EXPORT int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
                                                char *deprecated, char *target,
                                                char *qualifier, bool report);
 

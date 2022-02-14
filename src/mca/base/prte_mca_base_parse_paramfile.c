@@ -13,7 +13,7 @@
  * Copyright (c) 2013      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,7 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_vari.h"
 #include "src/mca/mca.h"
@@ -34,9 +34,9 @@
 
 static void save_value(const char *file, int lineno, const char *name, const char *value);
 
-static prte_list_t *_param_list;
+static pmix_list_t *_param_list;
 
-int prte_mca_base_parse_paramfile(const char *paramfile, prte_list_t *list)
+int prte_mca_base_parse_paramfile(const char *paramfile, pmix_list_t *list)
 {
     _param_list = list;
 
@@ -52,7 +52,7 @@ static void save_value(const char *file, int lineno, const char *name, const cha
        already have a param of this name.  If we do, just replace the
        value. */
 
-    PRTE_LIST_FOREACH (fv, _param_list, prte_mca_base_var_file_value_t) {
+    PMIX_LIST_FOREACH (fv, _param_list, prte_mca_base_var_file_value_t) {
         if (0 == strcmp(name, fv->mbvfv_var)) {
             if (NULL != fv->mbvfv_value) {
                 free(fv->mbvfv_value);
@@ -64,13 +64,13 @@ static void save_value(const char *file, int lineno, const char *name, const cha
 
     if (!found) {
         /* We didn't already have the param, so append it to the list */
-        fv = PRTE_NEW(prte_mca_base_var_file_value_t);
+        fv = PMIX_NEW(prte_mca_base_var_file_value_t);
         if (NULL == fv) {
             return;
         }
 
         fv->mbvfv_var = strdup(name);
-        prte_list_append(_param_list, &fv->super);
+        pmix_list_append(_param_list, &fv->super);
     }
 
     fv->mbvfv_value = value ? strdup(value) : NULL;

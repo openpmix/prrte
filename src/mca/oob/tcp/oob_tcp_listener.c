@@ -50,7 +50,7 @@
 #endif
 #include <ctype.h>
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/include/prte_socket_errno.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
@@ -63,7 +63,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_parse_options.h"
 #include "src/util/show_help.h"
@@ -76,7 +76,7 @@
 #include "src/mca/oob/tcp/oob_tcp_peer.h"
 
 static void connection_event_handler(int incoming_sd, short flags, void *cbdata);
-static void *listen_thread(prte_object_t *obj);
+static void *listen_thread(pmix_object_t *obj);
 static int create_listen(void);
 #if PRTE_ENABLE_IPV6
 static int create_listen6(void);
@@ -146,7 +146,7 @@ int prte_oob_tcp_start_listening(void)
         prte_oob_tcp_component.listen_thread_active = true;
         prte_oob_tcp_component.listen_thread.t_run = listen_thread;
         prte_oob_tcp_component.listen_thread.t_arg = NULL;
-        if (PRTE_SUCCESS != (rc = prte_thread_start(&prte_oob_tcp_component.listen_thread))) {
+        if (PRTE_SUCCESS != (rc = pmix_thread_start(&prte_oob_tcp_component.listen_thread))) {
             PRTE_ERROR_LOG(rc);
             prte_output(0, "%s Unable to start listen thread", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         }
@@ -155,13 +155,13 @@ int prte_oob_tcp_start_listening(void)
 
     /* otherwise, setup to listen via the event lib */
 
-    PRTE_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
+    PMIX_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
     {
         listener->ev_active = true;
         prte_event_set(prte_event_base, &listener->event, listener->sd,
                        PRTE_EV_READ | PRTE_EV_PERSIST, connection_event_handler, 0);
         prte_event_set_priority(&listener->event, PRTE_MSG_PRI);
-        PRTE_POST_OBJECT(listener);
+        PMIX_POST_OBJECT(listener);
         prte_event_add(&listener->event, 0);
     }
 
@@ -322,14 +322,14 @@ static int create_listen(void)
         }
 
         /* add this port to our connections */
-        conn = PRTE_NEW(prte_oob_tcp_listener_t);
+        conn = PMIX_NEW(prte_oob_tcp_listener_t);
         conn->sd = sd;
         conn->port = ntohs(((struct sockaddr_in *) &inaddr)->sin_port);
         if (0 == prte_process_info.my_port) {
             /* save the first one */
             prte_process_info.my_port = conn->port;
         }
-        prte_list_append(&prte_oob_tcp_component.listeners, &conn->item);
+        pmix_list_append(&prte_oob_tcp_component.listeners, &conn->item);
         /* and to our ports */
         pmix_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in *) &inaddr)->sin_port));
         pmix_argv_append_nosize(&prte_oob_tcp_component.ipv4ports, tconn);
@@ -348,7 +348,7 @@ static int create_listen(void)
     /* done with this, so release it */
     pmix_argv_free(ports);
 
-    if (0 == prte_list_get_size(&prte_oob_tcp_component.listeners)) {
+    if (0 == pmix_list_get_size(&prte_oob_tcp_component.listeners)) {
         /* cleanup */
         if (0 <= sd) {
             CLOSE_THE_SOCKET(sd);
@@ -524,11 +524,11 @@ static int create_listen6(void)
         }
 
         /* add this port to our connections */
-        conn = PRTE_NEW(prte_oob_tcp_listener_t);
+        conn = PMIX_NEW(prte_oob_tcp_listener_t);
         conn->tcp6 = true;
         conn->sd = sd;
         conn->port = ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port);
-        prte_list_append(&prte_oob_tcp_component.listeners, &conn->item);
+        pmix_list_append(&prte_oob_tcp_component.listeners, &conn->item);
         /* and to our ports */
         pmix_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port));
         pmix_argv_append_nosize(&prte_oob_tcp_component.ipv6ports, tconn);
@@ -544,7 +544,7 @@ static int create_listen6(void)
             break;
         }
     }
-    if (0 == prte_list_get_size(&prte_oob_tcp_component.listeners)) {
+    if (0 == pmix_list_get_size(&prte_oob_tcp_component.listeners)) {
         /* cleanup */
         CLOSE_THE_SOCKET(sd);
         pmix_argv_free(ports);
@@ -565,7 +565,7 @@ static int create_listen6(void)
  *
  * Runs until prte_oob_tcp_compnent.shutdown is set to true.
  */
-static void *listen_thread(prte_object_t *obj)
+static void *listen_thread(pmix_object_t *obj)
 {
     int rc, max, accepted_connections, sd;
     prte_socklen_t addrlen = sizeof(struct sockaddr_storage);
@@ -582,7 +582,7 @@ static void *listen_thread(prte_object_t *obj)
     while (prte_oob_tcp_component.listen_thread_active) {
         FD_ZERO(&readfds);
         max = -1;
-        PRTE_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
+        PMIX_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
         {
             FD_SET(listener->sd, &readfds);
             max = (listener->sd > max) ? listener->sd : max;
@@ -617,7 +617,7 @@ static void *listen_thread(prte_object_t *obj)
          */
         do {
             accepted_connections = 0;
-            PRTE_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
+            PMIX_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
             {
                 sd = listener->sd;
 
@@ -639,7 +639,7 @@ static void *listen_thread(prte_object_t *obj)
                  * process the connection here as it takes too long, and so the
                  * OS might start rejecting connections due to timeout.
                  */
-                pending_connection = PRTE_NEW(prte_oob_tcp_pending_connection_t);
+                pending_connection = PMIX_NEW(prte_oob_tcp_pending_connection_t);
                 prte_event_set(prte_event_base, &pending_connection->ev, -1, PRTE_EV_WRITE,
                                connection_handler, pending_connection);
                 prte_event_set_priority(&pending_connection->ev, PRTE_MSG_PRI);
@@ -648,7 +648,7 @@ static void *listen_thread(prte_object_t *obj)
 
                 /* check for < 0 as indicating an error upon accept */
                 if (pending_connection->fd < 0) {
-                    PRTE_RELEASE(pending_connection);
+                    PMIX_RELEASE(pending_connection);
 
                     /* Non-fatal errors */
                     if (EAGAIN == prte_socket_errno || EWOULDBLOCK == prte_socket_errno) {
@@ -703,13 +703,13 @@ static void *listen_thread(prte_object_t *obj)
                                            (struct sockaddr *) &pending_connection->addr),
                                        inport);
                         CLOSE_THE_SOCKET(pending_connection->fd);
-                        PRTE_RELEASE(pending_connection);
+                        PMIX_RELEASE(pending_connection);
                         continue;
                     }
                 }
 
                 /* activate the event */
-                PRTE_POST_OBJECT(pending_connection);
+                PMIX_POST_OBJECT(pending_connection);
                 prte_event_active(&pending_connection->ev, PRTE_EV_WRITE, 1);
                 accepted_connections++;
             }
@@ -730,7 +730,7 @@ done:
                         "%s prte_oob_tcp_listen_thread: switching to event lib",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     /* setup to listen via event library */
-    PRTE_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t) {
+    PMIX_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t) {
         prte_event_set(prte_event_base, listener->event,
                    listener->sd,
                    PRTE_EV_READ|PRTE_EV_PERSIST,
@@ -752,7 +752,7 @@ static void connection_handler(int sd, short flags, void *cbdata)
 
     new_connection = (prte_oob_tcp_pending_connection_t *) cbdata;
 
-    PRTE_ACQUIRE_OBJECT(new_connection);
+    PMIX_ACQUIRE_OBJECT(new_connection);
 
     prte_output_verbose(4, prte_oob_base_framework.framework_output,
                         "%s connection_handler: working connection "
@@ -765,7 +765,7 @@ static void connection_handler(int sd, short flags, void *cbdata)
     prte_oob_tcp_module.accept_connection(new_connection->fd,
                                           (struct sockaddr *) &(new_connection->addr));
     /* cleanup */
-    PRTE_RELEASE(new_connection);
+    PMIX_RELEASE(new_connection);
 }
 
 /*
@@ -838,6 +838,6 @@ static void tcp_ev_des(prte_oob_tcp_listener_t *event)
     }
 }
 
-PRTE_CLASS_INSTANCE(prte_oob_tcp_listener_t, prte_list_item_t, tcp_ev_cons, tcp_ev_des);
+PMIX_CLASS_INSTANCE(prte_oob_tcp_listener_t, pmix_list_item_t, tcp_ev_cons, tcp_ev_des);
 
-PRTE_CLASS_INSTANCE(prte_oob_tcp_pending_connection_t, prte_object_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_oob_tcp_pending_connection_t, pmix_object_t, NULL, NULL);

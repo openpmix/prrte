@@ -62,25 +62,25 @@
 /*
  * local variables
  */
-static prte_pointer_array_t prte_mca_base_vars;
+static pmix_pointer_array_t prte_mca_base_vars;
 static const char *prte_mca_prefix = PRTE_MCA_PREFIX;
 static char *home = NULL;
 bool prte_mca_base_var_initialized = false;
 static char *prte_mca_base_envar_files = NULL;
 static char **prte_mca_base_var_file_list = NULL;
 static bool prte_mca_base_var_suppress_override_warning = false;
-static prte_list_t prte_mca_base_var_file_values;
-static prte_list_t prte_mca_base_envar_file_values;
+static pmix_list_t prte_mca_base_var_file_values;
+static pmix_list_t prte_mca_base_envar_file_values;
 static char *prte_mca_base_var_files = NULL;
 
 static int prte_mca_base_var_count = 0;
 
-static prte_hash_table_t prte_mca_base_var_index_hash;
+static pmix_hash_table_t prte_mca_base_var_index_hash;
 
 #define PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(mbv_enumerator)         \
     {                                                            \
         if (mbv_enumerator && !mbv_enumerator->enum_is_static) { \
-            PRTE_RELEASE(mbv_enumerator);                        \
+            PMIX_RELEASE(mbv_enumerator);                        \
         }                                                        \
     }
 
@@ -117,11 +117,11 @@ static int var_value_string(prte_mca_base_var_t *var, char **value_string);
  */
 static void var_constructor(prte_mca_base_var_t *p);
 static void var_destructor(prte_mca_base_var_t *p);
-PRTE_CLASS_INSTANCE(prte_mca_base_var_t, prte_object_t, var_constructor, var_destructor);
+PMIX_CLASS_INSTANCE(prte_mca_base_var_t, pmix_object_t, var_constructor, var_destructor);
 
 static void fv_constructor(prte_mca_base_var_file_value_t *p);
 static void fv_destructor(prte_mca_base_var_file_value_t *p);
-PRTE_CLASS_INSTANCE(prte_mca_base_var_file_value_t, prte_list_item_t, fv_constructor,
+PMIX_CLASS_INSTANCE(prte_mca_base_var_file_value_t, pmix_list_item_t, fv_constructor,
                     fv_destructor);
 
 static const char *prte_mca_base_var_source_file(const prte_mca_base_var_t *var)
@@ -222,7 +222,7 @@ static void save_value(const char *file, int lineno, const char *name, const cha
      already have a param of this name.  If we do, just replace the
      value. */
 
-    PRTE_LIST_FOREACH(fv, &prte_mca_base_var_file_values, prte_mca_base_var_file_value_t)
+    PMIX_LIST_FOREACH(fv, &prte_mca_base_var_file_values, prte_mca_base_var_file_value_t)
     {
         if (0 == strcmp(name, fv->mbvfv_var)) {
             if (NULL != fv->mbvfv_value) {
@@ -235,13 +235,13 @@ static void save_value(const char *file, int lineno, const char *name, const cha
 
     if (!found) {
         /* We didn't already have the param, so append it to the list */
-        fv = PRTE_NEW(prte_mca_base_var_file_value_t);
+        fv = PMIX_NEW(prte_mca_base_var_file_value_t);
         if (NULL == fv) {
             return;
         }
 
         fv->mbvfv_var = strdup(name);
-        prte_list_append(&prte_mca_base_var_file_values, &fv->super);
+        pmix_list_append(&prte_mca_base_var_file_values, &fv->super);
     }
 
     fv->mbvfv_value = value ? strdup(value) : NULL;
@@ -261,9 +261,9 @@ int prte_mca_base_var_init(void)
     if (!prte_mca_base_var_initialized) {
         /* Init the value array for the param storage */
 
-        PRTE_CONSTRUCT(&prte_mca_base_vars, prte_pointer_array_t);
+        PMIX_CONSTRUCT(&prte_mca_base_vars, pmix_pointer_array_t);
         /* These values are arbitrary */
-        ret = prte_pointer_array_init(&prte_mca_base_vars, 128, 16384, 128);
+        ret = pmix_pointer_array_init(&prte_mca_base_vars, 128, 16384, 128);
         if (PRTE_SUCCESS != ret) {
             return ret;
         }
@@ -272,11 +272,11 @@ int prte_mca_base_var_init(void)
 
         /* Init the file param value list */
 
-        PRTE_CONSTRUCT(&prte_mca_base_var_file_values, prte_list_t);
-        PRTE_CONSTRUCT(&prte_mca_base_envar_file_values, prte_list_t);
-        PRTE_CONSTRUCT(&prte_mca_base_var_index_hash, prte_hash_table_t);
+        PMIX_CONSTRUCT(&prte_mca_base_var_file_values, pmix_list_t);
+        PMIX_CONSTRUCT(&prte_mca_base_envar_file_values, pmix_list_t);
+        PMIX_CONSTRUCT(&prte_mca_base_var_index_hash, pmix_hash_table_t);
 
-        ret = prte_hash_table_init(&prte_mca_base_var_index_hash, 1024);
+        ret = pmix_hash_table_init(&prte_mca_base_var_index_hash, 1024);
         if (PRTE_SUCCESS != ret) {
             return ret;
         }
@@ -331,7 +331,7 @@ int prte_mca_base_var_init(void)
         /* push the results into our environment, but do not overwrite
          * a value if the user already has it set as their environment
          * overrides anything from the default param files */
-        PRTE_LIST_FOREACH(fv, &prte_mca_base_var_file_values, prte_mca_base_var_file_value_t)
+        PMIX_LIST_FOREACH(fv, &prte_mca_base_var_file_values, prte_mca_base_var_file_value_t)
         {
             pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
             pmix_setenv(tmp, fv->mbvfv_value, false, &environ);
@@ -675,7 +675,7 @@ static int var_get(int vari, prte_mca_base_var_t **var_out, bool original)
         return PRTE_ERR_BAD_PARAM;
     }
 
-    var = prte_pointer_array_get_item(&prte_mca_base_vars, vari);
+    var = pmix_pointer_array_get_item(&prte_mca_base_vars, vari);
     if (NULL == var) {
         return PRTE_ERR_BAD_PARAM;
     }
@@ -714,7 +714,7 @@ static int var_find_by_name(const char *full_name, int *vari, bool invalidok)
     void *tmp;
     int rc;
 
-    rc = prte_hash_table_get_value_ptr(&prte_mca_base_var_index_hash, full_name, strlen(full_name),
+    rc = pmix_hash_table_get_value_ptr(&prte_mca_base_var_index_hash, full_name, strlen(full_name),
                                        &tmp);
     if (PRTE_SUCCESS != rc) {
         return rc;
@@ -825,12 +825,12 @@ int prte_mca_base_var_build_env(char ***env, int *num_env, bool internal)
 
     /* Iterate through all the registered parameters */
 
-    len = prte_pointer_array_get_size(&prte_mca_base_vars);
+    len = pmix_pointer_array_get_size(&prte_mca_base_vars);
     for (i = 0; i < len; ++i) {
         char *value_string;
         char *str = NULL;
 
-        var = prte_pointer_array_get_item(&prte_mca_base_vars, i);
+        var = pmix_pointer_array_get_item(&prte_mca_base_vars, i);
         if (NULL == var) {
             continue;
         }
@@ -907,29 +907,29 @@ cleanup:
  */
 void prte_mca_base_var_finalize(void)
 {
-    prte_object_t *object;
-    prte_list_item_t *item;
+    pmix_object_t *object;
+    pmix_list_item_t *item;
     int size, i;
 
     if (prte_mca_base_var_initialized) {
-        size = prte_pointer_array_get_size(&prte_mca_base_vars);
+        size = pmix_pointer_array_get_size(&prte_mca_base_vars);
         for (i = 0; i < size; ++i) {
-            object = prte_pointer_array_get_item(&prte_mca_base_vars, i);
+            object = pmix_pointer_array_get_item(&prte_mca_base_vars, i);
             if (NULL != object) {
-                PRTE_RELEASE(object);
+                PMIX_RELEASE(object);
             }
         }
-        PRTE_DESTRUCT(&prte_mca_base_vars);
+        PMIX_DESTRUCT(&prte_mca_base_vars);
 
-        while (NULL != (item = prte_list_remove_first(&prte_mca_base_var_file_values))) {
-            PRTE_RELEASE(item);
+        while (NULL != (item = pmix_list_remove_first(&prte_mca_base_var_file_values))) {
+            PMIX_RELEASE(item);
         }
-        PRTE_DESTRUCT(&prte_mca_base_var_file_values);
+        PMIX_DESTRUCT(&prte_mca_base_var_file_values);
 
-        while (NULL != (item = prte_list_remove_first(&prte_mca_base_envar_file_values))) {
-            PRTE_RELEASE(item);
+        while (NULL != (item = pmix_list_remove_first(&prte_mca_base_envar_file_values))) {
+            PMIX_RELEASE(item);
         }
-        PRTE_DESTRUCT(&prte_mca_base_envar_file_values);
+        PMIX_DESTRUCT(&prte_mca_base_envar_file_values);
 
         prte_mca_base_var_initialized = false;
         prte_mca_base_var_count = 0;
@@ -941,7 +941,7 @@ void prte_mca_base_var_finalize(void)
 
         (void) prte_mca_base_var_group_finalize();
 
-        PRTE_DESTRUCT(&prte_mca_base_var_index_hash);
+        PMIX_DESTRUCT(&prte_mca_base_var_index_hash);
 
         free(prte_mca_base_envar_files);
         prte_mca_base_envar_files = NULL;
@@ -1029,7 +1029,7 @@ static int register_variable(const char *project_name, const char *framework_nam
 #endif
 
     if (flags & PRTE_MCA_BASE_VAR_FLAG_SYNONYM) {
-        original = prte_pointer_array_get_item(&prte_mca_base_vars, synonym_for);
+        original = pmix_pointer_array_get_item(&prte_mca_base_vars, synonym_for);
         if (NULL == original) {
             /* Attempting to create a synonym for a non-existent variable. probably a
              * developer error. */
@@ -1072,7 +1072,7 @@ static int register_variable(const char *project_name, const char *framework_nam
             flags &= ~PRTE_MCA_BASE_VAR_FLAG_SETTABLE;
         }
 
-        var = PRTE_NEW(prte_mca_base_var_t);
+        var = PMIX_NEW(prte_mca_base_var_t);
 
         var->mbv_type = type;
         var->mbv_flags = flags;
@@ -1089,7 +1089,7 @@ static int register_variable(const char *project_name, const char *framework_nam
         ret = prte_mca_base_var_generate_full_name4(project_name, framework_name, component_name,
                                                     variable_name, &var->mbv_long_name);
         if (PRTE_SUCCESS != ret) {
-            PRTE_RELEASE(var);
+            PMIX_RELEASE(var);
             return PRTE_ERROR;
         }
         /* The mbv_full_name and the variable name are subset of the mbv_long_name
@@ -1109,9 +1109,9 @@ static int register_variable(const char *project_name, const char *framework_nam
            so the entire contents of the struct is copied.  The synonym list
            will always be empty at this point, so there's no need for an
            extra RETAIN or RELEASE. */
-        var_index = prte_pointer_array_add(&prte_mca_base_vars, var);
+        var_index = pmix_pointer_array_add(&prte_mca_base_vars, var);
         if (0 > var_index) {
-            PRTE_RELEASE(var);
+            PMIX_RELEASE(var);
             return PRTE_ERROR;
         }
 
@@ -1128,7 +1128,7 @@ static int register_variable(const char *project_name, const char *framework_nam
             assert(0);
         }
 
-        prte_hash_table_set_value_ptr(&prte_mca_base_var_index_hash, var->mbv_full_name,
+        pmix_hash_table_set_value_ptr(&prte_mca_base_var_index_hash, var->mbv_full_name,
                                       strlen(var->mbv_full_name), (void *) (uintptr_t) var_index);
     } else {
         ret = var_get(var_index, &var, false);
@@ -1173,7 +1173,7 @@ static int register_variable(const char *project_name, const char *framework_nam
     } else if (NULL != enumerator) {
         PRTE_MCA_VAR_MBV_ENUMERATOR_FREE(var->mbv_enumerator);
         if (!enumerator->enum_is_static) {
-            PRTE_RETAIN(enumerator);
+            PMIX_RETAIN(enumerator);
         }
     }
 
@@ -1189,7 +1189,7 @@ static int register_variable(const char *project_name, const char *framework_nam
         }
     } else {
         /* synonym variable */
-        prte_value_array_append_item(&original->mbv_synonyms, &var_index);
+        pmix_value_array_append_item(&original->mbv_synonyms, &var_index);
     }
 
     /* go ahead and mark this variable as valid */
@@ -1222,7 +1222,7 @@ int prte_mca_base_var_register(const char *project_name, const char *framework_n
                             description, type, enumerator, bind, flags, info_lvl, scope, -1,
                             storage);
 
-    if (PRTE_UNLIKELY(0 > ret)) {
+    if (PMIX_UNLIKELY(0 > ret)) {
         return ret;
     }
 
@@ -1233,7 +1233,7 @@ int prte_mca_base_var_register(const char *project_name, const char *framework_n
         return ret;
     }
 
-    PRTE_LIST_FOREACH_DECL(alias_item, &alias->component_aliases, prte_mca_base_alias_item_t)
+    PMIX_LIST_FOREACH_DECL(alias_item, &alias->component_aliases, prte_mca_base_alias_item_t)
     {
         prte_mca_base_var_syn_flag_t inflags = PRTE_MCA_BASE_VAR_SYN_FLAG_NONE;
         if (alias_item->alias_flags & PRTE_MCA_BASE_ALIAS_FLAG_DEPRECATED) {
@@ -1417,7 +1417,7 @@ static int var_set_from_env(prte_mca_base_var_t *var, prte_mca_base_var_t *origi
  * Lookup a param in the files
  */
 static int var_set_from_file(prte_mca_base_var_t *var, prte_mca_base_var_t *original,
-                             prte_list_t *file_values)
+                             pmix_list_t *file_values)
 {
     const char *var_full_name = var->mbv_full_name;
     const char *var_long_name = var->mbv_long_name;
@@ -1429,7 +1429,7 @@ static int var_set_from_file(prte_mca_base_var_t *var, prte_mca_base_var_t *orig
        find a match.  If we do, cache it on the param (for future
        lookups) and save it in the storage. */
 
-    PRTE_LIST_FOREACH(fv, file_values, prte_mca_base_var_file_value_t)
+    PMIX_LIST_FOREACH(fv, file_values, prte_mca_base_var_file_value_t)
     {
         if (0 != strcmp(fv->mbvfv_var, var_full_name)
             && 0 != strcmp(fv->mbvfv_var, var_long_name)) {
@@ -1530,8 +1530,8 @@ static void var_constructor(prte_mca_base_var_t *var)
     memset((char *) var + sizeof(var->super), 0, sizeof(*var) - sizeof(var->super));
 
     var->mbv_type = PRTE_MCA_BASE_VAR_TYPE_MAX;
-    PRTE_CONSTRUCT(&var->mbv_synonyms, prte_value_array_t);
-    prte_value_array_init(&var->mbv_synonyms, sizeof(int));
+    PMIX_CONSTRUCT(&var->mbv_synonyms, pmix_value_array_t);
+    pmix_value_array_init(&var->mbv_synonyms, sizeof(int));
 }
 
 /*
@@ -1560,7 +1560,7 @@ static void var_destructor(prte_mca_base_var_t *var)
     }
 
     /* Destroy the synonym array */
-    PRTE_DESTRUCT(&var->mbv_synonyms);
+    PMIX_DESTRUCT(&var->mbv_synonyms);
 
     /* mark this parameter as invalid */
     var->mbv_type = PRTE_MCA_BASE_VAR_TYPE_MAX;
@@ -1784,9 +1784,9 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
     component = group->group_component ? group->group_component : "base";
     full_name = var->mbv_full_name;
 
-    synonym_count = prte_value_array_get_size(&var->mbv_synonyms);
+    synonym_count = pmix_value_array_get_size(&var->mbv_synonyms);
     if (synonym_count) {
-        synonyms = PRTE_VALUE_ARRAY_GET_BASE(&var->mbv_synonyms, int);
+        synonyms = PMIX_VALUE_ARRAY_GET_BASE(&var->mbv_synonyms, int);
     }
 
     ret = var_value_string(var, &value_string);
@@ -1866,7 +1866,7 @@ int prte_mca_base_var_dump(int vari, char ***out, prte_mca_base_var_dump_type_t 
         /* Does this parameter have any synonyms or is it a synonym? */
         if (PRTE_VAR_IS_SYNONYM(var[0])) {
             pmix_asprintf(out[0] + line++, "%ssynonym_of:name:%s", tmp, original->mbv_full_name);
-        } else if (prte_value_array_get_size(&var->mbv_synonyms)) {
+        } else if (pmix_value_array_get_size(&var->mbv_synonyms)) {
             for (i = 0; i < synonym_count; ++i) {
                 prte_mca_base_var_t *synonym;
 

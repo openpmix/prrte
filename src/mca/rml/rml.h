@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  *
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,12 +55,12 @@ BEGIN_C_DECLS
 /* ******************************************************************** */
 
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     pmix_proc_t name;
     pmix_data_buffer_t data;
     bool active;
 } prte_rml_recv_cb_t;
-PRTE_CLASS_DECLARATION(prte_rml_recv_cb_t);
+PMIX_CLASS_DECLARATION(prte_rml_recv_cb_t);
 
 /* Provide a generic callback function to release buffers
  * following a non-blocking send as this happens all over
