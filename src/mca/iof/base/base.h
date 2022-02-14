@@ -59,7 +59,7 @@
 #include "src/mca/iof/iof.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 BEGIN_C_DECLS
 

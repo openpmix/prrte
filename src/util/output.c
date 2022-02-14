@@ -49,7 +49,7 @@
 
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/runtime.h"
-#include "src/threads/mutex.h"
+#include "src/threads/pmix_mutex.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"

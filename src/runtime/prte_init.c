@@ -51,7 +51,7 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/prted/pmix/pmix_server.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 #include "src/mca/base/base.h"
 #include "src/mca/errmgr/base/base.h"

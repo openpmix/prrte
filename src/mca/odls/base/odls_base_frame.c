@@ -44,7 +44,7 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_parse_options.h"
 #include "src/util/show_help.h"

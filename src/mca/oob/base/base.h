@@ -49,7 +49,7 @@
 #include "src/util/pmix_printf.h"
 
 #include "src/mca/mca.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 #include "src/mca/oob/oob.h"
 

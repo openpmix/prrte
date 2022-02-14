@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -57,7 +57,7 @@
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/output.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"

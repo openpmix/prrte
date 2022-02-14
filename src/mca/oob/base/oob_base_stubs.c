@@ -25,7 +25,7 @@
 #include "src/mca/oob/base/base.h"
 #include "src/mca/rml/rml.h"
 #include "src/mca/state/state.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 static void process_uri(char *uri);
 

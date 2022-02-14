@@ -78,7 +78,7 @@
 #include "src/prted/prted.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/context_fns.h"
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"

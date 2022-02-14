@@ -27,7 +27,7 @@
 #include "src/event/event-internal.h"
 #include "src/include/hash_string.h"
 #include "src/mca/mca.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/error.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"

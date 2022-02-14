@@ -50,7 +50,7 @@
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/error_strings.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"

@@ -28,7 +28,7 @@
 
 #include "constants.h"
 #include "src/runtime/runtime.h"
-#include "src/threads/mutex.h"
+#include "src/threads/pmix_mutex.h"
 #include "src/util/keyval/keyval_lex.h"
 #include "src/util/keyval_parse.h"
 #include "src/util/output.h"

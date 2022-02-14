@@ -43,7 +43,7 @@
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 

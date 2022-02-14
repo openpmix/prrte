@@ -42,7 +42,7 @@
 #include "src/mca/rml/rml.h"
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/show_help.h"
 

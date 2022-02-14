@@ -20,7 +20,7 @@
 #include "src/class/prte_list.h"
 #include "src/event/event-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
 #include "src/util/pmix_fd.h"

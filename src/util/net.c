@@ -66,7 +66,7 @@
 
 #include "constants.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/tsd.h"
+#include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"

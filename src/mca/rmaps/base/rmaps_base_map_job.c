@@ -41,7 +41,7 @@
 #include "src/mca/ras/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/rmaps/base/base.h"

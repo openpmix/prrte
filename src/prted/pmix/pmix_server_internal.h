@@ -44,14 +44,14 @@
 #include "src/event/event-internal.h"
 #include "src/mca/base/base.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/sys/atomic.h"
+#include "src/include/pmix_atomic.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "types.h"
 
 #include "src/mca/grpcomm/base/base.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 BEGIN_C_DECLS
 

@@ -28,7 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "src/threads/tsd.h"
+#include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_string_copy.h"
 #include "src/mca/errmgr/errmgr.h"

@@ -34,7 +34,7 @@
 #include "oob_tcp.h"
 #include "oob_tcp_hdr.h"
 #include "src/mca/rml/base/base.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 /* forward declare */
 struct prte_oob_tcp_peer_t;

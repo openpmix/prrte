@@ -76,7 +76,7 @@
 #include "src/util/pmix_environ.h"
 
 #include "src/mca/rml/base/rml_contact.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"
 #include "src/util/pmix_parse_options.h"

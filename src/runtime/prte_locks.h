@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -31,8 +31,8 @@
 
 #include "prte_config.h"
 
-#include "src/threads/mutex.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_mutex.h"
+#include "src/threads/pmix_threads.h"
 
 BEGIN_C_DECLS
 

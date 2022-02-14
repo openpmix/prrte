@@ -65,7 +65,7 @@
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/runtime.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/pmix_argv.h"

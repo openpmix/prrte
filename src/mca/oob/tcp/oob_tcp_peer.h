@@ -17,7 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,7 +34,7 @@
 
 #include "oob_tcp.h"
 #include "oob_tcp_sendrecv.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 typedef struct {
     prte_list_item_t super;

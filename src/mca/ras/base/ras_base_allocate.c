@@ -42,7 +42,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/error_strings.h"

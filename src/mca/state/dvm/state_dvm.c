@@ -43,7 +43,7 @@
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/base/state_private.h"

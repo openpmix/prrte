@@ -20,7 +20,7 @@
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/schizo/schizo.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/tsd.h"
+#include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"

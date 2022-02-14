@@ -51,7 +51,7 @@
 #include "src/include/constants.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/tsd.h"
+#include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"

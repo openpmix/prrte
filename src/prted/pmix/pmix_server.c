@@ -68,7 +68,7 @@
 #include "src/mca/rml/rml.h"
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"

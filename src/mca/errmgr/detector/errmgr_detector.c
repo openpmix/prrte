@@ -40,7 +40,7 @@
 #include "src/mca/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
