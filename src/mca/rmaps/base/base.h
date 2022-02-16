@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,9 +35,10 @@
 
 #include "src/class/prte_list.h"
 #include "src/mca/mca.h"
+#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/schizo/schizo.h"
 #include "src/util/printf.h"
 
-#include "src/mca/base/prte_mca_base_framework.h"
 #include "src/runtime/prte_globals.h"
 
 #include "src/mca/rmaps/rmaps.h"
@@ -116,7 +117,12 @@ PRTE_EXPORT int prte_rmaps_base_prep_topology(hwloc_topology_t topo);
 PRTE_EXPORT int prte_rmaps_base_filter_nodes(prte_app_context_t *app, prte_list_t *nodes,
                                              bool remove);
 
+PRTE_EXPORT int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
+                                                    prte_schizo_options_t *options);
 PRTE_EXPORT int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *spec);
+
+PRTE_EXPORT int prte_rmaps_base_set_default_ranking(prte_job_t *jdata,
+                                                    prte_schizo_options_t *options);
 PRTE_EXPORT int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec);
 
 PRTE_EXPORT void prte_rmaps_base_display_map(prte_job_t *jdata);

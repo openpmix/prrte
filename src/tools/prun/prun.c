@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -109,7 +109,6 @@ static prte_event_t term_handler;
 static int term_pipe[2];
 static prte_mutex_t prun_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
 static bool verbose = false;
-static prte_cmd_line_t *prte_cmd_line = NULL;
 static prte_list_t forwarded_signals;
 
 static void abort_signal_callback(int signal);
@@ -276,42 +275,6 @@ static void setupcbfunc(pmix_status_t status, pmix_info_t info[], size_t ninfo,
     PRTE_PMIX_WAKEUP_THREAD(&mylock->lock);
 }
 
-static prte_cmd_line_init_t prte_tool_options[] = {
-    /* look first for a system server */
-    {'\0', "system-server-first", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "First look for a system server and connect to it if found", PRTE_CMD_LINE_OTYPE_DVM},
-    /* connect only to a system server */
-    {'\0', "system-server-only", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Connect only to a system-level server", PRTE_CMD_LINE_OTYPE_DVM},
-    /* do not connect */
-    {'\0', "do-not-connect", 0, PRTE_CMD_LINE_TYPE_BOOL, "Do not connect to a server",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    /* wait to connect */
-    {'\0', "wait-to-connect", 1, PRTE_CMD_LINE_TYPE_INT,
-     "Delay specified number of seconds before trying to connect", PRTE_CMD_LINE_OTYPE_DVM},
-    /* number of times to try to connect */
-    {'\0', "num-connect-retries", 1, PRTE_CMD_LINE_TYPE_INT,
-     "Max number of times to try to connect", PRTE_CMD_LINE_OTYPE_DVM},
-    /* provide a connection PID */
-    {'\0', "pid", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "PID of the daemon to which we should connect (int => PID or file:<file> for file containing "
-     "the PID",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    /* provide a connection namespace */
-    {'\0', "namespace", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Namespace of the daemon to which we should connect", PRTE_CMD_LINE_OTYPE_DVM},
-    /* uri of the dvm, or at least where to get it */
-    {'\0', "dvm-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Specify the URI of the DVM master, or the name of the file (specified as file:filename) that "
-     "contains that info",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    /* override personality */
-    {'\0', "personality", 1, PRTE_CMD_LINE_TYPE_STRING, "Specify the personality to be used",
-     PRTE_CMD_LINE_OTYPE_DVM},
-
-    /* End of list */
-    {'\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL}};
-
 int prun(int argc, char *argv[])
 {
     int rc = 1, i;
@@ -328,7 +291,6 @@ int prun(int argc, char *argv[])
     pmix_app_t *papps = NULL;
     size_t napps;
     mylock_t mylock;
-    prte_value_t *pval;
     uint32_t ui32;
     pid_t pid;
     char **pargv, **targv;
@@ -345,13 +307,16 @@ int prun(int argc, char *argv[])
     char *outfile = NULL;
     char *personality;
     pmix_proc_t parent;
+    prte_cli_result_t results;
+    prte_cli_item_t *opt;
 
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
     PRTE_CONSTRUCT(&forwarded_signals, prte_list_t);
     prte_tool_basename = prte_basename(argv[0]);
+    prte_tool_actual = "prun";
     pargc = argc;
-    pargv = prte_argv_copy(argv);
+    pargv = prte_argv_copy_strip(argv);  // strip any quoted arguments
     gethostname(hostname, sizeof(hostname));
 
     /* because we have to use the schizo framework and init our hostname
@@ -414,9 +379,9 @@ int prun(int argc, char *argv[])
     signal(SIGPIPE, epipe_signal_callback);
 
     /* open the SCHIZO framework */
-    if (PRTE_SUCCESS
-        != (rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                              PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
+                                      PRTE_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -437,7 +402,7 @@ int prun(int argc, char *argv[])
 
     /* detect if we are running as a proxy and select the active
      * schizo module for this tool */
-    schizo = prte_schizo.detect_proxy(personality);
+    schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
         prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
@@ -446,44 +411,15 @@ int prun(int argc, char *argv[])
         personality = schizo->name;
     }
 
-    /* setup the cmd line - this is specific to the proxy */
-    prte_cmd_line = PRTE_NEW(prte_cmd_line_t);
-    if (PRTE_SUCCESS != (rc = schizo->define_cli(prte_cmd_line))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-    /* add the tool-specific options */
-    if (PRTE_SUCCESS != (rc = prte_cmd_line_add(prte_cmd_line, prte_tool_options))) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-    /* handle deprecated options */
-    if (PRTE_SUCCESS != (rc = schizo->parse_deprecated_cli(prte_cmd_line, &pargc, &pargv))) {
-        if (PRTE_OPERATION_SUCCEEDED == rc) {
-            /* the cmd line was restructured - show them the end result */
-            param = prte_argv_join(pargv, ' ');
-            fprintf(stderr, "\n******* Corrected cmd line: %s\n\n\n", param);
-            free(param);
+    /* parse the input argv to get values, including everyone's MCA params */
+    PRTE_CONSTRUCT(&results, prte_cli_result_t);
+    rc = schizo->parse_cli(pargv, &results, PRTE_CLI_WARN);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_DESTRUCT(&results);
+        if (PRTE_ERR_SILENT != rc) {
+            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         } else {
-            return rc;
-        }
-    }
-
-    /* parse the result to get values - this will not include MCA params */
-    if (PRTE_SUCCESS != (rc = prte_cmd_line_parse(prte_cmd_line, true, false, pargc, pargv))) {
-        if (PRTE_ERR_SILENT != rc) {
-            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
-        }
-        return rc;
-    }
-
-    /* let the schizo components take a pass at it to get the MCA params - this
-     * will include whatever default/user-level param files each schizo component
-     * supports */
-    if (PRTE_SUCCESS != (rc = schizo->parse_cli(pargc, 0, pargv, NULL))) {
-        if (PRTE_ERR_SILENT != rc) {
-            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
+            rc = PRTE_SUCCESS;
         }
         return rc;
     }
@@ -493,46 +429,14 @@ int prun(int argc, char *argv[])
      * exit with a giant warning message
      */
     if (0 == geteuid()) {
-        schizo->allow_run_as_root(prte_cmd_line); // will exit us if not allowed
-    }
-
-    /* check command line sanity - ensure there aren't multiple instances of
-     * options where there should be only one */
-    rc = schizo->check_sanity(prte_cmd_line);
-    if (PRTE_SUCCESS != rc) {
-        if (PRTE_ERR_SILENT != rc) {
-            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
-            param = prte_argv_join(pargv, ' ');
-            fprintf(stderr, "\n******* Cmd line: %s\n\n\n", param);
-            free(param);
-        }
-        return rc;
-    }
-
-    if (prte_cmd_line_is_taken(prte_cmd_line, "verbose")) {
-        verbose = true;
-    }
-
-    /* see if print version is requested. Do this before
-     * check for help so that --version --help works as
-     * one might expect. */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "version")) {
-        fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n", prte_tool_basename,
-                "PMIx Reference RunTime Environment", PRTE_VERSION, PACKAGE_BUGREPORT);
-        exit(0);
-    }
-
-    /* Check for help request */
-    rc = schizo->check_help(prte_cmd_line, pargv);
-    if (PRTE_ERR_SILENT == rc) {
-        /* help was printed */
-        exit(0);
+        schizo->allow_run_as_root(&results); // will exit us if not allowed
     }
 
     /** setup callbacks for signals we should forward */
     PRTE_CONSTRUCT(&prte_ess_base_signals, prte_list_t);
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "forward-signals", 0, 0))) {
-        param = pval->value.data.string;
+    opt = prte_cmd_line_get_param(&results, "forward-signals");
+    if (NULL != opt) {
+        param = opt->values[0];
     } else {
         param = NULL;
     }
@@ -546,10 +450,10 @@ int prun(int argc, char *argv[])
 
     /* setup the job data global table */
     prte_job_data = PRTE_NEW(prte_pointer_array_t);
-    if (PRTE_SUCCESS
-        != (ret = prte_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+    ret = prte_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                                           PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         return rc;
     }
@@ -572,49 +476,50 @@ int prun(int argc, char *argv[])
     }
     PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_RANK, &rank, PMIX_PROC_RANK);
 
-    if (prte_cmd_line_is_taken(prte_cmd_line, "do-not-connect")) {
+    if (prte_cmd_line_is_taken(&results, "do-not-connect")) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
-    } else if (prte_cmd_line_is_taken(prte_cmd_line, "system-server-first")) {
+    } else if (prte_cmd_line_is_taken(&results, "system-server-first")) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
-    } else if (prte_cmd_line_is_taken(prte_cmd_line, "system-server-only")) {
+    } else if (prte_cmd_line_is_taken(&results, "system-server-only")) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
     }
 
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "wait-to-connect", 0, 0))
-        && 0 < pval->value.data.integer) {
-        ui32 = pval->value.data.integer;
+    opt = prte_cmd_line_get_param(&results, "wait-to-connect");
+    if (NULL != opt) {
+        ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
 
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "num-connect-retries", 0, 0))
-        && 0 < pval->value.data.integer) {
-        ui32 = pval->value.data.integer;
+    opt = prte_cmd_line_get_param(&results, "num-connect-retries");
+    if (NULL != opt) {
+        ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
 
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "pid", 0, 0))) {
+    opt = prte_cmd_line_get_param(&results, "pid");
+    if (NULL != opt) {
         /* see if it is an integer value */
         char *leftover;
         leftover = NULL;
-        pid = strtol(pval->value.data.string, &leftover, 10);
+        pid = strtol(opt->values[0], &leftover, 10);
         if (NULL == leftover || 0 == strlen(leftover)) {
             /* it is an integer */
             PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
-        } else if (0 == strncasecmp(pval->value.data.string, "file", 4)) {
+        } else if (0 == strncasecmp(opt->values[0], "file", 4)) {
             FILE *fp;
             /* step over the file: prefix */
-            param = strchr(pval->value.data.string, ':');
+            param = strchr(opt->values[0], ':');
             if (NULL == param) {
                 /* malformed input */
                 prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
-                               "--pid", pval->value.data.string, "file:path");
+                               "--pid", opt->values[0], "file:path");
                 return PRTE_ERR_BAD_PARAM;
             }
             ++param;
             fp = fopen(param, "r");
             if (NULL == fp) {
                 prte_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
-                               "--pid", pval->value.data.string, param);
+                               "--pid", opt->values[0], param);
                 return PRTE_ERR_BAD_PARAM;
             }
             rc = fscanf(fp, "%lu", (unsigned long *) &pid);
@@ -622,7 +527,7 @@ int prun(int argc, char *argv[])
                 /* if we were unable to obtain the single conversion we
                  * require, then error out */
                 prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
-                               "--pid", pval->value.data.string, param);
+                               "--pid", opt->values[0], param);
                 fclose(fp);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -631,12 +536,13 @@ int prun(int argc, char *argv[])
         } else { /* a string that's neither an integer nor starts with 'file:' */
                 prte_show_help("help-prun.txt", "bad-option-input", true,
                                prte_tool_basename, "--pid",
-                               pval->value.data.string, "file:path");
+                               opt->values[0], "file:path");
                 return PRTE_ERR_BAD_PARAM;
         }
     }
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "namespace", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_NSPACE, pval->value.data.string, PMIX_STRING);
+    opt = prte_cmd_line_get_param(&results, "namespace");
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_NSPACE, opt->values[0], PMIX_STRING);
     }
 
     /* set our session directory to something hopefully unique so
@@ -655,8 +561,9 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_TOOL_SUPPORT, NULL, PMIX_BOOL);
 
     /* if they specified the URI, then pass it along */
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "dvm-uri", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_URI, pval->value.data.string, PMIX_STRING);
+    opt = prte_cmd_line_get_param(&results, "dvm-uri");
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_URI, opt->values[0], PMIX_STRING);
     }
 
     /* output all IOF */
@@ -713,133 +620,139 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, personality, PMIX_STRING);
 
     /* get display options */
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "display", 0, 0))) {
-        targv = prte_argv_split(pval->value.data.string, ',');
+    opt = prte_cmd_line_get_param(&results, "display");
+    if (NULL != opt) {
+        for (n=0; NULL != opt->values[n]; n++) {
+            targv = prte_argv_split(opt->values[n], ',');
 
-        for (int idx = 0; idx < prte_argv_count(targv); idx++) {
-            if (0 == strncasecmp(targv[idx], "allocation", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYALLOC", PMIX_STRING);
+            for (int idx = 0; idx < prte_argv_count(targv); idx++) {
+                if (0 == strncasecmp(targv[idx], "allocation", strlen(targv[idx]))) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYALLOC", PMIX_STRING);
+                }
+                if (0 == strcasecmp(targv[idx], "map")) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);
+                }
+                if (0 == strncasecmp(targv[idx], "bind", strlen(targv[idx]))) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":REPORT", PMIX_STRING);
+                }
+                if (0 == strcasecmp(targv[idx], "map-devel")) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDEVEL", PMIX_STRING);
+                }
+                if (0 == strncasecmp(targv[idx], "topo", strlen(targv[idx]))) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYTOPO", PMIX_STRING);
+                }
             }
-            if (0 == strcasecmp(targv[idx], "map")) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAY", PMIX_STRING);
-            }
-            if (0 == strncasecmp(targv[idx], "bind", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":REPORT", PMIX_STRING);
-            }
-            if (0 == strcasecmp(targv[idx], "map-devel")) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYDEVEL", PMIX_STRING);
-            }
-            if (0 == strncasecmp(targv[idx], "topo", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYTOPO", PMIX_STRING);
-            }
+            prte_argv_free(targv);
         }
-        prte_argv_free(targv);
     }
 
     /* cannot have both files and directory set for output */
     outdir = NULL;
     outfile = NULL;
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "output", 0, 0))) {
-        targv = prte_argv_split(pval->value.data.string, ',');
+    opt = prte_cmd_line_get_param(&results, "output");
+    if (NULL != opt) {
+        for (n=0; NULL != opt->values[n]; n++) {
+            targv = prte_argv_split(opt->values[n], ',');
 
-        for (int idx = 0; NULL != targv[idx]; idx++) {
-            /* check for qualifiers */
-            cptr = strchr(targv[idx], ':');
-            if (NULL != cptr) {
-                *cptr = '\0';
-                ++cptr;
-                /* could be multiple qualifiers, so separate them */
-                options = prte_argv_split(cptr, ',');
-                for (int m=0; NULL != options[m]; m++) {
-                    if (0 == strcasecmp(options[m], "nocopy")) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
-                    } else if (0 == strcasecmp(options[m], "pattern")) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
-#ifdef PMIX_IOF_OUTPUT_RAW
-                    } else if (0 == strcasecmp(options[m], "raw")) {
-                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
-#endif
+            for (int idx = 0; NULL != targv[idx]; idx++) {
+                /* check for qualifiers */
+                cptr = strchr(targv[idx], ':');
+                if (NULL != cptr) {
+                    *cptr = '\0';
+                    ++cptr;
+                    /* could be multiple qualifiers, so separate them */
+                    options = prte_argv_split(cptr, ',');
+                    for (int m=0; NULL != options[m]; m++) {
+                        if (0 == strcasecmp(options[m], "nocopy")) {
+                            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
+                        } else if (0 == strcasecmp(options[m], "pattern")) {
+                            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
+    #ifdef PMIX_IOF_OUTPUT_RAW
+                        } else if (0 == strcasecmp(options[m], "raw")) {
+                            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
+    #endif
+                        }
                     }
+                    prte_argv_free(options);
                 }
-                prte_argv_free(options);
-            }
-            if (0 == strlen(targv[idx])) {
-                // only qualifiers were given
-                continue;
-            }
-            /* remove any '=' sign in the directive */
-            if (NULL != (ptr = strchr(targv[idx], '='))) {
-                *ptr = '\0';
-                ++ptr;
-            }
-            if (0 == strncasecmp(targv[idx], "tag", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, &flag, PMIX_BOOL);
-            }
-            if (0 == strncasecmp(targv[idx], "timestamp", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
-            }
-            if (0 == strncasecmp(targv[idx], "xml", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
-            }
-            if (0 == strncasecmp(targv[idx], "merge-stderr-to-stdout", strlen(targv[idx]))) {
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
-            }
-            if (0 == strncasecmp(targv[idx], "directory", strlen(targv[idx]))) {
-                if (NULL != outfile) {
-                    prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
-                    return PRTE_ERR_FATAL;
+                if (0 == strlen(targv[idx])) {
+                    // only qualifiers were given
+                    continue;
                 }
-                if (NULL == ptr) {
-                    prte_show_help("help-prte-rmaps-base.txt",
-                                   "missing-qualifier", true,
-                                   "output", "directory", "directory");
-                    return PRTE_ERR_FATAL;
+                /* remove any '=' sign in the directive */
+                if (NULL != (ptr = strchr(targv[idx], '='))) {
+                    *ptr = '\0';
+                    ++ptr;
                 }
-                /* If the given filename isn't an absolute path, then
-                 * convert it to one so the name will be relative to
-                 * the directory where prun was given as that is what
-                 * the user will have seen */
-                if (!prte_path_is_absolute(ptr)) {
-                    char cwd[PRTE_PATH_MAX];
-                    if (NULL == getcwd(cwd, sizeof(cwd))) {
-                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                        goto DONE;
+                if (0 == strncasecmp(targv[idx], "tag", strlen(targv[idx]))) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, &flag, PMIX_BOOL);
+                }
+                if (0 == strncasecmp(targv[idx], "timestamp", strlen(targv[idx]))) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
+                }
+                if (0 == strncasecmp(targv[idx], "xml", strlen(targv[idx]))) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
+                }
+                if (0 == strncasecmp(targv[idx], "merge-stderr-to-stdout", strlen(targv[idx]))) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
+                }
+                if (0 == strncasecmp(targv[idx], "directory", strlen(targv[idx]))) {
+                    if (NULL != outfile) {
+                        prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                        return PRTE_ERR_FATAL;
                     }
-                    outdir = prte_os_path(false, cwd, ptr, NULL);
-                } else {
-                    outdir = strdup(ptr);
-                }
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
-            }
-            if (0 == strncasecmp(targv[idx], "file", strlen(targv[idx]))) {
-                if (NULL != outdir) {
-                    prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
-                    return PRTE_ERR_FATAL;
-                }
-                if (NULL == ptr) {
-                    prte_show_help("help-prte-rmaps-base.txt",
-                                   "missing-qualifier", true,
-                                   "output", "filename", "filename");
-                    return PRTE_ERR_FATAL;
-                }
-                /* If the given filename isn't an absolute path, then
-                 * convert it to one so the name will be relative to
-                 * the directory where prun was given as that is what
-                 * the user will have seen */
-                if (!prte_path_is_absolute(ptr)) {
-                    char cwd[PRTE_PATH_MAX];
-                    if (NULL == getcwd(cwd, sizeof(cwd))) {
-                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                        goto DONE;
+                    if (NULL == ptr) {
+                        prte_show_help("help-prte-rmaps-base.txt",
+                                       "missing-qualifier", true,
+                                       "output", "directory", "directory");
+                        return PRTE_ERR_FATAL;
                     }
-                    outfile = prte_os_path(false, cwd, ptr, NULL);
-                } else {
-                    outfile = strdup(ptr);
+                    /* If the given filename isn't an absolute path, then
+                     * convert it to one so the name will be relative to
+                     * the directory where prun was given as that is what
+                     * the user will have seen */
+                    if (!prte_path_is_absolute(ptr)) {
+                        char cwd[PRTE_PATH_MAX];
+                        if (NULL == getcwd(cwd, sizeof(cwd))) {
+                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                            goto DONE;
+                        }
+                        outdir = prte_os_path(false, cwd, ptr, NULL);
+                    } else {
+                        outdir = strdup(ptr);
+                    }
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
                 }
-                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
+                if (0 == strncasecmp(targv[idx], "file", strlen(targv[idx]))) {
+                    if (NULL != outdir) {
+                        prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                        return PRTE_ERR_FATAL;
+                    }
+                    if (NULL == ptr) {
+                        prte_show_help("help-prte-rmaps-base.txt",
+                                       "missing-qualifier", true,
+                                       "output", "filename", "filename");
+                        return PRTE_ERR_FATAL;
+                    }
+                    /* If the given filename isn't an absolute path, then
+                     * convert it to one so the name will be relative to
+                     * the directory where prun was given as that is what
+                     * the user will have seen */
+                    if (!prte_path_is_absolute(ptr)) {
+                        char cwd[PRTE_PATH_MAX];
+                        if (NULL == getcwd(cwd, sizeof(cwd))) {
+                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+                            goto DONE;
+                        }
+                        outfile = prte_os_path(false, cwd, ptr, NULL);
+                    } else {
+                        outfile = strdup(ptr);
+                    }
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
+                }
             }
+            prte_argv_free(targv);
         }
-        prte_argv_free(targv);
     }
     if (NULL != outdir) {
         free(outdir);
@@ -849,48 +762,58 @@ int prun(int argc, char *argv[])
     }
 
     /* check what user wants us to do with stdin */
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "stdin", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, pval->value.data.string, PMIX_STRING);
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_STDIN);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, opt->values[0], PMIX_STRING);
     }
 
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "map-by", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, pval->value.data.string, PMIX_STRING);
-        if (NULL != strcasestr(pval->value.data.string, "DONOTLAUNCH")) {
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, opt->values[0], PMIX_STRING);
+        if (NULL != strcasestr(opt->values[0], "DONOTLAUNCH")) {
             PMIX_INFO_LIST_ADD(ret, jinfo, "PRTE_JOB_DO_NOT_LAUNCH", NULL, PMIX_BOOL);
         }
     }
 
     /* if the user specified a ranking policy, then set it */
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "rank-by", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, pval->value.data.string, PMIX_STRING);
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_RANKBY);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, opt->values[0], PMIX_STRING);
     }
 
     /* if the user specified a binding policy, then set it */
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "bind-to", 0, 0))) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, pval->value.data.string, PMIX_STRING);
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_BINDTO);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, opt->values[0], PMIX_STRING);
+    }
+
+    /* check for an exec agent */
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_EXEC_AGENT);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_EXEC_AGENT, opt->values[0], PMIX_STRING);
     }
 
     /* mark if recovery was enabled on the cmd line */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "enable-recovery")) {
+    if (prte_cmd_line_is_taken(&results, PRTE_CLI_ENABLE_RECOVERY)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_RECOVERABLE, &flag, PMIX_BOOL);
     }
     /* record the max restarts */
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "max-restarts", 0, 0))
-        && 0 < pval->value.data.integer) {
-        ui32 = pval->value.data.integer;
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_MAX_RESTARTS);
+    if (NULL != opt) {
+        ui32 = strtol(opt->values[0], NULL, 10);
         PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t)
         {
             PMIX_INFO_LIST_ADD(ret, app->info, PMIX_MAX_RESTARTS, &ui32, PMIX_UINT32);
         }
     }
     /* if continuous operation was specified */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "continuous")) {
+    if (prte_cmd_line_is_taken(&results, "continuous")) {
         /* mark this job as continuously operating */
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_CONTINUOUS, &flag, PMIX_BOOL);
     }
 
     /* if stop-on-exec was specified */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "stop-on-exec")) {
+    if (prte_cmd_line_is_taken(&results, "stop-on-exec")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_ON_EXEC, &flag, PMIX_BOOL);
     }
 
@@ -898,8 +821,9 @@ int prun(int argc, char *argv[])
      * as that is what MPICH used
      */
     i = 0;
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "timeout", 0, 0))) {
-        i = pval->value.data.integer;
+    opt = prte_cmd_line_get_param(&results, "timeout");
+    if (NULL != opt) {
+        i = strtol(opt->values[0], NULL, 10);
     } else if (NULL != (param = getenv("MPIEXEC_TIMEOUT"))) {
         i = strtol(param, NULL, 10);
     }
@@ -911,21 +835,22 @@ int prun(int argc, char *argv[])
 #endif
     }
 
-    if (prte_cmd_line_is_taken(prte_cmd_line, "get-stack-traces")) {
+    if (prte_cmd_line_is_taken(&results, "get-stack-traces")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_STACKTRACES, &flag, PMIX_BOOL);
     }
-    if (prte_cmd_line_is_taken(prte_cmd_line, "report-state-on-timeout")) {
+    if (prte_cmd_line_is_taken(&results, "report-state-on-timeout")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_REPORT_STATE, &flag, PMIX_BOOL);
     }
 #ifdef PMIX_SPAWN_TIMEOUT
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "spawn-timeout", 0, 0))) {
-        i = pval->value.data.integer;
+    opt = prte_cmd_line_get_param(&results, "spawn-timeout");
+    if (NULL != opt) {
+        i = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_SPAWN_TIMEOUT, &i, PMIX_INT);
     }
 #endif
 
     /* give the schizo components a chance to add to the job info */
-    prte_schizo.job_info(prte_cmd_line, jinfo);
+    schizo->job_info(&results, jinfo);
 
     /* pickup any relevant envars */
     ninfo = 4;
@@ -970,7 +895,7 @@ int prun(int argc, char *argv[])
     /* they want to run an application, so let's parse
      * the cmd line to get it */
 
-    if (PRTE_SUCCESS != (rc = prte_parse_locals(prte_cmd_line, &apps, pargc, pargv, NULL, NULL))) {
+    if (PRTE_SUCCESS != (rc = prte_parse_locals(schizo, &apps, pargv, NULL, NULL))) {
         PRTE_ERROR_LOG(rc);
         PRTE_LIST_DESTRUCT(&apps);
         goto DONE;
@@ -1002,11 +927,6 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LIST_CONVERT(ret, app->info, &darray);
         papps[n].info = (pmix_info_t *) darray.array;
         papps[n].ninfo = darray.size;
-        /* pickup any relevant envars */
-        rc = prte_schizo.parse_env(prte_cmd_line, environ, &papps[n].env, false);
-        if (PRTE_SUCCESS != rc) {
-            goto DONE;
-        }
         ++n;
     }
     PRTE_LIST_DESTRUCT(&apps);

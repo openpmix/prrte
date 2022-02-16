@@ -17,7 +17,7 @@
 # Copyright (c) 2016      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -28,9 +28,10 @@
 SUBDIRS = keyval hostfile
 
 dist_prtedata_DATA = help-prte-util.txt \
-                      help-regex.txt \
-                      hostfile/help-hostfile.txt \
-                      dash_host/help-dash-host.txt
+                     help-cli.txt \
+                     help-regex.txt \
+                     hostfile/help-hostfile.txt \
+                     dash_host/help-dash-host.txt
 
 AM_LFLAGS = -Pprte_show_help_yy
 LEX_OUTPUT_ROOT = lex.prte_show_help_yy

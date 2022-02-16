@@ -68,6 +68,7 @@ prte_hash_table_t *prte_coprocessors = NULL;
 char *prte_topo_signature = NULL;
 char *prte_data_server_uri = NULL;
 char *prte_tool_basename = NULL;
+char *prte_tool_actual = NULL;
 bool prte_dvm_ready = false;
 prte_pointer_array_t *prte_cache = NULL;
 bool prte_persistent = true;
@@ -101,7 +102,7 @@ bool prte_node_info_communicated = false;
 /* launch agents */
 char *prte_launch_agent = NULL;
 char **prted_cmd_line = NULL;
-char **prte_fork_agent = NULL;
+char *prte_fork_agent_string = NULL;
 
 /* exit flags */
 int prte_exit_status = 0;
@@ -411,6 +412,7 @@ static void prte_app_context_construct(prte_app_context_t *app_context)
     app_context->cwd = NULL;
     app_context->flags = 0;
     PRTE_CONSTRUCT(&app_context->attributes, prte_list_t);
+    PRTE_CONSTRUCT(&app_context->cli, prte_cli_result_t);
 }
 
 static void prte_app_context_destructor(prte_app_context_t *app_context)
@@ -447,6 +449,7 @@ static void prte_app_context_destructor(prte_app_context_t *app_context)
     }
 
     PRTE_LIST_DESTRUCT(&app_context->attributes);
+    PRTE_DESTRUCT(&app_context->cli);
 }
 
 PRTE_CLASS_INSTANCE(prte_app_context_t, prte_object_t, prte_app_context_construct,
@@ -456,6 +459,7 @@ static void prte_job_construct(prte_job_t *job)
 {
     job->exit_code = 0;
     job->personality = NULL;
+    job->schizo = NULL;
     PMIX_LOAD_NSPACE(job->nspace, NULL);
     job->index = -1;
     job->offset = 0;
@@ -492,6 +496,7 @@ static void prte_job_construct(prte_job_t *job)
     PMIX_LOAD_NSPACE(job->launcher, NULL);
     job->ntraces = 0;
     job->traces = NULL;
+    PRTE_CONSTRUCT(&job->cli, prte_cli_result_t);
 }
 
 static void prte_job_destruct(prte_job_t *job)
@@ -578,6 +583,7 @@ static void prte_job_destruct(prte_job_t *job)
     if (NULL != job->traces) {
         prte_argv_free(job->traces);
     }
+    PRTE_DESTRUCT(&job->cli);
 }
 
 PRTE_CLASS_INSTANCE(prte_job_t,

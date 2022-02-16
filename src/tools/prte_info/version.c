@@ -15,7 +15,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,6 +30,7 @@
 
 #include "src/include/version.h"
 #include "src/mca/base/base.h"
+#include "src/util/argv.h"
 #include "src/util/printf.h"
 
 #include "pmix.h"
@@ -93,14 +94,13 @@ void prte_info_show_prte_version(const char *scope)
  *      - want_all: True if all components' info is required.
  *      - cmd_line: The constructed command line argument
  */
-void prte_info_do_version(bool want_all, prte_cmd_line_t *cmd_line)
+void prte_info_do_version(bool want_all)
 {
-    unsigned int count;
-    size_t i;
-    char *arg1, *scope, *type, *component;
-    char *pos;
+    size_t i, n;
+    char *arg1, *scope, **tmp;
+    char *pos = NULL;
     int j;
-    prte_value_t *pval;
+    prte_cli_item_t *opt;
 
     prte_info_components_open();
 
@@ -114,12 +114,21 @@ void prte_info_do_version(bool want_all, prte_cmd_line_t *cmd_line)
                                              prte_info_type_all);
         }
     } else {
-        count = prte_cmd_line_get_ninsts(cmd_line, "show-version");
-        for (i = 0; i < count; ++i) {
-            pval = prte_cmd_line_get_param(cmd_line, "show-version", (int) i, 0);
-            arg1 = pval->value.data.string;
-            pval = prte_cmd_line_get_param(cmd_line, "show-version", (int) i, 1);
-            scope = pval->value.data.string;
+        opt = prte_cmd_line_get_param(&prte_info_cmd_line, "show-version");
+        if (NULL != opt) {
+            tmp = prte_argv_split(opt->values[0], ':');
+            arg1 = tmp[0];
+            if (NULL == tmp[1]) {
+                scope = (char*)prte_info_ver_all;
+            } else {
+                if (NULL != tmp[2]) {
+                    pos = tmp[1];
+                    scope = tmp[2];
+                } else {
+                    pos = tmp[1];
+                    scope = (char*)prte_info_ver_all;
+                }
+            }
 
             /* Version of PRTE */
 
@@ -129,13 +138,8 @@ void prte_info_do_version(bool want_all, prte_cmd_line_t *cmd_line)
 
             /* Specific type and component */
 
-            else if (NULL != (pos = strchr(arg1, ':'))) {
-                *pos = '\0';
-                type = arg1;
-                pos++;
-                component = pos;
-
-                prte_info_show_component_version(type, component, scope, prte_info_ver_all);
+            else if (NULL != pos) {
+                prte_info_show_component_version(arg1, pos, scope, prte_info_ver_all);
 
             }
 
@@ -145,6 +149,7 @@ void prte_info_do_version(bool want_all, prte_cmd_line_t *cmd_line)
                 prte_info_show_component_version(arg1, prte_info_component_all, scope,
                                                  prte_info_ver_all);
             }
+            prte_argv_free(tmp);
         }
     }
 }

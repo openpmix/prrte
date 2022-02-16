@@ -14,7 +14,7 @@
 # Copyright (c) 2011      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -549,3 +549,11 @@ The %s option contains a directive that is missing a value:
   Valid directive: "%s=<value>"
 
 Please check for a typo or ensure that the value is provided.
+#
+[missing-personality]
+PRRTE has hit an internal problem that should never happen - it is
+attempting to map a job that lacks an assigned personality.
+
+  Job: %s
+
+Please report this to the PRRTE developers (https://github.com/openpmix/prrte/issues)

@@ -1,0 +1,248 @@
+# -*- text -*-
+#
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+#
+[usage]
+%s (%s) %s
+
+Usage: %s [OPTION]...
+Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
+
+/*****      General Options      *****/
+
+-h|--help                            This help message
+-h|--help <arg0>                     Help for the specified option
+-v|--verbose                         Enable typical debug options
+-V|--version                         Print version and exit
+
+
+/*****       Debug Options       *****/
+
+   --debug-daemons                   Debug daemons - if not set, the "verbose" setting will be limited to
+                                     the DVM controller to reduce clutter
+   --debug-daemons-file              Enable debugging of any PRTE daemons used by this application, storing
+                                     their verbose output in files
+   --leave-session-attached          Do not discard stdout/stderr of remote PRTE daemons
+   --test-suicide <arg0>             Suicide instead of clean abort after delay
+   --do-not-launch                   Do not actually launch the DVM
+   --display                         Comma-delimited list of options for displaying information
+
+
+/*****      Launch Options       *****/
+
+   --default-hostfile <arg0>         Provide a default hostfile
+-H|--host <arg0>                     List of hosts to use for the DVM
+   --hostfile <arg0>                 Provide a hostfile
+   --machinefile <arg0>              Provide a hostfile (synonym for "hostfile")
+   --mca <arg0> <arg1>               Pass generic MCA parameters to the DVM
+   --pmixmca <arg0> <arg1>           Pass PMIx MCA parameters
+   --prtemca <arg0> <arg1>           Pass PRTE MCA parameters to the DVM
+   --show-progress                   Output a brief periodic report on launch progress
+   --stream-buffering <arg0>         Adjust buffering for stdout/stderr
+-x <arg0>                            Export an environment variable, optionally specifying a value (e.g., "-x
+                                     foo" exports the environment variable foo and takes its value from the
+                                     current environment; "-x foo=bar" exports the environment variable name
+                                     foo and sets its value to "bar" in the started processes; "-x foo*"
+                                     exports all current environmental variables starting with "foo")
+   --allow-run-as-root               Allow execution as root (STRONGLY DISCOURAGED)
+   --daemonize                       Daemonize the DVM daemons into the background
+   --forward-signals <arg0>          Additional signals (names or integers) to forward
+   --keepalive <arg0>                Pipe to monitor - DVM will terminate upon closure
+   --launch-agent <arg0>             Name of daemon executable used to start processes on remote nodes
+                                     (default: prted)
+   --max-vm-size <arg0>              Max number of daemons to start
+   --no-ready-msg                    Do not print a DVM ready message
+   --noprefix                        Disable automatic --prefix behavior
+   --prefix <arg0>                   Prefix to be used to look for RTE executables
+   --report-pid <arg0>               Printout pid on stdout [-], stderr [+], or a file [anything else]
+   --report-uri <arg0>               Printout URI on stdout [-], stderr [+], or a file [anything else]
+   --set-sid                         Direct the DVM daemons to separate from the current session
+   --singleton <arg0>                ID of the singleton process that started us
+   --system-server                   Start the DVM as the system server
+   --tmpdir <arg0>                   Set the root for the session directory tree
+   --tune <arg0>                     File(s) containing MCA params for tuning DVM operations
+   --timeout <arg0>                  Timeout DVM startup if time exceeds the specified number of seconds
+
+Report bugs to %s
+#
+[prtemca]
+Syntax: --prtemca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value
+
+Pass a PRRTE MCA parameter
+#
+[pmixmca]
+Syntax: --pmixmca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value
+
+Pass a PMIx MCA parameter
+#
+[tune]
+File(s) containing PRRTE and PMIx MCA params for tuning DVM and/or application operations.
+Parameters in the file will be treated as _generic_ parameters and subject to the
+translation rules/uncertainties. See "--help mca" for more information.
+
+Syntax in the file is:
+
+param = value
+
+with one parameter and its associated value per line. Empty lines and lines beginning
+with the '#' character are ignored.
+#
+[no-ready-msg]
+Do not print a DVM ready message
+#
+[daemonize]
+Daemonize the DVM daemons and controller into the background
+#
+[system-server]
+Start the DVM as the system server
+#
+[set-sid]
+Direct the DVM daemons to separate from the current session
+#
+[report-pid]
+Printout PID on stdout [-], stderr [+], or a file [anything else]
+#
+[report-uri]
+Printout URI on stdout [-], stderr [+], or a file [anything else]
+#
+[test-suicide]
+Suicide instead of clean abort after delay
+#
+[default-hostfile]
+Provide a default hostfile
+#
+[singleton]
+ID of the singleton process that started us
+#
+[keepalive]
+Pipe to monitor - DVM will terminate upon closure
+#
+[launch-agent]
+Name of daemon executable used to start processes on remote nodes (default: prted)
+#
+[max-vm-size]
+Maximum number of daemons to start
+#
+[debug-daemons]
+Debug daemon output enabled
+#
+[debug-daemons-file]
+Enable debugging of any PRTE daemons used by this application, storing output in files
+#
+[leave-session-attached]
+Do not discard stdout/stderr of remote PRTE daemons
+#
+[tmpdir]
+Set the root for the session directory tree
+#
+[prefix]
+Prefix to be used to look for RTE executables
+#
+[noprefix]
+Disable automatic --prefix behavior
+#
+[forward-signals]
+Comma-delimited list of additional signals (names or integers) to forward to application
+processes ["none" => forward nothing]. Signals provided by default include SIGTSTP,
+SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT
+#
+[allow-run-as-root]
+Allow execution as root (STRONGLY DISCOURAGED)
+#
+[timeout]
+Timeout DVM startup if time exceeds the specified number of seconds
+#
+[x]
+Export an environment variable, optionally specifying a value (e.g., "-x foo" exports the
+environment variable foo and takes its value from the current environment; "-x foo=bar"
+exports the environment variable name foo and sets its value to "bar" in the started
+processes; "-x foo*" exports all current environmental variables starting with "foo")
+#
+[show-progress]
+Output a brief periodic report on launch progress
+#
+[hostfile]
+Provide a hostfile
+#
+[machinefile]
+Provide a hostfile (synonym for "hostfile")
+#
+[host]
+Comma-separated list of hosts to use for the DVM
+#
+[stream-buffering]
+Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]
+#
+[do-not-launch]
+Perform all necessary operations to prepare to launch the DVM, but do not actually
+launch it (usually used to test mapping patterns)
+#
+[display]
+Comma-delimited list of options for displaying information about the allocation and DVM.
+Allowed values:
+    allocation
+    bind
+    map
+    map-devel
+    topo
+#
+#
+#  DEPRECATED OPTIONS
+#
+[mca]
+Syntax: --mca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value
+
+Pass generic MCA parameters - i.e., parameters whose project affiliation
+must be determined by PRRTE based on matching the name of the parameter with defined values
+from various projects that PRRTE knows about.
+
+DEPRECATED: This translation can be incomplete (e.g., if  known project adds or changes
+parameters) - thus, it is strongly recommended that users use project-specific parameters
+such as "prtemca" or "pmixmca".
+#
+[xml]
+Provide all output in XML format
+
+DEPRECATED: please see "--help output" for details
+#
+[display-devel-map]
+Display a detailed process map (mostly intended for developers)
+just before launch
+
+DEPRECATED: please see "--help display" for details
+#
+[display-topo]
+Display the topology as part of the process map (mostly intended
+for developers) just before launch
+
+DEPRECATED: please see "--help display" for details
+#
+[report-bindings]
+Display process bindings to stderr
+
+DEPRECATED: please see "--help display" for details
+#
+[display-devel-allocation]
+Display a detailed list (mostly intended for developers) of the
+allocation being used by this job
+
+DEPRECATED: please see "--help display" for details
+#
+[display-map]
+Display the process map just before launch
+
+DEPRECATED: please see "--help display" for details
+#
+[display-allocation]
+Display the allocation being used by this job
+
+DEPRECATED: please see "--help display" for details

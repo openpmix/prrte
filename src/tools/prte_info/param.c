@@ -18,7 +18,7 @@
  * Copyright (c) 2018      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2018      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -46,8 +46,8 @@
 #include "src/include/prte_portable_platform.h"
 #include "src/include/version.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
+#include "src/util/argv.h"
 #include "src/util/printf.h"
-
 #include "src/util/show_help.h"
 
 #include "src/tools/prte_info/pinfo.h"
@@ -79,27 +79,28 @@ const char *prte_info_path_pkgincludedir = "pkgincludedir";
 
 void prte_info_do_params(bool want_all_in, bool want_internal)
 {
-    int count;
-    char *type, *component, *str;
+    char *type, *str;
+    char **args = NULL, **tmp;
     bool found;
-    int i;
+    int i, j;
     bool want_all = false;
     prte_value_t *pval;
+    prte_cli_item_t *opt;
 
     prte_info_components_open();
+    opt = prte_cmd_line_get_param(&prte_info_cmd_line, "param");
 
     if (want_all_in) {
         want_all = true;
     } else {
-        /* See if the special param "all" was givin to --param; that
+        /* See if the special param "all" was given to --param; that
          * superceeds any individual type
          */
-        count = prte_cmd_line_get_ninsts(prte_info_cmd_line, "param");
-        for (i = 0; i < count; ++i) {
-            pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int) i, 0);
-            if (0 == strcmp(prte_info_type_all, pval->value.data.string)) {
+        if (NULL != opt) {
+            /* split the arguments at the colon */
+            args = prte_argv_split(opt->values[0], ':');
+            if (0 == strcmp(args[0], "all")) {
                 want_all = true;
-                break;
             }
         }
     }
@@ -113,31 +114,38 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
             prte_info_show_mca_params(type, prte_info_component_all, want_internal);
         }
     } else {
-        for (i = 0; i < count; ++i) {
-            pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int) i, 0);
-            type = pval->value.data.string;
-            pval = prte_cmd_line_get_param(prte_info_cmd_line, "param", (int) i, 1);
-            component = pval->value.data.string;
+        if (NULL != opt && NULL != args) {
+            type = args[0];
+            if (NULL != args[1]) {
+                tmp = prte_argv_split(args[1], ',');
 
-            for (found = false, i = 0; i < mca_types.size; ++i) {
-                if (NULL == (str = (char *) prte_pointer_array_get_item(&mca_types, i))) {
-                    continue;
+                for (j=0; NULL != tmp[j]; j++) {
+                    for (found = false, i = 0; i < mca_types.size; ++i) {
+                        str = (char *) prte_pointer_array_get_item(&mca_types, i);
+                        if (NULL == str) {
+                            continue;
+                        }
+                        if (0 == strcmp(str, type)) {
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found) {
+                        prte_show_help("help-pinfo.txt", "not-found", true, type);
+                        exit(1);
+                    }
+
+                    prte_info_show_mca_params(type, tmp[j], want_internal);
                 }
-                if (0 == strcmp(str, type)) {
-                    found = true;
-                    break;
-                }
+                prte_argv_free(tmp);
+            } else {
+                prte_info_show_mca_params(type, "*", want_internal);
             }
-
-            if (!found) {
-                char *usage = prte_cmd_line_get_usage_msg(prte_info_cmd_line, false);
-                prte_show_help("help-pinfo.txt", "not-found", true, type);
-                free(usage);
-                exit(1);
-            }
-
-            prte_info_show_mca_params(type, component, want_internal);
         }
+    }
+    if (NULL != args) {
+        prte_argv_free(args);
     }
 }
 
@@ -219,20 +227,22 @@ void prte_info_show_mca_params(const char *type, const char *component, bool wan
     }
 }
 
-void prte_info_do_path(bool want_all, prte_cmd_line_t *cmd_line)
+void prte_info_do_path(bool want_all)
 {
     int i, count;
     char *scope;
     prte_value_t *pval;
+    prte_cli_item_t *opt;
 
     /* Check bozo case */
-    count = prte_cmd_line_get_ninsts(cmd_line, "path");
-    for (i = 0; i < count; ++i) {
-        pval = prte_cmd_line_get_param(cmd_line, "path", i, 0);
-        scope = pval->value.data.string;
-        if (0 == strcmp("all", scope)) {
-            want_all = true;
-            break;
+    opt = prte_cmd_line_get_param(&prte_info_cmd_line, "path");
+    if (NULL != opt) {
+        for (i=0; NULL != opt->values[i]; i++) {
+            scope = opt->values[i];
+            if (0 == strcmp("all", scope)) {
+                want_all = true;
+                break;
+            }
         }
     }
 
@@ -256,51 +266,49 @@ void prte_info_do_path(bool want_all, prte_cmd_line_t *cmd_line)
         prte_info_show_path(prte_info_path_pkglibdir, prte_install_dirs.prtelibdir);
         prte_info_show_path(prte_info_path_pkgincludedir, prte_install_dirs.prteincludedir);
     } else {
-        count = prte_cmd_line_get_ninsts(cmd_line, "path");
-        for (i = 0; i < count; ++i) {
-            pval = prte_cmd_line_get_param(cmd_line, "path", i, 0);
-            scope = pval->value.data.string;
+        if (NULL != opt) {
+            for (i=0; NULL != opt->values[i]; i++) {
+                scope = opt->values[i];
 
-            if (0 == strcmp(prte_info_path_prefix, scope)) {
-                prte_info_show_path(prte_info_path_prefix, prte_install_dirs.prefix);
-            } else if (0 == strcmp(prte_info_path_bindir, scope)) {
-                prte_info_show_path(prte_info_path_bindir, prte_install_dirs.bindir);
-            } else if (0 == strcmp(prte_info_path_libdir, scope)) {
-                prte_info_show_path(prte_info_path_libdir, prte_install_dirs.libdir);
-            } else if (0 == strcmp(prte_info_path_incdir, scope)) {
-                prte_info_show_path(prte_info_path_incdir, prte_install_dirs.includedir);
-            } else if (0 == strcmp(prte_info_path_mandir, scope)) {
-                prte_info_show_path(prte_info_path_mandir, prte_install_dirs.mandir);
-            } else if (0 == strcmp(prte_info_path_pkglibdir, scope)) {
-                prte_info_show_path(prte_info_path_pkglibdir, prte_install_dirs.prtelibdir);
-            } else if (0 == strcmp(prte_info_path_sysconfdir, scope)) {
-                prte_info_show_path(prte_info_path_sysconfdir, prte_install_dirs.sysconfdir);
-            } else if (0 == strcmp(prte_info_path_exec_prefix, scope)) {
-                prte_info_show_path(prte_info_path_exec_prefix, prte_install_dirs.exec_prefix);
-            } else if (0 == strcmp(prte_info_path_sbindir, scope)) {
-                prte_info_show_path(prte_info_path_sbindir, prte_install_dirs.sbindir);
-            } else if (0 == strcmp(prte_info_path_libexecdir, scope)) {
-                prte_info_show_path(prte_info_path_libexecdir, prte_install_dirs.libexecdir);
-            } else if (0 == strcmp(prte_info_path_datarootdir, scope)) {
-                prte_info_show_path(prte_info_path_datarootdir, prte_install_dirs.datarootdir);
-            } else if (0 == strcmp(prte_info_path_datadir, scope)) {
-                prte_info_show_path(prte_info_path_datadir, prte_install_dirs.datadir);
-            } else if (0 == strcmp(prte_info_path_sharedstatedir, scope)) {
-                prte_info_show_path(prte_info_path_sharedstatedir,
-                                    prte_install_dirs.sharedstatedir);
-            } else if (0 == strcmp(prte_info_path_localstatedir, scope)) {
-                prte_info_show_path(prte_info_path_localstatedir, prte_install_dirs.localstatedir);
-            } else if (0 == strcmp(prte_info_path_infodir, scope)) {
-                prte_info_show_path(prte_info_path_infodir, prte_install_dirs.infodir);
-            } else if (0 == strcmp(prte_info_path_pkgdatadir, scope)) {
-                prte_info_show_path(prte_info_path_pkgdatadir, prte_install_dirs.prtedatadir);
-            } else if (0 == strcmp(prte_info_path_pkgincludedir, scope)) {
-                prte_info_show_path(prte_info_path_pkgincludedir, prte_install_dirs.prteincludedir);
-            } else {
-                char *usage = prte_cmd_line_get_usage_msg(cmd_line, false);
-                prte_show_help("help-pinfo.txt", "usage", true, usage);
-                free(usage);
-                exit(1);
+                if (0 == strcmp(prte_info_path_prefix, scope)) {
+                    prte_info_show_path(prte_info_path_prefix, prte_install_dirs.prefix);
+                } else if (0 == strcmp(prte_info_path_bindir, scope)) {
+                    prte_info_show_path(prte_info_path_bindir, prte_install_dirs.bindir);
+                } else if (0 == strcmp(prte_info_path_libdir, scope)) {
+                    prte_info_show_path(prte_info_path_libdir, prte_install_dirs.libdir);
+                } else if (0 == strcmp(prte_info_path_incdir, scope)) {
+                    prte_info_show_path(prte_info_path_incdir, prte_install_dirs.includedir);
+                } else if (0 == strcmp(prte_info_path_mandir, scope)) {
+                    prte_info_show_path(prte_info_path_mandir, prte_install_dirs.mandir);
+                } else if (0 == strcmp(prte_info_path_pkglibdir, scope)) {
+                    prte_info_show_path(prte_info_path_pkglibdir, prte_install_dirs.prtelibdir);
+                } else if (0 == strcmp(prte_info_path_sysconfdir, scope)) {
+                    prte_info_show_path(prte_info_path_sysconfdir, prte_install_dirs.sysconfdir);
+                } else if (0 == strcmp(prte_info_path_exec_prefix, scope)) {
+                    prte_info_show_path(prte_info_path_exec_prefix, prte_install_dirs.exec_prefix);
+                } else if (0 == strcmp(prte_info_path_sbindir, scope)) {
+                    prte_info_show_path(prte_info_path_sbindir, prte_install_dirs.sbindir);
+                } else if (0 == strcmp(prte_info_path_libexecdir, scope)) {
+                    prte_info_show_path(prte_info_path_libexecdir, prte_install_dirs.libexecdir);
+                } else if (0 == strcmp(prte_info_path_datarootdir, scope)) {
+                    prte_info_show_path(prte_info_path_datarootdir, prte_install_dirs.datarootdir);
+                } else if (0 == strcmp(prte_info_path_datadir, scope)) {
+                    prte_info_show_path(prte_info_path_datadir, prte_install_dirs.datadir);
+                } else if (0 == strcmp(prte_info_path_sharedstatedir, scope)) {
+                    prte_info_show_path(prte_info_path_sharedstatedir,
+                                        prte_install_dirs.sharedstatedir);
+                } else if (0 == strcmp(prte_info_path_localstatedir, scope)) {
+                    prte_info_show_path(prte_info_path_localstatedir, prte_install_dirs.localstatedir);
+                } else if (0 == strcmp(prte_info_path_infodir, scope)) {
+                    prte_info_show_path(prte_info_path_infodir, prte_install_dirs.infodir);
+                } else if (0 == strcmp(prte_info_path_pkgdatadir, scope)) {
+                    prte_info_show_path(prte_info_path_pkgdatadir, prte_install_dirs.prtedatadir);
+                } else if (0 == strcmp(prte_info_path_pkgincludedir, scope)) {
+                    prte_info_show_path(prte_info_path_pkgincludedir, prte_install_dirs.prteincludedir);
+                } else {
+                    prte_show_help("help-pinfo.txt", "usage", true, "USAGE");
+                    exit(1);
+                }
             }
         }
     }

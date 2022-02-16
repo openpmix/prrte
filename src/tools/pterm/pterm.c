@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -108,41 +108,27 @@ static prte_mutex_t prun_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
 static prte_event_base_t *myevbase = NULL;
 static bool proxyrun = false;
 static bool verbose = false;
-static prte_cmd_line_t *prte_cmd_line = NULL;
 
 /* prun-specific options */
-static prte_cmd_line_init_t cmd_line_init[] = {
-    /* Various "obvious" generalized options */
-    {'h', "help", 0, PRTE_CMD_LINE_TYPE_BOOL, "This help message", PRTE_CMD_LINE_OTYPE_GENERAL},
-    {'V', "version", 0, PRTE_CMD_LINE_TYPE_BOOL, "Print version and exit",
-     PRTE_CMD_LINE_OTYPE_GENERAL},
-    {'v', "verbose", 0, PRTE_CMD_LINE_TYPE_BOOL, "Be verbose", PRTE_CMD_LINE_OTYPE_GENERAL},
+static struct option myoptions[] = {
+    /* basic options */
+    PRTE_OPTION_SHORT_DEFINE("help", PRTE_ARG_OPTIONAL, 'h'),
+    PRTE_OPTION_SHORT_DEFINE("version", PRTE_ARG_NONE, 'V'),
+    PRTE_OPTION_SHORT_DEFINE("verbose", PRTE_ARG_NONE, 'v'),
 
-    /* look first for a system server */
-    {'\0', "system-server-first", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "First look for a system server and connect to it if found", PRTE_CMD_LINE_OTYPE_DVM},
-    /* connect only to a system server */
-    {'\0', "system-server-only", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Connect only to a system-level server", PRTE_CMD_LINE_OTYPE_DVM},
-    /* wait to connect */
-    {'\0', "wait-to-connect", 0, PRTE_CMD_LINE_TYPE_INT,
-     "Delay specified number of seconds before trying to connect", PRTE_CMD_LINE_OTYPE_DVM},
-    /* number of times to try to connect */
-    {'\0', "num-connect-retries", 0, PRTE_CMD_LINE_TYPE_INT,
-     "Max number of times to try to connect", PRTE_CMD_LINE_OTYPE_DVM},
-    /* provide a connection PID */
-    {'\0', "pid", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "PID of the daemon to which we should connect (int => PID or file:<file> for file containing "
-     "the PID",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    /* uri of the dvm, or at least where to get it */
-    {'\0', "dvm-uri", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Specify the URI of the DVM master, or the name of the file (specified as file:filename) that "
-     "contains that info",
-     PRTE_CMD_LINE_OTYPE_DVM},
+    // DVM options
+    PRTE_OPTION_DEFINE("system-server-first", PRTE_ARG_NONE),
+    PRTE_OPTION_DEFINE("system-server-only", PRTE_ARG_NONE),
+    PRTE_OPTION_DEFINE("wait-to-connect", PRTE_ARG_REQD),
+    PRTE_OPTION_DEFINE("num-connect-retries", PRTE_ARG_REQD),
+    PRTE_OPTION_DEFINE("pid", PRTE_ARG_REQD),
+    PRTE_OPTION_DEFINE("namespace", PRTE_ARG_REQD),
+    PRTE_OPTION_DEFINE("dvm-uri", PRTE_ARG_REQD),
 
-    /* End of list */
-    {'\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL}};
+    PRTE_OPTION_END
+};
+
+static char *shorts = "hvVp";
 
 static void abort_signal_callback(int signal);
 static void clean_abort(int fd, short flags, void *arg);
@@ -161,7 +147,7 @@ static void infocb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *
     PRTE_ACQUIRE_OBJECT(lock);
 
     if (verbose) {
-        prte_output(0, "PRUN: INFOCB");
+        prte_output(0, "PTERM: INFOCB");
     }
 
     if (NULL != release_fn) {
@@ -229,20 +215,23 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
 
 int main(int argc, char *argv[])
 {
-    int rc = PRTE_ERR_FATAL;
+    int rc = PRTE_ERR_FATAL, i;
     prte_pmix_lock_t lock, rellock;
     pmix_info_t info, *iptr;
     pmix_status_t ret;
     bool flag;
     size_t ninfo;
-    prte_value_t *pval;
     uint32_t ui32;
-    char *param;
+    char *param, *ptr;
     pid_t pid;
     void *tinfo;
     pmix_data_array_t darray;
     char hostname[PRTE_PATH_MAX];
+    char *personality;
     pmix_rank_t rank;
+    prte_cli_result_t results;
+    prte_cli_item_t *opt;
+    prte_schizo_base_module_t *schizo;
 
     /* init the globals */
     PRTE_CONSTRUCT(&job_info, prte_list_t);
@@ -262,51 +251,61 @@ int main(int argc, char *argv[])
     prte_init_util(PRTE_PROC_MASTER);
 
     prte_tool_basename = prte_basename(argv[0]);
+    prte_tool_actual = "pterm";
     gethostname(hostname, sizeof(hostname));
+    PRTE_CONSTRUCT(&results, prte_cli_result_t);
 
-    /* setup our cmd line */
-    prte_cmd_line = PRTE_NEW(prte_cmd_line_t);
-    if (PRTE_SUCCESS != (rc = prte_cmd_line_add(prte_cmd_line, cmd_line_init))) {
+    /* open the SCHIZO framework */
+    rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
+                                      PRTE_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
 
-    /* parse the result to get values - this will not include MCA params */
-    if (PRTE_SUCCESS != (rc = prte_cmd_line_parse(prte_cmd_line, true, false, argc, argv))) {
+    if (PRTE_SUCCESS != (rc = prte_schizo_base_select())) {
+        PRTE_ERROR_LOG(rc);
+        return rc;
+    }
+
+    /* look for any personality specification */
+    personality = NULL;
+    for (i = 0; NULL != argv[i]; i++) {
+        if (0 == strcmp(argv[i], "--personality")) {
+            personality = argv[i + 1];
+            break;
+        }
+    }
+
+    /* detect if we are running as a proxy and select the active
+     * schizo module for this tool */
+    schizo = prte_schizo_base_detect_proxy(personality);
+    if (NULL == schizo) {
+        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        return 1;
+    }
+
+    rc = schizo->parse_cli(argv, &results, PRTE_CLI_WARN);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_DESTRUCT(&results);
         if (PRTE_ERR_SILENT != rc) {
-            fprintf(stderr, "%s: command line error (%s)\n", argv[0], prte_strerror(rc));
+            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
+        } else {
+            rc = PRTE_SUCCESS;
         }
-        PRTE_ERROR_LOG(rc);
         return rc;
     }
 
-    if (prte_cmd_line_is_taken(prte_cmd_line, "verbose")) {
-        verbose = true;
-    }
-
-    /* see if print version is requested. Do this before
-     * check for help so that --version --help works as
-     * one might expect. */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "version")) {
-        fprintf(stdout, "%s (%s) %s\n\nReport bugs to %s\n", prte_tool_basename,
-                "PMIx Reference RunTime Environment", PRTE_VERSION, PACKAGE_BUGREPORT);
-        exit(0);
-    }
-
-    /* Check for help request */
-    if (prte_cmd_line_is_taken(prte_cmd_line, "help")) {
-        char *str, *args = NULL;
-        args = prte_cmd_line_get_usage_msg(prte_cmd_line, false);
-        str = prte_show_help_string("help-pterm.txt", "usage", false, prte_tool_basename, "PRTE",
-                                    PRTE_VERSION, prte_tool_basename, args, PACKAGE_BUGREPORT);
-        if (NULL != str) {
-            printf("%s", str);
-            free(str);
+    // we do NOT accept arguments other than our own
+    if (NULL != results.tail) {
+        param = prte_argv_join(results.tail, ' ');
+        ptr = prte_show_help_string("help-pterm.txt", "no-args", false,
+                                    prte_tool_basename, param, prte_tool_basename);
+        if (NULL != ptr) {
+            printf("%s", ptr);
+            free(ptr);
         }
-        free(args);
-
-        /* If someone asks for help, that should be all we do */
-        exit(0);
+        return -1;
     }
 
     /* setup options */
@@ -319,44 +318,45 @@ int main(int argc, char *argv[])
     rank = 0;
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_TOOL_RANK, &rank, PMIX_PROC_RANK);
 
-    if (prte_cmd_line_is_taken(prte_cmd_line, "system-server-first")) {
+    if (prte_cmd_line_is_taken(&results, "system-server-first")) {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
-    } else if (prte_cmd_line_is_taken(prte_cmd_line, "system-server-only")) {
+    } else if (prte_cmd_line_is_taken(&results, "system-server-only")) {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
     }
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "wait-to-connect", 0, 0))
-        && 0 < pval->value.data.integer) {
-        ui32 = pval->value.data.integer;
+    opt = prte_cmd_line_get_param(&results, "wait-to-connect");
+    if (NULL != opt) {
+        ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "num-connect-retries", 0, 0))
-        && 0 < pval->value.data.integer) {
-        ui32 = pval->value.data.integer;
+    opt = prte_cmd_line_get_param(&results, "num-connect-retries");
+    if (NULL != opt) {
+        ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "pid", 0, 0))) {
+    opt = prte_cmd_line_get_param(&results, "pid");
+    if (NULL != opt) {
         /* see if it is an integer value */
         char *leftover;
         leftover = NULL;
-        pid = strtol(pval->value.data.string, &leftover, 10);
+        pid = strtol(opt->values[0], &leftover, 10);
         if (NULL == leftover || 0 == strlen(leftover)) {
             /* it is an integer */
             PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
-        } else if (0 == strncasecmp(pval->value.data.string, "file", 4)) {
+        } else if (0 == strncasecmp(opt->values[0], "file", 4)) {
             FILE *fp;
             /* step over the file: prefix */
-            param = strchr(pval->value.data.string, ':');
+            param = strchr(opt->values[0], ':');
             if (NULL == param) {
                 /* malformed input */
                 prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
-                               "--pid", pval->value.data.string, "file:path");
+                               "--pid", opt->values[0], "file:path");
                 return PRTE_ERR_BAD_PARAM;
             }
             ++param;
             fp = fopen(param, "r");
             if (NULL == fp) {
                 prte_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
-                               "--pid", pval->value.data.string, param);
+                               "--pid", opt->values[0], param);
                 return PRTE_ERR_BAD_PARAM;
             }
             rc = fscanf(fp, "%lu", (unsigned long *) &pid);
@@ -364,7 +364,7 @@ int main(int argc, char *argv[])
                 /* if we were unable to obtain the single conversion we
                  * require, then error out */
                 prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
-                               "--pid", pval->value.data.string, param);
+                               "--pid", opt->values[0], param);
                 return PRTE_ERR_BAD_PARAM;
             }
             fclose(fp);
@@ -373,8 +373,9 @@ int main(int argc, char *argv[])
     }
 
     /* if they specified the URI, then pass it along */
-    if (NULL != (pval = prte_cmd_line_get_param(prte_cmd_line, "dvm-uri", 0, 0))) {
-        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_URI, pval->value.data.string, PMIX_STRING);
+    opt = prte_cmd_line_get_param(&results, "dvm-uri");
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_URI, opt->values[0], PMIX_STRING);
     }
 
     /* convert to array of info */

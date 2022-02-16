@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -38,7 +38,6 @@
 #include "src/mca/base/prte_mca_base_alias.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
-#include "src/mca/schizo/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/runtime.h"
@@ -147,10 +146,6 @@ int prte_finalize(void)
     }
     PRTE_RELEASE(prte_node_pool);
 
-    if (NULL != prte_fork_agent) {
-        prte_argv_free(prte_fork_agent);
-    }
-
     free(prte_process_info.nodename);
     prte_process_info.nodename = NULL;
 
@@ -158,9 +153,6 @@ int prte_finalize(void)
     if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {
         return rc;
     }
-
-    /* finalize schizo */
-    prte_schizo.finalize();
 
     /* Close the general debug stream */
     prte_output_close(prte_debug_output);
