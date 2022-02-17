@@ -620,12 +620,6 @@ static void interim(int sd, short args, void *cbdata)
             /***   DEBUGGER DAEMONS   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUGGER_DAEMONS)) {
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
-            for (n=0; n < (size_t)jdata->apps->size; n++) {
-                app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, n);
-                if (NULL != app) {
-                    PRTE_FLAG_SET(app, PRTE_APP_FLAG_TOOL);
-                }
-            }
 
             /***   CO-LOCATE TARGET FOR DEBUGGER DAEMONS    ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_TARGET)) {
@@ -635,11 +629,13 @@ static void interim(int sd, short args, void *cbdata)
 
             /***   NUMBER OF DEBUGGER_DAEMONS PER NODE   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_DAEMONS_PER_NODE)) {
+            PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_NODE,
                                PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
 
             /***   NUMBER OF DEBUGGER_DAEMONS PER PROC   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_DAEMONS_PER_PROC)) {
+            PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC,
                                PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
 
@@ -717,6 +713,16 @@ static void interim(int sd, short args, void *cbdata)
             /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {
             pmix_server_cache_job_info(jdata, info);
+        }
+    }
+
+    /* set debugger flags on apps if needed */
+    if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+        for (n=0; n < (size_t)jdata->apps->size; n++) {
+            app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, n);
+            if (NULL != app) {
+                PRTE_FLAG_SET(app, PRTE_APP_FLAG_TOOL);
+            }
         }
     }
 

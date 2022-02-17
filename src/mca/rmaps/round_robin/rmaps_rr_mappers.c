@@ -13,7 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -89,7 +89,11 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
         }
 
         /* assign a number of procs equal to the number of available slots */
-        num_procs_to_assign = node->slots_available;
+        if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
+            num_procs_to_assign = node->slots_available;
+        } else {
+            num_procs_to_assign = node->slots;
+        }
 
         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:slot assigning %d procs to node %s",
@@ -358,7 +362,9 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
                 obj = hwloc_get_root_obj(node->topology->topo);
             }
 
-            if (0 != node->slots_max && node->slots_max <= node->slots_inuse) {
+            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+                0 != node->slots_max &&
+                node->slots_max <= node->slots_inuse) {
                 /* cannot use this node - already at max_slots */
                 continue;
             }
@@ -397,7 +403,8 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
                         }
                     }
                 }
-            } else if (node->slots <= node->slots_inuse) {
+            } else if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+                       node->slots <= node->slots_inuse) {
                 /* since we are not oversubcribed, ignore this node */
                 continue;
             } else {
@@ -418,7 +425,8 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
                     }
                 }
                 /* if slots < avg + extra (adjusted for cpus/proc), then try to take all */
-                if (node->slots_available < (navg + extra_procs_to_assign)) {
+                if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+                    node->slots_available < (navg + extra_procs_to_assign)) {
                     num_procs_to_assign = node->slots_available;
                     /* if we can't take any proc, skip following steps */
                     if (num_procs_to_assign == 0) {
@@ -455,7 +463,8 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
             /* not all nodes are equal, so only set oversubscribed for
              * this node if it is in that state
              */
-            if (node->slots < (int) node->num_procs) {
+            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+                node->slots < (int) node->num_procs) {
                 /* flag the node as oversubscribed so that sched-yield gets
                  * properly set
                  */
@@ -501,7 +510,9 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
                 obj = hwloc_get_root_obj(node->topology->topo);
             }
 
-            if (0 != node->slots_max && node->slots_max <= node->slots_inuse) {
+            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+                0 != node->slots_max &&
+                node->slots_max <= node->slots_inuse) {
                 /* cannot use this node - already at max_slots */
                 continue;
             }
@@ -519,7 +530,8 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
             /* not all nodes are equal, so only set oversubscribed for
              * this node if it is in that state
              */
-            if (node->slots < (int) node->num_procs) {
+            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+                node->slots < (int) node->num_procs) {
                 /* flag the node as oversubscribed so that sched-yield gets
                  * properly set
                  */
@@ -651,12 +663,18 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, prte_list_t 
                 start = (jdata->bkmark_obj + 1) % nobjs;
             }
             /* compute the number of procs to go on this node */
-            nprocs = node->slots_available;
+            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
+                nprocs = node->slots_available;
+            } else {
+                nprocs = nobjs;
+            }
             prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:rr: calculated nprocs %d", nprocs);
             if (nprocs < 1) {
                 if (second_pass) {
-                    if (0 != node->slots_max && node->slots_max <= node->slots_inuse) {
+                    if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+                        0 != node->slots_max &&
+                        node->slots_max <= node->slots_inuse) {
                         /* cannot use this node - already at max_slots */
                         continue;
                     }
@@ -671,7 +689,9 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, prte_list_t 
                 } else {
                     continue;
                 }
-            } else if (0 != node->slots_max && (node->slots_inuse + nprocs) > node->slots_max) {
+            } else if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+                       0 != node->slots_max &&
+                       (node->slots_inuse + nprocs) > node->slots_max) {
                 nprocs = node->slots_max - node->slots_inuse;
                 if (0 >= nprocs) {
                     /* cannot use this node */
@@ -777,7 +797,8 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, prte_list_t 
             /* not all nodes are equal, so only set oversubscribed for
              * this node if it is in that state
              */
-            if (node->slots < (int) node->num_procs) {
+            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+                node->slots < (int) node->num_procs) {
                 /* flag the node as oversubscribed so that sched-yield gets
                  * properly set
                  */
@@ -996,7 +1017,8 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, prte_list_t *n
         /* not all nodes are equal, so only set oversubscribed for
          * this node if it is in that state
          */
-        if (node->slots < (int) node->num_procs) {
+        if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+            node->slots < (int) node->num_procs) {
             /* flag the node as oversubscribed so that sched-yield gets
              * properly set
              */

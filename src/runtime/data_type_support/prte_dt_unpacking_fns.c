@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -582,6 +582,15 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
 
     /* unpack the cwd */
     rc = PMIx_Data_unpack(NULL, bkt, &app->cwd, &n, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PRTE_RELEASE(app);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* get the flags */
+    n = 1;
+    rc = PMIx_Data_unpack(NULL, bkt, &app->flags, &n, PMIX_INT8);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PRTE_RELEASE(app);
