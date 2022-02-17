@@ -154,7 +154,7 @@ AC_DEFUN([PRTE_CHECK_TM],[
 	    prte_check_tm_happy=no
 	fi
 
-	PRTE_SUMMARY_ADD([[Resource Managers]],[[Torque]],[$1],[$prte_check_tm_happy])
+	PRTE_SUMMARY_ADD([[Resource Managers]],[[Torque]],[$1],[$prte_check_tm_happy (launcher)])
 
 	PRTE_VAR_SCOPE_POP
     fi
