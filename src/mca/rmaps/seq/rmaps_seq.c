@@ -331,8 +331,9 @@ process:
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
             }
             proc = prte_rmaps_base_setup_proc(jdata, node, i);
-            if ((node->slots < (int) node->num_procs)
-                || (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
+            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
+                (node->slots < (int) node->num_procs) ||
+                (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
                 if (PRTE_MAPPING_NO_OVERSUBSCRIBE
                     & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                     prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
