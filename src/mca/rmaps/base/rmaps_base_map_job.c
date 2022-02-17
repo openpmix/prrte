@@ -244,14 +244,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 }
             }
 
-            // If we are oversubscribing the node, then set the necessary flags
-            if (node->slots < (int) (node->num_procs + 1)) {
-                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
-                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
-
-                PRTE_UNSET_MAPPING_DIRECTIVE(daemon_map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
-                PRTE_SET_MAPPING_DIRECTIVE(daemon_map->mapping, PRTE_MAPPING_SUBSCRIBE_GIVEN);
-            }
+            // tool procs do NOT count against subscription limits, so no
+            // need to check that here
         }
         nprocs = jdata->num_procs;
         daemon_app->num_procs = jdata->num_procs;
