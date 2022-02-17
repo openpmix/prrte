@@ -5,7 +5,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -132,7 +132,7 @@ static int ppr_mapper(prte_job_t *jdata)
     jdata->map->last_mapper = strdup(c->mca_component_name);
 
     /* initialize */
-    memset(rmaps_ppr_global, 0, PRTE_HWLOC_HWTHREAD_LEVEL * sizeof(prte_hwloc_level_t));
+    memset(rmaps_ppr_global, 0, (PRTE_HWLOC_HWTHREAD_LEVEL+1) * sizeof(prte_hwloc_level_t));
 
     /* parse option */
     n = 0;
@@ -311,7 +311,7 @@ static int ppr_mapper(prte_job_t *jdata)
              * that many procs on this node
              */
             if (PRTE_HWLOC_NODE_LEVEL == start) {
-                if (rmaps_ppr_global[start] > node->slots_available) {
+                if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) && rmaps_ppr_global[start] > node->slots_available) {
                     /* not enough slots available for this request */
                     prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                                    rmaps_ppr_global[start], app->app);
@@ -334,7 +334,7 @@ static int ppr_mapper(prte_job_t *jdata)
                 nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, lowest, cache_level);
                 /* Map up to number of slots_available on node or number of specified resource on
                  * node whichever is less. */
-                if (node->slots_available < (int) nobjs) {
+                if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) && node->slots_available < (int) nobjs) {
                     num_available = node->slots_available;
                 } else {
                     num_available = nobjs;
