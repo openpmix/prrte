@@ -50,26 +50,19 @@ unsigned long int prte_ras_alps_res_id = 0UL;
 char *ras_alps_apstat_cmd = NULL;
 
 prte_ras_base_component_t prte_ras_alps_component = {
-    /* First, the pmix_mca_base_component_t struct containing meta information about
-     * the component itself
-     * */
-    .base_version = {
-        PRTE_RAS_BASE_VERSION_2_0_0,
+    PRTE_RAS_BASE_VERSION_2_0_0,
 
-        /* Component name and version */
-        .pmix_mca_component_name = "alps",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PMIX_RELEASE_VERSION),
+    /* Component name and version */
+    .pmix_mca_component_name = "alps",
+    PMIX_MCA_BASE_MAKE_VERSION(component,
+                               PRTE_MAJOR_VERSION,
+                               PRTE_MINOR_VERSION,
+                               PMIX_RELEASE_VERSION),
 
-        /* Component open and close functions */
-        .mca_open_component = ras_alps_open,
-        .pmix_mca_query_component = prte_ras_alps_component_query,
-        .mca_register_component_params = ras_alps_register,
-    },
-    .base_data = {
-        /* The component is checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-    },
+    /* Component open and close functions */
+    .pmix_mca_open_component = ras_alps_open,
+    .pmix_mca_query_component = prte_ras_alps_component_query,
+    .pmix_mca_register_component_params = ras_alps_register,
 };
 
 /* simple function used to strip off characters on and after a period. NULL
@@ -160,27 +153,21 @@ static int ras_alps_register(void)
     param_priority = 75;
     (void) pmix_mca_base_component_var_register(&prte_ras_alps_component.base_version, "priority",
                                                 "Priority of the alps ras component",
-                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &param_priority);
+                                                PMIX_MCA_BASE_VAR_TYPE_INT, &param_priority);
 
     ras_alps_read_attempts = 10;
     (void) pmix_mca_base_component_var_register(&prte_ras_alps_component.base_version,
                                                 "appinfo_read_attempts",
                                                 "Maximum number of attempts to read ALPS "
                                                 "appinfo file",
-                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                                 &ras_alps_read_attempts);
 
     ras_alps_apstat_cmd = "apstat"; /* by default apstat is in a user's path on a Cray XE/XC if
                                        alps is the site's job launcher  */
     (void) pmix_mca_base_component_var_register(&prte_ras_alps_component.base_version, "apstat_cmd",
                                                 "Location of the apstat command",
-                                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_6,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &ras_alps_apstat_cmd);
 
     return PRTE_SUCCESS;

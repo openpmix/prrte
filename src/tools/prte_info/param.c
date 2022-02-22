@@ -85,10 +85,10 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
     int i, j;
     bool want_all = false;
     prte_value_t *pval;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     prte_info_components_open();
-    opt = prte_cmd_line_get_param(&prte_info_cmd_line, "param");
+    opt = pmix_cmd_line_get_param(&prte_info_cmd_line, "param");
 
     if (want_all_in) {
         want_all = true;
@@ -163,14 +163,13 @@ static void prte_info_show_mca_group_params(const pmix_mca_base_var_group_t *gro
 
     for (i = 0; i < count; ++i) {
         ret = pmix_mca_base_var_get(variables[i], &var);
-        if (PRTE_SUCCESS != ret
-            || ((var->mbv_flags & PRTE_MCA_BASE_VAR_FLAG_INTERNAL) && !want_internal)) {
+        if (PRTE_SUCCESS != ret) {
             continue;
         }
 
         ret = pmix_mca_base_var_dump(variables[i], &strings,
-                                     !prte_info_pretty ? PRTE_MCA_BASE_VAR_DUMP_PARSABLE
-                                                       : PRTE_MCA_BASE_VAR_DUMP_READABLE);
+                                     !prte_info_pretty ? PMIX_MCA_BASE_VAR_DUMP_PARSABLE
+                                                       : PMIX_MCA_BASE_VAR_DUMP_READABLE);
         if (PRTE_SUCCESS != ret) {
             continue;
         }
@@ -232,10 +231,10 @@ void prte_info_do_path(bool want_all)
     int i, count;
     char *scope;
     prte_value_t *pval;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     /* Check bozo case */
-    opt = prte_cmd_line_get_param(&prte_info_cmd_line, "path");
+    opt = pmix_cmd_line_get_param(&prte_info_cmd_line, "path");
     if (NULL != opt) {
         for (i=0; NULL != opt->values[i]; i++) {
             scope = opt->values[i];

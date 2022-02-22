@@ -29,7 +29,7 @@
 #include "src/class/pmix_list.h"
 #include "src/class/pmix_pointer_array.h"
 #include "src/mca/mca.h"
-#include "src/util/cmd_line.h"
+#include "src/util/prte_cmd_line.h"
 #include "src/util/pmix_printf.h"
 
 BEGIN_C_DECLS

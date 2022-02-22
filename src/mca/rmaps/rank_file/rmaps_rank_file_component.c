@@ -47,22 +47,15 @@
 static int prte_rmaps_rank_file_query(pmix_mca_base_module_t **module, int *priority);
 
 prte_rmaps_rf_component_t prte_rmaps_rank_file_component = {
-    {
-        /* First, the pmix_mca_base_component_t struct containing meta
-           information about the component itself */
+    .super = {
+        PRTE_RMAPS_BASE_VERSION_2_0_0,
 
-        .base_version = {
-            PRTE_RMAPS_BASE_VERSION_2_0_0,
-
-            .pmix_mca_component_name = "rank_file",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-            .pmix_mca_query_component = prte_rmaps_rank_file_query,
-        },
-        .base_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        .pmix_mca_component_name = "rank_file",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
+        .pmix_mca_query_component = prte_rmaps_rank_file_query,
     }
 };
 

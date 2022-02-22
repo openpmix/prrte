@@ -69,8 +69,7 @@ static int mca_plm_base_register(pmix_mca_base_register_flag_t flags)
     (void) pmix_mca_base_framework_var_register(
         &prte_plm_base_framework, "node_regex_threshold",
         "Only pass the node regex on the orted command line if smaller than this threshold",
-        PRTE_MCA_BASE_VAR_TYPE_SIZE_T, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_globals.node_regex_threshold);
+        PMIX_MCA_BASE_VAR_TYPE_SIZE_T, &prte_plm_globals.node_regex_threshold);
 
     /* Note that we break abstraction rules here by listing a
      specific PLM here in the base.  This is necessary, however,
@@ -92,7 +91,7 @@ static int mca_plm_base_register(pmix_mca_base_register_flag_t flags)
 
      This is why we tolerate this abstraction break up here in the
      PLM component base. */
-    (void) pmix_mca_base_alias_register("prte", "plm", "ssh", "rsh", PRTE_MCA_BASE_ALIAS_FLAG_NONE);
+    (void) pmix_mca_base_alias_register("prte", "plm", "ssh", "rsh", PMIX_MCA_BASE_ALIAS_FLAG_NONE);
     return PRTE_SUCCESS;
 }
 

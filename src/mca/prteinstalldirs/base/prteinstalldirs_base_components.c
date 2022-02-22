@@ -144,5 +144,5 @@ static int prte_prteinstalldirs_base_close(void)
 PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, prteinstalldirs, NULL, NULL, prte_prteinstalldirs_base_open,
                                 prte_prteinstalldirs_base_close,
                                 prte_prteinstalldirs_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_NOREGISTER
-                                    | PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_NOREGISTER
+                                    | PMIX_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);

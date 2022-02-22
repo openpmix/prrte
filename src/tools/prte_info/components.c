@@ -35,7 +35,7 @@
 #include "src/class/pmix_pointer_array.h"
 
 #include "src/util/pmix_argv.h"
-#include "src/util/cmd_line.h"
+#include "src/util/prte_cmd_line.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
@@ -82,7 +82,7 @@ static int info_register_framework(pmix_mca_base_framework_t *framework,
     prte_info_component_map_t *map;
     int rc;
 
-    rc = pmix_mca_base_framework_register(framework, PRTE_MCA_BASE_REGISTER_ALL);
+    rc = pmix_mca_base_framework_register(framework, PMIX_MCA_BASE_REGISTER_ALL);
     if (PRTE_SUCCESS != rc && PRTE_ERR_BAD_PARAM != rc) {
         return rc;
     }

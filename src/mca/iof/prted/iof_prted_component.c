@@ -46,23 +46,17 @@ const char *prte_iof_prted_component_version_string
     = "PRTE prted iof MCA component version " PRTE_VERSION;
 
 prte_iof_prted_component_t prte_iof_prted_component = {
-    {
-        .iof_version = {
-            PRTE_IOF_BASE_VERSION_2_0_0,
+    .super = {
+        PRTE_IOF_BASE_VERSION_2_0_0,
 
-            .pmix_mca_component_name = "prted",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
+        .pmix_mca_component_name = "prted",
+        PMIX_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                    PMIX_RELEASE_VERSION),
 
-            /* Component open, close, and query functions */
-            .mca_open_component = prte_iof_prted_open,
-            .mca_close_component = prte_iof_prted_close,
-            .pmix_mca_query_component = prte_iof_prted_query,
-        },
-        .iof_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        /* Component open, close, and query functions */
+        .pmix_mca_open_component = prte_iof_prted_open,
+        .pmix_mca_close_component = prte_iof_prted_close,
+        .pmix_mca_query_component = prte_iof_prted_query,
     }
 };
 

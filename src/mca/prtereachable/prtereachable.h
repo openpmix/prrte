@@ -59,10 +59,10 @@ typedef int (*prte_reachable_base_module_fini_fn_t)(void);
 /* Build reachability matrix between local and remote ethernet
  * interfaces
  *
- * @param local_ifs (IN)     Local list of pmix_if_t objects
- *                           The pmix_if_t objects must be fully populated
- * @param remote_ifs (IN)    Remote list of pmix_if_t objects
- *                           The pmix_if_t objects must have the following fields populated:
+ * @param local_ifs (IN)     Local list of pmix_pif_t objects
+ *                           The pmix_pif_t objects must be fully populated
+ * @param remote_ifs (IN)    Remote list of pmix_pif_t objects
+ *                           The pmix_pif_t objects must have the following fields populated:
  *                              uint16_t                 af_family;
  *                              struct sockaddr_storage  if_addr;
  *                              uint32_t                 if_mask;

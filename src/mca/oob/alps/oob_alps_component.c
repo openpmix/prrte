@@ -94,14 +94,10 @@ PRTE_MODULE_EXPORT prte_oob_base_component_t prte_oob_alps_component = {
     .oob_base = {
         PRTE_OOB_BASE_VERSION_2_0_0,
         .pmix_mca_component_name = "alps",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+        PMIX_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                     PMIX_RELEASE_VERSION),
-        .mca_open_component = alps_component_open,
-        .mca_close_component = alps_component_close,
-    },
-    .oob_data = {
-        /* The component is checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        .pmix_mca_open_component = alps_component_open,
+        .pmix_mca_close_component = alps_component_close,
     },
     .priority = 30, // default priority of this transport
     .available = component_available,

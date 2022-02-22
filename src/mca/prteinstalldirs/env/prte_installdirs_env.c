@@ -30,7 +30,7 @@ prte_prteinstalldirs_base_component_t prte_prteinstalldirs_env_component = {
         PRTE_INSTALLDIRS_BASE_VERSION_2_0_0,
 
         /* Component name and version */
-        .pmix_pmix_mca_component_name = "env",
+        .pmix_mca_component_name = "env",
         PMIX_MCA_BASE_MAKE_VERSION(component,
                                    PRTE_MAJOR_VERSION,
                                    PRTE_MINOR_VERSION,

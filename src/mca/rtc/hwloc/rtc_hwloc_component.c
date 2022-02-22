@@ -34,19 +34,15 @@ static int my_priority;
 
 prte_rtc_hwloc_component_t prte_rtc_hwloc_component = {
     .super = {
-        .base_version = {
-            PRTE_RTC_BASE_VERSION_1_0_0,
+        PRTE_RTC_BASE_VERSION_1_0_0,
 
-            .pmix_mca_component_name = "hwloc",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-            .pmix_mca_query_component = rtc_hwloc_query,
-            .mca_register_component_params = rtc_hwloc_register,
-        },
-        .base_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        .pmix_mca_component_name = "hwloc",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
+        .pmix_mca_query_component = rtc_hwloc_query,
+        .pmix_mca_register_component_params = rtc_hwloc_register,
     },
     .kind = VM_HOLE_BIGGEST
 };
@@ -56,23 +52,20 @@ static char *vmhole;
 
 static int rtc_hwloc_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_rtc_hwloc_component.super.base_version;
+    pmix_mca_base_component_t *c = &prte_rtc_hwloc_component.super;
 
     /* set as the default */
     my_priority = 70;
     (void) pmix_mca_base_component_var_register(c, "priority",
                                                 "Priority of the HWLOC rtc component",
-                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
+                                                PMIX_MCA_BASE_VAR_TYPE_INT, &my_priority);
 
     prte_rtc_hwloc_component.kind = VM_HOLE_BIGGEST;
     vmhole = biggest;
     (void) pmix_mca_base_component_var_register(
         c, "vmhole",
         "Kind of VM hole to identify - none, begin, biggest, libs, heap, stack (default=biggest)",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &vmhole);
+        PMIX_MCA_BASE_VAR_TYPE_STRING, &vmhole);
     if (0 == strcasecmp(vmhole, "none")) {
         prte_rtc_hwloc_component.kind = VM_HOLE_NONE;
     } else if (0 == strcasecmp(vmhole, "begin")) {

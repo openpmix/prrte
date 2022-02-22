@@ -68,9 +68,7 @@ static int prte_iof_base_register(pmix_mca_base_register_flag_t flags)
     prte_iof_base_output_limit = (size_t) INT_MAX;
     (void) pmix_mca_base_var_register("prte", "iof", "base", "output_limit",
                                       "Maximum backlog of output messages [default: unlimited]",
-                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_iof_base_output_limit);
 
     return PRTE_SUCCESS;

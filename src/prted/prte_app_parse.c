@@ -41,13 +41,14 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/pmix_os_dirpath.h"
-#include "src/util/pmix_os_path.h"
-#include "src/util/output.h"
-#include "src/util/pmix_path.h"
-#include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
+#include "src/util/pmix_os_dirpath.h"
+#include "src/util/pmix_os_path.h"
+#include "src/util/pmix_path.h"
+#include "src/util/output.h"
+#include "src/util/proc_info.h"
+#include "src/util/prte_cmd_line.h"
 #include "src/util/show_help.h"
 
 #include "src/runtime/prte_globals.h"
@@ -87,7 +88,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     prte_pmix_app_t *app = NULL;
     bool found = false;
     char *appname = NULL;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
     prte_value_t *pvalue;
     pmix_cli_result_t results;
     char *tval;
@@ -97,7 +98,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     /* parse the cmd line - do this every time thru so we can
      * repopulate the globals */
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
-    rc = schizo->parse_cli(argv, &results, PRTE_CLI_SILENT);
+    rc = schizo->parse_cli(argv, &results, PMIX_CLI_SILENT);
     if (PRTE_SUCCESS != rc) {
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", argv[0], prte_strerror(rc));
@@ -130,7 +131,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     }
 
     /* Did the user specify a path to the executable? */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_PATH);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PATH);
     if (NULL != opt) {
         param = opt->values[0];
         /* if this is a relative path, convert it to an absolute path */
@@ -148,7 +149,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     }
 
     /* Did the user request a specific wdir? */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_WDIR);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_WDIR);
     if (NULL != opt) {
         param = opt->values[0];
         /* if this is a relative path, convert it to an absolute path */
@@ -158,21 +159,21 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
             /* construct the absolute path */
             app->app.cwd = pmix_os_path(false, cwd, param, NULL);
         }
-    } else if (prte_cmd_line_is_taken(&results, "set-cwd-to-session-dir")) {
+    } else if (pmix_cmd_line_is_taken(&results, "set-cwd-to-session-dir")) {
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
     } else {
         app->app.cwd = strdup(cwd);
     }
 
     /* if they specified a process set name, then pass it along */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_PSET);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PSET);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PSET_NAME,
                            opt->values[0], PMIX_STRING);
     }
 
     /* Did the user specify a hostfile? */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_HOSTFILE);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOSTFILE);
     if (NULL != opt) {
         tval = pmix_argv_join(opt->values, ',');
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE,
@@ -186,7 +187,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     }
 
     /* Did the user specify any hosts? */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_HOST);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOST);
     if (NULL != opt) {
         tval = pmix_argv_join(opt->values, ',');
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOST, tval, PMIX_STRING);
@@ -199,7 +200,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     }
 
     /* check for bozo error */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_NP);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_NP);
     if (NULL != opt) {
         count = strtol(opt->values[0], NULL, 10);
         if (0 > count) {
@@ -221,13 +222,13 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
      */
     appname = pmix_basename(app->app.cmd);
     if (0 == strcmp(appname, "java")) {
-        opt = prte_cmd_line_get_param(&results, PRTE_CLI_PRELOAD_BIN);
+        opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PRELOAD_BIN);
         if (NULL != opt) {
             PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
             PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_BIN, NULL, PMIX_BOOL);
         }
     }
-    opt = prte_cmd_line_get_param(&results, "preload-files");
+    opt = pmix_cmd_line_get_param(&results, "preload-files");
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_FILES, opt->values[0], PMIX_STRING);
     }

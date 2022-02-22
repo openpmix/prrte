@@ -58,15 +58,15 @@
 #include "schizo_hydra.h"
 #include "src/mca/schizo/base/base.h"
 
-static int define_cli(prte_cmd_line_t *cli);
-static int check_help(prte_cmd_line_t *cli, char **argv);
+static int define_cli(pmix_cmd_line_t *cli);
+static int check_help(pmix_cmd_line_t *cli, char **argv);
 static int parse_cli(int argc, int start, char **argv, char ***target);
-static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***argv);
-static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, bool cmdline);
+static int parse_deprecated_cli(pmix_cmd_line_t *cmdline, int *argc, char ***argv);
+static int parse_env(pmix_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, bool cmdline);
 static int detect_proxy(char *argv);
-static void allow_run_as_root(prte_cmd_line_t *cmd_line);
-static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
-static int check_sanity(prte_cmd_line_t *cmd_line);
+static void allow_run_as_root(pmix_cmd_line_t *cmd_line);
+static void job_info(pmix_cmd_line_t *cmdline, void *jobinfo);
+static int check_sanity(pmix_cmd_line_t *cmd_line);
 
 prte_schizo_base_module_t prte_schizo_hydra_module = {
     .name = "hydra",
@@ -81,7 +81,7 @@ prte_schizo_base_module_t prte_schizo_hydra_module = {
     .check_sanity = check_sanity
 };
 
-static prte_cmd_line_init_t hydra_cmd_line_init[] = {
+static pmix_cmd_line_init_t hydra_cmd_line_init[] = {
     /* basic options */
     {'h', "help", 0, PRTE_CMD_LINE_TYPE_BOOL, "This help message", PRTE_CMD_LINE_OTYPE_GENERAL},
     {'V', "version", 0, PRTE_CMD_LINE_TYPE_BOOL, "Print version and exit",
@@ -376,7 +376,7 @@ static prte_cmd_line_init_t hydra_cmd_line_init[] = {
     /* End of list */
     {'\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL}};
 
-static int define_cli(prte_cmd_line_t *cli)
+static int define_cli(pmix_cmd_line_t *cli)
 {
     int rc;
 
@@ -388,7 +388,7 @@ static int define_cli(prte_cmd_line_t *cli)
         return PRTE_ERR_BAD_PARAM;
     }
 
-    rc = prte_cmd_line_add(cli, hydra_cmd_line_init);
+    rc = pmix_cmd_line_add(cli, hydra_cmd_line_init);
     return rc;
 }
 
@@ -495,12 +495,12 @@ static char *genhelp =
     "    -gpus-per-proc                   number of GPUs per process (default: auto)\n"
 ;
 
-static int check_help(prte_cmd_line_t *cli, char **argv)
+static int check_help(pmix_cmd_line_t *cli, char **argv)
 {
     size_t n;
     char *option;
 
-    if (prte_cmd_line_is_taken(cli, "help")) {
+    if (pmix_cmd_line_is_taken(cli, "help")) {
         fprintf(stdout, "\nUsage: %s [global opts] [local opts for exec1] [exec1] [exec1 args] :"
                         "[local opts for exec2] [exec2] [exec2 args] : ...\n%s",
                 prte_tool_basename, genhelp);
@@ -641,7 +641,7 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     return rc;
 }
 
-static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***argv)
+static int parse_deprecated_cli(pmix_cmd_line_t *cmdline, int *argc, char ***argv)
 {
     pmix_status_t rc;
 
@@ -727,7 +727,7 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
     return PRTE_SUCCESS;
 }
 
-static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, bool cmdline)
+static int parse_env(pmix_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, bool cmdline)
 {
     char *p1, *p2;
     prte_value_t *pval;
@@ -743,13 +743,13 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
-    if (0 < (j = prte_cmd_line_get_ninsts(cmd_line, "genv"))) {
+    if (0 < (j = pmix_cmd_line_get_ninsts(cmd_line, "genv"))) {
         for (i = 0; i < j; ++i) {
             /* the first value on the list is the name of the param */
-            pval = prte_cmd_line_get_param(cmd_line, "genv", i, 0);
+            pval = pmix_cmd_line_get_param(cmd_line, "genv", i, 0);
             p1 = prte_schizo_base_strip_quotes(pval->value.data.string);
             /* next value on the list is the value */
-            pval = prte_cmd_line_get_param(cmd_line, "genv", i, 1);
+            pval = pmix_cmd_line_get_param(cmd_line, "genv", i, 1);
             p2 = prte_schizo_base_strip_quotes(pval->value.data.string);
             pmix_setenv(p1, p2, true, dstenv);
             free(p1);
@@ -795,17 +795,17 @@ static int detect_proxy(char *personalities)
     return 0;
 }
 
-static void allow_run_as_root(prte_cmd_line_t *cmd_line)
+static void allow_run_as_root(pmix_cmd_line_t *cmd_line)
 {
     /* hydra always allows run-as-root */
     return;
 }
 
-static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
+static void job_info(pmix_cmd_line_t *cmdline, void *jobinfo)
 {
 }
 
-static int check_sanity(prte_cmd_line_t *cmd_line)
+static int check_sanity(pmix_cmd_line_t *cmd_line)
 {
     prte_value_t *pval;
     char *mappers[] = {"slot", "hwthread", "core", "l1cache", "l2cache",  "l3cache", "l4cache", "l5cache", "package",
@@ -829,29 +829,29 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
 
     bool hwtcpus = false;
 
-    if (1 < prte_cmd_line_get_ninsts(cmd_line, "map-by")) {
+    if (1 < pmix_cmd_line_get_ninsts(cmd_line, "map-by")) {
         prte_show_help("help-schizo-base.txt", "multi-instances", true, "map-by");
         return PRTE_ERR_SILENT;
     }
-    if (1 < prte_cmd_line_get_ninsts(cmd_line, "rank-by")) {
+    if (1 < pmix_cmd_line_get_ninsts(cmd_line, "rank-by")) {
         prte_show_help("help-schizo-base.txt", "multi-instances", true, "rank-by");
         return PRTE_ERR_SILENT;
     }
-    if (1 < prte_cmd_line_get_ninsts(cmd_line, "bind-to")) {
+    if (1 < pmix_cmd_line_get_ninsts(cmd_line, "bind-to")) {
         prte_show_help("help-schizo-base.txt", "multi-instances", true, "bind-to");
         return PRTE_ERR_SILENT;
     }
-    if (1 < prte_cmd_line_get_ninsts(cmd_line, "output")) {
+    if (1 < pmix_cmd_line_get_ninsts(cmd_line, "output")) {
         prte_show_help("help-schizo-base.txt", "multi-instances", true, "output");
         return PRTE_ERR_SILENT;
     }
-    if (1 < prte_cmd_line_get_ninsts(cmd_line, "display")) {
+    if (1 < pmix_cmd_line_get_ninsts(cmd_line, "display")) {
         prte_show_help("help-schizo-base.txt", "multi-instances", true, "display");
         return PRTE_ERR_SILENT;
     }
 
     /* quick check that we have valid directives */
-    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "map-by", 0, 0))) {
+    if (NULL != (pval = pmix_cmd_line_get_param(cmd_line, "map-by", 0, 0))) {
         if (NULL != strcasestr(pval->value.data.string, "HWTCPUS")) {
             hwtcpus = true;
         }
@@ -860,13 +860,13 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
         }
     }
 
-    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "rank-by", 0, 0))) {
+    if (NULL != (pval = pmix_cmd_line_get_param(cmd_line, "rank-by", 0, 0))) {
         if (!prte_schizo_base_check_directives("rank-by", rankers, rkquals, pval->value.data.string)) {
             return PRTE_ERR_SILENT;
         }
     }
 
-    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "bind-to", 0, 0))) {
+    if (NULL != (pval = pmix_cmd_line_get_param(cmd_line, "bind-to", 0, 0))) {
         if (!prte_schizo_base_check_directives("bind-to", binders, bndquals, pval->value.data.string)) {
             return PRTE_ERR_SILENT;
         }
@@ -878,13 +878,13 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
         }
     }
 
-    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "output", 0, 0))) {
+    if (NULL != (pval = pmix_cmd_line_get_param(cmd_line, "output", 0, 0))) {
         if (!prte_schizo_base_check_directives("output", outputs, outquals, pval->value.data.string)) {
             return PRTE_ERR_SILENT;
         }
     }
 
-    if (NULL != (pval = prte_cmd_line_get_param(cmd_line, "display", 0, 0))) {
+    if (NULL != (pval = pmix_cmd_line_get_param(cmd_line, "display", 0, 0))) {
         if (!prte_schizo_base_check_directives("display", displays, NULL, pval->value.data.string)) {
             return PRTE_ERR_SILENT;
         }

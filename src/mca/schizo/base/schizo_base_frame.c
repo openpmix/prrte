@@ -19,6 +19,7 @@
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/prte_cmd_line.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -49,8 +50,7 @@ static int prte_schizo_base_register(pmix_mca_base_register_flag_t flags)
     /* test proxy launch */
     prte_schizo_base.test_proxy_launch = false;
     pmix_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch", "Test proxy launches",
-                               PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                &prte_schizo_base.test_proxy_launch);
     return PRTE_SUCCESS;
 }
@@ -276,7 +276,7 @@ static char *limits[] = {
     NULL
 };
 
-static int check_ndirs(prte_cli_item_t *opt)
+static int check_ndirs(pmix_cli_item_t *opt)
 {
     int n, count;
     char *param;
@@ -297,7 +297,7 @@ static int check_ndirs(prte_cli_item_t *opt)
 
 int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 {
-    prte_cli_item_t *opt, *newopt;
+    pmix_cli_item_t *opt, *newopt;
     int n, rc, count;
     const char *tgt, *param;
 
@@ -399,26 +399,26 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 
     bool hwtcpus = false;
 
-    if (1 < prte_cmd_line_get_ninsts(cmd_line, PRTE_CLI_MAPBY)) {
+    if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_MAPBY)) {
         prte_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_MAPBY);
         return PRTE_ERR_SILENT;
     }
-    if (1 < prte_cmd_line_get_ninsts(cmd_line, PRTE_CLI_RANKBY)) {
+    if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_RANKBY)) {
         prte_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_RANKBY);
         return PRTE_ERR_SILENT;
     }
-    if (1 < prte_cmd_line_get_ninsts(cmd_line, PRTE_CLI_BINDTO)) {
+    if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_BINDTO)) {
         prte_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_BINDTO);
         return PRTE_ERR_SILENT;
     }
 
     /* check for synonyms */
-    PMIX_LIST_FOREACH(opt, &cmd_line->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH(opt, &cmd_line->instances, pmix_cli_item_t) {
         if (NULL != (tgt = check_synonym(opt->key))) {
             if (NULL == opt->values) {
                 // the presence is adequate
-                if (NULL == prte_cmd_line_get_param(cmd_line, tgt)) {
-                    newopt = PMIX_NEW(prte_cli_item_t);
+                if (NULL == pmix_cmd_line_get_param(cmd_line, tgt)) {
+                    newopt = PMIX_NEW(pmix_cli_item_t);
                     newopt->key = strdup(tgt);
                     pmix_list_append(&cmd_line->instances, &newopt->super);
                 }
@@ -435,7 +435,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     }
 
     /* quick check that we have valid directives */
-    opt = prte_cmd_line_get_param(cmd_line, PRTE_CLI_MAPBY);
+    opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_MAPBY);
     if (NULL != opt) {
         if (NULL != strcasestr(opt->values[0], PRTE_CLI_HWTCPUS)) {
             hwtcpus = true;
@@ -445,14 +445,14 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         }
     }
 
-    opt = prte_cmd_line_get_param(cmd_line, PRTE_CLI_RANKBY);
+    opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_RANKBY);
     if (NULL != opt) {
         if (!prte_schizo_base_check_directives(PRTE_CLI_RANKBY, rankers, rkquals, opt->values[0])) {
             return PRTE_ERR_SILENT;
         }
     }
 
-    opt = prte_cmd_line_get_param(cmd_line, PRTE_CLI_BINDTO);
+    opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_BINDTO);
     if (NULL != opt) {
         if (!prte_schizo_base_check_directives(PRTE_CLI_BINDTO, binders, bndquals, opt->values[0])) {
             return PRTE_ERR_SILENT;
@@ -465,7 +465,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         }
     }
 
-    opt = prte_cmd_line_get_param(cmd_line, PRTE_CLI_OUTPUT);
+    opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_OUTPUT);
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n++) {
             if (!prte_schizo_base_check_directives(PRTE_CLI_OUTPUT, outputs, outquals, opt->values[n])) {
@@ -474,7 +474,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         }
     }
 
-    opt = prte_cmd_line_get_param(cmd_line, PRTE_CLI_DISPLAY);
+    opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_DISPLAY);
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n++) {
             if (!prte_schizo_base_check_directives(PRTE_CLI_DISPLAY, displays, NULL, opt->values[n])) {
@@ -484,7 +484,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     }
 
     // check too many directives
-    PMIX_LIST_FOREACH(opt, &cmd_line->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH(opt, &cmd_line->instances, pmix_cli_item_t) {
         rc = check_ndirs(opt);
         if (PRTE_SUCCESS != rc) {
             return rc;

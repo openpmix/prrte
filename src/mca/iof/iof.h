@@ -188,8 +188,7 @@ typedef struct prte_iof_base_module_2_0_0_t prte_iof_base_module_2_0_0_t;
 typedef prte_iof_base_module_2_0_0_t prte_iof_base_module_t;
 PRTE_EXPORT extern prte_iof_base_module_t prte_iof;
 
-typedef struct prte_iof_base_component_2_0_0_t prte_iof_base_component_2_0_0_t;
-typedef struct pmix_mca_base_component_t prte_iof_base_component_t;
+typedef pmix_mca_base_component_t prte_iof_base_component_t;
 
 END_C_DECLS
 

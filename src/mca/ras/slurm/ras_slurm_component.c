@@ -48,71 +48,56 @@ static int ras_slurm_close(void);
 static int prte_ras_slurm_component_query(pmix_mca_base_module_t **module, int *priority);
 
 prte_ras_slurm_component_t prte_ras_slurm_component = {
-    {
-        /* First, the pmix_mca_base_component_t struct containing meta
-           information about the component itself */
+    .super = {
+        PRTE_RAS_BASE_VERSION_2_0_0,
 
-        .base_version = {
-            PRTE_RAS_BASE_VERSION_2_0_0,
+        /* Component name and version */
+        .pmix_mca_component_name = "slurm",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
 
-            /* Component name and version */
-            .pmix_mca_component_name = "slurm",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-
-            /* Component open and close functions */
-            .mca_open_component = ras_slurm_open,
-            .mca_close_component = ras_slurm_close,
-            .pmix_mca_query_component = prte_ras_slurm_component_query,
-            .mca_register_component_params = ras_slurm_register
-        },
-        .base_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        /* Component open and close functions */
+        .pmix_mca_open_component = ras_slurm_open,
+        .pmix_mca_close_component = ras_slurm_close,
+        .pmix_mca_query_component = prte_ras_slurm_component_query,
+        .pmix_mca_register_component_params = ras_slurm_register
     }
 };
 
 static int ras_slurm_register(void)
 {
-    pmix_mca_base_component_t *component = &prte_ras_slurm_component.super.base_version;
+    pmix_mca_base_component_t *component = &prte_ras_slurm_component.super;
 
     prte_ras_slurm_component.timeout = 30;
     (void) pmix_mca_base_component_var_register(
         component, "dyn_allocate_timeout", "Number of seconds to wait for Slurm dynamic allocation",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ras_slurm_component.timeout);
+        PMIX_MCA_BASE_VAR_TYPE_INT, &prte_ras_slurm_component.timeout);
 
     prte_ras_slurm_component.dyn_alloc_enabled = false;
     (void) pmix_mca_base_component_var_register(component, "enable_dyn_alloc",
                                                 "Whether or not dynamic allocations are enabled",
-                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_ras_slurm_component.dyn_alloc_enabled);
 
     prte_ras_slurm_component.config_file = NULL;
     (void) pmix_mca_base_component_var_register(component, "config_file",
                                                 "Path to Slurm configuration file",
-                                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &prte_ras_slurm_component.config_file);
 
     prte_ras_slurm_component.rolling_alloc = false;
     (void) pmix_mca_base_component_var_register(component, "enable_rolling_alloc",
                                                 "Enable partial dynamic allocations",
-                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_ras_slurm_component.rolling_alloc);
 
     prte_ras_slurm_component.use_all = false;
     (void) pmix_mca_base_component_var_register(
         component, "use_entire_allocation",
         "Use entire allocation (not just job step nodes) for this application",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ras_slurm_component.use_all);
+        PMIX_MCA_BASE_VAR_TYPE_BOOL, &prte_ras_slurm_component.use_all);
 
     return PRTE_SUCCESS;
 }

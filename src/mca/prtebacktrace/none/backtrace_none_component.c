@@ -33,18 +33,10 @@ PRTE_EXPORT extern const prte_backtrace_base_component_2_0_0_t prte_backtrace_no
 END_C_DECLS
 
 const prte_backtrace_base_component_2_0_0_t prte_prtebacktrace_none_component = {
-    /* First, the mca_component_t struct containing meta information
-       about the component itself */
-    .backtracec_version = {
-        PRTE_BACKTRACE_BASE_VERSION_2_0_0,
+    PRTE_BACKTRACE_BASE_VERSION_2_0_0,
 
-        /* Component name and version */
-        .pmix_mca_component_name = "none",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PMIX_RELEASE_VERSION),
-    },
-    .backtracec_data = {
-        /* The component is checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-    },
+    /* Component name and version */
+    .pmix_mca_component_name = "none",
+    PMIX_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                PMIX_RELEASE_VERSION),
 };

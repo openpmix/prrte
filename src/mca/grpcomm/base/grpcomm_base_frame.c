@@ -69,8 +69,7 @@ static int base_register(pmix_mca_base_register_flag_t flags)
     prte_grpcomm_base.context_id = 1;
     pmix_mca_base_var_register("prte", "grpcomm", "base", "starting_context_id",
                                "Starting value for assigning context id\'s",
-                               PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
                                &prte_grpcomm_base.context_id);
 
     return PRTE_SUCCESS;

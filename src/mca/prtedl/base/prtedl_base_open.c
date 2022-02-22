@@ -51,4 +51,4 @@ int prte_dl_base_open(pmix_mca_base_open_flag_t flags)
 PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, prtedl, "Dynamic loader framework", NULL /* register */,
                                 prte_dl_base_open /* open */, NULL /* close */,
                                 prte_prtedl_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);

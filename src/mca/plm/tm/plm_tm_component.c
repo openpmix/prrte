@@ -61,34 +61,27 @@ static int prte_plm_tm_component_query(pmix_mca_base_module_t **module, int *pri
  */
 
 prte_plm_tm_component_t prte_plm_tm_component = {
-    {
-        /* First, the mca_component_t struct containing meta information
-           about the component itself */
+    .super = {
+        PRTE_PLM_BASE_VERSION_2_0_0,
 
-        .base_version = {
-            PRTE_PLM_BASE_VERSION_2_0_0,
+        /* Component name and version */
+        .pmix_mca_component_name = "tm",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
 
-            /* Component name and version */
-            .pmix_mca_component_name = "tm",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-
-            /* Component open and close functions */
-            .mca_open_component = plm_tm_open,
-            .mca_close_component = plm_tm_close,
-            .pmix_mca_query_component = prte_plm_tm_component_query,
-            .mca_register_component_params = plm_tm_register,
-        },
-        .base_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        /* Component open and close functions */
+        .pmix_mca_open_component = plm_tm_open,
+        .pmix_mca_close_component = plm_tm_close,
+        .pmix_mca_query_component = prte_plm_tm_component_query,
+        .pmix_mca_register_component_params = plm_tm_register,
     }
 };
 
 static int plm_tm_register(void)
 {
-    pmix_mca_base_component_t *comp = &prte_plm_tm_component.super.base_version;
+    pmix_mca_base_component_t *comp = &prte_plm_tm_component.super;
 
     prte_plm_tm_component.want_path_check = true;
     (void) pmix_mca_base_component_var_register(
@@ -96,8 +89,7 @@ static int plm_tm_register(void)
         "Whether the launching process should check for the plm_tm_orted executable in the PATH "
         "before launching (the TM API does not give an indication of failure; this is a "
         "somewhat-lame workaround; non-zero values enable this check)",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_plm_tm_component.want_path_check);
+        PMIX_MCA_BASE_VAR_TYPE_BOOL, &prte_plm_tm_component.want_path_check);
 
     return PRTE_SUCCESS;
 }

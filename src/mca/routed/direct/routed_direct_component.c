@@ -33,21 +33,14 @@ static int prte_routed_direct_component_query(pmix_mca_base_module_t **module, i
  * component definition
  */
 prte_routed_component_t prte_routed_direct_component = {
-      /* First, the pmix_mca_base_component_t struct containing meta
-         information about the component itself */
+    PRTE_ROUTED_BASE_VERSION_3_0_0,
 
-    .base_version = {
-        PRTE_ROUTED_BASE_VERSION_3_0_0,
-
-        .pmix_mca_component_name = "direct",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PMIX_RELEASE_VERSION),
-        .pmix_mca_query_component = prte_routed_direct_component_query
-    },
-    .base_data = {
-        /* This component can be checkpointed */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-    },
+    .pmix_mca_component_name = "direct",
+    PMIX_MCA_BASE_MAKE_VERSION(component,
+                               PRTE_MAJOR_VERSION,
+                               PRTE_MINOR_VERSION,
+                               PMIX_RELEASE_VERSION),
+    .pmix_mca_query_component = prte_routed_direct_component_query
 };
 
 static int prte_routed_direct_component_query(pmix_mca_base_module_t **module, int *priority)

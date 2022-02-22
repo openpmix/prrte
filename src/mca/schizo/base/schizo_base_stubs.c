@@ -24,6 +24,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/pmix_cmd_line.h"
 #include "src/util/show_help.h"
 
 prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath)
@@ -85,11 +86,11 @@ int prte_schizo_base_add_directive(pmix_cli_result_t *results,
                                    const char *deprecated, const char *target,
                                    char *directive, bool report)
 {
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
     char *ptr, *tmp;
 
     /* does the matching key already exist? */
-    opt = prte_cmd_line_get_param(results, target);
+    opt = pmix_cmd_line_get_param(results, target);
     if (NULL != opt) {
         // does it already have a value?
         if (NULL == opt->values) {
@@ -136,7 +137,7 @@ int prte_schizo_base_add_directive(pmix_cli_result_t *results,
         }
     } else {
         // add the new option
-        opt = PMIX_NEW(prte_cli_item_t);
+        opt = PMIX_NEW(pmix_cli_item_t);
         opt->key = strdup(target);
         pmix_argv_append_nosize(&opt->values, directive);
         pmix_list_append(&results->instances, &opt->super);
@@ -159,11 +160,11 @@ int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
                                    char *deprecated, char *target,
                                    char *qualifier, bool report)
 {
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
     char *ptr, *tmp;
 
     /* does the matching key already exist? */
-    opt = prte_cmd_line_get_param(results, target);
+    opt = pmix_cmd_line_get_param(results, target);
     if (NULL != opt) {
         // does it already have a value?
         if (NULL == opt->values) {
@@ -193,7 +194,7 @@ int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
         }
     } else {
         // add the new option
-        opt = PMIX_NEW(prte_cli_item_t);
+        opt = PMIX_NEW(pmix_cli_item_t);
         opt->key = strdup(target);
         pmix_asprintf(&tmp, ":%s", qualifier);
         pmix_argv_append_nosize(&opt->values, tmp);

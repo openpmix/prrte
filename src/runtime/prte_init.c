@@ -42,6 +42,7 @@
 #include "src/util/listener.h"
 #include "src/util/malloc.h"
 #include "src/util/name_fns.h"
+#include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
@@ -63,6 +64,7 @@
 #include "src/mca/odls/base/base.h"
 #include "src/mca/oob/base/base.h"
 #include "src/mca/plm/base/base.h"
+#include "src/mca/pinstalldirs/base/base.h"
 #include "src/mca/prtebacktrace/base/base.h"
 #include "src/mca/prteinstalldirs/base/base.h"
 #include "src/mca/ras/base/base.h"
@@ -112,6 +114,7 @@ int prte_init_util(prte_proc_type_t flags)
 {
     int ret;
     char *error = NULL;
+    char *tmp;
 
     if (util_initialized) {
         return PRTE_SUCCESS;
@@ -128,15 +131,34 @@ int prte_init_util(prte_proc_type_t flags)
     prte_output_init();
 
     /* initialize install dirs code */
-    if (PRTE_SUCCESS
-        != (ret = pmix_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
-                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
+    ret = pmix_mca_base_framework_open(&pmix_pinstalldirs_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PMIX_SUCCESS != ret) {
+        fprintf(stderr,
+                "pmix_pinstalldirs_base_open() failed -- process will likely abort (%s:%d, "
+                "returned %d instead of PMIX_SUCCESS)\n",
+                __FILE__, __LINE__, ret);
+        return ret;
+    }
+    if (PMIX_SUCCESS != (ret = pmix_pinstall_dirs_base_init(NULL, 0))) {
+        fprintf(stderr,
+                "pmix_pinstalldirs_base_init() failed -- process will likely abort (%s:%d, "
+                "returned %d instead of PMIX_SUCCESS)\n",
+                __FILE__, __LINE__, ret);
+        return ret;
+    }
+    ret = pmix_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PMIX_SUCCESS != ret) {
         fprintf(stderr,
                 "prte_prteinstalldirs_base_open() failed -- process will likely abort (%s:%d, "
                 "returned %d instead of PRTE_SUCCESS)\n",
                 __FILE__, __LINE__, ret);
         return ret;
     }
+    pmix_asprintf(&tmp, "%s/prte", prte_install_dirs.libdir);
+    setenv("PMIX_MCA_mca_base_component_path", tmp, true);
+    free(tmp);
 
     /* initialize the help system */
     prte_show_help_init();

@@ -93,39 +93,32 @@ static int prte_odls_base_register(pmix_mca_base_register_flag_t flags)
     (void) pmix_mca_base_var_register(
         "prte", "odls", "base", "sigkill_timeout",
         "Time to wait for a process to die after issuing a kill signal to it",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_odls_globals.timeout_before_sigkill);
+        PMIX_MCA_BASE_VAR_TYPE_INT, &prte_odls_globals.timeout_before_sigkill);
 
     prte_odls_globals.max_threads = 16;
     (void) pmix_mca_base_var_register("prte", "odls", "base", "max_threads",
                                       "Maximum number of threads to use for spawning local procs",
-                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_odls_globals.max_threads);
 
     prte_odls_globals.num_threads = -1;
     (void) pmix_mca_base_var_register("prte", "odls", "base", "num_threads",
                                       "Specific number of threads to use for spawning local procs",
-                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_odls_globals.num_threads);
 
     prte_odls_globals.cutoff = 32;
     (void) pmix_mca_base_var_register(
         "prte", "odls", "base", "cutoff",
         "Minimum number of local procs before using thread pool for spawn",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_odls_globals.cutoff);
+        PMIX_MCA_BASE_VAR_TYPE_INT, &prte_odls_globals.cutoff);
 
     prte_odls_globals.signal_direct_children_only = false;
     (void) pmix_mca_base_var_register(
         "prte", "odls", "base", "signal_direct_children_only",
         "Whether to restrict signals (e.g., SIGTERM) to direct children, or "
         "to apply them as well to any children spawned by those processes",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_odls_globals.signal_direct_children_only);
+        PMIX_MCA_BASE_VAR_TYPE_BOOL, &prte_odls_globals.signal_direct_children_only);
 
     return PRTE_SUCCESS;
 }

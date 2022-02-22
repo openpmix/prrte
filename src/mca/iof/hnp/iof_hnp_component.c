@@ -50,26 +50,19 @@ const char *prte_iof_hnp_component_version_string
     = "PRTE hnp iof MCA component version " PRTE_VERSION;
 
 prte_iof_hnp_component_t prte_iof_hnp_component = {
-    {
-        /* First, the pmix_mca_base_component_t struct containing meta
-         information about the component itself */
+    .super = {
+        PRTE_IOF_BASE_VERSION_2_0_0,
 
-        .iof_version = {
-            PRTE_IOF_BASE_VERSION_2_0_0,
+        .pmix_mca_component_name = "hnp",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
 
-            .pmix_mca_component_name = "hnp",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-
-            /* Component open, close, and query functions */
-            .mca_open_component = prte_iof_hnp_open,
-            .mca_close_component = prte_iof_hnp_close,
-            .pmix_mca_query_component = prte_iof_hnp_query,
-        },
-        .iof_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        /* Component open, close, and query functions */
+        .pmix_mca_open_component = prte_iof_hnp_open,
+        .pmix_mca_close_component = prte_iof_hnp_close,
+        .pmix_mca_query_component = prte_iof_hnp_query,
     }
 };
 

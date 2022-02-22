@@ -32,18 +32,14 @@ static int component_register(void);
  */
 prte_schizo_ompi_component_t prte_schizo_ompi_component = {
     .super = {
-        .base_version = {
-            PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0,
-            .pmix_mca_component_name = "ompi",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-            .pmix_mca_query_component = component_query,
-            .mca_register_component_params = component_register,
-        },
-        .base_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0,
+        .pmix_mca_component_name = "ompi",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
+        .pmix_mca_query_component = component_query,
+        .pmix_mca_register_component_params = component_register,
     },
     .priority = 50,
     .warn_deprecations = false
@@ -51,14 +47,12 @@ prte_schizo_ompi_component_t prte_schizo_ompi_component = {
 
 static int component_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_schizo_ompi_component.super.base_version;
+    pmix_mca_base_component_t *c = &prte_schizo_ompi_component.super;
 
     prte_schizo_ompi_component.warn_deprecations = false;
     (void) pmix_mca_base_component_var_register(c, "warn_deprecations",
                                                 "Issue warnings about deprecated command line options",
-                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_schizo_ompi_component.warn_deprecations);
 
     return PRTE_SUCCESS;

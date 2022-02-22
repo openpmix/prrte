@@ -60,25 +60,15 @@ static int component_query(pmix_mca_base_module_t **module, int *priority);
  * component definition
  */
 prte_rml_component_t prte_rml_oob_component = {
-      /* First, the pmix_mca_base_component_t struct containing meta
-         information about the component itself */
+    PRTE_RML_BASE_VERSION_3_0_0,
 
-    .base = {
-        PRTE_RML_BASE_VERSION_3_0_0,
+    .pmix_mca_component_name = "oob",
+    PMIX_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                PMIX_RELEASE_VERSION),
+    .pmix_mca_open_component = rml_oob_open,
+    .pmix_mca_close_component = rml_oob_close,
+    .pmix_mca_query_component = component_query,
 
-        .pmix_mca_component_name = "oob",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PMIX_RELEASE_VERSION),
-        .mca_open_component = rml_oob_open,
-        .mca_close_component = rml_oob_close,
-        .pmix_mca_query_component = component_query,
-
-    },
-    .data = {
-        /* The component is checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-    },
-    .priority = 5
 };
 
 /* Local variables */
@@ -128,13 +118,14 @@ static int oob_ping(const char *uri, const struct timeval *tv)
     return PRTE_ERR_UNREACH;
 }
 
-static prte_rml_base_module_t base_module = {.component = (struct prte_rml_component_t
-                                                               *) &prte_rml_oob_component,
-                                             .ping = oob_ping,
-                                             .send_buffer_nb = prte_rml_oob_send_buffer_nb,
-                                             .recv_buffer_nb = recv_buffer_nb,
-                                             .recv_cancel = recv_cancel,
-                                             .purge = NULL};
+static prte_rml_base_module_t base_module = {
+    .component = (struct prte_rml_component_t *) &prte_rml_oob_component,
+    .ping = oob_ping,
+    .send_buffer_nb = prte_rml_oob_send_buffer_nb,
+    .recv_buffer_nb = recv_buffer_nb,
+    .recv_cancel = recv_cancel,
+    .purge = NULL
+};
 
 static int rml_oob_open(void)
 {

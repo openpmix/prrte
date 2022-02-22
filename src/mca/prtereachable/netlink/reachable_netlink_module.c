@@ -31,7 +31,7 @@ enum connection_quality { CQ_NO_CONNECTION = 0, CQ_DIFFERENT_NETWORK = 50, CQ_SA
 /* Local variables */
 static int init_counter = 0;
 
-static int get_weights(pmix_if_t *local_if, pmix_if_t *remote_if);
+static int get_weights(pmix_pif_t *local_if, pmix_pif_t *remote_if);
 static int calculate_weight(int bandwidth_local, int bandwidth_remote, int connection_quality);
 
 static int netlink_init(void)
@@ -59,7 +59,7 @@ static prte_reachable_t *netlink_reachable(pmix_list_t *local_ifs, pmix_list_t *
 {
     prte_reachable_t *reachable_results = NULL;
     int i, j;
-    pmix_if_t *local_iter, *remote_iter;
+    pmix_pif_t *local_iter, *remote_iter;
 
     reachable_results = prte_reachable_allocate(local_ifs->pmix_list_length,
                                                 remote_ifs->pmix_list_length);
@@ -68,10 +68,10 @@ static prte_reachable_t *netlink_reachable(pmix_list_t *local_ifs, pmix_list_t *
     }
 
     i = 0;
-    PMIX_LIST_FOREACH(local_iter, local_ifs, pmix_if_t)
+    PMIX_LIST_FOREACH(local_iter, local_ifs, pmix_pif_t)
     {
         j = 0;
-        PMIX_LIST_FOREACH(remote_iter, remote_ifs, pmix_if_t)
+        PMIX_LIST_FOREACH(remote_iter, remote_ifs, pmix_pif_t)
         {
             reachable_results->weights[i][j] = get_weights(local_iter, remote_iter);
             j++;
@@ -82,7 +82,7 @@ static prte_reachable_t *netlink_reachable(pmix_list_t *local_ifs, pmix_list_t *
     return reachable_results;
 }
 
-static int get_weights(pmix_if_t *local_if, pmix_if_t *remote_if)
+static int get_weights(pmix_pif_t *local_if, pmix_pif_t *remote_if)
 {
     char str_local[128], str_remote[128], *conn_type;
     int outgoing_interface, ret, weight, has_gateway;

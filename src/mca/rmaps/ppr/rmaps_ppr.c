@@ -68,7 +68,7 @@ static int ppr_mapper(prte_job_t *jdata)
 {
     int rc = PRTE_SUCCESS, j, n;
     prte_proc_t *proc;
-    pmix_mca_base_component_t *c = &prte_rmaps_ppr_component.base_version;
+    pmix_mca_base_component_t *c = &prte_rmaps_ppr_component;
     prte_node_t *node;
     prte_app_context_t *app;
     pmix_rank_t total_procs, nprocs_mapped;
@@ -646,7 +646,7 @@ error:
 static int assign_locations(prte_job_t *jdata)
 {
     int i, j, m, n;
-    pmix_mca_base_component_t *c = &prte_rmaps_ppr_component.base_version;
+    pmix_mca_base_component_t *c = &prte_rmaps_ppr_component;
     prte_node_t *node;
     prte_proc_t *proc;
     prte_app_context_t *app;

@@ -83,8 +83,7 @@ static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
         "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, PE-LIST=a,b (comma-delimited "
         "ranges of cpus to use for this job), FILE=%s (path to file containing sequential "
         "or rankfile entries)",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_mapping_policy);
+        PMIX_MCA_BASE_VAR_TYPE_STRING, &rmaps_base_mapping_policy);
 
     /* define default ranking policy */
     rmaps_base_ranking_policy = NULL;
@@ -92,16 +91,13 @@ static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
         "prte", "rmaps", "default", "ranking_policy",
         "Default ranking Policy [slot (default:np<=2) | hwthread | core | l1cache "
         "| l2cache | l3cache | numa (default:np>2) | package | node], with modifier :SPAN or :FILL",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_ranking_policy);
+        PMIX_MCA_BASE_VAR_TYPE_STRING, &rmaps_base_ranking_policy);
 
     rmaps_base_inherit = false;
     (void) pmix_mca_base_var_register("prte", "rmaps", "default", "inherit",
                                       "Whether child jobs shall inherit mapping/ranking/binding "
                                       "directives from their parent by default",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_inherit);
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL, &rmaps_base_inherit);
 
     return PRTE_SUCCESS;
 }

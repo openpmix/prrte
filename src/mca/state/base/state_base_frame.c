@@ -53,8 +53,7 @@ static int prte_state_base_register(pmix_mca_base_register_flag_t flags)
     prte_state_base_run_fdcheck = false;
     pmix_mca_base_var_register("prte", "state", "base", "check_fds",
                                "Daemons should check fds for leaks after each job completes",
-                               PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                &prte_state_base_run_fdcheck);
 
     return PRTE_SUCCESS;

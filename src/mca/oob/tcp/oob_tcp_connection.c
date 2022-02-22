@@ -160,7 +160,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     prte_oob_tcp_peer_t *peer;
     prte_oob_tcp_addr_t *addr;
     bool connected = false;
-    pmix_if_t *intf;
+    pmix_pif_t *intf;
     char *host;
 
     remote_list = PMIX_NEW(pmix_list_t);
@@ -174,10 +174,10 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     PMIX_ACQUIRE_OBJECT(op);
     peer = op->peer;
 
-    /* Construct a list of remote pmix_if_t from peer */
+    /* Construct a list of remote pmix_pif_t from peer */
     PMIX_LIST_FOREACH(addr, &peer->addrs, prte_oob_tcp_addr_t)
     {
-        intf = PMIX_NEW(pmix_if_t);
+        intf = PMIX_NEW(pmix_pif_t);
         if (NULL == intf) {
             prte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -251,7 +251,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         for (i = 0; i < best_i; i++) {
             ptr = ptr->pmix_list_next;
         }
-        intf = (pmix_if_t *) ptr;
+        intf = (pmix_pif_t *) ptr;
         prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                             "%s prte_tcp_peer_try_connect: "
                             "attempting to connect to proc %s on %s:%d - %d retries",

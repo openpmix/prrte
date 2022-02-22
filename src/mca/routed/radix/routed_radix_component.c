@@ -31,35 +31,26 @@ static int prte_routed_radix_component_query(pmix_mca_base_module_t **module, in
  * component definition
  */
 prte_routed_radix_component_t prte_routed_radix_component = {
-    {
-        /* First, the pmix_mca_base_component_t struct containing meta
-        information about the component itself */
+    .super = {
+        PRTE_ROUTED_BASE_VERSION_3_0_0,
 
-        .base_version = {
-            PRTE_ROUTED_BASE_VERSION_3_0_0,
-
-            .pmix_mca_component_name = "radix",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-            .pmix_mca_query_component = prte_routed_radix_component_query,
-            .mca_register_component_params = prte_routed_radix_component_register,
-        },
-        .base_data = {
-            /* This component can be checkpointed */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        .pmix_mca_component_name = "radix",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
+        .pmix_mca_query_component = prte_routed_radix_component_query,
+        .pmix_mca_register_component_params = prte_routed_radix_component_register,
     }
 };
 
 static int prte_routed_radix_component_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_routed_radix_component.super.base_version;
+    pmix_mca_base_component_t *c = &prte_routed_radix_component.super;
 
     prte_routed_radix_component.radix = 64;
     (void) pmix_mca_base_component_var_register(c, NULL, "Radix to be used for routed radix tree",
-                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                                 &prte_routed_radix_component.radix);
 
     return PRTE_SUCCESS;

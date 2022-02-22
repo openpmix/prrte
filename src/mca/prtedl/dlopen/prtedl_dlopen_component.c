@@ -53,19 +53,14 @@ prte_prtedl_dlopen_component_t prte_prtedl_dlopen_component = {
 
             /* Component name and version */
             .pmix_mca_component_name = "dlopen",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+            PMIX_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                         PMIX_RELEASE_VERSION),
 
             /* Component functions */
-            .mca_register_component_params = dlopen_component_register,
-            .mca_open_component = dlopen_component_open,
-            .mca_close_component = dlopen_component_close,
+            .pmix_mca_register_component_params = dlopen_component_register,
+            .pmix_mca_open_component = dlopen_component_open,
+            .pmix_mca_close_component = dlopen_component_close,
             .pmix_mca_query_component = dlopen_component_query,
-        },
-
-        .base_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
         },
 
         /* The prtedl framework members */
@@ -81,8 +76,7 @@ static int dlopen_component_register(void)
     ret = pmix_mca_base_component_var_register(
         &prte_prtedl_dlopen_component.base.base_version, "filename_suffixes",
         "Comma-delimited list of filename suffixes that the PRTE dlopen component will try",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_5,
-        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_prtedl_dlopen_component.filename_suffixes_mca_storage);
+        PMIX_MCA_BASE_VAR_TYPE_STRING, &prte_prtedl_dlopen_component.filename_suffixes_mca_storage);
     if (ret < 0) {
         return ret;
     }

@@ -217,14 +217,8 @@ PRTE_EXPORT extern prte_routed_module_t prte_routed;
  * exist in any routed component.
  */
 
-struct prte_routed_component_3_0_0_t {
-    /* Base component description */
-    pmix_mca_base_component_t base_version;
-    /* priority */
-    int priority;
-};
 /** Convienence typedef */
-typedef struct prte_routed_component_3_0_0_t prte_routed_component_t;
+typedef pmix_mca_base_component_t prte_routed_component_t;
 
 /* ******************************************************************** */
 

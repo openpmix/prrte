@@ -100,7 +100,7 @@ void prte_info_do_version(bool want_all)
     char *arg1, *scope, **tmp;
     char *pos = NULL;
     int j;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     prte_info_components_open();
 
@@ -114,7 +114,7 @@ void prte_info_do_version(bool want_all)
                                              prte_info_type_all);
         }
     } else {
-        opt = prte_cmd_line_get_param(&prte_info_cmd_line, "show-version");
+        opt = pmix_cmd_line_get_param(&prte_info_cmd_line, "show-version");
         if (NULL != opt) {
             tmp = pmix_argv_split(opt->values[0], ':');
             arg1 = tmp[0];
@@ -250,18 +250,18 @@ static void show_mca_version(const pmix_mca_base_component_t *component, const c
         want_component = true;
     }
 
-    mca_version = make_version_str(scope, component->mca_major_version,
-                                   component->mca_minor_version, component->mca_release_version, "",
+    mca_version = make_version_str(scope, component->pmix_mca_major_version,
+                                   component->pmix_mca_minor_version, component->pmix_mca_release_version, "",
                                    "");
-    api_version = make_version_str(scope, component->mca_type_major_version,
-                                   component->mca_type_minor_version,
-                                   component->mca_type_release_version, "", "");
-    component_version = make_version_str(scope, component->mca_component_major_version,
-                                         component->mca_component_minor_version,
-                                         component->mca_component_release_version, "", "");
+    api_version = make_version_str(scope, component->pmix_mca_type_major_version,
+                                   component->pmix_mca_type_minor_version,
+                                   component->pmix_mca_type_release_version, "", "");
+    component_version = make_version_str(scope, component->pmix_mca_component_major_version,
+                                         component->pmix_mca_component_minor_version,
+                                         component->pmix_mca_component_release_version, "", "");
 
     if (prte_info_pretty) {
-        pmix_asprintf(&message, "MCA %s", component->mca_type_name);
+        pmix_asprintf(&message, "MCA %s", component->pmix_mca_type_name);
         printed = false;
         pmix_asprintf(&content, "%s (", component->pmix_mca_component_name);
 
@@ -307,7 +307,7 @@ static void show_mca_version(const pmix_mca_base_component_t *component, const c
         free(tmp);
 
     } else {
-        pmix_asprintf(&message, "mca:%s:%s:version", component->mca_type_name,
+        pmix_asprintf(&message, "mca:%s:%s:version", component->pmix_mca_type_name,
                       component->pmix_mca_component_name);
         if (want_mca) {
             pmix_asprintf(&tmp, "mca:%s", mca_version);

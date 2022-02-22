@@ -54,51 +54,39 @@ static int prte_ras_gridengine_component_query(pmix_mca_base_module_t **module, 
 static int prte_ras_gridengine_verbose;
 
 prte_ras_gridengine_component_t prte_ras_gridengine_component = {
-    {
-        /* First, the pmix_mca_base_component_t struct containing meta
-           information about the component itself */
-
-        .base_version = {
-            PRTE_RAS_BASE_VERSION_2_0_0,
-            .pmix_mca_component_name = "gridengine",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-            .mca_open_component = prte_ras_gridengine_open,
-            .mca_close_component = prte_ras_gridengine_close,
-            .pmix_mca_query_component = prte_ras_gridengine_component_query,
-            .mca_register_component_params = prte_ras_gridengine_register,
-        },
-        .base_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+    .super = {
+        PRTE_RAS_BASE_VERSION_2_0_0,
+        .pmix_mca_component_name = "gridengine",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
+        .pmix_mca_open_component = prte_ras_gridengine_open,
+        .pmix_mca_close_component = prte_ras_gridengine_close,
+        .pmix_mca_query_component = prte_ras_gridengine_component_query,
+        .pmix_mca_register_component_params = prte_ras_gridengine_register,
     }
 };
 
 static int prte_ras_gridengine_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_ras_gridengine_component.super.base_version;
+    pmix_mca_base_component_t *c = &prte_ras_gridengine_component.super;
 
     prte_ras_gridengine_component.priority = 100;
     (void) pmix_mca_base_component_var_register(c, "priority",
                                                 "Priority of the gridengine ras component",
-                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                                 &prte_ras_gridengine_component.priority);
 
     prte_ras_gridengine_verbose = 0;
     (void) pmix_mca_base_component_var_register(
         c, "verbose", "Enable verbose output for the gridengine ras component",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_ras_gridengine_verbose);
+        PMIX_MCA_BASE_VAR_TYPE_INT, &prte_ras_gridengine_verbose);
 
     prte_ras_gridengine_component.show_jobid = false;
     (void) pmix_mca_base_component_var_register(c, "show_jobid",
                                                 "Show the JOB_ID of the Grid Engine job",
-                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_ras_gridengine_component.show_jobid);
 
     return PRTE_SUCCESS;

@@ -33,26 +33,20 @@ static int bmg_register(void);
  * Struct of function pointers that need to be initialized
  */
 prte_grpcomm_base_component_t prte_grpcomm_bmg_component = {
-    .base_version = {
-        PRTE_GRPCOMM_BASE_VERSION_3_0_0,
+    PRTE_GRPCOMM_BASE_VERSION_3_0_0,
 
-        .pmix_mca_component_name = "bmg",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                PMIX_RELEASE_VERSION),
-        .mca_open_component = bmg_open,
-        .mca_close_component = bmg_close,
-        .pmix_mca_query_component = bmg_query,
-        .mca_register_component_params = bmg_register,
-    },
-    .base_data = {
-        /* The component is checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-    },
+    .pmix_mca_component_name = "bmg",
+    PMIX_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+            PMIX_RELEASE_VERSION),
+    .pmix_mca_open_component = bmg_open,
+    .pmix_mca_close_component = bmg_close,
+    .pmix_mca_query_component = bmg_query,
+    .pmix_mca_register_component_params = bmg_register,
 };
 
 static int bmg_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_grpcomm_bmg_component.base_version;
+    pmix_mca_base_component_t *c = &prte_grpcomm_bmg_component;
 
     /* make the priority adjustable so users can select
      * bmg for use by apps without affecting daemons
@@ -60,9 +54,7 @@ static int bmg_register(void)
     my_priority = 50;
     (void) pmix_mca_base_component_var_register(c, "priority",
                                                 "Priority of the grpcomm bmg component",
-                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &my_priority);
+                                                PMIX_MCA_BASE_VAR_TYPE_INT, &my_priority);
     return PRTE_SUCCESS;
 }
 

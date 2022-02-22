@@ -66,8 +66,7 @@ static int ras_register(pmix_mca_base_register_flag_t flags)
     prte_ras_base.multiplier = 1;
     pmix_mca_base_var_register("prte", "ras", "base", "multiplier",
                                "Simulate a larger cluster by launching N daemons/node",
-                               PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
                                &prte_ras_base.multiplier);
 #if SLURM_CRAY_ENV
     /*
@@ -90,8 +89,7 @@ static int ras_register(pmix_mca_base_register_flag_t flags)
 
     pmix_mca_base_var_register("prte", "ras", "base", "launch_orted_on_hn",
                                "Launch an prte daemon on the head node",
-                               PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                &prte_ras_base.launch_orted_on_hn);
     return PRTE_SUCCESS;
 }

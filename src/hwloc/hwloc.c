@@ -77,11 +77,9 @@ int prte_hwloc_base_register(void)
 
     /* debug output */
     ret = pmix_mca_base_var_register("prte", "hwloc", "base", "verbose", "Debug verbosity",
-                                     PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                     PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &verbosity);
+                                     PMIX_MCA_BASE_VAR_TYPE_INT, &verbosity);
     pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "verbose",
-                                       PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     if (0 < verbosity) {
         prte_hwloc_base_output = prte_output_open(NULL);
@@ -92,26 +90,17 @@ int prte_hwloc_base_register(void)
     prte_hwloc_default_use_hwthread_cpus = false;
     (void) pmix_mca_base_var_register("prte", "hwloc", "base", "use_hwthreads_as_cpus",
                                       "Use hardware threads as independent cpus",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL,
-                                      NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
-                                      PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_hwloc_default_use_hwthread_cpus);
 
     (void) pmix_mca_base_var_register("prte", "hwloc", "base", "bind_to_core",
                                       "Bind processes to cores",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL,
-                                      NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
-                                      PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &bind_to_core);
 
     (void) pmix_mca_base_var_register("prte", "hwloc", "base", "bind_to_socket",
                                       "Bind processes to sockets",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL,
-                                      NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
-                                      PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &bind_to_socket);
 
     /* hwloc_base_mbind_policy */
@@ -126,15 +115,13 @@ int prte_hwloc_base_register(void)
                                      "Note that operating system paging policies are unaffected by this setting. For "
                                      "example, if \"local_only\" is used and local NUMA domain memory is exhausted, a new "
                                      "memory allocation may cause paging.",
-                                     PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0,
-                                     PRTE_MCA_BASE_VAR_FLAG_DEPRECATED, PRTE_INFO_LVL_9,
-                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_map);
+                                     PMIX_MCA_BASE_VAR_TYPE_INT, &prte_hwloc_base_map);
     PMIX_RELEASE(new_enum);
     if (0 > ret) {
         return ret;
     }
     pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "mem_alloc_policy",
-                                       PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     /* hwloc_base_bind_failure_action */
     prte_hwloc_base_mbfa = PRTE_HWLOC_BASE_MBFA_WARN;
@@ -148,15 +135,13 @@ int prte_hwloc_base_register(void)
                                      "PRTE will warn the first time this happens, but allow the job to continue "
                                      "(possibly with degraded performance).  A value of \"error\" means that PRTE "
                                      "will abort the job if this happens.",
-                                     PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0,
-                                     PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_mbfa);
+                                     PMIX_MCA_BASE_VAR_TYPE_INT, &prte_hwloc_base_mbfa);
     PMIX_RELEASE(new_enum);
     if (0 > ret) {
         return ret;
     }
     pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "mem_bind_failure_action",
-                                       PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     /* NOTE: for future developers and readers of this code, the binding policies are strictly
      * limited to none, hwthread, core, l1cache, l2cache, l3cache, package, and numa
@@ -174,11 +159,9 @@ int prte_hwloc_base_register(void)
                                      "the default when np<=2, and \"numa\" is the default when np>2). Allowed "
                                      "colon-delimited qualifiers: "
                                      "overload-allowed, if-supported",
-                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                     PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_binding_policy);
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING, &prte_hwloc_base_binding_policy);
     pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "binding_policy",
-                                       PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
     if (NULL == prte_hwloc_base_binding_policy) {
         if (bind_to_core) {
             prte_hwloc_base_binding_policy = "core";
@@ -214,14 +197,13 @@ int prte_hwloc_base_register(void)
                                      "Comma-separated list of ranges specifying logical cpus to be used by the DVM. "
                                      "Supported modifier:HWTCPUS (ranges specified in hwthreads) or CORECPUS "
                                      "(default: ranges specified in cores)",
-                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &default_cpu_list);
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING, &default_cpu_list);
     pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "cpu_list",
-                                       PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
     pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "slot_list",
-                                       PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
     pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "cpu_set",
-                                       PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     if (NULL != default_cpu_list) {
         if (NULL != (ptr = strrchr(default_cpu_list, ':'))) {
@@ -245,13 +227,11 @@ int prte_hwloc_base_register(void)
     prte_hwloc_base_topo_file = NULL;
     ret = pmix_mca_base_var_register("prte", "hwloc", "use", "topo_file",
                                      "Read local topology from file instead of directly sensing it",
-                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                     PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_topo_file);
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING, &prte_hwloc_base_topo_file);
     (void) pmix_mca_base_var_register_synonym(ret, "prte", "ras", "simulator", "topo_files",
-                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
     (void) pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "topo_file",
-                                              PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     /* register parameters */
     return PRTE_SUCCESS;

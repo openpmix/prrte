@@ -82,7 +82,7 @@ typedef struct prte_ess_base_module_3_0_0_t prte_ess_base_module_t;
 /*
  * the standard component data structure
  */
-typedef struct pmix_mca_base_component_t prte_ess_base_component_t;
+typedef pmix_mca_base_component_t prte_ess_base_component_t;
 
 /*
  * Macro for use in components that are of type ess

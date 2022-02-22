@@ -53,21 +53,16 @@ prte_reachable_base_component_t prte_prtereachable_netlink_component = {
         /* Component name and version */
 
         .pmix_mca_component_name = "netlink",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+        PMIX_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                     PMIX_RELEASE_VERSION),
 
         /* Component open and close functions */
 
-        .mca_open_component = reachable_netlink_open,
-        .mca_close_component = reachable_netlink_close,
+        .pmix_mca_open_component = reachable_netlink_open,
+        .pmix_mca_close_component = reachable_netlink_close,
         .pmix_mca_query_component = reachable_netlink_component_query,
-        .mca_register_component_params = component_register,
+        .pmix_mca_register_component_params = component_register,
     },
-    /* Next the MCA v1.0.0 component meta data */
-    .base_data = {
-        /* The component is checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-    }
 };
 
 static int reachable_netlink_open(void)

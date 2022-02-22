@@ -54,19 +54,14 @@ prte_prtedl_libltdl_component_t prte_prtedl_libltdl_component = {
 
             /* Component name and version */
             .pmix_mca_component_name = "libltdl",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+            PMIX_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                         PMIX_RELEASE_VERSION),
 
             /* Component functions */
-            .mca_register_component_params = libltdl_component_register,
-            .mca_open_component = libltdl_component_open,
-            .mca_close_component = libltdl_component_close,
+            .pmix_mca_register_component_params = libltdl_component_register,
+            .pmix_mca_open_component = libltdl_component_open,
+            .pmix_mca_close_component = libltdl_component_close,
             .pmix_mca_query_component = libltdl_component_query,
-        },
-
-        .base_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
         },
 
         /* The prtedl framework members */
@@ -85,9 +80,7 @@ static int libltdl_component_register(void)
                                          "have_lt_dladvise",
                                          "Whether the version of libltdl that this component is "
                                          "built against supports lt_dladvise functionality or not",
-                                         PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                         PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY, PRTE_INFO_LVL_7,
-                                         PRTE_MCA_BASE_VAR_SCOPE_CONSTANT, &supported);
+                                         PMIX_MCA_BASE_VAR_TYPE_BOOL, &supported);
 
     return PRTE_SUCCESS;
 }
