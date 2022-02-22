@@ -1256,7 +1256,7 @@ static int parse_env(char **srcenv, char ***dstenv,
             p3 = strchr(opt->values[i], '=');
             *p3 = '\0';
             ++p3;
-            p1 = opt->values[0];
+            p1 = opt->values[i];
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
                 prte_argv_append_nosize(&envlist, p3);
@@ -1278,7 +1278,7 @@ static int parse_env(char **srcenv, char ***dstenv,
             p3 = strchr(opt->values[i], '=');
             *p3 = '\0';
             ++p3;
-            p1 = opt->values[0];
+            p1 = opt->values[i];
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
                 prte_argv_append_nosize(&envlist, p3);
@@ -1300,7 +1300,7 @@ static int parse_env(char **srcenv, char ***dstenv,
             p3 = strchr(opt->values[i], '=');
             *p3 = '\0';
             ++p3;
-            p1 = opt->values[0];
+            p1 = opt->values[i];
             /* check if this is one of ours */
             if (check_generic(p1)) {
                 /* treat mca_base_env_list as a special case */
@@ -1326,7 +1326,7 @@ static int parse_env(char **srcenv, char ***dstenv,
             p3 = strchr(opt->values[i], '=');
             *p3 = '\0';
             ++p3;
-            p1 = opt->values[0];
+            p1 = opt->values[i];
             /* check if this is one of ours */
             if (check_generic(p1)) {
                 /* treat mca_base_env_list as a special case */
