@@ -42,7 +42,7 @@ static void send_self_exe(int fd, short args, void *data)
 {
     prte_self_send_xfer_t *xfer = (prte_self_send_xfer_t *) data;
 
-    PRTE_ACQUIRE_OBJECT(xfer);
+    PMIX_ACQUIRE_OBJECT(xfer);
 
     PRTE_OUTPUT_VERBOSE((1, prte_rml_base_framework.framework_output,
                          "%s rml_send_to_self callback executing for tag %d",
@@ -57,7 +57,7 @@ static void send_self_exe(int fd, short args, void *data)
     }
 
     /* cleanup the memory */
-    PRTE_RELEASE(xfer);
+    PMIX_RELEASE(xfer);
 }
 
 int prte_rml_oob_send_buffer_nb(pmix_proc_t *peer, pmix_data_buffer_t *buffer, prte_rml_tag_t tag,
@@ -107,11 +107,11 @@ int prte_rml_oob_send_buffer_nb(pmix_proc_t *peer, pmix_data_buffer_t *buffer, p
          */
 
         /* setup the send callback */
-        xfer = PRTE_NEW(prte_self_send_xfer_t);
+        xfer = PMIX_NEW(prte_self_send_xfer_t);
         rc = PMIx_Data_copy_payload(&xfer->dbuf, buffer);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PRTE_RELEASE(xfer);
+            PMIX_RELEASE(xfer);
             return prte_pmix_convert_status(rc);
         }
         xfer->cbfunc = cbfunc;
@@ -121,13 +121,13 @@ int prte_rml_oob_send_buffer_nb(pmix_proc_t *peer, pmix_data_buffer_t *buffer, p
         PRTE_THREADSHIFT(xfer, prte_event_base, send_self_exe, PRTE_MSG_PRI);
 
         /* copy the message for the recv */
-        rcv = PRTE_NEW(prte_rml_recv_t);
+        rcv = PMIX_NEW(prte_rml_recv_t);
         rcv->sender = *peer;
         rcv->tag = tag;
         rc = PMIx_Data_copy_payload(&rcv->dbuf, buffer);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PRTE_RELEASE(rcv);
+            PMIX_RELEASE(rcv);
             return prte_pmix_convert_status(rc);
         }
         /* post the message for receipt - since the send callback was posted
@@ -137,14 +137,14 @@ int prte_rml_oob_send_buffer_nb(pmix_proc_t *peer, pmix_data_buffer_t *buffer, p
         return PRTE_SUCCESS;
     }
 
-    snd = PRTE_NEW(prte_rml_send_t);
+    snd = PMIX_NEW(prte_rml_send_t);
     snd->dst = *peer;
     snd->origin = *PRTE_PROC_MY_NAME;
     snd->tag = tag;
     rc = PMIx_Data_copy_payload(&snd->dbuf, buffer);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(snd);
+        PMIX_RELEASE(snd);
         return prte_pmix_convert_status(rc);
     }
     snd->cbfunc = cbfunc;

@@ -40,7 +40,7 @@ int prte_util_keyval_parse_lineno = 0;
 
 static char *key_buffer = NULL;
 static size_t key_buffer_len = 0;
-static prte_mutex_t keyval_mutex;
+static pmix_mutex_t keyval_mutex;
 
 static int parse_line(const char *filename, prte_keyval_parse_fn_t callback);
 static int parse_line_new(const char *filename, prte_keyval_parse_state_t first_val,
@@ -56,12 +56,12 @@ void prte_util_keyval_parse_finalize(void)
     key_buffer = NULL;
     key_buffer_len = 0;
 
-    PRTE_DESTRUCT(&keyval_mutex);
+    PMIX_DESTRUCT(&keyval_mutex);
 }
 
 int prte_util_keyval_parse_init(void)
 {
-    PRTE_CONSTRUCT(&keyval_mutex, prte_mutex_t);
+    PMIX_CONSTRUCT(&keyval_mutex, pmix_mutex_t);
 
     return PRTE_SUCCESS;
 }
@@ -72,7 +72,7 @@ int prte_util_keyval_parse(const char *filename, prte_keyval_parse_fn_t callback
     int ret = PRTE_SUCCESS;
     ;
 
-    prte_mutex_lock(&keyval_mutex);
+    pmix_mutex_lock(&keyval_mutex);
 
     /* Open the prte */
     prte_util_keyval_yyin = fopen(filename, "r");
@@ -116,7 +116,7 @@ int prte_util_keyval_parse(const char *filename, prte_keyval_parse_fn_t callback
     prte_util_keyval_yylex_destroy();
 
 cleanup:
-    prte_mutex_unlock(&keyval_mutex);
+    pmix_mutex_unlock(&keyval_mutex);
     return ret;
 }
 

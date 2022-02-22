@@ -31,8 +31,8 @@
 
 #include "constants.h"
 #include "ras_alps.h"
-#include "src/mca/base/base.h"
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_base.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 
@@ -45,25 +45,25 @@ static int ras_alps_read_attempts;
 /* Local functions */
 static int ras_alps_register(void);
 static int ras_alps_open(void);
-static int prte_ras_alps_component_query(prte_mca_base_module_t **module, int *priority);
+static int prte_ras_alps_component_query(pmix_mca_base_module_t **module, int *priority);
 unsigned long int prte_ras_alps_res_id = 0UL;
 char *ras_alps_apstat_cmd = NULL;
 
 prte_ras_base_component_t prte_ras_alps_component = {
-    /* First, the prte_mca_base_component_t struct containing meta information about
+    /* First, the pmix_mca_base_component_t struct containing meta information about
      * the component itself
      * */
     .base_version = {
         PRTE_RAS_BASE_VERSION_2_0_0,
 
         /* Component name and version */
-        .mca_component_name = "alps",
+        .pmix_mca_component_name = "alps",
         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PRTE_RELEASE_VERSION),
+                                    PMIX_RELEASE_VERSION),
 
         /* Component open and close functions */
         .mca_open_component = ras_alps_open,
-        .mca_query_component = prte_ras_alps_component_query,
+        .pmix_mca_query_component = prte_ras_alps_component_query,
         .mca_register_component_params = ras_alps_register,
     },
     .base_data = {
@@ -158,14 +158,14 @@ static unsigned long int get_res_id(void)
 static int ras_alps_register(void)
 {
     param_priority = 75;
-    (void) prte_mca_base_component_var_register(&prte_ras_alps_component.base_version, "priority",
+    (void) pmix_mca_base_component_var_register(&prte_ras_alps_component.base_version, "priority",
                                                 "Priority of the alps ras component",
                                                 PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
                                                 PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY, &param_priority);
 
     ras_alps_read_attempts = 10;
-    (void) prte_mca_base_component_var_register(&prte_ras_alps_component.base_version,
+    (void) pmix_mca_base_component_var_register(&prte_ras_alps_component.base_version,
                                                 "appinfo_read_attempts",
                                                 "Maximum number of attempts to read ALPS "
                                                 "appinfo file",
@@ -176,7 +176,7 @@ static int ras_alps_register(void)
 
     ras_alps_apstat_cmd = "apstat"; /* by default apstat is in a user's path on a Cray XE/XC if
                                        alps is the site's job launcher  */
-    (void) prte_mca_base_component_var_register(&prte_ras_alps_component.base_version, "apstat_cmd",
+    (void) pmix_mca_base_component_var_register(&prte_ras_alps_component.base_version, "apstat_cmd",
                                                 "Location of the apstat command",
                                                 PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                                 PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_6,
@@ -191,7 +191,7 @@ static int ras_alps_open(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_ras_alps_component_query(prte_mca_base_module_t **module, int *priority)
+static int prte_ras_alps_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     char *jid_str = NULL;
     /* default to an invalid value */
@@ -217,7 +217,7 @@ static int prte_ras_alps_component_query(prte_mca_base_module_t **module, int *p
         *priority = param_priority;
         prte_output_verbose(2, prte_ras_base_framework.framework_output,
                             "ras:alps: available for selection");
-        *module = (prte_mca_base_module_t *) &prte_ras_alps_module;
+        *module = (pmix_mca_base_module_t *) &prte_ras_alps_module;
         return PRTE_SUCCESS;
     }
 

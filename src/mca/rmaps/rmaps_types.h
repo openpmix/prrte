@@ -13,7 +13,7 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,7 +29,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
 
 #include "src/runtime/prte_globals.h"
@@ -50,7 +50,7 @@ typedef uint16_t prte_ranking_policy_t;
  * allocated set of resources.
  */
 struct prte_job_map_t {
-    prte_object_t super;
+    pmix_object_t super;
     /* user-specified mapping params */
     char *req_mapper;  /* requested mapper */
     char *last_mapper; /* last mapper used */
@@ -69,15 +69,15 @@ struct prte_job_map_t {
     /* number of nodes participating in this job */
     int32_t num_nodes;
     /* array of pointers to nodes in this map for this job */
-    prte_pointer_array_t *nodes;
+    pmix_pointer_array_t *nodes;
 };
 typedef struct prte_job_map_t prte_job_map_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_job_map_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_job_map_t);
 
 /**
  * Macro for use in components that are of type rmaps
  */
-#define PRTE_RMAPS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("rmaps", 2, 0, 0)
+#define PRTE_RMAPS_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("rmaps", 2, 0, 0)
 
 /* define map-related directives */
 #define PRTE_MAPPING_NO_USE_LOCAL     0x0100

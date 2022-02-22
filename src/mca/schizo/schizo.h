@@ -27,8 +27,8 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prte_list.h"
-#include "src/util/cmd_line.h"
+#include "src/class/pmix_list.h"
+#include "src/util/prte_cmd_line.h"
 
 #include "src/mca/mca.h"
 
@@ -61,7 +61,7 @@ typedef int (*prte_schizo_base_module_init_fn_t)(void);
 
 /* parse a tool command line */
 typedef int (*prte_schizo_base_module_parse_cli_fn_t)(char **argv,
-                                                      prte_cli_result_t *results,
+                                                      pmix_cli_result_t *results,
                                                       bool silent);
 
 /* detect if we are running as a proxy
@@ -79,10 +79,10 @@ typedef int (*prte_schizo_base_detect_proxy_fn_t)(char *cmdpath);
  * forward to the app's environment upon execution */
 typedef int (*prte_schizo_base_module_parse_env_fn_t)(char **srcenv,
                                                       char ***dstenv,
-                                                      prte_cli_result_t *cli);
+                                                      pmix_cli_result_t *cli);
 
 /* check if running as root is allowed in this environment */
-typedef void (*prte_schizo_base_module_allow_run_as_root_fn_t)(prte_cli_result_t *results);
+typedef void (*prte_schizo_base_module_allow_run_as_root_fn_t)(pmix_cli_result_t *results);
 
 /* Set the default mapping policy for a job */
 typedef int (*prte_schizo_base_module_set_default_mapping_fn_t)(prte_job_t *jdata,
@@ -111,7 +111,7 @@ typedef int (*prte_schizo_base_module_setup_fork_fn_t)(prte_job_t *jdata,
 typedef void (*prte_schizo_base_module_finalize_fn_t)(void);
 
 /* give the components a chance to add job info */
-typedef void (*prte_schizo_base_module_job_info_fn_t)(prte_cli_result_t *results,
+typedef void (*prte_schizo_base_module_job_info_fn_t)(pmix_cli_result_t *results,
                                                       void *jobinfo);
 
 /*
@@ -140,17 +140,12 @@ typedef struct {
 /**
  * schizo component version 1.3.0
  */
-typedef struct {
-    /** Base MCA structure */
-    prte_mca_base_component_t base_version;
-    /** Base MCA data */
-    prte_mca_base_component_data_t base_data;
-} prte_schizo_base_component_t;
+typedef pmix_mca_base_component_t prte_schizo_base_component_t;
 
 /**
  * Macro for use in components that are of type schizo
  */
-#define PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_2_1_0("schizo", 1, 0, 0)
+#define PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0 PMIX_MCA_BASE_VERSION_1_0_0("schizo", 1, 0, 0)
 
 END_C_DECLS
 

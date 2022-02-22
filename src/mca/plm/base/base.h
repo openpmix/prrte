@@ -30,8 +30,8 @@
  */
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
-#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/class/pmix_list.h"
+#include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_printf.h"
 
@@ -42,7 +42,7 @@ BEGIN_C_DECLS
 /*
  * MCA framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_plm_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_plm_base_framework;
 /*
  * Select an available component.
  */

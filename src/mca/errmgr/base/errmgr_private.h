@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,7 +50,7 @@ BEGIN_C_DECLS
 
 /* define a struct to hold framework-global values */
 typedef struct {
-    prte_list_t error_cbacks;
+    pmix_list_t error_cbacks;
 } prte_errmgr_base_t;
 
 PRTE_EXPORT extern prte_errmgr_base_t prte_errmgr_base;

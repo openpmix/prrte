@@ -8,7 +8,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +40,7 @@ const char *prte_prteeachable_weighted_component_version_string
  */
 static int reachable_weighted_open(void);
 static int reachable_weighted_close(void);
-static int reachable_weighted_component_query(prte_mca_base_module_t **module, int *priority);
+static int reachable_weighted_component_query(pmix_mca_base_module_t **module, int *priority);
 static int component_register(void);
 
 /*
@@ -62,15 +62,15 @@ prte_prtereachable_weighted_component_t prte_prtereachable_weighted_component = 
 
             /* Component name and version */
 
-            .mca_component_name = "weighted",
+            .pmix_mca_component_name = "weighted",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
 
             /* Component open and close functions */
 
             .mca_open_component = reachable_weighted_open,
             .mca_close_component = reachable_weighted_close,
-            .mca_query_component = reachable_weighted_component_query,
+            .pmix_mca_query_component = reachable_weighted_component_query,
             .mca_register_component_params = component_register,
         },
         /* Next the MCA v1.0.0 component meta data */
@@ -98,9 +98,9 @@ static int component_register(void)
     return PRTE_SUCCESS;
 }
 
-static int reachable_weighted_component_query(prte_mca_base_module_t **module, int *priority)
+static int reachable_weighted_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     *priority = 1;
-    *module = (prte_mca_base_module_t *) &prte_prtereachable_weighted_module;
+    *module = (pmix_mca_base_module_t *) &prte_prtereachable_weighted_module;
     return PRTE_SUCCESS;
 }

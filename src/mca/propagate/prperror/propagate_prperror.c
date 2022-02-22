@@ -4,7 +4,7 @@
  *                         reserved.
  *
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,7 +61,7 @@
 
 #include "propagate_prperror.h"
 
-prte_list_t prte_error_procs = {{0}};
+pmix_list_t prte_error_procs = {{0}};
 
 static int prte_propagate_error_cb_type = -1;
 
@@ -87,8 +87,8 @@ static void flush_error_list(size_t evhdlr_registration_id, pmix_status_t status
 {
     PRTE_OUTPUT_VERBOSE(
         (2, prte_propagate_base_framework.framework_output, "Flush error process list"));
-    PRTE_DESTRUCT(&prte_error_procs);
-    PRTE_CONSTRUCT(&prte_error_procs, prte_list_t);
+    PMIX_DESTRUCT(&prte_error_procs);
+    PMIX_CONSTRUCT(&prte_error_procs, pmix_list_t);
     if (NULL != cbfunc) {
         cbfunc(PRTE_SUCCESS, NULL, 0, NULL, NULL, cbdata);
     }
@@ -99,7 +99,7 @@ static void flush_error_list(size_t evhdlr_registration_id, pmix_status_t status
  */
 static int init(void)
 {
-    PRTE_CONSTRUCT(&prte_error_procs, prte_list_t);
+    PMIX_CONSTRUCT(&prte_error_procs, pmix_list_t);
     pmix_status_t pcode1 = PMIX_EVENT_JOB_END;
     PMIx_Register_event_handler(&pcode1, 1, NULL, 0, flush_error_list, NULL, NULL);
     return PRTE_SUCCESS;
@@ -132,7 +132,7 @@ static int finalize(void)
      * illegal access */
     /* ret = prte_grpcomm.unregister_cb(prte_propagate_error_cb_type); */
     prte_propagate_error_cb_type = -1;
-    PRTE_DESTRUCT(&prte_error_procs);
+    PMIX_DESTRUCT(&prte_error_procs);
     return ret;
 }
 
@@ -151,9 +151,9 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
 
     /* namelist for tracking error procs */
     prte_namelist_t *nmcheck, *nm;
-    nmcheck = PRTE_NEW(prte_namelist_t);
+    nmcheck = PMIX_NEW(prte_namelist_t);
 
-    PRTE_LIST_FOREACH(nmcheck, &prte_error_procs, prte_namelist_t)
+    PMIX_LIST_FOREACH(nmcheck, &prte_error_procs, prte_namelist_t)
     {
         if (PMIX_CHECK_PROCID(&nmcheck->name, errorproc)) {
             PRTE_OUTPUT_VERBOSE(
@@ -164,9 +164,9 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
         }
     }
 
-    nm = PRTE_NEW(prte_namelist_t);
+    nm = PMIX_NEW(prte_namelist_t);
     PMIX_XFER_PROCID(&nm->name, errorproc);
-    prte_list_append(&prte_error_procs, &(nm->super));
+    pmix_list_append(&prte_error_procs, &(nm->super));
 
     prte_grpcomm_signature_t *sig;
     int cnt = 0;
@@ -232,7 +232,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              prte_get_proc_hostname(errorproc)));
 
-        node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, errorproc->rank);
+        node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, errorproc->rank);
         if (NULL == node) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
@@ -272,7 +272,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
 
         int i;
         for (i = 0; i < cnt; i++) {
-            if (NULL != (pptr = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i))) {
+            if (NULL != (pptr = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, i))) {
                 PRTE_OUTPUT_VERBOSE((5, prte_propagate_base_framework.framework_output,
                                      " %d children are afftected  %s\n", cnt,
                                      PRTE_NAME_PRINT(&pptr->name)));
@@ -367,7 +367,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
     }
 
     /* goes to all daemons */
-    sig = PRTE_NEW(prte_grpcomm_signature_t);
+    sig = PMIX_NEW(prte_grpcomm_signature_t);
     sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     sig->sz = 1;
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
@@ -384,7 +384,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
     }
     PMIX_DATA_BUFFER_DESTRUCT(&prperror_buffer);
     PMIX_INFO_FREE(pinfo, pcnt);
-    PRTE_RELEASE(sig);
+    PMIX_RELEASE(sig);
     /* we're done! */
     return PRTE_SUCCESS;
 }
@@ -399,9 +399,9 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source, pmix
 
     /* namelist for tracking error procs */
     prte_namelist_t *nmcheck, *nm;
-    nmcheck = PRTE_NEW(prte_namelist_t);
+    nmcheck = PMIX_NEW(prte_namelist_t);
 
-    PRTE_LIST_FOREACH(nmcheck, &prte_error_procs, prte_namelist_t)
+    PMIX_LIST_FOREACH(nmcheck, &prte_error_procs, prte_namelist_t)
     {
         if (PMIX_CHECK_PROCID(&nmcheck->name, errorproc)) {
             PRTE_OUTPUT_VERBOSE(
@@ -415,9 +415,9 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source, pmix
                          "propagate: prperror: internal forward: error proc is %s",
                          PRTE_NAME_PRINT(errorproc)));
 
-    nm = PRTE_NEW(prte_namelist_t);
+    nm = PMIX_NEW(prte_namelist_t);
     PMIX_XFER_PROCID(&nm->name, errorproc);
-    prte_list_append(&prte_error_procs, &(nm->super));
+    pmix_list_append(&prte_error_procs, &(nm->super));
 
     pmix_info_t *pinfo;
     int ret;
@@ -450,7 +450,7 @@ static int _prte_propagate_prperror(pmix_nspace_t job, pmix_proc_t *source, pmix
         if (PRTE_SUCCESS
             != PMIx_Notify_event(prte_pmix_convert_rc(state), NULL, PMIX_RANGE_LOCAL, pinfo,
                                  num_affected + 1, NULL, NULL)) {
-            PRTE_RELEASE(pinfo);
+            PMIX_RELEASE(pinfo);
         }
     }
     return true;

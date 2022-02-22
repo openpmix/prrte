@@ -2,7 +2,7 @@
  * Copyright (c) 2017-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,8 +18,8 @@
  */
 #include "prte_config.h"
 
-#include "src/class/prte_hash_table.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_hash_table.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/mca.h"
 
 #include "src/mca/odls/odls_types.h"
@@ -35,7 +35,7 @@ PRTE_EXPORT extern prte_propagate_base_module_t prte_propagate;
 /*
  * MCA framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_propagate_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_propagate_base_framework;
 /*
  * Select an available component.
  */

@@ -54,7 +54,7 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
     if (PMIX_SUCCESS != status) {
         PMIX_ERROR_LOG(status);
     }
-    PRTE_RELEASE(p);
+    PMIX_RELEASE(p);
 }
 
 void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
@@ -69,7 +69,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     pmix_iof_channel_t pchan;
     pmix_status_t prc;
 
-    PRTE_ACQUIRE_OBJECT(rev);
+    PMIX_ACQUIRE_OBJECT(rev);
 
     /* As we may use timer events, fd can be bogus (-1)
      * use the right one here
@@ -117,7 +117,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
         pchan |= PMIX_FWD_STDDIAG_CHANNEL;
     }
     /* setup the byte object */
-    p = PRTE_NEW(prte_iof_deliver_t);
+    p = PMIX_NEW(prte_iof_deliver_t);
     PMIX_XFER_PROCID(&p->source, &proct->name);
     p->bo.bytes = (char*)malloc(numbytes);
     memcpy(p->bo.bytes, data, numbytes);
@@ -125,7 +125,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-        PRTE_RELEASE(p);
+        PMIX_RELEASE(p);
     }
 
     /* prep the buffer */
@@ -183,11 +183,11 @@ CLEAN_RETURN:
      * the file descriptor */
     if (rev->tag & PRTE_IOF_STDOUT) {
         if (NULL != proct->revstdout) {
-            PRTE_RELEASE(proct->revstdout);
+            PMIX_RELEASE(proct->revstdout);
         }
     } else if (rev->tag & PRTE_IOF_STDERR) {
         if (NULL != proct->revstderr) {
-            PRTE_RELEASE(proct->revstderr);
+            PMIX_RELEASE(proct->revstderr);
         }
     }
     /* check to see if they are all done */

@@ -57,7 +57,7 @@
 
 #include "prte_stdint.h"
 #include "src/event/event-internal.h"
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/util/error.h"
 #include "src/util/pmix_fd.h"
@@ -68,7 +68,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/mca/prteif/prteif.h"
+#include "src/mca/pif/pif.h"
 #include "src/mca/prtereachable/base/base.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
@@ -151,19 +151,19 @@ static int tcp_peer_create_socket(prte_oob_tcp_peer_t *peer, sa_family_t family)
  */
 void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
 {
-    prte_list_t *local_list = &prte_oob_tcp_component.local_ifs, *remote_list;
+    pmix_list_t *local_list = &prte_oob_tcp_component.local_ifs, *remote_list;
     int rc, i, j, local_if_count, remote_if_count, best, best_i = 0, best_j = 0;
     prte_oob_tcp_conn_op_t *op = (prte_oob_tcp_conn_op_t *) cbdata;
     prte_reachable_t *results = NULL;
-    volatile prte_list_item_t *ptr;
+    volatile pmix_list_item_t *ptr;
     prte_socklen_t addrlen = 0;
     prte_oob_tcp_peer_t *peer;
     prte_oob_tcp_addr_t *addr;
     bool connected = false;
-    prte_if_t *intf;
+    pmix_if_t *intf;
     char *host;
 
-    remote_list = PRTE_NEW(prte_list_t);
+    remote_list = PMIX_NEW(pmix_list_t);
     if (NULL == remote_list) {
         prte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -171,13 +171,13 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         return;
     }
 
-    PRTE_ACQUIRE_OBJECT(op);
+    PMIX_ACQUIRE_OBJECT(op);
     peer = op->peer;
 
-    /* Construct a list of remote prte_if_t from peer */
-    PRTE_LIST_FOREACH(addr, &peer->addrs, prte_oob_tcp_addr_t)
+    /* Construct a list of remote pmix_if_t from peer */
+    PMIX_LIST_FOREACH(addr, &peer->addrs, prte_oob_tcp_addr_t)
     {
-        intf = PRTE_NEW(prte_if_t);
+        intf = PMIX_NEW(pmix_if_t);
         if (NULL == intf) {
             prte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -191,10 +191,10 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * zero value
          */
         intf->if_bandwidth = 1;
-        prte_list_append(remote_list, &(intf->super));
+        pmix_list_append(remote_list, &(intf->super));
     }
-    local_if_count = prte_list_get_size(local_list);
-    remote_if_count = prte_list_get_size(remote_list);
+    local_if_count = pmix_list_get_size(local_list);
+    remote_if_count = pmix_list_get_size(remote_list);
 
     results = prte_reachable.reachable(local_list, remote_list);
 
@@ -239,19 +239,19 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * the next best connection
          */
         results->weights[best_i][best_j] = 0;
-        ptr = peer->addrs.prte_list_sentinel.prte_list_next;
+        ptr = peer->addrs.pmix_list_sentinel.pmix_list_next;
         for (j = 0; j < best_j; j++) {
-            ptr = ptr->prte_list_next;
+            ptr = ptr->pmix_list_next;
         }
         /* Record the peer address we are using */
         peer->active_addr = (prte_oob_tcp_addr_t *) ptr;
         addr = peer->active_addr;
         /* Grab the local address we are using to bind the socket with */
-        ptr = prte_oob_tcp_component.local_ifs.prte_list_sentinel.prte_list_next;
+        ptr = prte_oob_tcp_component.local_ifs.pmix_list_sentinel.pmix_list_next;
         for (i = 0; i < best_i; i++) {
-            ptr = ptr->prte_list_next;
+            ptr = ptr->pmix_list_next;
         }
-        intf = (prte_if_t *) ptr;
+        intf = (pmix_if_t *) ptr;
         prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                             "%s prte_tcp_peer_try_connect: "
                             "attempting to connect to proc %s on %s:%d - %d retries",
@@ -342,7 +342,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                     prte_event_add(&peer->send_event, 0);
                     peer->send_ev_active = true;
                 }
-                PRTE_RELEASE(op);
+                PMIX_RELEASE(op);
                 goto out;
             }
 
@@ -389,7 +389,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                 /* close the current socket */
                 CLOSE_THE_SOCKET(peer->sd);
                 /* reset the addr states */
-                PRTE_LIST_FOREACH(addr, &peer->addrs, prte_oob_tcp_addr_t)
+                PMIX_LIST_FOREACH(addr, &peer->addrs, prte_oob_tcp_addr_t)
                 {
                     addr->state = MCA_OOB_TCP_UNCONNECTED;
                     addr->retries = 0;
@@ -435,7 +435,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          */
         if (NULL != peer->send_msg) {
         }
-        while (NULL != prte_list_remove_first(&peer->send_queue)) {
+        while (NULL != pmix_list_remove_first(&peer->send_queue)) {
         }
         goto cleanup;
     }
@@ -482,13 +482,13 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     }
 
 cleanup:
-    PRTE_RELEASE(op);
+    PMIX_RELEASE(op);
 out:
     if (NULL != results) {
         free(results);
     }
     if (NULL != remote_list) {
-        PRTE_RELEASE(remote_list);
+        PMIX_RELEASE(remote_list);
     }
 }
 
@@ -686,7 +686,7 @@ void prte_oob_tcp_peer_complete_connect(prte_oob_tcp_peer_t *peer)
 
         if (!peer->recv_ev_active) {
             peer->recv_ev_active = true;
-            PRTE_POST_OBJECT(peer);
+            PMIX_POST_OBJECT(peer);
             prte_event_add(&peer->recv_event, 0);
         }
     } else {
@@ -707,7 +707,7 @@ static int tcp_peer_send_blocking(int sd, void *data, size_t size)
     size_t cnt = 0;
     int retval;
 
-    PRTE_ACQUIRE_OBJECT(ptr);
+    PMIX_ACQUIRE_OBJECT(ptr);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s send blocking of %" PRIsize_t " bytes to socket %d",
@@ -873,10 +873,10 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
             prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                 "%s prte_oob_tcp_recv_connect: connection from new peer",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-            peer = PRTE_NEW(prte_oob_tcp_peer_t);
+            peer = PMIX_NEW(prte_oob_tcp_peer_t);
             PMIX_XFER_PROCID(&peer->name, &hdr.origin);
             peer->state = MCA_OOB_TCP_ACCEPTING;
-            prte_list_append(&prte_oob_tcp_component.peers, &peer->super);
+            pmix_list_append(&prte_oob_tcp_component.peers, &peer->super);
         }
     } else {
         /* compare the peers name to the expected value */
@@ -1038,11 +1038,11 @@ static void tcp_peer_connected(prte_oob_tcp_peer_t *peer)
 
     /* initiate send of first message on queue */
     if (NULL == peer->send_msg) {
-        peer->send_msg = (prte_oob_tcp_send_t *) prte_list_remove_first(&peer->send_queue);
+        peer->send_msg = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue);
     }
     if (NULL != peer->send_msg && !peer->send_ev_active) {
         peer->send_ev_active = true;
-        PRTE_POST_OBJECT(peer);
+        PMIX_POST_OBJECT(peer);
         prte_event_add(&peer->send_event, 0);
     }
 }
@@ -1107,7 +1107,7 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
     /*
     if (NULL != peer->send_msg) {
     }
-    while (NULL != (snd = (prte_oob_tcp_send_t*)prte_list_remove_first(&peer->send_queue))) {
+    while (NULL != (snd = (prte_oob_tcp_send_t*)pmix_list_remove_first(&peer->send_queue))) {
     }
     */
 }
@@ -1296,7 +1296,7 @@ bool prte_oob_tcp_peer_accept(prte_oob_tcp_peer_t *peer)
         tcp_peer_connected(peer);
         if (!peer->recv_ev_active) {
             peer->recv_ev_active = true;
-            PRTE_POST_OBJECT(peer);
+            PMIX_POST_OBJECT(peer);
             prte_event_add(&peer->recv_event, 0);
         }
         if (OOB_TCP_DEBUG_CONNECT

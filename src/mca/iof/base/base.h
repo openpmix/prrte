@@ -48,8 +48,8 @@
 #endif
 #include <signal.h>
 
-#include "src/class/prte_bitmap.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_bitmap.h"
+#include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
 #include "src/mca/mca.h"
 #include "src/pmix/pmix-internal.h"
@@ -66,7 +66,7 @@ BEGIN_C_DECLS
 /*
  * MCA framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_iof_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_iof_base_framework;
 /*
  * Select an available component.
  */
@@ -81,18 +81,18 @@ PRTE_EXPORT int prte_iof_base_select(void);
 #define PRTE_IOF_MAX_INPUT_BUFFERS   50
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     bool pending;
     bool always_writable;
     prte_event_t *ev;
     struct timeval tv;
     int fd;
-    prte_list_t outputs;
+    pmix_list_t outputs;
 } prte_iof_write_event_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_write_event_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_iof_write_event_t);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     pmix_proc_t name;
     pmix_proc_t daemon;
     prte_iof_tag_t tag;
@@ -101,11 +101,11 @@ typedef struct {
     bool exclusive;
     bool closed;
 } prte_iof_sink_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_sink_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_iof_sink_t);
 
 struct prte_iof_proc_t;
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     struct prte_iof_proc_t *proc;
     prte_event_t *ev;
     struct timeval tv;
@@ -116,30 +116,30 @@ typedef struct {
     bool always_readable;
     prte_iof_sink_t *sink;
 } prte_iof_read_event_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_read_event_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_iof_read_event_t);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     pmix_proc_t name;
     prte_iof_sink_t *stdinev;
     prte_iof_read_event_t *revstdout;
     prte_iof_read_event_t *revstderr;
 } prte_iof_proc_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_proc_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_iof_proc_t);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     char data[PRTE_IOF_BASE_TAGGED_OUT_MAX];
     int numbytes;
 } prte_iof_write_output_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_write_output_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_iof_write_output_t);
 
 typedef struct{
-    prte_object_t super;
+    pmix_object_t super;
     pmix_proc_t source;
     pmix_byte_object_t bo;
 } prte_iof_deliver_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_iof_deliver_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_iof_deliver_t);
 
 /* Write event macro's */
 
@@ -155,7 +155,7 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
     do {                                                               \
         struct timeval *tv = NULL;                                     \
         wev->pending = true;                                           \
-        PRTE_POST_OBJECT(wev);                                         \
+        PMIX_POST_OBJECT(wev);                                         \
         if (wev->always_writable) {                                    \
             /* Regular is always write ready. Use timer to activate */ \
             tv = &wev->tv;                                             \
@@ -172,7 +172,7 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
         prte_iof_sink_t *ep;                                                                       \
         PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,                          \
                              "defining endpt: file %s line %d fd %d", __FILE__, __LINE__, (fid))); \
-        ep = PRTE_NEW(prte_iof_sink_t);                                                            \
+        ep = PMIX_NEW(prte_iof_sink_t);                                                            \
         PMIX_LOAD_PROCID(&ep->name, (nm)->nspace, (nm)->rank);                                     \
         ep->tag = (tg);                                                                            \
         if (0 <= (fid)) {                                                                          \
@@ -187,7 +187,7 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
             prte_event_set_priority(ep->wev->ev, PRTE_MSG_PRI);                                    \
         }                                                                                          \
         *(snk) = ep;                                                                               \
-        PRTE_POST_OBJECT(ep);                                                                      \
+        PMIX_POST_OBJECT(ep);                                                                      \
     } while (0);
 
 /* Read event macro's */
@@ -205,7 +205,7 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
 #define PRTE_IOF_READ_ACTIVATE(rev) \
     do {                            \
         rev->active = true;         \
-        PRTE_POST_OBJECT(rev);      \
+        PMIX_POST_OBJECT(rev);      \
         PRTE_IOF_READ_ADDEV(rev);   \
     } while (0);
 
@@ -222,8 +222,8 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
                              "%s defining read event for %s: %s %d",                          \
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(p)->name), \
                              __FILE__, __LINE__));                                            \
-        rev = PRTE_NEW(prte_iof_read_event_t);                                                \
-        PRTE_RETAIN((p));                                                                     \
+        rev = PMIX_NEW(prte_iof_read_event_t);                                                \
+        PMIX_RETAIN((p));                                                                     \
         rev->proc = (struct prte_iof_proc_t *) (p);                                           \
         rev->tag = (tg);                                                                      \
         rev->fd = (fid);                                                                      \

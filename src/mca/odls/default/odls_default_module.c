@@ -114,7 +114,7 @@
 #    include <sys/ptrace.h>
 #endif
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_environ.h"
@@ -142,7 +142,7 @@
  * Module functions (function pointers used in a struct)
  */
 static int prte_odls_default_launch_local_procs(pmix_data_buffer_t *data);
-static int prte_odls_default_kill_local_procs(prte_pointer_array_t *procs);
+static int prte_odls_default_kill_local_procs(pmix_pointer_array_t *procs);
 static int prte_odls_default_signal_local_procs(const pmix_proc_t *proc, int32_t signal);
 static int prte_odls_default_restart_proc(prte_proc_t *child);
 
@@ -198,7 +198,7 @@ static int odls_default_kill_local(pid_t pid, int signum)
     return 0;
 }
 
-int prte_odls_default_kill_local_procs(prte_pointer_array_t *procs)
+int prte_odls_default_kill_local_procs(pmix_pointer_array_t *procs)
 {
     int rc;
 

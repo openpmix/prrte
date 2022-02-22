@@ -28,7 +28,7 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/util/pmix_string_copy.h"
 
 #include "oob_tcp.h"
@@ -41,7 +41,7 @@ struct prte_oob_tcp_peer_t;
 
 /* tcp structure for sending a message */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     prte_event_t ev;
     struct prte_oob_tcp_peer_t *peer;
     bool activate;
@@ -53,18 +53,18 @@ typedef struct {
     char *sdptr;
     size_t sdbytes;
 } prte_oob_tcp_send_t;
-PRTE_CLASS_DECLARATION(prte_oob_tcp_send_t);
+PMIX_CLASS_DECLARATION(prte_oob_tcp_send_t);
 
 /* tcp structure for recving a message */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     prte_oob_tcp_hdr_t hdr;
     bool hdr_recvd;
     char *data;
     char *rdptr;
     size_t rdbytes;
 } prte_oob_tcp_recv_t;
-PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
+PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
 
 /* Queue a message to be sent to a specified peer. The macro
  * checks to see if a message is already in position to be
@@ -101,7 +101,7 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
         prte_output_verbose(5, prte_oob_base_framework.framework_output,                       \
                             "%s:[%s:%d] queue send to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT(&((m)->dst)));                 \
-        _s = PRTE_NEW(prte_oob_tcp_send_t);                                                    \
+        _s = PMIX_NEW(prte_oob_tcp_send_t);                                                    \
         /* setup the header */                                                                 \
         PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->origin);                                       \
         PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->dst);                                             \
@@ -133,7 +133,7 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
         prte_output_verbose(5, prte_oob_base_framework.framework_output,                          \
                             "%s:[%s:%d] queue pending to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT(&((m)->dst)));                    \
-        _s = PRTE_NEW(prte_oob_tcp_send_t);                                                       \
+        _s = PMIX_NEW(prte_oob_tcp_send_t);                                                       \
         /* setup the header */                                                                    \
         PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->origin);                                          \
         PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->dst);                                                \
@@ -165,7 +165,7 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
         prte_output_verbose(5, prte_oob_base_framework.framework_output,                        \
                             "%s:[%s:%d] queue relay to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT(&((p)->name)));                 \
-        _s = PRTE_NEW(prte_oob_tcp_send_t);                                                     \
+        _s = PMIX_NEW(prte_oob_tcp_send_t);                                                     \
         /* setup the header */                                                                  \
         PMIX_XFER_PROCID(&_s->hdr.origin, &(m)->hdr.origin);                                    \
         PMIX_XFER_PROCID(&_s->hdr.dst, &(m)->hdr.dst);                                          \
@@ -187,11 +187,11 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_recv_t);
 
 /* State machine for processing message */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_event_t ev;
     prte_rml_send_t *msg;
 } prte_oob_tcp_msg_op_t;
-PRTE_CLASS_DECLARATION(prte_oob_tcp_msg_op_t);
+PMIX_CLASS_DECLARATION(prte_oob_tcp_msg_op_t);
 
 #define PRTE_ACTIVATE_TCP_POST_SEND(ms, cbfunc)                                               \
     do {                                                                                      \
@@ -199,19 +199,19 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_msg_op_t);
         prte_output_verbose(5, prte_oob_base_framework.framework_output,                      \
                             "%s:[%s:%d] post send to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT(&((ms)->dst)));               \
-        mop = PRTE_NEW(prte_oob_tcp_msg_op_t);                                                \
+        mop = PMIX_NEW(prte_oob_tcp_msg_op_t);                                                \
         mop->msg = (ms);                                                                      \
         PRTE_THREADSHIFT(mop, prte_event_base, (cbfunc), PRTE_MSG_PRI);                       \
     } while (0);
 
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_event_t ev;
     prte_rml_send_t *rmsg;
     prte_oob_tcp_send_t *snd;
     pmix_proc_t hop;
 } prte_oob_tcp_msg_error_t;
-PRTE_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
+PMIX_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
 
 #define PRTE_ACTIVATE_TCP_MSG_ERROR(s, r, h, cbfunc)                                               \
     do {                                                                                           \
@@ -221,14 +221,14 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
         prte_output_verbose(5, prte_oob_base_framework.framework_output,                           \
                             "%s:[%s:%d] post msg error to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT((h)));                             \
-        mop = PRTE_NEW(prte_oob_tcp_msg_error_t);                                                  \
+        mop = PMIX_NEW(prte_oob_tcp_msg_error_t);                                                  \
         if (NULL != (s)) {                                                                         \
             mop->snd = (s);                                                                        \
         } else if (NULL != (r)) {                                                                  \
             /* use a proxy so we can pass NULL into the macro */                                   \
             proxy = (r);                                                                           \
             /* create a send object for this message */                                            \
-            snd = PRTE_NEW(prte_oob_tcp_send_t);                                                   \
+            snd = PMIX_NEW(prte_oob_tcp_send_t);                                                   \
             mop->snd = snd;                                                                        \
             /* transfer and prep the header */                                                     \
             snd->hdr = proxy->hdr;                                                                 \
@@ -252,7 +252,7 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
         prte_output_verbose(5, prte_oob_base_framework.framework_output,                          \
                             "%s:[%s:%d] post no route to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT((h)));                            \
-        mop = PRTE_NEW(prte_oob_tcp_msg_error_t);                                                 \
+        mop = PMIX_NEW(prte_oob_tcp_msg_error_t);                                                 \
         mop->rmsg = (r);                                                                          \
         PMIX_XFER_PROCID(&mop->hop, (h));                                                         \
         /* this goes to the component, so use the framework                                       \

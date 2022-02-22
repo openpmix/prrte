@@ -15,7 +15,7 @@
  * Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,10 +33,10 @@
  */
 #include "prte_config.h"
 
-#include "src/class/prte_hash_table.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_hash_table.h"
+#include "src/class/pmix_list.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/mca.h"
 #include "src/mca/odls/odls_types.h"
@@ -51,7 +51,7 @@ BEGIN_C_DECLS
 /*
  * MCA framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_grpcomm_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_grpcomm_base_framework;
 /*
  * Select an available component.
  */
@@ -61,17 +61,17 @@ PRTE_EXPORT int prte_grpcomm_base_select(void);
  * globals that might be needed
  */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     int pri;
     prte_grpcomm_base_module_t *module;
-    prte_mca_base_component_t *component;
+    pmix_mca_base_component_t *component;
 } prte_grpcomm_base_active_t;
-PRTE_CLASS_DECLARATION(prte_grpcomm_base_active_t);
+PMIX_CLASS_DECLARATION(prte_grpcomm_base_active_t);
 
 typedef struct {
-    prte_list_t actives;
-    prte_list_t ongoing;
-    prte_hash_table_t sig_table;
+    pmix_list_t actives;
+    pmix_list_t ongoing;
+    pmix_hash_table_t sig_table;
     char *transports;
     uint32_t context_id;
 } prte_grpcomm_base_t;

@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -69,7 +69,7 @@ void prte_malloc_finalize(void)
     if (-1 != prte_malloc_output) {
         prte_output_close(prte_malloc_output);
         prte_malloc_output = -1;
-        PRTE_DESTRUCT(&malloc_stream);
+        PMIX_DESTRUCT(&malloc_stream);
     }
 }
 
@@ -78,7 +78,7 @@ void prte_malloc_finalize(void)
  */
 void prte_malloc_init(void)
 {
-    PRTE_CONSTRUCT(&malloc_stream, prte_output_stream_t);
+    PMIX_CONSTRUCT(&malloc_stream, prte_output_stream_t);
     malloc_stream.lds_is_debugging = true;
     malloc_stream.lds_verbose_level = 5;
     malloc_stream.lds_prefix = "malloc debug: ";

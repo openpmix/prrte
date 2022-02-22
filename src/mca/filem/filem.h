@@ -14,7 +14,7 @@
  *                         reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,10 +35,10 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
-#include "src/class/prte_object.h"
+#include "src/class/pmix_object.h"
 
 #include "src/runtime/prte_globals.h"
 BEGIN_C_DECLS
@@ -78,7 +78,7 @@ BEGIN_C_DECLS
  */
 struct prte_filem_base_process_set_1_0_0_t {
     /** This is an object, so must have a super */
-    prte_list_item_t super;
+    pmix_list_item_t super;
 
     /** Source Process */
     pmix_proc_t source;
@@ -89,7 +89,7 @@ struct prte_filem_base_process_set_1_0_0_t {
 typedef struct prte_filem_base_process_set_1_0_0_t prte_filem_base_process_set_1_0_0_t;
 typedef struct prte_filem_base_process_set_1_0_0_t prte_filem_base_process_set_t;
 
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_filem_base_process_set_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_filem_base_process_set_t);
 
 /**
  * Define a File Pair
@@ -103,7 +103,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_filem_base_process_set_t);
  */
 struct prte_filem_base_file_set_1_0_0_t {
     /** This is an object, so must have a super */
-    prte_list_item_t super;
+    pmix_list_item_t super;
 
     /* the app_index this pertains to, if applicable */
     prte_app_idx_t app_idx;
@@ -126,7 +126,7 @@ struct prte_filem_base_file_set_1_0_0_t {
 typedef struct prte_filem_base_file_set_1_0_0_t prte_filem_base_file_set_1_0_0_t;
 typedef struct prte_filem_base_file_set_1_0_0_t prte_filem_base_file_set_t;
 
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_filem_base_file_set_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_filem_base_file_set_t);
 
 /**
  * Definition of a file movement request
@@ -140,7 +140,7 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_filem_base_file_set_t);
  */
 struct prte_filem_base_request_1_0_0_t {
     /** This is an object, so must have a super */
-    prte_list_item_t super;
+    pmix_list_item_t super;
 
     /*
      * A list of process sets - use WILDCARD to
@@ -154,12 +154,12 @@ struct prte_filem_base_request_1_0_0_t {
      * in the file sets so we don't copy them over
      * multiple times
      */
-    prte_list_t process_sets;
+    pmix_list_t process_sets;
 
     /*
      * A list of file pairings
      */
-    prte_list_t file_sets;
+    pmix_list_t file_sets;
 
     /*
      * Internal use:
@@ -194,7 +194,7 @@ struct prte_filem_base_request_1_0_0_t {
 typedef struct prte_filem_base_request_1_0_0_t prte_filem_base_request_1_0_0_t;
 typedef struct prte_filem_base_request_1_0_0_t prte_filem_base_request_t;
 
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_filem_base_request_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_filem_base_request_t);
 
 /**
  * Module initialization function.
@@ -314,7 +314,7 @@ typedef int (*prte_filem_base_wait_fn_t)(prte_filem_base_request_t *request);
 /**
  * Wait for a multiple file movement requests to finish
  *
- * @param request_list prte_list_t of FileM requests describing the remote files/directories.
+ * @param request_list pmix_list_t of FileM requests describing the remote files/directories.
  *
  * The request must have been passed through one of the non-blocking functions
  * before calling wait or wait_all otherwise PRTE_ERROR will be returned.
@@ -322,7 +322,7 @@ typedef int (*prte_filem_base_wait_fn_t)(prte_filem_base_request_t *request);
  * @return PRTE_SUCCESS on success
  * @return PRTE_ERROR on fail
  */
-typedef int (*prte_filem_base_wait_all_fn_t)(prte_list_t *request_list);
+typedef int (*prte_filem_base_wait_all_fn_t)(pmix_list_t *request_list);
 
 typedef void (*prte_filem_completion_cbfunc_t)(int status, void *cbdata);
 
@@ -338,14 +338,7 @@ typedef int (*prte_filem_base_link_local_files_fn_t)(prte_job_t *jdata, prte_app
 /**
  * Structure for FILEM components.
  */
-struct prte_filem_base_component_2_0_0_t {
-    /** MCA base component */
-    prte_mca_base_component_t base_version;
-    /** MCA base data */
-    prte_mca_base_component_data_t base_data;
-};
-typedef struct prte_filem_base_component_2_0_0_t prte_filem_base_component_2_0_0_t;
-typedef struct prte_filem_base_component_2_0_0_t prte_filem_base_component_t;
+typedef pmix_mca_base_component_t prte_filem_base_component_t;
 
 /**
  * Structure for FILEM  modules
@@ -384,7 +377,7 @@ PRTE_EXPORT extern prte_filem_base_module_t prte_filem;
 /**
  * Macro for use in components that are of type FILEM
  */
-#define PRTE_FILEM_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("filem", 2, 0, 0)
+#define PRTE_FILEM_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("filem", 2, 0, 0)
 
 END_C_DECLS
 

@@ -29,7 +29,6 @@ SUBDIRS = \
 	include \
 	etc \
 	util \
-	mca/base \
 	$(MCA_prte_FRAMEWORKS_SUBDIRS) \
 	$(MCA_prte_FRAMEWORK_COMPONENT_STATIC_SUBDIRS) \
 	. \
@@ -39,7 +38,6 @@ DIST_SUBDIRS = \
 	include \
 	etc \
 	util \
-	mca/base \
 	$(MCA_prte_FRAMEWORKS_SUBDIRS) \
 	$(MCA_prte_FRAMEWORK_COMPONENT_ALL_SUBDIRS)
 
@@ -49,11 +47,9 @@ lib_LTLIBRARIES = libprrte.la
 libprrte_la_SOURCES =
 
 libprrte_la_LIBADD = \
-	mca/base/libprrte_mca_base.la \
 	util/libprrteutil.la \
 	$(MCA_prte_FRAMEWORK_LIBS)
 libprrte_la_DEPENDENCIES = \
-	mca/base/libprrte_mca_base.la \
 	util/libprrteutil.la \
 	$(MCA_prte_FRAMEWORK_LIBS)
 libprrte_la_LDFLAGS = -version-info $(libprrte_so_version)
@@ -78,7 +74,6 @@ EXTRA_DIST = Doxyfile
 include runtime/Makefile.am
 include tools/Makefile.am
 include prted/Makefile.am
-include mca/Makefile.am
 include pmix/Makefile.am
 include event/Makefile.am
 include hwloc/Makefile.am

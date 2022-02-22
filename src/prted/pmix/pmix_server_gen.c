@@ -64,7 +64,7 @@ static void _client_conn(int sd, short args, void *cbdata)
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     prte_proc_t *p;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
 
     if (NULL != cd->server_object) {
         /* we were passed back the prte_proc_t */
@@ -76,7 +76,7 @@ static void _client_conn(int sd, short args, void *cbdata)
     if (NULL != cd->cbfunc) {
         cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 pmix_status_t pmix_server_client_connected_fn(const pmix_proc_t *proc, void *server_object,
@@ -84,7 +84,7 @@ pmix_status_t pmix_server_client_connected_fn(const pmix_proc_t *proc, void *ser
 {
     /* need to thread-shift this request as we are going
      * to access our global list of registered events */
-    PRTE_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
+    PRTE_PRTE_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
                           NULL, NULL, 0, _client_conn,
                           cbfunc, cbdata);
     return PRTE_SUCCESS;
@@ -95,7 +95,7 @@ static void _client_finalized(int sd, short args, void *cbdata)
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     prte_proc_t *p;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
 
     if (NULL != cd->server_object) {
         /* we were passed back the prte_proc_t */
@@ -107,7 +107,7 @@ static void _client_finalized(int sd, short args, void *cbdata)
     if (NULL != cd->cbfunc) {
         cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 pmix_status_t pmix_server_client_finalized_fn(const pmix_proc_t *proc, void *server_object,
@@ -115,7 +115,7 @@ pmix_status_t pmix_server_client_finalized_fn(const pmix_proc_t *proc, void *ser
 {
     /* need to thread-shift this request as we are going
      * to access our global list of registered events */
-    PRTE_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
+    PRTE_PRTE_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
                           NULL, NULL, 0, _client_finalized,
                           cbfunc, cbdata);
     return PRTE_SUCCESS;
@@ -126,7 +126,7 @@ static void _client_abort(int sd, short args, void *cbdata)
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     prte_proc_t *p;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
 
     if (NULL != cd->server_object) {
         p = (prte_proc_t *) cd->server_object;
@@ -138,7 +138,7 @@ static void _client_abort(int sd, short args, void *cbdata)
     if (NULL != cd->cbfunc) {
         cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 pmix_status_t pmix_server_abort_fn(const pmix_proc_t *proc, void *server_object, int status,
@@ -147,7 +147,7 @@ pmix_status_t pmix_server_abort_fn(const pmix_proc_t *proc, void *server_object,
 {
     /* need to thread-shift this request as we are going
      * to access our global list of registered events */
-    PRTE_PMIX_THREADSHIFT(proc, server_object, status, msg, procs, nprocs, _client_abort, cbfunc,
+    PRTE_PRTE_THREADSHIFT(proc, server_object, status, msg, procs, nprocs, _client_abort, cbfunc,
                           cbdata);
     return PRTE_SUCCESS;
 }
@@ -156,14 +156,14 @@ static void _register_events(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
 
     /* need to implement this */
 
     if (NULL != cd->cbfunc) {
         cd->cbfunc(PRTE_SUCCESS, cd->cbdata);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 /* hook for the local PMIX server to pass event registrations
@@ -177,7 +177,7 @@ pmix_status_t pmix_server_register_events_fn(pmix_status_t *codes, size_t ncodes
 
     /* need to thread-shift this request as we are going
      * to access our global list of registered events */
-    cd = PRTE_NEW(prte_pmix_server_op_caddy_t);
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
     cd->codes = codes;
     cd->ncodes = ncodes;
     cd->info = (pmix_info_t *) info;
@@ -186,7 +186,7 @@ pmix_status_t pmix_server_register_events_fn(pmix_status_t *codes, size_t ncodes
     cd->cbdata = cbdata;
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _register_events, cd);
     prte_event_set_priority(&(cd->ev), PRTE_MSG_PRI);
-    PRTE_POST_OBJECT(cd);
+    PMIX_POST_OBJECT(cd);
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
     return PMIX_SUCCESS;
 }
@@ -195,13 +195,13 @@ static void _deregister_events(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
 
     /* need to implement this */
     if (NULL != cd->cbfunc) {
         cd->cbfunc(PRTE_SUCCESS, cd->cbdata);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 /* hook for the local PMIX server to pass event deregistrations
  * up to us */
@@ -212,14 +212,14 @@ pmix_status_t pmix_server_deregister_events_fn(pmix_status_t *codes, size_t ncod
 
     /* need to thread-shift this request as we are going
      * to access our global list of registered events */
-    cd = PRTE_NEW(prte_pmix_server_op_caddy_t);
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
     cd->codes = codes;
     cd->ncodes = ncodes;
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _deregister_events, cd);
     prte_event_set_priority(&(cd->ev), PRTE_MSG_PRI);
-    PRTE_POST_OBJECT(cd);
+    PMIX_POST_OBJECT(cd);
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
     return PRTE_SUCCESS;
 }
@@ -228,12 +228,12 @@ static void _notify_release(int status, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
 
     if (NULL != cd->info) {
         PMIX_INFO_FREE(cd->info, cd->ninfo);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 /* someone has sent us an event that we need to distribute
@@ -287,13 +287,13 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         return;
     }
 
-    cd = PRTE_NEW(prte_pmix_server_op_caddy_t);
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
 
     /* unpack the #infos that were provided */
     cnt = 1;
     if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &cd->ninfo, &cnt, PMIX_SIZE))) {
         PMIX_ERROR_LOG(ret);
-        PRTE_RELEASE(cd);
+        PMIX_RELEASE(cd);
         return;
     }
     /* reserve a spot for an additional flag */
@@ -307,7 +307,7 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, cd->info, &cnt, PMIX_INFO))) {
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(cd->info, cd->ninfo);
-            PRTE_RELEASE(cd);
+            PMIX_RELEASE(cd);
             return;
         }
     }
@@ -330,7 +330,7 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         if (NULL != cd->info) {
             PMIX_INFO_FREE(cd->info, cd->ninfo);
         }
-        PRTE_RELEASE(cd);
+        PMIX_RELEASE(cd);
     }
 }
 
@@ -351,12 +351,12 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *so
 
     /* we can get events prior to completing prte_init as we have
      * to init PMIx early so that PRRTE components can use it */
-    PRTE_ACQUIRE_THREAD(&prte_init_lock);
+    PMIX_ACQUIRE_THREAD(&prte_init_lock);
     if (!prte_initialized) {
-        PRTE_RELEASE_THREAD(&prte_init_lock);
+        PMIX_RELEASE_THREAD(&prte_init_lock);
         goto done;
     }
-    PRTE_RELEASE_THREAD(&prte_init_lock);
+    PMIX_RELEASE_THREAD(&prte_init_lock);
 
     /* check to see if this is one we sent down */
     for (n = 0; n < ninfo; n++) {
@@ -420,7 +420,7 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *so
     }
 
     /* goes to all daemons */
-    sig = PRTE_NEW(prte_grpcomm_signature_t);
+    sig = PMIX_NEW(prte_grpcomm_signature_t);
     if (NULL == sig) {
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         return PMIX_ERR_NOMEM;
@@ -428,7 +428,7 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *so
     sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     if (NULL == sig->signature) {
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-        PRTE_RELEASE(sig);
+        PMIX_RELEASE(sig);
         return PMIX_ERR_NOMEM;
     }
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
@@ -436,12 +436,12 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *so
     if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
-        PRTE_RELEASE(sig);
+        PMIX_RELEASE(sig);
         return PMIX_ERROR;
     }
     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
     /* maintain accounting */
-    PRTE_RELEASE(sig);
+    PMIX_RELEASE(sig);
 
 done:
     /* we do not need to execute a callback as we did this atomically */
@@ -484,7 +484,7 @@ void pmix_server_jobid_return(int status, pmix_proc_t *sender,
     }
 
     /* retrieve the request */
-    prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
+    pmix_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
     if (NULL == req) {
         /* we are hosed */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -503,7 +503,7 @@ void pmix_server_jobid_return(int status, pmix_proc_t *sender,
     req->toolcbfunc(ret, &proc, req->cbdata);
 
     /* cleanup */
-    PRTE_RELEASE(req);
+    PMIX_RELEASE(req);
 }
 
 static void _toolconn(int sd, short args, void *cbdata)
@@ -516,7 +516,7 @@ static void _toolconn(int sd, short args, void *cbdata)
     prte_plm_cmd_flag_t command = PRTE_PLM_ALLOC_JOBID_CMD;
     pmix_status_t xrc;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
                         "%s PROCESSING TOOL CONNECTION",
@@ -535,7 +535,7 @@ static void _toolconn(int sd, short args, void *cbdata)
                     if (NULL != cd->toolcbfunc) {
                         cd->toolcbfunc(xrc, NULL, cd->cbdata);
                     }
-                    PRTE_RELEASE(cd);
+                    PMIX_RELEASE(cd);
                     return;
                 }
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_GRPID)) {
@@ -544,7 +544,7 @@ static void _toolconn(int sd, short args, void *cbdata)
                     if (NULL != cd->toolcbfunc) {
                         cd->toolcbfunc(xrc, NULL, cd->cbdata);
                     }
-                    PRTE_RELEASE(cd);
+                    PMIX_RELEASE(cd);
                     return;
                 }
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_NSPACE)) {
@@ -563,7 +563,7 @@ static void _toolconn(int sd, short args, void *cbdata)
                     if (NULL != cd->toolcbfunc) {
                         cd->toolcbfunc(xrc, NULL, cd->cbdata);
                     }
-                    PRTE_RELEASE(cd);
+                    PMIX_RELEASE(cd);
                     return;
                 }
             }
@@ -587,14 +587,14 @@ static void _toolconn(int sd, short args, void *cbdata)
             free(tmp);
             prte_plm_globals.next_jobid++;
         } else {
-            rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, cd, &cd->room_num);
+            rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, cd, &cd->room_num);
             if (PRTE_SUCCESS != rc) {
                 prte_show_help("help-prted.txt", "noroom", true, cd->operation,
                                prte_pmix_server_globals.num_rooms);
                 if (NULL != cd->toolcbfunc) {
                     cd->toolcbfunc(PMIX_ERR_OUT_OF_RESOURCE, NULL, cd->cbdata);
                 }
-                PRTE_RELEASE(cd);
+                PMIX_RELEASE(cd);
                 return;
             }
             /* we need to send this to the HNP for a jobid */
@@ -613,13 +613,13 @@ static void _toolconn(int sd, short args, void *cbdata)
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 xrc = prte_pmix_convert_rc(rc);
-                prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs,
+                pmix_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs,
                                                         cd->room_num, (void **) &cd);
                 PMIX_DATA_BUFFER_RELEASE(buf);
                 if (NULL != cd->toolcbfunc) {
                     cd->toolcbfunc(xrc, NULL, cd->cbdata);
                 }
-                PRTE_RELEASE(cd);
+                PMIX_RELEASE(cd);
             }
             return;
         }
@@ -633,7 +633,7 @@ static void _toolconn(int sd, short args, void *cbdata)
     if (NULL != cd->toolcbfunc) {
         cd->toolcbfunc(rc, &cd->target, cd->cbdata);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo, pmix_tool_connection_cbfunc_t cbfunc,
@@ -645,7 +645,7 @@ void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo, pmix_tool_connectio
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* need to threadshift this request */
-    cd = PRTE_NEW(pmix_server_req_t);
+    cd = PMIX_NEW(pmix_server_req_t);
     cd->info = info;
     cd->ninfo = ninfo;
     cd->toolcbfunc = cbfunc;
@@ -653,7 +653,7 @@ void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo, pmix_tool_connectio
 
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _toolconn, cd);
     prte_event_set_priority(&(cd->ev), PRTE_MSG_PRI);
-    PRTE_POST_OBJECT(cd);
+    PMIX_POST_OBJECT(cd);
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 }
 
@@ -664,7 +664,7 @@ static void lgcbfn(int sd, short args, void *cbdata)
     if (NULL != cd->cbfunc) {
         cd->cbfunc(cd->status, cd->cbdata);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], size_t ndata,
@@ -743,7 +743,7 @@ done:
     /* we cannot directly execute the callback here
      * as it would threadlock - so shift to somewhere
      * safe */
-    PRTE_PMIX_THREADSHIFT(PRTE_NAME_WILDCARD, NULL, rc, NULL, NULL, 0, lgcbfn, cbfunc, cbdata);
+    PRTE_PRTE_THREADSHIFT(PRTE_NAME_WILDCARD, NULL, rc, NULL, NULL, 0, lgcbfn, cbfunc, cbdata);
 }
 
 pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_proc_t targets[],
@@ -755,7 +755,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
     size_t m, n;
     prte_proc_t *proc;
     pmix_nspace_t jobid;
-    prte_pointer_array_t parray, *ptrarray;
+    pmix_pointer_array_t parray, *ptrarray;
     pmix_data_buffer_t *cmd;
     prte_daemon_cmd_flag_t cmmnd;
     prte_grpcomm_signature_t *sig;
@@ -770,11 +770,11 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
             if (NULL == targets) {
                 ptrarray = NULL;
             } else {
-                PRTE_CONSTRUCT(&parray, prte_pointer_array_t);
+                PMIX_CONSTRUCT(&parray, pmix_pointer_array_t);
                 for (n = 0; n < ntargets; n++) {
                     if (PMIX_RANK_WILDCARD == targets[n].rank) {
                         /* create an object */
-                        proc = PRTE_NEW(prte_proc_t);
+                        proc = PMIX_NEW(prte_proc_t);
                         PMIX_LOAD_PROCID(&proc->name, targets[n].nspace, PMIX_RANK_WILDCARD);
                     } else {
                         /* get the proc object for this proc */
@@ -782,9 +782,9 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
                             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                             continue;
                         }
-                        PRTE_RETAIN(proc);
+                        PMIX_RETAIN(proc);
                     }
-                    prte_pointer_array_add(&parray, proc);
+                    pmix_pointer_array_add(&parray, proc);
                 }
                 ptrarray = &parray;
             }
@@ -794,11 +794,11 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
             if (NULL != ptrarray) {
                 /* cleanup the array */
                 for (j = 0; j < parray.size; j++) {
-                    if (NULL != (proc = (prte_proc_t *) prte_pointer_array_get_item(&parray, j))) {
-                        PRTE_RELEASE(proc);
+                    if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(&parray, j))) {
+                        PMIX_RELEASE(proc);
                     }
                 }
-                PRTE_DESTRUCT(&parray);
+                PMIX_DESTRUCT(&parray);
             }
         } else if (0 == strncmp(directives[m].key, PMIX_JOB_CTRL_TERMINATE, PMIX_MAX_KEYLEN)) {
             if (NULL == targets) {
@@ -813,7 +813,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
                     return rc;
                 }
                 /* goes to all daemons */
-                sig = PRTE_NEW(prte_grpcomm_signature_t);
+                sig = PMIX_NEW(prte_grpcomm_signature_t);
                 sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
                 sig->sz = 1;
                 PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
@@ -821,7 +821,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
                     PRTE_ERROR_LOG(rc);
                 }
                 PMIX_DATA_BUFFER_RELEASE(cmd);
-                PRTE_RELEASE(sig);
+                PMIX_RELEASE(sig);
             }
         } else if (0 == strncmp(directives[m].key, PMIX_JOB_CTRL_SIGNAL, PMIX_MAX_KEYLEN)) {
             PMIX_DATA_BUFFER_CREATE(cmd);
@@ -859,7 +859,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
                 return rc;
             }
             /* goes to all daemons */
-            sig = PRTE_NEW(prte_grpcomm_signature_t);
+            sig = PMIX_NEW(prte_grpcomm_signature_t);
             sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
             sig->sz = 1;
             PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
@@ -867,7 +867,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
                 PRTE_ERROR_LOG(rc);
             }
             PMIX_DATA_BUFFER_RELEASE(cmd);
-            PRTE_RELEASE(sig);
+            PMIX_RELEASE(sig);
         }
     }
 
@@ -881,7 +881,7 @@ static void relcb(void *cbdata)
     if (NULL != cd->info) {
         PMIX_INFO_FREE(cd->info, cd->ninfo);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
 {
@@ -894,7 +894,7 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     pmix_byte_object_t bo;
     int32_t byused;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
 
     if (PRTE_SUCCESS != status) {
         rc = status;
@@ -945,7 +945,7 @@ complete:
         if (NULL != cd->info) {
             PMIX_INFO_FREE(cd->info, cd->ninfo);
         }
-        PRTE_RELEASE(cd);
+        PMIX_RELEASE(cd);
     }
 }
 
@@ -982,19 +982,19 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
 
     if (PMIX_GROUP_CONSTRUCT == op) {
         /* add it to our list of known process sets */
-        pset = PRTE_NEW(pmix_server_pset_t);
+        pset = PMIX_NEW(pmix_server_pset_t);
         pset->name = strdup(gpid);
         pset->num_members = nprocs;
         PMIX_PROC_CREATE(pset->members, pset->num_members);
         memcpy(pset->members, procs, nprocs * sizeof(pmix_proc_t));
-        prte_list_append(&prte_pmix_server_globals.psets, &pset->super);
+        pmix_list_append(&prte_pmix_server_globals.psets, &pset->super);
     } else if (PMIX_GROUP_DESTRUCT == op) {
         /* find this process set on our list of groups */
-        PRTE_LIST_FOREACH(pset, &prte_pmix_server_globals.psets, pmix_server_pset_t)
+        PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.psets, pmix_server_pset_t)
         {
             if (0 == strcmp(pset->name, gpid)) {
-                prte_list_remove_item(&prte_pmix_server_globals.psets, &pset->super);
-                PRTE_RELEASE(pset);
+                pmix_list_remove_item(&prte_pmix_server_globals.psets, &pset->super);
+                PMIX_RELEASE(pset);
                 break;
             }
         }
@@ -1006,14 +1006,14 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         return PMIX_OPERATION_SUCCEEDED;
     }
 
-    cd = PRTE_NEW(prte_pmix_mdx_caddy_t);
+    cd = PMIX_NEW(prte_pmix_mdx_caddy_t);
     cd->infocbfunc = cbfunc;
     cd->cbdata = cbdata;
     cd->mode = mode;
 
     /* compute the signature of this collective */
     if (NULL != procs) {
-        cd->sig = PRTE_NEW(prte_grpcomm_signature_t);
+        cd->sig = PMIX_NEW(prte_grpcomm_signature_t);
         cd->sig->sz = nprocs;
         cd->sig->signature = (pmix_proc_t *) malloc(cd->sig->sz * sizeof(pmix_proc_t));
         memcpy(cd->sig->signature, procs, cd->sig->sz * sizeof(pmix_proc_t));
@@ -1033,7 +1033,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
                                                      mode, PMIX_SUCCESS,
                                                      group_release, cd))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(cd);
+        PMIX_RELEASE(cd);
         return PMIX_ERROR;
     }
     return PMIX_SUCCESS;
@@ -1102,7 +1102,7 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata)
         cd->cbfunc(PMIX_SUCCESS, cd->cbdata);
     }
 
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 pmix_status_t pmix_server_stdin_fn(const pmix_proc_t *source, const pmix_proc_t targets[],

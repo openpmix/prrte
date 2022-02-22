@@ -31,9 +31,9 @@
 #endif /* HAVE_UNISTD_H */
 #include <string.h>
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_if.h"
@@ -63,12 +63,12 @@ static int assign_proc(prte_job_t *jdata,
     proc->name.rank = vpid;
     proc->rank = vpid;
     /* insert the proc into the jdata array */
-    pptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->name.rank);
+    pptr = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, proc->name.rank);
     if (NULL != pptr) {
-        PRTE_RELEASE(pptr);
+        PMIX_RELEASE(pptr);
     }
-    PRTE_RETAIN(proc);
-    rc = prte_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+    PMIX_RETAIN(proc);
+    rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
@@ -112,7 +112,7 @@ static int rank_span(prte_job_t *jdata, hwloc_obj_type_t target,
         /* compute the total number of objects in the mapped nodes */
         delta = 0;
         for (m = 0; m < jdata->map->nodes->size; m++) {
-            node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+            node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m);
             if (NULL == node) {
                 continue;
             }
@@ -122,21 +122,21 @@ static int rank_span(prte_job_t *jdata, hwloc_obj_type_t target,
 
         /* cycle across the apps as they were mapped in order */
         for (n = 0; n < jdata->apps->size; n++) {
-            if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n))) {
+            if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n))) {
                 continue;
             }
             first = true;
             i = 0;
             /* cycle across the nodes looking for procs from that app */
             for (m = 0; m < jdata->map->nodes->size; m++) {
-                node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+                node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m);
                 if (NULL == node) {
                     continue;
                 }
                 vpid = i;
                 /* cycle thru the procs on this node */
                 for (j = 0; j < node->procs->size; j++) {
-                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                    proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j);
                     if (NULL == proc) {
                         continue;
                     }
@@ -182,13 +182,13 @@ static int rank_span(prte_job_t *jdata, hwloc_obj_type_t target,
 
     vpid = 0;
     for (n = 0; n < jdata->apps->size; n++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n))) {
             continue;
         }
 
         first = true;
         for (m = 0; m < jdata->map->nodes->size; m++) {
-            node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+            node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m);
             if (NULL == node) {
                 continue;
             }
@@ -210,7 +210,7 @@ static int rank_span(prte_job_t *jdata, hwloc_obj_type_t target,
 
                 /* cycle thru the procs on this node */
                 for (j = 0; j < node->procs->size; j++) {
-                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                    proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j);
                     if (NULL == proc) {
                         continue;
                     }
@@ -302,13 +302,13 @@ static int rank_fill(prte_job_t *jdata,
 
     vpid = 0;
     for (n = 0; n < jdata->apps->size; n++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n))) {
             continue;
         }
 
         cnt = 0;
         for (m = 0; m < jdata->map->nodes->size; m++) {
-            node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+            node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m);
             if (NULL == node) {
                 continue;
             }
@@ -331,7 +331,7 @@ static int rank_fill(prte_job_t *jdata,
 
                 /* cycle thru the procs on this node */
                 for (j = 0; j < node->procs->size && cnt < app->num_procs; j++) {
-                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                    proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j);
                     if (NULL == proc) {
                         continue;
                     }
@@ -384,13 +384,13 @@ static int rank_fill(prte_job_t *jdata,
                     cnt++;
 
                     /* insert the proc into the jdata array */
-                    pptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs,
+                    pptr = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs,
                                                                        proc->name.rank);
                     if (NULL != pptr) {
-                        PRTE_RELEASE(pptr);
+                        PMIX_RELEASE(pptr);
                     }
-                    PRTE_RETAIN(proc);
-                    rc = prte_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+                    PMIX_RETAIN(proc);
+                    rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
                     if (PRTE_SUCCESS != rc) {
                         PRTE_ERROR_LOG(rc);
                         return rc;
@@ -425,7 +425,7 @@ static int rank_by(prte_job_t *jdata,
     prte_proc_t *proc, *pptr;
     pmix_rank_t vpid;
     int cnt;
-    prte_pointer_array_t objs;
+    pmix_pointer_array_t objs;
     hwloc_obj_t locale;
     prte_app_idx_t napp;
     bool noassign, first;
@@ -453,20 +453,20 @@ static int rank_by(prte_job_t *jdata,
         // can just cycle within each node and rank sequentially
         vpid = 0;
         for (n = 0; n < jdata->apps->size; n++) {
-            app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n);
+            app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
             if (NULL == app) {
                 continue;
             }
             first = true;
             /* cycle across the nodes looking for procs from that app */
             for (m = 0; m < jdata->map->nodes->size; m++) {
-                node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+                node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m);
                 if (NULL == node) {
                     continue;
                 }
                 /* cycle thru the procs on this node */
                 for (j = 0; j < node->procs->size; j++) {
-                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                    proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j);
                     if (NULL == proc) {
                         continue;
                     }
@@ -506,18 +506,18 @@ static int rank_by(prte_job_t *jdata,
     // if the mapping/ranking aren't matched, then do it the hard way
     vpid = 0;
     for (n = 0, napp = 0; napp < jdata->num_apps && n < jdata->apps->size; n++) {
-        app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n);
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
         if (NULL == app) {
             continue;
         }
         napp++;
         /* setup the pointer array */
-        PRTE_CONSTRUCT(&objs, prte_pointer_array_t);
-        prte_pointer_array_init(&objs, 2, INT_MAX, 2);
+        PMIX_CONSTRUCT(&objs, pmix_pointer_array_t);
+        pmix_pointer_array_init(&objs, 2, INT_MAX, 2);
 
         cnt = 0;
         for (m = 0, nn = 0; nn < jdata->map->num_nodes && m < jdata->map->nodes->size; m++) {
-            node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+            node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m);
             if (NULL == node) {
                 continue;
             }
@@ -530,13 +530,13 @@ static int rank_by(prte_job_t *jdata,
                                 "mca:rmaps:rank_by: found %d objects on node %s with %d procs",
                                 num_objs, node->name, (int) node->num_procs);
             if (0 == num_objs) {
-                PRTE_DESTRUCT(&objs);
+                PMIX_DESTRUCT(&objs);
                 return PRTE_ERR_NOT_SUPPORTED;
             }
             /* collect all the objects */
             for (i = 0; i < num_objs; i++) {
                 obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, target, cache_level, i);
-                prte_pointer_array_set_item(&objs, i, obj);
+                pmix_pointer_array_set_item(&objs, i, obj);
             }
 
             /* cycle across the objects, assigning a proc to each one,
@@ -555,14 +555,14 @@ static int rank_by(prte_job_t *jdata,
                 noassign = true;
                 for (i = 0; i < num_objs && cnt < app->num_procs; i++) {
                     /* get the next object */
-                    obj = (hwloc_obj_t) prte_pointer_array_get_item(&objs, i);
+                    obj = (hwloc_obj_t) pmix_pointer_array_get_item(&objs, i);
                     if (NULL == obj) {
                         break;
                     }
                     /* scan across the procs and find the first unassigned one that includes this
                      * object */
                     for (j = 0; j < node->procs->size && cnt < app->num_procs; j++) {
-                        proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                        proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j);
                         if (NULL == proc) {
                             continue;
                         }
@@ -624,15 +624,15 @@ static int rank_by(prte_job_t *jdata,
                                             "%d assigned rank %s",
                                             j, i, PRTE_VPID_PRINT(proc->name.rank));
                         /* insert the proc into the jdata array */
-                        pptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->name.rank);
+                        pptr = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, proc->name.rank);
                         if (NULL != pptr) {
-                            PRTE_RELEASE(pptr);
+                            PMIX_RELEASE(pptr);
                         }
-                        PRTE_RETAIN(proc);
-                        rc = prte_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+                        PMIX_RETAIN(proc);
+                        rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
                         if (PRTE_SUCCESS != rc) {
                             PRTE_ERROR_LOG(rc);
-                            PRTE_DESTRUCT(&objs);
+                            PMIX_DESTRUCT(&objs);
                             return rc;
                         }
                         num_ranked++;
@@ -650,7 +650,7 @@ static int rank_by(prte_job_t *jdata,
             }
         }
         /* cleanup */
-        PRTE_DESTRUCT(&objs);
+        PMIX_DESTRUCT(&objs);
 
         /* Are all the procs ranked? we don't want to crash on INVALID ranks */
         if (cnt < app->num_procs) {
@@ -817,20 +817,20 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata)
                             PRTE_JOBID_PRINT(jdata->nspace));
         /* assign the ranks round-robin across nodes */
         for (n = 0; n < jdata->apps->size; n++) {
-            app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n);
+            app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
             if (NULL == app) {
                 continue;
             }
             first = true;
             cnt = 0;
             for (m = 0; m < jdata->map->nodes->size; m++) {
-                node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+                node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m);
                 if (NULL == node) {
                     continue;
                 }
                 vpid = cnt;
                 for (j = 0; j < node->procs->size; j++) {
-                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j);
+                    proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j);
                     if (NULL == proc) {
                         continue;
                     }
@@ -901,7 +901,7 @@ int prte_rmaps_base_compute_local_ranks(prte_job_t *jdata)
          * local and node ranks, until we
          * have done so for all procs on nodes in this map
          */
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, i))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
 
@@ -913,7 +913,7 @@ int prte_rmaps_base_compute_local_ranks(prte_job_t *jdata)
          */
         for (k = 0; k < node->procs->size; k++) {
             /* if this proc is NULL, skip it */
-            if (NULL == prte_pointer_array_get_item(node->procs, k)) {
+            if (NULL == pmix_pointer_array_get_item(node->procs, k)) {
                 continue;
             }
             minv = PMIX_RANK_VALID;
@@ -923,7 +923,7 @@ int prte_rmaps_base_compute_local_ranks(prte_job_t *jdata)
             /* find the minimum vpid proc */
             for (j = 0; j < node->procs->size; j++) {
                 /* if this proc is NULL, skip it */
-                if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+                if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
                     continue;
                 }
                 /* only look at procs for this job when
@@ -957,13 +957,13 @@ int prte_rmaps_base_compute_local_ranks(prte_job_t *jdata)
 
     /* compute app_rank */
     for (i = 0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
         k = 0;
         /* loop thru all procs in job to find those from this app_context */
         for (j = 0; j < jdata->procs->size; j++) {
-            if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, j))) {
+            if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, j))) {
                 continue;
             }
             if (proc->app_idx != app->idx) {
@@ -1007,7 +1007,7 @@ void prte_rmaps_base_update_local_ranks(prte_job_t *jdata, prte_node_t *oldnode,
 retry_nr:
     for (k = 0; k < newnode->procs->size; k++) {
         /* if this proc is NULL, skip it */
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(newnode->procs, k))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(newnode->procs, k))) {
             continue;
         }
         if (node_rank == proc->node_rank) {
@@ -1021,7 +1021,7 @@ retry_nr:
 retry_lr:
     for (k = 0; k < newnode->procs->size; k++) {
         /* if this proc is NULL, skip it */
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(newnode->procs, k))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(newnode->procs, k))) {
             continue;
         }
         /* ignore procs from other jobs */

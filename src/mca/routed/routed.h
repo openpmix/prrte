@@ -158,7 +158,7 @@ typedef void (*prte_routed_module_update_routing_plan_fn_t)(void);
  * the grpcomm framework will know who to send xcast to
  * next
  */
-typedef void (*prte_routed_module_get_routing_list_fn_t)(prte_list_t *coll);
+typedef void (*prte_routed_module_get_routing_list_fn_t)(pmix_list_t *coll);
 
 /*
  * Set lifeline process
@@ -219,9 +219,7 @@ PRTE_EXPORT extern prte_routed_module_t prte_routed;
 
 struct prte_routed_component_3_0_0_t {
     /* Base component description */
-    prte_mca_base_component_t base_version;
-    /* Base component data block */
-    prte_mca_base_component_data_t base_data;
+    pmix_mca_base_component_t base_version;
     /* priority */
     int priority;
 };
@@ -231,7 +229,7 @@ typedef struct prte_routed_component_3_0_0_t prte_routed_component_t;
 /* ******************************************************************** */
 
 /** Macro for use in components that are of type routed  */
-#define PRTE_ROUTED_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_2_1_0("routed", 3, 0, 0)
+#define PRTE_ROUTED_BASE_VERSION_3_0_0 PMIX_MCA_BASE_VERSION_1_0_0("routed", 3, 0, 0)
 
 /* ******************************************************************** */
 

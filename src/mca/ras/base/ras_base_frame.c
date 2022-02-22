@@ -15,7 +15,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,7 +27,7 @@
 #include "constants.h"
 
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/runtime/prte_globals.h"
 
@@ -42,7 +42,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prte_mca_base_component_t struct.
+ * component's public pmix_mca_base_component_t struct.
  */
 
 #include "src/mca/ras/base/static-components.h"
@@ -59,12 +59,12 @@ prte_ras_base_t prte_ras_base = {
     .simulated = false
 };
 
-static int ras_register(prte_mca_base_register_flag_t flags)
+static int ras_register(pmix_mca_base_register_flag_t flags)
 {
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     prte_ras_base.multiplier = 1;
-    prte_mca_base_var_register("prte", "ras", "base", "multiplier",
+    pmix_mca_base_var_register("prte", "ras", "base", "multiplier",
                                "Simulate a larger cluster by launching N daemons/node",
                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
@@ -88,7 +88,7 @@ static int ras_register(prte_mca_base_register_flag_t flags)
     prte_ras_base.launch_orted_on_hn = false;
 #endif
 
-    prte_mca_base_var_register("prte", "ras", "base", "launch_orted_on_hn",
+    pmix_mca_base_var_register("prte", "ras", "base", "launch_orted_on_hn",
                                "Launch an prte daemon on the head node",
                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
@@ -103,20 +103,20 @@ static int prte_ras_base_close(void)
         prte_ras_base.active_module->finalize();
     }
 
-    return prte_mca_base_framework_components_close(&prte_ras_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_ras_base_framework, NULL);
 }
 
 /**
  *  * Function for finding and opening either all MCA components, or the one
  *   * that was specifically requested via a MCA parameter.
  *    */
-static int prte_ras_base_open(prte_mca_base_open_flag_t flags)
+static int prte_ras_base_open(pmix_mca_base_open_flag_t flags)
 {
     /* Open up all available components */
-    return prte_mca_base_framework_components_open(&prte_ras_base_framework, flags);
+    return pmix_mca_base_framework_components_open(&prte_ras_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, ras, "PRTE Resource Allocation Subsystem", ras_register,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, ras, "PRTE Resource Allocation Subsystem", ras_register,
                                 prte_ras_base_open, prte_ras_base_close,
                                 prte_ras_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

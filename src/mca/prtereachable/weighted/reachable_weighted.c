@@ -28,7 +28,7 @@
 #    include <math.h>
 #endif
 
-#include "src/mca/prteif/prteif.h"
+#include "src/mca/pif/pif.h"
 
 #include "reachable_weighted.h"
 #include "src/mca/prtereachable/base/base.h"
@@ -37,9 +37,9 @@
 
 static int weighted_init(void);
 static int weighted_fini(void);
-static prte_reachable_t *weighted_reachable(prte_list_t *local_ifs, prte_list_t *remote_ifs);
+static prte_reachable_t *weighted_reachable(pmix_list_t *local_ifs, pmix_list_t *remote_ifs);
 
-static int get_weights(prte_if_t *local_if, prte_if_t *remote_if);
+static int get_weights(pmix_if_t *local_if, pmix_if_t *remote_if);
 static int calculate_weight(int bandwidth_local, int bandwidth_remote, int connection_quality);
 
 /*
@@ -79,23 +79,23 @@ static int weighted_fini(void)
     return PRTE_SUCCESS;
 }
 
-static prte_reachable_t *weighted_reachable(prte_list_t *local_ifs, prte_list_t *remote_ifs)
+static prte_reachable_t *weighted_reachable(pmix_list_t *local_ifs, pmix_list_t *remote_ifs)
 {
     prte_reachable_t *reachable_results = NULL;
     int i, j;
-    prte_if_t *local_iter, *remote_iter;
+    pmix_if_t *local_iter, *remote_iter;
 
-    reachable_results = prte_reachable_allocate(prte_list_get_size(local_ifs),
-                                                prte_list_get_size(remote_ifs));
+    reachable_results = prte_reachable_allocate(pmix_list_get_size(local_ifs),
+                                                pmix_list_get_size(remote_ifs));
     if (NULL == reachable_results) {
         return NULL;
     }
 
     i = 0;
-    PRTE_LIST_FOREACH(local_iter, local_ifs, prte_if_t)
+    PMIX_LIST_FOREACH(local_iter, local_ifs, pmix_if_t)
     {
         j = 0;
-        PRTE_LIST_FOREACH(remote_iter, remote_ifs, prte_if_t)
+        PMIX_LIST_FOREACH(remote_iter, remote_ifs, pmix_if_t)
         {
             reachable_results->weights[i][j] = get_weights(local_iter, remote_iter);
             j++;
@@ -106,7 +106,7 @@ static prte_reachable_t *weighted_reachable(prte_list_t *local_ifs, prte_list_t 
     return reachable_results;
 }
 
-static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
+static int get_weights(pmix_if_t *local_if, pmix_if_t *remote_if)
 {
     char str_local[128], str_remote[128], *conn_type;
     struct sockaddr *local_sockaddr, *remote_sockaddr;
@@ -176,7 +176,7 @@ static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
              * number of connections.
              *
              * There used to be a comment in this code (and one in the
-             * BTL TCP code as well) that the prte_if code doesn't
+             * BTL TCP code as well) that the pmix_if code doesn't
              * pass link-local addresses through.  However, this is
              * demonstratably not true on Linux, where link-local
              * interfaces are created.  Since it's easy to handle

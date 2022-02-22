@@ -45,7 +45,7 @@
 extern prte_ess_base_module_t prte_ess_hnp_module;
 static int hnp_component_open(void);
 static int hnp_component_close(void);
-static int hnp_component_query(prte_mca_base_module_t **module, int *priority);
+static int hnp_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
@@ -55,14 +55,14 @@ prte_ess_base_component_t prte_ess_hnp_component
     = {.base_version = {PRTE_ESS_BASE_VERSION_3_0_0,
 
                         /* Component name and version */
-                        .mca_component_name = "hnp",
+                        .pmix_mca_component_name = "hnp",
                         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION,
-                                                   PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION),
+                                                   PRTE_MINOR_VERSION, PMIX_RELEASE_VERSION),
 
                         /* Component open and close functions */
                         .mca_open_component = hnp_component_open,
                         .mca_close_component = hnp_component_close,
-                        .mca_query_component = hnp_component_query},
+                        .pmix_mca_query_component = hnp_component_query},
        .base_data = {/* The component is checkpoint ready */
                      PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT}};
 
@@ -72,7 +72,7 @@ static int hnp_component_open(void)
     return PRTE_SUCCESS;
 }
 
-static int hnp_component_query(prte_mca_base_module_t **module, int *priority)
+static int hnp_component_query(pmix_mca_base_module_t **module, int *priority)
 {
 
     /* we are the hnp module - we need to be selected
@@ -80,7 +80,7 @@ static int hnp_component_query(prte_mca_base_module_t **module, int *priority)
      */
     if (PRTE_PROC_IS_MASTER) {
         *priority = 100;
-        *module = (prte_mca_base_module_t *) &prte_ess_hnp_module;
+        *module = (pmix_mca_base_module_t *) &prte_ess_hnp_module;
         return PRTE_SUCCESS;
     }
 

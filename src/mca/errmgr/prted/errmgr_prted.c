@@ -112,7 +112,7 @@ static void wakeup(int sd, short args, void *cbdata)
 {
     PRTE_HIDE_UNUSED_PARAMS(sd, args, cbdata);
     /* nothing more we can do */
-    PRTE_ACQUIRE_OBJECT(cbdata);
+    PMIX_ACQUIRE_OBJECT(cbdata);
     prte_quit(0, 0, NULL);
 }
 
@@ -216,7 +216,7 @@ static void prted_abort(int error_code, char *fmt, ...)
     if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
                                           prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(alert);
+        PMIX_RELEASE(alert);
         /* we can't communicate, so give up */
         prte_quit(0, 0, NULL);
         return;
@@ -225,7 +225,7 @@ static void prted_abort(int error_code, char *fmt, ...)
 cleanup:
     /* set a timer for exiting - this also gives the message a chance
      * to get out! */
-    if (NULL == (timer = PRTE_NEW(prte_timer_t))) {
+    if (NULL == (timer = PMIX_NEW(prte_timer_t))) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return;
     }
@@ -233,7 +233,7 @@ cleanup:
     timer->tv.tv_usec = 0;
     prte_event_evtimer_set(prte_event_base, timer->ev, wakeup, NULL);
     prte_event_set_priority(timer->ev, PRTE_ERROR_PRI);
-    PRTE_POST_OBJECT(timer);
+    PMIX_POST_OBJECT(timer);
     prte_event_evtimer_add(timer->ev, &timer->tv);
 }
 
@@ -247,7 +247,7 @@ static void job_errors(int fd, short args, void *cbdata)
     pmix_data_buffer_t *alert;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
 
     /*
      * if prte is trying to shutdown, just let it
@@ -259,7 +259,7 @@ static void job_errors(int fd, short args, void *cbdata)
     /* if the jdata is NULL, then it is referencing the daemon job */
     if (NULL == caddy->jdata) {
         caddy->jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-        PRTE_RETAIN(caddy->jdata);
+        PMIX_RETAIN(caddy->jdata);
     }
 
     /* update the state */
@@ -309,11 +309,11 @@ static void job_errors(int fd, short args, void *cbdata)
     if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
                                           prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(alert);
+        PMIX_RELEASE(alert);
     }
 
 cleanup:
-    PRTE_RELEASE(caddy);
+    PMIX_RELEASE(caddy);
 }
 
 static void proc_errors(int fd, short args, void *cbdata)
@@ -330,7 +330,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     prte_wait_tracker_t *t2;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
 
     PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:prted:proc_errors process %s error state %s",
@@ -404,15 +404,15 @@ static void proc_errors(int fd, short args, void *cbdata)
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             /* get the proc_t */
             if (NULL
-                == (child = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs,
+                == (child = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs,
                                                                         proc->rank))) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 goto cleanup;
             }
             /* leave the exit code alone - process this as a waitpid */
-            t2 = PRTE_NEW(prte_wait_tracker_t);
-            PRTE_RETAIN(child); // protect against race conditions
+            t2 = PMIX_NEW(prte_wait_tracker_t);
+            PMIX_RETAIN(child); // protect against race conditions
             t2->child = child;
             t2->evb = prte_event_base;
             prte_event_set(t2->evb, &t2->ev, -1, PRTE_EV_WRITE,
@@ -429,7 +429,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* are any of my children still alive */
             for (i = 0; i < prte_local_children->size; i++) {
                 if (NULL
-                    != (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
+                    != (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
                                                                             i))) {
                     if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE)) {
                         PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
@@ -458,7 +458,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         goto cleanup;
     }
 
-    if (NULL == (child = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank))) {
+    if (NULL == (child = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, proc->rank))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         goto cleanup;
@@ -517,7 +517,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
                                                   prte_rml_send_callback, NULL))) {
                 PRTE_ERROR_LOG(rc);
-                PRTE_RELEASE(alert);
+                PMIX_RELEASE(alert);
             }
             /* mark that we notified the HNP for this job so we don't do it again */
             prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
@@ -571,7 +571,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
             for (i = 0; i < prte_local_children->size; i++) {
                 if (NULL
-                    != (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
+                    != (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
                                                                             i))) {
                     if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE)) {
                         goto keep_going;
@@ -669,12 +669,12 @@ static void proc_errors(int fd, short args, void *cbdata)
         /* remove all of this job's children from the global list */
         for (i = 0; i < prte_local_children->size; i++) {
             if (NULL
-                == (ptr = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+                == (ptr = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
                 continue;
             }
             if (PMIX_CHECK_NSPACE(jdata->nspace, ptr->name.nspace)) {
-                prte_pointer_array_set_item(prte_local_children, i, NULL);
-                PRTE_RELEASE(ptr);
+                pmix_pointer_array_set_item(prte_local_children, i, NULL);
+                PMIX_RELEASE(ptr);
             }
         }
 
@@ -682,7 +682,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         prte_session_dir_cleanup(jdata->nspace);
 
         /* remove this job from our local job data since it is complete */
-        PRTE_RELEASE(jdata);
+        PMIX_RELEASE(jdata);
 
         /* send it */
         if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
@@ -693,7 +693,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     }
 
 cleanup:
-    PRTE_RELEASE(caddy);
+    PMIX_RELEASE(caddy);
 }
 
 /*****************
@@ -705,7 +705,7 @@ static bool any_live_children(pmix_nspace_t job)
     prte_proc_t *child;
 
     for (i = 0; i < prte_local_children->size; i++) {
-        if (NULL == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+        if (NULL == (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
             continue;
         }
         /* is this child part of the specified job? */
@@ -765,7 +765,7 @@ static int pack_state_update(pmix_data_buffer_t *alert, prte_job_t *jobdat)
         return rc;
     }
     for (i = 0; i < prte_local_children->size; i++) {
-        if (NULL == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+        if (NULL == (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
             continue;
         }
         /* if this child is part of the job... */
@@ -795,7 +795,7 @@ static void failed_start(prte_job_t *jobdat)
     jobdat->state = PRTE_JOB_STATE_FAILED_TO_START;
 
     for (i = 0; i < prte_local_children->size; i++) {
-        if (NULL == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+        if (NULL == (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
             continue;
         }
         /* is this child part of the specified job? */
@@ -820,7 +820,7 @@ static void failed_start(prte_job_t *jobdat)
 
 static void killprocs(pmix_nspace_t job, pmix_rank_t vpid)
 {
-    prte_pointer_array_t cmd;
+    pmix_pointer_array_t cmd;
     prte_proc_t proc;
     int rc;
 
@@ -831,13 +831,13 @@ static void killprocs(pmix_nspace_t job, pmix_rank_t vpid)
         return;
     }
 
-    PRTE_CONSTRUCT(&cmd, prte_pointer_array_t);
-    PRTE_CONSTRUCT(&proc, prte_proc_t);
+    PMIX_CONSTRUCT(&cmd, pmix_pointer_array_t);
+    PMIX_CONSTRUCT(&proc, prte_proc_t);
     PMIX_LOAD_PROCID(&proc.name, job, vpid);
-    prte_pointer_array_add(&cmd, &proc);
+    pmix_pointer_array_add(&cmd, &proc);
     if (PRTE_SUCCESS != (rc = prte_odls.kill_local_procs(&cmd))) {
         PRTE_ERROR_LOG(rc);
     }
-    PRTE_DESTRUCT(&cmd);
-    PRTE_DESTRUCT(&proc);
+    PMIX_DESTRUCT(&cmd);
+    PMIX_DESTRUCT(&proc);
 }

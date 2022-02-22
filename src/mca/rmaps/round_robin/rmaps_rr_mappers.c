@@ -13,7 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -39,7 +39,7 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
 
-int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, prte_list_t *node_list,
+int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *node_list,
                          int32_t num_slots, pmix_rank_t num_procs)
 {
     int i, nprocs_mapped;
@@ -72,7 +72,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
      * map all specified procs or use all allocated slots
      */
     nprocs_mapped = 0;
-    PRTE_LIST_FOREACH(node, node_list, prte_node_t)
+    PMIX_LIST_FOREACH(node, node_list, prte_node_t)
     {
         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:slot working node %s", node->name);
@@ -99,8 +99,8 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
             /* add this node to the map - do it only once */
             if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-                PRTE_RETAIN(node);
-                prte_pointer_array_add(jdata->map->nodes, node);
+                PMIX_RETAIN(node);
+                pmix_pointer_array_add(jdata->map->nodes, node);
                 ++(jdata->map->num_nodes);
             }
             if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, app->idx))) {
@@ -126,12 +126,12 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
      * to add
      */
     balance = (float) ((int) app->num_procs - nprocs_mapped)
-              / (float) prte_list_get_size(node_list);
+              / (float) pmix_list_get_size(node_list);
     extra_procs_to_assign = (int) balance;
     if (0 < (balance - (float) extra_procs_to_assign)) {
         /* compute how many nodes need an extra proc */
         nxtra_nodes = app->num_procs - nprocs_mapped
-                      - (extra_procs_to_assign * prte_list_get_size(node_list));
+                      - (extra_procs_to_assign * pmix_list_get_size(node_list));
         /* add one so that we add an extra proc to the first nodes
          * until all procs are mapped
          */
@@ -143,7 +143,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
     // Rescan the nodes due to a max_slots issue
  rescan_nodes:
 
-    PRTE_LIST_FOREACH(node, node_list, prte_node_t)
+    PMIX_LIST_FOREACH(node, node_list, prte_node_t)
     {
         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:slot working node %s", node->name);
@@ -200,8 +200,8 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
         /* add this node to the map - do it only once */
         if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
             PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-            PRTE_RETAIN(node);
-            prte_pointer_array_add(jdata->map->nodes, node);
+            PMIX_RETAIN(node);
+            pmix_pointer_array_add(jdata->map->nodes, node);
             ++(jdata->map->num_nodes);
         }
 
@@ -275,7 +275,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
     return PRTE_SUCCESS;
 }
 
-int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t *node_list,
+int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *node_list,
                          int32_t num_slots, pmix_rank_t num_procs)
 {
     int j, nprocs_mapped, nnodes;
@@ -307,7 +307,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
         oversubscribed = true;
     }
 
-    nnodes = prte_list_get_size(node_list);
+    nnodes = pmix_list_get_size(node_list);
     nprocs_mapped = 0;
 
     do {
@@ -349,7 +349,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
                             navg, extra_procs_to_assign, nxtra_nodes);
 
         nnodes = 0;
-        PRTE_LIST_FOREACH(node, node_list, prte_node_t)
+        PMIX_LIST_FOREACH(node, node_list, prte_node_t)
         {
             /* get the root object as we are not assigning
              * locale except at the node level
@@ -436,8 +436,8 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
             /* add this node to the map, but only do so once */
             if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-                PRTE_RETAIN(node);
-                prte_pointer_array_add(jdata->map->nodes, node);
+                PMIX_RETAIN(node);
+                pmix_pointer_array_add(jdata->map->nodes, node);
                 ++(jdata->map->num_nodes);
             }
             nnodes++; // track how many nodes remain available
@@ -492,7 +492,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
     /* now fillin as required until fully mapped */
     while (nprocs_mapped < app->num_procs) {
         made_progress = false;
-        PRTE_LIST_FOREACH(node, node_list, prte_node_t)
+        PMIX_LIST_FOREACH(node, node_list, prte_node_t)
         {
             /* get the root object as we are not assigning
              * locale except at the node level
@@ -542,7 +542,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, prte_list_t
     return PRTE_SUCCESS;
 }
 
-static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, prte_list_t *node_list,
+static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *node_list,
                       int32_t num_slots, pmix_rank_t num_procs, hwloc_obj_type_t target,
                       unsigned cache_level);
 
@@ -550,7 +550,7 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, prte_list_t *n
  * but has the added complication of possibly having different
  * numbers of objects on each node
  */
-int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, prte_list_t *node_list,
+int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *node_list,
                         int32_t num_slots, pmix_rank_t num_procs, hwloc_obj_type_t target,
                         unsigned cache_level)
 {
@@ -629,7 +629,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, prte_list_t 
     second_pass = false;
     do {
         add_one = false;
-        PRTE_LIST_FOREACH(node, node_list, prte_node_t)
+        PMIX_LIST_FOREACH(node, node_list, prte_node_t)
         {
             if (NULL == node->topology || NULL == node->topology->topo) {
                 prte_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
@@ -698,8 +698,8 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, prte_list_t 
             /* add this node to the map, if reqd */
             if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-                PRTE_RETAIN(node);
-                prte_pointer_array_add(jdata->map->nodes, node);
+                PMIX_RETAIN(node);
+                pmix_pointer_array_add(jdata->map->nodes, node);
                 ++(jdata->map->num_nodes);
             }
             nmapped = 0;
@@ -830,7 +830,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, prte_list_t 
     return PRTE_SUCCESS;
 }
 
-static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, prte_list_t *node_list,
+static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *node_list,
                       int32_t num_slots, pmix_rank_t num_procs, hwloc_obj_type_t target,
                       unsigned cache_level)
 {
@@ -865,7 +865,7 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, prte_list_t *n
      * next determine how many total objects we have to work with
      */
     nobjs = 0;
-    PRTE_LIST_FOREACH(node, node_list, prte_node_t)
+    PMIX_LIST_FOREACH(node, node_list, prte_node_t)
     {
         if (NULL == node->topology || NULL == node->topology->topo) {
             prte_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
@@ -917,13 +917,13 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, prte_list_t *n
                         hwloc_obj_type_string(target), navg, nxtra_objs);
 
     nprocs_mapped = 0;
-    PRTE_LIST_FOREACH(node, node_list, prte_node_t)
+    PMIX_LIST_FOREACH(node, node_list, prte_node_t)
     {
         /* add this node to the map, if reqd */
         if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
             PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-            PRTE_RETAIN(node);
-            prte_pointer_array_add(jdata->map->nodes, node);
+            PMIX_RETAIN(node);
+            pmix_pointer_array_add(jdata->map->nodes, node);
             ++(jdata->map->num_nodes);
         }
         /* get the available processors on this node */

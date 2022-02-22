@@ -37,7 +37,7 @@ BEGIN_C_DECLS
 /*
  * MCA framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_filem_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_filem_base_framework;
 /*
  * Select an available component.
  */
@@ -72,7 +72,7 @@ PRTE_EXPORT int prte_filem_base_none_get_nb(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_rm(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_rm_nb(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_wait(prte_filem_base_request_t *request);
-PRTE_EXPORT int prte_filem_base_none_wait_all(prte_list_t *request_list);
+PRTE_EXPORT int prte_filem_base_none_wait_all(pmix_list_t *request_list);
 int prte_filem_base_none_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
                                            void *cbdata);
 int prte_filem_base_none_link_local_files(prte_job_t *jdata, prte_app_context_t *app);

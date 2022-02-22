@@ -26,80 +26,11 @@
 #ifndef PRTE_CMD_LINE_H
 #define PRTE_CMD_LINE_H
 
-#include "prte_config.h"
+#include "src/include/pmix_config.h"
 
-#ifdef HAVE_UNISTD_H
-#    include <unistd.h>
-#endif
-#include <ctype.h>
-#include <stdio.h>
-#include <string.h>
-#include <getopt.h>
-
-#include "src/class/prte_list.h"
-#include "src/class/prte_object.h"
-#include "src/util/pmix_argv.h"
+#include "src/util/pmix_cmd_line.h"
 
 BEGIN_C_DECLS
-
-typedef struct {
-    prte_list_item_t super;
-    char *key;
-    char **values;
-} prte_cli_item_t;
-PRTE_CLASS_DECLARATION(prte_cli_item_t);
-
-typedef struct {
-    prte_object_t super;
-    prte_list_t instances;  // comprised of prte_cli_item_t's
-    char **tail;  // remainder of argv
-} prte_cli_result_t;
-PRTE_CLASS_DECLARATION(prte_cli_result_t);
-
-#define PRTE_CLI_RESULT_STATIC_INIT                 \
-{                                                   \
-    .super = PRTE_OBJ_STATIC_INIT(prte_object_t),   \
-    .instances = PRTE_LIST_STATIC_INIT,             \
-    .tail = NULL                                    \
-}
-
-/* define PRTE-named flags for argument required */
-#define PRTE_ARG_REQD       required_argument
-#define PRTE_ARG_NONE       no_argument
-#define PRTE_ARG_OPTIONAL   optional_argument
-
-/* define PRTE-named flags for whether parsing
- * CLI shall include deprecation warnings */
-#define PRTE_CLI_SILENT     true
-#define PRTE_CLI_WARN       false
-
-/* define a long option that has no short option equivalent
- *
- * n = name of the option (see below for definitions)
- * a = whether or not it requires an argument
- */
-#define PRTE_OPTION_DEFINE(n, a)    \
-{                                   \
-    .name = (n),                    \
-    .has_arg = (a),                 \
-    .flag = NULL,                   \
-    .val = 0                        \
-}
-/* define a long option that has a short option equivalent
- *
- * n = name of the option (see below for definitions)
- * a = whether or not it requires an argument
- * c = single character equivalent option
- */
-#define PRTE_OPTION_SHORT_DEFINE(n, a, c)   \
-{                                           \
-    .name = (n),                            \
-    .has_arg = (a),                         \
-    .flag = NULL,                           \
-    .val = (c)                              \
-}
-
-#define PRTE_OPTION_END  {0, 0, 0, 0}
 
 /* define the command line options that PRRTE internally understands.
  * It is the responsibility of each schizo component to translate its
@@ -118,8 +49,8 @@ PRTE_CLASS_DECLARATION(prte_cli_result_t);
 #define PRTE_CLI_PERSONALITY            "personality"               // required
 
 // MCA parameter options
-#define PRTE_CLI_PRTEMCA                "prtemca"                   // requires TWO
-#define PRTE_CLI_PMIXMCA                "pmixmca"                   // requires TWO
+#define PRTE_CLI_PRTEMCA                "pmixmca"                   // requires TWO
+#define PRTE_CLI_PRTEMCA                "pmixmca"                   // requires TWO
 #define PRTE_CLI_TUNE                   "tune"                      // required
 
 // DVM options
@@ -278,86 +209,6 @@ PRTE_CLASS_DECLARATION(prte_cli_result_t);
 #define PRTE_CLI_RAW        "raw"
 #define PRTE_CLI_PATTERN    "pattern"
 
-typedef void (*prte_cmd_line_store_fn_t)(const char *name, const char *option,
-                                         prte_cli_result_t *results);
-
-PRTE_EXPORT int prte_cmd_line_parse(char **argv, char *shorts,
-                                    struct option myoptions[],
-                                    prte_cmd_line_store_fn_t storefn,
-                                    prte_cli_result_t *results,
-                                    char *helpfile);
-
-static inline prte_cli_item_t* prte_cmd_line_get_param(prte_cli_result_t *results,
-                                                       const char *key)
-{
-    prte_cli_item_t *opt;
-
-    PRTE_LIST_FOREACH(opt, &results->instances, prte_cli_item_t) {
-        if (0 == strcmp(opt->key, key)) {
-            return opt;
-        }
-    }
-    return NULL;
-}
-
-static inline bool prte_cmd_line_is_taken(prte_cli_result_t *results,
-                                          const char *key)
-{
-    if (NULL == prte_cmd_line_get_param(results, key)) {
-        return false;
-    }
-    return true;
-}
-
-static inline int prte_cmd_line_get_ninsts(prte_cli_result_t *results,
-                                           const char *key)
-{
-    prte_cli_item_t *opt;
-
-    opt = prte_cmd_line_get_param(results, key);
-    if (NULL == opt) {
-        return 0;
-    }
-    return pmix_argv_count(opt->values);
-}
-
-static inline char* prte_cmd_line_get_nth_instance(prte_cli_result_t *results,
-                                                   const char *key, int idx)
-{
-    prte_cli_item_t *opt;
-    int n, ninst;
-
-    opt = prte_cmd_line_get_param(results, key);
-    if (NULL == opt) {
-        return NULL;
-    }
-    ninst = pmix_argv_count(opt->values);
-    if (ninst < idx) {
-        return NULL;
-    }
-    return opt->values[idx];
-}
-
-#define PRTE_CLI_DEBUG_LIST(r)  \
-do {                                                                    \
-    prte_cli_item_t *_c;                                                \
-    prte_output(0, "\n[%s:%s:%d]", __FILE__, __func__, __LINE__);       \
-    PRTE_LIST_FOREACH(_c, &(r)->instances, prte_cli_item_t) {           \
-        prte_output(0, "KEY: %s", _c->key);                             \
-        if (NULL != _c->values) {                                       \
-            for (int _n=0; NULL != _c->values[_n]; _n++) {              \
-                prte_output(0, "    VAL[%d]: %s", _n, _c->values[_n]);  \
-            }                                                           \
-        }                                                               \
-    }                                                                   \
-    prte_output(0, "\n");                                               \
-} while(0)
-
-#define PRTE_CLI_REMOVE_DEPRECATED(r, o)    \
-do {                                                        \
-    prte_list_remove_item(&(r)->instances, &(o)->super);    \
-    PRTE_RELEASE(o);                                        \
-} while(0)
 END_C_DECLS
 
 #endif /* PRTE_CMD_LINE_H */

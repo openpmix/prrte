@@ -166,7 +166,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                     return;
                 }
-                temp_orte_proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs,
+                temp_orte_proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs,
                                                                              proc.rank);
                 if (NULL == temp_orte_proc) {
                     /* must already be gone */
@@ -205,7 +205,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
                                          "%s errmgr:dvm: send to hnp failed",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                     PRTE_ERROR_LOG(rc);
-                    PRTE_RELEASE(alert);
+                    PMIX_RELEASE(alert);
                 }
                 if (PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_IOF_COMPLETE)
                     && PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_WAITPID)
@@ -258,17 +258,17 @@ static int finalize(void)
 
 static void _terminate_job(pmix_nspace_t jobid)
 {
-    prte_pointer_array_t procs;
+    pmix_pointer_array_t procs;
     prte_proc_t pobj;
 
-    PRTE_CONSTRUCT(&procs, prte_pointer_array_t);
-    prte_pointer_array_init(&procs, 1, 1, 1);
-    PRTE_CONSTRUCT(&pobj, prte_proc_t);
+    PMIX_CONSTRUCT(&procs, pmix_pointer_array_t);
+    pmix_pointer_array_init(&procs, 1, 1, 1);
+    PMIX_CONSTRUCT(&pobj, prte_proc_t);
     PMIX_LOAD_PROCID(&pobj.name, jobid, PMIX_RANK_WILDCARD);
-    prte_pointer_array_add(&procs, &pobj);
+    pmix_pointer_array_add(&procs, &pobj);
     prte_plm.terminate_procs(&procs);
-    PRTE_DESTRUCT(&procs);
-    PRTE_DESTRUCT(&pobj);
+    PMIX_DESTRUCT(&procs);
+    PMIX_DESTRUCT(&pobj);
 }
 
 static void job_errors(int fd, short args, void *cbdata)
@@ -279,7 +279,7 @@ static void job_errors(int fd, short args, void *cbdata)
     int32_t rc;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
 
     /*
      * if prte is trying to shutdown, just let it
@@ -291,7 +291,7 @@ static void job_errors(int fd, short args, void *cbdata)
     /* if the jdata is NULL, then it is referencing the daemon job */
     if (NULL == caddy->jdata) {
         caddy->jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-        PRTE_RETAIN(caddy->jdata);
+        PMIX_RETAIN(caddy->jdata);
     }
 
     /* update the state */
@@ -311,7 +311,7 @@ static void job_errors(int fd, short args, void *cbdata)
             || PRTE_JOB_STATE_CANNOT_LAUNCH == jdata->state) {
             prte_routing_is_enabled = false;
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
-            PRTE_RELEASE(caddy);
+            PMIX_RELEASE(caddy);
             return;
         }
         /* if the daemon job aborted and we haven't heard from everyone yet,
@@ -328,7 +328,7 @@ static void job_errors(int fd, short args, void *cbdata)
         jdata->num_terminated = jdata->num_procs;
         /* activate the terminated state so we can exit */
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
-        PRTE_RELEASE(caddy);
+        PMIX_RELEASE(caddy);
         return;
     }
 
@@ -367,7 +367,7 @@ static void job_errors(int fd, short args, void *cbdata)
     }
 
     /* cleanup */
-    PRTE_RELEASE(caddy);
+    PMIX_RELEASE(caddy);
 }
 
 static void proc_errors(int fd, short args, void *cbdata)
@@ -381,7 +381,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     int32_t i32, *i32ptr;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
 
     PRTE_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:dvm: for proc %s state %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -390,10 +390,10 @@ static void proc_errors(int fd, short args, void *cbdata)
     /* get the job object */
     if (prte_finalizing || NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
         /* could be a race condition */
-        PRTE_RELEASE(caddy);
+        PMIX_RELEASE(caddy);
         return;
     }
-    pptr = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank);
+    pptr = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, proc->rank);
     if (NULL == pptr) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         goto cleanup;
@@ -439,7 +439,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                 for (i = 0; i < prte_local_children->size; i++) {
                     if (NULL
                             != (proct = (prte_proc_t *)
-                                    prte_pointer_array_get_item(prte_local_children, i))
+                                    pmix_pointer_array_get_item(prte_local_children, i))
                         && PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_ALIVE)
                         && proct->state < PRTE_PROC_STATE_UNTERMINATED) {
                         /* at least one is still alive */
@@ -478,7 +478,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
                                PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
-            PRTE_RETAIN(pptr);
+            PMIX_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             /* update our exit code */
             jdata->exit_code = pptr->exit_code;
@@ -504,7 +504,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     if (prte_prteds_term_ordered) {
         for (i = 0; i < prte_local_children->size; i++) {
             if (NULL
-                != (proct = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+                != (proct = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
                 if (PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
                     goto keep_going;
                 }
@@ -565,7 +565,7 @@ keep_going:
             prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
                                PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
-            PRTE_RETAIN(pptr);
+            PMIX_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
             /* kill the job */
@@ -583,7 +583,7 @@ keep_going:
             prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
                                PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
-            PRTE_RETAIN(pptr);
+            PMIX_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
             /* do not kill the job if ft prte is enabled */
@@ -603,7 +603,7 @@ keep_going:
             prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
                                PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
-            PRTE_RETAIN(pptr);
+            PMIX_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
             /* now treat a special case - if the proc exit'd without a required
@@ -641,7 +641,7 @@ keep_going:
                 jdata->exit_code = PRTE_ERR_FAILED_TO_START;
             }
             /* retain the object so it doesn't get free'd */
-            PRTE_RETAIN(pptr);
+            PMIX_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             /* kill the job */
             _terminate_job(jdata->nspace);
@@ -665,7 +665,7 @@ keep_going:
             prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
                                PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
-            PRTE_RETAIN(pptr);
+            PMIX_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
             /* kill the job */
@@ -694,7 +694,7 @@ keep_going:
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
                                    PMIX_POINTER);
                 /* retain the object so it doesn't get free'd */
-                PRTE_RETAIN(pptr);
+                PMIX_RETAIN(pptr);
                 PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
                 /* kill the job */
                 _terminate_job(jdata->nspace);
@@ -718,7 +718,7 @@ keep_going:
             prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
                                PMIX_POINTER);
             /* retain the object so it doesn't get free'd */
-            PRTE_RETAIN(pptr);
+            PMIX_RETAIN(pptr);
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             jdata->exit_code = pptr->exit_code;
             /* kill the job */
@@ -762,5 +762,5 @@ keep_going:
     }
 
 cleanup:
-    PRTE_RELEASE(caddy);
+    PMIX_RELEASE(caddy);
 }

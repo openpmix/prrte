@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,7 +49,7 @@ static void send_cb(int status, pmix_proc_t *peer, pmix_data_buffer_t *buf, prte
                     void *cbdata)
 {
     /* nothing to do here - just release buffer and return */
-    PRTE_RELEASE(buf);
+    PMIX_RELEASE(buf);
 }
 
 void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
@@ -135,7 +135,7 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&target)));
 
     /* cycle through our list of procs */
-    PRTE_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t)
     {
         /* is this intended for this jobid? */
         if (PMIX_CHECK_NSPACE(target.nspace, proct->name.nspace)) {

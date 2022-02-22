@@ -66,7 +66,7 @@ void prte_job_print(char **output, prte_job_t *src)
     free(tmp2);
 
     for (i = 0; i < src->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(src->apps, i))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(src->apps, i))) {
             continue;
         }
         prte_app_print(&tmp2, src, app);
@@ -94,7 +94,7 @@ void prte_job_print(char **output, prte_job_t *src)
     tmp = tmp2;
 
     for (i = 0; i < src->procs->size; i++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(src->procs, i))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(src->procs, i))) {
             continue;
         }
         prte_proc_print(&tmp2, src, proc);
@@ -225,7 +225,7 @@ PRINT_PROCS:
      * will be in the node array based on the order in which they were
      * mapped - which doesn't match job-rank'd order in many cases */
     for (i = 0; i < jdata->procs->size; i++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, i))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, i))) {
             continue;
         }
         if (proc->node != src) {
@@ -420,7 +420,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
         pmix_asprintf(&tmp, "<map>\n");
         /* loop through nodes */
         for (i = 0; i < src->nodes->size; i++) {
-            if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(src->nodes, i))) {
+            if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(src->nodes, i))) {
                 continue;
             }
             prte_node_print(&tmp2, jdata, node);
@@ -430,7 +430,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
             tmp = tmp3;
             /* for each node, loop through procs and print their rank */
             for (j = 0; j < node->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+                if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
                     continue;
                 }
                 if (proc->job != jdata) {
@@ -532,7 +532,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
     free(cpuset);
 
     for (i = 0; i < src->nodes->size; i++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(src->nodes, i))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(src->nodes, i))) {
             continue;
         }
         prte_node_print(&tmp2, jdata, node);

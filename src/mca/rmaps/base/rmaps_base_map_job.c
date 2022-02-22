@@ -31,7 +31,7 @@
 #include <string.h>
 
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
@@ -74,7 +74,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
     schizo = (prte_schizo_base_module_t*)jdata->schizo;
     if (NULL == schizo) {
@@ -154,7 +154,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         app_map = target_jdata->map;
 
         if (NULL == jdata->map) { // Just in case
-            jdata->map = PRTE_NEW(prte_job_map_t);
+            jdata->map = PMIX_NEW(prte_job_map_t);
         }
 
         daemon_map = jdata->map;
@@ -175,11 +175,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         jdata->num_procs = 0;
         prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
 
-        daemon_app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, 0);
+        daemon_app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, 0);
 
         // Foreach node assigned to the target application
         for (int i = 0; i < app_map->num_nodes; i++) {
-            node = (prte_node_t *) prte_pointer_array_get_item(app_map->nodes, i);
+            node = (prte_node_t *) pmix_pointer_array_get_item(app_map->nodes, i);
             if (daemons_per_proc > 0) {
                 prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps: mapping job %s: Assign %d daemons each process on node %s",
@@ -192,8 +192,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
             // Map the node to this job
             PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-            PRTE_RETAIN(node);
-            prte_pointer_array_add(daemon_map->nodes, node);
+            PMIX_RETAIN(node);
+            pmix_pointer_array_add(daemon_map->nodes, node);
             daemon_map->num_nodes += 1;
             obj = hwloc_get_root_obj(node->topology->topo);
 
@@ -208,7 +208,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                         goto cleanup;
                     }
                     // add it to the job's proc array
-                    prte_pointer_array_add(jdata->procs, (void *) proc);
+                    pmix_pointer_array_add(jdata->procs, (void *) proc);
                     jdata->num_procs += 1;
                     // we are REQUIRED to set the locale
                     prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
@@ -219,7 +219,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             if (daemons_per_proc > 0) {
                 // Foreach application process associated with this job on this node
                 for (int npr = 0; npr < node->procs->size; ++npr) {
-                    proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, npr);
+                    proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, npr);
                     if (NULL == proc) {
                         continue;
                     }
@@ -235,7 +235,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                             goto cleanup;
                         }
                         // add it to the job's proc array
-                        prte_pointer_array_add(jdata->procs, (void *) proc);
+                        pmix_pointer_array_add(jdata->procs, (void *) proc);
                         jdata->num_procs += 1;
                         // we are REQUIRED to set the locale
                         prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
@@ -290,7 +290,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
 
     if (NULL == jdata->map) {
-        jdata->map = PRTE_NEW(prte_job_map_t);
+        jdata->map = PMIX_NEW(prte_job_map_t);
     }
 
     if (inherit) {
@@ -398,32 +398,32 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     /* estimate the number of procs for assigning default mapping/ranking policies */
     nprocs = 0;
     for (int i = 0; i < jdata->apps->size; i++) {
-        if (NULL != (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL != (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             if (0 == app->num_procs) {
-                prte_list_t nodes;
-                PRTE_CONSTRUCT(&nodes, prte_list_t);
+                pmix_list_t nodes;
+                PMIX_CONSTRUCT(&nodes, pmix_list_t);
                 prte_rmaps_base_get_target_nodes(&nodes, &slots, app, PRTE_MAPPING_BYNODE, true,
                                                  true);
                 if (pernode) {
-                    slots = u16 * prte_list_get_size(&nodes);
+                    slots = u16 * pmix_list_get_size(&nodes);
                 } else if (perpackage) {
                     /* add in #packages for each node */
-                    PRTE_LIST_FOREACH(node, &nodes, prte_node_t)
+                    PMIX_LIST_FOREACH(node, &nodes, prte_node_t)
                     {
                         slots += u16 * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                           HWLOC_OBJ_PACKAGE, 0);
                     }
                 } else if (pernuma) {
                     /* add in #NUMA for each node */
-                    PRTE_LIST_FOREACH(node, &nodes, prte_node_t)
+                    PMIX_LIST_FOREACH(node, &nodes, prte_node_t)
                     {
                         slots += u16 * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                           HWLOC_OBJ_NUMANODE, 0);
                     }
                 } else if (sequential) {
-                    slots = prte_list_get_size(&nodes);
+                    slots = pmix_list_get_size(&nodes);
                 }
-                PRTE_LIST_DESTRUCT(&nodes);
+                PMIX_LIST_DESTRUCT(&nodes);
             } else {
                 slots = app->num_procs;
             }
@@ -580,16 +580,16 @@ ranking:
      */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         prte_topology_t *t0;
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, 0))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0))) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            PRTE_RELEASE(caddy);
+            PMIX_RELEASE(caddy);
             jdata->exit_code = PRTE_ERR_NOT_FOUND;
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
         t0 = node->topology;
         for (int i = 1; i < prte_node_pool->size; i++) {
-            if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, i))) {
+            if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
                 continue;
             }
             if (NULL == node->topology) {
@@ -607,13 +607,13 @@ ranking:
          * the job
          */
         did_map = false;
-        if (1 == prte_list_get_size(&prte_rmaps_base.selected_modules)) {
+        if (1 == pmix_list_get_size(&prte_rmaps_base.selected_modules)) {
             /* forced selection */
-            mod = (prte_rmaps_base_selected_module_t *) prte_list_get_first(
+            mod = (prte_rmaps_base_selected_module_t *) pmix_list_get_first(
                 &prte_rmaps_base.selected_modules);
-            jdata->map->req_mapper = strdup(mod->component->mca_component_name);
+            jdata->map->req_mapper = strdup(mod->component->pmix_mca_component_name);
         }
-        PRTE_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t)
+        PMIX_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t)
         {
             if (PRTE_SUCCESS == (rc = mod->module->map_job(jdata))
                 || PRTE_ERR_RESOURCE_BUSY == rc) {
@@ -732,13 +732,13 @@ ranking:
 cleanup:
     /* reset any node map flags we used so the next job will start clean */
     for (int i = 0; i < jdata->map->nodes->size; i++) {
-        if (NULL != (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, i))) {
+        if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, i))) {
             PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
         }
     }
 
     /* cleanup */
-    PRTE_RELEASE(caddy);
+    PMIX_RELEASE(caddy);
 }
 
 void prte_rmaps_base_display_map(prte_job_t *jdata)

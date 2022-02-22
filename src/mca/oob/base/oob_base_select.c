@@ -13,7 +13,7 @@
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/output.h"
 
@@ -45,34 +45,34 @@
  */
 int prte_oob_base_select(void)
 {
-    prte_mca_base_component_list_item_t *cli, *cmp, *c2;
+    pmix_mca_base_component_list_item_t *cli, *cmp, *c2;
     prte_oob_base_component_t *component, *c3;
     bool added;
     int i, rc;
 
     /* Query all available components and ask if their transport is available */
-    PRTE_LIST_FOREACH(cli, &prte_oob_base_framework.framework_components,
-                      prte_mca_base_component_list_item_t)
+    PMIX_LIST_FOREACH(cli, &prte_oob_base_framework.framework_components,
+                      pmix_mca_base_component_list_item_t)
     {
         component = (prte_oob_base_component_t *) cli->cli_component;
 
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "mca:oob:select: checking available component %s",
-                            component->oob_base.mca_component_name);
+                            component->oob_base.pmix_mca_component_name);
 
         /* If there's no query function, skip it */
         if (NULL == component->available) {
             prte_output_verbose(
                 5, prte_oob_base_framework.framework_output,
                 "mca:oob:select: Skipping component [%s]. It does not implement a query function",
-                component->oob_base.mca_component_name);
+                component->oob_base.pmix_mca_component_name);
             continue;
         }
 
         /* Query the component */
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "mca:oob:select: Querying component [%s]",
-                            component->oob_base.mca_component_name);
+                            component->oob_base.pmix_mca_component_name);
 
         rc = component->available();
 
@@ -82,7 +82,7 @@ int prte_oob_base_select(void)
         if (PRTE_SUCCESS != rc && PRTE_ERR_FORCE_SELECT != rc) {
             prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                 "mca:oob:select: Skipping component [%s] - no available interfaces",
-                                component->oob_base.mca_component_name);
+                                component->oob_base.pmix_mca_component_name);
             continue;
         }
 
@@ -90,7 +90,7 @@ int prte_oob_base_select(void)
         if (PRTE_SUCCESS != component->startup()) {
             prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                 "mca:oob:select: Skipping component [%s] - failed to startup",
-                                component->oob_base.mca_component_name);
+                                component->oob_base.pmix_mca_component_name);
             continue;
         }
 
@@ -98,23 +98,23 @@ int prte_oob_base_select(void)
             /* this component shall be the *only* component allowed
              * for use, so shutdown and remove any prior ones */
             while (NULL
-                   != (cmp = (prte_mca_base_component_list_item_t *) prte_list_remove_first(
+                   != (cmp = (pmix_mca_base_component_list_item_t *) pmix_list_remove_first(
                            &prte_oob_base.actives))) {
                 c3 = (prte_oob_base_component_t *) cmp->cli_component;
                 if (NULL != c3->shutdown) {
                     c3->shutdown();
                 }
-                PRTE_RELEASE(cmp);
+                PMIX_RELEASE(cmp);
             }
-            c2 = PRTE_NEW(prte_mca_base_component_list_item_t);
-            c2->cli_component = (prte_mca_base_component_t *) component;
-            prte_list_append(&prte_oob_base.actives, &c2->super);
+            c2 = PMIX_NEW(pmix_mca_base_component_list_item_t);
+            c2->cli_component = (pmix_mca_base_component_t *) component;
+            pmix_list_append(&prte_oob_base.actives, &c2->super);
             break;
         }
 
         /* record it, but maintain priority order */
         added = false;
-        PRTE_LIST_FOREACH(cmp, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+        PMIX_LIST_FOREACH(cmp, &prte_oob_base.actives, pmix_mca_base_component_list_item_t)
         {
             c3 = (prte_oob_base_component_t *) cmp->cli_component;
             if (c3->priority > component->priority) {
@@ -122,9 +122,9 @@ int prte_oob_base_select(void)
             }
             prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                 "mca:oob:select: Inserting component");
-            c2 = PRTE_NEW(prte_mca_base_component_list_item_t);
-            c2->cli_component = (prte_mca_base_component_t *) component;
-            prte_list_insert_pos(&prte_oob_base.actives, &cmp->super, &c2->super);
+            c2 = PMIX_NEW(pmix_mca_base_component_list_item_t);
+            c2->cli_component = (pmix_mca_base_component_t *) component;
+            pmix_list_insert_pos(&prte_oob_base.actives, &cmp->super, &c2->super);
             added = true;
             break;
         }
@@ -132,13 +132,13 @@ int prte_oob_base_select(void)
             /* add to end */
             prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                 "mca:oob:select: Adding component to end");
-            c2 = PRTE_NEW(prte_mca_base_component_list_item_t);
-            c2->cli_component = (prte_mca_base_component_t *) component;
-            prte_list_append(&prte_oob_base.actives, &c2->super);
+            c2 = PMIX_NEW(pmix_mca_base_component_list_item_t);
+            c2->cli_component = (pmix_mca_base_component_t *) component;
+            pmix_list_append(&prte_oob_base.actives, &c2->super);
         }
     }
 
-    if (0 == prte_list_get_size(&prte_oob_base.actives)) {
+    if (0 == pmix_list_get_size(&prte_oob_base.actives)) {
         /* no support available means we really cannot run */
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "mca:oob:select: Init failed to return any available transports");
@@ -148,7 +148,7 @@ int prte_oob_base_select(void)
 
     /* provide them an index so we can track their usability in a bitmap */
     i = 0;
-    PRTE_LIST_FOREACH(cmp, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+    PMIX_LIST_FOREACH(cmp, &prte_oob_base.actives, pmix_mca_base_component_list_item_t)
     {
         c3 = (prte_oob_base_component_t *) cmp->cli_component;
         c3->idx = i++;
@@ -156,6 +156,6 @@ int prte_oob_base_select(void)
 
     prte_output_verbose(5, prte_oob_base_framework.framework_output,
                         "mca:oob:select: Found %d active transports",
-                        (int) prte_list_get_size(&prte_oob_base.actives));
+                        (int) pmix_list_get_size(&prte_oob_base.actives));
     return PRTE_SUCCESS;
 }

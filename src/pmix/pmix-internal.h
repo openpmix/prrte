@@ -23,12 +23,13 @@
 #    include <sys/un.h>
 #endif
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
-#include "src/include/hash_string.h"
+#include "src/include/pmix_hash_string.h"
 #include "src/mca/mca.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/error.h"
+#include "src/util/pmix_error.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 
@@ -42,38 +43,38 @@ BEGIN_C_DECLS
 PRTE_EXPORT extern int prte_pmix_verbose_output;
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     pmix_app_t app;
     void *info;
 } prte_pmix_app_t;
-PRTE_CLASS_DECLARATION(prte_pmix_app_t);
+PMIX_CLASS_DECLARATION(prte_pmix_app_t);
 
 /* define a caddy for pointing to pmix_info_t that
  * are to be included in an answer */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     pmix_proc_t source;
     pmix_info_t *info;
     pmix_persistence_t persistence;
 } prte_ds_info_t;
-PRTE_CLASS_DECLARATION(prte_ds_info_t);
+PMIX_CLASS_DECLARATION(prte_ds_info_t);
 
 /* define another caddy for putting statically defined
  * pmix_info_t objects on a list */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     pmix_info_t info;
 } prte_info_item_t;
-PRTE_CLASS_DECLARATION(prte_info_item_t);
+PMIX_CLASS_DECLARATION(prte_info_item_t);
 
 typedef struct {
-    prte_list_item_t super;
-    prte_list_t infolist;
+    pmix_list_item_t super;
+    pmix_list_t infolist;
 } prte_info_array_item_t;
-PRTE_CLASS_DECLARATION(prte_info_array_item_t);
+PMIX_CLASS_DECLARATION(prte_info_array_item_t);
 
 typedef struct {
-    prte_mutex_t mutex;
+    pmix_mutex_t mutex;
     pthread_cond_t cond;
     volatile bool active;
     int status;
@@ -81,10 +82,10 @@ typedef struct {
 } prte_pmix_lock_t;
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     pmix_value_t value;
 } prte_value_t;
-PRTE_CLASS_DECLARATION(prte_value_t);
+PMIX_CLASS_DECLARATION(prte_value_t);
 
 #if !defined(WORDS_BIGENDIAN)
 #    define PMIX_PROC_NTOH(guid) pmix_proc_ntoh_intr(&(guid))
@@ -106,18 +107,18 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 
 #define PRTE_PMIX_CONSTRUCT_LOCK(l)                \
     do {                                           \
-        PRTE_CONSTRUCT(&(l)->mutex, prte_mutex_t); \
+        PMIX_CONSTRUCT(&(l)->mutex, pmix_mutex_t); \
         pthread_cond_init(&(l)->cond, NULL);       \
         (l)->active = true;                        \
         (l)->status = 0;                           \
         (l)->msg = NULL;                           \
-        PRTE_POST_OBJECT((l));                     \
+        PMIX_POST_OBJECT((l));                     \
     } while (0)
 
 #define PRTE_PMIX_DESTRUCT_LOCK(l)        \
     do {                                  \
-        PRTE_ACQUIRE_OBJECT((l));         \
-        PRTE_DESTRUCT(&(l)->mutex);       \
+        PMIX_ACQUIRE_OBJECT((l));         \
+        PMIX_DESTRUCT(&(l)->mutex);       \
         pthread_cond_destroy(&(l)->cond); \
         if (NULL != (l)->msg) {           \
             free((l)->msg);               \
@@ -127,14 +128,14 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 #if PRTE_ENABLE_DEBUG
 #    define PRTE_PMIX_ACQUIRE_THREAD(lck)                                       \
         do {                                                                    \
-            prte_mutex_lock(&(lck)->mutex);                                     \
-            if (prte_debug_threads) {                                           \
+            pmix_mutex_lock(&(lck)->mutex);                                     \
+            if (pmix_debug_threads) {                                           \
                 prte_output(0, "Waiting for thread %s:%d", __FILE__, __LINE__); \
             }                                                                   \
             while ((lck)->active) {                                             \
                 prte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex);          \
             }                                                                   \
-            if (prte_debug_threads) {                                           \
+            if (pmix_debug_threads) {                                           \
                 prte_output(0, "Thread obtained %s:%d", __FILE__, __LINE__);    \
             }                                                                   \
             (lck)->active = true;                                               \
@@ -142,7 +143,7 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 #else
 #    define PRTE_PMIX_ACQUIRE_THREAD(lck)                              \
         do {                                                           \
-            prte_mutex_lock(&(lck)->mutex);                            \
+            pmix_mutex_lock(&(lck)->mutex);                            \
             while ((lck)->active) {                                    \
                 prte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex); \
             }                                                          \
@@ -153,66 +154,66 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 #if PRTE_ENABLE_DEBUG
 #    define PRTE_PMIX_WAIT_THREAD(lck)                                          \
         do {                                                                    \
-            prte_mutex_lock(&(lck)->mutex);                                     \
-            if (prte_debug_threads) {                                           \
+            pmix_mutex_lock(&(lck)->mutex);                                     \
+            if (pmix_debug_threads) {                                           \
                 prte_output(0, "Waiting for thread %s:%d", __FILE__, __LINE__); \
             }                                                                   \
             while ((lck)->active) {                                             \
                 prte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex);          \
             }                                                                   \
-            if (prte_debug_threads) {                                           \
+            if (pmix_debug_threads) {                                           \
                 prte_output(0, "Thread obtained %s:%d", __FILE__, __LINE__);    \
             }                                                                   \
-            PRTE_ACQUIRE_OBJECT(&lck);                                          \
-            prte_mutex_unlock(&(lck)->mutex);                                   \
+            PMIX_ACQUIRE_OBJECT(&lck);                                          \
+            pmix_mutex_unlock(&(lck)->mutex);                                   \
         } while (0)
 #else
 #    define PRTE_PMIX_WAIT_THREAD(lck)                                 \
         do {                                                           \
-            prte_mutex_lock(&(lck)->mutex);                            \
+            pmix_mutex_lock(&(lck)->mutex);                            \
             while ((lck)->active) {                                    \
                 prte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex); \
             }                                                          \
-            PRTE_ACQUIRE_OBJECT(lck);                                  \
-            prte_mutex_unlock(&(lck)->mutex);                          \
+            PMIX_ACQUIRE_OBJECT(lck);                                  \
+            pmix_mutex_unlock(&(lck)->mutex);                          \
         } while (0)
 #endif
 
 #if PRTE_ENABLE_DEBUG
 #    define PRTE_PMIX_RELEASE_THREAD(lck)                                     \
         do {                                                                  \
-            if (prte_debug_threads) {                                         \
+            if (pmix_debug_threads) {                                         \
                 prte_output(0, "Releasing thread %s:%d", __FILE__, __LINE__); \
             }                                                                 \
             (lck)->active = false;                                            \
             pthread_cond_broadcast(&(lck)->cond);                             \
-            prte_mutex_unlock(&(lck)->mutex);                                 \
+            pmix_mutex_unlock(&(lck)->mutex);                                 \
         } while (0)
 #else
 #    define PRTE_PMIX_RELEASE_THREAD(lck)                   \
         do {                                                \
-            assert(0 != prte_mutex_trylock(&(lck)->mutex)); \
+            assert(0 != pmix_mutex_trylock(&(lck)->mutex)); \
             (lck)->active = false;                          \
             pthread_cond_broadcast(&(lck)->cond);           \
-            prte_mutex_unlock(&(lck)->mutex);               \
+            pmix_mutex_unlock(&(lck)->mutex);               \
         } while (0)
 #endif
 
 #define PRTE_PMIX_WAKEUP_THREAD(lck)          \
     do {                                      \
-        prte_mutex_lock(&(lck)->mutex);       \
+        pmix_mutex_lock(&(lck)->mutex);       \
         (lck)->active = false;                \
-        PRTE_POST_OBJECT(lck);                \
+        PMIX_POST_OBJECT(lck);                \
         pthread_cond_broadcast(&(lck)->cond); \
-        prte_mutex_unlock(&(lck)->mutex);     \
+        pmix_mutex_unlock(&(lck)->mutex);     \
     } while (0)
 
 /*
  * Count the hash for the the external RM
  */
-#define PRTE_HASH_JOBID(str, hash) \
+#define PMIX_HASH_JOBID(str, hash) \
     {                              \
-        PRTE_HASH_STR(str, hash);  \
+        PMIX_HASH_STR(str, hash);  \
         hash &= ~(0x8000);         \
     }
 
@@ -266,7 +267,7 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 #define PRTE_MODEX_SEND(r, sc, s, d, sz)                    \
     do {                                                    \
         char *_key;                                         \
-        _key = prte_mca_base_component_to_string((s));      \
+        _key = pmix_mca_base_component_to_string((s));      \
         PRTE_MODEX_SEND_STRING((r), (sc), _key, (d), (sz)); \
         free(_key);                                         \
     } while (0);
@@ -416,7 +417,7 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
  * from another process:
  *
  * r - the integer return status from the modex op (int)
- * s - the MCA component that posted the data (prte_mca_base_component_t*)
+ * s - the MCA component that posted the data (pmix_mca_base_component_t*)
  * p - pointer to the pmix_proc_t of the proc that posted
  *     the data (pmix_proc_t*)
  * d - pointer to a location wherein the data object
@@ -427,7 +428,7 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 #define PRTE_MODEX_RECV(r, s, p, d, sz)                                                            \
     do {                                                                                           \
         char *_key;                                                                                \
-        _key = prte_mca_base_component_to_string((s));                                             \
+        _key = pmix_mca_base_component_to_string((s));                                             \
         PRTE_OUTPUT_VERBOSE(                                                                       \
             (1, prte_pmix_verbose_output, "%s[%s:%d] MODEX RECV FOR PROC %s KEY %s",               \
              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__, PRTE_NAME_PRINT((p)), _key)); \
@@ -446,12 +447,12 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 typedef uint16_t prte_attribute_key_t;
 #define PRTE_ATTR_KEY_T PRTE_UINT16
 typedef struct {
-    prte_list_item_t super;   /* required for this to be on lists */
+    pmix_list_item_t super;   /* required for this to be on lists */
     prte_attribute_key_t key; /* key identifier */
     bool local;               // whether or not to pack/send this value
     pmix_value_t data;
 } prte_attribute_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_attribute_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_attribute_t);
 
 /* some helper functions */
 PRTE_EXPORT pmix_proc_state_t prte_pmix_convert_state(int state);
@@ -462,9 +463,6 @@ PRTE_EXPORT pmix_status_t prte_pmix_convert_job_state_to_error(int state);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_proc_state_to_error(int state);
 
 PRTE_EXPORT int prte_pmix_register_cleanup(char *path, bool directory, bool ignore, bool jobscope);
-
-#define PMIX_ERROR_LOG(r) \
-    prte_output(0, "[%s:%d] PMIx Error: %s", __FILE__, __LINE__, PMIx_Error_string((r)))
 
 #ifndef PMIX_DATA_BUFFER_STATIC_INIT
     #define PMIX_DATA_BUFFER_STATIC_INIT    \

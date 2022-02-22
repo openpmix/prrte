@@ -35,8 +35,8 @@
 #    include <sys/types.h>
 #endif
 
-#include "src/class/prte_list.h"
-#include "src/mca/base/base.h"
+#include "src/class/pmix_list.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
 #include "src/util/output.h"
@@ -52,7 +52,7 @@
  * Globals
  */
 prte_errmgr_base_t prte_errmgr_base = {
-    .error_cbacks = PRTE_LIST_STATIC_INIT
+    .error_cbacks = PMIX_LIST_STATIC_INIT
 };
 
 /* Public module provides a wrapper around previous functions */
@@ -81,27 +81,27 @@ static int prte_errmgr_base_close(void)
     prte_errmgr = prte_errmgr_default_fns;
 
     /* destruct the callback list */
-    PRTE_LIST_DESTRUCT(&prte_errmgr_base.error_cbacks);
+    PMIX_LIST_DESTRUCT(&prte_errmgr_base.error_cbacks);
 
-    return prte_mca_base_framework_components_close(&prte_errmgr_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_errmgr_base_framework, NULL);
 }
 
 /**
  *  * Function for finding and opening either all MCA components, or the one
  *   * that was specifically requested via a MCA parameter.
  *    */
-static int prte_errmgr_base_open(prte_mca_base_open_flag_t flags)
+static int prte_errmgr_base_open(pmix_mca_base_open_flag_t flags)
 {
     /* load the default fns */
     prte_errmgr = prte_errmgr_default_fns;
 
     /* initialize the error callback list */
-    PRTE_CONSTRUCT(&prte_errmgr_base.error_cbacks, prte_list_t);
+    PMIX_CONSTRUCT(&prte_errmgr_base.error_cbacks, pmix_list_t);
 
     /* Open up all available components */
-    return prte_mca_base_framework_components_open(&prte_errmgr_base_framework, flags);
+    return pmix_mca_base_framework_components_open(&prte_errmgr_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, errmgr, "PRTE Error Manager", NULL, prte_errmgr_base_open,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, errmgr, "PRTE Error Manager", NULL, prte_errmgr_base_open,
                                 prte_errmgr_base_close, prte_errmgr_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

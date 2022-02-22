@@ -16,7 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,14 +49,14 @@ prte_ess_base_component_t prte_ess_tm_component = {
         PRTE_ESS_BASE_VERSION_3_0_0,
 
         /* Component name and version */
-        .mca_component_name = "tm",
+        .pmix_mca_component_name = "tm",
         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PRTE_RELEASE_VERSION),
+                                    PMIX_RELEASE_VERSION),
 
         /* Component open and close functions */
         .mca_open_component = prte_ess_tm_component_open,
         .mca_close_component = prte_ess_tm_component_close,
-        .mca_query_component = prte_ess_tm_component_query,
+        .pmix_mca_query_component = prte_ess_tm_component_query,
     },
     .base_data = {
         /* The component is checkpoint ready */
@@ -69,7 +69,7 @@ int prte_ess_tm_component_open(void)
     return PRTE_SUCCESS;
 }
 
-int prte_ess_tm_component_query(prte_mca_base_module_t **module, int *priority)
+int prte_ess_tm_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* Are we running under a TM job? Were
      * we given a path back to the HNP? If the
@@ -80,7 +80,7 @@ int prte_ess_tm_component_query(prte_mca_base_module_t **module, int *priority)
     if (PRTE_PROC_IS_DAEMON && NULL != getenv("PBS_JOBID")
         && NULL != prte_process_info.my_hnp_uri) {
         *priority = 30;
-        *module = (prte_mca_base_module_t *) &prte_ess_tm_module;
+        *module = (pmix_mca_base_module_t *) &prte_ess_tm_module;
         return PRTE_SUCCESS;
     }
 

@@ -42,9 +42,6 @@
 #endif
 
 #include "src/mca/mca.h"
-#include "src/util/name_fns.h"
-#include "src/util/output.h"
-#include "src/util/pmix_printf.h"
 
 #include "constants.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -56,6 +53,10 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
+#include "src/util/name_fns.h"
+#include "src/util/output.h"
+#include "src/util/pmix_error.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "types.h"
 
@@ -111,7 +112,7 @@ int prte_filem_base_comm_stop(void)
 
 /*
  * handle message from proxies
- * NOTE: The incoming buffer "buffer" is PRTE_RELEASED by the calling program.
+ * NOTE: The incoming buffer "buffer" is PMIX_RELEASED by the calling program.
  * DO NOT RELEASE THIS BUFFER IN THIS CODE
  */
 void prte_filem_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
@@ -186,7 +187,7 @@ static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t *sender,
         return;
     }
     /* get the proc object for it */
-    proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, name.rank);
+    proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, name.rank);
     if (NULL == proc || NULL == proc->node) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);

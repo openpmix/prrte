@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,11 +48,11 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
 {
     prte_app_context_t *app;
     int i;
-    prte_list_t node_list;
-    prte_list_item_t *item;
+    pmix_list_t node_list;
+    pmix_list_item_t *item;
     int32_t num_slots;
     int rc;
-    prte_mca_base_component_t *c = &prte_rmaps_round_robin_component.base_version;
+    pmix_mca_base_component_t *c = &prte_rmaps_round_robin_component.base_version;
     bool initial_map = true;
 
     /* this mapper can only handle initial launch
@@ -66,7 +66,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper
-        && 0 != strcasecmp(jdata->map->req_mapper, c->mca_component_name)) {
+        && 0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: job %s not using rr mapper",
@@ -88,7 +88,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
     if (NULL != jdata->map->last_mapper) {
         free(jdata->map->last_mapper);
     }
-    jdata->map->last_mapper = strdup(c->mca_component_name);
+    jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
 
     /* start at the beginning... */
     jdata->num_procs = 0;
@@ -97,12 +97,12 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
     for (i = 0; i < jdata->apps->size; i++) {
         hwloc_obj_type_t target;
         unsigned cache_level;
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
 
         /* setup the nodelist here in case we jump to error */
-        PRTE_CONSTRUCT(&node_list, prte_list_t);
+        PMIX_CONSTRUCT(&node_list, pmix_list_t);
 
         /* if the number of processes wasn't specified, then we know there can be only
          * one app_context allowed in the launch, and that we are to launch it across
@@ -250,32 +250,32 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
         /* cleanup the node list - it can differ from one app_context
          * to another, so we have to get it every time
          */
-        while (NULL != (item = prte_list_remove_first(&node_list))) {
-            PRTE_RELEASE(item);
+        while (NULL != (item = pmix_list_remove_first(&node_list))) {
+            PMIX_RELEASE(item);
         }
-        PRTE_DESTRUCT(&node_list);
+        PMIX_DESTRUCT(&node_list);
     }
 
     return PRTE_SUCCESS;
 
 error:
-    while (NULL != (item = prte_list_remove_first(&node_list))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&node_list))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&node_list);
+    PMIX_DESTRUCT(&node_list);
 
     return rc;
 }
 
 static int prte_rmaps_rr_assign_locations(prte_job_t *jdata)
 {
-    prte_mca_base_component_t *c = &prte_rmaps_round_robin_component.base_version;
+    pmix_mca_base_component_t *c = &prte_rmaps_round_robin_component.base_version;
     hwloc_obj_type_t target;
     unsigned cache_level;
     int rc;
 
     if (NULL == jdata->map->last_mapper ||
-        0 != strcasecmp(jdata->map->last_mapper, c->mca_component_name)) {
+        0 != strcasecmp(jdata->map->last_mapper, c->pmix_mca_component_name)) {
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: job %s not using rr mapper",

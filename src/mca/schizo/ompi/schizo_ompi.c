@@ -50,7 +50,7 @@
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
-#include "src/mca/base/prte_mca_base_vari.h"
+#include "src/mca/base/pmix_mca_base_vari.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/rmaps/base/base.h"
@@ -59,14 +59,14 @@
 #include "schizo_ompi.h"
 #include "src/mca/schizo/base/base.h"
 
-static int parse_cli(char **argv, prte_cli_result_t *results, bool silent);
+static int parse_cli(char **argv, pmix_cli_result_t *results, bool silent);
 static int detect_proxy(char *argv);
-static int parse_env(char **srcenv, char ***dstenv, prte_cli_result_t *cli);
-static void allow_run_as_root(prte_cli_result_t *results);
+static int parse_env(char **srcenv, char ***dstenv, pmix_cli_result_t *cli);
+static void allow_run_as_root(pmix_cli_result_t *results);
 static int set_default_ranking(prte_job_t *jdata,
                                prte_schizo_options_t *options);
 static int setup_fork(prte_job_t *jdata, prte_app_context_t *context);
-static void job_info(prte_cli_result_t *results,
+static void job_info(pmix_cli_result_t *results,
                      void *jobinfo);
 
 prte_schizo_base_module_t prte_schizo_ompi_module = {
@@ -232,10 +232,10 @@ static struct option ompioptions[] = {
 };
 static char *ompishorts = "h::vVpn:c:N:sH:x:";
 
-static int convert_deprecated_cli(prte_cli_result_t *results,
+static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent);
 
-static int parse_cli(char **argv, prte_cli_result_t *results,
+static int parse_cli(char **argv, pmix_cli_result_t *results,
                      bool silent)
 {
     int rc, n;
@@ -296,7 +296,7 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
     }
 
     // handle relevant MCA params
-    PRTE_LIST_FOREACH(opt, &results->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH(opt, &results->instances, prte_cli_item_t) {
         if (0 == strcmp(opt->key, PRTE_CLI_PRTEMCA)) {
             for (n=0; NULL != opt->values[n]; n++) {
                 p1 = opt->values[n];
@@ -353,7 +353,7 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
     return PRTE_SUCCESS;
 };
 
-static int convert_deprecated_cli(prte_cli_result_t *results,
+static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent)
 {
     char *option, *p1, *p2, *tmp, *tmp2, *output, *modifier;
@@ -368,7 +368,7 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         warn = prte_schizo_ompi_component.warn_deprecations;
     }
 
-    PRTE_LIST_FOREACH_SAFE(opt, nxt, &results->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH_SAFE(opt, nxt, &results->instances, prte_cli_item_t) {
         option = opt->key;
         if (0 == strcmp(option, "n")) {
             /* if they passed a "--n" option, we need to convert it
@@ -1176,7 +1176,7 @@ static bool check_generic(char *p1)
 }
 
 static int parse_env(char **srcenv, char ***dstenv,
-                     prte_cli_result_t *results)
+                     pmix_cli_result_t *results)
 {
     char *p1, *p2, *p3;
     char *env_set_flag;
@@ -1549,7 +1549,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
      * ones as the app-specific ones can override them. We have to
      * process them in the order they were given to ensure we wind
      * up in the desired final state */
-    PRTE_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t)
+    PMIX_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t)
     {
         if (PRTE_JOB_SET_ENVAR == attr->key) {
             pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
@@ -1613,7 +1613,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     }
 
     /* now do the same thing for any app-level attributes */
-    PRTE_LIST_FOREACH(attr, &app->attributes, prte_attribute_t)
+    PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t)
     {
         if (PRTE_APP_SET_ENVAR == attr->key) {
             pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
@@ -1685,8 +1685,8 @@ static int detect_proxy(char *personalities)
     char *evar, *tmp, *e2;
     char *file;
     const char *home;
-    prte_list_t params;
-    prte_mca_base_var_file_value_t *fv;
+    pmix_list_t params;
+    pmix_mca_base_var_file_value_t *fv;
     uid_t uid;
     int n, len;
 
@@ -1775,10 +1775,10 @@ weareit:
     home = pmix_home_directory(uid);
     if (NULL != home) {
         file = pmix_os_path(false, home, ".openmpi", "mca-params.conf", NULL);
-        PRTE_CONSTRUCT(&params, prte_list_t);
-        prte_mca_base_parse_paramfile(file, &params);
+        PMIX_CONSTRUCT(&params, pmix_list_t);
+        pmix_mca_base_parse_paramfile(file, &params);
         free(file);
-        PRTE_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+        PMIX_LIST_FOREACH (fv, &params, pmix_mca_base_var_file_value_t) {
             // see if this param relates to PRRTE
             if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
@@ -1800,17 +1800,17 @@ weareit:
                 free(tmp);
             }
         }
-        PRTE_LIST_DESTRUCT(&params);
+        PMIX_LIST_DESTRUCT(&params);
     }
 
     /* check if the user has set OMPIHOME in their environment */
     if (NULL != (evar = getenv("OMPIHOME"))) {
         /* look for the default MCA param file */
         file = pmix_os_path(false, evar, "etc", "openmpi-mca-params.conf", NULL);
-        PRTE_CONSTRUCT(&params, prte_list_t);
-        prte_mca_base_parse_paramfile(file, &params);
+        PMIX_CONSTRUCT(&params, pmix_list_t);
+        pmix_mca_base_parse_paramfile(file, &params);
         free(file);
-        PRTE_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+        PMIX_LIST_FOREACH (fv, &params, pmix_mca_base_var_file_value_t) {
             // see if this param relates to PRRTE
             if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
@@ -1826,13 +1826,13 @@ weareit:
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
             }
         }
-        PRTE_LIST_DESTRUCT(&params);
+        PMIX_LIST_DESTRUCT(&params);
     }
 
     return 100;
 }
 
-static void allow_run_as_root(prte_cli_result_t *results)
+static void allow_run_as_root(pmix_cli_result_t *results)
 {
     /* we always run last */
     char *r1, *r2;
@@ -1874,7 +1874,7 @@ static int set_default_ranking(prte_job_t *jdata,
     return PRTE_SUCCESS;
 }
 
-static void job_info(prte_cli_result_t *results,
+static void job_info(pmix_cli_result_t *results,
                      void *jobinfo)
 {
     prte_cli_item_t *opt;

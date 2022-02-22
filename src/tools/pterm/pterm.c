@@ -66,7 +66,7 @@
 #endif
 
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/pmix_mutex.h"
@@ -80,7 +80,7 @@
 #include "src/util/pmix_getcwd.h"
 #include "src/util/show_help.h"
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_path.h"
@@ -97,14 +97,14 @@ typedef struct {
     size_t ninfo;
 } mylock_t;
 
-static prte_list_t job_info;
+static pmix_list_t job_info;
 static pmix_nspace_t myjobid = {0};
 
 static pmix_proc_t myproc;
 static bool forcibly_die = false;
 static prte_event_t term_handler;
 static int term_pipe[2];
-static prte_mutex_t prun_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
+static pmix_mutex_t prun_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static prte_event_base_t *myevbase = NULL;
 static bool proxyrun = false;
 static bool verbose = false;
@@ -144,7 +144,7 @@ static void infocb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *
         return;
     }
 #endif
-    PRTE_ACQUIRE_OBJECT(lock);
+    PMIX_ACQUIRE_OBJECT(lock);
 
     if (verbose) {
         prte_output(0, "PTERM: INFOCB");
@@ -159,7 +159,7 @@ static void infocb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
-    PRTE_ACQUIRE_OBJECT(lock);
+    PMIX_ACQUIRE_OBJECT(lock);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
@@ -229,12 +229,12 @@ int main(int argc, char *argv[])
     char hostname[PRTE_PATH_MAX];
     char *personality;
     pmix_rank_t rank;
-    prte_cli_result_t results;
+    pmix_cli_result_t results;
     prte_cli_item_t *opt;
     prte_schizo_base_module_t *schizo;
 
     /* init the globals */
-    PRTE_CONSTRUCT(&job_info, prte_list_t);
+    PMIX_CONSTRUCT(&job_info, pmix_list_t);
 
     /* we always need the prrte and pmix params */
     rc = prte_schizo_base_parse_prte(argc, 0, argv, NULL);
@@ -253,11 +253,11 @@ int main(int argc, char *argv[])
     prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "pterm";
     gethostname(hostname, sizeof(hostname));
-    PRTE_CONSTRUCT(&results, prte_cli_result_t);
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
 
     /* open the SCHIZO framework */
-    rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                      PRTE_MCA_BASE_OPEN_DEFAULT);
+    rc = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                      PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;
@@ -287,7 +287,7 @@ int main(int argc, char *argv[])
 
     rc = schizo->parse_cli(argv, &results, PRTE_CLI_WARN);
     if (PRTE_SUCCESS != rc) {
-        PRTE_DESTRUCT(&results);
+        PMIX_DESTRUCT(&results);
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         } else {
@@ -482,7 +482,7 @@ static void clean_abort(int fd, short flags, void *arg)
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
      */
-    if (prte_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
+    if (pmix_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
         if (forcibly_die) {
             /* exit with a non-zero status */
             exit(1);

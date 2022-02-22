@@ -16,7 +16,7 @@
 
 #include <string.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
@@ -29,7 +29,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prte_mca_base_component_t struct.
+ * component's public pmix_mca_base_component_t struct.
  */
 
 #include "src/mca/schizo/base/static-components.h"
@@ -38,17 +38,17 @@
  * Global variables
  */
 prte_schizo_base_t prte_schizo_base = {
-    .active_modules = PRTE_LIST_STATIC_INIT,
+    .active_modules = PMIX_LIST_STATIC_INIT,
     .test_proxy_launch = false
 };
 
-static int prte_schizo_base_register(prte_mca_base_register_flag_t flags)
+static int prte_schizo_base_register(pmix_mca_base_register_flag_t flags)
 {
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     /* test proxy launch */
     prte_schizo_base.test_proxy_launch = false;
-    prte_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch", "Test proxy launches",
+    pmix_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch", "Test proxy launches",
                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                &prte_schizo_base.test_proxy_launch);
@@ -58,33 +58,33 @@ static int prte_schizo_base_register(prte_mca_base_register_flag_t flags)
 static int prte_schizo_base_close(void)
 {
     /* cleanup globals */
-    PRTE_LIST_DESTRUCT(&prte_schizo_base.active_modules);
+    PMIX_LIST_DESTRUCT(&prte_schizo_base.active_modules);
 
-    return prte_mca_base_framework_components_close(&prte_schizo_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_schizo_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components, or the one
  * that was specifically requested via a MCA parameter.
  */
-static int prte_schizo_base_open(prte_mca_base_open_flag_t flags)
+static int prte_schizo_base_open(pmix_mca_base_open_flag_t flags)
 {
     int rc;
 
     /* init the globals */
-    PRTE_CONSTRUCT(&prte_schizo_base.active_modules, prte_list_t);
+    PMIX_CONSTRUCT(&prte_schizo_base.active_modules, pmix_list_t);
 
     /* Open up all available components */
-    rc = prte_mca_base_framework_components_open(&prte_schizo_base_framework, flags);
+    rc = pmix_mca_base_framework_components_open(&prte_schizo_base_framework, flags);
 
     /* All done */
     return rc;
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, schizo, "PRTE Schizo Subsystem", prte_schizo_base_register,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, schizo, "PRTE Schizo Subsystem", prte_schizo_base_register,
                                 prte_schizo_base_open, prte_schizo_base_close,
                                 prte_schizo_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 void prte_schizo_base_expose(char *param, char *prefix)
 {
@@ -295,7 +295,7 @@ static int check_ndirs(prte_cli_item_t *opt)
     return PRTE_SUCCESS;
 }
 
-int prte_schizo_base_sanity(prte_cli_result_t *cmd_line)
+int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 {
     prte_cli_item_t *opt, *newopt;
     int n, rc, count;
@@ -413,14 +413,14 @@ int prte_schizo_base_sanity(prte_cli_result_t *cmd_line)
     }
 
     /* check for synonyms */
-    PRTE_LIST_FOREACH(opt, &cmd_line->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH(opt, &cmd_line->instances, prte_cli_item_t) {
         if (NULL != (tgt = check_synonym(opt->key))) {
             if (NULL == opt->values) {
                 // the presence is adequate
                 if (NULL == prte_cmd_line_get_param(cmd_line, tgt)) {
-                    newopt = PRTE_NEW(prte_cli_item_t);
+                    newopt = PMIX_NEW(prte_cli_item_t);
                     newopt->key = strdup(tgt);
-                    prte_list_append(&cmd_line->instances, &newopt->super);
+                    pmix_list_append(&cmd_line->instances, &newopt->super);
                 }
             } else {
                 for (n=0; NULL != opt->values[n]; n++) {
@@ -484,7 +484,7 @@ int prte_schizo_base_sanity(prte_cli_result_t *cmd_line)
     }
 
     // check too many directives
-    PRTE_LIST_FOREACH(opt, &cmd_line->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH(opt, &cmd_line->instances, prte_cli_item_t) {
         rc = check_ndirs(opt);
         if (PRTE_SUCCESS != rc) {
             return rc;
@@ -494,4 +494,4 @@ int prte_schizo_base_sanity(prte_cli_result_t *cmd_line)
     return PRTE_SUCCESS;
 }
 
-PRTE_CLASS_INSTANCE(prte_schizo_base_active_module_t, prte_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_schizo_base_active_module_t, pmix_list_item_t, NULL, NULL);

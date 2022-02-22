@@ -24,7 +24,7 @@
 #include "schizo_ompi.h"
 #include "src/mca/schizo/schizo.h"
 
-static int component_query(prte_mca_base_module_t **module, int *priority);
+static int component_query(pmix_mca_base_module_t **module, int *priority);
 static int component_register(void);
 
 /*
@@ -34,10 +34,10 @@ prte_schizo_ompi_component_t prte_schizo_ompi_component = {
     .super = {
         .base_version = {
             PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0,
-            .mca_component_name = "ompi",
+            .pmix_mca_component_name = "ompi",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
-            .mca_query_component = component_query,
+                                        PMIX_RELEASE_VERSION),
+            .pmix_mca_query_component = component_query,
             .mca_register_component_params = component_register,
         },
         .base_data = {
@@ -51,10 +51,10 @@ prte_schizo_ompi_component_t prte_schizo_ompi_component = {
 
 static int component_register(void)
 {
-    prte_mca_base_component_t *c = &prte_schizo_ompi_component.super.base_version;
+    pmix_mca_base_component_t *c = &prte_schizo_ompi_component.super.base_version;
 
     prte_schizo_ompi_component.warn_deprecations = false;
-    (void) prte_mca_base_component_var_register(c, "warn_deprecations",
+    (void) pmix_mca_base_component_var_register(c, "warn_deprecations",
                                                 "Issue warnings about deprecated command line options",
                                                 PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
                                                 PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
@@ -64,9 +64,9 @@ static int component_register(void)
     return PRTE_SUCCESS;
 }
 
-static int component_query(prte_mca_base_module_t **module, int *priority)
+static int component_query(pmix_mca_base_module_t **module, int *priority)
 {
-    *module = (prte_mca_base_module_t *) &prte_schizo_ompi_module;
+    *module = (pmix_mca_base_module_t *) &prte_schizo_ompi_module;
     *priority = prte_schizo_ompi_component.priority;
     return PRTE_SUCCESS;
 }

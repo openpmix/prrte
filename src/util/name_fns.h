@@ -14,7 +14,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,7 +41,7 @@
 
 #include "types.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
@@ -90,12 +90,12 @@ __prte_attribute_always_inline__ static inline int prte_util_get_local_jobid(pmi
 
 /* List of names for general use */
 struct prte_namelist_t {
-    prte_list_item_t super; /**< Allows this item to be placed on a list */
+    pmix_list_item_t super; /**< Allows this item to be placed on a list */
     pmix_proc_t name;       /**< Name of a process */
 };
 typedef struct prte_namelist_t prte_namelist_t;
 
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_namelist_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_namelist_t);
 
 PRTE_EXPORT int prte_util_convert_vpid_to_string(char **vpid_string, const pmix_rank_t vpid);
 PRTE_EXPORT int prte_util_convert_string_to_process_name(pmix_proc_t *name,

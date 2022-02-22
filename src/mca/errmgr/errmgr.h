@@ -16,7 +16,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      NVIDIA Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -51,11 +51,11 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
-#include "src/class/prte_object.h"
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_object.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
 
@@ -144,10 +144,7 @@ PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr;
  */
 struct prte_errmgr_base_component_3_0_0_t {
     /** MCA base component */
-    prte_mca_base_component_t base_version;
-    /** MCA base data */
-    prte_mca_base_component_data_t base_data;
-
+    pmix_mca_base_component_t base_version;
     /** Verbosity Level */
     int verbose;
     /** Output Handle for prte_output */
@@ -161,7 +158,7 @@ typedef prte_errmgr_base_component_3_0_0_t prte_errmgr_base_component_t;
 /*
  * Macro for use in components that are of type errmgr
  */
-#define PRTE_ERRMGR_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_2_1_0("errmgr", 3, 0, 0)
+#define PRTE_ERRMGR_BASE_VERSION_3_0_0 PMIX_MCA_BASE_VERSION_1_0_0("errmgr", 3, 0, 0)
 
 END_C_DECLS
 

@@ -7,7 +7,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Inria.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,8 +18,8 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/base/base.h"
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_base.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 
 #include "rtc_hwloc.h"
 
@@ -27,7 +27,7 @@
  * Local functions
  */
 
-static int rtc_hwloc_query(prte_mca_base_module_t **module, int *priority);
+static int rtc_hwloc_query(pmix_mca_base_module_t **module, int *priority);
 static int rtc_hwloc_register(void);
 
 static int my_priority;
@@ -37,10 +37,10 @@ prte_rtc_hwloc_component_t prte_rtc_hwloc_component = {
         .base_version = {
             PRTE_RTC_BASE_VERSION_1_0_0,
 
-            .mca_component_name = "hwloc",
+            .pmix_mca_component_name = "hwloc",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
-            .mca_query_component = rtc_hwloc_query,
+                                        PMIX_RELEASE_VERSION),
+            .pmix_mca_query_component = rtc_hwloc_query,
             .mca_register_component_params = rtc_hwloc_register,
         },
         .base_data = {
@@ -56,11 +56,11 @@ static char *vmhole;
 
 static int rtc_hwloc_register(void)
 {
-    prte_mca_base_component_t *c = &prte_rtc_hwloc_component.super.base_version;
+    pmix_mca_base_component_t *c = &prte_rtc_hwloc_component.super.base_version;
 
     /* set as the default */
     my_priority = 70;
-    (void) prte_mca_base_component_var_register(c, "priority",
+    (void) pmix_mca_base_component_var_register(c, "priority",
                                                 "Priority of the HWLOC rtc component",
                                                 PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
                                                 PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
@@ -68,7 +68,7 @@ static int rtc_hwloc_register(void)
 
     prte_rtc_hwloc_component.kind = VM_HOLE_BIGGEST;
     vmhole = biggest;
-    (void) prte_mca_base_component_var_register(
+    (void) pmix_mca_base_component_var_register(
         c, "vmhole",
         "Kind of VM hole to identify - none, begin, biggest, libs, heap, stack (default=biggest)",
         PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
@@ -93,12 +93,12 @@ static int rtc_hwloc_register(void)
     return PRTE_SUCCESS;
 }
 
-static int rtc_hwloc_query(prte_mca_base_module_t **module, int *priority)
+static int rtc_hwloc_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* Only run on the HNP */
 
     *priority = my_priority;
-    *module = (prte_mca_base_module_t *) &prte_rtc_hwloc_module;
+    *module = (pmix_mca_base_module_t *) &prte_rtc_hwloc_module;
 
     return PRTE_SUCCESS;
 }

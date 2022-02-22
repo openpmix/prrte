@@ -17,7 +17,7 @@
  *                         reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +31,7 @@
 #include <string.h>
 
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 
 #include "src/util/show_help.h"
 
@@ -44,20 +44,20 @@
  * Local functions
  */
 
-static int prte_rmaps_rank_file_query(prte_mca_base_module_t **module, int *priority);
+static int prte_rmaps_rank_file_query(pmix_mca_base_module_t **module, int *priority);
 
 prte_rmaps_rf_component_t prte_rmaps_rank_file_component = {
     {
-        /* First, the prte_mca_base_component_t struct containing meta
+        /* First, the pmix_mca_base_component_t struct containing meta
            information about the component itself */
 
         .base_version = {
             PRTE_RMAPS_BASE_VERSION_2_0_0,
 
-            .mca_component_name = "rank_file",
+            .pmix_mca_component_name = "rank_file",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
-            .mca_query_component = prte_rmaps_rank_file_query,
+                                        PMIX_RELEASE_VERSION),
+            .pmix_mca_query_component = prte_rmaps_rank_file_query,
         },
         .base_data = {
             /* The component is checkpoint ready */
@@ -66,10 +66,10 @@ prte_rmaps_rf_component_t prte_rmaps_rank_file_component = {
     }
 };
 
-static int prte_rmaps_rank_file_query(prte_mca_base_module_t **module, int *priority)
+static int prte_rmaps_rank_file_query(pmix_mca_base_module_t **module, int *priority)
 {
     *priority = 0;
-    *module = (prte_mca_base_module_t *) &prte_rmaps_rank_file_module;
+    *module = (pmix_mca_base_module_t *) &prte_rmaps_rank_file_module;
     return PRTE_SUCCESS;
 }
 
@@ -83,4 +83,4 @@ static void rf_map_destruct(prte_rmaps_rank_file_map_t *ptr)
     if (NULL != ptr->node_name)
         free(ptr->node_name);
 }
-PRTE_CLASS_INSTANCE(prte_rmaps_rank_file_map_t, prte_object_t, rf_map_construct, rf_map_destruct);
+PMIX_CLASS_INSTANCE(prte_rmaps_rank_file_map_t, pmix_object_t, rf_map_construct, rf_map_destruct);

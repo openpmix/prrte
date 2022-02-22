@@ -15,7 +15,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +31,7 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/mca/mca.h"
 #include "src/pmix/pmix-internal.h"
 
@@ -42,7 +42,7 @@ BEGIN_C_DECLS
 /*
  * MCA Framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_ess_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_ess_base_framework;
 /**
  * Select a ess module
  */
@@ -56,7 +56,7 @@ PRTE_EXPORT extern int prte_ess_base_std_buffering;
 PRTE_EXPORT extern int prte_ess_base_num_procs;
 PRTE_EXPORT extern char *prte_ess_base_nspace;
 PRTE_EXPORT extern char *prte_ess_base_vpid;
-PRTE_EXPORT extern prte_list_t prte_ess_base_signals;
+PRTE_EXPORT extern pmix_list_t prte_ess_base_signals;
 
 /*
  * Internal helper functions used by components
@@ -81,12 +81,12 @@ PRTE_EXPORT int prte_ess_base_proc_binding(void);
 PRTE_EXPORT int prte_ess_env_put(int32_t num_procs, int32_t num_local_procs, char ***env);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     char *signame;
     int signal;
     bool can_forward;
 } prte_ess_base_signal_t;
-PRTE_CLASS_DECLARATION(prte_ess_base_signal_t);
+PMIX_CLASS_DECLARATION(prte_ess_base_signal_t);
 
 END_C_DECLS
 

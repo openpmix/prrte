@@ -2,7 +2,7 @@
  * Copyright (c) 2017-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,8 +28,8 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/class/prte_bitmap.h"
-#include "src/class/prte_object.h"
+#include "src/class/pmix_bitmap.h"
+#include "src/class/pmix_object.h"
 #include "src/mca/mca.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/mca/state/state.h"
@@ -80,9 +80,7 @@ PRTE_EXPORT extern prte_propagate_base_module_t prte_propagate;
  */
 struct prte_propagate_base_component_3_0_0_t {
     /** MCA base component */
-    prte_mca_base_component_t base_version;
-    /** MCA base data */
-    prte_mca_base_component_data_t base_data;
+    pmix_mca_base_component_t base_version;
 
     /** Verbosity Level */
     int verbose;
@@ -100,7 +98,7 @@ typedef prte_propagate_base_component_3_0_0_t prte_propagate_base_component_t;
  */
 #define PRTE_PROPAGATE_BASE_VERSION_3_0_0       \
     /* propagate v3.0 is chained to MCA v2.0 */ \
-    PRTE_MCA_BASE_VERSION_2_1_0("propagate", 3, 0, 0)
+    PMIX_MCA_BASE_VERSION_1_0_0("propagate", 3, 0, 0)
 
 END_C_DECLS
 

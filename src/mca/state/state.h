@@ -4,7 +4,7 @@
  *                         reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,7 +47,7 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -62,7 +62,7 @@ BEGIN_C_DECLS
  * MCA Framework - put here to access the prte_output channel
  * in the macros
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_state_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_state_base_framework;
 
 #ifdef HAVE_SYS_TIME_H
 #    include <sys/time.h>
@@ -294,19 +294,12 @@ PRTE_EXPORT extern prte_state_base_module_t prte_state;
 /*
  * State Component
  */
-struct prte_state_base_component_1_0_0_t {
-    /** MCA base component */
-    prte_mca_base_component_t base_version;
-    /** MCA base data */
-    prte_mca_base_component_data_t base_data;
-};
-typedef struct prte_state_base_component_1_0_0_t prte_state_base_component_1_0_0_t;
-typedef prte_state_base_component_1_0_0_t prte_state_base_component_t;
+typedef pmix_mca_base_component_t prte_state_base_component_t;
 
 /*
  * Macro for use in components that are of type state
  */
-#define PRTE_STATE_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_2_1_0("state", 1, 0, 0)
+#define PRTE_STATE_BASE_VERSION_1_0_0 PMIX_MCA_BASE_VERSION_1_0_0("state", 1, 0, 0)
 
 END_C_DECLS
 #endif

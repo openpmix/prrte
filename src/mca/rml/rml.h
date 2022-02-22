@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  *
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,12 +55,12 @@ BEGIN_C_DECLS
 /* ******************************************************************** */
 
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     pmix_proc_t name;
     pmix_data_buffer_t data;
     bool active;
 } prte_rml_recv_cb_t;
-PRTE_CLASS_DECLARATION(prte_rml_recv_cb_t);
+PMIX_CLASS_DECLARATION(prte_rml_recv_cb_t);
 
 /* Provide a generic callback function to release buffers
  * following a non-blocking send as this happens all over
@@ -223,19 +223,12 @@ PRTE_EXPORT extern prte_rml_base_module_t prte_rml;
  * this structure, called mca_rml_[component name]_component, must
  * exist in any RML component.
  */
-typedef struct prte_rml_component_t {
-    /* Base component description */
-    prte_mca_base_component_t base;
-    /* Base component data block */
-    prte_mca_base_component_data_t data;
-    /* Component priority */
-    int priority;
-} prte_rml_component_t;
+typedef pmix_mca_base_component_t prte_rml_component_t;
 
 /* ******************************************************************** */
 
 /** Macro for use in components that are of type rml */
-#define PRTE_RML_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_2_1_0("rml", 3, 0, 0)
+#define PRTE_RML_BASE_VERSION_3_0_0 PMIX_MCA_BASE_VERSION_1_0_0("rml", 3, 0, 0)
 
 /* ******************************************************************** */
 

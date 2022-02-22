@@ -58,13 +58,13 @@ typedef struct prte_ras_alps_sysconfig_t {
 } prte_ras_alps_sysconfig_t;
 
 /* /// Local Functions /// */
-static int prte_ras_alps_allocate(prte_job_t *jdata, prte_list_t *nodes);
+static int prte_ras_alps_allocate(prte_job_t *jdata, pmix_list_t *nodes);
 
 static int prte_ras_alps_finalize(void);
 
 static char *ras_alps_getline(FILE *fp);
 
-static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, unsigned int *uMe);
+static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, unsigned int *uMe);
 
 static char *prte_ras_get_appinfo_path(void);
 
@@ -300,7 +300,7 @@ static char *prte_ras_get_appinfo_path(void)
  * Discover available (pre-allocated) nodes.  Allocate the
  * requested number of nodes/process slots to the job.
  */
-static int prte_ras_alps_allocate(prte_job_t *jdata, prte_list_t *nodes)
+static int prte_ras_alps_allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     int ret;
     char *appinfo_path = NULL;
@@ -321,7 +321,7 @@ static int prte_ras_alps_allocate(prte_job_t *jdata, prte_list_t *nodes)
     }
 
     /* Record the number of allocated nodes */
-    prte_num_allocated_nodes = prte_list_get_size(nodes);
+    prte_num_allocated_nodes = pmix_list_get_size(nodes);
 
 cleanup:
     /* All done */
@@ -367,7 +367,7 @@ typedef placeNodeList_t prte_ras_alps_placeNodeList_t;
 typedef placeNodeList_ver3_t prte_ras_alps_placeNodeList_t;
 #endif
 
-static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, unsigned int *uMe)
+static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, unsigned int *uMe)
 {
     int iq;
     int ix;
@@ -521,7 +521,7 @@ static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, u
                 prte_output_verbose(1, prte_ras_base_framework.framework_output,
                                     "ras:alps:read_appinfo: added NID %d to list", apSlots[ix].nid);
 
-                node = PRTE_NEW(prte_node_t);
+                node = PMIX_NEW(prte_node_t);
                 node->name = hostname;
                 prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL,
                                    &apSlots[ix].nid, PMIX_INT32);
@@ -533,7 +533,7 @@ static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, u
                  * can properly function
                  */
                 /* add it to the end */
-                prte_list_append(nodes, &node->super);
+                pmix_list_append(nodes, &node->super);
                 sNodes++; /* Increment the node count       */
             }
         }
@@ -560,7 +560,7 @@ static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, u
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
 
-            node = PRTE_NEW(prte_node_t);
+            node = PMIX_NEW(prte_node_t);
             node->name = hostname;
             prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL,
                                &apNodes[ix].nid, PMIX_INT32);
@@ -576,7 +576,7 @@ static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, u
              * can properly function
              */
             /* add it to the end */
-            prte_list_append(nodes, &node->super);
+            pmix_list_append(nodes, &node->super);
             sNodes++; /* Increment the node count       */
         }
 #endif

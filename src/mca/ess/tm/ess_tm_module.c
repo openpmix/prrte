@@ -31,7 +31,7 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/pmix_environ.h"

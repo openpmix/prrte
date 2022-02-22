@@ -14,7 +14,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +32,7 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_object.h"
+#include "src/class/pmix_object.h"
 
 #include "src/mca/rmaps/rmaps.h"
 
@@ -52,13 +52,13 @@ extern prte_rmaps_base_module_t prte_rmaps_rank_file_module;
 typedef struct cpu_package_t cpu_package_t;
 
 struct prte_rmaps_rank_file_map_t {
-    prte_object_t super;
+    pmix_object_t super;
     char *node_name;
     char slot_list[64];
 };
 typedef struct prte_rmaps_rank_file_map_t prte_rmaps_rank_file_map_t;
 
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_rmaps_rank_file_map_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rmaps_rank_file_map_t);
 
 END_C_DECLS
 

@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2012-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -82,17 +82,12 @@ typedef struct prte_ess_base_module_3_0_0_t prte_ess_base_module_t;
 /*
  * the standard component data structure
  */
-struct prte_ess_base_component_2_0_0_t {
-    prte_mca_base_component_t base_version;
-    prte_mca_base_component_data_t base_data;
-};
-typedef struct prte_ess_base_component_2_0_0_t prte_ess_base_component_2_0_0_t;
-typedef struct prte_ess_base_component_2_0_0_t prte_ess_base_component_t;
+typedef struct pmix_mca_base_component_t prte_ess_base_component_t;
 
 /*
  * Macro for use in components that are of type ess
  */
-#define PRTE_ESS_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_2_1_0("ess", 3, 0, 0)
+#define PRTE_ESS_BASE_VERSION_3_0_0 PMIX_MCA_BASE_VERSION_1_0_0("ess", 3, 0, 0)
 
 /* Global structure for accessing ESS functions */
 PRTE_EXPORT extern prte_ess_base_module_t prte_ess; /* holds selected module's function pointers */

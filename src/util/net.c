@@ -105,7 +105,7 @@ typedef struct private_ipv4_t {
 static private_ipv4_t *private_ipv4 = NULL;
 
 #    if PRTE_ENABLE_IPV6
-static prte_tsd_key_t hostname_tsd_key;
+static pmix_tsd_key_t hostname_tsd_key;
 
 static void hostname_cleanup(void *value)
 {
@@ -118,13 +118,13 @@ static char *get_hostname_buffer(void)
     void *buffer;
     int ret;
 
-    ret = prte_tsd_getspecific(hostname_tsd_key, &buffer);
+    ret = pmix_tsd_getspecific(hostname_tsd_key, &buffer);
     if (PRTE_SUCCESS != ret)
         return NULL;
 
     if (NULL == buffer) {
         buffer = (void *) malloc((NI_MAXHOST + 1) * sizeof(char));
-        ret = prte_tsd_setspecific(hostname_tsd_key, buffer);
+        ret = pmix_tsd_setspecific(hostname_tsd_key, buffer);
     }
 
     return (char *) buffer;
@@ -185,7 +185,7 @@ int pmix_net_init(void)
 
 do_local_init:
 #    if PRTE_ENABLE_IPV6
-    return prte_tsd_key_create(&hostname_tsd_key, hostname_cleanup);
+    return pmix_tsd_key_create(&hostname_tsd_key, hostname_cleanup);
 #    else
     return PRTE_SUCCESS;
 #    endif

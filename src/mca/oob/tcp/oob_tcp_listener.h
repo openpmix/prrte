@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,14 +35,14 @@
 #    include <sys/socket.h>
 #endif
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
 
 /*
  * Data structure for accepting connections.
  */
 struct prte_oob_tcp_listener_t {
-    prte_list_item_t item;
+    pmix_list_item_t item;
     bool ev_active;
     prte_event_t event;
     bool tcp6;
@@ -50,15 +50,15 @@ struct prte_oob_tcp_listener_t {
     uint16_t port;
 };
 typedef struct prte_oob_tcp_listener_t prte_oob_tcp_listener_t;
-PRTE_CLASS_DECLARATION(prte_oob_tcp_listener_t);
+PMIX_CLASS_DECLARATION(prte_oob_tcp_listener_t);
 
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_event_t ev;
     int fd;
     struct sockaddr_storage addr;
 } prte_oob_tcp_pending_connection_t;
-PRTE_CLASS_DECLARATION(prte_oob_tcp_pending_connection_t);
+PMIX_CLASS_DECLARATION(prte_oob_tcp_pending_connection_t);
 
 PRTE_MODULE_EXPORT int prte_oob_tcp_start_listening(void);
 

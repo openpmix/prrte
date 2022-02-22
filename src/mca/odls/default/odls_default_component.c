@@ -16,7 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,7 +39,7 @@
 #endif
 #include <ctype.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
 #include "src/mca/odls/base/odls_private.h"
@@ -57,14 +57,14 @@ prte_odls_base_component_t prte_odls_default_component = {
     .version = {
         PRTE_ODLS_BASE_VERSION_2_0_0,
         /* Component name and version */
-        .mca_component_name = "default",
+        .pmix_mca_component_name = "default",
         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PRTE_RELEASE_VERSION),
+                                    PMIX_RELEASE_VERSION),
 
         /* Component open and close functions */
         .mca_open_component = prte_odls_default_component_open,
         .mca_close_component = prte_odls_default_component_close,
-        .mca_query_component = prte_odls_default_component_query,
+        .pmix_mca_query_component = prte_odls_default_component_query,
     },
     .base_data = {
         /* The component is checkpoint ready */
@@ -77,7 +77,7 @@ int prte_odls_default_component_open(void)
     return PRTE_SUCCESS;
 }
 
-int prte_odls_default_component_query(prte_mca_base_module_t **module, int *priority)
+int prte_odls_default_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* the base open/select logic protects us against operation when
      * we are NOT in a daemon, so we don't have to check that here
@@ -89,7 +89,7 @@ int prte_odls_default_component_query(prte_mca_base_module_t **module, int *prio
      * case, we definitely should be considered for selection
      */
     *priority = 10; /* let others override us - we are the default */
-    *module = (prte_mca_base_module_t *) &prte_odls_default_module;
+    *module = (pmix_mca_base_module_t *) &prte_odls_default_module;
     return PRTE_SUCCESS;
 }
 

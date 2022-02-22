@@ -31,8 +31,8 @@
 
 #include "src/runtime/runtime.h"
 
-#include "src/class/prte_list.h"
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_pointer_array.h"
 
 #include "src/util/pmix_argv.h"
 #include "src/util/cmd_line.h"
@@ -45,7 +45,7 @@
 
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 
-#include "src/mca/base/prte_mca_base_component_repository.h"
+#include "src/mca/base/pmix_mca_base_component_repository.h"
 #include "src/tools/prte_info/pinfo.h"
 
 /*
@@ -65,10 +65,10 @@ static void component_map_destruct(prte_info_component_map_t *map)
      * list of components
      */
 }
-PRTE_CLASS_INSTANCE(prte_info_component_map_t, prte_list_item_t, component_map_construct,
+PMIX_CLASS_INSTANCE(prte_info_component_map_t, pmix_list_item_t, component_map_construct,
                     component_map_destruct);
 
-prte_pointer_array_t prte_component_map = {{0}};
+pmix_pointer_array_t prte_component_map = {{0}};
 
 /*
  * Private variables
@@ -76,31 +76,31 @@ prte_pointer_array_t prte_component_map = {{0}};
 
 static bool opened_components = false;
 
-static int info_register_framework(prte_mca_base_framework_t *framework,
-                                   prte_pointer_array_t *component_map)
+static int info_register_framework(pmix_mca_base_framework_t *framework,
+                                   pmix_pointer_array_t *component_map)
 {
     prte_info_component_map_t *map;
     int rc;
 
-    rc = prte_mca_base_framework_register(framework, PRTE_MCA_BASE_REGISTER_ALL);
+    rc = pmix_mca_base_framework_register(framework, PRTE_MCA_BASE_REGISTER_ALL);
     if (PRTE_SUCCESS != rc && PRTE_ERR_BAD_PARAM != rc) {
         return rc;
     }
 
     if (NULL != component_map) {
-        map = PRTE_NEW(prte_info_component_map_t);
+        map = PMIX_NEW(prte_info_component_map_t);
         map->type = strdup(framework->framework_name);
         map->components = &framework->framework_components;
         map->failed_components = &framework->framework_failed_components;
-        prte_pointer_array_add(component_map, map);
+        pmix_pointer_array_add(component_map, map);
     }
 
     return rc;
 }
 
 static int register_project_frameworks(const char *project_name,
-                                       prte_mca_base_framework_t **frameworks,
-                                       prte_pointer_array_t *component_map)
+                                       pmix_mca_base_framework_t **frameworks,
+                                       pmix_pointer_array_t *component_map)
 {
     int i, rc = PRTE_SUCCESS;
 
@@ -128,12 +128,12 @@ static int register_project_frameworks(const char *project_name,
     return rc;
 }
 
-static int register_framework_params(prte_pointer_array_t *component_map)
+static int register_framework_params(pmix_pointer_array_t *component_map)
 {
     int rc;
 
     /* Register mca/base parameters */
-    if (PRTE_SUCCESS != prte_mca_base_open()) {
+    if (PRTE_SUCCESS != pmix_mca_base_open()) {
         prte_show_help("help-prte_info.txt", "lib-call-fail", true, "mca_base_open", __FILE__,
                        __LINE__);
         return PRTE_ERROR;
@@ -157,8 +157,8 @@ void prte_info_components_open(void)
     opened_components = true;
 
     /* init the map */
-    PRTE_CONSTRUCT(&prte_component_map, prte_pointer_array_t);
-    prte_pointer_array_init(&prte_component_map, 256, INT_MAX, 128);
+    PMIX_CONSTRUCT(&prte_component_map, pmix_pointer_array_t);
+    pmix_pointer_array_init(&prte_component_map, 256, INT_MAX, 128);
 
     register_framework_params(&prte_component_map);
 }
@@ -176,18 +176,18 @@ void prte_info_components_close(void)
     }
 
     for (i = 0; NULL != prte_frameworks[i]; i++) {
-        (void) prte_mca_base_framework_close(prte_frameworks[i]);
+        (void) pmix_mca_base_framework_close(prte_frameworks[i]);
     }
 
     for (i = 0; i < prte_component_map.size; i++) {
         if (NULL
-            != (map = (prte_info_component_map_t *) prte_pointer_array_get_item(&prte_component_map,
+            != (map = (prte_info_component_map_t *) pmix_pointer_array_get_item(&prte_component_map,
                                                                                 i))) {
-            PRTE_RELEASE(map);
+            PMIX_RELEASE(map);
         }
     }
 
-    PRTE_DESTRUCT(&prte_component_map);
+    PMIX_DESTRUCT(&prte_component_map);
 
     opened_components = false;
 }

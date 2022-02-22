@@ -62,7 +62,7 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
     if (PMIX_SUCCESS != status) {
         PMIX_ERROR_LOG(status);
     }
-    PRTE_RELEASE(p);
+    PMIX_RELEASE(p);
 }
 
 void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
@@ -128,13 +128,13 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         /* nothing to do - shouldn't have been sent */
         goto CLEAN_RETURN;
     }
-    p = PRTE_NEW(prte_iof_deliver_t);
+    p = PMIX_NEW(prte_iof_deliver_t);
     PMIX_XFER_PROCID(&p->source, &origin);
     p->bo.bytes = (char*)malloc(numbytes);
     rc = PMIx_Data_unpack(NULL, buffer, p->bo.bytes, &numbytes, PMIX_BYTE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(p);
+        PMIX_RELEASE(p);
         goto CLEAN_RETURN;
     }
     p->bo.size = numbytes;
@@ -144,7 +144,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&origin)));
 
     /* do we already have this process in our list? */
-    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, &origin)) {
             /* found it */
@@ -153,9 +153,9 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     }
 
     /* if we get here, then we don't yet have this proc in our list */
-    proct = PRTE_NEW(prte_iof_proc_t);
+    proct = PMIX_NEW(prte_iof_proc_t);
     PMIX_XFER_PROCID(&proct->name, &origin);
-    prte_list_append(&prte_iof_hnp_component.procs, &proct->super);
+    pmix_list_append(&prte_iof_hnp_component.procs, &proct->super);
 
 NSTEP:
     pchan = 0;
@@ -172,7 +172,7 @@ NSTEP:
     prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-        PRTE_RELEASE(p);
+        PMIX_RELEASE(p);
     }
 
 CLEAN_RETURN:

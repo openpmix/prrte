@@ -54,7 +54,7 @@
 #    include <fcntl.h>
 #endif
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
@@ -187,7 +187,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
 
-    PRTE_ACQUIRE_OBJECT(state);
+    PMIX_ACQUIRE_OBJECT(state);
 
     /* start by setting up the virtual machine */
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
@@ -207,7 +207,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          */
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -228,7 +228,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -297,7 +297,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         nodelist_argc = 0;
 
         for (nnode = 0; nnode < map->nodes->size; nnode++) {
-            if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, nnode))) {
+            if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, nnode))) {
                 continue;
             }
 
@@ -368,7 +368,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     for (i = 0; i < state->jdata->apps->size; i++) {
         char *app_prefix_dir = NULL;
         if (NULL
-            == (app = (prte_app_context_t *) prte_pointer_array_get_item(state->jdata->apps, i))) {
+            == (app = (prte_app_context_t *) pmix_pointer_array_get_item(state->jdata->apps, i))) {
             continue;
         }
         prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &app_prefix_dir,
@@ -436,7 +436,7 @@ cleanup:
     }
 
     /* cleanup the caddy */
-    PRTE_RELEASE(state);
+    PMIX_RELEASE(state);
 }
 
 /**
@@ -488,7 +488,7 @@ static int plm_alps_finalize(void)
     int rc;
 
     if (NULL != alpsrun) {
-        PRTE_RELEASE(alpsrun);
+        PMIX_RELEASE(alpsrun);
     }
 
     /* cleanup any pending recvs */
@@ -535,7 +535,7 @@ static void alps_wait_cb(int sd, short args, void *cbdata)
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ABORTED);
         }
     }
-    PRTE_RELEASE(t2);
+    PMIX_RELEASE(t2);
 }
 
 static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
@@ -554,7 +554,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
         return PRTE_ERR_SYS_LIMITS_CHILDREN;
     }
 
-    alpsrun = PRTE_NEW(prte_proc_t);
+    alpsrun = PMIX_NEW(prte_proc_t);
     alpsrun->pid = alps_pid;
     /* be sure to mark it as alive so we don't instantly fire */
     PRTE_FLAG_SET(alpsrun, PRTE_PROC_FLAG_ALIVE);

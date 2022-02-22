@@ -55,7 +55,7 @@
 
 #include <ctype.h>
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/include/prte_socket_errno.h"
 #include "src/util/error.h"
 #include "src/util/pmix_fd.h"
@@ -70,10 +70,10 @@
 
 #include "src/util/listener.h"
 
-static void *listen_thread_fn(prte_object_t *obj);
-static prte_list_t mylisteners;
+static void *listen_thread_fn(pmix_object_t *obj);
+static pmix_list_t mylisteners;
 static bool initialized = false;
-static prte_thread_t listen_thread;
+static pmix_thread_t listen_thread;
 static volatile bool listen_thread_active = false;
 static struct timeval listen_thread_tv;
 static int stop_thread[2];
@@ -86,15 +86,15 @@ static int stop_thread[2];
     } while (0)
 
 int prte_register_listener(struct sockaddr *address, prte_socklen_t addrlen,
-                           prte_event_base_t *evbase, prte_listener_callback_fn_t handler)
+                           prte_event_base_t *evbase, pmix_listener_callback_fn_t handler)
 {
-    prte_listener_t *conn;
+    pmix_listener_t *conn;
     int flags;
     int sd = -1;
 
     if (!initialized) {
-        PRTE_CONSTRUCT(&mylisteners, prte_list_t);
-        PRTE_CONSTRUCT(&listen_thread, prte_thread_t);
+        PMIX_CONSTRUCT(&mylisteners, pmix_list_t);
+        PMIX_CONSTRUCT(&listen_thread, pmix_thread_t);
         if (0 > pipe(stop_thread)) {
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
             return PRTE_ERR_OUT_OF_RESOURCE;
@@ -142,7 +142,7 @@ int prte_register_listener(struct sockaddr *address, prte_socklen_t addrlen,
 
     /* setup listen backlog to maximum allowed by kernel */
     if (listen(sd, SOMAXCONN) < 0) {
-        prte_output(0, "prte_listener: listen() failed: %s (%d)", strerror(prte_socket_errno),
+        prte_output(0, "pmix_listener: listen() failed: %s (%d)", strerror(prte_socket_errno),
                     prte_socket_errno);
         CLOSE_THE_SOCKET(sd);
         return PRTE_ERROR;
@@ -150,25 +150,25 @@ int prte_register_listener(struct sockaddr *address, prte_socklen_t addrlen,
 
     /* set socket up to be non-blocking, otherwise accept could block */
     if ((flags = fcntl(sd, F_GETFL, 0)) < 0) {
-        prte_output(0, "prte_listener: fcntl(F_GETFL) failed: %s (%d)", strerror(prte_socket_errno),
+        prte_output(0, "pmix_listener: fcntl(F_GETFL) failed: %s (%d)", strerror(prte_socket_errno),
                     prte_socket_errno);
         CLOSE_THE_SOCKET(sd);
         return PRTE_ERROR;
     }
     flags |= O_NONBLOCK;
     if (fcntl(sd, F_SETFL, flags) < 0) {
-        prte_output(0, "prte_listener: fcntl(F_SETFL) failed: %s (%d)", strerror(prte_socket_errno),
+        prte_output(0, "pmix_listener: fcntl(F_SETFL) failed: %s (%d)", strerror(prte_socket_errno),
                     prte_socket_errno);
         CLOSE_THE_SOCKET(sd);
         return PRTE_ERROR;
     }
 
     /* add this port to our connections */
-    conn = PRTE_NEW(prte_listener_t);
+    conn = PMIX_NEW(pmix_listener_t);
     conn->sd = sd;
     conn->evbase = evbase;
     conn->handler = handler;
-    prte_list_append(&mylisteners, &conn->item);
+    pmix_list_append(&mylisteners, &conn->item);
 
     return PRTE_SUCCESS;
 }
@@ -190,7 +190,7 @@ int prte_start_listening(void)
 
     /* if we aren't initialized, or have nothing
      * registered, or are already listening, then return SUCCESS */
-    if (!initialized || 0 == prte_list_get_size(&mylisteners) || listen_thread_active) {
+    if (!initialized || 0 == pmix_list_get_size(&mylisteners) || listen_thread_active) {
         return PRTE_SUCCESS;
     }
 
@@ -198,7 +198,7 @@ int prte_start_listening(void)
     listen_thread_active = true;
     listen_thread.t_run = listen_thread_fn;
     listen_thread.t_arg = NULL;
-    if (PRTE_SUCCESS != (rc = prte_thread_start(&listen_thread))) {
+    if (PRTE_SUCCESS != (rc = pmix_thread_start(&listen_thread))) {
         PRTE_ERROR_LOG(rc);
         prte_output(0, "%s Unable to start listen thread", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     }
@@ -218,31 +218,31 @@ void prte_stop_listening(void)
     if (-1 == write(stop_thread[1], &i, sizeof(int))) {
         return;
     }
-    prte_thread_join(&listen_thread, NULL);
-    PRTE_DESTRUCT(&listen_thread);
-    PRTE_LIST_DESTRUCT(&mylisteners);
+    pmix_thread_join(&listen_thread, NULL);
+    PMIX_DESTRUCT(&listen_thread);
+    PMIX_LIST_DESTRUCT(&mylisteners);
 }
 
 /*
  * The listen thread accepts incoming connections and places them
  * in a queue for further processing
  *
- * Runs until prte_listener_shutdown is set to true.
+ * Runs until pmix_listener_shutdown is set to true.
  */
-static void *listen_thread_fn(prte_object_t *obj)
+static void *listen_thread_fn(pmix_object_t *obj)
 {
     int rc, max, accepted_connections, sd;
     prte_socklen_t addrlen = sizeof(struct sockaddr_storage);
     prte_pending_connection_t *pending_connection;
     struct timeval timeout;
     fd_set readfds;
-    prte_listener_t *listener;
+    pmix_listener_t *listener;
     PRTE_HIDE_UNUSED_PARAMS(obj);
 
     while (listen_thread_active) {
         FD_ZERO(&readfds);
         max = -1;
-        PRTE_LIST_FOREACH(listener, &mylisteners, prte_listener_t)
+        PMIX_LIST_FOREACH(listener, &mylisteners, pmix_listener_t)
         {
             FD_SET(listener->sd, &readfds);
             max = (listener->sd > max) ? listener->sd : max;
@@ -276,7 +276,7 @@ static void *listen_thread_fn(prte_object_t *obj)
          */
         do {
             accepted_connections = 0;
-            PRTE_LIST_FOREACH(listener, &mylisteners, prte_listener_t)
+            PMIX_LIST_FOREACH(listener, &mylisteners, pmix_listener_t)
             {
                 sd = listener->sd;
 
@@ -298,14 +298,14 @@ static void *listen_thread_fn(prte_object_t *obj)
                  * process the connection here as it takes too long, and so the
                  * OS might start rejecting connections due to timeout.
                  */
-                pending_connection = PRTE_NEW(prte_pending_connection_t);
+                pending_connection = PMIX_NEW(prte_pending_connection_t);
                 prte_event_set(listener->evbase, &pending_connection->ev, -1, PRTE_EV_WRITE,
                                listener->handler, pending_connection);
                 prte_event_set_priority(&pending_connection->ev, PRTE_MSG_PRI);
                 pending_connection->fd = accept(sd, (struct sockaddr *) &(pending_connection->addr),
                                                 &addrlen);
                 if (pending_connection->fd < 0) {
-                    PRTE_RELEASE(pending_connection);
+                    PMIX_RELEASE(pending_connection);
 
                     /* Non-fatal errors */
                     if (EAGAIN == prte_socket_errno || EWOULDBLOCK == prte_socket_errno) {
@@ -350,18 +350,18 @@ done:
 }
 
 /* INSTANTIATE CLASSES */
-static void lcons(prte_listener_t *p)
+static void lcons(pmix_listener_t *p)
 {
     p->sd = -1;
     p->evbase = NULL;
     p->handler = NULL;
 }
-static void ldes(prte_listener_t *p)
+static void ldes(pmix_listener_t *p)
 {
     if (0 <= p->sd) {
         CLOSE_THE_SOCKET(p->sd);
     }
 }
-PRTE_CLASS_INSTANCE(prte_listener_t, prte_list_item_t, lcons, ldes);
+PMIX_CLASS_INSTANCE(pmix_listener_t, pmix_list_item_t, lcons, ldes);
 
-PRTE_CLASS_INSTANCE(prte_pending_connection_t, prte_object_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_pending_connection_t, pmix_object_t, NULL, NULL);

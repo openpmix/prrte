@@ -79,15 +79,15 @@ void prte_quit(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
 
     /* cleanup */
     if (NULL != caddy) {
-        PRTE_RELEASE(caddy);
+        PMIX_RELEASE(caddy);
     }
 
     /* check one-time lock to protect against "bounce" */
-    if (prte_mutex_trylock(&prte_quit_lock)) { /* returns 1 if already locked */
+    if (pmix_mutex_trylock(&prte_quit_lock)) { /* returns 1 if already locked */
         return;
     }
 
@@ -95,7 +95,7 @@ void prte_quit(int fd, short args, void *cbdata)
      * so we will exit
      */
     prte_event_base_active = false;
-    PRTE_POST_OBJECT(prte_event_base_active);
+    PMIX_POST_OBJECT(prte_event_base_active);
     /* break the event loop - this will cause the loop to exit upon
        completion of any current event */
     prte_event_base_loopexit(prte_event_base);
@@ -294,7 +294,7 @@ static char *dump_job(prte_job_t *job)
 
     /* cycle through and count the number that were killed or aborted */
     for (i = 0; i < job->procs->size; i++) {
-        if (NULL == (pptr = (prte_proc_t *) prte_pointer_array_get_item(job->procs, i))) {
+        if (NULL == (pptr = (prte_proc_t *) pmix_pointer_array_get_item(job->procs, i))) {
             /* array is left-justified - we are done */
             break;
         }
@@ -316,7 +316,7 @@ static char *dump_job(prte_job_t *job)
         return NULL;
     }
 
-    approc = (prte_app_context_t *) prte_pointer_array_get_item(job->apps, proc->app_idx);
+    approc = (prte_app_context_t *) pmix_pointer_array_get_item(job->apps, proc->app_idx);
     node = proc->node;
     return print_aborted_job(job, approc, proc, node);
 }
@@ -347,10 +347,10 @@ char *prte_dump_aborted_procs(prte_job_t *jdata)
      * one that caused the error */
     /* if this is a non-persistent job, it won't have any child
      * jobs, so look at it directly */
-    if (0 == prte_list_get_size(&launcher->children)) {
+    if (0 == pmix_list_get_size(&launcher->children)) {
         output = dump_job(jdata);
     } else {
-        PRTE_LIST_FOREACH(job, &launcher->children, prte_job_t)
+        PMIX_LIST_FOREACH(job, &launcher->children, prte_job_t)
         {
             output = dump_job(job);
             if (NULL != output) {

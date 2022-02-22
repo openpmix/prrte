@@ -25,7 +25,7 @@
 
 #include <stdio.h>
 
-#include "src/include/hash_string.h"
+#include "src/include/pmix_hash_string.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/plm/base/plm_private.h"

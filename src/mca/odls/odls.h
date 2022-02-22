@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,7 +34,7 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/mca/mca.h"
 #include "src/mca/rml/rml_types.h"
 #include "src/pmix/pmix-internal.h"
@@ -68,7 +68,7 @@ typedef int (*prte_odls_base_module_launch_local_processes_fn_t)(pmix_data_buffe
 /**
  * Kill the local processes on this node
  */
-typedef int (*prte_odls_base_module_kill_local_processes_fn_t)(prte_pointer_array_t *procs);
+typedef int (*prte_odls_base_module_kill_local_processes_fn_t)(pmix_pointer_array_t *procs);
 
 /**
  * Signal local processes
@@ -100,21 +100,12 @@ typedef struct prte_odls_base_module_1_3_0_t prte_odls_base_module_t;
 /**
  * odls component
  */
-struct prte_odls_base_component_2_0_0_t {
-    /** component version */
-    prte_mca_base_component_t version;
-    /** component data */
-    prte_mca_base_component_data_t base_data;
-};
-/** Convenience typedef */
-typedef struct prte_odls_base_component_2_0_0_t prte_odls_base_component_2_0_0_t;
-/** Convenience typedef */
-typedef prte_odls_base_component_2_0_0_t prte_odls_base_component_t;
+typedef pmix_mca_base_component_t prte_odls_base_component_t;
 
 /**
  * Macro for use in modules that are of type odls
  */
-#define PRTE_ODLS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("odls", 2, 0, 0)
+#define PRTE_ODLS_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("odls", 2, 0, 0)
 
 /* Global structure for accessing ODLS functions
  */

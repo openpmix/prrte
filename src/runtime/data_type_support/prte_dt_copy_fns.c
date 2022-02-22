@@ -40,7 +40,7 @@
 int prte_job_copy(prte_job_t **dest, prte_job_t *src)
 {
     (*dest) = src;
-    PRTE_RETAIN(src);
+    PMIX_RETAIN(src);
 
     return PRTE_SUCCESS;
 }
@@ -52,7 +52,7 @@ int prte_node_copy(prte_node_t **dest, prte_node_t *src)
 {
     prte_node_t *node;
 
-    node = PRTE_NEW(prte_node_t);
+    node = PMIX_NEW(prte_node_t);
     node->name = strdup(src->name);
     node->state = src->state;
     node->slots = src->slots;
@@ -71,7 +71,7 @@ int prte_node_copy(prte_node_t **dest, prte_node_t *src)
 int prte_proc_copy(prte_proc_t **dest, prte_proc_t *src)
 {
     (*dest) = src;
-    PRTE_RETAIN(src);
+    PMIX_RETAIN(src);
     return PRTE_SUCCESS;
 }
 
@@ -84,7 +84,7 @@ int prte_app_copy(prte_app_context_t **dest, prte_app_context_t *src)
     pmix_status_t rc;
 
     /* create the new object */
-    *dest = PRTE_NEW(prte_app_context_t);
+    *dest = PMIX_NEW(prte_app_context_t);
     if (NULL == *dest) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return PRTE_ERR_OUT_OF_RESOURCE;
@@ -102,16 +102,16 @@ int prte_app_copy(prte_app_context_t **dest, prte_app_context_t *src)
         (*dest)->cwd = strdup(src->cwd);
     }
 
-    PRTE_LIST_FOREACH(kv, &src->attributes, prte_value_t)
+    PMIX_LIST_FOREACH(kv, &src->attributes, prte_value_t)
     {
-        kvnew = PRTE_NEW(prte_value_t);
+        kvnew = PMIX_NEW(prte_value_t);
         PMIX_VALUE_XFER_DIRECT(rc, &kvnew->value, &kv->value);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PRTE_RELEASE(kvnew);
+            PMIX_RELEASE(kvnew);
             return prte_pmix_convert_status(rc);
         }
-        prte_list_append(&(*dest)->attributes, &kvnew->super);
+        pmix_list_append(&(*dest)->attributes, &kvnew->super);
     }
 
     return PRTE_SUCCESS;
@@ -132,7 +132,7 @@ int prte_map_copy(struct prte_job_map_t **d, struct prte_job_map_t *s)
     }
 
     /* create the new object */
-    *dest = PRTE_NEW(prte_job_map_t);
+    *dest = PMIX_NEW(prte_job_map_t);
     if (NULL == *dest) {
         PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
         return PRTE_ERR_OUT_OF_RESOURCE;

@@ -23,7 +23,7 @@ void prte_rtc_base_assign(prte_job_t *jdata)
 {
     prte_rtc_base_selected_module_t *active;
 
-    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
+    PMIX_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
     {
         if (NULL != active->module->assign) {
             /* give this module a chance to operate on it */
@@ -36,7 +36,7 @@ void prte_rtc_base_set(prte_odls_spawn_caddy_t *cd, int error_fd)
 {
     prte_rtc_base_selected_module_t *active;
 
-    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
+    PMIX_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
     {
         if (NULL != active->module->set) {
             /* give this module a chance to operate on it */
@@ -45,11 +45,11 @@ void prte_rtc_base_set(prte_odls_spawn_caddy_t *cd, int error_fd)
     }
 }
 
-void prte_rtc_base_get_avail_vals(prte_list_t *vals)
+void prte_rtc_base_get_avail_vals(pmix_list_t *vals)
 {
     prte_rtc_base_selected_module_t *active;
 
-    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
+    PMIX_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
     {
         if (NULL != active->module->get_available_values) {
             /* give this module a chance to operate on it */

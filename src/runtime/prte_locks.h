@@ -37,13 +37,13 @@
 BEGIN_C_DECLS
 
 /* for everyone */
-PRTE_EXPORT extern prte_mutex_t prte_finalize_lock;
+PRTE_EXPORT extern pmix_mutex_t prte_finalize_lock;
 
 /* for HNPs */
-PRTE_EXPORT extern prte_mutex_t prte_abort_inprogress_lock;
-PRTE_EXPORT extern prte_mutex_t prte_jobs_complete_lock;
-PRTE_EXPORT extern prte_mutex_t prte_quit_lock;
-PRTE_EXPORT extern prte_lock_t prte_init_lock;
+PRTE_EXPORT extern pmix_mutex_t prte_abort_inprogress_lock;
+PRTE_EXPORT extern pmix_mutex_t prte_jobs_complete_lock;
+PRTE_EXPORT extern pmix_mutex_t prte_quit_lock;
+PRTE_EXPORT extern pmix_lock_t prte_init_lock;
 
 /**
  * Initialize the locks

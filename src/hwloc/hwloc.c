@@ -15,7 +15,7 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/include/constants.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/schizo/schizo.h"
@@ -50,13 +50,13 @@ hwloc_obj_type_t prte_hwloc_levels[] = {
     HWLOC_OBJ_PU
 };
 
-static prte_mca_base_var_enum_value_t hwloc_base_map[] = {
+static pmix_mca_base_var_enum_value_t hwloc_base_map[] = {
     {PRTE_HWLOC_BASE_MAP_NONE, "none"},
     {PRTE_HWLOC_BASE_MAP_LOCAL_ONLY, "local_only"},
     {0, NULL}
 };
 
-static prte_mca_base_var_enum_value_t hwloc_failure_action[] = {
+static pmix_mca_base_var_enum_value_t hwloc_failure_action[] = {
     {PRTE_HWLOC_BASE_MBFA_SILENT, "silent"},
     {PRTE_HWLOC_BASE_MBFA_WARN, "warn"},
     {PRTE_HWLOC_BASE_MBFA_ERROR, "error"},
@@ -71,16 +71,16 @@ static bool bind_to_socket = false;
 
 int prte_hwloc_base_register(void)
 {
-    prte_mca_base_var_enum_t *new_enum;
+    pmix_mca_base_var_enum_t *new_enum;
     int ret;
     char *ptr;
 
     /* debug output */
-    ret = prte_mca_base_var_register("prte", "hwloc", "base", "verbose", "Debug verbosity",
+    ret = pmix_mca_base_var_register("prte", "hwloc", "base", "verbose", "Debug verbosity",
                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &verbosity);
-    prte_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "verbose",
+    pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "verbose",
                                        PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     if (0 < verbosity) {
@@ -90,7 +90,7 @@ int prte_hwloc_base_register(void)
 
     /* handle some deprecated options */
     prte_hwloc_default_use_hwthread_cpus = false;
-    (void) prte_mca_base_var_register("prte", "hwloc", "base", "use_hwthreads_as_cpus",
+    (void) pmix_mca_base_var_register("prte", "hwloc", "base", "use_hwthreads_as_cpus",
                                       "Use hardware threads as independent cpus",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL,
                                       NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
@@ -98,7 +98,7 @@ int prte_hwloc_base_register(void)
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                       &prte_hwloc_default_use_hwthread_cpus);
 
-    (void) prte_mca_base_var_register("prte", "hwloc", "base", "bind_to_core",
+    (void) pmix_mca_base_var_register("prte", "hwloc", "base", "bind_to_core",
                                       "Bind processes to cores",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL,
                                       NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
@@ -106,7 +106,7 @@ int prte_hwloc_base_register(void)
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                       &bind_to_core);
 
-    (void) prte_mca_base_var_register("prte", "hwloc", "base", "bind_to_socket",
+    (void) pmix_mca_base_var_register("prte", "hwloc", "base", "bind_to_socket",
                                       "Bind processes to sockets",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL,
                                       NULL, 0, PRTE_MCA_BASE_VAR_FLAG_DEPRECATED,
@@ -117,8 +117,8 @@ int prte_hwloc_base_register(void)
     /* hwloc_base_mbind_policy */
 
     prte_hwloc_base_map = PRTE_HWLOC_BASE_MAP_NONE;
-    prte_mca_base_var_enum_create("hwloc memory allocation policy", hwloc_base_map, &new_enum);
-    ret = prte_mca_base_var_register("prte", "hwloc", "default", "mem_alloc_policy",
+    pmix_mca_base_var_enum_create("hwloc memory allocation policy", hwloc_base_map, &new_enum);
+    ret = pmix_mca_base_var_register("prte", "hwloc", "default", "mem_alloc_policy",
                                      "Default general memory allocations placement policy (this is not memory binding). "
                                      "\"none\" means that no memory policy is applied. \"local_only\" means that a process' "
                                      "memory allocations will be restricted to its local NUMA domain. "
@@ -129,18 +129,18 @@ int prte_hwloc_base_register(void)
                                      PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0,
                                      PRTE_MCA_BASE_VAR_FLAG_DEPRECATED, PRTE_INFO_LVL_9,
                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_map);
-    PRTE_RELEASE(new_enum);
+    PMIX_RELEASE(new_enum);
     if (0 > ret) {
         return ret;
     }
-    prte_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "mem_alloc_policy",
+    pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "mem_alloc_policy",
                                        PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     /* hwloc_base_bind_failure_action */
     prte_hwloc_base_mbfa = PRTE_HWLOC_BASE_MBFA_WARN;
-    prte_mca_base_var_enum_create("hwloc memory bind failure action", hwloc_failure_action,
+    pmix_mca_base_var_enum_create("hwloc memory bind failure action", hwloc_failure_action,
                                   &new_enum);
-    ret = prte_mca_base_var_register("prte", "hwloc", "default", "mem_bind_failure_action",
+    ret = pmix_mca_base_var_register("prte", "hwloc", "default", "mem_bind_failure_action",
                                      "What PRTE will do if it explicitly tries to bind memory to a specific NUMA "
                                      "location, and fails.  Note that this is a different case than the general "
                                      "allocation policy described by mem_alloc_policy.  A value of \"silent\" "
@@ -151,11 +151,11 @@ int prte_hwloc_base_register(void)
                                      PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0,
                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_mbfa);
-    PRTE_RELEASE(new_enum);
+    PMIX_RELEASE(new_enum);
     if (0 > ret) {
         return ret;
     }
-    prte_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "mem_bind_failure_action",
+    pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "mem_bind_failure_action",
                                        PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     /* NOTE: for future developers and readers of this code, the binding policies are strictly
@@ -167,7 +167,7 @@ int prte_hwloc_base_register(void)
      *                     generate an error if it cannot be done
      */
     prte_hwloc_base_binding_policy = NULL;
-    ret = prte_mca_base_var_register("prte", "hwloc", "default", "binding_policy",
+    ret = pmix_mca_base_var_register("prte", "hwloc", "default", "binding_policy",
                                      "Default policy for binding processes. Allowed values: none, hwthread, core, l1cache, "
                                      "l2cache, "
                                      "l3cache, numa, package, (\"none\" is the default when oversubscribed, \"core\" is "
@@ -177,7 +177,7 @@ int prte_hwloc_base_register(void)
                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_binding_policy);
-    prte_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "binding_policy",
+    pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "binding_policy",
                                        PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
     if (NULL == prte_hwloc_base_binding_policy) {
         if (bind_to_core) {
@@ -210,17 +210,17 @@ int prte_hwloc_base_register(void)
      * bound only to core14 as that is the only PU in the cpuset that lies in package1.
      */
     default_cpu_list = NULL;
-    ret = prte_mca_base_var_register("prte", "hwloc", "default", "cpu_list",
+    ret = pmix_mca_base_var_register("prte", "hwloc", "default", "cpu_list",
                                      "Comma-separated list of ranges specifying logical cpus to be used by the DVM. "
                                      "Supported modifier:HWTCPUS (ranges specified in hwthreads) or CORECPUS "
                                      "(default: ranges specified in cores)",
                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &default_cpu_list);
-    prte_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "cpu_list",
+    pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "cpu_list",
                                        PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-    prte_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "slot_list",
+    pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "slot_list",
                                        PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
-    prte_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "cpu_set",
+    pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "cpu_set",
                                        PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     if (NULL != default_cpu_list) {
@@ -243,14 +243,14 @@ int prte_hwloc_base_register(void)
     }
 
     prte_hwloc_base_topo_file = NULL;
-    ret = prte_mca_base_var_register("prte", "hwloc", "use", "topo_file",
+    ret = pmix_mca_base_var_register("prte", "hwloc", "use", "topo_file",
                                      "Read local topology from file instead of directly sensing it",
                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hwloc_base_topo_file);
-    (void) prte_mca_base_var_register_synonym(ret, "prte", "ras", "simulator", "topo_files",
+    (void) pmix_mca_base_var_register_synonym(ret, "prte", "ras", "simulator", "topo_files",
                                               PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
-    (void) prte_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "topo_file",
+    (void) pmix_mca_base_var_register_synonym(ret, "opal", "hwloc", "base", "topo_file",
                                               PRTE_MCA_BASE_VAR_SYN_FLAG_DEPRECATED | PRTE_MCA_BASE_VAR_SYN_FLAG_INTERNAL);
 
     /* register parameters */
@@ -438,7 +438,7 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
 }
 
 static bool fns_init = false;
-static prte_tsd_key_t print_tsd_key;
+static pmix_tsd_key_t print_tsd_key;
 char *prte_hwloc_print_null = "NULL";
 
 static void buffer_cleanup(void *value)
@@ -462,13 +462,13 @@ prte_hwloc_print_buffers_t *prte_hwloc_get_print_buffer(void)
 
     if (!fns_init) {
         /* setup the print_args function */
-        if (PRTE_SUCCESS != (ret = prte_tsd_key_create(&print_tsd_key, buffer_cleanup))) {
+        if (PRTE_SUCCESS != (ret = pmix_tsd_key_create(&print_tsd_key, buffer_cleanup))) {
             return NULL;
         }
         fns_init = true;
     }
 
-    ret = prte_tsd_getspecific(print_tsd_key, (void **) &ptr);
+    ret = pmix_tsd_getspecific(print_tsd_key, (void **) &ptr);
     if (PRTE_SUCCESS != ret)
         return NULL;
 
@@ -478,7 +478,7 @@ prte_hwloc_print_buffers_t *prte_hwloc_get_print_buffer(void)
             ptr->buffers[i] = (char *) malloc((PRTE_HWLOC_PRINT_MAX_SIZE + 1) * sizeof(char));
         }
         ptr->cntr = 0;
-        ret = prte_tsd_setspecific(print_tsd_key, (void *) ptr);
+        ret = pmix_tsd_setspecific(print_tsd_key, (void *) ptr);
     }
 
     return (prte_hwloc_print_buffers_t *) ptr;
@@ -573,47 +573,47 @@ static void obj_data_const(prte_hwloc_obj_data_t *ptr)
     ptr->idx = UINT_MAX;
     ptr->num_bound = 0;
 }
-PRTE_CLASS_INSTANCE(prte_hwloc_obj_data_t, prte_object_t, obj_data_const, NULL);
+PMIX_CLASS_INSTANCE(prte_hwloc_obj_data_t, pmix_object_t, obj_data_const, NULL);
 
 static void sum_const(prte_hwloc_summary_t *ptr)
 {
     ptr->num_objs = 0;
-    PRTE_CONSTRUCT(&ptr->sorted_by_dist_list, prte_list_t);
+    PMIX_CONSTRUCT(&ptr->sorted_by_dist_list, pmix_list_t);
 }
 static void sum_dest(prte_hwloc_summary_t *ptr)
 {
-    prte_list_item_t *item;
-    while (NULL != (item = prte_list_remove_first(&ptr->sorted_by_dist_list))) {
-        PRTE_RELEASE(item);
+    pmix_list_item_t *item;
+    while (NULL != (item = pmix_list_remove_first(&ptr->sorted_by_dist_list))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&ptr->sorted_by_dist_list);
+    PMIX_DESTRUCT(&ptr->sorted_by_dist_list);
 }
-PRTE_CLASS_INSTANCE(prte_hwloc_summary_t, prte_list_item_t, sum_const, sum_dest);
+PMIX_CLASS_INSTANCE(prte_hwloc_summary_t, pmix_list_item_t, sum_const, sum_dest);
 static void topo_data_const(prte_hwloc_topo_data_t *ptr)
 {
     ptr->available = NULL;
-    PRTE_CONSTRUCT(&ptr->summaries, prte_list_t);
+    PMIX_CONSTRUCT(&ptr->summaries, pmix_list_t);
     ptr->numas = NULL;
     ptr->num_numas = 0;
 }
 static void topo_data_dest(prte_hwloc_topo_data_t *ptr)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
 
     if (NULL != ptr->available) {
         hwloc_bitmap_free(ptr->available);
     }
-    while (NULL != (item = prte_list_remove_first(&ptr->summaries))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&ptr->summaries))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&ptr->summaries);
+    PMIX_DESTRUCT(&ptr->summaries);
     if (NULL != ptr->numas) {
         free(ptr->numas);
     }
 }
-PRTE_CLASS_INSTANCE(prte_hwloc_topo_data_t, prte_object_t, topo_data_const, topo_data_dest);
+PMIX_CLASS_INSTANCE(prte_hwloc_topo_data_t, pmix_object_t, topo_data_const, topo_data_dest);
 
-PRTE_CLASS_INSTANCE(prte_rmaps_numa_node_t, prte_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_rmaps_numa_node_t, pmix_list_item_t, NULL, NULL);
 
 int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 {

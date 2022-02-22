@@ -53,7 +53,7 @@
 #include "src/prted/pmix/pmix_server.h"
 #include "src/threads/pmix_threads.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
@@ -64,7 +64,6 @@
 #include "src/mca/oob/base/base.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/prtebacktrace/base/base.h"
-#include "src/mca/prteif/base/base.h"
 #include "src/mca/prteinstalldirs/base/base.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
@@ -130,8 +129,8 @@ int prte_init_util(prte_proc_type_t flags)
 
     /* initialize install dirs code */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         fprintf(stderr,
                 "prte_prteinstalldirs_base_open() failed -- process will likely abort (%s:%d, "
                 "returned %d instead of PRTE_SUCCESS)\n",
@@ -149,7 +148,7 @@ int prte_init_util(prte_proc_type_t flags)
     }
 
     /* Setup the parameter system */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_var_init())) {
+    if (PRTE_SUCCESS != (ret = pmix_mca_base_var_init())) {
         error = "mca_base_var_init";
         goto error;
     }
@@ -160,11 +159,6 @@ int prte_init_util(prte_proc_type_t flags)
     prte_setup_hostname();
     /* load the output verbose stream */
     prte_output_setup_stream_prefix();
-
-    if (PRTE_SUCCESS != (ret = pmix_net_init())) {
-        error = "pmix_net_init";
-        goto error;
-    }
 
     /* pretty-print stack handlers */
     if (PRTE_SUCCESS != (ret = prte_util_register_stackhandlers())) {
@@ -181,7 +175,7 @@ int prte_init_util(prte_proc_type_t flags)
     }
 
     /* Initialize the data storage service. */ /* initialize the mca */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_open())) {
+    if (PRTE_SUCCESS != (ret = pmix_mca_base_open())) {
         error = "mca_base_open";
         goto error;
     }
@@ -192,22 +186,9 @@ int prte_init_util(prte_proc_type_t flags)
         goto error;
     }
 
-    /* initialize if framework */
-    ret = prte_mca_base_framework_open(&prte_prteif_base_framework,
-                                       PRTE_MCA_BASE_OPEN_DEFAULT);
-    if (PRTE_SUCCESS != ret) {
-        fprintf(stderr,
-                "prte_prteif_base_open() failed -- process will likely abort (%s:%d, returned %d "
-                "instead of PRTE_SUCCESS)\n",
-                __FILE__, __LINE__, ret);
-        return ret;
-    }
-    /* add network aliases to our list of alias hostnames */
-    pmix_ifgetaliases(&prte_process_info.aliases);
-
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_prtebacktrace_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_backtrace_base_open";
         goto error;
     }
@@ -228,12 +209,12 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     int ret;
     char *error = NULL;
 
-    PRTE_ACQUIRE_THREAD(&prte_init_lock);
+    PMIX_ACQUIRE_THREAD(&prte_init_lock);
     if (prte_initialized) {
-        PRTE_RELEASE_THREAD(&prte_init_lock);
+        PMIX_RELEASE_THREAD(&prte_init_lock);
         return PRTE_SUCCESS;
     }
-    PRTE_RELEASE_THREAD(&prte_init_lock);
+    PMIX_RELEASE_THREAD(&prte_init_lock);
 
     ret = prte_init_util(flags);
     if (PRTE_SUCCESS != ret) {
@@ -282,27 +263,27 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     prte_hwloc_base_open();
 
     /* setup the global job and node arrays */
-    prte_job_data = PRTE_NEW(prte_pointer_array_t);
+    prte_job_data = PMIX_NEW(pmix_pointer_array_t);
     if (PRTE_SUCCESS
-        != (ret = prte_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+        != (ret = pmix_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                                           PRTE_GLOBAL_ARRAY_MAX_SIZE,
                                           PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         error = "setup job array";
         goto error;
     }
-    prte_node_pool = PRTE_NEW(prte_pointer_array_t);
+    prte_node_pool = PMIX_NEW(pmix_pointer_array_t);
     if (PRTE_SUCCESS
-        != (ret = prte_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+        != (ret = pmix_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                                           PRTE_GLOBAL_ARRAY_MAX_SIZE,
                                           PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         error = "setup node array";
         goto error;
     }
-    prte_node_topologies = PRTE_NEW(prte_pointer_array_t);
+    prte_node_topologies = PMIX_NEW(pmix_pointer_array_t);
     if (PRTE_SUCCESS
-        != (ret = prte_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+        != (ret = pmix_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                                           PRTE_GLOBAL_ARRAY_MAX_SIZE,
                                           PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
@@ -313,8 +294,8 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     /* open the SCHIZO framework as everyone needs it, and the
      * ess will use it to help select its component */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_schizo_base_open";
         goto error;
@@ -327,8 +308,8 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
 
     /* open the ESS and select the correct module for this environment */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_ess_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_ess_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_ess_base_open";
         goto error;
@@ -345,9 +326,16 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
         goto error;
     }
 
+    /* add network aliases to our list of alias hostnames */
+    if (PRTE_SUCCESS != (ret = pmix_net_init())) {
+        error = "pmix_net_init";
+        goto error;
+    }
+    pmix_ifgetaliases(&prte_process_info.aliases);
+
     /* initialize the cache */
-    prte_cache = PRTE_NEW(prte_pointer_array_t);
-    prte_pointer_array_init(prte_cache, 1, INT_MAX, 1);
+    prte_cache = PMIX_NEW(pmix_pointer_array_t);
+    pmix_pointer_array_init(prte_cache, 1, INT_MAX, 1);
 
 #if PRTE_ENABLE_FT
     if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_DAEMON) {
@@ -366,9 +354,9 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     }
 
     /* All done */
-    PRTE_ACQUIRE_THREAD(&prte_init_lock);
+    PMIX_ACQUIRE_THREAD(&prte_init_lock);
     prte_initialized = true;
-    PRTE_RELEASE_THREAD(&prte_init_lock);
+    PMIX_RELEASE_THREAD(&prte_init_lock);
     return PRTE_SUCCESS;
 
 error:

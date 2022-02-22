@@ -27,8 +27,8 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/base/base.h"
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_base.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/util/pmix_basename.h"
 
 #include "ras_pbs.h"
@@ -44,24 +44,24 @@ static int param_priority;
  */
 static int ras_pbs_register(void);
 static int ras_pbs_open(void);
-static int prte_ras_pbs_component_query(prte_mca_base_module_t **module, int *priority);
+static int prte_ras_pbs_component_query(pmix_mca_base_module_t **module, int *priority);
 
 prte_ras_pbs_component_t prte_ras_pbs_component = {
     {
-        /* First, the prte_mca_base_component_t struct containing meta
+        /* First, the pmix_mca_base_component_t struct containing meta
            information about the component itself */
 
         .base_version = {
             PRTE_RAS_BASE_VERSION_2_0_0,
 
             /* Component name and version */
-            .mca_component_name = "pbs",
+            .pmix_mca_component_name = "pbs",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
 
             /* Component open and close functions */
             .mca_open_component = ras_pbs_open,
-            .mca_query_component = prte_ras_pbs_component_query,
+            .pmix_mca_query_component = prte_ras_pbs_component_query,
             .mca_register_component_params = ras_pbs_register,
         },
         .base_data = {
@@ -73,10 +73,10 @@ prte_ras_pbs_component_t prte_ras_pbs_component = {
 
 static int ras_pbs_register(void)
 {
-    prte_mca_base_component_t *c = &prte_ras_pbs_component.super.base_version;
+    pmix_mca_base_component_t *c = &prte_ras_pbs_component.super.base_version;
 
     param_priority = 100;
-    (void) prte_mca_base_component_var_register(c, "priority", "Priority of the pbs ras component",
+    (void) pmix_mca_base_component_var_register(c, "priority", "Priority of the pbs ras component",
                                                 PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
                                                 PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                                 PRTE_MCA_BASE_VAR_SCOPE_READONLY, &param_priority);
@@ -88,7 +88,7 @@ static int ras_pbs_register(void)
      * inform us that we are in such an environment
      */
     prte_ras_pbs_component.smp_mode = false;
-    (void) prte_mca_base_component_var_register(
+    (void) pmix_mca_base_component_var_register(
         c, "smp",
         "The PBS system is configured in SMP mode "
         "with the number of cpus/node given in the environment",
@@ -103,12 +103,12 @@ static int ras_pbs_open(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_ras_pbs_component_query(prte_mca_base_module_t **module, int *priority)
+static int prte_ras_pbs_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* Are we running under a PBS job? */
     if (NULL != getenv("PBS_ENVIRONMENT") && NULL != getenv("PBS_JOBID")) {
         *priority = param_priority;
-        *module = (prte_mca_base_module_t *) &prte_ras_pbs_module;
+        *module = (pmix_mca_base_module_t *) &prte_ras_pbs_module;
         return PRTE_SUCCESS;
     }
 

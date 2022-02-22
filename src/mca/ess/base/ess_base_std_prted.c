@@ -44,8 +44,6 @@
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/pmix_os_path.h"
-#include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -71,6 +69,9 @@
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
 #include "src/util/name_fns.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_error.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
@@ -121,7 +122,7 @@ int prte_ess_base_prted_setup(void)
     setup_sighandler(SIGTERM, &term_handler, shutdown_signal);
     setup_sighandler(SIGINT, &int_handler, shutdown_signal);
     /** setup callbacks for signals we should forward */
-    if (0 < (idx = prte_list_get_size(&prte_ess_base_signals))) {
+    if (0 < (idx = pmix_list_get_size(&prte_ess_base_signals))) {
         forward_signals_events = (prte_event_t *) malloc(sizeof(prte_event_t) * idx);
         if (NULL == forward_signals_events) {
             ret = PRTE_ERR_OUT_OF_RESOURCE;
@@ -129,7 +130,7 @@ int prte_ess_base_prted_setup(void)
             goto error;
         }
         idx = 0;
-        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+        PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
         {
             setup_sighandler(sig->signal, forward_signals_events + idx, signal_forward_callback);
             ++idx;
@@ -175,8 +176,8 @@ int prte_ess_base_prted_setup(void)
 
     /* open and setup the state machine */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_state_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_state_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_state_base_open";
         goto error;
@@ -188,8 +189,8 @@ int prte_ess_base_prted_setup(void)
     }
     /* open the errmgr */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_errmgr_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_errmgr_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_errmgr_base_open";
         goto error;
@@ -197,8 +198,8 @@ int prte_ess_base_prted_setup(void)
 #if PRTE_ENABLE_FT
     /* open the propagate */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_propagate_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_propagate_base_open";
         goto error;
@@ -208,15 +209,15 @@ int prte_ess_base_prted_setup(void)
      * open and select something -only- if we are given
      * a specific module to use
      */
-    (void) prte_mca_base_var_env_name("plm", &param);
+    (void) pmix_mca_base_var_env_name("plm", &param);
     if (NULL != getenv(param)) {
         plm_in_use = true;
     }
     free(param);
     if (plm_in_use) {
         if (PRTE_SUCCESS
-            != (ret = prte_mca_base_framework_open(&prte_plm_base_framework,
-                                                   PRTE_MCA_BASE_OPEN_DEFAULT))) {
+            != (ret = pmix_mca_base_framework_open(&prte_plm_base_framework,
+                                                   PMIX_MCA_BASE_OPEN_DEFAULT))) {
             PRTE_ERROR_LOG(ret);
             error = "prte_plm_base_open";
             goto error;
@@ -285,7 +286,7 @@ int prte_ess_base_prted_setup(void)
     }
     /* Setup the job data object for the daemons */
     /* create and store the job data object */
-    jdata = PRTE_NEW(prte_job_t);
+    jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
     prte_set_job_data_object(jdata);
     /* set the schizo personality to "prte" by default */
@@ -298,18 +299,18 @@ int prte_ess_base_prted_setup(void)
     }
 
     /* every job requires at least one app */
-    app = PRTE_NEW(prte_app_context_t);
-    prte_pointer_array_set_item(jdata->apps, 0, app);
+    app = PMIX_NEW(prte_app_context_t);
+    pmix_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps++;
 
     /* create and store a proc object for us */
-    proc = PRTE_NEW(prte_proc_t);
+    proc = PMIX_NEW(prte_proc_t);
     PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
     proc->job = jdata;
     proc->rank = proc->name.rank;
     proc->pid = prte_process_info.pid;
     proc->state = PRTE_PROC_STATE_RUNNING;
-    prte_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+    pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
     jdata->state = PRTE_JOB_STATE_RUNNING;
@@ -329,8 +330,8 @@ int prte_ess_base_prted_setup(void)
     /* Setup the communication infrastructure */
     /* Routed system */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_routed_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_routed_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_routed_base_open";
         goto error;
@@ -341,8 +342,8 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_prtereachable_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_prtereachable_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_prtereachable_base_open";
         goto error;
@@ -353,8 +354,8 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_oob_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_oob_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_oob_base_open";
         goto error;
@@ -365,8 +366,8 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rml_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_rml_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rml_base_open";
         goto error;
@@ -423,8 +424,8 @@ int prte_ess_base_prted_setup(void)
      * Group communications
      */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_grpcomm_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_grpcomm_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_grpcomm_base_open";
         goto error;
@@ -436,8 +437,8 @@ int prte_ess_base_prted_setup(void)
     }
     /* Open/select the odls */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_odls_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_odls_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_odls_base_open";
         goto error;
@@ -449,8 +450,8 @@ int prte_ess_base_prted_setup(void)
     }
     /* Open/select the rtc */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rtc_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_rtc_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rtc_base_open";
         goto error;
@@ -461,8 +462,8 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rmaps_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_rmaps_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rmaps_base_open";
         goto error;
@@ -477,13 +478,13 @@ int prte_ess_base_prted_setup(void)
      * will have reset our topology. Ensure we always get the right
      * one by setting our node topology afterwards
      */
-    t = PRTE_NEW(prte_topology_t);
+    t = PMIX_NEW(prte_topology_t);
     t->topo = prte_hwloc_topology;
     /* save the signature */
     t->sig = strdup(prte_topo_signature);
     /* save the topology - note that this may have to be moved later
      * to ensure a common array position with the DVM master */
-    prte_pointer_array_add(prte_node_topologies, t);
+    pmix_pointer_array_add(prte_node_topologies, t);
     if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         char *output = NULL;
         pmix_topology_t topo;
@@ -516,8 +517,8 @@ int prte_ess_base_prted_setup(void)
 
     /* setup I/O forwarding system - must come after we init routes */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_iof_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_iof_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_iof_base_open";
         goto error;
@@ -529,8 +530,8 @@ int prte_ess_base_prted_setup(void)
     }
     /* setup the FileM */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_filem_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_filem_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_filem_base_open";
         goto error;
@@ -564,7 +565,7 @@ int prte_ess_base_prted_finalize(void)
         prte_event_del(&int_handler);
         /** Remove the USR signal handlers */
         i = 0;
-        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+        PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
         {
             prte_event_signal_del(forward_signals_events + i);
             ++i;
@@ -583,7 +584,7 @@ int prte_ess_base_prted_finalize(void)
     if (NULL != prte_propagate.finalize) {
         prte_propagate.finalize();
     }
-    (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_propagate_base_framework);
 #endif
 
     if (NULL != prte_errmgr.finalize) {
@@ -594,22 +595,22 @@ int prte_ess_base_prted_finalize(void)
     pmix_server_finalize();
 
     /* close frameworks */
-    (void) prte_mca_base_framework_close(&prte_filem_base_framework);
-    (void) prte_mca_base_framework_close(&prte_grpcomm_base_framework);
-    (void) prte_mca_base_framework_close(&prte_iof_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_filem_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_iof_base_framework);
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
-    (void) prte_mca_base_framework_close(&prte_plm_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_plm_base_framework);
     /* make sure our local procs are dead */
     prte_odls.kill_local_procs(NULL);
-    (void) prte_mca_base_framework_close(&prte_rtc_base_framework);
-    (void) prte_mca_base_framework_close(&prte_odls_base_framework);
-    (void) prte_mca_base_framework_close(&prte_routed_base_framework);
-    (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);
-    (void) prte_mca_base_framework_close(&prte_rml_base_framework);
-    (void) prte_mca_base_framework_close(&prte_oob_base_framework);
-    (void) prte_mca_base_framework_close(&prte_prtereachable_base_framework);
-    (void) prte_mca_base_framework_close(&prte_state_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_rtc_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_routed_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_rml_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_oob_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_prtereachable_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_state_base_framework);
     /* remove our use of the session directory tree */
     prte_session_dir_finalize(PRTE_PROC_MY_NAME);
     /* ensure we scrub the session directory tree */

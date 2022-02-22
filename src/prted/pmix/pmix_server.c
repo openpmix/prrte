@@ -49,9 +49,9 @@
 #include <ctype.h>
 
 #include "prte_stdint.h"
-#include "src/class/prte_hotel.h"
-#include "src/class/prte_list.h"
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/class/pmix_hotel.h"
+#include "src/class/pmix_list.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
@@ -342,7 +342,7 @@ void pmix_server_register_params(void)
 
     /* register a verbosity */
     prte_pmix_server_globals.verbosity = -1;
-    (void) prte_mca_base_var_register("prte", "pmix", NULL, "server_verbose",
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "server_verbose",
                                       "Debug verbosity for PMIx server", PRTE_MCA_BASE_VAR_TYPE_INT,
                                       NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_ALL,
@@ -355,14 +355,14 @@ void pmix_server_register_params(void)
     /* specify the size of the hotel */
     prte_pmix_server_globals.num_rooms = -1;
     (void)
-        prte_mca_base_var_register("prte", "pmix", NULL, "server_max_reqs",
+        pmix_mca_base_var_register("prte", "pmix", NULL, "server_max_reqs",
                                    "Maximum number of backlogged PMIx server direct modex requests",
                                    PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                    PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL,
                                    &prte_pmix_server_globals.num_rooms);
     /* specify the timeout for the hotel */
     prte_pmix_server_globals.timeout = 2;
-    (void) prte_mca_base_var_register(
+    (void) pmix_mca_base_var_register(
         "prte", "pmix", NULL, "server_max_wait",
         "Maximum time (in seconds) the PMIx server should wait to service direct modex requests",
         PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
@@ -371,7 +371,7 @@ void pmix_server_register_params(void)
     /* whether or not to wait for the universal server */
     prte_pmix_server_globals.wait_for_server = false;
     (void)
-        prte_mca_base_var_register("prte", "pmix", NULL, "wait_for_server",
+        pmix_mca_base_var_register("prte", "pmix", NULL, "wait_for_server",
                                    "Whether or not to wait for the session-level server to start",
                                    PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
                                    PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
@@ -381,7 +381,7 @@ void pmix_server_register_params(void)
     /* whether or not to drop a session-level tool rendezvous point */
     prte_pmix_server_globals.session_server = false;
     (void)
-        prte_mca_base_var_register("prte", "pmix", NULL, "session_server",
+        pmix_mca_base_var_register("prte", "pmix", NULL, "session_server",
                                    "Whether or not to drop a session-level tool rendezvous point",
                                    PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
                                    PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
@@ -390,7 +390,7 @@ void pmix_server_register_params(void)
 
     /* whether or not to drop a system-level tool rendezvous point */
     prte_pmix_server_globals.system_server = false;
-    (void) prte_mca_base_var_register("prte", "pmix", NULL, "system_server",
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "system_server",
                                       "Whether or not to drop a system-level tool rendezvous point",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
@@ -398,7 +398,7 @@ void pmix_server_register_params(void)
                                       &prte_pmix_server_globals.system_server);
 
     /* whether or not to drop a system-level tool rendezvous point */
-    (void) prte_mca_base_var_register("prte", "pmix", NULL, "generate_distances",
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "generate_distances",
                                       "Device types whose distances are to be provided (default=none, options=fabric,gpu,network",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
@@ -420,7 +420,7 @@ void pmix_server_register_params(void)
 
 }
 
-static void eviction_cbfunc(struct prte_hotel_t *hotel, int room_num, void *occupant)
+static void eviction_cbfunc(struct pmix_hotel_t *hotel, int room_num, void *occupant)
 {
     pmix_server_req_t *req = (pmix_server_req_t *) occupant;
     bool timeout = false;
@@ -454,13 +454,13 @@ static void eviction_cbfunc(struct prte_hotel_t *hotel, int room_num, void *occu
                 /* it has - ask our local pmix server for the data */
                 PMIX_VALUE_RELEASE(pval);
                 /* check us back into hotel so the modex_resp function can safely remove us */
-                prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+                pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
                 if (PMIX_SUCCESS
                     != (prc = PMIx_server_dmodex_request(&req->tproc, modex_resp, req))) {
                     PMIX_ERROR_LOG(prc);
                     send_error(rc, &req->tproc, &req->proxy, req->remote_room_num);
-                    prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
-                    PRTE_RELEASE(req);
+                    pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+                    PMIX_RELEASE(req);
                 }
                 return;
             }
@@ -470,7 +470,7 @@ static void eviction_cbfunc(struct prte_hotel_t *hotel, int room_num, void *occu
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->key);
         }
         /* not done yet - check us back in */
-        rc = prte_hotel_recheck(&prte_pmix_server_globals.reqs, req, req->room_num);
+        rc = pmix_hotel_recheck(&prte_pmix_server_globals.reqs, req, req->room_num);
         if (PRTE_SUCCESS == rc) {
             prte_output_verbose(2, prte_pmix_server_globals.output,
                                 "%s server:evict checked back in to room %d",
@@ -494,7 +494,7 @@ static void eviction_cbfunc(struct prte_hotel_t *hotel, int room_num, void *occu
     } else if (NULL != req->lkcbfunc) {
         req->lkcbfunc(PMIX_ERR_TIMEOUT, NULL, 0, req->cbdata);
     }
-    PRTE_RELEASE(req);
+    PMIX_RELEASE(req);
 }
 
 /* NOTE: this function must be called from within an event! */
@@ -504,12 +504,12 @@ void prte_pmix_server_clear(pmix_proc_t *pname)
     pmix_server_req_t *req;
 
     for (n = 0; n < prte_pmix_server_globals.reqs.num_rooms; n++) {
-        prte_hotel_knock(&prte_pmix_server_globals.reqs, n, (void **) &req);
+        pmix_hotel_knock(&prte_pmix_server_globals.reqs, n, (void **) &req);
         if (NULL != req) {
             if (0 == strncmp(req->tproc.nspace, pname->nspace, PMIX_MAX_NSLEN) &&
                 PMIX_CHECK_RANK(req->tproc.rank, pname->rank)) {
-                prte_hotel_checkout(&prte_pmix_server_globals.reqs, n);
-                PRTE_RELEASE(req);
+                pmix_hotel_checkout(&prte_pmix_server_globals.reqs, n);
+                PMIX_RELEASE(req);
             }
         }
     }
@@ -525,7 +525,7 @@ static void lost_connection_hdlr(size_t evhdlr_registration_id, pmix_status_t st
     prte_pmix_tool_t *tl;
 
     /* scan the list of attached tools to see if this one is there */
-    PRTE_LIST_FOREACH(tl, &prte_pmix_server_globals.tools, prte_pmix_tool_t)
+    PMIX_LIST_FOREACH(tl, &prte_pmix_server_globals.tools, prte_pmix_tool_t)
     {
         if (PMIX_CHECK_PROCID(&tl->name, source)) {
             /* remove the session directory we created for it */
@@ -533,9 +533,9 @@ static void lost_connection_hdlr(size_t evhdlr_registration_id, pmix_status_t st
                 pmix_os_dirpath_destroy(tl->nsdir, true, NULL);
             }
             /* take this tool off the list */
-            prte_list_remove_item(&prte_pmix_server_globals.tools, &tl->super);
+            pmix_list_remove_item(&prte_pmix_server_globals.tools, &tl->super);
             /* release it */
-            PRTE_RELEASE(tl);
+            PMIX_RELEASE(tl);
             break;
         }
     }
@@ -550,7 +550,7 @@ static void lost_connection_hdlr(size_t evhdlr_registration_id, pmix_status_t st
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
-    PRTE_ACQUIRE_OBJECT(lock);
+    PMIX_ACQUIRE_OBJECT(lock);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
@@ -575,9 +575,9 @@ int pmix_server_init(void)
     prte_pmix_server_globals.initialized = true;
 
     /* setup the server's state variables */
-    PRTE_CONSTRUCT(&prte_pmix_server_globals.reqs, prte_hotel_t);
-    PRTE_CONSTRUCT(&prte_pmix_server_globals.psets, prte_list_t);
-    PRTE_CONSTRUCT(&prte_pmix_server_globals.tools, prte_list_t);
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.reqs, pmix_hotel_t);
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.psets, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.tools, pmix_list_t);
 
     /* by the time we init the server, we should know how many nodes we
      * have in our environment - with the exception of mpirun. If the
@@ -590,14 +590,14 @@ int pmix_server_init(void)
             prte_pmix_server_globals.num_rooms = PRTE_PMIX_SERVER_MIN_ROOMS;
         }
     }
-    rc = prte_hotel_init(&prte_pmix_server_globals.reqs, prte_pmix_server_globals.num_rooms,
-                         prte_event_base, prte_pmix_server_globals.timeout, PRTE_ERROR_PRI,
+    rc = pmix_hotel_init(&prte_pmix_server_globals.reqs, prte_pmix_server_globals.num_rooms,
+                         prte_event_base, prte_pmix_server_globals.timeout,
                          eviction_cbfunc);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
-    PRTE_CONSTRUCT(&prte_pmix_server_globals.notifications, prte_list_t);
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.notifications, pmix_list_t);
     prte_pmix_server_globals.server = *PRTE_NAME_INVALID;
 
     PMIX_INFO_LIST_START(ilist);
@@ -919,9 +919,9 @@ void pmix_server_finalize(void)
     PMIx_server_finalize();
 
     /* cleanup collectives */
-    PRTE_DESTRUCT(&prte_pmix_server_globals.reqs);
-    PRTE_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
-    PRTE_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
+    PMIX_DESTRUCT(&prte_pmix_server_globals.reqs);
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
     free(mytopology.source);
     prte_pmix_server_globals.initialized = false;
 }
@@ -961,13 +961,13 @@ static void _mdxresp(int sd, short args, void *cbdata)
     pmix_data_buffer_t *reply;
     pmix_status_t prc;
 
-    PRTE_ACQUIRE_OBJECT(req);
+    PMIX_ACQUIRE_OBJECT(req);
 
     prte_output_verbose(2, prte_pmix_server_globals.output, "%s XMITTING DATA FOR PROC %s:%u",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->tproc.nspace, req->tproc.rank);
 
     /* check us out of the hotel */
-    prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+    pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
 
     /* pack the status */
     PMIX_DATA_BUFFER_CREATE(reply);
@@ -1007,7 +1007,7 @@ static void _mdxresp(int sd, short args, void *cbdata)
                             prte_rml_send_callback, NULL);
 
 error:
-    PRTE_RELEASE(req);
+    PMIX_RELEASE(req);
     return;
 }
 /* the modex_resp function takes place in the local PMIx server's
@@ -1017,7 +1017,7 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
 {
     pmix_server_req_t *req = (pmix_server_req_t *) cbdata;
 
-    PRTE_ACQUIRE_OBJECT(req);
+    PMIX_ACQUIRE_OBJECT(req);
 
     req->pstatus = status;
     if (PMIX_SUCCESS == status && NULL != data) {
@@ -1032,7 +1032,7 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
     }
     prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, _mdxresp, req);
     prte_event_set_priority(&(req->ev), PRTE_MSG_PRI);
-    PRTE_POST_OBJECT(req);
+    PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 }
 static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
@@ -1100,7 +1100,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
         prte_output_verbose(2, prte_pmix_server_globals.output,
                             "%s dmdx:recv request no job - checking into hotel",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        req = PRTE_NEW(pmix_server_req_t);
+        req = PMIX_NEW(pmix_server_req_t);
         pmix_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
         req->proxy = *sender;
         memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
@@ -1114,15 +1114,15 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
          * amount of time to start the job */
         PRTE_ADJUST_TIMEOUT(req);
         if (PRTE_SUCCESS
-            != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+            != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
             prte_show_help("help-prted.txt", "noroom", true, req->operation,
                            prte_pmix_server_globals.num_rooms);
-            PRTE_RELEASE(req);
+            PMIX_RELEASE(req);
             send_error(rc, &pproc, sender, room_num);
         }
         return;
     }
-    if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, pproc.rank))) {
+    if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, pproc.rank))) {
         /* this is truly an error, so notify the sender */
         send_error(PRTE_ERR_NOT_FOUND, &pproc, sender, room_num);
         return;
@@ -1142,7 +1142,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
                                 "%s dmdx:recv key %s not found - checking into hotel",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), key);
             /* we don't - wait for awhile */
-            req = PRTE_NEW(pmix_server_req_t);
+            req = PMIX_NEW(pmix_server_req_t);
             pmix_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
             req->proxy = *sender;
             memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
@@ -1157,10 +1157,10 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
             PMIX_INFO_FREE(info, ninfo);
             /* check us into the hotel */
             if (PRTE_SUCCESS
-                != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+                != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
                 prte_show_help("help-prted.txt", "noroom", true, req->operation,
                                prte_pmix_server_globals.num_rooms);
-                PRTE_RELEASE(req);
+                PMIX_RELEASE(req);
                 send_error(rc, &pproc, sender, room_num);
             }
             prte_output_verbose(2, prte_pmix_server_globals.output,
@@ -1177,7 +1177,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
 
     /* track the request since the call down to the PMIx server
      * is asynchronous */
-    req = PRTE_NEW(pmix_server_req_t);
+    req = PMIX_NEW(pmix_server_req_t);
     pmix_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
     req->proxy = *sender;
     memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
@@ -1188,10 +1188,10 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
      * amount of time to start the job */
     PRTE_ADJUST_TIMEOUT(req);
     if (PRTE_SUCCESS
-        != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+        != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
         prte_show_help("help-prted.txt", "noroom", true, req->operation,
                        prte_pmix_server_globals.num_rooms);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         send_error(rc, &pproc, sender, room_num);
         return;
     }
@@ -1199,8 +1199,8 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
     /* ask our local pmix server for the data */
     if (PMIX_SUCCESS != (prc = PMIx_server_dmodex_request(&pproc, modex_resp, req))) {
         PMIX_ERROR_LOG(prc);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
-        PRTE_RELEASE(req);
+        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        PMIX_RELEASE(req);
         send_error(rc, &pproc, sender, room_num);
         return;
     }
@@ -1208,7 +1208,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
 }
 
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     char *data;
     int32_t ndata;
 } datacaddy_t;
@@ -1223,13 +1223,13 @@ static void dcdes(datacaddy_t *p)
         free(p->data);
     }
 }
-static PRTE_CLASS_INSTANCE(datacaddy_t, prte_object_t, dccon, dcdes);
+static PMIX_CLASS_INSTANCE(datacaddy_t, pmix_object_t, dccon, dcdes);
 
 static void relcbfunc(void *relcbdata)
 {
     datacaddy_t *d = (datacaddy_t *) relcbdata;
 
-    PRTE_RELEASE(d);
+    PMIX_RELEASE(d);
 }
 
 static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
@@ -1248,13 +1248,13 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender),
                         (int) buffer->bytes_used);
 
-    d = PRTE_NEW(datacaddy_t);
+    d = PMIX_NEW(datacaddy_t);
 
     /* unpack the status */
     cnt = 1;
     if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, &pret, &cnt, PMIX_STATUS))) {
         PMIX_ERROR_LOG(prc);
-        PRTE_RELEASE(d);
+        PMIX_RELEASE(d);
         return;
     }
 
@@ -1262,7 +1262,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
     cnt = 1;
     if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, &pproc, &cnt, PMIX_PROC))) {
         PMIX_ERROR_LOG(prc);
-        PRTE_RELEASE(d);
+        PMIX_RELEASE(d);
         return;
     }
 
@@ -1270,7 +1270,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
     cnt = 1;
     if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, &room_num, &cnt, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
-        PRTE_RELEASE(d);
+        PMIX_RELEASE(d);
         return;
     }
 
@@ -1279,7 +1279,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
         cnt = 1;
         if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, &psz, &cnt, PMIX_SIZE))) {
             PMIX_ERROR_LOG(prc);
-            PRTE_RELEASE(d);
+            PMIX_RELEASE(d);
             return;
         }
         if (0 < psz) {
@@ -1291,22 +1291,22 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
             cnt = psz;
             if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, d->data, &cnt, PMIX_BYTE))) {
                 PMIX_ERROR_LOG(prc);
-                PRTE_RELEASE(d);
+                PMIX_RELEASE(d);
                 return;
             }
         }
     }
 
     /* check the request out of the tracking hotel */
-    prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room_num,
+    pmix_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room_num,
                                             (void **) &req);
     /* return the returned data to the requestor */
     if (NULL != req) {
         if (NULL != req->mdxcbfunc) {
-            PRTE_RETAIN(d);
+            PMIX_RETAIN(d);
             req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
         }
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
     } else {
         prte_output_verbose(2, prte_pmix_server_globals.output, "REQ WAS NULL IN ROOM %d",
                             room_num);
@@ -1314,20 +1314,20 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
 
     /* now see if anyone else was waiting for data from this target */
     for (rnum = 0; rnum < prte_pmix_server_globals.reqs.num_rooms; rnum++) {
-        prte_hotel_knock(&prte_pmix_server_globals.reqs, rnum, (void **) &req);
+        pmix_hotel_knock(&prte_pmix_server_globals.reqs, rnum, (void **) &req);
         if (NULL == req) {
             continue;
         }
         if (PMIX_CHECK_PROCID(&req->tproc, &pproc)) {
             if (NULL != req->mdxcbfunc) {
-                PRTE_RETAIN(d);
+                PMIX_RETAIN(d);
                 req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
             }
-            prte_hotel_checkout(&prte_pmix_server_globals.reqs, rnum);
-            PRTE_RELEASE(req);
+            pmix_hotel_checkout(&prte_pmix_server_globals.reqs, rnum);
+            PMIX_RELEASE(req);
         }
     }
-    PRTE_RELEASE(d); // maintain accounting
+    PMIX_RELEASE(d); // maintain accounting
 }
 
 static void pmix_server_log(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
@@ -1405,7 +1405,7 @@ static void opcon(prte_pmix_server_op_caddy_t *p)
     p->cbdata = NULL;
     p->server_object = NULL;
 }
-PRTE_CLASS_INSTANCE(prte_pmix_server_op_caddy_t, prte_object_t, opcon, NULL);
+PMIX_CLASS_INSTANCE(prte_pmix_server_op_caddy_t, pmix_object_t, opcon, NULL);
 
 static void rqcon(pmix_server_req_t *p)
 {
@@ -1448,11 +1448,11 @@ static void rqdes(pmix_server_req_t *p)
         free(p->key);
     }
     if (NULL != p->jdata) {
-        PRTE_RELEASE(p->jdata);
+        PMIX_RELEASE(p->jdata);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&p->msg);
 }
-PRTE_CLASS_INSTANCE(pmix_server_req_t, prte_object_t, rqcon, rqdes);
+PMIX_CLASS_INSTANCE(pmix_server_req_t, pmix_object_t, rqcon, rqdes);
 
 static void mdcon(prte_pmix_mdx_caddy_t *p)
 {
@@ -1467,13 +1467,13 @@ static void mdcon(prte_pmix_mdx_caddy_t *p)
 static void mddes(prte_pmix_mdx_caddy_t *p)
 {
     if (NULL != p->sig) {
-        PRTE_RELEASE(p->sig);
+        PMIX_RELEASE(p->sig);
     }
     if (NULL != p->buf) {
         PMIX_DATA_BUFFER_RELEASE(p->buf);
     }
 }
-PRTE_CLASS_INSTANCE(prte_pmix_mdx_caddy_t, prte_object_t, mdcon, mddes);
+PMIX_CLASS_INSTANCE(prte_pmix_mdx_caddy_t, pmix_object_t, mdcon, mddes);
 
 static void pscon(pmix_server_pset_t *p)
 {
@@ -1490,7 +1490,7 @@ static void psdes(pmix_server_pset_t *p)
         free(p->members);
     }
 }
-PRTE_CLASS_INSTANCE(pmix_server_pset_t, prte_list_item_t, pscon, psdes);
+PMIX_CLASS_INSTANCE(pmix_server_pset_t, pmix_list_item_t, pscon, psdes);
 
 static void tlcon(prte_pmix_tool_t *p)
 {
@@ -1502,6 +1502,6 @@ static void tldes(prte_pmix_tool_t *p)
         free(p->nsdir);
     }
 }
-PRTE_CLASS_INSTANCE(prte_pmix_tool_t,
-                    prte_list_item_t,
+PMIX_CLASS_INSTANCE(prte_pmix_tool_t,
+                    pmix_list_item_t,
                     tlcon, tldes);

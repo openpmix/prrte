@@ -60,8 +60,8 @@
 
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/base/base.h"
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_base.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
@@ -129,7 +129,7 @@ static int ncollected = 0;
 static bool node_regex_waiting = false;
 static bool prted_abort = false;
 static char *prte_parent_uri = NULL;
-static prte_cli_result_t results;
+static pmix_cli_result_t results;
 
 typedef struct {
     prte_pmix_lock_t lock;
@@ -254,8 +254,8 @@ int main(int argc, char *argv[])
 
     /* open the SCHIZO framework */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         return ret;
     }
@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
     }
 
     /* parse the CLI to load the MCA params */
-    PRTE_CONSTRUCT(&results, prte_cli_result_t);
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
     ret = schizo->parse_cli(pargv, &results, PRTE_CLI_SILENT);
     if (PRTE_SUCCESS != ret) {
         if (PRTE_ERR_SILENT != ret) {
@@ -470,7 +470,7 @@ int main(int argc, char *argv[])
      * any messages we send can flow thru him.
      */
     prte_parent_uri = NULL;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "parent_uri",
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "parent_uri",
                                       "URI for the parent if tree launch is enabled.",
                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
@@ -832,7 +832,7 @@ int main(int argc, char *argv[])
     while (prte_event_base_active) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
     }
-    PRTE_ACQUIRE_OBJECT(prte_event_base_active);
+    PMIX_ACQUIRE_OBJECT(prte_event_base_active);
 
     /* ensure all local procs are dead */
     prte_odls.kill_local_procs(NULL);
@@ -861,7 +861,7 @@ static void shutdown_callback(int fd, short flags, void *arg)
 
     if (NULL != tm) {
         /* release the timer */
-        PRTE_RELEASE(tm);
+        PMIX_RELEASE(tm);
     }
 
     /* if we were ordered to abort, do so */

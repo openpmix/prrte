@@ -35,7 +35,7 @@
 #endif
 
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
@@ -54,24 +54,24 @@
 
 static int rml_oob_open(void);
 static int rml_oob_close(void);
-static int component_query(prte_mca_base_module_t **module, int *priority);
+static int component_query(pmix_mca_base_module_t **module, int *priority);
 
 /**
  * component definition
  */
 prte_rml_component_t prte_rml_oob_component = {
-      /* First, the prte_mca_base_component_t struct containing meta
+      /* First, the pmix_mca_base_component_t struct containing meta
          information about the component itself */
 
     .base = {
         PRTE_RML_BASE_VERSION_3_0_0,
 
-        .mca_component_name = "oob",
+        .pmix_mca_component_name = "oob",
         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PRTE_RELEASE_VERSION),
+                                    PMIX_RELEASE_VERSION),
         .mca_open_component = rml_oob_open,
         .mca_close_component = rml_oob_close,
-        .mca_query_component = component_query,
+        .pmix_mca_query_component = component_query,
 
     },
     .data = {
@@ -93,7 +93,7 @@ static void recv_buffer_nb(pmix_proc_t *peer, prte_rml_tag_t tag, bool persisten
 
     /* push the request into the event base so we can add
      * the receive to our list of posted recvs */
-    req = PRTE_NEW(prte_rml_recv_request_t);
+    req = PMIX_NEW(prte_rml_recv_request_t);
     PMIX_XFER_PROCID(&req->post->peer, peer);
     req->post->tag = tag;
     req->post->persistent = persistent;
@@ -109,7 +109,7 @@ static void recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
                         "%s rml_recv_cancel for peer %s tag %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(peer), tag);
 
-    PRTE_ACQUIRE_OBJECT(prte_event_base_active);
+    PMIX_ACQUIRE_OBJECT(prte_event_base_active);
     if (!prte_event_base_active) {
         /* no event will be processed any more, so simply return. */
         return;
@@ -117,7 +117,7 @@ static void recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
 
     /* push the request into the event base so we can remove
      * the receive from our list of posted recvs */
-    req = PRTE_NEW(prte_rml_recv_request_t);
+    req = PMIX_NEW(prte_rml_recv_request_t);
     req->cancel = true;
     PMIX_XFER_PROCID(&req->post->peer, peer);
     req->post->tag = tag;
@@ -146,9 +146,9 @@ static int rml_oob_close(void)
     return PRTE_SUCCESS;
 }
 
-static int component_query(prte_mca_base_module_t **module, int *priority)
+static int component_query(pmix_mca_base_module_t **module, int *priority)
 {
     *priority = 50;
-    *module = (prte_mca_base_module_t *) &base_module;
+    *module = (pmix_mca_base_module_t *) &base_module;
     return PRTE_SUCCESS;
 }
