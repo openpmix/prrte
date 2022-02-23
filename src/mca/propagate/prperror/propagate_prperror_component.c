@@ -22,7 +22,7 @@
 /*
  * Public string for version number
  */
-const char *prte_propagate_prperror_component_version_string
+const char *mca_propagate_prperror_component_version_string
     = "PRTE PROPAGATE prperror MCA component version " PRTE_VERSION;
 
 /*
@@ -37,7 +37,7 @@ static int propagate_prperror_component_query(pmix_mca_base_module_t **module, i
  * Instantiate the public struct with all of our public information
  * and pointer to our public functions in it
  */
-prte_propagate_base_component_t prte_propagate_prperror_component = {
+prte_propagate_base_component_t mca_propagate_prperror_component = {
     /* Handle the general mca_component_t struct containing
      *  meta information about the component prperror
      */
@@ -60,7 +60,7 @@ static int my_priority;
 
 static int propagate_prperror_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_propagate_prperror_component.base_version;
+    pmix_mca_base_component_t *c = &mca_propagate_prperror_component.base_version;
 
     my_priority = 1000;
     (void) pmix_mca_base_component_var_register(c, "priority",

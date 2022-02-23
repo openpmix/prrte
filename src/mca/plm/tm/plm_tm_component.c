@@ -44,7 +44,7 @@
 /*
  * Public string showing the plm ompi_tm component version number
  */
-const char *prte_plm_tm_component_version_string
+const char *mca_plm_tm_component_version_string
     = "PRTE tm plm MCA component version " PRTE_VERSION;
 
 /*
@@ -53,14 +53,14 @@ const char *prte_plm_tm_component_version_string
 static int plm_tm_register(void);
 static int plm_tm_open(void);
 static int plm_tm_close(void);
-static int prte_plm_tm_component_query(pmix_mca_base_module_t **module, int *priority);
+static int mca_plm_tm_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
 
-prte_plm_tm_component_t prte_plm_tm_component = {
+mca_plm_tm_component_t mca_plm_tm_component = {
     .super = {
         PRTE_PLM_BASE_VERSION_2_0_0,
 
@@ -74,43 +74,43 @@ prte_plm_tm_component_t prte_plm_tm_component = {
         /* Component open and close functions */
         .pmix_mca_open_component = plm_tm_open,
         .pmix_mca_close_component = plm_tm_close,
-        .pmix_mca_query_component = prte_plm_tm_component_query,
+        .pmix_mca_query_component = mca_plm_tm_component_query,
         .pmix_mca_register_component_params = plm_tm_register,
     }
 };
 
 static int plm_tm_register(void)
 {
-    pmix_mca_base_component_t *comp = &prte_plm_tm_component.super;
+    pmix_mca_base_component_t *comp = &mca_plm_tm_component.super;
 
-    prte_plm_tm_component.want_path_check = true;
+    mca_plm_tm_component.want_path_check = true;
     (void) pmix_mca_base_component_var_register(
         comp, "want_path_check",
         "Whether the launching process should check for the plm_tm_orted executable in the PATH "
         "before launching (the TM API does not give an indication of failure; this is a "
         "somewhat-lame workaround; non-zero values enable this check)",
-        PMIX_MCA_BASE_VAR_TYPE_BOOL, &prte_plm_tm_component.want_path_check);
+        PMIX_MCA_BASE_VAR_TYPE_BOOL, &mca_plm_tm_component.want_path_check);
 
     return PRTE_SUCCESS;
 }
 
 static int plm_tm_open(void)
 {
-    prte_plm_tm_component.checked_paths = NULL;
+    mca_plm_tm_component.checked_paths = NULL;
 
     return PRTE_SUCCESS;
 }
 
 static int plm_tm_close(void)
 {
-    if (NULL != prte_plm_tm_component.checked_paths) {
-        pmix_argv_free(prte_plm_tm_component.checked_paths);
+    if (NULL != mca_plm_tm_component.checked_paths) {
+        pmix_argv_free(mca_plm_tm_component.checked_paths);
     }
 
     return PRTE_SUCCESS;
 }
 
-static int prte_plm_tm_component_query(pmix_mca_base_module_t **module, int *priority)
+static int mca_plm_tm_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* Are we running under a TM job? */
 

@@ -3,7 +3,7 @@
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +32,7 @@ struct prte_ras_sim_component_t {
 };
 typedef struct prte_ras_sim_component_t prte_ras_sim_component_t;
 
-PRTE_EXPORT extern prte_ras_sim_component_t prte_ras_simulator_component;
+PRTE_EXPORT extern prte_ras_sim_component_t mca_ras_simulator_component;
 PRTE_EXPORT extern prte_ras_base_module_t prte_ras_sim_module;
 
 END_C_DECLS

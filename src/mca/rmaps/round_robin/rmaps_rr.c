@@ -52,7 +52,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
     pmix_list_item_t *item;
     int32_t num_slots;
     int rc;
-    pmix_mca_base_component_t *c = &prte_rmaps_round_robin_component;
+    pmix_mca_base_component_t *c = &mca_rmaps_round_robin_component;
     bool initial_map = true;
 
     /* this mapper can only handle initial launch
@@ -269,7 +269,7 @@ error:
 
 static int prte_rmaps_rr_assign_locations(prte_job_t *jdata)
 {
-    pmix_mca_base_component_t *c = &prte_rmaps_round_robin_component;
+    pmix_mca_base_component_t *c = &mca_rmaps_round_robin_component;
     hwloc_obj_type_t target;
     unsigned cache_level;
     int rc;

@@ -45,7 +45,6 @@ int prte_schizo_base_select(void)
         return PRTE_SUCCESS;
     }
 
-    prte_output(0, "COMPONENTS FOUND: %d", pmix_list_get_size(&prte_schizo_base_framework.framework_components));
     /* Query all available components and ask if they have a module */
     PMIX_LIST_FOREACH(cli, &prte_schizo_base_framework.framework_components,
                       pmix_mca_base_component_list_item_t)

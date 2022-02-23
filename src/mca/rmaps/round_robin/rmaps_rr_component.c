@@ -43,7 +43,7 @@ static int prte_rmaps_round_robin_query(pmix_mca_base_module_t **module, int *pr
 
 static int my_priority;
 
-prte_rmaps_base_component_t prte_rmaps_round_robin_component = {
+prte_rmaps_base_component_t mca_rmaps_round_robin_component = {
     PRTE_RMAPS_BASE_VERSION_2_0_0,
 
     .pmix_mca_component_name = "round_robin",
@@ -63,7 +63,7 @@ prte_rmaps_base_component_t prte_rmaps_round_robin_component = {
 static int prte_rmaps_round_robin_register(void)
 {
     my_priority = 10;
-    (void) pmix_mca_base_component_var_register(&prte_rmaps_round_robin_component,
+    (void) pmix_mca_base_component_var_register(&mca_rmaps_round_robin_component,
                                                 "priority", "Priority of the rr rmaps component",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT, &my_priority);
 

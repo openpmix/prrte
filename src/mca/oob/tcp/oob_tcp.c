@@ -124,7 +124,7 @@ static void ping(const pmix_proc_t *proc)
         prte_output_verbose(2, prte_oob_base_framework.framework_output,
                             "%s:[%s:%d] hop %s unknown", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             __FILE__, __LINE__, PRTE_NAME_PRINT(proc));
-        PRTE_ACTIVATE_TCP_MSG_ERROR(NULL, NULL, proc, prte_oob_tcp_component_hop_unknown);
+        PRTE_ACTIVATE_TCP_MSG_ERROR(NULL, NULL, proc, mca_oob_tcp_component_hop_unknown);
         return;
     }
 
@@ -170,7 +170,7 @@ static void send_nb(prte_rml_send_t *msg)
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,
                             PRTE_NAME_PRINT(&msg->dst), msg->tag, msg->seq_num,
                             PRTE_NAME_PRINT(&hop));
-        PRTE_ACTIVATE_TCP_NO_ROUTE(msg, &hop, prte_oob_tcp_component_no_route);
+        PRTE_ACTIVATE_TCP_NO_ROUTE(msg, &hop, mca_oob_tcp_component_no_route);
         return;
     }
 

@@ -28,7 +28,7 @@
 
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 
-const prte_backtrace_base_component_2_0_0_t prte_prtebacktrace_printstack_component = {
+const prte_backtrace_base_component_2_0_0_t mca_prtebacktrace_printstack_component = {
     PRTE_BACKTRACE_BASE_VERSION_2_0_0,
 
     /* Component name and version */

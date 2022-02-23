@@ -23,7 +23,7 @@
 
 static int prteinstalldirs_env_open(void);
 
-prte_prteinstalldirs_base_component_t prte_prteinstalldirs_env_component = {
+prte_prteinstalldirs_base_component_t mca_prteinstalldirs_env_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     .component = {
@@ -51,7 +51,7 @@ prte_prteinstalldirs_base_component_t prte_prteinstalldirs_env_component = {
         if (NULL != tmp && 0 == strlen(tmp)) {                            \
             tmp = NULL;                                                   \
         }                                                                 \
-        prte_prteinstalldirs_env_component.install_dirs_data.field = tmp; \
+        mca_prteinstalldirs_env_component.install_dirs_data.field = tmp;  \
     } while (0)
 
 static int prteinstalldirs_env_open(void)

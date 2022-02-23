@@ -18,7 +18,7 @@
 #include "src/mca/prteinstalldirs/config/install_dirs.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 
-const prte_prteinstalldirs_base_component_t prte_prteinstalldirs_config_component = {
+const prte_prteinstalldirs_base_component_t mca_prteinstalldirs_config_component = {
     /* First, the mca_component_t struct containing meta information
        about the component itself */
     .component = {

@@ -44,9 +44,9 @@ static int param_priority;
  */
 static int ras_pbs_register(void);
 static int ras_pbs_open(void);
-static int prte_ras_pbs_component_query(pmix_mca_base_module_t **module, int *priority);
+static int mca_ras_pbs_component_query(pmix_mca_base_module_t **module, int *priority);
 
-prte_ras_pbs_component_t prte_ras_pbs_component = {
+mca_ras_pbs_component_t mca_ras_pbs_component = {
     .super = {
         PRTE_RAS_BASE_VERSION_2_0_0,
 
@@ -59,14 +59,14 @@ prte_ras_pbs_component_t prte_ras_pbs_component = {
 
         /* Component open and close functions */
         .pmix_mca_open_component = ras_pbs_open,
-        .pmix_mca_query_component = prte_ras_pbs_component_query,
+        .pmix_mca_query_component = mca_ras_pbs_component_query,
         .pmix_mca_register_component_params = ras_pbs_register,
     }
 };
 
 static int ras_pbs_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_ras_pbs_component.super;
+    pmix_mca_base_component_t *c = &mca_ras_pbs_component.super;
 
     param_priority = 100;
     (void) pmix_mca_base_component_var_register(c, "priority", "Priority of the pbs ras component",
@@ -78,12 +78,12 @@ static int ras_pbs_register(void)
      * tells us how many cpus/node were allocated. Allow the user to
      * inform us that we are in such an environment
      */
-    prte_ras_pbs_component.smp_mode = false;
+    mca_ras_pbs_component.smp_mode = false;
     (void) pmix_mca_base_component_var_register(
         c, "smp",
         "The PBS system is configured in SMP mode "
         "with the number of cpus/node given in the environment",
-        PMIX_MCA_BASE_VAR_TYPE_BOOL, &prte_ras_pbs_component.smp_mode);
+        PMIX_MCA_BASE_VAR_TYPE_BOOL, &mca_ras_pbs_component.smp_mode);
 
     return PRTE_SUCCESS;
 }
@@ -93,7 +93,7 @@ static int ras_pbs_open(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_ras_pbs_component_query(pmix_mca_base_module_t **module, int *priority)
+static int mca_ras_pbs_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* Are we running under a PBS job? */
     if (NULL != getenv("PBS_ENVIRONMENT") && NULL != getenv("PBS_JOBID")) {

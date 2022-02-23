@@ -42,7 +42,7 @@
 static int ras_sim_register(void);
 static int ras_sim_component_query(pmix_mca_base_module_t **module, int *priority);
 
-prte_ras_sim_component_t prte_ras_simulator_component = {
+prte_ras_sim_component_t mca_ras_simulator_component = {
     .super = {
         PRTE_RAS_BASE_VERSION_2_0_0,
 
@@ -59,42 +59,42 @@ prte_ras_sim_component_t prte_ras_simulator_component = {
 
 static int ras_sim_register(void)
 {
-    pmix_mca_base_component_t *component = &prte_ras_simulator_component.super;
+    pmix_mca_base_component_t *component = &mca_ras_simulator_component.super;
 
-    prte_ras_simulator_component.slots = "1";
+    mca_ras_simulator_component.slots = "1";
     (void) pmix_mca_base_component_var_register(
         component, "slots", "Comma-separated list of number of slots on each node to simulate",
-        PMIX_MCA_BASE_VAR_TYPE_STRING, &prte_ras_simulator_component.slots);
+        PMIX_MCA_BASE_VAR_TYPE_STRING, &mca_ras_simulator_component.slots);
 
-    prte_ras_simulator_component.slots_max = "0";
+    mca_ras_simulator_component.slots_max = "0";
     (void) pmix_mca_base_component_var_register(
         component, "max_slots",
         "Comma-separated list of number of max slots on each node to simulate",
-        PMIX_MCA_BASE_VAR_TYPE_STRING, &prte_ras_simulator_component.slots_max);
+        PMIX_MCA_BASE_VAR_TYPE_STRING, &mca_ras_simulator_component.slots_max);
 
-    prte_ras_simulator_component.num_nodes = NULL;
+    mca_ras_simulator_component.num_nodes = NULL;
     (void) pmix_mca_base_component_var_register(
         component, "num_nodes",
         "Comma-separated list of number of nodes to simulate for each topology",
-        PMIX_MCA_BASE_VAR_TYPE_STRING, &prte_ras_simulator_component.num_nodes);
+        PMIX_MCA_BASE_VAR_TYPE_STRING, &mca_ras_simulator_component.num_nodes);
 
-    prte_ras_simulator_component.have_cpubind = true;
+    mca_ras_simulator_component.have_cpubind = true;
     (void) pmix_mca_base_component_var_register(component, "have_cpubind",
                                                 "Topology supports binding to cpus",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &prte_ras_simulator_component.have_cpubind);
+                                                &mca_ras_simulator_component.have_cpubind);
 
-    prte_ras_simulator_component.have_membind = true;
+    mca_ras_simulator_component.have_membind = true;
     (void) pmix_mca_base_component_var_register(component, "have_membind",
                                                 "Topology supports binding to memory",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &prte_ras_simulator_component.have_membind);
+                                                &mca_ras_simulator_component.have_membind);
     return PRTE_SUCCESS;
 }
 
 static int ras_sim_component_query(pmix_mca_base_module_t **module, int *priority)
 {
-    if (NULL != prte_ras_simulator_component.num_nodes) {
+    if (NULL != mca_ras_simulator_component.num_nodes) {
         *module = (pmix_mca_base_module_t *) &prte_ras_sim_module;
         *priority = 1000;
         prte_ras_base.simulated = true;

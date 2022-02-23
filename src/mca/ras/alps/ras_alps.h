@@ -16,7 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +37,7 @@
 
 BEGIN_C_DECLS
 
-PRTE_EXPORT extern prte_ras_base_component_t prte_ras_alps_component;
+PRTE_EXPORT extern prte_ras_base_component_t mca_ras_alps_component;
 PRTE_EXPORT extern prte_ras_base_module_t prte_ras_alps_module;
 PRTE_EXPORT int prte_ras_alps_get_appinfo_attempts(int *attempts);
 PRTE_EXPORT extern unsigned long int prte_ras_alps_res_id;

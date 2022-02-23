@@ -27,9 +27,9 @@ typedef struct {
     prte_schizo_base_component_t super;
     int priority;
     bool warn_deprecations;
-} prte_schizo_ompi_component_t;
+} mca_schizo_ompi_component_t;
 
-PRTE_MODULE_EXPORT extern prte_schizo_ompi_component_t prte_schizo_ompi_component;
+PRTE_MODULE_EXPORT extern mca_schizo_ompi_component_t mca_schizo_ompi_component;
 extern prte_schizo_base_module_t prte_schizo_ompi_module;
 
 END_C_DECLS

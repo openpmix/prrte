@@ -29,7 +29,7 @@ BEGIN_C_DECLS
  * Local Component structures
  */
 
-PRTE_MODULE_EXPORT extern prte_propagate_base_component_t prte_propagate_prperror_component;
+PRTE_MODULE_EXPORT extern prte_propagate_base_component_t mca_propagate_prperror_component;
 
 PRTE_EXPORT extern prte_propagate_base_module_t prte_propagate_prperror_module;
 

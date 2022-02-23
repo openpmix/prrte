@@ -135,7 +135,7 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&target)));
 
     /* cycle through our list of procs */
-    PMIX_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &mca_iof_prted_component.procs, prte_iof_proc_t)
     {
         /* is this intended for this jobid? */
         if (PMIX_CHECK_NSPACE(target.nspace, proct->name.nspace)) {
@@ -158,8 +158,8 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
                     /* getting too backed up - tell the HNP to hold off any more input if we
                      * haven't already told it
                      */
-                    if (!prte_iof_prted_component.xoff) {
-                        prte_iof_prted_component.xoff = true;
+                    if (!mca_iof_prted_component.xoff) {
+                        mca_iof_prted_component.xoff = true;
                         prte_iof_prted_send_xonxoff(PRTE_IOF_XOFF);
                     }
                 }

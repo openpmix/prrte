@@ -3,6 +3,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2022      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,8 +37,8 @@ typedef struct {
 
     char *filename_suffixes_mca_storage;
     char **filename_suffixes;
-} prte_prtedl_dlopen_component_t;
+} mca_prtedl_dlopen_component_t;
 
-PRTE_EXPORT extern prte_prtedl_dlopen_component_t prte_prtedl_dlopen_component;
+PRTE_EXPORT extern mca_prtedl_dlopen_component_t mca_prtedl_dlopen_component;
 
 #endif /* PRTE_DL_DLOPEN */

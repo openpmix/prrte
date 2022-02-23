@@ -5,6 +5,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2022      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,8 +25,8 @@ BEGIN_C_DECLS
 typedef struct {
     prte_routed_component_t super;
     int radix;
-} prte_routed_radix_component_t;
-PRTE_MODULE_EXPORT extern prte_routed_radix_component_t prte_routed_radix_component;
+} mca_routed_radix_component_t;
+PRTE_MODULE_EXPORT extern mca_routed_radix_component_t mca_routed_radix_component;
 
 extern prte_routed_module_t prte_routed_radix_module;
 

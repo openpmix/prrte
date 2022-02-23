@@ -34,13 +34,13 @@
 
 BEGIN_C_DECLS
 
-struct prte_ras_pbs_component_t {
+struct mca_ras_pbs_component_t {
     prte_ras_base_component_t super;
     bool smp_mode;
 };
-typedef struct prte_ras_pbs_component_t prte_ras_pbs_component_t;
+typedef struct mca_ras_pbs_component_t mca_ras_pbs_component_t;
 
-PRTE_EXPORT extern prte_ras_pbs_component_t prte_ras_pbs_component;
+PRTE_EXPORT extern mca_ras_pbs_component_t mca_ras_pbs_component;
 PRTE_EXPORT extern prte_ras_base_module_t prte_ras_pbs_module;
 
 END_C_DECLS

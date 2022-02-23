@@ -90,7 +90,7 @@ static bool component_is_reachable(char *routed, pmix_proc_t *peer);
 /*
  * Struct of function pointers and all that to let us be initialized
  */
-PRTE_MODULE_EXPORT prte_oob_base_component_t prte_oob_alps_component = {
+PRTE_MODULE_EXPORT prte_oob_base_component_t mca_oob_alps_component = {
     .oob_base = {
         PRTE_OOB_BASE_VERSION_2_0_0,
         .pmix_mca_component_name = "alps",

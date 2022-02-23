@@ -183,7 +183,7 @@ static int ssh_init(void)
     int rc;
 
     /* we were selected, so setup the launch agent */
-    if (prte_plm_ssh_component.using_qrsh) {
+    if (mca_plm_ssh_component.using_qrsh) {
         /* perform base setup for qrsh */
         pmix_asprintf(&tmp, "%s/bin/%s", getenv("SGE_ROOT"), getenv("ARC"));
         if (PRTE_SUCCESS != (rc = launch_agent_setup("qrsh", tmp))) {
@@ -206,7 +206,7 @@ static int ssh_init(void)
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmp);
             free(tmp);
         }
-    } else if (prte_plm_ssh_component.using_llspawn) {
+    } else if (mca_plm_ssh_component.using_llspawn) {
         /* perform base setup for llspawn */
         if (PRTE_SUCCESS != (rc = launch_agent_setup("llspawn", NULL))) {
             PRTE_ERROR_LOG(rc);
@@ -217,7 +217,7 @@ static int ssh_init(void)
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ssh_agent_path);
     } else {
         /* not using qrsh or llspawn - use MCA-specified agent */
-        if (PRTE_SUCCESS != (rc = launch_agent_setup(prte_plm_ssh_component.agent, NULL))) {
+        if (PRTE_SUCCESS != (rc = launch_agent_setup(mca_plm_ssh_component.agent, NULL))) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }
@@ -323,7 +323,7 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
 
     /* release any delay */
     --num_in_progress;
-    if (num_in_progress < prte_plm_ssh_component.num_concurrent) {
+    if (num_in_progress < mca_plm_ssh_component.num_concurrent) {
         /* trigger continuation of the launch */
         prte_event_active(&launch_event, EV_WRITE, 1);
     }
@@ -381,9 +381,9 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     argv = pmix_argv_copy(ssh_agent_argv);
     argc = pmix_argv_count(argv);
     /* if any ssh args were provided, now is the time to add them */
-    if (NULL != prte_plm_ssh_component.ssh_args) {
+    if (NULL != mca_plm_ssh_component.ssh_args) {
         char **ssh_argv;
-        ssh_argv = pmix_argv_split(prte_plm_ssh_component.ssh_args, ' ');
+        ssh_argv = pmix_argv_split(mca_plm_ssh_component.ssh_args, ' ');
         for (i = 0; NULL != ssh_argv[i]; i++) {
             pmix_argv_append(&argc, &argv, ssh_argv[i]);
         }
@@ -449,8 +449,8 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     pmix_argv_free(orted_argv); /* done with this */
 
     /* if they asked us to change directory, do so */
-    if (NULL != prte_plm_ssh_component.chdir) {
-        pmix_asprintf(&tmp, "cd %s", prte_plm_ssh_component.chdir);
+    if (NULL != mca_plm_ssh_component.chdir) {
+        pmix_asprintf(&tmp, "cd %s", mca_plm_ssh_component.chdir);
         pmix_argv_append_nosize(&final_argv, tmp);
         free(tmp);
     }
@@ -514,16 +514,16 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
 
 
     /* if the user specified a library path to pass, set it up now */
-    if (NULL != prte_plm_ssh_component.pass_libpath) {
+    if (NULL != mca_plm_ssh_component.pass_libpath) {
         if (PRTE_PLM_SSH_SHELL_SH == remote_shell ||
             PRTE_PLM_SSH_SHELL_KSH == remote_shell ||
             PRTE_PLM_SSH_SHELL_ZSH == remote_shell ||
             PRTE_PLM_SSH_SHELL_BASH == remote_shell) {
-            pmix_asprintf(&tmp, "LD_LIBRARY_PATH=%s:$LD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
+            pmix_asprintf(&tmp, "LD_LIBRARY_PATH=%s:$LD_LIBRARY_PATH", mca_plm_ssh_component.pass_libpath);
             pmix_argv_append_nosize(&final_argv, tmp);
             pmix_argv_append_nosize(&final_argv, "export LD_LIBRARY_PATH");
             free(tmp);
-            pmix_asprintf(&tmp, "DYLD_LIBRARY_PATH=%s:$DYLD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
+            pmix_asprintf(&tmp, "DYLD_LIBRARY_PATH=%s:$DYLD_LIBRARY_PATH", mca_plm_ssh_component.pass_libpath);
             pmix_argv_append_nosize(&final_argv, tmp);
             pmix_argv_append_nosize(&final_argv, "export DYLD_LIBRARY_PATH");
             free(tmp);
@@ -541,10 +541,10 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
              * we have to insert the orted_prefix in the right place
              */
             pmix_argv_append_nosize(&final_argv, "if ( $?LD_LIBRARY_PATH == 1 ) set PRTE_have_llp");
-            pmix_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s", prte_plm_ssh_component.pass_libpath);
+            pmix_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s", mca_plm_ssh_component.pass_libpath);
             pmix_argv_append_nosize(&final_argv, tmp);
             free(tmp);
-            pmix_asprintf(&tmp, "if ( $?PRTE_have_llp == 1 ) setenv LD_LIBRARY_PATH %s:$LD_LIBRARY_PATH", prte_plm_ssh_component.pass_libpath);
+            pmix_asprintf(&tmp, "if ( $?PRTE_have_llp == 1 ) setenv LD_LIBRARY_PATH %s:$LD_LIBRARY_PATH", mca_plm_ssh_component.pass_libpath);
             pmix_argv_append_nosize(&final_argv, tmp);
             free(tmp);
         }
@@ -593,15 +593,15 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
     /* if we are not tree launching or debugging, tell the daemon
      * to daemonize so we can launch the next group
      */
-    if (prte_plm_ssh_component.no_tree_spawn &&
+    if (mca_plm_ssh_component.no_tree_spawn &&
         !prte_debug_flag && !prte_debug_daemons_flag &&
         !prte_debug_daemons_file_flag && !prte_leave_session_attached &&
         /* Daemonize when not using qrsh.  Or, if using qrsh, only
          * daemonize if told to by user with daemonize_qrsh flag. */
-        ((!prte_plm_ssh_component.using_qrsh) ||
-         (prte_plm_ssh_component.using_qrsh && prte_plm_ssh_component.daemonize_qrsh)) &&
-         ((!prte_plm_ssh_component.using_llspawn) ||
-          (prte_plm_ssh_component.using_llspawn && prte_plm_ssh_component.daemonize_llspawn))) {
+        ((!mca_plm_ssh_component.using_qrsh) ||
+         (mca_plm_ssh_component.using_qrsh && mca_plm_ssh_component.daemonize_qrsh)) &&
+         ((!mca_plm_ssh_component.using_llspawn) ||
+          (mca_plm_ssh_component.using_llspawn && mca_plm_ssh_component.daemonize_llspawn))) {
         pmix_argv_append(&argc, &argv, "--daemonize");
     }
 
@@ -618,7 +618,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
 
     /* if we are tree-spawning, tell our child daemons the
      * uri of their parent (me) */
-    if (!prte_plm_ssh_component.no_tree_spawn) {
+    if (!mca_plm_ssh_component.no_tree_spawn) {
         pmix_argv_append(&argc, &argv, "--tree-spawn");
         prte_oob_base_get_addr(&param);
         pmix_argv_append(&argc, &argv, "--prtemca");
@@ -829,7 +829,7 @@ static int remote_spawn(void)
     /* we NEVER use tree-spawn for secondary launches - e.g.,
      * due to a dynamic launch requesting add_hosts - so be
      * sure to turn it off here */
-    prte_plm_ssh_component.no_tree_spawn = true;
+    mca_plm_ssh_component.no_tree_spawn = true;
 
     /* trigger the event to start processing the launch list */
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
@@ -894,7 +894,7 @@ static void process_launch_list(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(caddy);
 
-    while (num_in_progress < prte_plm_ssh_component.num_concurrent) {
+    while (num_in_progress < mca_plm_ssh_component.num_concurrent) {
         item = pmix_list_remove_first(&launch_list);
         if (NULL == item) {
             /* we are done */
@@ -1036,7 +1036,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     if ((0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)
          || prte_leave_session_attached)
-        && prte_plm_ssh_component.num_concurrent < map->num_new_daemons) {
+        && mca_plm_ssh_component.num_concurrent < map->num_new_daemons) {
         /**
          * If we are in '--debug-daemons' we keep the ssh connection
          * alive for the span of the run. If we use this option
@@ -1051,7 +1051,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * and return an error code.
          */
         prte_show_help("help-plm-ssh.txt", "deadlock-params", true,
-                       prte_plm_ssh_component.num_concurrent, map->num_new_daemons);
+                       mca_plm_ssh_component.num_concurrent, map->num_new_daemons);
         PRTE_ERROR_LOG(PRTE_ERR_FATAL);
         rc = PRTE_ERR_SILENT;
         goto cleanup;
@@ -1118,7 +1118,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* if we are tree launching, find our children and create the launch cmd */
-    if (!prte_plm_ssh_component.no_tree_spawn) {
+    if (!mca_plm_ssh_component.no_tree_spawn) {
         /* get the updated routing list */
         PMIX_CONSTRUCT(&coll, pmix_list_t);
         prte_routed.get_routing_list(&coll);
@@ -1140,7 +1140,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         }
 
         /* if we are tree launching, only launch our own children */
-        if (!prte_plm_ssh_component.no_tree_spawn) {
+        if (!mca_plm_ssh_component.no_tree_spawn) {
             PMIX_LIST_FOREACH(child, &coll, prte_namelist_t)
             {
                 if (child->name.rank == node->daemon->name.rank) {
@@ -1225,7 +1225,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* we NEVER use tree-spawn for secondary launches - e.g.,
      * due to a dynamic launch requesting add_hosts - so be
      * sure to turn it off here */
-    prte_plm_ssh_component.no_tree_spawn = true;
+    mca_plm_ssh_component.no_tree_spawn = true;
 
     /* set the job state to indicate the daemons are launched */
     state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
@@ -1305,9 +1305,9 @@ static int ssh_finalize(void)
             }
         }
     }
-    free(prte_plm_ssh_component.agent_path);
+    free(mca_plm_ssh_component.agent_path);
     free(ssh_agent_path);
-    pmix_argv_free(prte_plm_ssh_component.agent_argv);
+    pmix_argv_free(mca_plm_ssh_component.agent_argv);
     pmix_argv_free(ssh_agent_argv);
 
     return rc;
@@ -1359,14 +1359,14 @@ static int launch_agent_setup(const char *agent, char *path)
     int i;
 
     /* if no agent was provided, then report not found */
-    if (NULL == prte_plm_ssh_component.agent && NULL == agent) {
+    if (NULL == mca_plm_ssh_component.agent && NULL == agent) {
         return PRTE_ERR_NOT_FOUND;
     }
 
     /* search for the argv */
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:ssh_setup on agent %s path %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (NULL == agent) ? prte_plm_ssh_component.agent : agent,
+                         (NULL == agent) ? mca_plm_ssh_component.agent : agent,
                          (NULL == path) ? "NULL" : path));
     ssh_agent_argv = prte_plm_ssh_search(agent, path);
 
@@ -1447,8 +1447,8 @@ static int ssh_probe(char *nodename, prte_plm_ssh_shell_t *shell)
             exit(01);
         }
         /* Build argv array */
-        argv = pmix_argv_copy(prte_plm_ssh_component.agent_argv);
-        argc = pmix_argv_count(prte_plm_ssh_component.agent_argv);
+        argv = pmix_argv_copy(mca_plm_ssh_component.agent_argv);
+        argc = pmix_argv_count(mca_plm_ssh_component.agent_argv);
         pmix_argv_append(&argc, &argv, nodename);
         pmix_argv_append(&argc, &argv, "echo $SHELL");
 
@@ -1552,7 +1552,7 @@ static int setup_shell(prte_plm_ssh_shell_t *sshell, prte_plm_ssh_shell_t *lshel
                          local_shell, prte_plm_ssh_shell_name[local_shell]));
 
     /* What is our remote shell? */
-    if (prte_plm_ssh_component.assume_same_shell) {
+    if (mca_plm_ssh_component.assume_same_shell) {
         remote_shell = local_shell;
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: assuming same remote shell as local shell",

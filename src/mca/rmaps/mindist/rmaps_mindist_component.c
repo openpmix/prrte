@@ -43,7 +43,7 @@ static int prte_rmaps_mindist_register(void);
 
 static int my_priority = 20;
 
-prte_rmaps_base_component_t prte_rmaps_mindist_component = {
+prte_rmaps_base_component_t mca_rmaps_mindist_component = {
     PRTE_RMAPS_BASE_VERSION_2_0_0,
 
     .pmix_mca_component_name = "mindist",
@@ -59,7 +59,7 @@ prte_rmaps_base_component_t prte_rmaps_mindist_component = {
 
 static int prte_rmaps_mindist_register(void)
 {
-    (void) pmix_mca_base_component_var_register(&prte_rmaps_mindist_component,
+    (void) pmix_mca_base_component_var_register(&mca_rmaps_mindist_component,
                                                 "priority",
                                                 "Priority of the mindist rmaps component",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT, &my_priority);

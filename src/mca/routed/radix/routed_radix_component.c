@@ -24,13 +24,13 @@
 #include "routed_radix.h"
 #include "src/mca/routed/base/base.h"
 
-static int prte_routed_radix_component_register(void);
-static int prte_routed_radix_component_query(pmix_mca_base_module_t **module, int *priority);
+static int mca_routed_radix_component_register(void);
+static int mca_routed_radix_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /**
  * component definition
  */
-prte_routed_radix_component_t prte_routed_radix_component = {
+mca_routed_radix_component_t mca_routed_radix_component = {
     .super = {
         PRTE_ROUTED_BASE_VERSION_3_0_0,
 
@@ -39,26 +39,26 @@ prte_routed_radix_component_t prte_routed_radix_component = {
                                    PRTE_MAJOR_VERSION,
                                    PRTE_MINOR_VERSION,
                                    PMIX_RELEASE_VERSION),
-        .pmix_mca_query_component = prte_routed_radix_component_query,
-        .pmix_mca_register_component_params = prte_routed_radix_component_register,
+        .pmix_mca_query_component = mca_routed_radix_component_query,
+        .pmix_mca_register_component_params = mca_routed_radix_component_register,
     }
 };
 
-static int prte_routed_radix_component_register(void)
+static int mca_routed_radix_component_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_routed_radix_component.super;
+    pmix_mca_base_component_t *c = &mca_routed_radix_component.super;
 
-    prte_routed_radix_component.radix = 64;
+    mca_routed_radix_component.radix = 64;
     (void) pmix_mca_base_component_var_register(c, NULL, "Radix to be used for routed radix tree",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_routed_radix_component.radix);
+                                                &mca_routed_radix_component.radix);
 
     return PRTE_SUCCESS;
 }
 
-static int prte_routed_radix_component_query(pmix_mca_base_module_t **module, int *priority)
+static int mca_routed_radix_component_query(pmix_mca_base_module_t **module, int *priority)
 {
-    if (0 > prte_routed_radix_component.radix) {
+    if (0 > mca_routed_radix_component.radix) {
         return PRTE_ERR_BAD_PARAM;
     }
 

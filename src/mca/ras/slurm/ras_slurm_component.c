@@ -45,9 +45,9 @@
 static int ras_slurm_register(void);
 static int ras_slurm_open(void);
 static int ras_slurm_close(void);
-static int prte_ras_slurm_component_query(pmix_mca_base_module_t **module, int *priority);
+static int mca_ras_slurm_component_query(pmix_mca_base_module_t **module, int *priority);
 
-prte_ras_slurm_component_t prte_ras_slurm_component = {
+mca_ras_slurm_component_t mca_ras_slurm_component = {
     .super = {
         PRTE_RAS_BASE_VERSION_2_0_0,
 
@@ -61,43 +61,43 @@ prte_ras_slurm_component_t prte_ras_slurm_component = {
         /* Component open and close functions */
         .pmix_mca_open_component = ras_slurm_open,
         .pmix_mca_close_component = ras_slurm_close,
-        .pmix_mca_query_component = prte_ras_slurm_component_query,
+        .pmix_mca_query_component = mca_ras_slurm_component_query,
         .pmix_mca_register_component_params = ras_slurm_register
     }
 };
 
 static int ras_slurm_register(void)
 {
-    pmix_mca_base_component_t *component = &prte_ras_slurm_component.super;
+    pmix_mca_base_component_t *component = &mca_ras_slurm_component.super;
 
-    prte_ras_slurm_component.timeout = 30;
+    mca_ras_slurm_component.timeout = 30;
     (void) pmix_mca_base_component_var_register(
         component, "dyn_allocate_timeout", "Number of seconds to wait for Slurm dynamic allocation",
-        PMIX_MCA_BASE_VAR_TYPE_INT, &prte_ras_slurm_component.timeout);
+        PMIX_MCA_BASE_VAR_TYPE_INT, &mca_ras_slurm_component.timeout);
 
-    prte_ras_slurm_component.dyn_alloc_enabled = false;
+    mca_ras_slurm_component.dyn_alloc_enabled = false;
     (void) pmix_mca_base_component_var_register(component, "enable_dyn_alloc",
                                                 "Whether or not dynamic allocations are enabled",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &prte_ras_slurm_component.dyn_alloc_enabled);
+                                                &mca_ras_slurm_component.dyn_alloc_enabled);
 
-    prte_ras_slurm_component.config_file = NULL;
+    mca_ras_slurm_component.config_file = NULL;
     (void) pmix_mca_base_component_var_register(component, "config_file",
                                                 "Path to Slurm configuration file",
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                                &prte_ras_slurm_component.config_file);
+                                                &mca_ras_slurm_component.config_file);
 
-    prte_ras_slurm_component.rolling_alloc = false;
+    mca_ras_slurm_component.rolling_alloc = false;
     (void) pmix_mca_base_component_var_register(component, "enable_rolling_alloc",
                                                 "Enable partial dynamic allocations",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &prte_ras_slurm_component.rolling_alloc);
+                                                &mca_ras_slurm_component.rolling_alloc);
 
-    prte_ras_slurm_component.use_all = false;
+    mca_ras_slurm_component.use_all = false;
     (void) pmix_mca_base_component_var_register(
         component, "use_entire_allocation",
         "Use entire allocation (not just job step nodes) for this application",
-        PMIX_MCA_BASE_VAR_TYPE_BOOL, &prte_ras_slurm_component.use_all);
+        PMIX_MCA_BASE_VAR_TYPE_BOOL, &mca_ras_slurm_component.use_all);
 
     return PRTE_SUCCESS;
 }
@@ -112,13 +112,13 @@ static int ras_slurm_close(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_ras_slurm_component_query(pmix_mca_base_module_t **module, int *priority)
+static int mca_ras_slurm_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* if I built, then slurm support is available. If
      * I am not in a Slurm allocation, and dynamic alloc
      * is not enabled, then disqualify myself
      */
-    if (NULL == getenv("SLURM_JOBID") && !prte_ras_slurm_component.dyn_alloc_enabled) {
+    if (NULL == getenv("SLURM_JOBID") && !mca_ras_slurm_component.dyn_alloc_enabled) {
         /* disqualify ourselves */
         *priority = 0;
         *module = NULL;

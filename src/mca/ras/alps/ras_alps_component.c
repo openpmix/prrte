@@ -45,11 +45,11 @@ static int ras_alps_read_attempts;
 /* Local functions */
 static int ras_alps_register(void);
 static int ras_alps_open(void);
-static int prte_ras_alps_component_query(pmix_mca_base_module_t **module, int *priority);
+static int mca_ras_alps_component_query(pmix_mca_base_module_t **module, int *priority);
 unsigned long int prte_ras_alps_res_id = 0UL;
 char *ras_alps_apstat_cmd = NULL;
 
-prte_ras_base_component_t prte_ras_alps_component = {
+prte_ras_base_component_t mca_ras_alps_component = {
     PRTE_RAS_BASE_VERSION_2_0_0,
 
     /* Component name and version */
@@ -61,7 +61,7 @@ prte_ras_base_component_t prte_ras_alps_component = {
 
     /* Component open and close functions */
     .pmix_mca_open_component = ras_alps_open,
-    .pmix_mca_query_component = prte_ras_alps_component_query,
+    .pmix_mca_query_component = mca_ras_alps_component_query,
     .pmix_mca_register_component_params = ras_alps_register,
 };
 
@@ -151,12 +151,12 @@ static unsigned long int get_res_id(void)
 static int ras_alps_register(void)
 {
     param_priority = 75;
-    (void) pmix_mca_base_component_var_register(&prte_ras_alps_component.base_version, "priority",
+    (void) pmix_mca_base_component_var_register(&mca_ras_alps_component.base_version, "priority",
                                                 "Priority of the alps ras component",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT, &param_priority);
 
     ras_alps_read_attempts = 10;
-    (void) pmix_mca_base_component_var_register(&prte_ras_alps_component.base_version,
+    (void) pmix_mca_base_component_var_register(&mca_ras_alps_component.base_version,
                                                 "appinfo_read_attempts",
                                                 "Maximum number of attempts to read ALPS "
                                                 "appinfo file",
@@ -165,7 +165,7 @@ static int ras_alps_register(void)
 
     ras_alps_apstat_cmd = "apstat"; /* by default apstat is in a user's path on a Cray XE/XC if
                                        alps is the site's job launcher  */
-    (void) pmix_mca_base_component_var_register(&prte_ras_alps_component.base_version, "apstat_cmd",
+    (void) pmix_mca_base_component_var_register(&mca_ras_alps_component.base_version, "apstat_cmd",
                                                 "Location of the apstat command",
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &ras_alps_apstat_cmd);
@@ -178,7 +178,7 @@ static int ras_alps_open(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_ras_alps_component_query(pmix_mca_base_module_t **module, int *priority)
+static int mca_ras_alps_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     char *jid_str = NULL;
     /* default to an invalid value */

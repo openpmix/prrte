@@ -44,7 +44,7 @@ extern prte_ess_base_module_t prte_ess_env_module;
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
-prte_ess_base_component_t prte_ess_env_component = {
+prte_ess_base_component_t mca_ess_env_component = {
     PRTE_ESS_BASE_VERSION_3_0_0,
 
     /* Component name and version */
@@ -55,17 +55,17 @@ prte_ess_base_component_t prte_ess_env_component = {
                                PMIX_RELEASE_VERSION),
 
     /* Component open and close functions */
-    .pmix_mca_open_component = prte_ess_env_component_open,
-    .pmix_mca_close_component = prte_ess_env_component_close,
-    .pmix_mca_query_component = prte_ess_env_component_query,
+    .pmix_mca_open_component = mca_ess_env_component_open,
+    .pmix_mca_close_component = mca_ess_env_component_close,
+    .pmix_mca_query_component = mca_ess_env_component_query,
 };
 
-int prte_ess_env_component_open(void)
+int mca_ess_env_component_open(void)
 {
     return PRTE_SUCCESS;
 }
 
-int prte_ess_env_component_query(pmix_mca_base_module_t **module, int *priority)
+int mca_ess_env_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* we are the env module, only used by daemons that are
      * launched by ssh so allow any enviro-specifc modules
@@ -82,7 +82,7 @@ int prte_ess_env_component_query(pmix_mca_base_module_t **module, int *priority)
     return PRTE_ERROR;
 }
 
-int prte_ess_env_component_close(void)
+int mca_ess_env_component_close(void)
 {
     return PRTE_SUCCESS;
 }

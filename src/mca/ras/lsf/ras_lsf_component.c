@@ -39,12 +39,12 @@
 
 static int prte_ras_lsf_open(void);
 static int prte_ras_lsf_close(void);
-static int prte_ras_lsf_component_query(pmix_mca_base_module_t **module, int *priority);
+static int mca_ras_lsf_component_query(pmix_mca_base_module_t **module, int *priority);
 static int prte_ras_lsf_register(void);
 
 bool prte_ras_lsf_skip_affinity_file = false;
 
-prte_ras_base_component_t prte_ras_lsf_component = {
+prte_ras_base_component_t mca_ras_lsf_component = {
     /* Indicate that we are a ras v2.0.0 component (which also
        implies a specific MCA version) */
 
@@ -57,7 +57,7 @@ prte_ras_base_component_t prte_ras_lsf_component = {
                                PMIX_RELEASE_VERSION),
     .pmix_mca_open_component = prte_ras_lsf_open,
     .pmix_mca_close_component = prte_ras_lsf_close,
-    .pmix_mca_query_component = prte_ras_lsf_component_query,
+    .pmix_mca_query_component = mca_ras_lsf_component_query,
     .pmix_mca_register_component_params = prte_ras_lsf_register,
 };
 
@@ -69,7 +69,7 @@ static int prte_ras_lsf_open(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_ras_lsf_component_query(pmix_mca_base_module_t **module, int *priority)
+static int mca_ras_lsf_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* check if lsf is running here */
     if (NULL == getenv("LSB_JOBID") || lsb_init("PRTE launcher") < 0) {
@@ -95,7 +95,7 @@ static int prte_ras_lsf_close(void)
 static int prte_ras_lsf_register(void)
 {
     prte_ras_lsf_skip_affinity_file = false;
-    (void) pmix_mca_base_component_var_register(&prte_ras_lsf_component,
+    (void) pmix_mca_base_component_var_register(&mca_ras_lsf_component,
                                                 "skip_affinity_file",
                                                 "Skip processing the LSB_AFFINITY_HOSTFILE.",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,

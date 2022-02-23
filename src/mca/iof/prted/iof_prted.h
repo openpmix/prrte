@@ -62,14 +62,14 @@ BEGIN_C_DECLS
 /**
  * IOF PRTED Component
  */
-struct prte_iof_prted_component_t {
+struct mca_iof_prted_component_t {
     prte_iof_base_component_t super;
     pmix_list_t procs;
     bool xoff;
 };
-typedef struct prte_iof_prted_component_t prte_iof_prted_component_t;
+typedef struct mca_iof_prted_component_t mca_iof_prted_component_t;
 
-PRTE_MODULE_EXPORT extern prte_iof_prted_component_t prte_iof_prted_component;
+PRTE_MODULE_EXPORT extern mca_iof_prted_component_t mca_iof_prted_component;
 extern prte_iof_base_module_t prte_iof_prted_module;
 
 void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,

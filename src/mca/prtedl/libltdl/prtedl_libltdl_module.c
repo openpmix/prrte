@@ -4,7 +4,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +32,7 @@ static int libltdl_open(const char *fname, bool use_ext, bool private_namespace,
     lt_prtedlhandle local_handle;
 
 #if PRTE_DL_LIBLTDL_HAVE_LT_DLADVISE
-    prte_prtedl_libltdl_component_t *c = &prte_prtedl_libltdl_component;
+    mca_prtedl_libltdl_component_t *c = &mca_prtedl_libltdl_component;
 
     if (use_ext && private_namespace) {
         local_handle = lt_dlopenadvise(fname, c->advise_private_ext);

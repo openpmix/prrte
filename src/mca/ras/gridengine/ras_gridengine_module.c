@@ -72,7 +72,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
     bool found;
 
     /* show the Grid Engine's JOB_ID */
-    if (prte_ras_gridengine_component.show_jobid || prte_ras_gridengine_component.verbose != -1) {
+    if (mca_ras_gridengine_component.show_jobid || mca_ras_gridengine_component.verbose != -1) {
         prte_output(0, "ras:gridengine: JOB_ID: %s", job_id);
     }
 
@@ -88,7 +88,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
     /* parse the pe_hostfile for hostname, slots, etc, then compare the
      * current node with a list of hosts in the nodelist, if the current
      * node is not found in nodelist, add it in */
-    prte_output(prte_ras_gridengine_component.verbose, "ras:gridengine: PE_HOSTFILE: %s",
+    prte_output(mca_ras_gridengine_component.verbose, "ras:gridengine: PE_HOSTFILE: %s",
                 pe_hostfile);
 
     while (fgets(buf, sizeof(buf), fp)) {
@@ -119,7 +119,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
             node->slots_inuse = 0;
             node->slots_max = 0;
             node->slots = (int) strtol(num, (char **) NULL, 10);
-            prte_output(prte_ras_gridengine_component.verbose,
+            prte_output(mca_ras_gridengine_component.verbose,
                         "ras:gridengine: %s: PE_HOSTFILE shows slots=%d", node->name, node->slots);
             pmix_list_append(nodelist, &node->super);
         }
@@ -169,7 +169,7 @@ static int get_slot_count(char* node_name, int* slot_cnt)
 
         if(strcmp(node_name,name) == 0) {
             *slot_cnt = (int) strtol(num, (char **)NULL, 10);
-            prte_output(prte_ras_gridengine_component.verbose,
+            prte_output(mca_ras_gridengine_component.verbose,
                 "ras:gridengine: %s: PE_HOSTFILE shows slots=%d",
                 node_name, *slot_cnt);
             fclose(fp);
@@ -189,7 +189,7 @@ static int get_slot_count(char* node_name, int* slot_cnt)
 static int prte_ras_gridengine_finalize(void)
 {
     /* Nothing to do */
-    prte_output(prte_ras_gridengine_component.verbose,
+    prte_output(mca_ras_gridengine_component.verbose,
                 "ras:gridengine:finalize: success (nothing to do)");
     return PRTE_SUCCESS;
 }

@@ -26,14 +26,14 @@
 
 BEGIN_C_DECLS
 
-PRTE_MODULE_EXPORT extern prte_ess_base_component_t prte_ess_slurm_component;
+PRTE_MODULE_EXPORT extern prte_ess_base_component_t mca_ess_slurm_component;
 
 /*
  * Module open / close
  */
-int prte_ess_slurm_component_open(void);
-int prte_ess_slurm_component_close(void);
-int prte_ess_slurm_component_query(pmix_mca_base_module_t **module, int *priority);
+int mca_ess_slurm_component_open(void);
+int mca_ess_slurm_component_close(void);
+int mca_ess_slurm_component_query(pmix_mca_base_module_t **module, int *priority);
 
 END_C_DECLS
 

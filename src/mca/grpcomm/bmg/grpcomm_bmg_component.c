@@ -32,7 +32,7 @@ static int bmg_register(void);
 /*
  * Struct of function pointers that need to be initialized
  */
-prte_grpcomm_base_component_t prte_grpcomm_bmg_component = {
+prte_grpcomm_base_component_t mca_grpcomm_bmg_component = {
     PRTE_GRPCOMM_BASE_VERSION_3_0_0,
 
     .pmix_mca_component_name = "bmg",
@@ -46,7 +46,7 @@ prte_grpcomm_base_component_t prte_grpcomm_bmg_component = {
 
 static int bmg_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_grpcomm_bmg_component;
+    pmix_mca_base_component_t *c = &mca_grpcomm_bmg_component;
 
     /* make the priority adjustable so users can select
      * bmg for use by apps without affecting daemons

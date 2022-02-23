@@ -24,12 +24,12 @@
 #include "routed_binomial.h"
 #include "src/mca/routed/base/base.h"
 
-static int prte_routed_binomial_component_query(pmix_mca_base_module_t **module, int *priority);
+static int mca_routed_binomial_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /**
  * component definition
  */
-prte_routed_component_t prte_routed_binomial_component = {
+prte_routed_component_t mca_routed_binomial_component = {
     PRTE_ROUTED_BASE_VERSION_3_0_0,
 
     .pmix_mca_component_name = "binomial",
@@ -37,10 +37,10 @@ prte_routed_component_t prte_routed_binomial_component = {
                                PRTE_MAJOR_VERSION,
                                PRTE_MINOR_VERSION,
                                PMIX_RELEASE_VERSION),
-    .pmix_mca_query_component = prte_routed_binomial_component_query
+    .pmix_mca_query_component = mca_routed_binomial_component_query
 };
 
-static int prte_routed_binomial_component_query(pmix_mca_base_module_t **module, int *priority)
+static int mca_routed_binomial_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* make this selected ONLY if the user directs as this module scales
      * poorly compared to our other options

@@ -3,7 +3,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,8 +46,8 @@ typedef struct {
     lt_dladvise advise_public_noext;
     lt_dladvise advise_public_ext;
 #endif
-} prte_prtedl_libltdl_component_t;
+} mca_prtedl_libltdl_component_t;
 
-PRTE_EXPORT extern prte_prtedl_libltdl_component_t prte_prtedl_libltdl_component;
+PRTE_EXPORT extern mca_prtedl_libltdl_component_t mca_prtedl_libltdl_component;
 
 #endif /* PRTE_DL_LIBLTDL */

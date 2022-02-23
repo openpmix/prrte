@@ -91,16 +91,16 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
 
     if (PRTE_IOF_XON & stream) {
         /* re-start the stdin read event */
-        if (NULL != prte_iof_hnp_component.stdinev && !prte_job_term_ordered
-            && !prte_iof_hnp_component.stdinev->active) {
-            PRTE_IOF_READ_ACTIVATE(prte_iof_hnp_component.stdinev);
+        if (NULL != mca_iof_hnp_component.stdinev && !prte_job_term_ordered
+            && !mca_iof_hnp_component.stdinev->active) {
+            PRTE_IOF_READ_ACTIVATE(mca_iof_hnp_component.stdinev);
         }
         goto CLEAN_RETURN;
     } else if (PRTE_IOF_XOFF & stream) {
         /* stop the stdin read event */
-        if (NULL != prte_iof_hnp_component.stdinev && !prte_iof_hnp_component.stdinev->active) {
-            prte_event_del(prte_iof_hnp_component.stdinev->ev);
-            prte_iof_hnp_component.stdinev->active = false;
+        if (NULL != mca_iof_hnp_component.stdinev && !mca_iof_hnp_component.stdinev->active) {
+            prte_event_del(mca_iof_hnp_component.stdinev->ev);
+            mca_iof_hnp_component.stdinev->active = false;
         }
         goto CLEAN_RETURN;
     }
@@ -144,7 +144,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&origin)));
 
     /* do we already have this process in our list? */
-    PMIX_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &mca_iof_hnp_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, &origin)) {
             /* found it */
@@ -155,7 +155,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     /* if we get here, then we don't yet have this proc in our list */
     proct = PMIX_NEW(prte_iof_proc_t);
     PMIX_XFER_PROCID(&proct->name, &origin);
-    pmix_list_append(&prte_iof_hnp_component.procs, &proct->super);
+    pmix_list_append(&mca_iof_hnp_component.procs, &proct->super);
 
 NSTEP:
     pchan = 0;

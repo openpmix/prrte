@@ -103,7 +103,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     pmix_list_t default_seq_list;
     pmix_list_t node_list, *seq_list, sq_list;
     prte_proc_t *proc;
-    pmix_mca_base_component_t *c = &prte_rmaps_seq_component;
+    pmix_mca_base_component_t *c = &mca_rmaps_seq_component;
     char *hosts = NULL;
     bool use_hwthread_cpus, match;
 

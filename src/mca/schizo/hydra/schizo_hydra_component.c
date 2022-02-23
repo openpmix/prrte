@@ -29,7 +29,7 @@ static int component_query(pmix_mca_base_module_t **module, int *priority);
 /*
  * Struct of function pointers and all that to let us be initialized
  */
-prte_schizo_hydra_component_t prte_schizo_hydra_component = {
+mca_schizo_hydra_component_t mca_schizo_hydra_component = {
     .super = {
         .base_version = {
             PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0,
@@ -49,6 +49,6 @@ prte_schizo_hydra_component_t prte_schizo_hydra_component = {
 static int component_query(pmix_mca_base_module_t **module, int *priority)
 {
     *module = (pmix_mca_base_module_t *) &prte_schizo_hydra_module;
-    *priority = prte_schizo_hydra_component.priority;
+    *priority = mca_schizo_hydra_component.priority;
     return PRTE_SUCCESS;
 }
