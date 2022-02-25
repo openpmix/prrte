@@ -289,9 +289,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     env = pmix_argv_copy(prte_launch_environ);
 
     /* enable local launch by the orteds */
-    (void) pmix_mca_base_var_env_name("plm", &var);
-    pmix_setenv(var, "ssh", true, &env);
-    free(var);
+    pmix_setenv("PRTE_MCA_plm", "ssh", true, &env);
 
     /* add our umask -- see big note in orted.c */
     current_umask = umask(0);

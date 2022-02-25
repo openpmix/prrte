@@ -13,7 +13,7 @@
 # $HEADER$
 #
 
-noinst_LTLIBRARIES = libmca_prteinstalldirs_config.la
+noinst_LTLIBRARIES = libprte_mca_prteinstalldirs_config.la
 
 libprte_mca_prteinstalldirs_config_la_SOURCES = \
         prte_installdirs_config.c

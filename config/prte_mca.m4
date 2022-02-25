@@ -662,10 +662,10 @@ AC_DEFUN([MCA_PROCESS_COMPONENT],[
         else
             # Other frameworks do not have to obey the
             # $FRAMEWORK_LIB_PREFIX prefix.
-            $6="mca/$1/$2/libmca_$1_$2.la $$6"
+            $6="mca/$1/$2/libprte_mca_$1_$2.la $$6"
         fi
-        echo "extern const pmix_mca_base_component_t mca_$1_$2_component;" >> $outfile.extern
-        echo "  &mca_$1_$2_component, " >> $outfile.struct
+        echo "extern const pmix_mca_base_component_t prte_mca_$1_$2_component;" >> $outfile.extern
+        echo "  &prte_mca_$1_$2_component, " >> $outfile.struct
         $4="$$4 $2"
     fi
 

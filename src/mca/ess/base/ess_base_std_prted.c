@@ -209,11 +209,9 @@ int prte_ess_base_prted_setup(void)
      * open and select something -only- if we are given
      * a specific module to use
      */
-    (void) pmix_mca_base_var_env_name("plm", &param);
-    if (NULL != getenv(param)) {
+    if (NULL != getenv("PRTE_MCA_plm")) {
         plm_in_use = true;
     }
-    free(param);
     if (plm_in_use) {
         if (PRTE_SUCCESS
             != (ret = pmix_mca_base_framework_open(&prte_plm_base_framework,

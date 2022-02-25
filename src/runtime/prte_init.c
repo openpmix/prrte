@@ -158,9 +158,6 @@ int prte_init_util(prte_proc_type_t flags)
                 __FILE__, __LINE__, ret);
         return ret;
     }
-    pmix_asprintf(&tmp, "%s/prte", prte_install_dirs.libdir);
-    setenv("PMIX_MCA_mca_base_component_path", tmp, true);
-    free(tmp);
 
     /* initialize the help system */
     prte_show_help_init();

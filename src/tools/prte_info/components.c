@@ -131,9 +131,25 @@ static int register_project_frameworks(const char *project_name,
 static int register_framework_params(pmix_pointer_array_t *component_map)
 {
     int rc;
+    char *tmp, *value;
+    char **paths = NULL;
+
+    pmix_argv_append_nosize(&paths, prte_install_dirs.prtelibdir);
+#if PRTE_WANT_HOME_CONFIG_FILES
+    value = (char *) pmix_home_directory(geteuid());
+    pmix_asprintf(&tmp,
+                  "%s" PMIX_PATH_SEP ".prte" PMIX_PATH_SEP "components", value);
+    pmix_argv_append_nosize(&paths, tmp);
+    free(tmp);
+#endif
+    value = pmix_argv_join(paths, PMIX_ENV_SEP);
+    pmix_asprintf(&tmp, "prte@%s", value);
+    free(value);
 
     /* Register mca/base parameters */
-    if (PRTE_SUCCESS != pmix_mca_base_open()) {
+    rc = pmix_mca_base_open(tmp);
+    free(tmp);
+    if (PMIX_SUCCESS != rc) {
         prte_show_help("help-prte_info.txt", "lib-call-fail", true, "mca_base_open", __FILE__,
                        __LINE__);
         return PRTE_ERROR;
