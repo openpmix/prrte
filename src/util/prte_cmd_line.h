@@ -49,8 +49,8 @@ BEGIN_C_DECLS
 #define PRTE_CLI_PERSONALITY            "personality"               // required
 
 // MCA parameter options
-#define PRTE_CLI_PRTEMCA                "pmixmca"                   // requires TWO
-#define PRTE_CLI_PRTEMCA                "pmixmca"                   // requires TWO
+#define PRTE_CLI_PRTEMCA                "prtemca"                   // requires TWO
+#define PRTE_CLI_PMIXMCA                "pmixmca"                   // requires TWO
 #define PRTE_CLI_TUNE                   "tune"                      // required
 
 // DVM options

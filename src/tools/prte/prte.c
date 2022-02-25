@@ -345,7 +345,6 @@ int main(int argc, char *argv[])
     signal(SIGINT, abort_signal_callback);
     signal(SIGHUP, abort_signal_callback);
 
-    prte_output(0, "OPENING SCHIZO FRAMEWORK");
     /* open the SCHIZO framework */
     rc = pmix_mca_base_framework_open(&prte_schizo_base_framework,
                                       PMIX_MCA_BASE_OPEN_DEFAULT);

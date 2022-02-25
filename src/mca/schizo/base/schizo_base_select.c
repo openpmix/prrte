@@ -51,8 +51,7 @@ int prte_schizo_base_select(void)
     {
         component = (pmix_mca_base_component_t *) cli->cli_component;
 
-      //  prte_output_verbose(5, prte_schizo_base_framework.framework_output,
-        prte_output(0,
+        prte_output_verbose(5, prte_schizo_base_framework.framework_output,
                             "mca:schizo:select: checking available component %s",
                             component->pmix_mca_component_name);
 

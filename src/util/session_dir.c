@@ -91,7 +91,6 @@ static int prte_create_dir(char *directory)
 
     /* Sanity check before creating the directory with the proper mode,
      * Make sure it doesn't exist already */
-    prte_output(0, "DIR %s", directory);
     if (PMIX_ERR_NOT_FOUND != (ret = pmix_os_dirpath_access(directory, my_mode))) {
         /* Failure because pmix_os_dirpath_access() indicated that either:
          * - The directory exists and we can access it (no need to create it again),

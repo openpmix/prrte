@@ -285,7 +285,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     rc = pmix_cmd_line_parse(pargv, ompishorts, ompioptions, NULL,
                              results, "help-schizo-ompi.txt");
     pmix_argv_free(pargv);
-    if (PRTE_SUCCESS != rc) {
+    if (PMIX_SUCCESS != rc) {
         return rc;
     }
 

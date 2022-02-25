@@ -461,7 +461,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     }
     rc = pmix_cmd_line_parse(argv, shorts, myoptions, NULL,
                              results, helpfile);
-    if (PRTE_SUCCESS != rc) {
+    if (PMIX_SUCCESS != rc) {
         return rc;
     }
 

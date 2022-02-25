@@ -41,8 +41,6 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/runtime.h"
-#include "src/util/listener.h"
-#include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 
@@ -66,10 +64,6 @@ int prte_finalize(void)
 
     /* flag that we are finalizing */
     prte_finalizing = true;
-
-    /* stop listening for connections - will
-     * be ignored if no listeners were registered */
-    prte_stop_listening();
 
     /* release the cache */
     PMIX_RELEASE(prte_cache);

@@ -39,13 +39,15 @@
 #include "src/util/error.h"
 #include "src/util/error_strings.h"
 #include "src/util/keyval_parse.h"
-#include "src/util/listener.h"
 #include "src/util/malloc.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/pmix_keyval_parse.h"
+#include "src/util/pmix_os_dirpath.h"
+#include "src/util/pmix_show_help.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 #include "src/util/stacktrace.h"
@@ -76,6 +78,7 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 
+#include "src/runtime/pmix_rte.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/runtime.h"
@@ -123,6 +126,9 @@ int prte_init_util(prte_proc_type_t flags)
     }
     util_initialized = true;
 
+    /* carry across the toolname */
+    pmix_tool_basename = prte_tool_basename;
+
     /* ensure we know the type of proc for when we finalize */
     prte_process_info.proc_type = flags;
 
@@ -130,6 +136,7 @@ int prte_init_util(prte_proc_type_t flags)
     prte_malloc_init();
 
     /* initialize the output system */
+    pmix_output_init();
     prte_output_init();
 
     /* initialize install dirs code */
@@ -160,9 +167,14 @@ int prte_init_util(prte_proc_type_t flags)
     }
 
     /* initialize the help system */
+    pmix_show_help_init();
     prte_show_help_init();
 
     /* keyval lex-based parser */
+    if (PMIX_SUCCESS != (ret = pmix_util_keyval_parse_init())) {
+        error = "pmix_util_keyval_parse_init";
+        goto error;
+    }
     if (PRTE_SUCCESS != (ret = prte_util_keyval_parse_init())) {
         error = "prte_util_keyval_parse_init";
         goto error;
@@ -171,6 +183,12 @@ int prte_init_util(prte_proc_type_t flags)
     /* Setup the parameter system */
     if (PRTE_SUCCESS != (ret = pmix_mca_base_var_init())) {
         error = "mca_base_var_init";
+        goto error;
+    }
+
+    /* register params for pmix */
+    if (PMIX_SUCCESS != (ret = pmix_register_params())) {
+        error = "pmix_register_params";
         goto error;
     }
 
@@ -201,7 +219,9 @@ int prte_init_util(prte_proc_type_t flags)
     value = (char *) pmix_home_directory(geteuid());
     pmix_asprintf(&tmp,
                   "%s" PMIX_PATH_SEP ".prte" PMIX_PATH_SEP "components", value);
-    pmix_argv_append_nosize(&paths, tmp);
+    if (PMIX_SUCCESS == pmix_os_dirpath_access(tmp, 0)) {
+        pmix_argv_append_nosize(&paths, tmp);
+    }
     free(tmp);
 #endif
     value = pmix_argv_join(paths, PMIX_ENV_SEP);
@@ -380,14 +400,6 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
         }
     }
 #endif
-
-    /* start listening - will be ignored if no listeners
-     * were registered */
-    if (PRTE_SUCCESS != (ret = prte_start_listening())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_start_listening";
-        goto error;
-    }
 
     /* All done */
     PMIX_ACQUIRE_THREAD(&prte_init_lock);
