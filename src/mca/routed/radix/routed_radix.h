@@ -25,8 +25,8 @@ BEGIN_C_DECLS
 typedef struct {
     prte_routed_component_t super;
     int radix;
-} mca_routed_radix_component_t;
-PRTE_MODULE_EXPORT extern mca_routed_radix_component_t mca_routed_radix_component;
+} prte_mca_routed_radix_component_t;
+PRTE_MODULE_EXPORT extern prte_mca_routed_radix_component_t prte_mca_routed_radix_component;
 
 extern prte_routed_module_t prte_routed_radix_module;
 

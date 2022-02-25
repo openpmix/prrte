@@ -498,7 +498,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
     if (silent) {
         warn = false;
     } else {
-        warn = mca_schizo_prte_component.warn_deprecations;
+        warn = prte_mca_schizo_prte_component.warn_deprecations;
     }
 
     PMIX_LIST_FOREACH_SAFE(opt, nxt, &results->instances, pmix_cli_item_t) {
@@ -1087,7 +1087,7 @@ static int detect_proxy(char *personalities)
          * if it contains "prte", then we are available but
          * at a low priority */
         if (NULL != strstr(personalities, "prte")) {
-            return mca_schizo_prte_component.priority;
+            return prte_mca_schizo_prte_component.priority;
         }
         return 0;
     }
@@ -1104,7 +1104,7 @@ static int detect_proxy(char *personalities)
     }
 
     /* if neither of those were true, then just use our default */
-    return mca_schizo_prte_component.priority;
+    return prte_mca_schizo_prte_component.priority;
 }
 
 static void allow_run_as_root(pmix_cli_result_t *cli)

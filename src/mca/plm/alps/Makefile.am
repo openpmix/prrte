@@ -16,6 +16,7 @@
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -36,23 +37,23 @@ dist_prtedata_DATA = help-plm-alps.txt
 
 if MCA_BUILD_prte_plm_alps_DSO
 component_noinst =
-component_install = mca_plm_alps.la
+component_install = prte_mca_plm_alps.la
 else
-component_noinst = libmca_plm_alps.la
+component_noinst = libprte_mca_plm_alps.la
 component_install =
 endif
 
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
-mca_plm_alps_la_SOURCES = $(sources)
-mca_plm_alps_la_CPPFLAGS = $(plm_alps_CPPFLAGS)
-mca_plm_alps_la_LDFLAGS = -module -avoid-version $(plm_alps_LDFLAGS)
-mca_plm_alps_la_LIBADD = $(plm_alps_LIBS) \
+prte_mca_plm_alps_la_SOURCES = $(sources)
+prte_mca_plm_alps_la_CPPFLAGS = $(plm_alps_CPPFLAGS)
+prte_mca_plm_alps_la_LDFLAGS = -module -avoid-version $(plm_alps_LDFLAGS)
+prte_mca_plm_alps_la_LIBADD = $(plm_alps_LIBS) \
     $(top_builddir)/src/libprrte.la   \
     $(PRTE_TOP_BUILDDIR)/src/mca/common/alps/libmca_common_alps.la
 
 noinst_LTLIBRARIES = $(component_noinst)
-libmca_plm_alps_la_SOURCES =$(sources)
-libmca_plm_alps_la_CPPFLAGS = $(plm_alps_CPPFLAGS)
-libmca_plm_alps_la_LDFLAGS = -module -avoid-version $(plm_alps_LDFLAGS)
-libmca_plm_alps_la_LIBADD = $(plm_alps_LIBS)
+libprte_mca_plm_alps_la_SOURCES =$(sources)
+libprte_mca_plm_alps_la_CPPFLAGS = $(plm_alps_CPPFLAGS)
+libprte_mca_plm_alps_la_LDFLAGS = -module -avoid-version $(plm_alps_LDFLAGS)
+libprte_mca_plm_alps_la_LIBADD = $(plm_alps_LIBS)

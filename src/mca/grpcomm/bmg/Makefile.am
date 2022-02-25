@@ -6,6 +6,7 @@
 # Copyright (c) 2017-2020 The University of Tennessee and The University
 #                         of Tennessee Research Foundation.  All rights
 #                         reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -26,19 +27,19 @@ sources = \
 
 if MCA_BUILD_prte_grpcomm_bmg_DSO
 component_noinst =
-component_install = mca_grpcomm_bmg.la
+component_install = prte_mca_grpcomm_bmg.la
 else
-component_noinst = libmca_grpcomm_bmg.la
+component_noinst = libprte_mca_grpcomm_bmg.la
 component_install =
 endif
 
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
-mca_grpcomm_bmg_la_SOURCES = $(sources)
-mca_grpcomm_bmg_la_LDFLAGS = -module -avoid-version
-mca_grpcomm_bmg_la_LIBADD = $(top_builddir)/src/libprrte.la
+prte_mca_grpcomm_bmg_la_SOURCES = $(sources)
+prte_mca_grpcomm_bmg_la_LDFLAGS = -module -avoid-version
+prte_mca_grpcomm_bmg_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
-libmca_grpcomm_bmg_la_SOURCES =$(sources)
-libmca_grpcomm_bmg_la_LDFLAGS = -module -avoid-version
+libprte_mca_grpcomm_bmg_la_SOURCES =$(sources)
+libprte_mca_grpcomm_bmg_la_LDFLAGS = -module -avoid-version
 

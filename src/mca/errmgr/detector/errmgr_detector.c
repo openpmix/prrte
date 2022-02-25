@@ -336,8 +336,8 @@ static void enable_detector(bool enable_flag)
         }
         /* someone is observing us: range [1~n], the observing ring */
         detector->hb_observer = (ndmns + vpid) % ndmns + 1;
-        detector->hb_period = mca_errmgr_detector_component.heartbeat_period;
-        detector->hb_timeout = mca_errmgr_detector_component.heartbeat_timeout;
+        detector->hb_period = prte_mca_errmgr_detector_component.heartbeat_period;
+        detector->hb_timeout = prte_mca_errmgr_detector_component.heartbeat_timeout;
         detector->hb_sstamp = 0.;
         /* give some slack for MPI_Init */
         detector->hb_rstamp = Wtime() + (double) ndmns;

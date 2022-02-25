@@ -26,7 +26,7 @@
 /*
  * Public string showing the sysinfo ompi_linux component version number
  */
-const char *mca_prtedl_libltdl_component_version_string
+const char *prte_mca_prtedl_libltdl_component_version_string
     = "PRTE prtedl libltdl MCA component version " PRTE_VERSION;
 
 /*
@@ -42,7 +42,7 @@ static int libltdl_component_query(pmix_mca_base_module_t **module, int *priorit
  * and pointers to our public functions in it
  */
 
-mca_prtedl_libltdl_component_t mca_prtedl_libltdl_component = {
+prte_mca_prtedl_libltdl_component_t prte_mca_prtedl_libltdl_component = {
 
     /* Fill in the mca_prtedl_base_component_t */
     .base = {
@@ -76,7 +76,7 @@ static int libltdl_component_register(void)
     /* Register an info param indicating whether we have lt_dladvise
        support or not */
     bool supported = PRTE_INT_TO_BOOL(PRTE_DL_LIBLTDL_HAVE_LT_DLADVISE);
-    pmix_mca_base_component_var_register(&mca_prtedl_libltdl_component.base.base_version,
+    pmix_mca_base_component_var_register(&prte_mca_prtedl_libltdl_component.base.base_version,
                                          "have_lt_dladvise",
                                          "Whether the version of libltdl that this component is "
                                          "built against supports lt_dladvise functionality or not",
@@ -92,7 +92,7 @@ static int libltdl_component_open(void)
     }
 
 #if PRTE_DL_LIBLTDL_HAVE_LT_DLADVISE
-    mca_prtedl_libltdl_component_t *c = &mca_prtedl_libltdl_component;
+    prte_mca_prtedl_libltdl_component_t *c = &prte_mca_prtedl_libltdl_component;
 
     if (lt_dladvise_init(&c->advise_private_noext)) {
         return PRTE_ERR_OUT_OF_RESOURCE;
@@ -118,7 +118,7 @@ static int libltdl_component_open(void)
 static int libltdl_component_close(void)
 {
 #if PRTE_DL_LIBLTDL_HAVE_LT_DLADVISE
-    mca_prtedl_libltdl_component_t *c = &mca_prtedl_libltdl_component;
+    prte_mca_prtedl_libltdl_component_t *c = &prte_mca_prtedl_libltdl_component;
 
     lt_dladvise_destroy(&c->advise_private_noext);
     lt_dladvise_destroy(&c->advise_private_ext);
@@ -136,7 +136,7 @@ static int libltdl_component_query(pmix_mca_base_module_t **module, int *priorit
     /* The priority value is somewhat meaningless here; by
        src/mca/prtedl/configure.m4, there's at most one component
        available. */
-    *priority = mca_prtedl_libltdl_component.base.priority;
+    *priority = prte_mca_prtedl_libltdl_component.base.priority;
     *module = &prte_prtedl_libltdl_module.super;
 
     return PRTE_SUCCESS;

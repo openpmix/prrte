@@ -33,7 +33,7 @@ BEGIN_C_DECLS
  * Module open / close
  */
 
-PRTE_MODULE_EXPORT extern prte_ess_base_component_t mca_ess_hnp_component;
+PRTE_MODULE_EXPORT extern prte_ess_base_component_t prte_mca_ess_hnp_component;
 
 END_C_DECLS
 

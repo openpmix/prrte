@@ -36,7 +36,7 @@ BEGIN_C_DECLS
 /**
  * RAS Component
  */
-PRTE_EXPORT extern prte_ras_base_component_t mca_ras_lsf_component;
+PRTE_EXPORT extern prte_ras_base_component_t prte_mca_ras_lsf_component;
 PRTE_EXPORT extern prte_ras_base_module_t prte_ras_lsf_module;
 
 PRTE_EXPORT extern bool prte_ras_lsf_skip_affinity_file;

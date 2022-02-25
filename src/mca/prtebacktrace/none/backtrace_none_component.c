@@ -32,7 +32,7 @@ BEGIN_C_DECLS
 PRTE_EXPORT extern const prte_backtrace_base_component_2_0_0_t mca_backtrace_none_component;
 END_C_DECLS
 
-const prte_backtrace_base_component_2_0_0_t mca_prtebacktrace_none_component = {
+const prte_backtrace_base_component_2_0_0_t prte_mca_prtebacktrace_none_component = {
     PRTE_BACKTRACE_BASE_VERSION_2_0_0,
 
     /* Component name and version */

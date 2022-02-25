@@ -327,13 +327,13 @@ static void radix_tree(int rank, int *num_children_out, pmix_list_t *children,
     NInLevel = 1;
 
     while (Sum < (rank + 1)) {
-        NInLevel *= mca_routed_radix_component.radix;
+        NInLevel *= prte_mca_routed_radix_component.radix;
         Sum += NInLevel;
     }
 
     /* our children start at our rank + num_in_level */
     peer = rank + NInLevel;
-    for (i = 0; i < mca_routed_radix_component.radix; i++) {
+    for (i = 0; i < prte_mca_routed_radix_component.radix; i++) {
         if (peer < (int) prte_process_info.num_daemons) {
             child = PMIX_NEW(prte_routed_tree_t);
             child->rank = peer;
@@ -386,12 +386,12 @@ static void update_routing_plan(void)
 
     while (Sum < (Ii + 1)) {
         Level++;
-        NInLevel *= mca_routed_radix_component.radix;
+        NInLevel *= prte_mca_routed_radix_component.radix;
         Sum += NInLevel;
     }
     Sum -= NInLevel;
 
-    NInPrevLevel = NInLevel / mca_routed_radix_component.radix;
+    NInPrevLevel = NInLevel / prte_mca_routed_radix_component.radix;
 
     if (0 == Ii) {
         PRTE_PROC_MY_PARENT->rank = -1;

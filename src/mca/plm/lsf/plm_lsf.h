@@ -32,14 +32,14 @@
 
 BEGIN_C_DECLS
 
-struct mca_plm_lsf_component_t {
+struct prte_mca_plm_lsf_component_t {
     prte_plm_base_component_t super;
     bool timing;
 };
-typedef struct mca_plm_lsf_component_t mca_plm_lsf_component_t;
+typedef struct prte_mca_plm_lsf_component_t prte_mca_plm_lsf_component_t;
 
 /* Globally exported variables */
-PRTE_EXPORT extern mca_plm_lsf_component_t mca_plm_lsf_component;
+PRTE_EXPORT extern prte_mca_plm_lsf_component_t prte_mca_plm_lsf_component;
 extern prte_plm_base_module_t prte_plm_lsf_module;
 
 END_C_DECLS

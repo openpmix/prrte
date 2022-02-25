@@ -25,7 +25,7 @@
 /*
  * Public string showing the sysinfo ompi_linux component version number
  */
-const char *mca_prtedl_dlopen_component_version_string
+const char *prte_mca_prtedl_dlopen_component_version_string
     = "PRTE prtedl dlopen MCA component version " PRTE_VERSION;
 
 /*
@@ -41,7 +41,7 @@ static int dlopen_component_query(pmix_mca_base_module_t **module, int *priority
  * and pointers to our public functions in it
  */
 
-mca_prtedl_dlopen_component_t mca_prtedl_dlopen_component = {
+prte_mca_prtedl_dlopen_component_t prte_mca_prtedl_dlopen_component = {
 
     /* Fill in the mca_prtedl_base_component_t */
     .base = {
@@ -72,16 +72,16 @@ static int dlopen_component_register(void)
 {
     int ret;
 
-    mca_prtedl_dlopen_component.filename_suffixes_mca_storage = ".so,.dylib,.dll,.sl";
+    prte_mca_prtedl_dlopen_component.filename_suffixes_mca_storage = ".so,.dylib,.dll,.sl";
     ret = pmix_mca_base_component_var_register(
-        &mca_prtedl_dlopen_component.base.base_version, "filename_suffixes",
+        &prte_mca_prtedl_dlopen_component.base.base_version, "filename_suffixes",
         "Comma-delimited list of filename suffixes that the PRTE dlopen component will try",
-        PMIX_MCA_BASE_VAR_TYPE_STRING, &mca_prtedl_dlopen_component.filename_suffixes_mca_storage);
+        PMIX_MCA_BASE_VAR_TYPE_STRING, &prte_mca_prtedl_dlopen_component.filename_suffixes_mca_storage);
     if (ret < 0) {
         return ret;
     }
-    mca_prtedl_dlopen_component.filename_suffixes
-        = pmix_argv_split(mca_prtedl_dlopen_component.filename_suffixes_mca_storage, ',');
+    prte_mca_prtedl_dlopen_component.filename_suffixes
+        = pmix_argv_split(prte_mca_prtedl_dlopen_component.filename_suffixes_mca_storage, ',');
 
     return PRTE_SUCCESS;
 }
@@ -93,9 +93,9 @@ static int dlopen_component_open(void)
 
 static int dlopen_component_close(void)
 {
-    if (NULL != mca_prtedl_dlopen_component.filename_suffixes) {
-        pmix_argv_free(mca_prtedl_dlopen_component.filename_suffixes);
-        mca_prtedl_dlopen_component.filename_suffixes = NULL;
+    if (NULL != prte_mca_prtedl_dlopen_component.filename_suffixes) {
+        pmix_argv_free(prte_mca_prtedl_dlopen_component.filename_suffixes);
+        prte_mca_prtedl_dlopen_component.filename_suffixes = NULL;
     }
 
     return PRTE_SUCCESS;
@@ -106,7 +106,7 @@ static int dlopen_component_query(pmix_mca_base_module_t **module, int *priority
     /* The priority value is somewhat meaningless here; by
        src/mca/prtedl/configure.m4, there's at most one component
        available. */
-    *priority = mca_prtedl_dlopen_component.base.priority;
+    *priority = prte_mca_prtedl_dlopen_component.base.priority;
     *module = &prte_prtedl_dlopen_module.super;
 
     return PRTE_SUCCESS;

@@ -26,9 +26,9 @@ BEGIN_C_DECLS
 typedef struct {
     prte_schizo_base_component_t super;
     int priority;
-} mca_schizo_hydra_component_t;
+} prte_mca_schizo_hydra_component_t;
 
-PRTE_MODULE_EXPORT extern mca_schizo_hydra_component_t mca_schizo_hydra_component;
+PRTE_MODULE_EXPORT extern prte_mca_schizo_hydra_component_t prte_mca_schizo_hydra_component;
 extern prte_schizo_base_module_t prte_schizo_hydra_module;
 
 END_C_DECLS

@@ -102,8 +102,8 @@ static int init(void)
                             prte_iof_prted_recv, NULL);
 
     /* setup the local global variables */
-    PMIX_CONSTRUCT(&mca_iof_prted_component.procs, pmix_list_t);
-    mca_iof_prted_component.xoff = false;
+    PMIX_CONSTRUCT(&prte_mca_iof_prted_component.procs, pmix_list_t);
+    prte_mca_iof_prted_component.xoff = false;
 
     return PRTE_SUCCESS;
 }
@@ -135,7 +135,7 @@ static int prted_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
     }
 
     /* do we already have this process in our list? */
-    PMIX_LIST_FOREACH(proct, &mca_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_mca_iof_prted_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, dst_name)) {
             /* found it */
@@ -145,7 +145,7 @@ static int prted_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
     /* if we get here, then we don't yet have this proc in our list */
     proct = PMIX_NEW(prte_iof_proc_t);
     PMIX_XFER_PROCID(&proct->name, dst_name);
-    pmix_list_append(&mca_iof_prted_component.procs, &proct->super);
+    pmix_list_append(&prte_mca_iof_prted_component.procs, &proct->super);
 
 SETUP:
     /* get the local jobdata for this proc */
@@ -217,7 +217,7 @@ static int prted_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
     }
 
     /* do we already have this process in our list? */
-    PMIX_LIST_FOREACH(proct, &mca_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_mca_iof_prted_component.procs, prte_iof_proc_t)
     {
         if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &proct->name, dst_name)) {
             /* found it */
@@ -227,7 +227,7 @@ static int prted_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
     /* if we get here, then we don't yet have this proc in our list */
     proct = PMIX_NEW(prte_iof_proc_t);
     PMIX_XFER_PROCID(&proct->name, dst_name);
-    pmix_list_append(&mca_iof_prted_component.procs, &proct->super);
+    pmix_list_append(&prte_mca_iof_prted_component.procs, &proct->super);
 
 SETUP:
     PRTE_IOF_SINK_DEFINE(&proct->stdinev, dst_name, fd, PRTE_IOF_STDIN, stdin_write_handler);
@@ -244,7 +244,7 @@ static int prted_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag)
 {
     prte_iof_proc_t *proct;
 
-    PMIX_LIST_FOREACH(proct, &mca_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_mca_iof_prted_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, peer)) {
             if (PRTE_IOF_STDIN & source_tag) {
@@ -267,7 +267,7 @@ static int prted_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag)
             }
             /* if we closed them all, then remove this proc */
             if (NULL == proct->stdinev && NULL == proct->revstdout && NULL == proct->revstderr) {
-                pmix_list_remove_item(&mca_iof_prted_component.procs, &proct->super);
+                pmix_list_remove_item(&prte_mca_iof_prted_component.procs, &proct->super);
                 PMIX_RELEASE(proct);
             }
             break;
@@ -282,10 +282,10 @@ static void prted_complete(const prte_job_t *jdata)
     prte_iof_proc_t *proct, *next;
 
     /* cleanout any lingering sinks */
-    PMIX_LIST_FOREACH_SAFE(proct, next, &mca_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH_SAFE(proct, next, &prte_mca_iof_prted_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_NSPACE(jdata->nspace, proct->name.nspace)) {
-            pmix_list_remove_item(&mca_iof_prted_component.procs, &proct->super);
+            pmix_list_remove_item(&prte_mca_iof_prted_component.procs, &proct->super);
             PMIX_RELEASE(proct);
         }
     }
@@ -293,7 +293,7 @@ static void prted_complete(const prte_job_t *jdata)
 
 static int finalize(void)
 {
-    PMIX_LIST_DESTRUCT(&mca_iof_prted_component.procs);
+    PMIX_LIST_DESTRUCT(&prte_mca_iof_prted_component.procs);
 
     /* Cancel the RML receive */
     prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_PROXY);
@@ -355,8 +355,8 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
             PMIX_RELEASE(wev);
             sink->wev = NULL;
             /* tell the HNP to stop sending us stuff */
-            if (!mca_iof_prted_component.xoff) {
-                mca_iof_prted_component.xoff = true;
+            if (!prte_mca_iof_prted_component.xoff) {
+                prte_mca_iof_prted_component.xoff = true;
                 prte_iof_prted_send_xonxoff(PRTE_IOF_XOFF);
             }
             return;
@@ -379,7 +379,7 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
     }
 
 CHECK:
-    if (mca_iof_prted_component.xoff) {
+    if (prte_mca_iof_prted_component.xoff) {
         /* if we have told the HNP to stop reading stdin, see if
          * the proc has absorbed enough to justify restart
          *
@@ -391,7 +391,7 @@ CHECK:
          */
         if (pmix_list_get_size(&wev->outputs) < PRTE_IOF_MAX_INPUT_BUFFERS) {
             /* restart the read */
-            mca_iof_prted_component.xoff = false;
+            prte_mca_iof_prted_component.xoff = false;
             prte_iof_prted_send_xonxoff(PRTE_IOF_XON);
         }
     }

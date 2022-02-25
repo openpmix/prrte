@@ -22,7 +22,7 @@
 
 BEGIN_C_DECLS
 
-PRTE_MODULE_EXPORT extern prte_routed_component_t mca_routed_direct_component;
+PRTE_MODULE_EXPORT extern prte_routed_component_t prte_mca_routed_direct_component;
 
 extern prte_routed_module_t prte_routed_direct_module;
 

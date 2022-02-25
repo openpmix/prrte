@@ -61,15 +61,15 @@ BEGIN_C_DECLS
 /**
  * IOF HNP Component
  */
-struct mca_iof_hnp_component_t {
+struct prte_mca_iof_hnp_component_t {
     prte_iof_base_component_t super;
     pmix_list_t procs;
     prte_iof_read_event_t *stdinev;
     prte_event_t stdinsig;
 };
-typedef struct mca_iof_hnp_component_t mca_iof_hnp_component_t;
+typedef struct prte_mca_iof_hnp_component_t prte_mca_iof_hnp_component_t;
 
-PRTE_MODULE_EXPORT extern mca_iof_hnp_component_t mca_iof_hnp_component;
+PRTE_MODULE_EXPORT extern prte_mca_iof_hnp_component_t prte_mca_iof_hnp_component;
 extern prte_iof_base_module_t prte_iof_hnp_module;
 
 void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,

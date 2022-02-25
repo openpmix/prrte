@@ -44,7 +44,7 @@ typedef struct {
     char *routed; // name of routed module to be used
 } prte_rml_oob_module_t;
 
-PRTE_MODULE_EXPORT extern prte_rml_component_t mca_rml_oob_component;
+PRTE_MODULE_EXPORT extern prte_rml_component_t prte_mca_rml_oob_component;
 
 void prte_rml_oob_fini(struct prte_rml_base_module_t *mod);
 

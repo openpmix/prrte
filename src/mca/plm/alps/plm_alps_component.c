@@ -45,7 +45,7 @@
 /*
  * Public string showing the plm ompi_alps component version number
  */
-const char *mca_plm_alps_component_version_string
+const char *prte_mca_plm_alps_component_version_string
     = "PRTE alps plm MCA component version " PRTE_VERSION;
 
 /*
@@ -54,14 +54,14 @@ const char *mca_plm_alps_component_version_string
 static int plm_alps_register(void);
 static int plm_alps_open(void);
 static int plm_alps_close(void);
-static int mca_plm_alps_component_query(pmix_mca_base_module_t **module, int *priority);
+static int prte_mca_plm_alps_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
 
-mca_plm_alps_component_t mca_plm_alps_component = {
+prte_mca_plm_alps_component_t prte_mca_plm_alps_component = {
     .super = {
         PRTE_PLM_BASE_VERSION_2_0_0,
 
@@ -75,38 +75,38 @@ mca_plm_alps_component_t mca_plm_alps_component = {
         /* Component open and close functions */
         .pmix_mca_open_component = plm_alps_open,
         .pmix_mca_close_component = plm_alps_close,
-        .pmix_mca_query_component = mca_plm_alps_component_query,
+        .pmix_mca_query_component = prte_mca_plm_alps_component_query,
         .pmix_mca_register_component_params = plm_alps_register,
     }
 };
 
 static int plm_alps_register(void)
 {
-    pmix_mca_base_component_t *comp = &mca_plm_alps_component.super;
+    pmix_mca_base_component_t *comp = &prte_mca_plm_alps_component.super;
 
-    mca_plm_alps_component.debug = false;
+    prte_mca_plm_alps_component.debug = false;
     (void) pmix_mca_base_component_var_register(comp, "debug", "Enable debugging of alps plm",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &mca_plm_alps_component.debug);
+                                                &prte_mca_plm_alps_component.debug);
 
-    if (mca_plm_alps_component.debug == 0) {
-        mca_plm_alps_component.debug = prte_debug_flag;
+    if (prte_mca_plm_alps_component.debug == 0) {
+        prte_mca_plm_alps_component.debug = prte_debug_flag;
     }
 
-    mca_plm_alps_component.priority = 100;
+    prte_mca_plm_alps_component.priority = 100;
     (void) pmix_mca_base_component_var_register(comp, "priority", "Default selection priority",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &mca_plm_alps_component.priority);
+                                                &prte_mca_plm_alps_component.priority);
 
-    mca_plm_alps_component.aprun_cmd = "aprun";
+    prte_mca_plm_alps_component.aprun_cmd = "aprun";
     (void) pmix_mca_base_component_var_register(comp, "aprun", "Command to run instead of aprun",
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                                &mca_plm_alps_component.aprun_cmd);
+                                                &prte_mca_plm_alps_component.aprun_cmd);
 
-    mca_plm_alps_component.custom_args = NULL;
+    prte_mca_plm_alps_component.custom_args = NULL;
     (void) pmix_mca_base_component_var_register(comp, "args", "Custom arguments to aprun",
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                                &mca_plm_alps_component.custom_args);
+                                                &prte_mca_plm_alps_component.custom_args);
     return PRTE_SUCCESS;
 }
 
@@ -115,7 +115,7 @@ static int plm_alps_open(void)
     return PRTE_SUCCESS;
 }
 
-static int mca_plm_alps_component_query(pmix_mca_base_module_t **module, int *priority)
+static int prte_mca_plm_alps_component_query(pmix_mca_base_module_t **module, int *priority)
 {
 #if CRAY_WLM_DETECT
     char slurm[] = "SLURM";
@@ -145,7 +145,7 @@ static int mca_plm_alps_component_query(pmix_mca_base_module_t **module, int *pr
     }
 #endif
 
-    *priority = mca_plm_alps_component.priority;
+    *priority = prte_mca_plm_alps_component.priority;
     *module = (pmix_mca_base_module_t *) &prte_plm_alps_module;
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                          "%s plm:alps: available for selection",

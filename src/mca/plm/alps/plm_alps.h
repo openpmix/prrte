@@ -34,20 +34,20 @@
 
 BEGIN_C_DECLS
 
-struct mca_plm_alps_component_t {
+struct prte_mca_plm_alps_component_t {
     prte_plm_base_component_t super;
     int priority;
     bool debug;
     char *aprun_cmd;
     char *custom_args;
 };
-typedef struct mca_plm_alps_component_t mca_plm_alps_component_t;
+typedef struct prte_mca_plm_alps_component_t prte_mca_plm_alps_component_t;
 
 /*
  * Globally exported variable
  */
 
-PRTE_MODULE_EXPORT extern mca_plm_alps_component_t mca_plm_alps_component;
+PRTE_MODULE_EXPORT extern prte_mca_plm_alps_component_t prte_mca_plm_alps_component;
 PRTE_EXPORT extern prte_plm_base_module_t prte_plm_alps_module;
 
 END_C_DECLS

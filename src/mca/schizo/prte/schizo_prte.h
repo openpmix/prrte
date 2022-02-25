@@ -29,7 +29,7 @@ typedef struct {
     bool warn_deprecations;
 } prte_schizo_prte_component_t;
 
-PRTE_MODULE_EXPORT extern prte_schizo_prte_component_t mca_schizo_prte_component;
+PRTE_MODULE_EXPORT extern prte_schizo_prte_component_t prte_mca_schizo_prte_component;
 extern prte_schizo_base_module_t prte_schizo_prte_module;
 
 END_C_DECLS

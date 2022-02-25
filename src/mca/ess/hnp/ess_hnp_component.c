@@ -51,7 +51,7 @@ static int hnp_component_query(pmix_mca_base_module_t **module, int *priority);
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
-prte_ess_base_component_t mca_ess_hnp_component = {
+prte_ess_base_component_t prte_mca_ess_hnp_component = {
     PRTE_ESS_BASE_VERSION_3_0_0,
 
     /* Component name and version */

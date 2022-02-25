@@ -44,7 +44,7 @@ extern prte_ess_base_module_t prte_ess_tm_module;
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
-prte_ess_base_component_t mca_ess_tm_component = {
+prte_ess_base_component_t prte_mca_ess_tm_component = {
     PRTE_ESS_BASE_VERSION_3_0_0,
 
     /* Component name and version */
@@ -53,17 +53,17 @@ prte_ess_base_component_t mca_ess_tm_component = {
                                 PMIX_RELEASE_VERSION),
 
     /* Component open and close functions */
-    .pmix_mca_open_component = mca_ess_tm_component_open,
-    .pmix_mca_close_component = mca_ess_tm_component_close,
-    .pmix_mca_query_component = mca_ess_tm_component_query,
+    .pmix_mca_open_component = prte_mca_ess_tm_component_open,
+    .pmix_mca_close_component = prte_mca_ess_tm_component_close,
+    .pmix_mca_query_component = prte_mca_ess_tm_component_query,
 };
 
-int mca_ess_tm_component_open(void)
+int prte_mca_ess_tm_component_open(void)
 {
     return PRTE_SUCCESS;
 }
 
-int mca_ess_tm_component_query(pmix_mca_base_module_t **module, int *priority)
+int prte_mca_ess_tm_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* Are we running under a TM job? Were
      * we given a path back to the HNP? If the
@@ -84,7 +84,7 @@ int mca_ess_tm_component_query(pmix_mca_base_module_t **module, int *priority)
     return PRTE_ERROR;
 }
 
-int mca_ess_tm_component_close(void)
+int prte_mca_ess_tm_component_close(void)
 {
     return PRTE_SUCCESS;
 }

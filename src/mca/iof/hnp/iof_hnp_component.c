@@ -46,10 +46,10 @@ static int prte_iof_hnp_query(pmix_mca_base_module_t **module, int *priority);
 /*
  * Public string showing the iof hnp component version number
  */
-const char *mca_iof_hnp_component_version_string
+const char *prte_mca_iof_hnp_component_version_string
     = "PRTE hnp iof MCA component version " PRTE_VERSION;
 
-mca_iof_hnp_component_t mca_iof_hnp_component = {
+prte_mca_iof_hnp_component_t prte_mca_iof_hnp_component = {
     .super = {
         PRTE_IOF_BASE_VERSION_2_0_0,
 

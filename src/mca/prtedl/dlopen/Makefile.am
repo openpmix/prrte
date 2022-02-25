@@ -3,6 +3,7 @@
 #                         All rights reserved.
 # Copyright (c) 2014-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -17,8 +18,8 @@ sources = \
 
 # This component will only ever be built statically -- never as a DSO.
 
-noinst_LTLIBRARIES = libmca_prtedl_dlopen.la
+noinst_LTLIBRARIES = libprte_mca_prtedl_dlopen.la
 
-libmca_prtedl_dlopen_la_SOURCES = $(sources)
-libmca_prtedl_dlopen_la_LDFLAGS = -module -avoid-version
-libmca_prtedl_dlopen_la_LIBADD = $(prte_prtedl_dlopen_LIBS)
+libprte_mca_prtedl_dlopen_la_SOURCES = $(sources)
+libprte_mca_prtedl_dlopen_la_LDFLAGS = -module -avoid-version
+libprte_mca_prtedl_dlopen_la_LIBADD = $(prte_prtedl_dlopen_LIBS)

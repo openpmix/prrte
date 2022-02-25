@@ -31,7 +31,7 @@ BEGIN_C_DECLS
  * Local Component structures
  */
 
-PRTE_MODULE_EXPORT extern prte_state_base_component_t mca_state_prted_component;
+PRTE_MODULE_EXPORT extern prte_state_base_component_t prte_mca_state_prted_component;
 
 PRTE_EXPORT extern prte_state_base_module_t prte_state_prted_module;
 

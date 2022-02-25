@@ -22,7 +22,7 @@
 /*
  * Public string for version number
  */
-const char *mca_errmgr_detector_component_version_string
+const char *prte_mca_errmgr_detector_component_version_string
     = "PRTE ERRMGR detector MCA component version " PRTE_VERSION;
 
 /*
@@ -37,7 +37,7 @@ static int errmgr_detector_component_query(pmix_mca_base_module_t **module, int 
  * Instantiate the public struct with all of our public information
  * and pointer to our public functions in it
  */
-mca_errmgr_detector_component_t mca_errmgr_detector_component = {
+prte_mca_errmgr_detector_component_t prte_mca_errmgr_detector_component = {
     .super = {
         /* Handle the general mca_component_t struct containing
          *  meta information about the component detector
@@ -64,7 +64,7 @@ static int my_priority;
 
 static int errmgr_detector_register(void)
 {
-    pmix_mca_base_component_t *c = &mca_errmgr_detector_component.super.base_version;
+    pmix_mca_base_component_t *c = &prte_mca_errmgr_detector_component.super.base_version;
     if (PRTE_PROC_IS_DAEMON)
         my_priority = 1005;
     else
@@ -75,11 +75,11 @@ static int errmgr_detector_register(void)
 
     (void) pmix_mca_base_component_var_register(
         c, "heartbeat_period", "Set heartbeat period for ring detector in errmgr component",
-        PMIX_MCA_BASE_VAR_TYPE_DOUBLE, &mca_errmgr_detector_component.heartbeat_period);
+        PMIX_MCA_BASE_VAR_TYPE_DOUBLE, &prte_mca_errmgr_detector_component.heartbeat_period);
 
     (void) pmix_mca_base_component_var_register(
         c, "heartbeat_timeout", "Set heartbeat timeout for ring detector in errmgr component",
-        PMIX_MCA_BASE_VAR_TYPE_DOUBLE, &mca_errmgr_detector_component.heartbeat_timeout);
+        PMIX_MCA_BASE_VAR_TYPE_DOUBLE, &prte_mca_errmgr_detector_component.heartbeat_timeout);
 
     return PRTE_SUCCESS;
 }

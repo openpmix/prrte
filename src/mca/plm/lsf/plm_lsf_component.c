@@ -47,7 +47,7 @@
 /*
  * Public string showing the plm lsf component version number
  */
-const char *mca_plm_lsf_component_version_string
+const char *prte_mca_plm_lsf_component_version_string
     = "PRTE lsf plm MCA component version " PRTE_VERSION;
 
 /*
@@ -55,14 +55,14 @@ const char *mca_plm_lsf_component_version_string
  */
 static int plm_lsf_open(void);
 static int plm_lsf_close(void);
-static int mca_plm_lsf_component_query(pmix_mca_base_module_t **module, int *priority);
+static int prte_mca_plm_lsf_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
 
-mca_plm_lsf_component_t mca_plm_lsf_component = {
+prte_mca_plm_lsf_component_t prte_mca_plm_lsf_component = {
     .super = {
         PRTE_PLM_BASE_VERSION_2_0_0,
 
@@ -76,7 +76,7 @@ mca_plm_lsf_component_t mca_plm_lsf_component = {
         /* Component open and close functions */
         .pmix_mca_open_component = plm_lsf_open,
         .pmix_mca_close_component = plm_lsf_close,
-        .pmix_mca_query_component = mca_plm_lsf_component_query,
+        .pmix_mca_query_component = prte_mca_plm_lsf_component_query,
     }
 };
 
@@ -90,7 +90,7 @@ static int plm_lsf_close(void)
     return PRTE_SUCCESS;
 }
 
-static int mca_plm_lsf_component_query(pmix_mca_base_module_t **module, int *priority)
+static int prte_mca_plm_lsf_component_query(pmix_mca_base_module_t **module, int *priority)
 {
 
     /* check if lsf is running here and make sure IBM CSM is NOT enabled */

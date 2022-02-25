@@ -10,6 +10,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -17,8 +18,8 @@
 # $HEADER$
 #
 
-noinst_LTLIBRARIES = libmca_prtebacktrace_execinfo.la
+noinst_LTLIBRARIES = libprte_mca_prtebacktrace_execinfo.la
 
-libmca_prtebacktrace_execinfo_la_SOURCES = \
+libprte_mca_prtebacktrace_execinfo_la_SOURCES = \
     backtrace_execinfo.c \
     backtrace_execinfo_component.c

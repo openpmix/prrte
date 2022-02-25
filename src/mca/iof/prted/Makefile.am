@@ -12,6 +12,7 @@
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -25,9 +26,9 @@
 
 if MCA_BUILD_prte_iof_prted_DSO
 component_noinst =
-component_install = mca_iof_prted.la
+component_install = prte_mca_iof_prted.la
 else
-component_noinst = libmca_iof_prted.la
+component_noinst = libprte_mca_iof_prted.la
 component_install =
 endif
 
@@ -40,11 +41,11 @@ prted_SOURCES = \
 
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
-mca_iof_prted_la_SOURCES = $(prted_SOURCES)
-mca_iof_prted_la_LDFLAGS = -module -avoid-version
-mca_iof_prted_la_LIBADD = $(top_builddir)/src/libprrte.la
+prte_mca_iof_prted_la_SOURCES = $(prted_SOURCES)
+prte_mca_iof_prted_la_LDFLAGS = -module -avoid-version
+prte_mca_iof_prted_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
-libmca_iof_prted_la_SOURCES = $(prted_SOURCES)
-libmca_iof_prted_la_LIBADD =
-libmca_iof_prted_la_LDFLAGS = -module -avoid-version
+libprte_mca_iof_prted_la_SOURCES = $(prted_SOURCES)
+libprte_mca_iof_prted_la_LIBADD =
+libprte_mca_iof_prted_la_LDFLAGS = -module -avoid-version

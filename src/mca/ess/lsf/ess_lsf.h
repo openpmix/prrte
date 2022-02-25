@@ -26,14 +26,14 @@
 
 BEGIN_C_DECLS
 
-PRTE_MODULE_EXPORT extern prte_ess_base_component_t mca_ess_lsf_component;
+PRTE_MODULE_EXPORT extern prte_ess_base_component_t prte_mca_ess_lsf_component;
 
 /*
  * Module open / close
  */
-int mca_ess_lsf_component_open(void);
-int mca_ess_lsf_component_close(void);
-int mca_ess_lsf_component_query(pmix_mca_base_module_t **module, int *priority);
+int prte_mca_ess_lsf_component_open(void);
+int prte_mca_ess_lsf_component_close(void);
+int prte_mca_ess_lsf_component_query(pmix_mca_base_module_t **module, int *priority);
 
 END_C_DECLS
 

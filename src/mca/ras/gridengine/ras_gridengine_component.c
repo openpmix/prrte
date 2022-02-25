@@ -49,11 +49,11 @@
 static int prte_ras_gridengine_register(void);
 static int prte_ras_gridengine_open(void);
 static int prte_ras_gridengine_close(void);
-static int mca_ras_gridengine_component_query(pmix_mca_base_module_t **module, int *priority);
+static int prte_mca_ras_gridengine_component_query(pmix_mca_base_module_t **module, int *priority);
 
 static int prte_ras_gridengine_verbose;
 
-mca_ras_gridengine_component_t mca_ras_gridengine_component = {
+prte_mca_ras_gridengine_component_t prte_mca_ras_gridengine_component = {
     .super = {
         PRTE_RAS_BASE_VERSION_2_0_0,
         .pmix_mca_component_name = "gridengine",
@@ -63,31 +63,31 @@ mca_ras_gridengine_component_t mca_ras_gridengine_component = {
                                    PMIX_RELEASE_VERSION),
         .pmix_mca_open_component = prte_ras_gridengine_open,
         .pmix_mca_close_component = prte_ras_gridengine_close,
-        .pmix_mca_query_component = mca_ras_gridengine_component_query,
+        .pmix_mca_query_component = prte_mca_ras_gridengine_component_query,
         .pmix_mca_register_component_params = prte_ras_gridengine_register,
     }
 };
 
 static int prte_ras_gridengine_register(void)
 {
-    pmix_mca_base_component_t *c = &mca_ras_gridengine_component.super;
+    pmix_mca_base_component_t *c = &prte_mca_ras_gridengine_component.super;
 
-    mca_ras_gridengine_component.priority = 100;
+    prte_mca_ras_gridengine_component.priority = 100;
     (void) pmix_mca_base_component_var_register(c, "priority",
                                                 "Priority of the gridengine ras component",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &mca_ras_gridengine_component.priority);
+                                                &prte_mca_ras_gridengine_component.priority);
 
     prte_ras_gridengine_verbose = 0;
     (void) pmix_mca_base_component_var_register(
         c, "verbose", "Enable verbose output for the gridengine ras component",
         PMIX_MCA_BASE_VAR_TYPE_INT, &prte_ras_gridengine_verbose);
 
-    mca_ras_gridengine_component.show_jobid = false;
+    prte_mca_ras_gridengine_component.show_jobid = false;
     (void) pmix_mca_base_component_var_register(c, "show_jobid",
                                                 "Show the JOB_ID of the Grid Engine job",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &mca_ras_gridengine_component.show_jobid);
+                                                &prte_mca_ras_gridengine_component.show_jobid);
 
     return PRTE_SUCCESS;
 }
@@ -98,17 +98,17 @@ static int prte_ras_gridengine_register(void)
 static int prte_ras_gridengine_open(void)
 {
     if (prte_ras_gridengine_verbose != 0) {
-        mca_ras_gridengine_component.verbose = prte_output_open(NULL);
+        prte_mca_ras_gridengine_component.verbose = prte_output_open(NULL);
     } else {
-        mca_ras_gridengine_component.verbose = -1;
+        prte_mca_ras_gridengine_component.verbose = -1;
     }
 
     return PRTE_SUCCESS;
 }
 
-static int mca_ras_gridengine_component_query(pmix_mca_base_module_t **module, int *priority)
+static int prte_mca_ras_gridengine_component_query(pmix_mca_base_module_t **module, int *priority)
 {
-    *priority = mca_ras_gridengine_component.priority;
+    *priority = prte_mca_ras_gridengine_component.priority;
 
     if (NULL != getenv("SGE_ROOT") && NULL != getenv("ARC") && NULL != getenv("PE_HOSTFILE")
         && NULL != getenv("JOB_ID")) {

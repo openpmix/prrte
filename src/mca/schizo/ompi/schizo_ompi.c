@@ -365,7 +365,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
     if (silent) {
         warn = false;
     } else {
-        warn = mca_schizo_ompi_component.warn_deprecations;
+        warn = prte_mca_schizo_ompi_component.warn_deprecations;
     }
 
     PMIX_LIST_FOREACH_SAFE(opt, nxt, &results->instances, pmix_cli_item_t) {

@@ -43,8 +43,8 @@ typedef struct {
     char *config_file;
     bool rolling_alloc;
     bool use_all;
-} mca_ras_slurm_component_t;
-PRTE_EXPORT extern mca_ras_slurm_component_t mca_ras_slurm_component;
+} prte_mca_ras_slurm_component_t;
+PRTE_EXPORT extern prte_mca_ras_slurm_component_t prte_mca_ras_slurm_component;
 
 PRTE_EXPORT extern prte_ras_base_module_t prte_ras_slurm_module;
 

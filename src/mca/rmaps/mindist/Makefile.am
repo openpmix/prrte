@@ -13,6 +13,7 @@
 # Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -33,18 +34,18 @@ sources = \
 
 if MCA_BUILD_prte_rmaps_mindist_DSO
 component_noinst =
-component_install = mca_rmaps_mindist.la
+component_install = prte_mca_rmaps_mindist.la
 else
-component_noinst = libmca_rmaps_mindist.la
+component_noinst = libprte_mca_rmaps_mindist.la
 component_install =
 endif
 
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
-mca_rmaps_mindist_la_SOURCES = $(sources)
-mca_rmaps_mindist_la_LDFLAGS = -module -avoid-version
-mca_rmaps_mindist_la_LIBADD = $(top_builddir)/src/libprrte.la
+prte_mca_rmaps_mindist_la_SOURCES = $(sources)
+prte_mca_rmaps_mindist_la_LDFLAGS = -module -avoid-version
+prte_mca_rmaps_mindist_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
-libmca_rmaps_mindist_la_SOURCES =$(sources)
-libmca_rmaps_mindist_la_LDFLAGS = -module -avoid-version
+libprte_mca_rmaps_mindist_la_SOURCES =$(sources)
+libprte_mca_rmaps_mindist_la_LDFLAGS = -module -avoid-version

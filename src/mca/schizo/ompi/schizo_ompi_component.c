@@ -30,7 +30,7 @@ static int component_register(void);
 /*
  * Struct of function pointers and all that to let us be initialized
  */
-mca_schizo_ompi_component_t mca_schizo_ompi_component = {
+prte_mca_schizo_ompi_component_t prte_mca_schizo_ompi_component = {
     .super = {
         PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0,
         .pmix_mca_component_name = "ompi",
@@ -47,13 +47,13 @@ mca_schizo_ompi_component_t mca_schizo_ompi_component = {
 
 static int component_register(void)
 {
-    pmix_mca_base_component_t *c = &mca_schizo_ompi_component.super;
+    pmix_mca_base_component_t *c = &prte_mca_schizo_ompi_component.super;
 
-    mca_schizo_ompi_component.warn_deprecations = false;
+    prte_mca_schizo_ompi_component.warn_deprecations = false;
     (void) pmix_mca_base_component_var_register(c, "warn_deprecations",
                                                 "Issue warnings about deprecated command line options",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &mca_schizo_ompi_component.warn_deprecations);
+                                                &prte_mca_schizo_ompi_component.warn_deprecations);
 
     return PRTE_SUCCESS;
 }
@@ -61,6 +61,6 @@ static int component_register(void)
 static int component_query(pmix_mca_base_module_t **module, int *priority)
 {
     *module = (pmix_mca_base_module_t *) &prte_schizo_ompi_module;
-    *priority = mca_schizo_ompi_component.priority;
+    *priority = prte_mca_schizo_ompi_component.priority;
     return PRTE_SUCCESS;
 }

@@ -72,7 +72,7 @@ static int mindist_map(prte_job_t *jdata)
     int32_t num_nodes, num_slots;
     unsigned int npus, total_npus, num_procs_to_assign = 0, required;
     int rc;
-    pmix_mca_base_component_t *c = &mca_rmaps_mindist_component;
+    pmix_mca_base_component_t *c = &prte_mca_rmaps_mindist_component;
     bool initial_map = true;
     bool bynode = false;
     float balance;
@@ -496,7 +496,7 @@ static int assign_locations(prte_job_t *jdata)
     prte_node_t *node;
     prte_proc_t *proc;
     hwloc_obj_t obj = NULL;
-    pmix_mca_base_component_t *c = &mca_rmaps_mindist_component;
+    pmix_mca_base_component_t *c = &prte_mca_rmaps_mindist_component;
     int rc;
     pmix_list_t numa_list;
     prte_rmaps_numa_node_t *numa;

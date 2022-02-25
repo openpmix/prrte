@@ -22,7 +22,7 @@
 
 BEGIN_C_DECLS
 
-PRTE_MODULE_EXPORT extern prte_rmaps_base_component_t mca_rmaps_ppr_component;
+PRTE_MODULE_EXPORT extern prte_rmaps_base_component_t prte_mca_rmaps_ppr_component;
 extern prte_rmaps_base_module_t prte_rmaps_ppr_module;
 
 END_C_DECLS

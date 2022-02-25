@@ -33,7 +33,7 @@ BEGIN_C_DECLS
  * Local Component structures
  */
 
-PRTE_MODULE_EXPORT extern prte_errmgr_base_component_t mca_errmgr_dvm_component;
+PRTE_MODULE_EXPORT extern prte_errmgr_base_component_t prte_mca_errmgr_dvm_component;
 
 PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr_dvm_module;
 

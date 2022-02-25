@@ -45,6 +45,7 @@
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
 #include "src/util/stacktrace.h"
@@ -114,7 +115,8 @@ int prte_init_util(prte_proc_type_t flags)
 {
     int ret;
     char *error = NULL;
-    char *tmp;
+    char *tmp, *value;
+    char **paths = NULL;
 
     if (util_initialized) {
         return PRTE_SUCCESS;
@@ -196,8 +198,23 @@ int prte_init_util(prte_proc_type_t flags)
         return PRTE_ERR_SILENT;
     }
 
+    /* setup the paths to the PRRTE component libraries */
+    pmix_argv_append_nosize(&paths, prte_install_dirs.prtelibdir);
+#if PRTE_WANT_HOME_CONFIG_FILES
+    value = (char *) pmix_home_directory(geteuid());
+    pmix_asprintf(&tmp,
+                  "%s" PMIX_PATH_SEP ".prte" PMIX_PATH_SEP "components", value);
+    pmix_argv_append_nosize(&paths, tmp);
+    free(tmp);
+#endif
+    value = pmix_argv_join(paths, PMIX_ENV_SEP);
+    pmix_asprintf(&tmp, "prte@%s", value);
+    free(value);
+
     /* Initialize the data storage service. */ /* initialize the mca */
-    if (PRTE_SUCCESS != (ret = pmix_mca_base_open())) {
+    ret = pmix_mca_base_open(tmp);
+    free(tmp);
+    if (PMIX_SUCCESS != ret) {
         error = "mca_base_open";
         goto error;
     }

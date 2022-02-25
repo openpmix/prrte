@@ -48,7 +48,7 @@ typedef struct {
     double heartbeat_timeout;
 } prte_errmgr_detector_component_t;
 
-PRTE_MODULE_EXPORT extern prte_errmgr_detector_component_t mca_errmgr_detector_component;
+PRTE_MODULE_EXPORT extern prte_errmgr_detector_component_t prte_mca_errmgr_detector_component;
 
 PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr_detector_module;
 

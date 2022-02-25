@@ -26,7 +26,7 @@
 
 BEGIN_C_DECLS
 
-PRTE_MODULE_EXPORT extern prte_filem_base_component_t mca_filem_raw_component;
+PRTE_MODULE_EXPORT extern prte_filem_base_component_t prte_mca_filem_raw_component;
 PRTE_EXPORT extern prte_filem_base_module_t prte_filem_raw_module;
 
 extern bool prte_filem_raw_flatten_trees;

@@ -49,7 +49,7 @@ BEGIN_C_DECLS
 /**
  * PLS Component
  */
-struct mca_plm_ssh_component_t {
+struct prte_mca_plm_ssh_component_t {
     prte_plm_base_component_t super;
     bool force_ssh;
     bool disable_qrsh;
@@ -71,9 +71,9 @@ struct mca_plm_ssh_component_t {
     char *pass_libpath;
     char *chdir;
 };
-typedef struct mca_plm_ssh_component_t mca_plm_ssh_component_t;
+typedef struct prte_mca_plm_ssh_component_t prte_mca_plm_ssh_component_t;
 
-PRTE_MODULE_EXPORT extern mca_plm_ssh_component_t mca_plm_ssh_component;
+PRTE_MODULE_EXPORT extern prte_mca_plm_ssh_component_t prte_mca_plm_ssh_component;
 extern prte_plm_base_module_t prte_plm_ssh_module;
 
 PRTE_MODULE_EXPORT char **prte_plm_ssh_search(const char *agent_list, const char *path);

@@ -54,7 +54,7 @@ int prte_ess_alps_sync_complete(void);
  * ODLS Alps module
  */
 extern prte_ess_base_module_t prte_ess_alps_module;
-PRTE_MODULE_EXPORT extern prte_ess_base_component_t mca_ess_alps_component;
+PRTE_MODULE_EXPORT extern prte_ess_base_component_t prte_mca_ess_alps_component;
 
 END_C_DECLS
 

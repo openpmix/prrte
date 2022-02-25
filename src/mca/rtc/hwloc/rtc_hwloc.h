@@ -44,9 +44,9 @@ typedef enum {
 typedef struct {
     prte_rtc_base_component_t super;
     prte_rtc_hwloc_vm_hole_kind_t kind;
-} mca_rtc_hwloc_component_t;
+} prte_mca_rtc_hwloc_component_t;
 
-PRTE_MODULE_EXPORT extern mca_rtc_hwloc_component_t mca_rtc_hwloc_component;
+PRTE_MODULE_EXPORT extern prte_mca_rtc_hwloc_component_t prte_mca_rtc_hwloc_component;
 
 extern prte_rtc_base_module_t prte_rtc_hwloc_module;
 

@@ -46,8 +46,8 @@ typedef struct {
     lt_dladvise advise_public_noext;
     lt_dladvise advise_public_ext;
 #endif
-} mca_prtedl_libltdl_component_t;
+} prte_mca_prtedl_libltdl_component_t;
 
-PRTE_EXPORT extern mca_prtedl_libltdl_component_t mca_prtedl_libltdl_component;
+PRTE_EXPORT extern prte_mca_prtedl_libltdl_component_t prte_mca_prtedl_libltdl_component;
 
 #endif /* PRTE_DL_LIBLTDL */

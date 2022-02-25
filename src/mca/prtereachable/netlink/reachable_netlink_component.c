@@ -23,7 +23,7 @@
 /*
  * Public string showing the reachable netlink component version number
  */
-const char *mca_prtereachable_netlink_component_version_string
+const char *prte_mca_prtereachable_netlink_component_version_string
     = "PRTE netlink prtereachable MCA component version " PRTE_VERSION;
 
 /*
@@ -39,7 +39,7 @@ static int component_register(void);
  * and pointers to our public functions in it
  */
 
-prte_reachable_base_component_t mca_prtereachable_netlink_component = {
+prte_reachable_base_component_t prte_mca_prtereachable_netlink_component = {
 
     /* First, the mca_component_t struct containing meta information
        about the component itself */

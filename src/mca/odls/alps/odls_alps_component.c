@@ -55,7 +55,7 @@
  * and pointers to our public functions in it
  */
 
-prte_odls_base_component_t mca_odls_alps_component = {
+prte_odls_base_component_t prte_mca_odls_alps_component = {
     PRTE_ODLS_BASE_VERSION_2_0_0,
     /* Component name and version */
     .pmix_mca_component_name = "alps",
@@ -63,17 +63,17 @@ prte_odls_base_component_t mca_odls_alps_component = {
                                 PMIX_RELEASE_VERSION),
 
     /* Component open and close functions */
-    .pmix_mca_open_component = mca_odls_alps_component_open,
-    .pmix_mca_close_component = mca_odls_alps_component_close,
-    .pmix_mca_query_component = mca_odls_alps_component_query,
+    .pmix_mca_open_component = prte_mca_odls_alps_component_open,
+    .pmix_mca_close_component = prte_mca_odls_alps_component_close,
+    .pmix_mca_query_component = prte_mca_odls_alps_component_query,
 };
 
-int mca_odls_alps_component_open(void)
+int prte_mca_odls_alps_component_open(void)
 {
     return PRTE_SUCCESS;
 }
 
-int mca_odls_alps_component_query(pmix_mca_base_module_t **module, int *priority)
+int prte_mca_odls_alps_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     int rc = PRTE_SUCCESS;
     bool flag;
@@ -103,7 +103,7 @@ int mca_odls_alps_component_query(pmix_mca_base_module_t **module, int *priority
     return rc;
 }
 
-int mca_odls_alps_component_close(void)
+int prte_mca_odls_alps_component_close(void)
 {
     return PRTE_SUCCESS;
 }

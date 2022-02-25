@@ -59,7 +59,7 @@ static int component_query(pmix_mca_base_module_t **module, int *priority);
 /**
  * component definition
  */
-prte_rml_component_t mca_rml_oob_component = {
+prte_rml_component_t prte_mca_rml_oob_component = {
     PRTE_RML_BASE_VERSION_3_0_0,
 
     .pmix_mca_component_name = "oob",
@@ -119,7 +119,7 @@ static int oob_ping(const char *uri, const struct timeval *tv)
 }
 
 static prte_rml_base_module_t base_module = {
-    .component = (struct prte_rml_component_t *) &mca_rml_oob_component,
+    .component = (struct prte_rml_component_t *) &prte_mca_rml_oob_component,
     .ping = oob_ping,
     .send_buffer_nb = prte_rml_oob_send_buffer_nb,
     .recv_buffer_nb = recv_buffer_nb,

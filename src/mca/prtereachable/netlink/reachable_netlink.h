@@ -18,7 +18,7 @@
 
 BEGIN_C_DECLS
 
-PRTE_EXPORT extern prte_reachable_base_component_t mca_prtereachable_netlink_component;
+PRTE_EXPORT extern prte_reachable_base_component_t prte_mca_prtereachable_netlink_component;
 
 PRTE_EXPORT extern const prte_reachable_base_module_t prte_prtereachable_netlink_module;
 

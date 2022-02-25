@@ -32,9 +32,9 @@ BEGIN_C_DECLS
 
 typedef struct {
     prte_reachable_base_component_t super;
-} mca_prtereachable_weighted_component_t;
+} prte_mca_prtereachable_weighted_component_t;
 
-PRTE_EXPORT extern mca_prtereachable_weighted_component_t mca_prtereachable_weighted_component;
+PRTE_EXPORT extern prte_mca_prtereachable_weighted_component_t prte_mca_prtereachable_weighted_component;
 
 PRTE_EXPORT extern const prte_reachable_base_module_t prte_prtereachable_weighted_module;
 

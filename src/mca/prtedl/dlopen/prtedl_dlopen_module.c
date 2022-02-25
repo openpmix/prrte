@@ -72,8 +72,8 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
         int i, rc;
         char *ext;
 
-        for (i = 0, ext = mca_prtedl_dlopen_component.filename_suffixes[i]; NULL != ext;
-             ext = mca_prtedl_dlopen_component.filename_suffixes[++i]) {
+        for (i = 0, ext = prte_mca_prtedl_dlopen_component.filename_suffixes[i]; NULL != ext;
+             ext = prte_mca_prtedl_dlopen_component.filename_suffixes[++i]) {
             char *name;
 
             pmix_asprintf(&name, "%s%s", fname, ext);
