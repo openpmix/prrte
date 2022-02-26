@@ -55,8 +55,8 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
         AC_MSG_ERROR([Cannot continue])
     fi
 
-    AS_IF([test "$with_hwloc_extra_libs" = "yes" -o "$with_hwloc_extra_libs" = "no"],
-	  [AC_MSG_ERROR([--with-hwloc-extra-libs requires an argument other than yes or no])])
+    AS_IF([test "$with_pmix_extra_libs" = "yes" -o "$with_pmix_extra_libs" = "no"],
+	  [AC_MSG_ERROR([--with-pmix-extra-libs requires an argument other than yes or no])])
 
     # get rid of any trailing slash(es)
     pmix_prefix=$(echo $with_pmix | sed -e 'sX/*$XXg')
@@ -109,7 +109,7 @@ echo "--> $pmix_ext_install_libdir"
         # need to figure out what to do if PMIx was installed in
         # a standard location - still need to add the "pmix"
         # extension, but what do we add it to?
-        prte_pmix_CPPFLAGS="$prte_pmix_CPPFLAGS"
+        prte_pmix_CPPFLAGS="$prte_pmix_CPPFLAGS -I/usr/include/pmix"
     fi
 
     prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
