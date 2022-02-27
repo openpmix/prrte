@@ -117,7 +117,7 @@ static bool forcibly_die = false;
 static prte_event_t term_handler;
 static prte_event_t epipe_handler;
 static int term_pipe[2];
-static pmix_mutex_t prun_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
+static pmix_mutex_t prun_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static prte_event_t *forward_signals_events = NULL;
 static char *mypidfile = NULL;
 static bool verbose = false;

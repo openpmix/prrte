@@ -41,7 +41,6 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/runtime.h"
-#include "src/util/listener.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
@@ -66,10 +65,6 @@ int prte_finalize(void)
 
     /* flag that we are finalizing */
     prte_finalizing = true;
-
-    /* stop listening for connections - will
-     * be ignored if no listeners were registered */
-    prte_stop_listening();
 
     /* release the cache */
     PMIX_RELEASE(prte_cache);
@@ -105,7 +100,6 @@ int prte_finalize(void)
         pmix_pointer_array_t *array = prte_node_topologies;
         int i;
         if (array->number_free != array->size) {
-            pmix_mutex_lock(&array->lock);
             array->lowest_free = 0;
             array->number_free = array->size;
             for (i = 0; i < array->size; i++) {
@@ -116,7 +110,6 @@ int prte_finalize(void)
                 }
                 array->addr[i] = NULL;
             }
-            pmix_mutex_unlock(&array->lock);
         }
     }
     PMIX_RELEASE(prte_node_topologies);
@@ -126,7 +119,6 @@ int prte_finalize(void)
         int i;
         prte_node_t *node;
         if (array->number_free != array->size) {
-            pmix_mutex_lock(&array->lock);
             array->lowest_free = 0;
             array->number_free = array->size;
             for (i = 0; i < array->size; i++) {
@@ -141,7 +133,6 @@ int prte_finalize(void)
                 }
                 array->addr[i] = NULL;
             }
-            pmix_mutex_unlock(&array->lock);
         }
     }
     PMIX_RELEASE(prte_node_pool);
@@ -158,9 +149,6 @@ int prte_finalize(void)
     prte_output_close(prte_debug_output);
 
     prte_mca_base_alias_cleanup();
-
-    /* finalize the class/object system */
-    prte_class_finalize();
 
     return PRTE_SUCCESS;
 }

@@ -163,6 +163,15 @@ typedef struct {
 } prte_event_list_item_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_event_list_item_t);
 
+/* define a threadshift macro */
+#define PMIX_THREADSHIFT(x, eb, f, p)                                  \
+    do {                                                               \
+        prte_event_set((eb), &((x)->ev), -1, PRTE_EV_WRITE, (f), (x)); \
+        prte_event_set_priority(&((x)->ev), (p));                      \
+        PMIX_POST_OBJECT((x));                                         \
+        prte_event_active(&((x)->ev), PRTE_EV_WRITE, 1);               \
+    } while (0)
+
 END_C_DECLS
 
 #endif /* PRTE_EVENT_H_ */

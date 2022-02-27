@@ -227,7 +227,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
             /* save the request in the hotel until the
              * data is returned */
             if (PRTE_SUCCESS
-                != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+                != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
                 prte_show_help("help-prted.txt", "noroom", true, req->operation,
                                prte_pmix_server_globals.num_rooms);
                 /* can't just return as that would cause the requestor
@@ -255,7 +255,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     /* has anyone already requested data for this target? If so,
      * then the data is already on its way */
     for (rnum = 0; rnum < prte_pmix_server_globals.reqs.num_rooms; rnum++) {
-        prte_hotel_knock(&prte_pmix_server_globals.reqs, rnum, (void **) &r);
+        pmix_hotel_knock(&prte_pmix_server_globals.reqs, rnum, (void **) &r);
         if (NULL == r) {
             continue;
         }
@@ -263,7 +263,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
             /* save the request in the hotel until the
              * data is returned */
             if (PRTE_SUCCESS
-                != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+                != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
                 prte_show_help("help-prted.txt", "noroom", true, req->operation,
                                prte_pmix_server_globals.num_rooms);
                 /* can't just return as that would cause the requestor
@@ -282,7 +282,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
          * that we don't know about yet. In this case, just
          * record the request and we will process it later */
         if (PRTE_SUCCESS
-            != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+            != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
             prte_show_help("help-prted.txt", "noroom", true, req->operation,
                            prte_pmix_server_globals.num_rooms);
             /* can't just return as that would cause the requestor
@@ -335,7 +335,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     /* track the request so we know the function and cbdata
      * to callback upon completion */
     if (PRTE_SUCCESS
-        != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+        != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
         prte_show_help("help-prted.txt", "noroom", true, req->operation,
                        prte_pmix_server_globals.num_rooms);
         prc = prte_pmix_convert_rc(rc);
@@ -353,28 +353,28 @@ static void dmodex_req(int sd, short args, void *cbdata)
     PMIX_DATA_BUFFER_CREATE(buf);
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, &req->tproc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(prc);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
     /* include the request room number for quick retrieval */
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, &req->room_num, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
     /* add any qualifiers */
     if (PRTE_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, &req->ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(prc);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
     if (0 < req->ninfo) {
         if (PRTE_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, req->info, req->ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(prc);
-            prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+            pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
             PMIX_DATA_BUFFER_RELEASE(buf);
             goto callback;
         }
@@ -385,7 +385,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
         != (rc = prte_rml.send_buffer_nb(&dmn->name, buf, PRTE_RML_TAG_DIRECT_MODEX,
                                          prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         PMIX_RELEASE(buf);
         prc = prte_pmix_convert_rc(rc);
         goto callback;

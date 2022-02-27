@@ -86,7 +86,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_peer_op_t);
         prte_oob_tcp_peer_op_t *pop;                                    \
         pop = PMIX_NEW(prte_oob_tcp_peer_op_t);                         \
         PMIX_XFER_PROCID(&pop->peer, &(p)->name);                       \
-        PRTE_THREADSHIFT(pop, prte_event_base, (cbfunc), PRTE_MSG_PRI); \
+        PMIX_THREADSHIFT(pop, prte_event_base, (cbfunc), PRTE_MSG_PRI); \
     } while (0);
 
 #endif /* _MCA_OOB_TCP_PEER_H_ */

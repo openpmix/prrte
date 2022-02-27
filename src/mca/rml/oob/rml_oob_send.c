@@ -118,7 +118,7 @@ int prte_rml_oob_send_buffer_nb(pmix_proc_t *peer, pmix_data_buffer_t *buffer, p
         xfer->tag = tag;
         xfer->cbdata = cbdata;
         /* setup the event for the send callback */
-        PRTE_THREADSHIFT(xfer, prte_event_base, send_self_exe, PRTE_MSG_PRI);
+        PMIX_THREADSHIFT(xfer, prte_event_base, send_self_exe, PRTE_MSG_PRI);
 
         /* copy the message for the recv */
         rcv = PMIX_NEW(prte_rml_recv_t);

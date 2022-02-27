@@ -215,7 +215,7 @@ void prte_wait_cb_cancel(prte_proc_t *child)
     trk = PMIX_NEW(prte_wait_tracker_t);
     PMIX_RETAIN(child); // protect against race conditions
     trk->child = child;
-    PRTE_THREADSHIFT(trk, prte_event_base, cancel_callback, PRTE_SYS_PRI);
+    PMIX_THREADSHIFT(trk, prte_event_base, cancel_callback, PRTE_SYS_PRI);
 }
 
 /* callback from the event library whenever a SIGCHLD is received */

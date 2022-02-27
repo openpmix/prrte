@@ -224,7 +224,7 @@ static void *progress_engine(pmix_object_t *obj)
         prte_event_loop(trk->ev_base, PRTE_EVLOOP_ONCE);
     }
 
-    return PRTE_THREAD_CANCELLED;
+    return PMIX_THREAD_CANCELLED;
 }
 
 static void stop_progress_engine(prte_progress_tracker_t *trk)

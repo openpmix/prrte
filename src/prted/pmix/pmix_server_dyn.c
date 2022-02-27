@@ -67,7 +67,7 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     }
 
     /* retrieve the request */
-    prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
+    pmix_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
     if (NULL == req) {
         /* we are hosed */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -140,7 +140,7 @@ static void spawn(int sd, short args, void *cbdata)
 
     /* add this request to our tracker hotel */
     PRTE_ADJUST_TIMEOUT(req);
-    rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+    rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
     if (PRTE_SUCCESS != rc) {
         prte_show_help("help-prted.txt", "noroom", true, req->operation,
                        prte_pmix_server_globals.num_rooms);
@@ -159,7 +159,7 @@ static void spawn(int sd, short args, void *cbdata)
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         goto callback;
     }
 
@@ -167,7 +167,7 @@ static void spawn(int sd, short args, void *cbdata)
     rc = prte_job_pack(buf, req->jdata);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
@@ -177,7 +177,7 @@ static void spawn(int sd, short args, void *cbdata)
         != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_PLM,
                                          prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }

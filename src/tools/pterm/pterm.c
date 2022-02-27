@@ -104,7 +104,7 @@ static pmix_proc_t myproc;
 static bool forcibly_die = false;
 static prte_event_t term_handler;
 static int term_pipe[2];
-static pmix_mutex_t prun_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
+static pmix_mutex_t prun_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static prte_event_base_t *myevbase = NULL;
 static bool proxyrun = false;
 static bool verbose = false;

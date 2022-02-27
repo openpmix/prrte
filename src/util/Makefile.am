@@ -56,7 +56,6 @@ headers = \
         ethtool.h \
         error.h \
         keyval_parse.h \
-        listener.h \
         malloc.h \
         name_fns.h \
         nidmap.h \
@@ -83,7 +82,6 @@ libprrteutil_la_SOURCES = \
         ethtool.c \
         error.c \
         keyval_parse.c \
-        listener.c \
         malloc.c \
         name_fns.c \
         nidmap.c \

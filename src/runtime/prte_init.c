@@ -39,7 +39,6 @@
 #include "src/util/error.h"
 #include "src/util/error_strings.h"
 #include "src/util/keyval_parse.h"
-#include "src/util/listener.h"
 #include "src/util/malloc.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_net.h"
@@ -203,9 +202,6 @@ int prte_init_util(prte_proc_type_t flags)
                 __FILE__, __LINE__, ret);
         return ret;
     }
-    /* add network aliases to our list of alias hostnames */
-    pmix_ifgetaliases(&prte_process_info.aliases);
-
     if (PRTE_SUCCESS
         != (ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework,
                                                PRTE_MCA_BASE_OPEN_DEFAULT))) {
@@ -345,6 +341,8 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
         error = "prte_ess_init";
         goto error;
     }
+    /* add network aliases to our list of alias hostnames */
+    pmix_ifgetaliases(&prte_process_info.aliases);
 
     /* initialize the cache */
     prte_cache = PMIX_NEW(pmix_pointer_array_t);
@@ -357,14 +355,6 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
         }
     }
 #endif
-
-    /* start listening - will be ignored if no listeners
-     * were registered */
-    if (PRTE_SUCCESS != (ret = prte_start_listening())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_start_listening";
-        goto error;
-    }
 
     /* All done */
     PMIX_ACQUIRE_THREAD(&prte_init_lock);

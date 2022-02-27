@@ -30,12 +30,12 @@
 #include "src/runtime/prte_locks.h"
 
 /* for everyone */
-pmix_mutex_t prte_finalize_lock = PRTE_MUTEX_STATIC_INIT;
+pmix_mutex_t prte_finalize_lock = PMIX_MUTEX_STATIC_INIT;
 
 /* for HNPs */
-pmix_mutex_t prte_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
-pmix_mutex_t prte_jobs_complete_lock = PRTE_MUTEX_STATIC_INIT;
-pmix_mutex_t prte_quit_lock = PRTE_MUTEX_STATIC_INIT;
+pmix_mutex_t prte_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
+pmix_mutex_t prte_jobs_complete_lock = PMIX_MUTEX_STATIC_INIT;
+pmix_mutex_t prte_quit_lock = PMIX_MUTEX_STATIC_INIT;
 pmix_lock_t prte_init_lock = PMIX_LOCK_STATIC_INIT;
 
 int prte_locks_init(void)

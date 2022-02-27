@@ -484,7 +484,7 @@ void pmix_server_jobid_return(int status, pmix_proc_t *sender,
     }
 
     /* retrieve the request */
-    prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
+    pmix_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
     if (NULL == req) {
         /* we are hosed */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -587,7 +587,7 @@ static void _toolconn(int sd, short args, void *cbdata)
             free(tmp);
             prte_plm_globals.next_jobid++;
         } else {
-            rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, cd, &cd->room_num);
+            rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, cd, &cd->room_num);
             if (PRTE_SUCCESS != rc) {
                 prte_show_help("help-prted.txt", "noroom", true, cd->operation,
                                prte_pmix_server_globals.num_rooms);
@@ -613,7 +613,7 @@ static void _toolconn(int sd, short args, void *cbdata)
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 xrc = prte_pmix_convert_rc(rc);
-                prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs,
+                pmix_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs,
                                                         cd->room_num, (void **) &cd);
                 PMIX_DATA_BUFFER_RELEASE(buf);
                 if (NULL != cd->toolcbfunc) {

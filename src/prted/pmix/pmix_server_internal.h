@@ -40,7 +40,7 @@
 #endif
 #include <pmix_server.h>
 
-#include "src/class/prte_hotel.h"
+#include "src/class/pmix_hotel.h"
 #include "src/event/event-internal.h"
 #include "src/mca/base/base.h"
 #include "src/pmix/pmix-internal.h"
@@ -363,7 +363,7 @@ typedef struct {
     bool initialized;
     int verbosity;
     int output;
-    prte_hotel_t reqs;
+    pmix_hotel_t reqs;
     int num_rooms;
     int timeout;
     bool wait_for_server;

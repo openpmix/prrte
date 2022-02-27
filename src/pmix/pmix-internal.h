@@ -29,6 +29,7 @@
 #include "src/mca/mca.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/error.h"
+#include "src/util/pmix_error.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 
@@ -462,9 +463,6 @@ PRTE_EXPORT pmix_status_t prte_pmix_convert_job_state_to_error(int state);
 PRTE_EXPORT pmix_status_t prte_pmix_convert_proc_state_to_error(int state);
 
 PRTE_EXPORT int prte_pmix_register_cleanup(char *path, bool directory, bool ignore, bool jobscope);
-
-#define PMIX_ERROR_LOG(r) \
-    prte_output(0, "[%s:%d] PMIx Error: %s", __FILE__, __LINE__, PMIx_Error_string((r)))
 
 #ifndef PMIX_DATA_BUFFER_STATIC_INIT
     #define PMIX_DATA_BUFFER_STATIC_INIT    \

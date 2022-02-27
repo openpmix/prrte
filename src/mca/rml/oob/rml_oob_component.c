@@ -99,7 +99,7 @@ static void recv_buffer_nb(pmix_proc_t *peer, prte_rml_tag_t tag, bool persisten
     req->post->persistent = persistent;
     req->post->cbfunc = cbfunc;
     req->post->cbdata = cbdata;
-    PRTE_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
+    PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
 }
 static void recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
 {
@@ -121,7 +121,7 @@ static void recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
     req->cancel = true;
     PMIX_XFER_PROCID(&req->post->peer, peer);
     req->post->tag = tag;
-    PRTE_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
+    PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
 }
 static int oob_ping(const char *uri, const struct timeval *tv)
 {
