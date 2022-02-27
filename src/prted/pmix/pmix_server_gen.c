@@ -582,7 +582,7 @@ static void _toolconn(int sd, short args, void *cbdata)
         /* if we are the HNP, we can directly assign the jobid */
         if (PRTE_PROC_IS_MASTER) {
             /* the new nspace is our base nspace with an "@N" extension */
-            prte_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
+            pmix_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
             PMIX_LOAD_PROCID(&cd->target, tmp, 0);
             free(tmp);
             prte_plm_globals.next_jobid++;

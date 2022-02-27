@@ -275,7 +275,7 @@ static int ssh_component_query(prte_mca_base_module_t **module, int *priority)
     if (!prte_plm_ssh_component.disable_qrsh && NULL != getenv("SGE_ROOT") && NULL != getenv("ARC")
         && NULL != getenv("PE_HOSTFILE") && NULL != getenv("JOB_ID")) {
         /* setup the search path for qrsh */
-        prte_asprintf(&tmp, "%s/bin/%s", getenv("SGE_ROOT"), getenv("ARC"));
+        pmix_asprintf(&tmp, "%s/bin/%s", getenv("SGE_ROOT"), getenv("ARC"));
         /* see if the agent is available */
         if (PRTE_SUCCESS != ssh_launch_agent_lookup("qrsh", tmp)) {
             /* can't be SGE */

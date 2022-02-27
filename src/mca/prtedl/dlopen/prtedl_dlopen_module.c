@@ -28,7 +28,7 @@
 #include "constants.h"
 #include "src/mca/prtedl/prtedl.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "prtedl_dlopen.h"
 
@@ -76,7 +76,7 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
              ext = prte_prtedl_dlopen_component.filename_suffixes[++i]) {
             char *name;
 
-            prte_asprintf(&name, "%s%s", fname, ext);
+            pmix_asprintf(&name, "%s%s", fname, ext);
             if (NULL == name) {
                 return PRTE_ERR_IN_ERRNO;
             }
@@ -183,7 +183,7 @@ static int dlopen_foreachfile(const char *search_path,
 
             /* Make the absolute path name */
             char *abs_name = NULL;
-            prte_asprintf(&abs_name, "%s/%s", dirs[i], de->d_name);
+            pmix_asprintf(&abs_name, "%s/%s", dirs[i], de->d_name);
             if (NULL == abs_name) {
                 ret = PRTE_ERR_IN_ERRNO;
                 goto error;

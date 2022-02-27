@@ -1098,9 +1098,9 @@ void prte_state_base_check_fds(prte_job_t *jdata)
             pmix_argv_free(list);
             list = NULL;
             if (NULL == result) {
-                prte_asprintf(&result, "    %d\t(%s)\t%s\n", i, info, status);
+                pmix_asprintf(&result, "    %d\t(%s)\t%s\n", i, info, status);
             } else {
-                prte_asprintf(&r2, "%s    %d\t(%s)\t%s\n", result, i, info, status);
+                pmix_asprintf(&r2, "%s    %d\t(%s)\t%s\n", result, i, info, status);
                 free(result);
                 result = r2;
             }
@@ -1108,7 +1108,7 @@ void prte_state_base_check_fds(prte_job_t *jdata)
         }
         ++cnt;
     }
-    prte_asprintf(&r2, "%s: %d open file descriptors after job %d completed\n%s",
+    pmix_asprintf(&r2, "%s: %d open file descriptors after job %d completed\n%s",
                   PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cnt, PRTE_LOCAL_JOBID(jdata->nspace), result);
     prte_output(0, "%s", r2);
     free(result);

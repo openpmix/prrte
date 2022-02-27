@@ -130,7 +130,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 
         for (i = 0; i < num_nodes; i++) {
             node = PRTE_NEW(prte_node_t);
-            prte_asprintf(&node->name, "%s%0*d", prefix, dig, i);
+            pmix_asprintf(&node->name, "%s%0*d", prefix, dig, i);
             node->state = PRTE_NODE_STATE_UP;
             node->slots_inuse = 0;
             if (NULL == max_slot_cnt || NULL == max_slot_cnt[n]) {

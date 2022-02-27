@@ -12,7 +12,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,7 +26,7 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 /*
  * Function for comparing two mca_base_component_priority_t structs so
@@ -130,7 +130,7 @@ int prte_mca_base_component_compatible(const prte_mca_base_component_t *aa,
 char *prte_mca_base_component_to_string(const prte_mca_base_component_t *a)
 {
     char *str = NULL;
-    if (0 > prte_asprintf(&str, "%s.%s.%d.%d", a->mca_type_name, a->mca_component_name,
+    if (0 > pmix_asprintf(&str, "%s.%s.%d.%d", a->mca_type_name, a->mca_component_name,
                           a->mca_component_major_version, a->mca_component_minor_version)) {
         return NULL;
     }

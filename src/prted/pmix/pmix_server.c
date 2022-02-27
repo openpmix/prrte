@@ -58,7 +58,7 @@
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
 
@@ -1101,7 +1101,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
                             "%s dmdx:recv request no job - checking into hotel",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         req = PRTE_NEW(pmix_server_req_t);
-        prte_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
+        pmix_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
         req->proxy = *sender;
         memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
         req->info = info;
@@ -1143,7 +1143,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), key);
             /* we don't - wait for awhile */
             req = PRTE_NEW(pmix_server_req_t);
-            prte_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
+            pmix_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
             req->proxy = *sender;
             memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
             req->info = info;
@@ -1178,7 +1178,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
     /* track the request since the call down to the PMIx server
      * is asynchronous */
     req = PRTE_NEW(pmix_server_req_t);
-    prte_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
+    pmix_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
     req->proxy = *sender;
     memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
     req->info = info;

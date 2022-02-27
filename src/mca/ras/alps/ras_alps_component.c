@@ -19,7 +19,7 @@
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -122,7 +122,7 @@ static unsigned long int get_res_id(void)
             return 0;
         }
 
-        ret = prte_asprintf(&apstat_cmd, "%s -r", ras_alps_apstat_cmd);
+        ret = pmix_asprintf(&apstat_cmd, "%s -r", ras_alps_apstat_cmd);
         if (0 > ret) {
             return 0;
         }

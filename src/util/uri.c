@@ -6,7 +6,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,7 +25,7 @@
 
 #include "src/util/output.h"
 #include "src/util/path.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/show_help.h"
 
 #include "src/util/uri.h"
@@ -61,7 +61,7 @@ char *prte_filename_to_uri(const char *filename, const char *hostname)
      * the scheme can either be missing or given as "localhost"
      */
     if (NULL == hostname) {
-        prte_asprintf(&uri, "file://%s", filename);
+        pmix_asprintf(&uri, "file://%s", filename);
         return uri;
     }
 
@@ -98,7 +98,7 @@ char *prte_filename_to_uri(const char *filename, const char *hostname)
      * ensure it was absolute, so the required separator should
      * already be present
      */
-    prte_asprintf(&uri, "file://%s%s", hostname, fn);
+    pmix_asprintf(&uri, "file://%s%s", hostname, fn);
     free(fn);
     return uri;
 }

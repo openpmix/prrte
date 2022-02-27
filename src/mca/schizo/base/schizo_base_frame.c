@@ -93,7 +93,7 @@ void prte_schizo_base_expose(char *param, char *prefix)
     value = strchr(param, '=');
     *value = '\0';
     ++value;
-    prte_asprintf(&pm, "%s_%s", prefix, param);
+    pmix_asprintf(&pm, "%s_%s", prefix, param);
     setenv(pm, value, true);
     free(pm);
     --value;
@@ -186,7 +186,7 @@ bool prte_schizo_base_check_directives(char *directive,
                     m = strtoul(args[1], &v, 10);
                     if (NULL != v && 0 < strlen(v)) {
                         /* the first entry had to be a pure number */
-                        prte_asprintf(&v, "ppr:[Number of procs/object]:%s", args[2]);
+                        pmix_asprintf(&v, "ppr:[Number of procs/object]:%s", args[2]);
                         prte_show_help("help-prte-rmaps-base.txt",
                                        "unrecognized-qualifier", true,
                                        directive, dir, v);
@@ -203,7 +203,7 @@ bool prte_schizo_base_check_directives(char *directive,
                     }
                     if (!found) {
                         v = pmix_argv_join(pproptions, ',');
-                        prte_asprintf(&q, "ppr:%s:[%s]", args[1], v);
+                        pmix_asprintf(&q, "ppr:%s:[%s]", args[1], v);
                         free(v);
                         prte_show_help("help-prte-rmaps-base.txt",
                                        "unrecognized-qualifier", true,

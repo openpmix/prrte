@@ -21,7 +21,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -51,7 +51,7 @@
 #include "src/runtime/runtime.h"
 #include "src/threads/mutex.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/prte_environ.h"
 #include "src/util/string_copy.h"
@@ -212,7 +212,7 @@ bool prte_output_init(void)
 
     /* Set some defaults */
 
-    prte_asprintf(&output_prefix, "prte-output-pid%d-", getpid());
+    pmix_asprintf(&output_prefix, "prte-output-pid%d-", getpid());
     output_dir = strdup(prte_tmp_directory());
 
     /* Open the default verbose stream */
@@ -223,7 +223,7 @@ bool prte_output_init(void)
 
 void prte_output_setup_stream_prefix(void)
 {
-    prte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prte_process_info.nodename, getpid());
+    pmix_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prte_process_info.nodename, getpid());
 }
 
 /*
@@ -281,7 +281,7 @@ void prte_output_reopen_all(void)
         free(verbose.lds_prefix);
         verbose.lds_prefix = NULL;
     }
-    prte_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prte_process_info.nodename, getpid());
+    pmix_asprintf(&verbose.lds_prefix, "[%s:%05d] ", prte_process_info.nodename, getpid());
 #if 0
     int i;
     prte_output_stream_t lds;
@@ -839,7 +839,7 @@ static int make_string(char **no_newline_string, output_desc_t *ldi, const char 
 
     /* Make the formatted string */
 
-    prte_vasprintf(no_newline_string, format, arglist);
+    pmix_vasprintf(no_newline_string, format, arglist);
     total_len = len = strlen(*no_newline_string);
     if ('\n' != (*no_newline_string)[len - 1]) {
         want_newline = true;

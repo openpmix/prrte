@@ -54,7 +54,7 @@
 #include "src/util/keyval_parse.h"
 #include "src/util/os_path.h"
 #include "src/util/path.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/prte_environ.h"
 #include "src/util/show_help.h"
 
@@ -336,7 +336,7 @@ static int data_init(const char *appname)
     char *datafile;
 
     /* now load the data */
-    prte_asprintf(&datafile, "%s%s%s-wrapper-data.txt", prte_install_dirs.prtedatadir,
+    pmix_asprintf(&datafile, "%s%s%s-wrapper-data.txt", prte_install_dirs.prtedatadir,
                   PRTE_PATH_SEP, appname);
     if (NULL == datafile)
         return PRTE_ERR_TEMP_OUT_OF_RESOURCE;
@@ -388,7 +388,7 @@ static void load_env_data(const char *project, const char *flag, char **data)
     if (NULL == project || NULL == flag)
         return;
 
-    prte_asprintf(&envname, "%s_%s", project, flag);
+    pmix_asprintf(&envname, "%s_%s", project, flag);
     if (NULL == (envvalue = getenv(envname))) {
         free(envname);
         return;
@@ -408,7 +408,7 @@ static void load_env_data_argv(const char *project, const char *flag, char ***da
     if (NULL == project || NULL == flag)
         return;
 
-    prte_asprintf(&envname, "%s_%s", project, flag);
+    pmix_asprintf(&envname, "%s_%s", project, flag);
     if (NULL == (envvalue = getenv(envname))) {
         free(envname);
         return;

@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -315,19 +315,19 @@
 
 #    if !defined(HAVE_ASPRINTF) || !defined(HAVE_SNPRINTF) || !defined(HAVE_VASPRINTF) \
         || !defined(HAVE_VSNPRINTF)
-#        include "src/util/printf.h"
+#        include "src/util/pmix_printf.h"
 #    endif
 
 #    ifndef HAVE_ASPRINTF
-#        define asprintf prte_asprintf
+#        define asprintf pmix_asprintf
 #    endif
 
 #    ifndef HAVE_SNPRINTF
-#        define snprintf prte_snprintf
+#        define snprintf pmix_snprintf
 #    endif
 
 #    ifndef HAVE_VASPRINTF
-#        define vasprintf prte_vasprintf
+#        define vasprintf pmix_vasprintf
 #    endif
 
 #    ifndef HAVE_VSNPRINTF

@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,7 +44,7 @@
 #include "src/mca/mca.h"
 #include "src/util/name_fns.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "constants.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -246,7 +246,7 @@ static void filem_base_process_get_remote_path_cmd(pmix_proc_t *sender, pmix_dat
         if (NULL == getcwd(cwd, sizeof(cwd))) {
             return;
         }
-        prte_asprintf(&tmp_name, "%s/%s", cwd, filename);
+        pmix_asprintf(&tmp_name, "%s/%s", cwd, filename);
     } else {
         tmp_name = strdup(filename);
     }

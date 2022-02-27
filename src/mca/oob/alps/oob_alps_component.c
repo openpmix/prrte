@@ -164,7 +164,7 @@ static char *component_get_addr(void)
      * eventually be able to support connect/accept using aprun.
      */
 
-    prte_asprintf(&cptr, "gni://%s:%d", prte_process_info.nodename, getpid());
+    pmix_asprintf(&cptr, "gni://%s:%d", prte_process_info.nodename, getpid());
 
     prte_output_verbose(10, prte_oob_base_framework.framework_output,
                         "%s oob:alps: component_get_addr invoked - %s",

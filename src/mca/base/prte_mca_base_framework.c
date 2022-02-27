@@ -8,7 +8,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,7 +20,7 @@
 
 #include "src/include/constants.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "prte_mca_base_framework.h"
 #include "prte_mca_base_var.h"
@@ -87,7 +87,7 @@ int prte_mca_base_framework_register(struct prte_mca_base_framework_t *framework
             return ret;
         }
 
-        prte_asprintf(&desc,
+        pmix_asprintf(&desc,
                       "Default selection set of components for the %s framework (<none>"
                       " means use all components that can be found)",
                       framework->framework_name);
@@ -102,7 +102,7 @@ int prte_mca_base_framework_register(struct prte_mca_base_framework_t *framework
         }
 
         /* register a verbosity variable for this framework */
-        ret = prte_asprintf(&desc, "Verbosity level for the %s framework (default: 0)",
+        ret = pmix_asprintf(&desc, "Verbosity level for the %s framework (default: 0)",
                             framework->framework_name);
         if (0 > ret) {
             return PRTE_ERR_OUT_OF_RESOURCE;

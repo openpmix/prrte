@@ -79,7 +79,7 @@
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/prte_environ.h"
 #include "src/util/prte_getcwd.h"
 #include "src/util/show_help.h"
@@ -734,7 +734,7 @@ int main(int argc, char *argv[])
             outpipe = strtol(opt->values[0], &leftover, 10);
             if (NULL == leftover || 0 == strlen(leftover)) {
                 /* stitch together the var names and URI */
-                prte_asprintf(&leftover, "%lu", (unsigned long) getpid());
+                pmix_asprintf(&leftover, "%lu", (unsigned long) getpid());
                 /* output to the pipe */
                 rc = prte_fd_write(outpipe, strlen(leftover) + 1, leftover);
                 free(leftover);

@@ -17,7 +17,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -142,7 +142,7 @@ static int parser_ini(char **val_if_found, FILE *fp, const char *var_name)
             return PRTE_ERR_FILE_OPEN_FAILURE;
         }
         /* Success! */
-        prte_asprintf(val_if_found, "%s/appinfo", cpq);
+        pmix_asprintf(val_if_found, "%s/appinfo", cpq);
         if (NULL == val_if_found) {
             free(alps_config_str);
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
@@ -209,7 +209,7 @@ static int parser_separated_columns(char **val_if_found, FILE *fp, const char *v
             return PRTE_ERR_FILE_OPEN_FAILURE;
         }
         /* Success! */
-        prte_asprintf(val_if_found, "%s/appinfo", cpq);
+        pmix_asprintf(val_if_found, "%s/appinfo", cpq);
         if (NULL == val_if_found) {
             free(alps_config_str);
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
@@ -505,7 +505,7 @@ static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, u
             prte_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "ras:alps:read_appinfo: got NID %d", apSlots[ix].nid);
 
-            prte_asprintf(&hostname, "nid%05d", apSlots[ix].nid);
+            pmix_asprintf(&hostname, "nid%05d", apSlots[ix].nid);
             if (NULL == hostname) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 return PRTE_ERR_OUT_OF_RESOURCE;
@@ -554,7 +554,7 @@ static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, u
             prte_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "ras:alps:read_appinfo(modern): processing NID %d with %d slots",
                                 apNodes[ix].nid, apNodes[ix].numPEs);
-            prte_asprintf(&hostname, "nid%05d", apNodes[ix].nid);
+            pmix_asprintf(&hostname, "nid%05d", apNodes[ix].nid);
             if (NULL == hostname) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 return PRTE_ERR_OUT_OF_RESOURCE;

@@ -238,7 +238,7 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
 
     /* create the caddy */
     req = PRTE_NEW(pmix_server_req_t);
-    prte_asprintf(&req->operation, "PUBLISH: %s:%d", __FILE__, __LINE__);
+    pmix_asprintf(&req->operation, "PUBLISH: %s:%d", __FILE__, __LINE__);
     req->opcbfunc = cbfunc;
     req->cbdata = cbdata;
 
@@ -306,7 +306,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
 
     /* create the caddy */
     req = PRTE_NEW(pmix_server_req_t);
-    prte_asprintf(&req->operation, "LOOKUP: %s:%d", __FILE__, __LINE__);
+    pmix_asprintf(&req->operation, "LOOKUP: %s:%d", __FILE__, __LINE__);
     req->lkcbfunc = cbfunc;
     req->cbdata = cbdata;
 
@@ -388,7 +388,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
 
     /* create the caddy */
     req = PRTE_NEW(pmix_server_req_t);
-    prte_asprintf(&req->operation, "UNPUBLISH: %s:%d", __FILE__, __LINE__);
+    pmix_asprintf(&req->operation, "UNPUBLISH: %s:%d", __FILE__, __LINE__);
     req->opcbfunc = cbfunc;
     req->cbdata = cbdata;
 

@@ -11,7 +11,7 @@
 #include "mpi.h"
 #include "opal/mca/pmix/pmix.h"
 #include "opal/util/argv.h"
-#include "opal/util/printf.h"
+#include "opal/util/pmix_printf.h"
 #include "prte/runtime/runtime.h"
 #include "prte/util/proc_info.h"
 #include "prte/util/name_fns.h"
