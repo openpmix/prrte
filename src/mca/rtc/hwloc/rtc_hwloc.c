@@ -4,7 +4,7 @@
  * Copyright (c) 2017      Inria.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,7 +41,7 @@
 #    include "hwloc/shmem.h"
 #endif
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/fd.h"
 #include "src/util/path.h"
 #include "src/util/prte_environ.h"

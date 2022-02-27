@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +40,7 @@
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/attr.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
@@ -110,7 +110,7 @@ void prte_setup_hostname(void)
      * the names exchanged in the modex match the names found locally
      */
     if (NULL != prte_strip_prefix && !prte_net_isaddr(hostname)) {
-        prefixes = prte_argv_split(prte_strip_prefix, ',');
+        prefixes = pmix_argv_split(prte_strip_prefix, ',');
         match = false;
         for (i = 0; NULL != prefixes[i]; i++) {
             if (0 == strncmp(hostname, prefixes[i], strlen(prefixes[i]))) {
@@ -127,7 +127,7 @@ void prte_setup_hostname(void)
                     prte_process_info.nodename = strdup(&hostname[idx]);
                 }
                 /* add this to our list of aliases */
-                prte_argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
+                pmix_argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
                 match = true;
                 break;
             }
@@ -136,7 +136,7 @@ void prte_setup_hostname(void)
         if (!match) {
             prte_process_info.nodename = strdup(hostname);
         }
-        prte_argv_free(prefixes);
+        pmix_argv_free(prefixes);
     } else {
         prte_process_info.nodename = strdup(hostname);
     }
@@ -147,11 +147,11 @@ void prte_setup_hostname(void)
         if (prte_keep_fqdn_hostnames) {
             /* retain the non-fqdn name as an alias */
             *ptr = '\0';
-            prte_argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
+            pmix_argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
             *ptr = '.';
         } else {
             /* add the fqdn name as an alias */
-            prte_argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
+            pmix_argv_append_unique_nosize(&prte_process_info.aliases, prte_process_info.nodename);
             /* retain the non-fqdn name as the node's name */
             *ptr = '\0';
         }
@@ -179,7 +179,7 @@ bool prte_check_host_is_local(const char *name)
     if (!prte_do_not_resolve) {
         if (prte_ifislocal(name)) {
             /* add to our aliases */
-            prte_argv_append_nosize(&prte_process_info.aliases, name);
+            pmix_argv_append_nosize(&prte_process_info.aliases, name);
             return true;
         }
     }
@@ -297,7 +297,7 @@ int prte_proc_info_finalize(void)
 
     prte_process_info.proc_type = PRTE_PROC_TYPE_NONE;
 
-    prte_argv_free(prte_process_info.aliases);
+    pmix_argv_free(prte_process_info.aliases);
 
     init = false;
     return PRTE_SUCCESS;

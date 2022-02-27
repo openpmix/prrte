@@ -70,7 +70,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/mutex.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/fd.h"
@@ -316,7 +316,7 @@ int prun(int argc, char *argv[])
     prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "prun";
     pargc = argc;
-    pargv = prte_argv_copy_strip(argv);  // strip any quoted arguments
+    pargv = pmix_argv_copy_strip(argv);  // strip any quoted arguments
     gethostname(hostname, sizeof(hostname));
 
     /* because we have to use the schizo framework and init our hostname
@@ -623,9 +623,9 @@ int prun(int argc, char *argv[])
     opt = prte_cmd_line_get_param(&results, "display");
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n++) {
-            targv = prte_argv_split(opt->values[n], ',');
+            targv = pmix_argv_split(opt->values[n], ',');
 
-            for (int idx = 0; idx < prte_argv_count(targv); idx++) {
+            for (int idx = 0; idx < pmix_argv_count(targv); idx++) {
                 if (0 == strncasecmp(targv[idx], "allocation", strlen(targv[idx]))) {
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYALLOC", PMIX_STRING);
                 }
@@ -642,7 +642,7 @@ int prun(int argc, char *argv[])
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":DISPLAYTOPO", PMIX_STRING);
                 }
             }
-            prte_argv_free(targv);
+            pmix_argv_free(targv);
         }
     }
 
@@ -652,7 +652,7 @@ int prun(int argc, char *argv[])
     opt = prte_cmd_line_get_param(&results, "output");
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n++) {
-            targv = prte_argv_split(opt->values[n], ',');
+            targv = pmix_argv_split(opt->values[n], ',');
 
             for (int idx = 0; NULL != targv[idx]; idx++) {
                 /* check for qualifiers */
@@ -661,7 +661,7 @@ int prun(int argc, char *argv[])
                     *cptr = '\0';
                     ++cptr;
                     /* could be multiple qualifiers, so separate them */
-                    options = prte_argv_split(cptr, ',');
+                    options = pmix_argv_split(cptr, ',');
                     for (int m=0; NULL != options[m]; m++) {
                         if (0 == strcasecmp(options[m], "nocopy")) {
                             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
@@ -673,7 +673,7 @@ int prun(int argc, char *argv[])
     #endif
                         }
                     }
-                    prte_argv_free(options);
+                    pmix_argv_free(options);
                 }
                 if (0 == strlen(targv[idx])) {
                     // only qualifiers were given
@@ -751,7 +751,7 @@ int prun(int argc, char *argv[])
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
                 }
             }
-            prte_argv_free(targv);
+            pmix_argv_free(targv);
         }
     }
     if (NULL != outdir) {
@@ -920,8 +920,8 @@ int prun(int argc, char *argv[])
     PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t)
     {
         papps[n].cmd = strdup(app->app.cmd);
-        papps[n].argv = prte_argv_copy(app->app.argv);
-        papps[n].env = prte_argv_copy(app->app.env);
+        papps[n].argv = pmix_argv_copy(app->app.argv);
+        papps[n].env = pmix_argv_copy(app->app.env);
         papps[n].cwd = strdup(app->app.cwd);
         papps[n].maxprocs = app->app.maxprocs;
         PMIX_INFO_LIST_CONVERT(ret, app->info, &darray);

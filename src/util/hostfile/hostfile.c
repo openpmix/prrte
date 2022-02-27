@@ -37,7 +37,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
@@ -126,9 +126,9 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         } else {
             value = prte_util_hostfile_value.sval;
         }
-        argv = prte_argv_split(value, '@');
+        argv = pmix_argv_split(value, '@');
 
-        cnt = prte_argv_count(argv);
+        cnt = pmix_argv_count(argv);
         if (1 == cnt) {
             node_name = strdup(argv[0]);
         } else if (2 == cnt) {
@@ -137,7 +137,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         } else {
             prte_output(0, "WARNING: Unhandled user@host-combination\n"); /* XXX */
         }
-        prte_argv_free(argv);
+        pmix_argv_free(argv);
 
         // Strip off the FQDN if present, ignore IP addresses
         if (!prte_net_isaddr(node_name)) {
@@ -188,18 +188,18 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
                 }
                 if (NULL != alias && 0 != strcmp(alias, node->name)) {
                     // new node object, so alias must be unique
-                    prte_argv_append_nosize(&node->aliases, alias);
+                    pmix_argv_append_nosize(&node->aliases, alias);
                 }
                 prte_list_append(exclude, &node->super);
             } else {
                 /* the node name may not match the prior entry, so ensure we
                  * keep it if necessary */
                 if (0 != strcmp(node_name, node->name)) {
-                    prte_argv_append_unique_nosize(&node->aliases, node_name);
+                    pmix_argv_append_unique_nosize(&node->aliases, node_name);
                 }
                 free(node_name);
                 if (NULL != alias && 0 != strcmp(alias, node->name)) {
-                    prte_argv_append_unique_nosize(&node->aliases, alias);
+                    pmix_argv_append_unique_nosize(&node->aliases, alias);
                 }
             }
             if (NULL != alias) {
@@ -233,7 +233,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
             }
             if (NULL != alias && 0 != strcmp(alias, node->name)) {
                 // new node object, so alias must be unique
-                prte_argv_append_nosize(&node->aliases, alias);
+                pmix_argv_append_nosize(&node->aliases, alias);
             }
             prte_list_append(updates, &node->super);
         } else {
@@ -243,11 +243,11 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
             /* the node name may not match the prior entry, so ensure we
              * keep it if necessary */
             if (0 != strcmp(node_name, node->name)) {
-                prte_argv_append_unique_nosize(&node->aliases, node_name);
+                pmix_argv_append_unique_nosize(&node->aliases, node_name);
             }
             free(node_name);
             if (NULL != alias && 0 != strcmp(alias, node->name)) {
-                prte_argv_append_unique_nosize(&node->aliases, alias);
+                pmix_argv_append_unique_nosize(&node->aliases, alias);
             }
         }
     } else if (PRTE_HOSTFILE_RELATIVE == token) {
@@ -272,7 +272,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         }
         if (NULL != alias && 0 != strcmp(alias, node->name)) {
             // new node object, so alias must be unique
-            prte_argv_append_nosize(&node->aliases, alias);
+            pmix_argv_append_nosize(&node->aliases, alias);
             free(alias);
         }
         prte_list_append(updates, &node->super);
@@ -297,9 +297,9 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
             value = prte_util_hostfile_value.sval;
         }
 
-        argv = prte_argv_split(value, '@');
+        argv = pmix_argv_split(value, '@');
 
-        cnt = prte_argv_count(argv);
+        cnt = pmix_argv_count(argv);
         if (1 == cnt) {
             node_name = strdup(argv[0]);
         } else if (2 == cnt) {
@@ -308,7 +308,7 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
         } else {
             prte_output(0, "WARNING: Unhandled user@host-combination\n"); /* XXX */
         }
-        prte_argv_free(argv);
+        pmix_argv_free(argv);
 
         // Strip off the FQDN if present, ignore IP addresses
         if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(node_name)) {
@@ -336,11 +336,11 @@ static int hostfile_parse_line(int token, prte_list_t *updates, prte_list_t *exc
             /* the node name may not match the prior entry, so ensure we
              * keep it if necessary */
             if (0 != strcmp(node_name, node->name)) {
-                prte_argv_append_unique_nosize(&node->aliases, node_name);
+                pmix_argv_append_unique_nosize(&node->aliases, node_name);
             }
         }
         if (NULL != alias) {
-            prte_argv_append_unique_nosize(&node->aliases, alias);
+            pmix_argv_append_unique_nosize(&node->aliases, alias);
             free(alias);
             node->rawname = strdup(node_name);
         }
@@ -614,11 +614,11 @@ int prte_util_add_hostfile_nodes(prte_list_t *nodes, char *hostfile)
         }
         if (found) {
             /* add this node name as alias */
-            prte_argv_append_unique_nosize(&node->aliases, nd->name);
+            pmix_argv_append_unique_nosize(&node->aliases, nd->name);
             /* ensure all other aliases are also transferred */
             if (NULL != nd->aliases) {
                 for (i=0; NULL != nd->aliases[i]; i++) {
-                    prte_argv_append_unique_nosize(&node->aliases, nd->aliases[i]);
+                    pmix_argv_append_unique_nosize(&node->aliases, nd->aliases[i]);
                 }
             }
            PRTE_RELEASE(item);

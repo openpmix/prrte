@@ -3,7 +3,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,7 +22,7 @@
 #include "src/mca/prteif/base/static-components.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
@@ -119,7 +119,7 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
              */
             if (PRTE_ERR_NETWORK_NOT_PARSEABLE == rc) {
                 prte_show_help("help-oob-tcp.txt", "not-parseable", true);
-                prte_argv_free(interfaces);
+                pmix_argv_free(interfaces);
                 return PRTE_ERR_BAD_PARAM;
             }
             /* if we are including, then remove this if not present */
@@ -171,7 +171,7 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
 
     /* cleanup */
     if (NULL != interfaces) {
-        prte_argv_free(interfaces);
+        pmix_argv_free(interfaces);
     }
 
     if (0 == prte_list_get_size(&prte_if_list)) {
@@ -240,7 +240,7 @@ static char **split_and_resolve(const char *orig_str,
         return NULL;
     }
 
-    argv = prte_argv_split(orig_str, ',');
+    argv = pmix_argv_split(orig_str, ',');
     interfaces = NULL;
     for (i = 0; NULL != argv[i]; ++i) {
         if (isalpha(argv[i][0])) {
@@ -310,6 +310,6 @@ static char **split_and_resolve(const char *orig_str,
         }
     }
 
-    prte_argv_free(argv);
+    pmix_argv_free(argv);
     return interfaces;
 }

@@ -17,7 +17,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,7 +38,7 @@
 #include "src/mca/rml/rml.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
@@ -130,7 +130,7 @@ int prte_show_help_init(void)
 
     PRTE_CONSTRUCT(&abd_tuples, prte_list_t);
 
-    prte_argv_append_nosize(&search_dirs, prte_install_dirs.prtedatadir);
+    pmix_argv_append_nosize(&search_dirs, prte_install_dirs.prtedatadir);
     show_help_initialized = true;
     return PRTE_SUCCESS;
 }
@@ -158,7 +158,7 @@ void prte_show_help_finalize(void)
 
     /* destruct the search list */
     if (NULL != search_dirs) {
-        prte_argv_free(search_dirs);
+        pmix_argv_free(search_dirs);
         search_dirs = NULL;
     }
     show_help_initialized = false;
@@ -177,7 +177,7 @@ static int array2string(char **outstring, int want_error_header, char **lines)
     /* See how much space we need */
 
     len = want_error_header ? 2 * strlen(dash_line) : 0;
-    count = prte_argv_count(lines);
+    count = pmix_argv_count(lines);
     for (i = 0; i < count; ++i) {
         if (NULL == lines[i]) {
             break;
@@ -334,8 +334,8 @@ static int read_topic(char ***array)
         token = prte_show_help_yylex();
         switch (token) {
         case PRTE_SHOW_HELP_PARSE_MESSAGE:
-            /* prte_argv_append_nosize does strdup(prte_show_help_yytext) */
-            rc = prte_argv_append_nosize(array, prte_show_help_yytext);
+            /* pmix_argv_append_nosize does strdup(prte_show_help_yytext) */
+            rc = pmix_argv_append_nosize(array, prte_show_help_yytext);
             if (rc != PRTE_SUCCESS) {
                 return rc;
             }
@@ -366,7 +366,7 @@ static int load_array(char ***array, const char *filename, const char *topic)
     prte_show_help_yylex_destroy();
 
     if (PRTE_SUCCESS != ret) {
-        prte_argv_free(*array);
+        pmix_argv_free(*array);
     }
 
     return ret;
@@ -392,7 +392,7 @@ char *prte_show_help_vstring(const char *filename, const char *topic, int want_e
         free(single_string);
     }
 
-    prte_argv_free(array);
+    pmix_argv_free(array);
     return (PRTE_SUCCESS == rc) ? output : NULL;
 }
 
@@ -446,7 +446,7 @@ int prte_show_help(const char *filename, const char *topic, int want_error_heade
 
 int prte_show_help_add_dir(const char *directory)
 {
-    prte_argv_append_nosize(&search_dirs, directory);
+    pmix_argv_append_nosize(&search_dirs, directory);
     return PRTE_SUCCESS;
 }
 

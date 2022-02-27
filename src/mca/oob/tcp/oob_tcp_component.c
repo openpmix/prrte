@@ -21,7 +21,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -62,7 +62,7 @@
 #include "src/include/prte_socket_errno.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/runtime/prte_progress_threads.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/error.h"
 #include "src/util/net.h"
 #include "src/util/output.h"
@@ -167,22 +167,22 @@ static int tcp_component_close(void)
     PRTE_LIST_DESTRUCT(&prte_oob_tcp_component.peers);
 
     if (NULL != prte_oob_tcp_component.ipv4conns) {
-        prte_argv_free(prte_oob_tcp_component.ipv4conns);
+        pmix_argv_free(prte_oob_tcp_component.ipv4conns);
     }
     if (NULL != prte_oob_tcp_component.ipv4ports) {
-        prte_argv_free(prte_oob_tcp_component.ipv4ports);
+        pmix_argv_free(prte_oob_tcp_component.ipv4ports);
     }
 
 #if PRTE_ENABLE_IPV6
     if (NULL != prte_oob_tcp_component.ipv6conns) {
-        prte_argv_free(prte_oob_tcp_component.ipv6conns);
+        pmix_argv_free(prte_oob_tcp_component.ipv6conns);
     }
     if (NULL != prte_oob_tcp_component.ipv6ports) {
-        prte_argv_free(prte_oob_tcp_component.ipv6ports);
+        pmix_argv_free(prte_oob_tcp_component.ipv6ports);
     }
 #endif
     if (NULL != prte_oob_tcp_component.if_masks) {
-        prte_argv_free(prte_oob_tcp_component.if_masks);
+        pmix_argv_free(prte_oob_tcp_component.if_masks);
     }
     return PRTE_SUCCESS;
 }
@@ -241,7 +241,7 @@ static int tcp_component_register(void)
     if (NULL != static_port_string) {
         prte_util_parse_range_options(static_port_string, &prte_oob_tcp_component.tcp_static_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp_static_ports[0], "-1")) {
-            prte_argv_free(prte_oob_tcp_component.tcp_static_ports);
+            pmix_argv_free(prte_oob_tcp_component.tcp_static_ports);
             prte_oob_tcp_component.tcp_static_ports = NULL;
         }
     } else {
@@ -262,7 +262,7 @@ static int tcp_component_register(void)
         prte_util_parse_range_options(static_port_string6,
                                       &prte_oob_tcp_component.tcp6_static_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp6_static_ports[0], "-1")) {
-            prte_argv_free(prte_oob_tcp_component.tcp6_static_ports);
+            pmix_argv_free(prte_oob_tcp_component.tcp6_static_ports);
             prte_oob_tcp_component.tcp6_static_ports = NULL;
         }
     } else {
@@ -285,14 +285,14 @@ static int tcp_component_register(void)
     if (NULL != dyn_port_string) {
         /* can't have both static and dynamic ports! */
         if (prte_static_ports) {
-            char *err = prte_argv_join(prte_oob_tcp_component.tcp_static_ports, ',');
+            char *err = pmix_argv_join(prte_oob_tcp_component.tcp_static_ports, ',');
             prte_show_help("help-oob-tcp.txt", "static-and-dynamic", true, err, dyn_port_string);
             free(err);
             return PRTE_ERROR;
         }
         prte_util_parse_range_options(dyn_port_string, &prte_oob_tcp_component.tcp_dyn_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp_dyn_ports[0], "-1")) {
-            prte_argv_free(prte_oob_tcp_component.tcp_dyn_ports);
+            pmix_argv_free(prte_oob_tcp_component.tcp_dyn_ports);
             prte_oob_tcp_component.tcp_dyn_ports = NULL;
         }
     } else {
@@ -312,10 +312,10 @@ static int tcp_component_register(void)
         if (prte_static_ports) {
             char *err4 = NULL, *err6 = NULL;
             if (NULL != prte_oob_tcp_component.tcp_static_ports) {
-                err4 = prte_argv_join(prte_oob_tcp_component.tcp_static_ports, ',');
+                err4 = pmix_argv_join(prte_oob_tcp_component.tcp_static_ports, ',');
             }
             if (NULL != prte_oob_tcp_component.tcp6_static_ports) {
-                err6 = prte_argv_join(prte_oob_tcp_component.tcp6_static_ports, ',');
+                err6 = pmix_argv_join(prte_oob_tcp_component.tcp6_static_ports, ',');
             }
             prte_show_help("help-oob-tcp.txt", "static-and-dynamic-ipv6", true,
                            (NULL == err4) ? "N/A" : err4, (NULL == err6) ? "N/A" : err6,
@@ -330,7 +330,7 @@ static int tcp_component_register(void)
         }
         prte_util_parse_range_options(dyn_port_string6, &prte_oob_tcp_component.tcp6_dyn_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp6_dyn_ports[0], "-1")) {
-            prte_argv_free(prte_oob_tcp_component.tcp6_dyn_ports);
+            pmix_argv_free(prte_oob_tcp_component.tcp6_dyn_ports);
             prte_oob_tcp_component.tcp6_dyn_ports = NULL;
         }
     } else {
@@ -436,7 +436,7 @@ static int component_available(void)
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 prte_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-            prte_argv_append_nosize(&prte_oob_tcp_component.ipv4conns,
+            pmix_argv_append_nosize(&prte_oob_tcp_component.ipv4conns,
                                     prte_net_get_hostname((struct sockaddr *) &my_ss));
         } else if (AF_INET6 == my_ss.ss_family) {
 #if PRTE_ENABLE_IPV6
@@ -445,7 +445,7 @@ static int component_available(void)
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 prte_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-            prte_argv_append_nosize(&prte_oob_tcp_component.ipv6conns,
+            pmix_argv_append_nosize(&prte_oob_tcp_component.ipv6conns,
                                     prte_net_get_hostname((struct sockaddr *) &my_ss));
 #endif // PRTE_ENABLE_IPV6
         } else {
@@ -477,13 +477,13 @@ static int component_available(void)
         copied_interface->ifmtu = selected_interface->ifmtu;
         /* Add the if_mask to the list */
         sprintf(string, "%d", selected_interface->if_mask);
-        prte_argv_append_nosize(&prte_oob_tcp_component.if_masks, string);
+        pmix_argv_append_nosize(&prte_oob_tcp_component.if_masks, string);
         prte_list_append(&prte_oob_tcp_component.local_ifs, &(copied_interface->super));
     }
 
-    if (0 == prte_argv_count(prte_oob_tcp_component.ipv4conns)
+    if (0 == pmix_argv_count(prte_oob_tcp_component.ipv4conns)
 #if PRTE_ENABLE_IPV6
-        && 0 == prte_argv_count(prte_oob_tcp_component.ipv6conns)
+        && 0 == pmix_argv_count(prte_oob_tcp_component.ipv6conns)
 #endif
     ) {
         return PRTE_ERR_NOT_AVAILABLE;
@@ -567,9 +567,9 @@ static char *component_get_addr(void)
     char *cptr = NULL, *tmp, *tp, *tm;
 
     if (!prte_oob_tcp_component.disable_ipv4_family && NULL != prte_oob_tcp_component.ipv4conns) {
-        tmp = prte_argv_join(prte_oob_tcp_component.ipv4conns, ',');
-        tp = prte_argv_join(prte_oob_tcp_component.ipv4ports, ',');
-        tm = prte_argv_join(prte_oob_tcp_component.if_masks, ',');
+        tmp = pmix_argv_join(prte_oob_tcp_component.ipv4conns, ',');
+        tp = pmix_argv_join(prte_oob_tcp_component.ipv4ports, ',');
+        tm = pmix_argv_join(prte_oob_tcp_component.if_masks, ',');
         prte_asprintf(&cptr, "tcp://%s:%s:%s", tmp, tp, tm);
         free(tmp);
         free(tp);
@@ -590,9 +590,9 @@ static char *component_get_addr(void)
          * an implementation may use an optional version flag to indicate such a format
          * explicitly rather than rely on heuristic determination.
          */
-        tmp = prte_argv_join(prte_oob_tcp_component.ipv6conns, ',');
-        tp = prte_argv_join(prte_oob_tcp_component.ipv6ports, ',');
-        tm = prte_argv_join(prte_oob_tcp_component.if_masks, ',');
+        tmp = pmix_argv_join(prte_oob_tcp_component.ipv6conns, ',');
+        tp = pmix_argv_join(prte_oob_tcp_component.ipv6ports, ',');
+        tm = pmix_argv_join(prte_oob_tcp_component.if_masks, ',');
         if (NULL == cptr) {
             /* no ipv4 stuff */
             prte_asprintf(&cptr, "tcp6://[%s]:%s:%s", tmp, tp, tm);
@@ -708,7 +708,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
         }
         *masks_string = '\0';
         masks_string++;
-        masks = prte_argv_split(masks_string, ',');
+        masks = pmix_argv_split(masks_string, ',');
 
         /* separate the ports from the network addrs */
         ports = strrchr(tcpuri, ':');
@@ -736,7 +736,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
             }
         }
 #endif // PRTE_ENABLE_IPV6
-        addrs = prte_argv_split(hptr, ',');
+        addrs = pmix_argv_split(hptr, ',');
 
         /* cycle across the provided addrs */
         for (j = 0; NULL != addrs[j]; j++) {
@@ -800,7 +800,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
 
             found = true;
         }
-        prte_argv_free(addrs);
+        pmix_argv_free(addrs);
         free(tcpuri);
     }
     if (found) {

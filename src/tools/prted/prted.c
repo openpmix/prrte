@@ -63,7 +63,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/daemon_init.h"
@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
     prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "prted";
     pargc = argc;
-    pargv = prte_argv_copy_strip(argv);  // strip any quoted arguments
+    pargv = pmix_argv_copy_strip(argv);  // strip any quoted arguments
 
     /* save a pristine copy of the environment for launch purposes.
      * This MUST be done so that we can pass it to any local procs we
@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
     for (i=0; NULL != environ[i]; i++) {
         if (0 != strncmp(environ[i], "PMIX_", 5) &&
             0 != strncmp(environ[i], "PRTE_", 5)) {
-            prte_argv_append_nosize(&prte_launch_environ, environ[i]);
+            pmix_argv_append_nosize(&prte_launch_environ, environ[i]);
         }
     }
 
@@ -376,7 +376,7 @@ int main(int argc, char *argv[])
             /* cleanup */
             hwloc_bitmap_free(ours);
             hwloc_bitmap_free(res);
-            prte_argv_free(cores);
+            pmix_argv_free(cores);
         }
     }
 
@@ -619,15 +619,15 @@ int main(int argc, char *argv[])
         if (0 != strcmp(prte_process_info.aliases[n], "localhost")
             && 0 != strcmp(prte_process_info.aliases[n], "127.0.0.1")
             && 0 != strcmp(prte_process_info.aliases[n], prte_process_info.nodename)) {
-            prte_argv_append_nosize(&nonlocal, prte_process_info.aliases[n]);
+            pmix_argv_append_nosize(&nonlocal, prte_process_info.aliases[n]);
         }
     }
-    naliases = prte_argv_count(nonlocal);
+    naliases = pmix_argv_count(nonlocal);
     prc = PMIx_Data_pack(NULL, &buffer, &naliases, 1, PMIX_UINT8);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_DESTRUCT(&buffer);
-        prte_argv_free(nonlocal);
+        pmix_argv_free(nonlocal);
         goto DONE;
     }
     for (ni = 0; ni < naliases; ni++) {
@@ -635,11 +635,11 @@ int main(int argc, char *argv[])
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
             PMIX_DATA_BUFFER_DESTRUCT(&buffer);
-            prte_argv_free(nonlocal);
+            pmix_argv_free(nonlocal);
             goto DONE;
         }
     }
-    prte_argv_free(nonlocal);
+    pmix_argv_free(nonlocal);
 
     /* always send back our topology signature - this is a small string
      * and won't hurt anything */
@@ -798,9 +798,9 @@ int main(int argc, char *argv[])
                     }
                 }
                 if (!ignore) {
-                    prte_argv_append_nosize(&prted_cmd_line, "--"PRTE_CLI_PRTEMCA);
-                    prte_argv_append_nosize(&prted_cmd_line, opt->values[i]);
-                    prte_argv_append_nosize(&prted_cmd_line, t);
+                    pmix_argv_append_nosize(&prted_cmd_line, "--"PRTE_CLI_PRTEMCA);
+                    pmix_argv_append_nosize(&prted_cmd_line, opt->values[i]);
+                    pmix_argv_append_nosize(&prted_cmd_line, t);
                 }
                 --t;
                 *t = '=';
@@ -813,9 +813,9 @@ int main(int argc, char *argv[])
                 char *t = strchr(opt->values[i], '=');
                 *t = '\0';
                 ++t;
-                prte_argv_append_nosize(&prted_cmd_line, "--"PRTE_CLI_PMIXMCA);
-                prte_argv_append_nosize(&prted_cmd_line, opt->values[i]);
-                prte_argv_append_nosize(&prted_cmd_line, t);
+                pmix_argv_append_nosize(&prted_cmd_line, "--"PRTE_CLI_PMIXMCA);
+                pmix_argv_append_nosize(&prted_cmd_line, opt->values[i]);
+                pmix_argv_append_nosize(&prted_cmd_line, t);
                 --t;
                 *t = '=';
             }

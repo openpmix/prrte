@@ -40,7 +40,7 @@
 
 #include "src/mca/mca.h"
 #include "src/threads/threads.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/prte_environ.h"
 
 #include "constants.h"
@@ -212,9 +212,9 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
 
         /* assign a schizo module */
         if (NULL == jdata->personality) {
-            prte_argv_append_nosize(&jdata->personality, "prte");
+            pmix_argv_append_nosize(&jdata->personality, "prte");
         }
-        tmp = prte_argv_join(jdata->personality, ',');
+        tmp = pmix_argv_join(jdata->personality, ',');
         jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
         if (NULL == jdata->schizo) {
             prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, tmp);
@@ -279,7 +279,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                     continue;
                 }
                 env = prte_environ_merge(prte_forwarded_envars, app->env);
-                prte_argv_free(app->env);
+                pmix_argv_free(app->env);
                 app->env = env;
             }
         }

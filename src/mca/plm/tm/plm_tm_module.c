@@ -59,7 +59,7 @@
 
 #include "src/event/event-internal.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
@@ -256,7 +256,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_base_prted_append_basic_args(&argc, &argv, "tm", &proc_vpid_index);
 
     if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-        param = prte_argv_join(argv, ' ');
+        param = pmix_argv_join(argv, ' ');
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:tm: final top-level argv:\n\t%s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == param) ? "NULL" : param));
@@ -286,7 +286,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     bin_base = pmix_basename(prte_install_dirs.bindir);
 
     /* setup environment */
-    env = prte_argv_copy(prte_launch_environ);
+    env = pmix_argv_copy(prte_launch_environ);
 
     /* enable local launch by the orteds */
     (void) prte_mca_base_var_env_name("plm", &var);
@@ -370,7 +370,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
         /* exec the daemon */
         if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-            param = prte_argv_join(argv, ' ');
+            param = pmix_argv_join(argv, ' ');
             PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:tm: executing:\n\t%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  (NULL == param) ? "NULL" : param));

@@ -47,7 +47,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/prted/pmix/pmix_server.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/error.h"
@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
     }
     // we do NOT accept arguments other than our own
     if (NULL != prte_info_cmd_line.tail) {
-        str = prte_argv_join(prte_info_cmd_line.tail, ' ');
+        str = pmix_argv_join(prte_info_cmd_line.tail, ' ');
         ptr = prte_show_help_string("help-pterm.txt", "no-args", false,
                                     prte_tool_basename, str, prte_tool_basename);
         free(str);

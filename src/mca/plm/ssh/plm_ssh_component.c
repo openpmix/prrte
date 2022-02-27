@@ -43,7 +43,7 @@
 #endif
 #include <ctype.h>
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
@@ -364,9 +364,9 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
         prte_string_copy(cwd, path, PRTE_PATH_MAX);
     }
     if (NULL == agent_list) {
-        lines = prte_argv_split(prte_plm_ssh_component.agent, ':');
+        lines = pmix_argv_split(prte_plm_ssh_component.agent, ':');
     } else {
-        lines = prte_argv_split(agent_list, ':');
+        lines = pmix_argv_split(agent_list, ':');
     }
     for (i = 0; NULL != lines[i]; ++i) {
         line = lines[i];
@@ -383,23 +383,23 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
         }
 
         /* Split it */
-        tokens = prte_argv_split(line, ' ');
+        tokens = pmix_argv_split(line, ' ');
 
         /* Look for the first token in the PATH */
         tmp = prte_path_findv(tokens[0], X_OK, environ, cwd);
         if (NULL != tmp) {
             free(tokens[0]);
             tokens[0] = tmp;
-            prte_argv_free(lines);
+            pmix_argv_free(lines);
             return tokens;
         }
 
         /* Didn't find it */
-        prte_argv_free(tokens);
+        pmix_argv_free(tokens);
     }
 
     /* Doh -- didn't find anything */
-    prte_argv_free(lines);
+    pmix_argv_free(lines);
     return NULL;
 }
 
@@ -438,7 +438,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
     if (0 == strcmp(bname, "ssh")) {
         /* if xterm option was given, add '-X', ensuring we don't do it twice */
         if (NULL != prte_xterm) {
-            prte_argv_append_unique_nosize(&prte_plm_ssh_component.agent_argv, "-X");
+            pmix_argv_append_unique_nosize(&prte_plm_ssh_component.agent_argv, "-X");
         } else if (0 >= prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
             /* if debug was not specified, and the user didn't explicitly
              * specify X11 forwarding/non-forwarding, add "-x" if it
@@ -450,7 +450,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
                 }
             }
             if (NULL == prte_plm_ssh_component.agent_argv[i]) {
-                prte_argv_append_nosize(&prte_plm_ssh_component.agent_argv, "-x");
+                pmix_argv_append_nosize(&prte_plm_ssh_component.agent_argv, "-x");
             }
         }
     }

@@ -14,7 +14,7 @@
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +30,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 
@@ -255,7 +255,7 @@ int prte_ess_base_setup_signals(char *mysignals)
      * have asked for some we already cover, and so we ignore any duplicates */
     if (NULL != mysignals) {
         /* if they told us "none", then dump the list */
-        signals = prte_argv_split(mysignals, ',');
+        signals = pmix_argv_split(mysignals, ',');
         for (i = 0; NULL != signals[i]; i++) {
             sval = 0;
             if (0 != strncmp(signals[i], "SIG", 3)) {
@@ -265,7 +265,7 @@ int prte_ess_base_setup_signals(char *mysignals)
                 if (0 != errno || '\0' != *tmp) {
                     prte_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
                                    forwarded_signals);
-                    prte_argv_free(signals);
+                    pmix_argv_free(signals);
                     return PRTE_ERR_SILENT;
                 }
             }
@@ -293,7 +293,7 @@ int prte_ess_base_setup_signals(char *mysignals)
                     if (!known_signals[j].can_forward) {
                         prte_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
                                        known_signals[j].signame, forwarded_signals);
-                        prte_argv_free(signals);
+                        pmix_argv_free(signals);
                         return PRTE_ERR_SILENT;
                     }
                     found = true;
@@ -306,14 +306,14 @@ int prte_ess_base_setup_signals(char *mysignals)
                 if (0 == strncmp(signals[i], "SIG", 3)) {
                     prte_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
                                    forwarded_signals);
-                    prte_argv_free(signals);
+                    pmix_argv_free(signals);
                     return PRTE_ERR_SILENT;
                 }
 
                 ESS_ADDSIGNAL(sval, signals[i]);
             }
         }
-        prte_argv_free(signals);
+        pmix_argv_free(signals);
     }
     return PRTE_SUCCESS;
 }

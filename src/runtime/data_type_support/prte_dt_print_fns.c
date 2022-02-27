@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,7 +28,7 @@
 #include <sys/types.h>
 
 #include "src/hwloc/hwloc-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/grpcomm.h"
@@ -51,7 +51,7 @@ void prte_job_print(char **output, prte_job_t *src)
     /* set default result */
     *output = NULL;
 
-    tmp2 = prte_argv_join(src->personality, ',');
+    tmp2 = pmix_argv_join(src->personality, ',');
     prte_asprintf(&tmp,
                   "\nData for job: %s\tPersonality: %s\tRecovery: %s(%s)\n\tNum apps: %ld\tStdin "
                   "target: %s\tState: %s\tAbort: %s",
@@ -371,14 +371,14 @@ void prte_app_print(char **output, prte_job_t *jdata, prte_app_context_t *src)
                   (unsigned long) src->idx, (NULL == src->app) ? "NULL" : src->app,
                   (unsigned long) src->num_procs, PRTE_VPID_PRINT(src->first_rank));
 
-    count = prte_argv_count(src->argv);
+    count = pmix_argv_count(src->argv);
     for (i = 0; i < count; i++) {
         prte_asprintf(&tmp2, "%s\n\tArgv[%d]: %s", tmp, i, src->argv[i]);
         free(tmp);
         tmp = tmp2;
     }
 
-    count = prte_argv_count(src->env);
+    count = pmix_argv_count(src->env);
     for (i = 0; i < count; i++) {
         prte_asprintf(&tmp2, "%s\n\tEnv[%lu]: %s", tmp, (unsigned long) i, src->env[i]);
         free(tmp);

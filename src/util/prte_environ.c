@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,7 +36,7 @@
 #include <pwd.h>
 
 #include "constants.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/printf.h"
 #include "src/util/prte_environ.h"
 
@@ -58,13 +58,13 @@ char **prte_environ_merge(char **minor, char **major)
         if (NULL == minor) {
             return NULL;
         } else {
-            return prte_argv_copy(minor);
+            return pmix_argv_copy(minor);
         }
     }
 
     /* First, copy major */
 
-    ret = prte_argv_copy(major);
+    ret = pmix_argv_copy(major);
 
     /* Do we have something in minor? */
 
@@ -124,7 +124,7 @@ int prte_setenv(const char *name, const char *value, bool overwrite, char ***env
         return PRTE_ERR_BAD_PARAM;
     } else if (NULL == *env) {
         i = 0;
-        prte_argv_append(&i, env, newvalue);
+        pmix_argv_append(&i, env, newvalue);
         free(newvalue);
         return PRTE_SUCCESS;
     }
@@ -196,8 +196,8 @@ int prte_setenv(const char *name, const char *value, bool overwrite, char ***env
 
     /* If we found no match, append this value */
 
-    i = prte_argv_count(*env);
-    prte_argv_append(&i, env, newvalue);
+    i = pmix_argv_count(*env);
+    pmix_argv_append(&i, env, newvalue);
 
     /* All done */
 

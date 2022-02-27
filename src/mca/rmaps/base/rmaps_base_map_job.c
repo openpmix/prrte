@@ -33,7 +33,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/string_copy.h"
 

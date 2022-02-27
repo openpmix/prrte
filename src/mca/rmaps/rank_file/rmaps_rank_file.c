@@ -39,7 +39,7 @@
 
 #include "src/class/prte_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/if.h"
 #include "src/util/net.h"
 #include "src/util/proc_info.h"
@@ -521,8 +521,8 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                 } else {
                     value = prte_rmaps_rank_file_value.sval;
                 }
-                argv = prte_argv_split(value, '@');
-                cnt = prte_argv_count(argv);
+                argv = pmix_argv_split(value, '@');
+                cnt = pmix_argv_count(argv);
                 if (NULL != node_name) {
                     free(node_name);
                 }
@@ -534,11 +534,11 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                     prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
                     rc = PRTE_ERR_BAD_PARAM;
                     PRTE_ERROR_LOG(rc);
-                    prte_argv_free(argv);
+                    pmix_argv_free(argv);
                     node_name = NULL;
                     goto unlock;
                 }
-                prte_argv_free(argv);
+                pmix_argv_free(argv);
 
                 // Strip off the FQDN if present, ignore IP addresses
                 if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(node_name)) {

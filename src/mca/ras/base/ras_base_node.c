@@ -28,7 +28,7 @@
 
 #include <string.h>
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/if.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -148,7 +148,7 @@ int prte_ras_base_node_insert(prte_list_t *nodes, prte_job_t *jdata)
                 PRTE_FLAG_UNSET(hnp_node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             }
             /* if the node name is different, store it as an alias */
-            prte_argv_append_unique_nosize(&hnp_node->aliases, node->name);
+            pmix_argv_append_unique_nosize(&hnp_node->aliases, node->name);
             if (NULL != node->rawname) {
                 if (NULL != hnp_node->rawname) {
                     free(hnp_node->rawname);

@@ -4,7 +4,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,7 +17,7 @@
 
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
 
@@ -325,7 +325,7 @@ static void process_uri(char *uri)
     }
 
     /* split the rest of the uri into component parts */
-    uris = prte_argv_split(cptr, ';');
+    uris = pmix_argv_split(cptr, ';');
 
     /* get the peer object for this process */
     pr = prte_oob_base_get_peer(&peer);
@@ -365,7 +365,7 @@ static void process_uri(char *uri)
             }
         }
     }
-    prte_argv_free(uris);
+    pmix_argv_free(uris);
 }
 
 prte_oob_base_peer_t *prte_oob_base_get_peer(const pmix_proc_t *pr)

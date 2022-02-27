@@ -18,7 +18,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,7 +60,7 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/prte_environ.h"
 
@@ -247,7 +247,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         /* otherwise, add it to the list of nodes upon which
          * we need to launch a daemon
          */
-        prte_argv_append(&nodelist_argc, &nodelist_argv, node->name);
+        pmix_argv_append(&nodelist_argc, &nodelist_argv, node->name);
     }
 
     /*
@@ -290,7 +290,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_base_wrap_args(argv);
 
     if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-        param = prte_argv_join(argv, ' ');
+        param = pmix_argv_join(argv, ' ');
         if (NULL != param) {
             prte_output(0, "plm:lsf: final top-level argv:");
             prte_output(0, "plm:lsf:     %s", param);
@@ -341,7 +341,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* setup environment */
-    env = prte_argv_copy(prte_launch_environ);
+    env = pmix_argv_copy(prte_launch_environ);
 
     /* lsb_launch tampers with SIGCHLD.
      * After the call to lsb_launch, the signal handler for SIGCHLD is NULL.
@@ -359,9 +359,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
     if ((rc = lsb_launch(nodelist_argv, argv, LSF_DJOB_REPLACE_ENV | LSF_DJOB_NOWAIT, env)) < 0) {
         PRTE_ERROR_LOG(PRTE_ERR_FAILED_TO_START);
         char *flattened_nodelist = NULL;
-        flattened_nodelist = prte_argv_join(nodelist_argv, '\n');
+        flattened_nodelist = pmix_argv_join(nodelist_argv, '\n');
         prte_show_help("help-plm-lsf.txt", "lsb_launch-failed", true, rc, lsberrno, lsb_sysmsg(),
-                       prte_argv_count(nodelist_argv), flattened_nodelist);
+                       pmix_argv_count(nodelist_argv), flattened_nodelist);
         free(flattened_nodelist);
         rc = PRTE_ERR_FAILED_TO_START;
         prte_wait_enable(); /* re-enable our SIGCHLD handler */
@@ -378,10 +378,10 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
 cleanup:
     if (NULL != argv) {
-        prte_argv_free(argv);
+        pmix_argv_free(argv);
     }
     if (NULL != env) {
-        prte_argv_free(env);
+        pmix_argv_free(env);
     }
 
     /* check for failed launch - if so, force terminate */

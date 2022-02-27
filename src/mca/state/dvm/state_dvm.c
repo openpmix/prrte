@@ -4,7 +4,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +23,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/nidmap.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/output.h"
@@ -452,7 +452,7 @@ static void ready_for_debug(int fd, short args, void *cbdata)
            free(name);
         }
         /* pass the argv from each app */
-        name = prte_argv_join(app->argv, ' ');
+        name = pmix_argv_join(app->argv, ' ');
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_APP_ARGV, name, PMIX_STRING);
         free(name);
     }

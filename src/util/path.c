@@ -17,7 +17,7 @@
  * Copyright (c) 2016      University of Houston. All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -74,7 +74,7 @@
 
 #include "prte_stdint.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/os_path.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
@@ -201,13 +201,13 @@ char *prte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
        the wrkdir to the end of the path */
 
     if (!found_dot && NULL != wrkdir) {
-        prte_argv_append(&dirc, &dirv, wrkdir);
+        pmix_argv_append(&dirc, &dirv, wrkdir);
     }
 
     if (NULL == dirv)
         return NULL;
     fullpath = prte_path_find(fname, dirv, mode, envv);
-    prte_argv_free(dirv);
+    pmix_argv_free(dirv);
     return fullpath;
 }
 
@@ -321,7 +321,7 @@ static void path_env_load(char *path, int *pargc, char ***pargv)
         if (p != path) {
             saved = *p;
             *p = '\0';
-            prte_argv_append(pargc, pargv, path);
+            pmix_argv_append(pargc, pargv, path);
             *p = saved;
             path = p;
         }

@@ -46,7 +46,7 @@
 #include "src/include/prte_portable_platform.h"
 #include "src/include/version.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/printf.h"
 #include "src/util/show_help.h"
 
@@ -98,7 +98,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
          */
         if (NULL != opt) {
             /* split the arguments at the colon */
-            args = prte_argv_split(opt->values[0], ':');
+            args = pmix_argv_split(opt->values[0], ':');
             if (0 == strcmp(args[0], "all")) {
                 want_all = true;
             }
@@ -117,7 +117,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
         if (NULL != opt && NULL != args) {
             type = args[0];
             if (NULL != args[1]) {
-                tmp = prte_argv_split(args[1], ',');
+                tmp = pmix_argv_split(args[1], ',');
 
                 for (j=0; NULL != tmp[j]; j++) {
                     for (found = false, i = 0; i < mca_types.size; ++i) {
@@ -138,14 +138,14 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
 
                     prte_info_show_mca_params(type, tmp[j], want_internal);
                 }
-                prte_argv_free(tmp);
+                pmix_argv_free(tmp);
             } else {
                 prte_info_show_mca_params(type, "*", want_internal);
             }
         }
     }
     if (NULL != args) {
-        prte_argv_free(args);
+        pmix_argv_free(args);
     }
 }
 

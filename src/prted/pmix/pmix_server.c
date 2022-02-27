@@ -53,7 +53,7 @@
 #include "src/class/prte_list.h"
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/error.h"
 #include "src/util/os_dirpath.h"
 #include "src/util/os_path.h"
@@ -406,7 +406,7 @@ void pmix_server_register_params(void)
                                       &generate_dist);
     prte_pmix_server_globals.generate_dist = 0;
     if (NULL != generate_dist) {
-        tmp = prte_argv_split(generate_dist, ',');
+        tmp = pmix_argv_split(generate_dist, ',');
         for (i=0; NULL != tmp[i]; i++) {
             if (0 == strcasecmp(tmp[i], "fabric")) {
                 prte_pmix_server_globals.generate_dist |= PMIX_DEVTYPE_OPENFABRICS;

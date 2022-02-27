@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,7 +55,7 @@
 #include "src/mca/mca.h"
 #include "src/mca/prtedl/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 #include "src/util/prte_environ.h"
@@ -152,7 +152,7 @@ int prte_mca_base_component_find(const char *directory, prte_mca_base_framework_
 component_find_out:
 
     if (NULL != requested_component_names) {
-        prte_argv_free(requested_component_names);
+        pmix_argv_free(requested_component_names);
     }
 
     /* All done */
@@ -224,7 +224,7 @@ int prte_mca_base_components_filter(prte_mca_base_framework_t *framework, uint32
     }
 
     if (NULL != requested_component_names) {
-        prte_argv_free(requested_component_names);
+        pmix_argv_free(requested_component_names);
     }
 
     return ret;
@@ -391,7 +391,7 @@ int prte_mca_base_component_parse_requested(const char *requested, bool *include
     }
 
     /* Split up the value into individual component names */
-    *requested_component_names = prte_argv_split(requested, ',');
+    *requested_component_names = pmix_argv_split(requested, ',');
 
     /* All done */
     return PRTE_SUCCESS;

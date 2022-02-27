@@ -24,7 +24,7 @@
 #include <string.h>
 
 #include "src/hwloc/hwloc-internal.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/util/show_help.h"
@@ -136,15 +136,15 @@ static int ppr_mapper(prte_job_t *jdata)
 
     /* parse option */
     n = 0;
-    ppr_req = prte_argv_split(jobppr, ',');
+    ppr_req = pmix_argv_split(jobppr, ',');
     for (j = 0; NULL != ppr_req[j]; j++) {
         /* split on the colon */
-        ck = prte_argv_split(ppr_req[j], ':');
-        if (2 != prte_argv_count(ck)) {
+        ck = pmix_argv_split(ppr_req[j], ':');
+        if (2 != pmix_argv_count(ck)) {
             /* must provide a specification */
             prte_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, jobppr);
-            prte_argv_free(ppr_req);
-            prte_argv_free(ck);
+            pmix_argv_free(ppr_req);
+            pmix_argv_free(ck);
             free(jobppr);
             return PRTE_ERR_SILENT;
         }
@@ -233,14 +233,14 @@ static int ppr_mapper(prte_job_t *jdata)
             /* unknown spec */
             prte_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true, ck[1],
                            jobppr);
-            prte_argv_free(ppr_req);
-            prte_argv_free(ck);
+            pmix_argv_free(ppr_req);
+            pmix_argv_free(ck);
             free(jobppr);
             return PRTE_ERR_SILENT;
         }
-        prte_argv_free(ck);
+        pmix_argv_free(ck);
     }
-    prte_argv_free(ppr_req);
+    pmix_argv_free(ppr_req);
     /* if nothing was given, that's an error */
     if (0 == n) {
         prte_output(0, "NOTHING GIVEN");
@@ -703,11 +703,11 @@ static int assign_locations(prte_job_t *jdata)
     }
 
     /* get the ppr value */
-    ppr_req = prte_argv_split(jobppr, ',');
-    ck = prte_argv_split(ppr_req[0], ':');
+    ppr_req = pmix_argv_split(jobppr, ',');
+    ck = pmix_argv_split(ppr_req[0], ':');
     ppr = strtol(ck[0], NULL, 10);
-    prte_argv_free(ck);
-    prte_argv_free(ppr_req);
+    pmix_argv_free(ck);
+    pmix_argv_free(ppr_req);
 
     /* start assigning procs to objects, filling each object as we go until
      * all procs are assigned. */
