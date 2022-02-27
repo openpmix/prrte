@@ -48,7 +48,7 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/error.h"
 #include "src/util/path.h"
@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
      * and then abnormally terminates the pipe early */
     signal(SIGPIPE, SIG_IGN);
 
-    prte_tool_basename = prte_basename(argv[0]);
+    prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "prte_info";
 
     /* Initialize the argv parsing stuff */

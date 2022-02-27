@@ -18,7 +18,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,7 +45,7 @@
 #include "src/mca/mca.h"
 #include "src/mca/prtedl/base/base.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/printf.h"
 #include "src/util/string_copy.h"
 
@@ -107,7 +107,7 @@ static int process_repository_item(const char *filename, void *data)
     int ret;
     PRTE_HIDE_UNUSED_PARAMS(data);
 
-    base = prte_basename(filename);
+    base = pmix_basename(filename);
     if (NULL == base) {
         return PRTE_ERROR;
     }

@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -57,7 +57,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/prte_environ.h"
@@ -569,8 +569,8 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
            explaining all the rationale for how / why we're doing
            this. */
 
-        lib_base = prte_basename(prte_install_dirs.libdir);
-        bin_base = prte_basename(prte_install_dirs.bindir);
+        lib_base = pmix_basename(prte_install_dirs.libdir);
+        bin_base = pmix_basename(prte_install_dirs.bindir);
 
         /* If we have a prefix, then modify the PATH and
            LD_LIBRARY_PATH environment variables.  */

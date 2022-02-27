@@ -43,13 +43,10 @@ AM_CPPFLAGS = $(LTDLINCL)
 # Source code files
 
 headers = \
-        alfg.h \
-        arch.h \
         argv.h \
         attr.h \
-        basename.h \
-	bipartite_graph.h \
-	bipartite_graph_internal.h \
+        bipartite_graph.h \
+        bipartite_graph_internal.h \
         bit_ops.h \
         cmd_line.h \
         context_fns.h \
@@ -57,7 +54,7 @@ headers = \
         daemon_init.h \
         dash_host/dash_host.h \
         error_strings.h \
-	ethtool.h \
+        ethtool.h \
         error.h \
         fd.h \
         few.h \
@@ -89,11 +86,8 @@ headers = \
 
 libprrteutil_la_SOURCES = \
         $(headers) \
-        alfg.c \
-        arch.c \
         argv.c \
         attr.c \
-        basename.c \
         bipartite_graph.c \
         cmd_line.c \
         context_fns.c \
@@ -133,10 +127,10 @@ libprrteutil_la_SOURCES = \
 
 libprrteutil_la_LIBADD = \
         keyval/libprrteutilkeyval.la \
-	hostfile/libprrteutilhostfile.la
+        hostfile/libprrteutilhostfile.la
 libprrteutil_la_DEPENDENCIES = \
         keyval/libprrteutilkeyval.la \
-	hostfile/libprrteutilhostfile.la
+        hostfile/libprrteutilhostfile.la
 
 # Conditionally install the header files
 

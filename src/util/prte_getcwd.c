@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,7 +25,7 @@
 #include <string.h>
 
 #include "constants.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/prte_getcwd.h"
 #include "src/util/string_copy.h"
 
@@ -91,7 +91,7 @@ int prte_getcwd(char *buf, size_t size)
         /* if it isn't big enough, give them as much
          * of the basename as possible
          */
-        shortened = prte_basename(pwd);
+        shortened = pmix_basename(pwd);
         prte_string_copy(buf, shortened, size);
         free(shortened);
         /* indicate that it isn't the full path */

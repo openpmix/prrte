@@ -14,7 +14,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,7 +46,7 @@
 #endif
 #include <errno.h>
 
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/path.h"
 #include "src/util/prte_environ.h"
 
@@ -130,7 +130,7 @@ int prte_util_check_context_app(prte_app_context_t *context, char **env)
         bproc, for example, does not use the fork pls for launching, so
         it does this same work over there. */
 
-    tmp = prte_basename(context->app);
+    tmp = pmix_basename(context->app);
     if (strlen(tmp) == strlen(context->app)) {
         /* If this is a naked executable -- no relative or absolute
         pathname -- then search the PATH for it */

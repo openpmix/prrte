@@ -17,7 +17,7 @@
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
@@ -55,8 +55,8 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
         AC_MSG_ERROR([Cannot continue])
     fi
 
-    AS_IF([test "$with_hwloc_extra_libs" = "yes" -o "$with_hwloc_extra_libs" = "no"],
-	  [AC_MSG_ERROR([--with-hwloc-extra-libs requires an argument other than yes or no])])
+    AS_IF([test "$with_pmix_extra_libs" = "yes" -o "$with_pmix_extra_libs" = "no"],
+	  [AC_MSG_ERROR([--with-pmix-extra-libs requires an argument other than yes or no])])
 
     # get rid of any trailing slash(es)
     pmix_prefix=$(echo $with_pmix | sed -e 'sX/*$XXg')
@@ -100,6 +100,17 @@ echo "--> $pmix_ext_install_libdir"
     AS_IF([test $prte_pmix_support -eq 0],
           [AC_MSG_WARN([PRRTE requires PMIx support using an external copy that you supply.])
            AC_MSG_ERROR([Cannot continue.])])
+
+    # need to add one level of indirection so that we can
+    # access the PMIx headers
+    if test ! -z "$pmix_ext_install_dir"; then
+        prte_pmix_CPPFLAGS="$prte_pmix_CPPFLAGS -I$pmix_ext_install_dir/include/pmix"
+    else
+        # need to figure out what to do if PMIx was installed in
+        # a standard location - still need to add the "pmix"
+        # extension, but what do we add it to?
+        prte_pmix_CPPFLAGS="$prte_pmix_CPPFLAGS -I/usr/include/pmix"
+    fi
 
     prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
     prte_external_pmix_save_LDFLAGS=$LDFLAGS

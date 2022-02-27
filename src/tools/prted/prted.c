@@ -64,7 +64,7 @@
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/daemon_init.h"
 #include "src/util/fd.h"
@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
 
     /* initialize the globals */
     PMIX_DATA_BUFFER_CREATE(bucket);
-    prte_tool_basename = prte_basename(argv[0]);
+    prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "prted";
     pargc = argc;
     pargv = prte_argv_copy_strip(argv);  // strip any quoted arguments

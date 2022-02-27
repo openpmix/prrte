@@ -20,7 +20,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -44,7 +44,7 @@
 #include <ctype.h>
 
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/output.h"
 #include "src/util/path.h"
 #include "src/util/prte_environ.h"
@@ -427,7 +427,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
     /* if we got here, then one of the given agents could be found - the
      * complete path is in the argv[0] position */
     prte_plm_ssh_component.agent_path = strdup(prte_plm_ssh_component.agent_argv[0]);
-    bname = prte_basename(prte_plm_ssh_component.agent_argv[0]);
+    bname = pmix_basename(prte_plm_ssh_component.agent_argv[0]);
     if (NULL == bname) {
         return PRTE_SUCCESS;
     }

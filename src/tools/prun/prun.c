@@ -71,7 +71,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/mutex.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/fd.h"
 #include "src/util/os_path.h"
@@ -313,7 +313,7 @@ int prun(int argc, char *argv[])
     /* init the globals */
     PRTE_CONSTRUCT(&apps, prte_list_t);
     PRTE_CONSTRUCT(&forwarded_signals, prte_list_t);
-    prte_tool_basename = prte_basename(argv[0]);
+    prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "prun";
     pargc = argc;
     pargv = prte_argv_copy_strip(argv);  // strip any quoted arguments

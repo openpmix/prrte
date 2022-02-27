@@ -71,7 +71,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/mutex.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/fd.h"
 #include "src/util/output.h"
@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
     /* init the tiny part of PRTE we use */
     prte_init_util(PRTE_PROC_MASTER);
 
-    prte_tool_basename = prte_basename(argv[0]);
+    prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "pterm";
     gethostname(hostname, sizeof(hostname));
     PRTE_CONSTRUCT(&results, prte_cli_result_t);

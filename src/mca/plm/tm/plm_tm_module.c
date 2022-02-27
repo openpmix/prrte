@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,7 +60,7 @@
 #include "src/event/event-internal.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/output.h"
 #include "src/util/printf.h"
 #include "src/util/prte_environ.h"
@@ -282,8 +282,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* Figure out the basenames for the libdir and bindir.  There is a
        lengthy comment about this in plm_rsh_module.c explaining all
        the rationale for how / why we're doing this. */
-    lib_base = prte_basename(prte_install_dirs.libdir);
-    bin_base = prte_basename(prte_install_dirs.bindir);
+    lib_base = pmix_basename(prte_install_dirs.libdir);
+    bin_base = pmix_basename(prte_install_dirs.bindir);
 
     /* setup environment */
     env = prte_argv_copy(prte_launch_environ);

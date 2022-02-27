@@ -44,7 +44,6 @@
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/arch.h"
 #include "src/util/os_path.h"
 #include "src/util/prte_environ.h"
 
