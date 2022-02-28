@@ -89,7 +89,7 @@ int prte_schizo_base_add_directive(pmix_cli_result_t *results,
     char *ptr, *tmp;
 
     /* does the matching key already exist? */
-    opt = prte_cmd_line_get_param(results, target);
+    opt = pmix_cmd_line_get_param(results, target);
     if (NULL != opt) {
         // does it already have a value?
         if (NULL == opt->values) {
@@ -163,7 +163,7 @@ int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
     char *ptr, *tmp;
 
     /* does the matching key already exist? */
-    opt = prte_cmd_line_get_param(results, target);
+    opt = pmix_cmd_line_get_param(results, target);
     if (NULL != opt) {
         // does it already have a value?
         if (NULL == opt->values) {

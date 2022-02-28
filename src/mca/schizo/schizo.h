@@ -28,7 +28,7 @@
 #include "types.h"
 
 #include "src/class/pmix_list.h"
-#include "src/util/cmd_line.h"
+#include "src/util/pmix_cmd_line.h"
 
 #include "src/mca/mca.h"
 

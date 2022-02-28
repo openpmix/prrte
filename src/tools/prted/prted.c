@@ -65,7 +65,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/cmd_line.h"
+#include "src/util/prte_cmd_line.h"
 #include "src/util/daemon_init.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_if.h"
@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
 
     /* parse the CLI to load the MCA params */
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
-    ret = schizo->parse_cli(pargv, &results, PRTE_CLI_SILENT);
+    ret = schizo->parse_cli(pargv, &results, PMIX_CLI_SILENT);
     if (PRTE_SUCCESS != ret) {
         if (PRTE_ERR_SILENT != ret) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename,
@@ -313,7 +313,7 @@ int main(int argc, char *argv[])
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
-    if (!prte_debug_flag && !prte_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
+    if (!prte_debug_flag && !pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         pipe(wait_pipe);
         prte_state_base_parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
@@ -321,7 +321,7 @@ int main(int argc, char *argv[])
     }
 #if defined(HAVE_SETSID)
     /* see if we were directed to separate from current session */
-    if (prte_cmd_line_is_taken(&results, PRTE_CLI_SET_SID)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SET_SID)) {
         setsid();
     }
 #endif
@@ -770,7 +770,7 @@ int main(int argc, char *argv[])
      * from our cmd line so we can pass them along to the daemons we spawn -
      * otherwise, only the first layer of daemons will ever see them
      */
-    if (prte_cmd_line_is_taken(&results, PRTE_CLI_TREE_SPAWN)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_TREE_SPAWN)) {
         int j, k;
         bool ignore;
         char *no_keep[] = {
@@ -782,7 +782,7 @@ int main(int argc, char *argv[])
             "mca_base_env_list",
             NULL
         };
-        opt = prte_cmd_line_get_param(&results, PRTE_CLI_PRTEMCA);
+        opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PRTEMCA);
         if (NULL != opt) {
             // cycle across found values
             for (i=0; NULL != opt->values[i]; i++) {
@@ -806,7 +806,7 @@ int main(int argc, char *argv[])
                 *t = '=';
             }
         }
-        opt = prte_cmd_line_get_param(&results, PRTE_CLI_PMIXMCA);
+        opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PMIXMCA);
         if (NULL != opt) {
             // cycle across found values - we always pass PMIx values
             for (i=0; NULL != opt->values[i]; i++) {
@@ -866,7 +866,7 @@ static void shutdown_callback(int fd, short flags, void *arg)
 
     /* if we were ordered to abort, do so */
     if (prted_abort) {
-        if (prte_cmd_line_is_taken(&results, PRTE_CLI_TEST_SUICIDE)) {
+        if (pmix_cmd_line_is_taken(&results, PRTE_CLI_TEST_SUICIDE)) {
             suicide = true;
         }
         prte_output(0, "%s is executing %s abort", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),

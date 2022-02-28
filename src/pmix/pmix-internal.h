@@ -129,14 +129,8 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 #    define PRTE_PMIX_ACQUIRE_THREAD(lck)                                       \
         do {                                                                    \
             pmix_mutex_lock(&(lck)->mutex);                                     \
-            if (pmix_debug_threads) {                                           \
-                prte_output(0, "Waiting for thread %s:%d", __FILE__, __LINE__); \
-            }                                                                   \
             while ((lck)->active) {                                             \
                 prte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex);          \
-            }                                                                   \
-            if (pmix_debug_threads) {                                           \
-                prte_output(0, "Thread obtained %s:%d", __FILE__, __LINE__);    \
             }                                                                   \
             (lck)->active = true;                                               \
         } while (0)
@@ -155,14 +149,8 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 #    define PRTE_PMIX_WAIT_THREAD(lck)                                          \
         do {                                                                    \
             pmix_mutex_lock(&(lck)->mutex);                                     \
-            if (pmix_debug_threads) {                                           \
-                prte_output(0, "Waiting for thread %s:%d", __FILE__, __LINE__); \
-            }                                                                   \
             while ((lck)->active) {                                             \
                 prte_pmix_condition_wait(&(lck)->cond, &(lck)->mutex);          \
-            }                                                                   \
-            if (pmix_debug_threads) {                                           \
-                prte_output(0, "Thread obtained %s:%d", __FILE__, __LINE__);    \
             }                                                                   \
             PMIX_ACQUIRE_OBJECT(&lck);                                          \
             pmix_mutex_unlock(&(lck)->mutex);                                   \
@@ -182,9 +170,6 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
 #if PRTE_ENABLE_DEBUG
 #    define PRTE_PMIX_RELEASE_THREAD(lck)                                     \
         do {                                                                  \
-            if (pmix_debug_threads) {                                         \
-                prte_output(0, "Releasing thread %s:%d", __FILE__, __LINE__); \
-            }                                                                 \
             (lck)->active = false;                                            \
             pthread_cond_broadcast(&(lck)->cond);                             \
             pmix_mutex_unlock(&(lck)->mutex);                                 \

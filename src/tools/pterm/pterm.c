@@ -72,7 +72,7 @@
 #include "src/threads/pmix_mutex.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/cmd_line.h"
+#include "src/util/prte_cmd_line.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
@@ -112,20 +112,20 @@ static bool verbose = false;
 /* prun-specific options */
 static struct option myoptions[] = {
     /* basic options */
-    PRTE_OPTION_SHORT_DEFINE("help", PRTE_ARG_OPTIONAL, 'h'),
-    PRTE_OPTION_SHORT_DEFINE("version", PRTE_ARG_NONE, 'V'),
-    PRTE_OPTION_SHORT_DEFINE("verbose", PRTE_ARG_NONE, 'v'),
+    PMIX_OPTION_SHORT_DEFINE("help", PMIX_ARG_OPTIONAL, 'h'),
+    PMIX_OPTION_SHORT_DEFINE("version", PMIX_ARG_NONE, 'V'),
+    PMIX_OPTION_SHORT_DEFINE("verbose", PMIX_ARG_NONE, 'v'),
 
     // DVM options
-    PRTE_OPTION_DEFINE("system-server-first", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("system-server-only", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("wait-to-connect", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("num-connect-retries", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("pid", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("namespace", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("dvm-uri", PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE("system-server-first", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("system-server-only", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("wait-to-connect", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("num-connect-retries", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("pid", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("namespace", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("dvm-uri", PMIX_ARG_REQD),
 
-    PRTE_OPTION_END
+    PMIX_OPTION_END
 };
 
 static char *shorts = "hvVp";
@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    rc = schizo->parse_cli(argv, &results, PRTE_CLI_WARN);
+    rc = schizo->parse_cli(argv, &results, PMIX_CLI_WARN);
     if (PRTE_SUCCESS != rc) {
         PMIX_DESTRUCT(&results);
         if (PRTE_ERR_SILENT != rc) {
@@ -318,22 +318,22 @@ int main(int argc, char *argv[])
     rank = 0;
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_TOOL_RANK, &rank, PMIX_PROC_RANK);
 
-    if (prte_cmd_line_is_taken(&results, "system-server-first")) {
+    if (pmix_cmd_line_is_taken(&results, "system-server-first")) {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
-    } else if (prte_cmd_line_is_taken(&results, "system-server-only")) {
+    } else if (pmix_cmd_line_is_taken(&results, "system-server-only")) {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
     }
-    opt = prte_cmd_line_get_param(&results, "wait-to-connect");
+    opt = pmix_cmd_line_get_param(&results, "wait-to-connect");
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
-    opt = prte_cmd_line_get_param(&results, "num-connect-retries");
+    opt = pmix_cmd_line_get_param(&results, "num-connect-retries");
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
-    opt = prte_cmd_line_get_param(&results, "pid");
+    opt = pmix_cmd_line_get_param(&results, "pid");
     if (NULL != opt) {
         /* see if it is an integer value */
         char *leftover;
@@ -373,7 +373,7 @@ int main(int argc, char *argv[])
     }
 
     /* if they specified the URI, then pass it along */
-    opt = prte_cmd_line_get_param(&results, "dvm-uri");
+    opt = pmix_cmd_line_get_param(&results, "dvm-uri");
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_URI, opt->values[0], PMIX_STRING);
     }

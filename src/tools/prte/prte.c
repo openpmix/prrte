@@ -72,7 +72,7 @@
 #include "src/threads/pmix_mutex.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/cmd_line.h"
+#include "src/util/prte_cmd_line.h"
 #include "src/util/daemon_init.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_os_dirpath.h"
@@ -392,7 +392,7 @@ int main(int argc, char *argv[])
 
     /* parse the input argv to get values, including everyone's MCA params */
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
-    rc = schizo->parse_cli(pargv, &results, PRTE_CLI_WARN);
+    rc = schizo->parse_cli(pargv, &results, PMIX_CLI_WARN);
     if (PRTE_SUCCESS != rc) {
         PMIX_DESTRUCT(&results);
         if (PRTE_ERR_SILENT != rc) {
@@ -410,7 +410,7 @@ int main(int argc, char *argv[])
     }
 
     /* if we were given a keepalive pipe, set up to monitor it now */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_KEEPALIVE);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_KEEPALIVE);
     if (NULL != opt) {
         pmix_setenv("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
     }
@@ -418,7 +418,7 @@ int main(int argc, char *argv[])
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
-    if (!prte_debug_flag && prte_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
+    if (!prte_debug_flag && pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         pipe(wait_pipe);
         prte_state_base_parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
@@ -426,24 +426,24 @@ int main(int argc, char *argv[])
     } else {
 #if defined(HAVE_SETSID)
         /* see if we were directed to separate from current session */
-        if (prte_cmd_line_is_taken(&results, PRTE_CLI_SET_SID)) {
+        if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SET_SID)) {
             setsid();
         }
 #endif
     }
 
-    if (prte_cmd_line_is_taken(&results, PRTE_CLI_NO_READY_MSG)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_NO_READY_MSG)) {
         prte_state_base_ready_msg = false;
     }
 
-    if (prte_cmd_line_is_taken(&results, PRTE_CLI_SYSTEM_SERVER)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SYSTEM_SERVER)) {
         /* we should act as system-level PMIx server */
         pmix_setenv("PRTE_MCA_pmix_system_server", "1", true, &environ);
     }
     /* always act as session-level PMIx server */
     pmix_setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
     /* if we were asked to report a uri, set the MCA param to do so */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_REPORT_URI);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_REPORT_URI);
     if (NULL != opt) {
         prte_pmix_server_globals.report_uri = strdup(opt->values[0]);
     }
@@ -452,7 +452,7 @@ int main(int argc, char *argv[])
 
     /* if we are supporting a singleton, push its ID into the environ
      * so it can get picked up and registered by server init */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_SINGLETON);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_SINGLETON);
     if (NULL != opt) {
         prte_pmix_server_globals.singleton = strdup(opt->values[0]);
     }
@@ -464,7 +464,7 @@ int main(int argc, char *argv[])
     prte_persistent = true;
 
     /* if we are told to daemonize, then we cannot have apps */
-    if (!prte_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
+    if (!pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         /* see if they want to run an application - let's parse
          * the cmd line to get it */
         rc = prte_parse_locals(schizo, &apps, pargv, &hostfiles, &hosts);
@@ -512,7 +512,7 @@ int main(int argc, char *argv[])
     PMIX_VALUE_RELEASE(val);
 
     /* setup callbacks for signals we should forward */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_FWD_SIGNALS);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_FWD_SIGNALS);
     if (NULL != opt) {
         param = opt->values[0];
     } else {
@@ -587,7 +587,7 @@ int main(int argc, char *argv[])
         goto DONE;
     }
 
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
     if (NULL != opt) {
         if (NULL != strcasestr(opt->values[0], PRTE_CLI_NOLAUNCH)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH,
@@ -596,7 +596,7 @@ int main(int argc, char *argv[])
     }
 
     /* Did the user specify a prefix, or want prefix by default? */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_PREFIX);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PREFIX);
     if (NULL != opt || want_prefix_by_default) {
         if (NULL != opt) {
             param = strdup(opt->values[0]);
@@ -673,7 +673,7 @@ int main(int argc, char *argv[])
 
     /* add any hostfile directives to the daemon job */
     if (prte_persistent) {
-        opt = prte_cmd_line_get_param(&results, PRTE_CLI_HOSTFILE);
+        opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOSTFILE);
         if (NULL != opt) {
             tpath = pmix_argv_join(opt->values, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE,
@@ -682,7 +682,7 @@ int main(int argc, char *argv[])
         }
 
         /* Did the user specify any hosts? */
-        opt = prte_cmd_line_get_param(&results, PRTE_CLI_HOST);
+        opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOST);
         if (NULL != opt) {
             char *tval;
             tval = pmix_argv_join(opt->values, ',');
@@ -718,7 +718,7 @@ int main(int argc, char *argv[])
     while (prte_event_base_active && !prte_dvm_ready) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
     }
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_REPORT_PID);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_REPORT_PID);
     if (NULL != opt) {
         /* if the string is a "-", then output to stdout */
         if (0 == strcmp(opt->values[0], "-")) {
@@ -779,7 +779,7 @@ int main(int argc, char *argv[])
     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, personality, PMIX_STRING);
 
     /* get display options */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_DISPLAY);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DISPLAY);
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n++) {
             targv = pmix_argv_split(opt->values[n], ',');
@@ -808,7 +808,7 @@ int main(int argc, char *argv[])
     /* cannot have both files and directory set for output */
     outdir = NULL;
     outfile = NULL;
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_OUTPUT);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_OUTPUT);
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n++) {
             targv = pmix_argv_split(opt->values[0], ',');
@@ -917,40 +917,40 @@ int main(int argc, char *argv[])
     }
 
     /* check what user wants us to do with stdin */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_STDIN);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_STDIN);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, opt->values[0], PMIX_STRING);
     }
 
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, opt->values[0], PMIX_STRING);
     }
 
     /* if the user specified a ranking policy, then set it */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_RANKBY);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_RANKBY);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, opt->values[0], PMIX_STRING);
     }
 
     /* if the user specified a binding policy, then set it */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_BINDTO);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_BINDTO);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, opt->values[0], PMIX_STRING);
     }
 
     /* check for an exec agent */
-   opt = prte_cmd_line_get_param(&results, PRTE_CLI_EXEC_AGENT);
+   opt = pmix_cmd_line_get_param(&results, PRTE_CLI_EXEC_AGENT);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_EXEC_AGENT, opt->values[0], PMIX_STRING);
     }
 
     /* mark if recovery was enabled on the cmd line */
-    if (prte_cmd_line_is_taken(&results, PRTE_CLI_ENABLE_RECOVERY)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_ENABLE_RECOVERY)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_RECOVERABLE, NULL, PMIX_BOOL);
     }
     /* record the max restarts */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_MAX_RESTARTS);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_MAX_RESTARTS);
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_LIST_FOREACH(app, &apps, prte_pmix_app_t)
@@ -959,13 +959,13 @@ int main(int argc, char *argv[])
         }
     }
     /* if continuous operation was specified */
-    if (prte_cmd_line_is_taken(&results, PRTE_CLI_CONTINUOUS)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_CONTINUOUS)) {
         /* mark this job as continuously operating */
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_CONTINUOUS, NULL, PMIX_BOOL);
     }
 
     /* if stop-on-exec was specified */
-    if (prte_cmd_line_is_taken(&results, PRTE_CLI_STOP_ON_EXEC)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_STOP_ON_EXEC)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);
     }
 
@@ -973,7 +973,7 @@ int main(int argc, char *argv[])
      * as that is what MPICH used
      */
     timeoutenv = NULL;
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_TIMEOUT);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_TIMEOUT);
     if (NULL != opt || NULL != (timeoutenv = getenv("MPIEXEC_TIMEOUT"))) {
         if (NULL != timeoutenv) {
             i = strtol(timeoutenv, NULL, 10);
@@ -996,14 +996,14 @@ int main(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT, &i, PMIX_INT);
 #endif
     }
-    if (prte_cmd_line_is_taken(&results, PRTE_CLI_STACK_TRACES)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_STACK_TRACES)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_STACKTRACES, NULL, PMIX_BOOL);
     }
-    if (prte_cmd_line_is_taken(&results, PRTE_CLI_REPORT_STATE)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_REPORT_STATE)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_REPORT_STATE, NULL, PMIX_BOOL);
     }
 #ifdef PMIX_SPAWN_TIMEOUT
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_SPAWN_TIMEOUT);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_SPAWN_TIMEOUT);
     if (NULL != opt) {
         i = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_SPAWN_TIMEOUT, &i, PMIX_INT);

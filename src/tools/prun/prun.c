@@ -72,7 +72,7 @@
 #include "src/threads/pmix_mutex.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/cmd_line.h"
+#include "src/util/prte_cmd_line.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
@@ -413,7 +413,7 @@ int prun(int argc, char *argv[])
 
     /* parse the input argv to get values, including everyone's MCA params */
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
-    rc = schizo->parse_cli(pargv, &results, PRTE_CLI_WARN);
+    rc = schizo->parse_cli(pargv, &results, PMIX_CLI_WARN);
     if (PRTE_SUCCESS != rc) {
         PMIX_DESTRUCT(&results);
         if (PRTE_ERR_SILENT != rc) {
@@ -434,7 +434,7 @@ int prun(int argc, char *argv[])
 
     /** setup callbacks for signals we should forward */
     PMIX_CONSTRUCT(&prte_ess_base_signals, pmix_list_t);
-    opt = prte_cmd_line_get_param(&results, "forward-signals");
+    opt = pmix_cmd_line_get_param(&results, "forward-signals");
     if (NULL != opt) {
         param = opt->values[0];
     } else {
@@ -476,27 +476,27 @@ int prun(int argc, char *argv[])
     }
     PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_RANK, &rank, PMIX_PROC_RANK);
 
-    if (prte_cmd_line_is_taken(&results, "do-not-connect")) {
+    if (pmix_cmd_line_is_taken(&results, "do-not-connect")) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
-    } else if (prte_cmd_line_is_taken(&results, "system-server-first")) {
+    } else if (pmix_cmd_line_is_taken(&results, "system-server-first")) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
-    } else if (prte_cmd_line_is_taken(&results, "system-server-only")) {
+    } else if (pmix_cmd_line_is_taken(&results, "system-server-only")) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
     }
 
-    opt = prte_cmd_line_get_param(&results, "wait-to-connect");
+    opt = pmix_cmd_line_get_param(&results, "wait-to-connect");
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
 
-    opt = prte_cmd_line_get_param(&results, "num-connect-retries");
+    opt = pmix_cmd_line_get_param(&results, "num-connect-retries");
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
 
-    opt = prte_cmd_line_get_param(&results, "pid");
+    opt = pmix_cmd_line_get_param(&results, "pid");
     if (NULL != opt) {
         /* see if it is an integer value */
         char *leftover;
@@ -540,7 +540,7 @@ int prun(int argc, char *argv[])
                 return PRTE_ERR_BAD_PARAM;
         }
     }
-    opt = prte_cmd_line_get_param(&results, "namespace");
+    opt = pmix_cmd_line_get_param(&results, "namespace");
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_NSPACE, opt->values[0], PMIX_STRING);
     }
@@ -561,7 +561,7 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_TOOL_SUPPORT, NULL, PMIX_BOOL);
 
     /* if they specified the URI, then pass it along */
-    opt = prte_cmd_line_get_param(&results, "dvm-uri");
+    opt = pmix_cmd_line_get_param(&results, "dvm-uri");
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_URI, opt->values[0], PMIX_STRING);
     }
@@ -620,7 +620,7 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, personality, PMIX_STRING);
 
     /* get display options */
-    opt = prte_cmd_line_get_param(&results, "display");
+    opt = pmix_cmd_line_get_param(&results, "display");
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n++) {
             targv = pmix_argv_split(opt->values[n], ',');
@@ -649,7 +649,7 @@ int prun(int argc, char *argv[])
     /* cannot have both files and directory set for output */
     outdir = NULL;
     outfile = NULL;
-    opt = prte_cmd_line_get_param(&results, "output");
+    opt = pmix_cmd_line_get_param(&results, "output");
     if (NULL != opt) {
         for (n=0; NULL != opt->values[n]; n++) {
             targv = pmix_argv_split(opt->values[n], ',');
@@ -762,12 +762,12 @@ int prun(int argc, char *argv[])
     }
 
     /* check what user wants us to do with stdin */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_STDIN);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_STDIN);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_STDIN_TGT, opt->values[0], PMIX_STRING);
     }
 
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, opt->values[0], PMIX_STRING);
         if (NULL != strcasestr(opt->values[0], "DONOTLAUNCH")) {
@@ -776,29 +776,29 @@ int prun(int argc, char *argv[])
     }
 
     /* if the user specified a ranking policy, then set it */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_RANKBY);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_RANKBY);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RANKBY, opt->values[0], PMIX_STRING);
     }
 
     /* if the user specified a binding policy, then set it */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_BINDTO);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_BINDTO);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, opt->values[0], PMIX_STRING);
     }
 
     /* check for an exec agent */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_EXEC_AGENT);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_EXEC_AGENT);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_EXEC_AGENT, opt->values[0], PMIX_STRING);
     }
 
     /* mark if recovery was enabled on the cmd line */
-    if (prte_cmd_line_is_taken(&results, PRTE_CLI_ENABLE_RECOVERY)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_ENABLE_RECOVERY)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_RECOVERABLE, &flag, PMIX_BOOL);
     }
     /* record the max restarts */
-    opt = prte_cmd_line_get_param(&results, PRTE_CLI_MAX_RESTARTS);
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_MAX_RESTARTS);
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_LIST_FOREACH(app, &apps, prte_pmix_app_t)
@@ -807,13 +807,13 @@ int prun(int argc, char *argv[])
         }
     }
     /* if continuous operation was specified */
-    if (prte_cmd_line_is_taken(&results, "continuous")) {
+    if (pmix_cmd_line_is_taken(&results, "continuous")) {
         /* mark this job as continuously operating */
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_CONTINUOUS, &flag, PMIX_BOOL);
     }
 
     /* if stop-on-exec was specified */
-    if (prte_cmd_line_is_taken(&results, "stop-on-exec")) {
+    if (pmix_cmd_line_is_taken(&results, "stop-on-exec")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_ON_EXEC, &flag, PMIX_BOOL);
     }
 
@@ -821,7 +821,7 @@ int prun(int argc, char *argv[])
      * as that is what MPICH used
      */
     i = 0;
-    opt = prte_cmd_line_get_param(&results, "timeout");
+    opt = pmix_cmd_line_get_param(&results, "timeout");
     if (NULL != opt) {
         i = strtol(opt->values[0], NULL, 10);
     } else if (NULL != (param = getenv("MPIEXEC_TIMEOUT"))) {
@@ -835,14 +835,14 @@ int prun(int argc, char *argv[])
 #endif
     }
 
-    if (prte_cmd_line_is_taken(&results, "get-stack-traces")) {
+    if (pmix_cmd_line_is_taken(&results, "get-stack-traces")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_STACKTRACES, &flag, PMIX_BOOL);
     }
-    if (prte_cmd_line_is_taken(&results, "report-state-on-timeout")) {
+    if (pmix_cmd_line_is_taken(&results, "report-state-on-timeout")) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_REPORT_STATE, &flag, PMIX_BOOL);
     }
 #ifdef PMIX_SPAWN_TIMEOUT
-    opt = prte_cmd_line_get_param(&results, "spawn-timeout");
+    opt = pmix_cmd_line_get_param(&results, "spawn-timeout");
     if (NULL != opt) {
         i = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_SPAWN_TIMEOUT, &i, PMIX_INT);
