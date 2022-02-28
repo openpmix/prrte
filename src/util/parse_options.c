@@ -39,9 +39,9 @@
 
 #include "src/runtime/prte_globals.h"
 
-#include "src/util/parse_options.h"
+#include "src/util/pmix_parse_options.h"
 
-void prte_util_parse_range_options(char *inp, char ***output)
+void pmix_util_parse_range_options(char *inp, char ***output)
 {
     char **r1 = NULL, **r2 = NULL;
     int i, vint;

@@ -52,7 +52,7 @@
  * Global variables
  */
 prte_rmaps_base_t prte_rmaps_base = {
-    .selected_modules = PRTE_LIST_STATIC_INIT,
+    .selected_modules = PMIX_LIST_STATIC_INIT,
     .mapping = 0,
     .ranking = 0,
     .device = NULL,
@@ -108,13 +108,13 @@ static int prte_rmaps_base_register(prte_mca_base_register_flag_t flags)
 
 static int prte_rmaps_base_close(void)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
 
     /* cleanup globals */
-    while (NULL != (item = prte_list_remove_first(&prte_rmaps_base.selected_modules))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&prte_rmaps_base.selected_modules))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&prte_rmaps_base.selected_modules);
+    PMIX_DESTRUCT(&prte_rmaps_base.selected_modules);
 
     return prte_mca_base_framework_components_close(&prte_rmaps_base_framework, NULL);
 }
@@ -128,7 +128,7 @@ static int prte_rmaps_base_open(prte_mca_base_open_flag_t flags)
     int rc;
 
     /* init the globals */
-    PRTE_CONSTRUCT(&prte_rmaps_base.selected_modules, prte_list_t);
+    PMIX_CONSTRUCT(&prte_rmaps_base.selected_modules, pmix_list_t);
     prte_rmaps_base.mapping = 0;
     prte_rmaps_base.ranking = 0;
     prte_rmaps_base.inherit = rmaps_base_inherit;
@@ -161,7 +161,7 @@ PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, rmaps, "PRTE Mapping Subsystem", prte_rmap
                                 prte_rmaps_base_static_components,
                                 PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
-PRTE_CLASS_INSTANCE(prte_rmaps_base_selected_module_t, prte_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_rmaps_base_selected_module_t, pmix_list_item_t, NULL, NULL);
 
 static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *tmp)
 {

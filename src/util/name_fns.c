@@ -28,9 +28,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "src/threads/tsd.h"
+#include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/mca/errmgr/errmgr.h"
 
 #include "src/util/name_fns.h"
@@ -45,14 +45,14 @@ static void prte_namelist_construct(prte_namelist_t *list)
 }
 
 /* define instance of prte_class_t */
-PRTE_CLASS_INSTANCE(prte_namelist_t,           /* type name */
-                    prte_list_item_t,          /* parent "class" name */
+PMIX_CLASS_INSTANCE(prte_namelist_t,           /* type name */
+                    pmix_list_item_t,          /* parent "class" name */
                     prte_namelist_construct,   /* constructor */
                     NULL); /* destructor */
 
 static bool fns_init = false;
 
-static prte_tsd_key_t print_args_tsd_key;
+static pmix_tsd_key_t print_args_tsd_key;
 char *prte_print_args_null = "NULL";
 typedef struct {
     char *buffers[PRTE_PRINT_NAME_ARG_NUM_BUFS];
@@ -80,14 +80,14 @@ static prte_print_args_buffers_t *get_print_name_buffer(void)
 
     if (!fns_init) {
         /* setup the print_args function */
-        if (PRTE_SUCCESS != (ret = prte_tsd_key_create(&print_args_tsd_key, buffer_cleanup))) {
+        if (PRTE_SUCCESS != (ret = pmix_tsd_key_create(&print_args_tsd_key, buffer_cleanup))) {
             PRTE_ERROR_LOG(ret);
             return NULL;
         }
         fns_init = true;
     }
 
-    ret = prte_tsd_getspecific(print_args_tsd_key, (void **) &ptr);
+    ret = pmix_tsd_getspecific(print_args_tsd_key, (void **) &ptr);
     if (PRTE_SUCCESS != ret)
         return NULL;
 
@@ -97,7 +97,7 @@ static prte_print_args_buffers_t *get_print_name_buffer(void)
             ptr->buffers[i] = (char *) malloc((PRTE_PRINT_NAME_ARGS_MAX_SIZE + 1) * sizeof(char));
         }
         ptr->cntr = 0;
-        ret = prte_tsd_setspecific(print_args_tsd_key, (void *) ptr);
+        ret = pmix_tsd_setspecific(print_args_tsd_key, (void *) ptr);
     }
 
     return (prte_print_args_buffers_t *) ptr;

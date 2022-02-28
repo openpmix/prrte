@@ -37,7 +37,7 @@
 
 #include "src/mca/routed/base/base.h"
 
-void prte_routed_base_xcast_routing(prte_list_t *coll, prte_list_t *my_children)
+void prte_routed_base_xcast_routing(pmix_list_t *coll, pmix_list_t *my_children)
 {
     prte_routed_tree_t *child;
     prte_namelist_t *nm;
@@ -53,36 +53,36 @@ void prte_routed_base_xcast_routing(prte_list_t *coll, prte_list_t *my_children)
             daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
             for (i = 1; i < daemons->procs->size; i++) {
                 if (NULL
-                    == (proc = (prte_proc_t *) prte_pointer_array_get_item(daemons->procs, i))) {
+                    == (proc = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, i))) {
                     continue;
                 }
                 /* exclude anyone known not alive */
                 if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_ALIVE)) {
-                    nm = PRTE_NEW(prte_namelist_t);
+                    nm = PMIX_NEW(prte_namelist_t);
                     PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace, proc->name.rank);
-                    prte_list_append(coll, &nm->super);
+                    pmix_list_append(coll, &nm->super);
                 }
             }
             /* if nobody is known alive, then we need to die */
-            if (0 == prte_list_get_size(coll)) {
+            if (0 == pmix_list_get_size(coll)) {
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             }
         } else {
             /* the xcast always goes to our children */
-            PRTE_LIST_FOREACH(child, my_children, prte_routed_tree_t)
+            PMIX_LIST_FOREACH(child, my_children, prte_routed_tree_t)
             {
-                nm = PRTE_NEW(prte_namelist_t);
+                nm = PMIX_NEW(prte_namelist_t);
                 PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace, child->rank);
-                prte_list_append(coll, &nm->super);
+                pmix_list_append(coll, &nm->super);
             }
         }
     } else {
         /* I am a daemon - route to my children */
-        PRTE_LIST_FOREACH(child, my_children, prte_routed_tree_t)
+        PMIX_LIST_FOREACH(child, my_children, prte_routed_tree_t)
         {
-            nm = PRTE_NEW(prte_namelist_t);
+            nm = PMIX_NEW(prte_namelist_t);
             PMIX_LOAD_PROCID(&nm->name, PRTE_PROC_MY_NAME->nspace, child->rank);
-            prte_list_append(coll, &nm->super);
+            pmix_list_append(coll, &nm->super);
         }
     }
 }
@@ -125,7 +125,7 @@ int prte_routed_base_process_callback(pmix_nspace_t job, pmix_data_buffer_t *buf
             return PRTE_ERR_FATAL;
         }
 
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, vpid))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, vpid))) {
             PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
             continue;
         }

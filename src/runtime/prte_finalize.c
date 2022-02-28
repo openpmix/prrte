@@ -41,7 +41,6 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/runtime.h"
-#include "src/util/listener.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
@@ -51,28 +50,24 @@ int prte_finalize(void)
     int rc, n;
     prte_job_t *jdata = NULL, *child_jdata = NULL, *next_jdata = NULL;
 
-    PRTE_ACQUIRE_THREAD(&prte_init_lock);
+    PMIX_ACQUIRE_THREAD(&prte_init_lock);
     if (!prte_initialized) {
-        PRTE_RELEASE_THREAD(&prte_init_lock);
+        PMIX_RELEASE_THREAD(&prte_init_lock);
         return PRTE_ERROR;
     }
     prte_initialized = false;
-    PRTE_RELEASE_THREAD(&prte_init_lock);
+    PMIX_RELEASE_THREAD(&prte_init_lock);
 
     /* protect against multiple calls */
-    if (prte_mutex_trylock(&prte_finalize_lock)) {
+    if (pmix_mutex_trylock(&prte_finalize_lock)) {
         return PRTE_SUCCESS;
     }
 
     /* flag that we are finalizing */
     prte_finalizing = true;
 
-    /* stop listening for connections - will
-     * be ignored if no listeners were registered */
-    prte_stop_listening();
-
     /* release the cache */
-    PRTE_RELEASE(prte_cache);
+    PMIX_RELEASE(prte_cache);
 
     /* Release the job hash table
      *
@@ -86,47 +81,44 @@ int prte_finalize(void)
      * release the prte_job_t objects.
      */
     for (n = 0; n < prte_job_data->size; n++) {
-        jdata = (prte_job_t *) prte_pointer_array_get_item(prte_job_data, n);
+        jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, n);
         if (NULL == jdata) {
             continue;
         }
         // Remove all children from the list
         // We do not want to destruct this list here since that occurs in the
         // prte_job_t destructor - which will happen in the next loop.
-        PRTE_LIST_FOREACH_SAFE(child_jdata, next_jdata, &jdata->children, prte_job_t)
+        PMIX_LIST_FOREACH_SAFE(child_jdata, next_jdata, &jdata->children, prte_job_t)
         {
-            prte_list_remove_item(&jdata->children, &child_jdata->super);
+            pmix_list_remove_item(&jdata->children, &child_jdata->super);
         }
-        PRTE_RELEASE(jdata);
+        PMIX_RELEASE(jdata);
     }
-    PRTE_RELEASE(prte_job_data);
+    PMIX_RELEASE(prte_job_data);
 
     {
-        prte_pointer_array_t *array = prte_node_topologies;
+        pmix_pointer_array_t *array = prte_node_topologies;
         int i;
         if (array->number_free != array->size) {
-            prte_mutex_lock(&array->lock);
             array->lowest_free = 0;
             array->number_free = array->size;
             for (i = 0; i < array->size; i++) {
                 if (NULL != array->addr[i]) {
                     prte_topology_t *topo = (prte_topology_t *) array->addr[i];
                     topo->topo = NULL;
-                    PRTE_RELEASE(topo);
+                    PMIX_RELEASE(topo);
                 }
                 array->addr[i] = NULL;
             }
-            prte_mutex_unlock(&array->lock);
         }
     }
-    PRTE_RELEASE(prte_node_topologies);
+    PMIX_RELEASE(prte_node_topologies);
 
     {
-        prte_pointer_array_t *array = prte_node_pool;
+        pmix_pointer_array_t *array = prte_node_pool;
         int i;
         prte_node_t *node;
         if (array->number_free != array->size) {
-            prte_mutex_lock(&array->lock);
             array->lowest_free = 0;
             array->number_free = array->size;
             for (i = 0; i < array->size; i++) {
@@ -134,17 +126,16 @@ int prte_finalize(void)
                     node = (prte_node_t *) array->addr[i];
                     if (NULL != node) {
                         if (NULL != node->daemon) {
-                            PRTE_RELEASE(node->daemon);
+                            PMIX_RELEASE(node->daemon);
                         }
-                        PRTE_RELEASE(node);
+                        PMIX_RELEASE(node);
                     }
                 }
                 array->addr[i] = NULL;
             }
-            prte_mutex_unlock(&array->lock);
         }
     }
-    PRTE_RELEASE(prte_node_pool);
+    PMIX_RELEASE(prte_node_pool);
 
     free(prte_process_info.nodename);
     prte_process_info.nodename = NULL;
@@ -158,9 +149,6 @@ int prte_finalize(void)
     prte_output_close(prte_debug_output);
 
     prte_mca_base_alias_cleanup();
-
-    /* finalize the class/object system */
-    prte_class_finalize();
 
     return PRTE_SUCCESS;
 }

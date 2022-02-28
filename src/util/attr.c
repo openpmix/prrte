@@ -21,7 +21,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/mca/errmgr/errmgr.h"
 
@@ -41,13 +41,13 @@ typedef struct {
 /* all default to NULL */
 static prte_attr_converter_t converters[MAX_CONVERTERS];
 
-bool prte_get_attribute(prte_list_t *attributes, prte_attribute_key_t key, void **data,
+bool prte_get_attribute(pmix_list_t *attributes, prte_attribute_key_t key, void **data,
                         pmix_data_type_t type)
 {
     prte_attribute_t *kv;
     int rc;
 
-    PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t)
+    PMIX_LIST_FOREACH(kv, attributes, prte_attribute_t)
     {
         if (key == kv->key) {
             if (kv->data.type != type) {
@@ -66,13 +66,13 @@ bool prte_get_attribute(prte_list_t *attributes, prte_attribute_key_t key, void 
     return false;
 }
 
-int prte_set_attribute(prte_list_t *attributes, prte_attribute_key_t key, bool local, void *data,
+int prte_set_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local, void *data,
                        pmix_data_type_t type)
 {
     prte_attribute_t *kv;
     int rc;
 
-    PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t)
+    PMIX_LIST_FOREACH(kv, attributes, prte_attribute_t)
     {
         if (key == kv->key) {
             if (kv->data.type != type) {
@@ -85,18 +85,18 @@ int prte_set_attribute(prte_list_t *attributes, prte_attribute_key_t key, bool l
         }
     }
     /* not found - add it */
-    kv = PRTE_NEW(prte_attribute_t);
+    kv = PMIX_NEW(prte_attribute_t);
     kv->key = key;
     kv->local = local;
     if (PRTE_SUCCESS != (rc = prte_attr_load(kv, data, type))) {
-        PRTE_RELEASE(kv);
+        PMIX_RELEASE(kv);
         return rc;
     }
-    prte_list_append(attributes, &kv->super);
+    pmix_list_append(attributes, &kv->super);
     return PRTE_SUCCESS;
 }
 
-prte_attribute_t *prte_fetch_attribute(prte_list_t *attributes, prte_attribute_t *prev,
+prte_attribute_t *prte_fetch_attribute(pmix_list_t *attributes, prte_attribute_t *prev,
                                        prte_attribute_key_t key)
 {
     prte_attribute_t *kv, *end, *next;
@@ -104,7 +104,7 @@ prte_attribute_t *prte_fetch_attribute(prte_list_t *attributes, prte_attribute_t
     /* if prev is NULL, then find the first attr on the list
      * that matches the key */
     if (NULL == prev) {
-        PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t)
+        PMIX_LIST_FOREACH(kv, attributes, prte_attribute_t)
         {
             if (key == kv->key) {
                 return kv;
@@ -115,69 +115,69 @@ prte_attribute_t *prte_fetch_attribute(prte_list_t *attributes, prte_attribute_t
     }
 
     /* if we are at the end of the list, then nothing to do */
-    end = (prte_attribute_t *) prte_list_get_end(attributes);
-    if (prev == end || end == (prte_attribute_t *) prte_list_get_next(&prev->super)
-        || NULL == prte_list_get_next(&prev->super)) {
+    end = (prte_attribute_t *) pmix_list_get_end(attributes);
+    if (prev == end || end == (prte_attribute_t *) pmix_list_get_next(&prev->super)
+        || NULL == pmix_list_get_next(&prev->super)) {
         return NULL;
     }
 
     /* starting with the next item on the list, search
      * for the next attr with the matching key */
-    next = (prte_attribute_t *) prte_list_get_next(&prev->super);
+    next = (prte_attribute_t *) pmix_list_get_next(&prev->super);
     while (NULL != next) {
         if (next->key == key) {
             return next;
         }
-        next = (prte_attribute_t *) prte_list_get_next(&next->super);
+        next = (prte_attribute_t *) pmix_list_get_next(&next->super);
     }
 
     /* if we get here, then no matching key was found */
     return NULL;
 }
 
-int prte_add_attribute(prte_list_t *attributes, prte_attribute_key_t key, bool local, void *data,
+int prte_add_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local, void *data,
                        pmix_data_type_t type)
 {
     prte_attribute_t *kv;
     int rc;
 
-    kv = PRTE_NEW(prte_attribute_t);
+    kv = PMIX_NEW(prte_attribute_t);
     kv->key = key;
     kv->local = local;
     if (PRTE_SUCCESS != (rc = prte_attr_load(kv, data, type))) {
-        PRTE_RELEASE(kv);
+        PMIX_RELEASE(kv);
         return rc;
     }
-    prte_list_append(attributes, &kv->super);
+    pmix_list_append(attributes, &kv->super);
     return PRTE_SUCCESS;
 }
 
-int prte_prepend_attribute(prte_list_t *attributes, prte_attribute_key_t key, bool local,
+int prte_prepend_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local,
                            void *data, pmix_data_type_t type)
 {
     prte_attribute_t *kv;
     int rc;
 
-    kv = PRTE_NEW(prte_attribute_t);
+    kv = PMIX_NEW(prte_attribute_t);
     kv->key = key;
     kv->local = local;
     if (PRTE_SUCCESS != (rc = prte_attr_load(kv, data, type))) {
-        PRTE_RELEASE(kv);
+        PMIX_RELEASE(kv);
         return rc;
     }
-    prte_list_prepend(attributes, &kv->super);
+    pmix_list_prepend(attributes, &kv->super);
     return PRTE_SUCCESS;
 }
 
-void prte_remove_attribute(prte_list_t *attributes, prte_attribute_key_t key)
+void prte_remove_attribute(pmix_list_t *attributes, prte_attribute_key_t key)
 {
     prte_attribute_t *kv;
 
-    PRTE_LIST_FOREACH(kv, attributes, prte_attribute_t)
+    PMIX_LIST_FOREACH(kv, attributes, prte_attribute_t)
     {
         if (key == kv->key) {
-            prte_list_remove_item(attributes, &kv->super);
-            PRTE_RELEASE(kv);
+            pmix_list_remove_item(attributes, &kv->super);
+            PMIX_RELEASE(kv);
             return;
         }
     }
@@ -191,7 +191,7 @@ int prte_attr_register(const char *project, prte_attribute_key_t key_base,
     for (i = 0; i < MAX_CONVERTERS; ++i) {
         if (0 == converters[i].init) {
             converters[i].init = 1;
-            prte_string_copy(converters[i].project, project, MAX_CONVERTER_PROJECT_LEN);
+            pmix_string_copy(converters[i].project, project, MAX_CONVERTER_PROJECT_LEN);
             converters[i].project[MAX_CONVERTER_PROJECT_LEN - 1] = '\0';
             converters[i].key_base = key_base;
             converters[i].key_max = key_max;
@@ -203,12 +203,12 @@ int prte_attr_register(const char *project, prte_attribute_key_t key_base,
     return PRTE_ERR_OUT_OF_RESOURCE;
 }
 
-char *prte_attr_print_list(prte_list_t *attributes)
+char *prte_attr_print_list(pmix_list_t *attributes)
 {
     char *out1, **cache = NULL;
     prte_attribute_t *attr;
 
-    PRTE_LIST_FOREACH(attr, attributes, prte_attribute_t)
+    PMIX_LIST_FOREACH(attr, attributes, prte_attribute_t)
     {
         pmix_argv_append_nosize(&cache, prte_attr_key_to_str(attr->key));
     }

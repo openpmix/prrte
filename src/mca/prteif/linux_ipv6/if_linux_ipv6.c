@@ -6,7 +6,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -52,11 +52,11 @@
 #include "constants.h"
 #include "src/mca/prteif/base/base.h"
 #include "src/mca/prteif/prteif.h"
-#include "src/util/if.h"
+#include "src/util/pmix_if.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 #define LOG_PREFIX "mca: prteif: linux_ipv6: "
 
@@ -69,7 +69,7 @@ prte_if_base_component_t prte_prteif_linux_ipv6_component = {
     {PRTE_IF_BASE_VERSION_2_0_0,
 
      /* Component name and version */
-     "linux_ipv6", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION,
+     "linux_ipv6", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PMIX_RELEASE_VERSION,
 
      /* Component open and close functions */
      if_linux_ipv6_open, NULL},
@@ -111,7 +111,7 @@ static int if_linux_ipv6_open(void)
 #if PRTE_ENABLE_IPV6
     FILE *f;
     if ((f = fopen("/proc/net/if_inet6", "r"))) {
-        char ifname[PRTE_IF_NAMESIZE];
+        char ifname[PMIX_IF_NAMESIZE];
         unsigned int idx, pfxlen, scope, dadstat;
         struct in6_addr a6;
         uint32_t flag;
@@ -141,7 +141,7 @@ static int if_linux_ipv6_open(void)
                 continue;
             }
 
-            intf = PRTE_NEW(prte_if_t);
+            intf = PMIX_NEW(prte_if_t);
             if (NULL == intf) {
                 prte_output(0, LOG_PREFIX "unable to allocate %lu bytes\n",
                             (unsigned long) sizeof(prte_if_t));
@@ -151,8 +151,8 @@ static int if_linux_ipv6_open(void)
             intf->af_family = AF_INET6;
 
             /* now construct the prte_if_t */
-            prte_string_copy(intf->if_name, ifname, PRTE_IF_NAMESIZE);
-            intf->if_index = prte_list_get_size(&prte_if_list) + 1;
+            pmix_string_copy(intf->if_name, ifname, PMIX_IF_NAMESIZE);
+            intf->if_index = pmix_list_get_size(&prte_if_list) + 1;
             intf->if_kernel_index = (uint16_t) idx;
             ((struct sockaddr_in6 *) &intf->if_addr)->sin6_addr = a6;
             ((struct sockaddr_in6 *) &intf->if_addr)->sin6_family = AF_INET6;
@@ -166,7 +166,7 @@ static int if_linux_ipv6_open(void)
 
             /* copy new interface information to heap and append
                to list */
-            prte_list_append(&prte_if_list, &(intf->super));
+            pmix_list_append(&prte_if_list, &(intf->super));
             prte_output_verbose(1, prte_prteif_base_framework.framework_output,
                                 LOG_PREFIX "added interface %s inet6 %s scope %x\n", ifname,
                                 addrstr, scope);

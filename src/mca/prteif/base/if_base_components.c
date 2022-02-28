@@ -23,12 +23,12 @@
 #include "src/mca/prteif/prteif.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 
 /* instantiate the global list of interfaces */
-prte_list_t prte_if_list = PRTE_LIST_STATIC_INIT;
+pmix_list_t prte_if_list = PMIX_LIST_STATIC_INIT;
 bool prte_if_retain_loopback = false;
 
 static int prte_if_base_open(prte_mca_base_open_flag_t flags);
@@ -39,7 +39,7 @@ static char **split_and_resolve(const char *orig_str, const char *name);
 static bool frameopen = false;
 
 /* instance the prte_if_t object */
-PRTE_CLASS_INSTANCE(prte_if_t, prte_list_item_t, prte_if_construct, NULL);
+PMIX_CLASS_INSTANCE(prte_if_t, pmix_list_item_t, prte_if_construct, NULL);
 
 PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prteif, NULL, NULL, prte_if_base_open,
                                 prte_if_base_close, prte_prteif_base_static_components,
@@ -61,7 +61,7 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
     frameopen = true;
 
     /* setup the global list */
-    PRTE_CONSTRUCT(&prte_if_list, prte_list_t);
+    PMIX_CONSTRUCT(&prte_if_list, pmix_list_t);
 
     rc = prte_mca_base_framework_components_open(&prte_prteif_base_framework, flags);
     if (PRTE_SUCCESS != rc) {
@@ -83,7 +83,7 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
         excluding = true;
     }
     /* look at all available interfaces */
-    PRTE_LIST_FOREACH_SAFE(selected_interface, next, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH_SAFE(selected_interface, next, &prte_if_list, prte_if_t)
     {
         i = selected_interface->if_index;
         kindex = selected_interface->if_kernel_index;
@@ -95,8 +95,8 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
             && AF_INET6 != my_ss.ss_family
 #endif
             ) {
-            prte_list_remove_item(&prte_if_list, &selected_interface->super);
-            PRTE_RELEASE(selected_interface);
+            pmix_list_remove_item(&prte_if_list, &selected_interface->super);
+            PMIX_RELEASE(selected_interface);
             continue;
         }
         prte_output_verbose(10, prte_prteif_base_framework.framework_output,
@@ -105,15 +105,15 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
 
         /* remove any virtual interfaces */
         if (0 == strncmp(selected_interface->if_name, "vir", 3)) {
-            prte_list_remove_item(&prte_if_list, &selected_interface->super);
-            PRTE_RELEASE(selected_interface);
+            pmix_list_remove_item(&prte_if_list, &selected_interface->super);
+            PMIX_RELEASE(selected_interface);
             continue;
         }
 
         /* handle include/exclude directives */
         if (NULL != interfaces) {
             /* check for match */
-            rc = prte_ifmatches(kindex, interfaces);
+            rc = pmix_ifmatches(kindex, interfaces);
             /* if one of the network specifications isn't parseable, then
              * error out as we can't do what was requested
              */
@@ -129,8 +129,8 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
                                         20, prte_prteif_base_framework.framework_output,
                                         "%s oob:tcp:init rejecting interface %s (not in include list)",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), selected_interface->if_name);
-                    prte_list_remove_item(&prte_if_list, &selected_interface->super);
-                    PRTE_RELEASE(selected_interface);
+                    pmix_list_remove_item(&prte_if_list, &selected_interface->super);
+                    PMIX_RELEASE(selected_interface);
                     continue;
                 }
             } else {
@@ -140,8 +140,8 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
                                         "%s oob:tcp:init rejecting interface %s (in exclude list)",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         selected_interface->if_name);
-                    prte_list_remove_item(&prte_if_list, &selected_interface->super);
-                    PRTE_RELEASE(selected_interface);
+                    pmix_list_remove_item(&prte_if_list, &selected_interface->super);
+                    PMIX_RELEASE(selected_interface);
                    continue;
                 }
             }
@@ -149,13 +149,13 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
             /* if no specific interfaces were provided, we remove the loopback
              * interface unless nothing else is available
              */
-            if (1 < prte_ifcount() && prte_ifisloopback(i)) {
+            if (1 < pmix_ifcount() && pmix_ifisloopback(i)) {
                 prte_output_verbose(20, prte_prteif_base_framework.framework_output,
                                     "%s if: rejecting loopback interface %s",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                     selected_interface->if_name);
-                prte_list_remove_item(&prte_if_list, &selected_interface->super);
-                PRTE_RELEASE(selected_interface);
+                pmix_list_remove_item(&prte_if_list, &selected_interface->super);
+                PMIX_RELEASE(selected_interface);
                 continue;
             }
         }
@@ -174,7 +174,7 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
         pmix_argv_free(interfaces);
     }
 
-    if (0 == prte_list_get_size(&prte_if_list)) {
+    if (0 == pmix_list_get_size(&prte_if_list)) {
         if (including) {
             prte_show_help("help-oob-tcp.txt", "no-included-found", true,
                            prte_if_include);
@@ -190,17 +190,17 @@ static int prte_if_base_open(prte_mca_base_open_flag_t flags)
 
 static int prte_if_base_close(void)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
 
     if (!frameopen) {
         return PRTE_SUCCESS;
     }
     frameopen = false;
 
-    while (NULL != (item = prte_list_remove_first(&prte_if_list))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&prte_if_list))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&prte_if_list);
+    PMIX_DESTRUCT(&prte_if_list);
 
     return prte_mca_base_framework_components_close(&prte_prteif_base_framework, NULL);
 }
@@ -232,7 +232,7 @@ static char **split_and_resolve(const char *orig_str,
     char **argv, **interfaces, *str;
     struct sockaddr_storage argv_inaddr, if_inaddr;
     uint32_t argv_prefix;
-    char if_name[PRTE_IF_NAMESIZE];
+    char if_name[PMIX_IF_NAMESIZE];
     bool found;
 
     /* Sanity check */
@@ -278,26 +278,26 @@ static char **split_and_resolve(const char *orig_str,
         prte_output_verbose(20, prte_prteif_base_framework.framework_output,
                             "%s if: Searching for %s address+prefix: %s / %u",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), name,
-                            prte_net_get_hostname((struct sockaddr *) &argv_inaddr), argv_prefix);
+                            pmix_net_get_hostname((struct sockaddr *) &argv_inaddr), argv_prefix);
 
 
         /* Go through all interfaces to see if we can find one or more matches */
         found = false;
-        for (if_index = prte_ifbegin(); if_index >= 0;
-             if_index = prte_ifnext(if_index)) {
-            prte_ifindextoaddr(if_index,
+        for (if_index = pmix_ifbegin(); if_index >= 0;
+             if_index = pmix_ifnext(if_index)) {
+            pmix_ifindextoaddr(if_index,
                                (struct sockaddr*) &if_inaddr,
                                sizeof(if_inaddr));
-            if (prte_net_samenetwork(&argv_inaddr, &if_inaddr, argv_prefix)) {
+            if (pmix_net_samenetwork(&argv_inaddr, &if_inaddr, argv_prefix)) {
                 /* We found a match. If it's not already in the interfaces array,
                    add it. If it's already in the array, treat it as a match */
                 found = true;
-                prte_ifindextoname(if_index, if_name, sizeof(if_name));
+                pmix_ifindextoname(if_index, if_name, sizeof(if_name));
                 pmix_argv_append_unique_nosize(&interfaces, if_name);
                     prte_output_verbose(20,
                                         prte_prteif_base_framework.framework_output,
                                         "prteif:base: Found match: %s (%s)",
-                                        prte_net_get_hostname((struct sockaddr*) &if_inaddr),
+                                        pmix_net_get_hostname((struct sockaddr*) &if_inaddr),
                                         if_name);
             }
         }

@@ -27,8 +27,8 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
-#include "src/class/prte_object.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_object.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/cmd_line.h"
@@ -56,11 +56,11 @@ static int endswith(const char *str, const char *suffix)
 }
 
 static void check_store(const char *name, const char *option,
-                        prte_cli_result_t *results)
+                        pmix_cli_result_t *results)
 {
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
-    PRTE_LIST_FOREACH(opt, &results->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH(opt, &results->instances, pmix_cli_item_t) {
         if (0 == strcmp(opt->key, name)) {
             /* if the name is NULL, then this is just setting
              * a boolean value - the presence of the option in
@@ -73,9 +73,9 @@ static void check_store(const char *name, const char *option,
     }
 
     // get here if this is new option
-    opt = PRTE_NEW(prte_cli_item_t);
+    opt = PMIX_NEW(pmix_cli_item_t);
     opt->key = strdup(name);
-    prte_list_append(&results->instances, &opt->super);
+    pmix_list_append(&results->instances, &opt->super);
     /* if the name is NULL, then this is just setting
      * a boolean value - the presence of the option in
      * the results is considered "true" */
@@ -88,7 +88,7 @@ static void check_store(const char *name, const char *option,
 int prte_cmd_line_parse(char **pargv, char *shorts,
                         struct option myoptions[],
                         prte_cmd_line_store_fn_t storefn,
-                        prte_cli_result_t *results,
+                        pmix_cli_result_t *results,
                         char *helpfile)
 {
     int option_index = 0;   /* getopt_long stores the option index here. */
@@ -363,12 +363,12 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
     return PRTE_SUCCESS;
 }
 
-static void icon(prte_cli_item_t *p)
+static void icon(pmix_cli_item_t *p)
 {
     p->key = NULL;
     p->values = NULL;
 }
-static void ides(prte_cli_item_t *p)
+static void ides(pmix_cli_item_t *p)
 {
     if (NULL != p->key) {
         free(p->key);
@@ -377,22 +377,22 @@ static void ides(prte_cli_item_t *p)
         pmix_argv_free(p->values);
     }
 }
-PRTE_CLASS_INSTANCE(prte_cli_item_t,
-                    prte_list_item_t,
+PMIX_CLASS_INSTANCE(pmix_cli_item_t,
+                    pmix_list_item_t,
                     icon, ides);
 
-static void ocon(prte_cli_result_t *p)
+static void ocon(pmix_cli_result_t *p)
 {
-    PRTE_CONSTRUCT(&p->instances, prte_list_t);
+    PMIX_CONSTRUCT(&p->instances, pmix_list_t);
     p->tail = NULL;
 }
-static void odes(prte_cli_result_t *p)
+static void odes(pmix_cli_result_t *p)
 {
-    PRTE_LIST_DESTRUCT(&p->instances);
+    PMIX_LIST_DESTRUCT(&p->instances);
     if (NULL != p->tail) {
         pmix_argv_free(p->tail);
     }
 }
-PRTE_CLASS_INSTANCE(prte_cli_result_t,
-                    prte_object_t,
+PMIX_CLASS_INSTANCE(pmix_cli_result_t,
+                    pmix_object_t,
                     ocon, odes);

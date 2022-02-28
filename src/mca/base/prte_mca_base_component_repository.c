@@ -38,8 +38,8 @@
 #endif
 
 #include "constants.h"
-#include "src/class/prte_hash_table.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_hash_table.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_component_repository.h"
 #include "src/mca/mca.h"
@@ -47,7 +47,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 #if PRTE_HAVE_DL_SUPPORT
 
@@ -56,25 +56,25 @@
  */
 static void ri_constructor(prte_mca_base_component_repository_item_t *ri);
 static void ri_destructor(prte_mca_base_component_repository_item_t *ri);
-PRTE_CLASS_INSTANCE(prte_mca_base_component_repository_item_t, prte_list_item_t, ri_constructor,
+PMIX_CLASS_INSTANCE(prte_mca_base_component_repository_item_t, pmix_list_item_t, ri_constructor,
                     ri_destructor);
 
 #endif /* PRTE_HAVE_DL_SUPPORT */
 
-static void clf_constructor(prte_object_t *obj);
-static void clf_destructor(prte_object_t *obj);
+static void clf_constructor(pmix_object_t *obj);
+static void clf_destructor(pmix_object_t *obj);
 
-PRTE_CLASS_INSTANCE(prte_mca_base_failed_component_t, prte_list_item_t, clf_constructor,
+PMIX_CLASS_INSTANCE(prte_mca_base_failed_component_t, pmix_list_item_t, clf_constructor,
                     clf_destructor);
 
-static void clf_constructor(prte_object_t *obj)
+static void clf_constructor(pmix_object_t *obj)
 {
     prte_mca_base_failed_component_t *cli = (prte_mca_base_failed_component_t *) obj;
     cli->comp = NULL;
     cli->error_msg = NULL;
 }
 
-static void clf_destructor(prte_object_t *obj)
+static void clf_destructor(pmix_object_t *obj)
 {
     prte_mca_base_failed_component_t *cli = (prte_mca_base_failed_component_t *) obj;
     cli->comp = NULL;
@@ -91,7 +91,7 @@ static bool initialized = false;
 
 #if PRTE_HAVE_DL_SUPPORT
 
-static prte_hash_table_t prte_mca_base_component_repository;
+static pmix_hash_table_t prte_mca_base_component_repository;
 
 /* two-level macro for stringifying a number */
 #    define STRINGIFYX(x) #    x
@@ -102,7 +102,7 @@ static int process_repository_item(const char *filename, void *data)
     char name[PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN + 1];
     char type[PRTE_MCA_BASE_MAX_TYPE_NAME_LEN + 1];
     prte_mca_base_component_repository_item_t *ri;
-    prte_list_t *component_list;
+    pmix_list_t *component_list;
     char *base;
     int ret;
     PRTE_HIDE_UNUSED_PARAMS(data);
@@ -131,27 +131,27 @@ static int process_repository_item(const char *filename, void *data)
     }
 
     /* lookup the associated framework list and create if it doesn't already exist */
-    ret = prte_hash_table_get_value_ptr(&prte_mca_base_component_repository, type, strlen(type),
+    ret = pmix_hash_table_get_value_ptr(&prte_mca_base_component_repository, type, strlen(type),
                                         (void **) &component_list);
     if (PRTE_SUCCESS != ret) {
-        component_list = PRTE_NEW(prte_list_t);
+        component_list = PMIX_NEW(pmix_list_t);
         if (NULL == component_list) {
             free(base);
             /* OOM. nothing to do but fail */
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
 
-        ret = prte_hash_table_set_value_ptr(&prte_mca_base_component_repository, type, strlen(type),
+        ret = pmix_hash_table_set_value_ptr(&prte_mca_base_component_repository, type, strlen(type),
                                             (void *) component_list);
         if (PRTE_SUCCESS != ret) {
             free(base);
-            PRTE_RELEASE(component_list);
+            PMIX_RELEASE(component_list);
             return ret;
         }
     }
 
     /* check for duplicate components */
-    PRTE_LIST_FOREACH(ri, component_list, prte_mca_base_component_repository_item_t)
+    PMIX_LIST_FOREACH(ri, component_list, prte_mca_base_component_repository_item_t)
     {
         if (0 == strcmp(ri->ri_name, name)) {
             /* already scanned this component */
@@ -160,7 +160,7 @@ static int process_repository_item(const char *filename, void *data)
         }
     }
 
-    ri = PRTE_NEW(prte_mca_base_component_repository_item_t);
+    ri = PMIX_NEW(prte_mca_base_component_repository_item_t);
     if (NULL == ri) {
         free(base);
         return PRTE_ERR_OUT_OF_RESOURCE;
@@ -170,14 +170,14 @@ static int process_repository_item(const char *filename, void *data)
 
     ri->ri_path = strdup(filename);
     if (NULL == ri->ri_path) {
-        PRTE_RELEASE(ri);
+        PMIX_RELEASE(ri);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    prte_string_copy(ri->ri_type, type, PRTE_MCA_BASE_MAX_TYPE_NAME_LEN);
-    prte_string_copy(ri->ri_name, name, PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN);
+    pmix_string_copy(ri->ri_type, type, PRTE_MCA_BASE_MAX_TYPE_NAME_LEN);
+    pmix_string_copy(ri->ri_name, name, PRTE_MCA_BASE_MAX_COMPONENT_NAME_LEN);
 
-    prte_list_append(component_list, &ri->super);
+    pmix_list_append(component_list, &ri->super);
 
     return PRTE_SUCCESS;
 }
@@ -264,8 +264,8 @@ int prte_mca_base_component_repository_init(void)
         }
         prte_dl_base_select();
 
-        PRTE_CONSTRUCT(&prte_mca_base_component_repository, prte_hash_table_t);
-        ret = prte_hash_table_init(&prte_mca_base_component_repository, 128);
+        PMIX_CONSTRUCT(&prte_mca_base_component_repository, pmix_hash_table_t);
+        ret = pmix_hash_table_init(&prte_mca_base_component_repository, 128);
         if (PRTE_SUCCESS != ret) {
             (void) prte_mca_base_framework_close(&prte_prtedl_base_framework);
             return ret;
@@ -274,7 +274,7 @@ int prte_mca_base_component_repository_init(void)
         ret = prte_mca_base_component_repository_add(prte_mca_base_component_path);
         if (PRTE_SUCCESS != ret) {
             prte_output(0, "ERROR ON REPO ADD");
-            PRTE_DESTRUCT(&prte_mca_base_component_repository);
+            PMIX_DESTRUCT(&prte_mca_base_component_repository);
             (void) prte_mca_base_framework_close(&prte_prtedl_base_framework);
             return ret;
         }
@@ -289,11 +289,11 @@ int prte_mca_base_component_repository_init(void)
 }
 
 int prte_mca_base_component_repository_get_components(prte_mca_base_framework_t *framework,
-                                                      prte_list_t **framework_components)
+                                                      pmix_list_t **framework_components)
 {
     *framework_components = NULL;
 #if PRTE_HAVE_DL_SUPPORT
-    return prte_hash_table_get_value_ptr(&prte_mca_base_component_repository,
+    return pmix_hash_table_get_value_ptr(&prte_mca_base_component_repository,
                                          framework->framework_name,
                                          strlen(framework->framework_name),
                                          (void **) framework_components);
@@ -326,17 +326,17 @@ prte_mca_base_component_repository_release_internal(prte_mca_base_component_repo
 static prte_mca_base_component_repository_item_t *find_component(const char *type, const char *name)
 {
     prte_mca_base_component_repository_item_t *ri;
-    prte_list_t *component_list;
+    pmix_list_t *component_list;
     int ret;
 
-    ret = prte_hash_table_get_value_ptr(&prte_mca_base_component_repository, type, strlen(type),
+    ret = pmix_hash_table_get_value_ptr(&prte_mca_base_component_repository, type, strlen(type),
                                         (void **) &component_list);
     if (PRTE_SUCCESS != ret) {
         /* component does not exist in the repository */
         return NULL;
     }
 
-    PRTE_LIST_FOREACH(ri, component_list, prte_mca_base_component_repository_item_t)
+    PMIX_LIST_FOREACH(ri, component_list, prte_mca_base_component_repository_item_t)
     {
         if (0 == strcmp(ri->ri_name, name)) {
             return ri;
@@ -398,7 +398,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
        Hence, returning PRTE_ERR_PARAM indicates that the *file* failed
        to load, not the component. */
 
-    PRTE_LIST_FOREACH(mitem, &framework->framework_components, prte_mca_base_component_list_item_t)
+    PMIX_LIST_FOREACH(mitem, &framework->framework_components, prte_mca_base_component_list_item_t)
     {
         if (0 == strcmp(mitem->cli_component->mca_component_name, ri->ri_name)) {
             prte_output_verbose(PRTE_MCA_BASE_VERBOSE_INFO, 0,
@@ -414,13 +414,13 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
         prte_output_verbose(
             PRTE_MCA_BASE_VERBOSE_INFO, 0,
             "mca_base_component_repository_open: already loaded. returning cached component");
-        mitem = PRTE_NEW(prte_mca_base_component_list_item_t);
+        mitem = PMIX_NEW(prte_mca_base_component_list_item_t);
         if (NULL == mitem) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
 
         mitem->cli_component = ri->ri_component_struct;
-        prte_list_append(&framework->framework_components, &mitem->super);
+        pmix_list_append(&framework->framework_components, &mitem->super);
 
         return PRTE_SUCCESS;
     }
@@ -455,14 +455,14 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
             ri->ri_base, err_msg);
 
         if (prte_mca_base_component_track_load_errors) {
-            prte_mca_base_failed_component_t *f_comp = PRTE_NEW(prte_mca_base_failed_component_t);
+            prte_mca_base_failed_component_t *f_comp = PMIX_NEW(prte_mca_base_failed_component_t);
             f_comp->comp = ri;
             if (0 > asprintf(&(f_comp->error_msg), "%s", err_msg)) {
-                PRTE_RELEASE(f_comp);
+                PMIX_RELEASE(f_comp);
                 free(err_msg);
                 return PRTE_ERR_BAD_PARAM;
             }
-            prte_list_append(&framework->framework_failed_components, &f_comp->super);
+            pmix_list_append(&framework->framework_failed_components, &f_comp->super);
         }
 
         free(err_msg);
@@ -479,7 +479,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
             break;
         }
 
-        mitem = PRTE_NEW(prte_mca_base_component_list_item_t);
+        mitem = PMIX_NEW(prte_mca_base_component_list_item_t);
         if (NULL == mitem) {
             ret = PRTE_ERR_OUT_OF_RESOURCE;
             break;
@@ -539,7 +539,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
 
         ri->ri_component_struct = mitem->cli_component = component_struct;
         ri->ri_refcnt = 1;
-        prte_list_append(&framework->framework_components, &mitem->super);
+        pmix_list_append(&framework->framework_components, &mitem->super);
 
         prte_output_verbose(PRTE_MCA_BASE_VERBOSE_INFO, 0,
                             "mca_base_component_repository_open: opened dynamic %s MCA "
@@ -550,7 +550,7 @@ int prte_mca_base_component_repository_open(prte_mca_base_framework_t *framework
     } while (0);
 
     if (mitem) {
-        PRTE_RELEASE(mitem);
+        PMIX_RELEASE(mitem);
     }
 
     if (struct_name) {
@@ -580,21 +580,21 @@ void prte_mca_base_component_repository_finalize(void)
     initialized = false;
 
 #if PRTE_HAVE_DL_SUPPORT
-    prte_list_t *component_list;
+    pmix_list_t *component_list;
     void *node, *key;
     size_t key_size;
     int ret;
 
-    ret = prte_hash_table_get_first_key_ptr(&prte_mca_base_component_repository, &key, &key_size,
+    ret = pmix_hash_table_get_first_key_ptr(&prte_mca_base_component_repository, &key, &key_size,
                                             (void **) &component_list, &node);
     while (PRTE_SUCCESS == ret) {
-        PRTE_LIST_RELEASE(component_list);
-        ret = prte_hash_table_get_next_key_ptr(&prte_mca_base_component_repository, &key, &key_size,
+        PMIX_LIST_RELEASE(component_list);
+        ret = pmix_hash_table_get_next_key_ptr(&prte_mca_base_component_repository, &key, &key_size,
                                                (void **) &component_list, node, &node);
     }
 
     (void) prte_mca_base_framework_close(&prte_prtedl_base_framework);
-    PRTE_DESTRUCT(&prte_mca_base_component_repository);
+    PMIX_DESTRUCT(&prte_mca_base_component_repository);
 #endif
 }
 

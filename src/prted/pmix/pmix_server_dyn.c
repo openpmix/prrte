@@ -36,10 +36,10 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
-#include "src/util/prte_getcwd.h"
+#include "src/util/pmix_path.h"
+#include "src/util/pmix_getcwd.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -47,7 +47,7 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/show_help.h"
 
@@ -67,7 +67,7 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     }
 
     /* retrieve the request */
-    prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
+    pmix_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
     if (NULL == req) {
         /* we are hosed */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -84,7 +84,7 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
         req->toolcbfunc(ret, &req->target, req->cbdata);
     }
     /* cleanup */
-    PRTE_RELEASE(req);
+    PMIX_RELEASE(req);
 
     /* mark that we sent it */
     prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED,
@@ -136,11 +136,11 @@ static void spawn(int sd, short args, void *cbdata)
     char nspace[PMIX_MAX_NSLEN + 1];
     pmix_status_t prc;
 
-    PRTE_ACQUIRE_OBJECT(req);
+    PMIX_ACQUIRE_OBJECT(req);
 
     /* add this request to our tracker hotel */
     PRTE_ADJUST_TIMEOUT(req);
-    rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+    rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
     if (PRTE_SUCCESS != rc) {
         prte_show_help("help-prted.txt", "noroom", true, req->operation,
                        prte_pmix_server_globals.num_rooms);
@@ -159,7 +159,7 @@ static void spawn(int sd, short args, void *cbdata)
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         goto callback;
     }
 
@@ -167,7 +167,7 @@ static void spawn(int sd, short args, void *cbdata)
     rc = prte_job_pack(buf, req->jdata);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
@@ -177,7 +177,7 @@ static void spawn(int sd, short args, void *cbdata)
         != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_PLM,
                                          prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
@@ -190,7 +190,7 @@ callback:
         PMIX_LOAD_NSPACE(nspace, NULL);
         req->spcbfunc(prc, nspace, req->cbdata);
     }
-    PRTE_RELEASE(req);
+    PMIX_RELEASE(req);
 }
 
 static int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info);
@@ -217,22 +217,22 @@ static void interim(int sd, short args, void *cbdata)
                         (int) cd->napps);
 
     /* create the job object */
-    jdata = PRTE_NEW(prte_job_t);
-    jdata->map = PRTE_NEW(prte_job_map_t);
+    jdata = PMIX_NEW(prte_job_t);
+    jdata->map = PMIX_NEW(prte_job_map_t);
     /* default to the requestor as the originator */
     PMIX_LOAD_PROCID(&jdata->originator, requestor->nspace, requestor->rank);
 
     /* transfer the apps across */
     for (n = 0; n < cd->napps; n++) {
         papp = &cd->apps[n];
-        app = PRTE_NEW(prte_app_context_t);
-        app->idx = prte_pointer_array_add(jdata->apps, app);
+        app = PMIX_NEW(prte_app_context_t);
+        app->idx = pmix_pointer_array_add(jdata->apps, app);
         jdata->num_apps++;
         if (NULL != papp->cmd) {
             app->app = strdup(papp->cmd);
         } else if (NULL == papp->argv || NULL == papp->argv[0]) {
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            PRTE_RELEASE(jdata);
+            PMIX_RELEASE(jdata);
             rc = PRTE_ERR_BAD_PARAM;
             goto complete;
         } else {
@@ -268,17 +268,17 @@ static void interim(int sd, short args, void *cbdata)
                                        info->value.data.string, PMIX_STRING);
                 } else if (PMIX_CHECK_KEY(info, PMIX_WDIR)) {
                     /* if this is a relative path, convert it to an absolute path */
-                    if (prte_path_is_absolute(info->value.data.string)) {
+                    if (pmix_path_is_absolute(info->value.data.string)) {
                         app->cwd = strdup(info->value.data.string);
                     } else {
                         /* get the cwd */
-                        if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
+                        if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
                             prte_show_help("help-prted.txt", "cwd", true, "spawn", rc);
-                            PRTE_RELEASE(jdata);
+                            PMIX_RELEASE(jdata);
                             goto complete;
                         }
                         /* construct the absolute path */
-                        app->cwd = prte_os_path(false, cwd, info->value.data.string, NULL);
+                        app->cwd = pmix_os_path(false, cwd, info->value.data.string, NULL);
                     }
                 } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_BIN)) {
                     flag = PMIX_INFO_TRUE(info);
@@ -442,7 +442,7 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_MAX_RESTARTS)) {
             for (i = 0; i < jdata->apps->size; i++) {
                 if (NULL
-                    == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+                    == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
                     continue;
                 }
                 prte_set_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, PRTE_ATTR_GLOBAL,
@@ -674,7 +674,7 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
             for (n=0; n < (size_t)jdata->apps->size; n++) {
-                app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, n);
+                app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, n);
                 if (NULL != app) {
                     PRTE_FLAG_SET(app, PRTE_APP_FLAG_TOOL);
                 }
@@ -719,7 +719,7 @@ static void interim(int sd, short args, void *cbdata)
     /* set debugger flags on apps if needed */
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
         for (n=0; n < (size_t)jdata->apps->size; n++) {
-            app = (prte_app_context_t*)prte_pointer_array_get_item(jdata->apps, n);
+            app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, n);
             if (NULL != app) {
                 PRTE_FLAG_SET(app, PRTE_APP_FLAG_TOOL);
             }
@@ -737,7 +737,7 @@ static void interim(int sd, short args, void *cbdata)
      * and thread-shift the entire thing so it can be safely added to
      * our tracking list */
     PRTE_SPN_REQ(jdata, spawn, cd->spcbfunc, cd->cbdata);
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
     return;
 
 complete:
@@ -750,23 +750,23 @@ complete:
         /* this isn't going to launch, so indicate that */
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 static int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info)
 {
     prte_info_item_t *kv;
-    prte_list_t *cache;
+    pmix_list_t *cache;
 
     /* cache for inclusion with job info at registration */
-    kv = PRTE_NEW(prte_info_item_t);
+    kv = PMIX_NEW(prte_info_item_t);
     PMIX_INFO_XFER(&kv->info, info);
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, (void **) &cache,
                            PMIX_POINTER)) {
-        prte_list_append(cache, &kv->super);
+        pmix_list_append(cache, &kv->super);
     } else {
-        cache = PRTE_NEW(prte_list_t);
-        prte_list_append(cache, &kv->super);
+        cache = PMIX_NEW(pmix_list_t);
+        pmix_list_append(cache, &kv->super);
         prte_set_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void *) cache,
                            PMIX_POINTER);
     }
@@ -783,7 +783,7 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc, const pmix_info_t job_info[], 
                         "%s spawn upcalled on behalf of proc %s:%u with %" PRIsize_t " job infos",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), proc->nspace, proc->rank, ninfo);
 
-    cd = PRTE_NEW(prte_pmix_server_op_caddy_t);
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
     PMIX_LOAD_PROCID(&cd->proc, proc->nspace, proc->rank);
     cd->info = (pmix_info_t *) job_info;
     cd->ninfo = ninfo;
@@ -793,7 +793,7 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc, const pmix_info_t job_info[], 
     cd->cbdata = cbdata;
     prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, interim, cd);
     prte_event_set_priority(&cd->ev, PRTE_MSG_PRI);
-    PRTE_POST_OBJECT(cd);
+    PMIX_POST_OBJECT(cd);
     prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
     return PRTE_SUCCESS;
 }
@@ -818,7 +818,7 @@ static void _cnlk(pmix_status_t status, pmix_pdata_t data[], size_t ndata, void 
     pmix_info_t *info = NULL;
     size_t ninfo;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
 
     /* if we failed to get the required data, then just inform
      * the embedded server that the connect cannot succeed */
@@ -867,7 +867,7 @@ static void _cnlk(pmix_status_t status, pmix_pdata_t data[], size_t ndata, void 
 
     /* we have to process the data to convert it into an prte_job_t
      * that describes this job as we didn't already have it */
-    jdata = PRTE_NEW(prte_job_t);
+    jdata = PMIX_NEW(prte_job_t);
 
     /* register the data with the local server */
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
@@ -889,14 +889,14 @@ static void _cnlk(pmix_status_t status, pmix_pdata_t data[], size_t ndata, void 
     /* we don't need to protect the re-referenced data as
      * the prte_pmix_server_op_caddy_t does not have
      * a destructor! */
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
     return;
 
 release:
     if (NULL != cd->cbfunc) {
         cd->cbfunc(ret, cd->cbdata);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 static void cndbfunc(pmix_status_t status, void *cbdata)
@@ -917,7 +917,7 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     uint32_t ctxid;
     bool first = true;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
 
     /* process returned data */
     if (NULL != buf && 0 != buf->bytes_used) {
@@ -978,7 +978,7 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
         md->opcbfunc(status, md->cbdata);
     }
 
-    PRTE_RELEASE(md);
+    PMIX_RELEASE(md);
 }
 
 static void _cnct(int sd, short args, void *cbdata)
@@ -998,7 +998,7 @@ static void _cnct(int sd, short args, void *cbdata)
     pmix_scope_t scope;
     prte_pmix_mdx_caddy_t *md;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
 
     /* at some point, we need to add bookeeping to track which
      * procs are "connected" so we know who to notify upon
@@ -1054,7 +1054,7 @@ static void _cnct(int sd, short args, void *cbdata)
         }
         /* cycle thru our local children and collect any info they have posted */
         for (m=0; m < prte_local_children->size; m++) {
-            if (NULL == (proc = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, m))) {
+            if (NULL == (proc = (prte_proc_t*)pmix_pointer_array_get_item(prte_local_children, m))) {
                 continue;
             }
             if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
@@ -1109,8 +1109,8 @@ static void _cnct(int sd, short args, void *cbdata)
      * nodes, (b) send along any information posted by the participants
      * for "remote" scope, and (c) request assignment of a unique context ID
      * that the app can use for things like a communicator ID */
-    md = PRTE_NEW(prte_pmix_mdx_caddy_t);
-    md->sig = PRTE_NEW(prte_grpcomm_signature_t);
+    md = PMIX_NEW(prte_pmix_mdx_caddy_t);
+    md->sig = PMIX_NEW(prte_grpcomm_signature_t);
     md->sig->sz = cd->nprocs;
     md->sig->signature = (pmix_proc_t *) malloc(md->sig->sz * sizeof(pmix_proc_t));
     memcpy(md->sig->signature, cd->procs, md->sig->sz * sizeof(pmix_proc_t));
@@ -1122,11 +1122,11 @@ static void _cnct(int sd, short args, void *cbdata)
     rc = prte_grpcomm.allgather(md->sig, &dbuf, 1, cd->status, connect_release, md);
     if (PMIX_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(md);
+        PMIX_RELEASE(md);
         PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
         goto release;
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
     return;
 
 release:
@@ -1134,7 +1134,7 @@ release:
     if (NULL != cd->cbfunc) {
         cd->cbfunc(rc, cd->cbdata);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
@@ -1151,7 +1151,7 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
         return PMIX_ERR_BAD_PARAM;
     }
     /* must thread shift this as we will be accessing global data */
-    op = PRTE_NEW(prte_pmix_server_op_caddy_t);
+    op = PMIX_NEW(prte_pmix_server_op_caddy_t);
     op->procs = (pmix_proc_t *) procs;
     op->nprocs = nprocs;
     op->info = (pmix_info_t *) info;
@@ -1171,7 +1171,7 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     op->cbdata = cbdata;
     prte_event_set(prte_event_base, &(op->ev), -1, PRTE_EV_WRITE, _cnct, op);
     prte_event_set_priority(&(op->ev), PRTE_MSG_PRI);
-    PRTE_POST_OBJECT(op);
+    PMIX_POST_OBJECT(op);
     prte_event_active(&(op->ev), PRTE_EV_WRITE, 1);
 
     return PMIX_SUCCESS;
@@ -1182,12 +1182,12 @@ static void mdxcbfunc(pmix_status_t status, const char *data, size_t ndata, void
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
 
-    PRTE_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(cd);
     /* ack the call */
     if (NULL != cd->cbfunc) {
         cd->cbfunc(status, cd->cbdata);
     }
-    PRTE_RELEASE(cd);
+    PMIX_RELEASE(cd);
 }
 
 pmix_status_t pmix_server_disconnect_fn(const pmix_proc_t procs[], size_t nprocs,
@@ -1205,14 +1205,14 @@ pmix_status_t pmix_server_disconnect_fn(const pmix_proc_t procs[], size_t nprocs
      * termination or failure. For now, just execute a fence
      * Note that we do not need to thread-shift here as the
      * fence function will do it for us */
-    cd = PRTE_NEW(prte_pmix_server_op_caddy_t);
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
 
     rc = pmix_server_fencenb_fn(procs, nprocs, info, ninfo, NULL, 0, mdxcbfunc, cd);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(cd);
+        PMIX_RELEASE(cd);
     }
 
     return rc;

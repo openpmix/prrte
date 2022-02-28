@@ -4,7 +4,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -15,7 +15,7 @@
 #include "prte_config.h"
 #include "constants.h"
 #include "src/util/output.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 #include <string.h>
 #ifdef HAVE_UNISTD_H
@@ -70,7 +70,7 @@ prte_if_base_component_t prte_prteif_bsdx_ipv6_component = {
     {PRTE_IF_BASE_VERSION_2_0_0,
 
      /* Component name and version */
-     "bsdx_ipv6", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION,
+     "bsdx_ipv6", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PMIX_RELEASE_VERSION,
 
      /* Component open and close functions */
      if_bsdx_ipv6_open, NULL},
@@ -169,15 +169,15 @@ static int if_bsdx_ipv6_open(void)
         /* fill values into the prte_if_t */
         memcpy(&a6, &(sin_addr->sin6_addr), sizeof(struct in6_addr));
 
-        intf = PRTE_NEW(prte_if_t);
+        intf = PMIX_NEW(prte_if_t);
         if (NULL == intf) {
             prte_output(0, "prte_ifinit: unable to allocate %lu bytes\n", sizeof(prte_if_t));
             free(ifadd_list);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
         intf->af_family = AF_INET6;
-        prte_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PRTE_IF_NAMESIZE);
-        intf->if_index = prte_list_get_size(&prte_if_list) + 1;
+        pmix_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PMIX_IF_NAMESIZE);
+        intf->if_index = pmix_list_get_size(&prte_if_list) + 1;
         ((struct sockaddr_in6 *) &intf->if_addr)->sin6_addr = a6;
         ((struct sockaddr_in6 *) &intf->if_addr)->sin6_family = AF_INET6;
 
@@ -196,7 +196,7 @@ static int if_bsdx_ipv6_open(void)
          * data
          */
         intf->if_kernel_index = (uint16_t) if_nametoindex(cur_ifaddrs->ifa_name);
-        prte_list_append(&prte_if_list, &(intf->super));
+        pmix_list_append(&prte_if_list, &(intf->super));
     } /*  of for loop over ifaddrs list */
 
     free(ifadd_list);

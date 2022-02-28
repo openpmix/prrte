@@ -5,7 +5,7 @@
  *                         reserved.
  *
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,7 +20,7 @@
 #include <math.h>
 #include <string.h>
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/pmix/pmix-internal.h"
 
 #include "grpcomm_bmg.h"
@@ -58,7 +58,7 @@ prte_grpcomm_base_module_t prte_grpcomm_bmg_module = {
 static void rbcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                         prte_rml_tag_t tag, void *cbdata);
 /* internal variables */
-static prte_list_t tracker;
+static pmix_list_t tracker;
 
 /*
  * registration of callbacks
@@ -93,7 +93,7 @@ static int unregister_cb_type(int type)
  */
 static int bmg_init(void)
 {
-    PRTE_CONSTRUCT(&tracker, prte_list_t);
+    PMIX_CONSTRUCT(&tracker, pmix_list_t);
 
     prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST, PRTE_RML_PERSISTENT,
                             rbcast_recv, NULL);
@@ -107,7 +107,7 @@ static void bmg_finalize(void)
 {
     /* cancel the rbcast recv */
     prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST);
-    PRTE_LIST_DESTRUCT(&tracker);
+    PMIX_LIST_DESTRUCT(&tracker);
     return;
 }
 

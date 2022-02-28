@@ -33,7 +33,7 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -48,7 +48,7 @@
 /*
  * Local functions
  */
-static int allocate(prte_job_t *jdata, prte_list_t *nodes);
+static int allocate(prte_job_t *jdata, pmix_list_t *nodes);
 static int finalize(void);
 
 /*
@@ -56,7 +56,7 @@ static int finalize(void);
  */
 prte_ras_base_module_t prte_ras_lsf_module = {NULL, allocate, NULL, finalize};
 
-static int allocate(prte_job_t *jdata, prte_list_t *nodes)
+static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     char **nodelist;
     prte_node_t *node;
@@ -76,7 +76,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 
     /* step through the list */
     for (i = 0; i < num_nodes; i++) {
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(nodelist[i])) {
+        if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(nodelist[i])) {
             if (NULL != (ptr = strchr(nodelist[i], '.'))) {
                 *ptr = '\0';
             }
@@ -92,13 +92,13 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         }
 
         /* not a repeat - create a node entry for it */
-        node = PRTE_NEW(prte_node_t);
+        node = PMIX_NEW(prte_node_t);
         node->name = strdup(nodelist[i]);
         node->slots_inuse = 0;
         node->slots_max = 0;
         node->slots = 1;
         node->state = PRTE_NODE_STATE_UP;
-        prte_list_append(nodes, &node->super);
+        pmix_list_append(nodes, &node->super);
 
         prte_output_verbose(10, prte_ras_base_framework.framework_output,
                             "ras/lsf: New Node (%s) [slots=%d]", node->name, node->slots);
@@ -146,7 +146,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
          * cpusets given as physical cpu-ids. Setup the job object
          * so it knows to process this accordingly */
         if (NULL == jdata->map) {
-            jdata->map = PRTE_NEW(prte_job_map_t);
+            jdata->map = PMIX_NEW(prte_job_map_t);
         }
         PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_SEQ);
         jdata->map->req_mapper = strdup("seq"); // need sequential mapper

@@ -41,13 +41,13 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/os_dirpath.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_dirpath.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/proc_info.h"
-#include "src/util/prte_environ.h"
-#include "src/util/prte_getcwd.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_getcwd.h"
 #include "src/util/show_help.h"
 
 #include "src/runtime/prte_globals.h"
@@ -77,7 +77,7 @@ static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfil
  * with a NULL value for app_env, meaning that there is no "base"
  * environment that the app needs to be created from.
  */
-static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_t *jdata,
+static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_t *jdata,
                       prte_pmix_app_t **app_ptr, bool *made_app, char ***app_env,
                       char ***hostfiles, char ***hosts)
 {
@@ -87,29 +87,29 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
     prte_pmix_app_t *app = NULL;
     bool found = false;
     char *appname = NULL;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
     prte_value_t *pvalue;
-    prte_cli_result_t results;
+    pmix_cli_result_t results;
     char *tval;
 
     *made_app = false;
 
     /* parse the cmd line - do this every time thru so we can
      * repopulate the globals */
-    PRTE_CONSTRUCT(&results, prte_cli_result_t);
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
     rc = schizo->parse_cli(argv, &results, PRTE_CLI_SILENT);
     if (PRTE_SUCCESS != rc) {
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", argv[0], prte_strerror(rc));
         }
-        PRTE_DESTRUCT(&results);
+        PMIX_DESTRUCT(&results);
         return rc;
     }
     // sanity check the results
     rc = prte_schizo_base_sanity(&results);
     if (PRTE_SUCCESS != rc) {
         // sanity checker prints the reason
-        PRTE_DESTRUCT(&results);
+        PMIX_DESTRUCT(&results);
         return rc;
     }
 
@@ -119,12 +119,12 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
         goto cleanup;
     }
     /* Setup application context */
-    app = PRTE_NEW(prte_pmix_app_t);
+    app = PMIX_NEW(prte_pmix_app_t);
     app->app.argv = pmix_argv_copy(results.tail);
     app->app.cmd = strdup(app->app.argv[0]);
 
     /* get the cwd - we may need it in several places */
-    if (PRTE_SUCCESS != (rc = prte_getcwd(cwd, sizeof(cwd)))) {
+    if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
         prte_show_help("help-prun.txt", "prun:init-failure", true, "get the cwd", rc);
         goto cleanup;
     }
@@ -134,14 +134,14 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
     if (NULL != opt) {
         param = opt->values[0];
         /* if this is a relative path, convert it to an absolute path */
-        if (prte_path_is_absolute(param)) {
+        if (pmix_path_is_absolute(param)) {
             value = strdup(param);
         } else {
             /* construct the absolute path */
-            value = prte_os_path(false, cwd, param, NULL);
+            value = pmix_os_path(false, cwd, param, NULL);
         }
         /* construct the new argv[0] */
-        ptr = prte_os_path(false, value, app->app.argv[0], NULL);
+        ptr = pmix_os_path(false, value, app->app.argv[0], NULL);
         free(value);
         free(app->app.argv[0]);
         app->app.argv[0] = ptr;
@@ -152,11 +152,11 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
     if (NULL != opt) {
         param = opt->values[0];
         /* if this is a relative path, convert it to an absolute path */
-        if (prte_path_is_absolute(param)) {
+        if (pmix_path_is_absolute(param)) {
             app->app.cwd = strdup(param);
         } else {
             /* construct the absolute path */
-            app->app.cwd = prte_os_path(false, cwd, param, NULL);
+            app->app.cwd = pmix_os_path(false, cwd, param, NULL);
         }
     } else if (prte_cmd_line_is_taken(&results, "set-cwd-to-session-dir")) {
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
@@ -296,13 +296,13 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                 /* yep - but does it include the path to the mpi libs? */
                 found = true;
                 /* check if mpi.jar exists - if so, add it */
-                value = prte_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
+                value = pmix_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
                 if (access(value, F_OK) != -1) {
                     set_classpath_jar_file(app, i + 1, "mpi.jar");
                 }
                 free(value);
                 /* check for oshmem support */
-                value = prte_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
+                value = pmix_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
                 if (access(value, F_OK) != -1) {
                     set_classpath_jar_file(app, i + 1, "shmem.jar");
                 }
@@ -323,13 +323,13 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                     ++value; /* step over the = */
                     pmix_argv_insert_element(&app->app.argv, 1, value);
                     /* check for mpi.jar */
-                    value = prte_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
+                    value = pmix_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
                     if (access(value, F_OK) != -1) {
                         set_classpath_jar_file(app, 1, "mpi.jar");
                     }
                     free(value);
                     /* check for shmem.jar */
-                    value = prte_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
+                    value = pmix_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
                     if (access(value, F_OK) != -1) {
                         set_classpath_jar_file(app, 1, "shmem.jar");
                     }
@@ -352,7 +352,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                 /* always start with the working directory */
                 str = strdup(app->app.cwd);
                 /* check for mpi.jar */
-                value = prte_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
+                value = pmix_os_path(false, prte_install_dirs.libdir, "mpi.jar", NULL);
                 if (access(value, F_OK) != -1) {
                     pmix_asprintf(&str2, "%s:%s", str, value);
                     free(str);
@@ -360,7 +360,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
                 }
                 free(value);
                 /* check for shmem.jar */
-                value = prte_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
+                value = pmix_os_path(false, prte_install_dirs.libdir, "shmem.jar", NULL);
                 if (access(value, F_OK) != -1) {
                     pmix_asprintf(&str2, "%s:%s", str, value);
                     free(str);
@@ -388,17 +388,17 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, prte_list_
 
 cleanup:
     if (NULL != app) {
-        PRTE_RELEASE(app);
+        PMIX_RELEASE(app);
     }
     if (NULL != appname) {
         free(appname);
     }
-    PRTE_DESTRUCT(&results);
+    PMIX_DESTRUCT(&results);
     return rc;
 }
 
 int prte_parse_locals(prte_schizo_base_module_t *schizo,
-                      prte_list_t *jdata, char *argv[],
+                      pmix_list_t *jdata, char *argv[],
                       char ***hostfiles, char ***hosts)
 {
     int i, rc;
@@ -433,7 +433,7 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
                     return rc;
                 }
                 if (made_app) {
-                    prte_list_append(jdata, &app->super);
+                    pmix_list_append(jdata, &app->super);
                 }
 
                 /* Reset the temps */
@@ -454,7 +454,7 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
             return rc;
         }
         if (made_app) {
-            prte_list_append(jdata, &app->super);
+            pmix_list_append(jdata, &app->super);
         }
     }
     if (NULL != env) {

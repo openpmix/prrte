@@ -4,7 +4,7 @@
  *                         reserved.
  *
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,7 +46,7 @@ prte_propagate_base_component_t prte_propagate_prperror_component = {
         /* Component name and version */
         .mca_component_name = "prperror",
         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                PRTE_RELEASE_VERSION),
+                PMIX_RELEASE_VERSION),
 
         /* Component open and close functions */
         .mca_open_component = propagate_prperror_open,

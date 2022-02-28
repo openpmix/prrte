@@ -57,14 +57,14 @@
 #include <ctype.h>
 #include <sys/socket.h>
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
 #include "src/include/prte_socket_errno.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/runtime/prte_progress_threads.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
 
@@ -75,10 +75,10 @@
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/attr.h"
 #include "src/util/name_fns.h"
-#include "src/util/parse_options.h"
+#include "src/util/pmix_parse_options.h"
 #include "src/util/show_help.h"
 
 #include "oob_tcp_peer.h"
@@ -114,7 +114,7 @@ prte_oob_tcp_component_t prte_oob_tcp_component = {
             PRTE_OOB_BASE_VERSION_2_0_0,
             .mca_component_name = "tcp",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
             .mca_open_component = tcp_component_open,
             .mca_close_component = tcp_component_close,
             .mca_register_component_params = tcp_component_register,
@@ -139,10 +139,10 @@ prte_oob_tcp_component_t prte_oob_tcp_component = {
  */
 static int tcp_component_open(void)
 {
-    PRTE_CONSTRUCT(&prte_oob_tcp_component.peers, prte_list_t);
-    PRTE_CONSTRUCT(&prte_oob_tcp_component.listeners, prte_list_t);
+    PMIX_CONSTRUCT(&prte_oob_tcp_component.peers, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_oob_tcp_component.listeners, pmix_list_t);
     if (PRTE_PROC_IS_MASTER) {
-        PRTE_CONSTRUCT(&prte_oob_tcp_component.listen_thread, prte_thread_t);
+        PMIX_CONSTRUCT(&prte_oob_tcp_component.listen_thread, pmix_thread_t);
         prte_oob_tcp_component.listen_thread_active = false;
         prte_oob_tcp_component.listen_thread_tv.tv_sec = 3600;
         prte_oob_tcp_component.listen_thread_tv.tv_usec = 0;
@@ -154,7 +154,7 @@ static int tcp_component_open(void)
     prte_oob_tcp_component.ipv6ports = NULL;
     prte_oob_tcp_component.if_masks = NULL;
 
-    PRTE_CONSTRUCT(&prte_oob_tcp_component.local_ifs, prte_list_t);
+    PMIX_CONSTRUCT(&prte_oob_tcp_component.local_ifs, pmix_list_t);
     return PRTE_SUCCESS;
 }
 
@@ -163,8 +163,8 @@ static int tcp_component_open(void)
  */
 static int tcp_component_close(void)
 {
-    PRTE_LIST_DESTRUCT(&prte_oob_tcp_component.local_ifs);
-    PRTE_LIST_DESTRUCT(&prte_oob_tcp_component.peers);
+    PMIX_LIST_DESTRUCT(&prte_oob_tcp_component.local_ifs);
+    PMIX_LIST_DESTRUCT(&prte_oob_tcp_component.peers);
 
     if (NULL != prte_oob_tcp_component.ipv4conns) {
         pmix_argv_free(prte_oob_tcp_component.ipv4conns);
@@ -239,7 +239,7 @@ static int tcp_component_register(void)
 
     /* if ports were provided, parse the provided range */
     if (NULL != static_port_string) {
-        prte_util_parse_range_options(static_port_string, &prte_oob_tcp_component.tcp_static_ports);
+        pmix_util_parse_range_options(static_port_string, &prte_oob_tcp_component.tcp_static_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp_static_ports[0], "-1")) {
             pmix_argv_free(prte_oob_tcp_component.tcp_static_ports);
             prte_oob_tcp_component.tcp_static_ports = NULL;
@@ -259,7 +259,7 @@ static int tcp_component_register(void)
 
     /* if ports were provided, parse the provided range */
     if (NULL != static_port_string6) {
-        prte_util_parse_range_options(static_port_string6,
+        pmix_util_parse_range_options(static_port_string6,
                                       &prte_oob_tcp_component.tcp6_static_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp6_static_ports[0], "-1")) {
             pmix_argv_free(prte_oob_tcp_component.tcp6_static_ports);
@@ -290,7 +290,7 @@ static int tcp_component_register(void)
             free(err);
             return PRTE_ERROR;
         }
-        prte_util_parse_range_options(dyn_port_string, &prte_oob_tcp_component.tcp_dyn_ports);
+        pmix_util_parse_range_options(dyn_port_string, &prte_oob_tcp_component.tcp_dyn_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp_dyn_ports[0], "-1")) {
             pmix_argv_free(prte_oob_tcp_component.tcp_dyn_ports);
             prte_oob_tcp_component.tcp_dyn_ports = NULL;
@@ -328,7 +328,7 @@ static int tcp_component_register(void)
             }
             return PRTE_ERROR;
         }
-        prte_util_parse_range_options(dyn_port_string6, &prte_oob_tcp_component.tcp6_dyn_ports);
+        pmix_util_parse_range_options(dyn_port_string6, &prte_oob_tcp_component.tcp6_dyn_ports);
         if (0 == strcmp(prte_oob_tcp_component.tcp6_dyn_ports[0], "-1")) {
             pmix_argv_free(prte_oob_tcp_component.tcp6_dyn_ports);
             prte_oob_tcp_component.tcp6_dyn_ports = NULL;
@@ -404,7 +404,7 @@ static int component_available(void)
 {
     prte_if_t *copied_interface, *selected_interface;
     struct sockaddr_storage my_ss;
-    char name[PRTE_IF_NAMESIZE];
+    char name[PMIX_IF_NAMESIZE];
     /* Larger than necessary, used for copying mask */
     char string[50];
     int kindex;
@@ -414,7 +414,7 @@ static int component_available(void)
                         "oob:tcp: component_available called");
 
     /* look at all available interfaces */
-    PRTE_LIST_FOREACH(selected_interface, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH(selected_interface, &prte_if_list, prte_if_t)
     {
         i = selected_interface->if_index;
         kindex = selected_interface->if_kernel_index;
@@ -434,32 +434,32 @@ static int component_available(void)
             prte_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init adding %s to our list of %s connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                prte_net_get_hostname((struct sockaddr *) &my_ss),
+                                pmix_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
             pmix_argv_append_nosize(&prte_oob_tcp_component.ipv4conns,
-                                    prte_net_get_hostname((struct sockaddr *) &my_ss));
+                                    pmix_net_get_hostname((struct sockaddr *) &my_ss));
         } else if (AF_INET6 == my_ss.ss_family) {
 #if PRTE_ENABLE_IPV6
             prte_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init adding %s to our list of %s connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                prte_net_get_hostname((struct sockaddr *) &my_ss),
+                                pmix_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
             pmix_argv_append_nosize(&prte_oob_tcp_component.ipv6conns,
-                                    prte_net_get_hostname((struct sockaddr *) &my_ss));
+                                    pmix_net_get_hostname((struct sockaddr *) &my_ss));
 #endif // PRTE_ENABLE_IPV6
         } else {
             prte_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init ignoring %s from out list of connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                prte_net_get_hostname((struct sockaddr *) &my_ss));
+                                pmix_net_get_hostname((struct sockaddr *) &my_ss));
             continue;
         }
-        copied_interface = PRTE_NEW(prte_if_t);
+        copied_interface = PMIX_NEW(prte_if_t);
         if (NULL == copied_interface) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        prte_string_copy(copied_interface->if_name, selected_interface->if_name, sizeof(name));
+        pmix_string_copy(copied_interface->if_name, selected_interface->if_name, sizeof(name));
         copied_interface->if_index = i;
         copied_interface->if_kernel_index = kindex;
         copied_interface->af_family = my_ss.ss_family;
@@ -478,7 +478,7 @@ static int component_available(void)
         /* Add the if_mask to the list */
         sprintf(string, "%d", selected_interface->if_mask);
         pmix_argv_append_nosize(&prte_oob_tcp_component.if_masks, string);
-        prte_list_append(&prte_oob_tcp_component.local_ifs, &(copied_interface->super));
+        pmix_list_append(&prte_oob_tcp_component.local_ifs, &(copied_interface->super));
     }
 
     if (0 == pmix_argv_count(prte_oob_tcp_component.ipv4conns)
@@ -527,7 +527,7 @@ static void component_shutdown(void)
         /* tell the thread to exit */
         rc = write(prte_oob_tcp_component.stop_thread[1], &i, sizeof(int));
         if (0 < rc) {
-            prte_thread_join(&prte_oob_tcp_component.listen_thread, NULL);
+            pmix_thread_join(&prte_oob_tcp_component.listen_thread, NULL);
         }
 
         close(prte_oob_tcp_component.stop_thread[0]);
@@ -538,7 +538,7 @@ static void component_shutdown(void)
     }
 
     /* cleanup listen event list */
-    PRTE_LIST_DESTRUCT(&prte_oob_tcp_component.listeners);
+    PMIX_LIST_DESTRUCT(&prte_oob_tcp_component.listeners);
 
     prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP SHUTDOWN done",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -771,23 +771,23 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
             }
 
             if (NULL == (pr = prte_oob_tcp_peer_lookup(peer))) {
-                pr = PRTE_NEW(prte_oob_tcp_peer_t);
+                pr = PMIX_NEW(prte_oob_tcp_peer_t);
                 PMIX_XFER_PROCID(&pr->name, peer);
                 prte_output_verbose(20, prte_oob_base_framework.framework_output,
                                     "%s SET_PEER ADDING PEER %s",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer));
-                prte_list_append(&prte_oob_tcp_component.peers, &pr->super);
+                pmix_list_append(&prte_oob_tcp_component.peers, &pr->super);
             }
 
-            maddr = PRTE_NEW(prte_oob_tcp_addr_t);
+            maddr = PMIX_NEW(prte_oob_tcp_addr_t);
             ((struct sockaddr_storage *) &(maddr->addr))->ss_family = af_family;
             if (PRTE_SUCCESS
                 != (rc = parse_uri(af_family, host, ports,
                                    (struct sockaddr_storage *) &(maddr->addr)))) {
                 PRTE_ERROR_LOG(rc);
-                PRTE_RELEASE(maddr);
-                prte_list_remove_item(&prte_oob_tcp_component.peers, &pr->super);
-                PRTE_RELEASE(pr);
+                PMIX_RELEASE(maddr);
+                pmix_list_remove_item(&prte_oob_tcp_component.peers, &pr->super);
+                PMIX_RELEASE(pr);
                 return PRTE_ERR_TAKE_NEXT_OPTION;
             }
             maddr->if_mask = atoi(masks[j]);
@@ -796,7 +796,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
                                 "%s set_peer: peer %s is listening on net %s port %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer),
                                 (NULL == host) ? "NULL" : host, (NULL == ports) ? "NULL" : ports);
-            prte_list_append(&pr->addrs, &maddr->super);
+            pmix_list_append(&pr->addrs, &maddr->super);
 
             found = true;
         }
@@ -833,7 +833,7 @@ void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
     prte_oob_base_peer_t *bpr;
 
-    PRTE_ACQUIRE_OBJECT(pop);
+    PMIX_ACQUIRE_OBJECT(pop);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:set_module called for peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -845,13 +845,13 @@ void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
      */
     bpr = prte_oob_base_get_peer(&pop->peer);
     if (NULL == bpr) {
-        bpr = PRTE_NEW(prte_oob_base_peer_t);
+        bpr = PMIX_NEW(prte_oob_base_peer_t);
         PMIX_XFER_PROCID(&bpr->name, &pop->peer);
     }
-    prte_bitmap_set_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
+    pmix_bitmap_set_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
     bpr->component = &prte_oob_tcp_component.super;
 
-    PRTE_RELEASE(pop);
+    PMIX_RELEASE(pop);
 }
 
 void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
@@ -859,7 +859,7 @@ void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
     prte_oob_base_peer_t *bpr;
 
-    PRTE_ACQUIRE_OBJECT(pop);
+    PMIX_ACQUIRE_OBJECT(pop);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:lost connection called for peer %s",
@@ -868,9 +868,9 @@ void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
     /* Mark that we no longer support this peer */
     bpr = prte_oob_base_get_peer(&pop->peer);
     if (NULL != bpr) {
-        prte_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
-        prte_list_remove_item(&prte_oob_base.peers, &bpr->super);
-        PRTE_RELEASE(bpr);
+        pmix_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
+        pmix_list_remove_item(&prte_oob_base.peers, &bpr->super);
+        PMIX_RELEASE(bpr);
     }
 
     if (!prte_finalizing) {
@@ -881,7 +881,7 @@ void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
             PRTE_ACTIVATE_PROC_STATE(&pop->peer, PRTE_PROC_STATE_COMM_FAILED);
         }
     }
-    PRTE_RELEASE(pop);
+    PMIX_RELEASE(pop);
 }
 
 void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
@@ -889,7 +889,7 @@ void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
     prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t *) cbdata;
     prte_oob_base_peer_t *bpr;
 
-    PRTE_ACQUIRE_OBJECT(mop);
+    PMIX_ACQUIRE_OBJECT(mop);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:no route called for peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -898,10 +898,10 @@ void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
     /* mark that we cannot reach this hop */
     bpr = prte_oob_base_get_peer(&mop->hop);
     if (NULL == bpr) {
-        bpr = PRTE_NEW(prte_oob_base_peer_t);
+        bpr = PMIX_NEW(prte_oob_base_peer_t);
         PMIX_XFER_PROCID(&bpr->name, &mop->hop);
     }
-    prte_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
+    pmix_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
 
     /* report the error back to the OOB and let it try other components
      * or declare a problem
@@ -910,7 +910,7 @@ void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
     /* activate the OOB send state */
     PRTE_OOB_SEND(mop->rmsg);
 
-    PRTE_RELEASE(mop);
+    PMIX_RELEASE(mop);
 }
 
 void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
@@ -921,7 +921,7 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
     pmix_status_t rc;
     pmix_byte_object_t bo;
 
-    PRTE_ACQUIRE_OBJECT(mop);
+    PMIX_ACQUIRE_OBJECT(mop);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:unknown hop called for peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -929,7 +929,7 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
 
     if (prte_finalizing || prte_abnormal_term_ordered) {
         /* just ignore the problem */
-        PRTE_RELEASE(mop);
+        PMIX_RELEASE(mop);
         return;
     }
 
@@ -948,10 +948,10 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&mop->snd->hdr.dst),
                     PRTE_NAME_PRINT(&mop->hop));
         PRTE_ACTIVATE_PROC_STATE(&mop->hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
-        PRTE_RELEASE(mop);
+        PMIX_RELEASE(mop);
         return;
     }
-    prte_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
+    pmix_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
 
     /* mark that this component cannot reach this destination either */
     bpr = prte_oob_base_get_peer(&mop->snd->hdr.dst);
@@ -961,16 +961,16 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
             "%s ERROR: message to %s requires routing and the OOB has no knowledge of this process",
             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&mop->snd->hdr.dst));
         PRTE_ACTIVATE_PROC_STATE(&mop->hop, PRTE_PROC_STATE_UNABLE_TO_SEND_MSG);
-        PRTE_RELEASE(mop);
+        PMIX_RELEASE(mop);
         return;
     }
-    prte_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
+    pmix_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
 
     /* post the message to the OOB so it can see
      * if another component can transfer it
      */
     MCA_OOB_TCP_HDR_NTOH(&mop->snd->hdr);
-    snd = PRTE_NEW(prte_rml_send_t);
+    snd = PMIX_NEW(prte_rml_send_t);
     snd->retries = mop->rmsg->retries + 1;
     PMIX_XFER_PROCID(&snd->dst, &mop->snd->hdr.dst);
     PMIX_XFER_PROCID(&snd->origin, &mop->snd->hdr.origin);
@@ -989,14 +989,14 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
     /* protect the data */
     mop->snd->data = NULL;
 
-    PRTE_RELEASE(mop);
+    PMIX_RELEASE(mop);
 }
 
 void prte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
 
-    PRTE_ACQUIRE_OBJECT(pop);
+    PMIX_ACQUIRE_OBJECT(pop);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:failed_to_connect called for peer %s",
@@ -1004,7 +1004,7 @@ void prte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata)
 
     /* if we are terminating, then don't attempt to reconnect */
     if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
-        PRTE_RELEASE(pop);
+        PMIX_RELEASE(pop);
         return;
     }
 
@@ -1014,7 +1014,7 @@ void prte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata)
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&pop->peer));
 
     PRTE_ACTIVATE_PROC_STATE(&pop->peer, PRTE_PROC_STATE_FAILED_TO_CONNECT);
-    PRTE_RELEASE(pop);
+    PMIX_RELEASE(pop);
 }
 
 
@@ -1024,11 +1024,11 @@ static void peer_cons(prte_oob_tcp_peer_t *peer)
 {
     peer->auth_method = NULL;
     peer->sd = -1;
-    PRTE_CONSTRUCT(&peer->addrs, prte_list_t);
+    PMIX_CONSTRUCT(&peer->addrs, pmix_list_t);
     peer->active_addr = NULL;
     peer->state = MCA_OOB_TCP_UNCONNECTED;
     peer->num_retries = 0;
-    PRTE_CONSTRUCT(&peer->send_queue, prte_list_t);
+    PMIX_CONSTRUCT(&peer->send_queue, pmix_list_t);
     peer->send_msg = NULL;
     peer->recv_msg = NULL;
     peer->send_ev_active = false;
@@ -1054,10 +1054,10 @@ static void peer_des(prte_oob_tcp_peer_t *peer)
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), peer->sd);
         CLOSE_THE_SOCKET(peer->sd);
     }
-    PRTE_LIST_DESTRUCT(&peer->addrs);
-    PRTE_LIST_DESTRUCT(&peer->send_queue);
+    PMIX_LIST_DESTRUCT(&peer->addrs);
+    PMIX_LIST_DESTRUCT(&peer->send_queue);
 }
-PRTE_CLASS_INSTANCE(prte_oob_tcp_peer_t, prte_list_item_t, peer_cons, peer_des);
+PMIX_CLASS_INSTANCE(prte_oob_tcp_peer_t, pmix_list_item_t, peer_cons, peer_des);
 
 static void padd_cons(prte_oob_tcp_addr_t *ptr)
 {
@@ -1065,7 +1065,7 @@ static void padd_cons(prte_oob_tcp_addr_t *ptr)
     ptr->retries = 0;
     ptr->state = MCA_OOB_TCP_UNCONNECTED;
 }
-PRTE_CLASS_INSTANCE(prte_oob_tcp_addr_t, prte_list_item_t, padd_cons, NULL);
+PMIX_CLASS_INSTANCE(prte_oob_tcp_addr_t, pmix_list_item_t, padd_cons, NULL);
 
 static void pop_cons(prte_oob_tcp_peer_op_t *pop)
 {
@@ -1081,15 +1081,15 @@ static void pop_des(prte_oob_tcp_peer_op_t *pop)
         free(pop->port);
     }
 }
-PRTE_CLASS_INSTANCE(prte_oob_tcp_peer_op_t, prte_object_t, pop_cons, pop_des);
+PMIX_CLASS_INSTANCE(prte_oob_tcp_peer_op_t, pmix_object_t, pop_cons, pop_des);
 
-PRTE_CLASS_INSTANCE(prte_oob_tcp_msg_op_t, prte_object_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_oob_tcp_msg_op_t, pmix_object_t, NULL, NULL);
 
-PRTE_CLASS_INSTANCE(prte_oob_tcp_conn_op_t, prte_object_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_oob_tcp_conn_op_t, pmix_object_t, NULL, NULL);
 
 static void nicaddr_cons(prte_oob_tcp_nicaddr_t *ptr)
 {
     ptr->af_family = PF_UNSPEC;
     memset(&ptr->addr, 0, sizeof(ptr->addr));
 }
-PRTE_CLASS_INSTANCE(prte_oob_tcp_nicaddr_t, prte_list_item_t, nicaddr_cons, NULL);
+PMIX_CLASS_INSTANCE(prte_oob_tcp_nicaddr_t, pmix_list_item_t, nicaddr_cons, NULL);

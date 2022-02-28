@@ -20,7 +20,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_argv.h"
 
@@ -33,7 +33,7 @@
 /*
  * Local functions
  */
-static int allocate(prte_job_t *jdata, prte_list_t *nodes);
+static int allocate(prte_job_t *jdata, pmix_list_t *nodes);
 static int finalize(void);
 
 /*
@@ -41,7 +41,7 @@ static int finalize(void);
  */
 prte_ras_base_module_t prte_ras_sim_module = {NULL, allocate, NULL, finalize};
 
-static int allocate(prte_job_t *jdata, prte_list_t *nodes)
+static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     int i, n, val, dig, num_nodes;
     prte_node_t *node;
@@ -93,7 +93,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
     }
 
     /* use our topology */
-    t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, 0);
+    t = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, 0);
     if (NULL == t) {
         return PRTE_ERR_NOT_FOUND;
     }
@@ -129,7 +129,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         }
 
         for (i = 0; i < num_nodes; i++) {
-            node = PRTE_NEW(prte_node_t);
+            node = PMIX_NEW(prte_node_t);
             pmix_asprintf(&node->name, "%s%0*d", prefix, dig, i);
             node->state = PRTE_NODE_STATE_UP;
             node->slots_inuse = 0;
@@ -146,18 +146,18 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
                 obj = hwloc_get_root_obj(t->topo);
                 node->slots = prte_hwloc_base_get_npus(t->topo, use_hwthread_cpus, available, obj);
             }
-            PRTE_RETAIN(t);
+            PMIX_RETAIN(t);
             node->topology = t;
             prte_output_verbose(1, prte_ras_base_framework.framework_output,
                                 "Created Node <%10s> [%3d : %3d]", node->name, node->slots,
                                 node->slots_max);
-            prte_list_append(nodes, &node->super);
+            pmix_list_append(nodes, &node->super);
         }
         hwloc_bitmap_free(available);
     }
 
     /* record the number of allocated nodes */
-    prte_num_allocated_nodes = prte_list_get_size(nodes);
+    prte_num_allocated_nodes = pmix_list_get_size(nodes);
 
     if (NULL != max_slot_cnt) {
         pmix_argv_free(max_slot_cnt);

@@ -53,7 +53,7 @@ int prte_ess_base_std_buffering = -1;
 int prte_ess_base_num_procs = -1;
 char *prte_ess_base_nspace = NULL;
 char *prte_ess_base_vpid = NULL;
-prte_list_t prte_ess_base_signals = PRTE_LIST_STATIC_INIT;
+pmix_list_t prte_ess_base_signals = PMIX_LIST_STATIC_INIT;
 
 static prte_mca_base_var_enum_value_t stream_buffering_values[] = {
     {-1, "default"},
@@ -81,7 +81,7 @@ static int prte_ess_base_register(prte_mca_base_register_flag_t flags)
         "(Default: -1)",
         PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_std_buffering);
-    PRTE_RELEASE(new_enum);
+    PMIX_RELEASE(new_enum);
 
     prte_ess_base_nspace = NULL;
     ret = prte_mca_base_var_register("prte", "ess", "base", "nspace", "Process nspace",
@@ -124,7 +124,7 @@ static int prte_ess_base_register(prte_mca_base_register_flag_t flags)
 
 static int prte_ess_base_close(void)
 {
-    PRTE_LIST_DESTRUCT(&prte_ess_base_signals);
+    PMIX_LIST_DESTRUCT(&prte_ess_base_signals);
 
     return prte_mca_base_framework_components_close(&prte_ess_base_framework, NULL);
 }
@@ -133,7 +133,7 @@ static int prte_ess_base_open(prte_mca_base_open_flag_t flags)
 {
     int rc;
 
-    PRTE_CONSTRUCT(&prte_ess_base_signals, prte_list_t);
+    PMIX_CONSTRUCT(&prte_ess_base_signals, pmix_list_t);
 
     if (PRTE_SUCCESS != (rc = prte_ess_base_setup_signals(forwarded_signals))) {
         return rc;
@@ -219,10 +219,10 @@ static struct known_signal known_signals[] = {
 #define ESS_ADDSIGNAL(x, s)                                     \
     do {                                                        \
         prte_ess_base_signal_t *_sig;                           \
-        _sig = PRTE_NEW(prte_ess_base_signal_t);                \
+        _sig = PMIX_NEW(prte_ess_base_signal_t);                \
         _sig->signal = (x);                                     \
         _sig->signame = strdup((s));                            \
-        prte_list_append(&prte_ess_base_signals, &_sig->super); \
+        pmix_list_append(&prte_ess_base_signals, &_sig->super); \
     } while (0)
 
 static bool signals_added = false;
@@ -272,7 +272,7 @@ int prte_ess_base_setup_signals(char *mysignals)
 
             /* see if it is one we already covered */
             ignore = false;
-            PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+            PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
             {
                 if (0 == strcasecmp(signals[i], sig->signame) || sval == sig->signal) {
                     /* got it - we will ignore */
@@ -329,4 +329,4 @@ static void sdes(prte_ess_base_signal_t *t)
         free(t->signame);
     }
 }
-PRTE_CLASS_INSTANCE(prte_ess_base_signal_t, prte_list_item_t, scon, sdes);
+PMIX_CLASS_INSTANCE(prte_ess_base_signal_t, pmix_list_item_t, scon, sdes);

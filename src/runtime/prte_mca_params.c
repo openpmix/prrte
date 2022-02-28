@@ -41,7 +41,7 @@
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/show_help.h"
 #include "src/mca/errmgr/errmgr.h"
 
@@ -223,10 +223,10 @@ int prte_register_params(void)
      * we use it below, and prun and some other tools call this
      * function prior to calling prte_init
      */
-    PRTE_CONSTRUCT(&lds, prte_output_stream_t);
+    PMIX_CONSTRUCT(&lds, prte_output_stream_t);
     lds.lds_want_stdout = true;
     prte_clean_output = prte_output_open(&lds);
-    PRTE_DESTRUCT(&lds);
+    PMIX_DESTRUCT(&lds);
 
     prte_help_want_aggregate = true;
     (void) prte_mca_base_var_register(

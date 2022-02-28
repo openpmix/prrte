@@ -38,7 +38,7 @@
  * Global variables
  */
 prte_schizo_base_t prte_schizo_base = {
-    .active_modules = PRTE_LIST_STATIC_INIT,
+    .active_modules = PMIX_LIST_STATIC_INIT,
     .test_proxy_launch = false
 };
 
@@ -58,7 +58,7 @@ static int prte_schizo_base_register(prte_mca_base_register_flag_t flags)
 static int prte_schizo_base_close(void)
 {
     /* cleanup globals */
-    PRTE_LIST_DESTRUCT(&prte_schizo_base.active_modules);
+    PMIX_LIST_DESTRUCT(&prte_schizo_base.active_modules);
 
     return prte_mca_base_framework_components_close(&prte_schizo_base_framework, NULL);
 }
@@ -72,7 +72,7 @@ static int prte_schizo_base_open(prte_mca_base_open_flag_t flags)
     int rc;
 
     /* init the globals */
-    PRTE_CONSTRUCT(&prte_schizo_base.active_modules, prte_list_t);
+    PMIX_CONSTRUCT(&prte_schizo_base.active_modules, pmix_list_t);
 
     /* Open up all available components */
     rc = prte_mca_base_framework_components_open(&prte_schizo_base_framework, flags);
@@ -276,7 +276,7 @@ static char *limits[] = {
     NULL
 };
 
-static int check_ndirs(prte_cli_item_t *opt)
+static int check_ndirs(pmix_cli_item_t *opt)
 {
     int n, count;
     char *param;
@@ -295,9 +295,9 @@ static int check_ndirs(prte_cli_item_t *opt)
     return PRTE_SUCCESS;
 }
 
-int prte_schizo_base_sanity(prte_cli_result_t *cmd_line)
+int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 {
-    prte_cli_item_t *opt, *newopt;
+    pmix_cli_item_t *opt, *newopt;
     int n, rc, count;
     const char *tgt, *param;
 
@@ -413,14 +413,14 @@ int prte_schizo_base_sanity(prte_cli_result_t *cmd_line)
     }
 
     /* check for synonyms */
-    PRTE_LIST_FOREACH(opt, &cmd_line->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH(opt, &cmd_line->instances, pmix_cli_item_t) {
         if (NULL != (tgt = check_synonym(opt->key))) {
             if (NULL == opt->values) {
                 // the presence is adequate
                 if (NULL == prte_cmd_line_get_param(cmd_line, tgt)) {
-                    newopt = PRTE_NEW(prte_cli_item_t);
+                    newopt = PMIX_NEW(pmix_cli_item_t);
                     newopt->key = strdup(tgt);
-                    prte_list_append(&cmd_line->instances, &newopt->super);
+                    pmix_list_append(&cmd_line->instances, &newopt->super);
                 }
             } else {
                 for (n=0; NULL != opt->values[n]; n++) {
@@ -484,7 +484,7 @@ int prte_schizo_base_sanity(prte_cli_result_t *cmd_line)
     }
 
     // check too many directives
-    PRTE_LIST_FOREACH(opt, &cmd_line->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH(opt, &cmd_line->instances, pmix_cli_item_t) {
         rc = check_ndirs(opt);
         if (PRTE_SUCCESS != rc) {
             return rc;
@@ -494,4 +494,4 @@ int prte_schizo_base_sanity(prte_cli_result_t *cmd_line)
     return PRTE_SUCCESS;
 }
 
-PRTE_CLASS_INSTANCE(prte_schizo_base_active_module_t, prte_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_schizo_base_active_module_t, pmix_list_item_t, NULL, NULL);

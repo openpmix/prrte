@@ -33,19 +33,19 @@
 #    include <sys/time.h>
 #endif
 
-#include "src/class/prte_hash_table.h"
-#include "src/class/prte_pointer_array.h"
-#include "src/class/prte_value_array.h"
+#include "src/class/pmix_hash_table.h"
+#include "src/class/pmix_pointer_array.h"
+#include "src/class/pmix_value_array.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/mca/rml/rml.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 
@@ -54,8 +54,8 @@
 #include "src/runtime/runtime_internals.h"
 
 /* State Machine */
-prte_list_t prte_job_states = {{0}};
-prte_list_t prte_proc_states = {{0}};
+pmix_list_t prte_job_states = {{0}};
+pmix_list_t prte_proc_states = {{0}};
 
 /* a clean output channel without prefix */
 int prte_clean_output = -1;
@@ -64,13 +64,13 @@ int prte_clean_output = -1;
 bool prte_debug_daemons_file_flag = false;
 bool prte_leave_session_attached = false;
 bool prte_coprocessors_detected = false;
-prte_hash_table_t *prte_coprocessors = NULL;
+pmix_hash_table_t *prte_coprocessors = NULL;
 char *prte_topo_signature = NULL;
 char *prte_data_server_uri = NULL;
 char *prte_tool_basename = NULL;
 char *prte_tool_actual = NULL;
 bool prte_dvm_ready = false;
-prte_pointer_array_t *prte_cache = NULL;
+pmix_pointer_array_t *prte_cache = NULL;
 bool prte_persistent = true;
 bool prte_add_pid_to_session_dirname = false;
 
@@ -119,10 +119,10 @@ prte_timer_t *prte_mpiexec_timeout = NULL;
 int prte_stack_trace_wait_timeout = 30;
 
 /* global arrays for data storage */
-prte_pointer_array_t *prte_job_data = NULL;
-prte_pointer_array_t *prte_node_pool = NULL;
-prte_pointer_array_t *prte_node_topologies = NULL;
-prte_pointer_array_t *prte_local_children = NULL;
+pmix_pointer_array_t *prte_job_data = NULL;
+pmix_pointer_array_t *prte_node_pool = NULL;
+pmix_pointer_array_t *prte_node_topologies = NULL;
+pmix_pointer_array_t *prte_local_children = NULL;
 pmix_rank_t prte_total_procs = 0;
 char *prte_base_compute_node_sig = NULL;
 bool prte_hetero_nodes = false;
@@ -220,7 +220,7 @@ prte_job_t *prte_get_job_data_object(const pmix_nspace_t job)
         return NULL;
     }
     for (i = 0; i < prte_job_data->size; i++) {
-        if (NULL == (jptr = (prte_job_t *) prte_pointer_array_get_item(prte_job_data, i))) {
+        if (NULL == (jptr = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, i))) {
             continue;
         }
         if (PMIX_CHECK_NSPACE(jptr->nspace, job)) {
@@ -245,7 +245,7 @@ int prte_set_job_data_object(prte_job_t *jdata)
     }
     /* verify that we don't already have this object */
     for (i = 0; i < prte_job_data->size; i++) {
-        if (NULL == (jptr = (prte_job_t *) prte_pointer_array_get_item(prte_job_data, i))) {
+        if (NULL == (jptr = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, i))) {
             if (0 > save) {
                 save = i;
             }
@@ -257,10 +257,10 @@ int prte_set_job_data_object(prte_job_t *jdata)
     }
 
     if (-1 == save) {
-        jdata->index = prte_pointer_array_add(prte_job_data, jdata);
+        jdata->index = pmix_pointer_array_add(prte_job_data, jdata);
     } else {
         jdata->index = save;
-        prte_pointer_array_set_item(prte_job_data, save, jdata);
+        pmix_pointer_array_set_item(prte_job_data, save, jdata);
     }
     if (0 > jdata->index) {
         return PRTE_ERROR;
@@ -276,7 +276,7 @@ prte_proc_t *prte_get_proc_object(const pmix_proc_t *proc)
     if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
         return NULL;
     }
-    proct = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank);
+    proct = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, proc->rank);
     return proct;
 }
 
@@ -288,7 +288,7 @@ pmix_rank_t prte_get_proc_daemon_vpid(const pmix_proc_t *proc)
     if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
         return PMIX_RANK_INVALID;
     }
-    if (NULL == (proct = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank))) {
+    if (NULL == (proct = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, proc->rank))) {
         return PMIX_RANK_INVALID;
     }
     if (NULL == proct->node || NULL == proct->node->daemon) {
@@ -327,7 +327,7 @@ prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc)
     return proct->node_rank;
 }
 
-prte_node_t* prte_node_match(prte_list_t *nodes, const char *name)
+prte_node_t* prte_node_match(pmix_list_t *nodes, const char *name)
 {
     int m;
     prte_node_t *nptr;
@@ -340,7 +340,7 @@ prte_node_t* prte_node_match(prte_list_t *nodes, const char *name)
         nm = (char*)name;
     }
 
-    PRTE_LIST_FOREACH(nptr, nodes, prte_node_t) {
+    PMIX_LIST_FOREACH(nptr, nodes, prte_node_t) {
         /* start with the simple check */
         if (0 == strcmp(nptr->name, nm)) {
             return nptr;
@@ -348,7 +348,7 @@ prte_node_t* prte_node_match(prte_list_t *nodes, const char *name)
     }
 
     /* see if it is an alias for something already on the list */
-    PRTE_LIST_FOREACH(nptr, nodes, prte_node_t) {
+    PMIX_LIST_FOREACH(nptr, nodes, prte_node_t) {
         if (NULL == nptr->aliases) {
             continue;
         }
@@ -403,16 +403,16 @@ static void prte_app_context_construct(prte_app_context_t *app_context)
     app_context->idx = 0;
     app_context->app = NULL;
     app_context->num_procs = 0;
-    PRTE_CONSTRUCT(&app_context->procs, prte_pointer_array_t);
-    prte_pointer_array_init(&app_context->procs, 1, PRTE_GLOBAL_ARRAY_MAX_SIZE, 16);
+    PMIX_CONSTRUCT(&app_context->procs, pmix_pointer_array_t);
+    pmix_pointer_array_init(&app_context->procs, 1, PRTE_GLOBAL_ARRAY_MAX_SIZE, 16);
     app_context->state = PRTE_APP_STATE_UNDEF;
     app_context->first_rank = 0;
     app_context->argv = NULL;
     app_context->env = NULL;
     app_context->cwd = NULL;
     app_context->flags = 0;
-    PRTE_CONSTRUCT(&app_context->attributes, prte_list_t);
-    PRTE_CONSTRUCT(&app_context->cli, prte_cli_result_t);
+    PMIX_CONSTRUCT(&app_context->attributes, pmix_list_t);
+    PMIX_CONSTRUCT(&app_context->cli, pmix_cli_result_t);
 }
 
 static void prte_app_context_destructor(prte_app_context_t *app_context)
@@ -426,11 +426,11 @@ static void prte_app_context_destructor(prte_app_context_t *app_context)
     }
 
     for (i = 0; i < app_context->procs.size; i++) {
-        if (NULL != (proc = (prte_proc_t *) prte_pointer_array_get_item(&app_context->procs, i))) {
-            PRTE_RELEASE(proc);
+        if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(&app_context->procs, i))) {
+            PMIX_RELEASE(proc);
         }
     }
-    PRTE_DESTRUCT(&app_context->procs);
+    PMIX_DESTRUCT(&app_context->procs);
 
     /* argv and env lists created by util/argv copy functions */
     if (NULL != app_context->argv) {
@@ -448,11 +448,11 @@ static void prte_app_context_destructor(prte_app_context_t *app_context)
         app_context->cwd = NULL;
     }
 
-    PRTE_LIST_DESTRUCT(&app_context->attributes);
-    PRTE_DESTRUCT(&app_context->cli);
+    PMIX_LIST_DESTRUCT(&app_context->attributes);
+    PMIX_DESTRUCT(&app_context->cli);
 }
 
-PRTE_CLASS_INSTANCE(prte_app_context_t, prte_object_t, prte_app_context_construct,
+PMIX_CLASS_INSTANCE(prte_app_context_t, pmix_object_t, prte_app_context_construct,
                     prte_app_context_destructor);
 
 static void prte_job_construct(prte_job_t *job)
@@ -463,14 +463,14 @@ static void prte_job_construct(prte_job_t *job)
     PMIX_LOAD_NSPACE(job->nspace, NULL);
     job->index = -1;
     job->offset = 0;
-    job->apps = PRTE_NEW(prte_pointer_array_t);
-    prte_pointer_array_init(job->apps, 1, PRTE_GLOBAL_ARRAY_MAX_SIZE, 2);
+    job->apps = PMIX_NEW(pmix_pointer_array_t);
+    pmix_pointer_array_init(job->apps, 1, PRTE_GLOBAL_ARRAY_MAX_SIZE, 2);
     job->num_apps = 0;
     job->stdin_target = 0;
     job->total_slots_alloc = 0;
     job->num_procs = 0;
-    job->procs = PRTE_NEW(prte_pointer_array_t);
-    prte_pointer_array_init(job->procs, PRTE_GLOBAL_ARRAY_BLOCK_SIZE, PRTE_GLOBAL_ARRAY_MAX_SIZE,
+    job->procs = PMIX_NEW(pmix_pointer_array_t);
+    pmix_pointer_array_init(job->procs, PRTE_GLOBAL_ARRAY_BLOCK_SIZE, PRTE_GLOBAL_ARRAY_MAX_SIZE,
                             PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
     job->map = NULL;
     job->bookmark = NULL;
@@ -490,13 +490,13 @@ static void prte_job_construct(prte_job_t *job)
     job->flags = 0;
     PRTE_FLAG_SET(job, PRTE_JOB_FLAG_FORWARD_OUTPUT);
 
-    PRTE_CONSTRUCT(&job->attributes, prte_list_t);
+    PMIX_CONSTRUCT(&job->attributes, pmix_list_t);
     PMIX_DATA_BUFFER_CONSTRUCT(&job->launch_msg);
-    PRTE_CONSTRUCT(&job->children, prte_list_t);
+    PMIX_CONSTRUCT(&job->children, pmix_list_t);
     PMIX_LOAD_NSPACE(job->launcher, NULL);
     job->ntraces = 0;
     job->traces = NULL;
-    PRTE_CONSTRUCT(&job->cli, prte_cli_result_t);
+    PMIX_CONSTRUCT(&job->cli, pmix_cli_result_t);
 }
 
 static void prte_job_destruct(prte_job_t *job)
@@ -521,12 +521,12 @@ static void prte_job_destruct(prte_job_t *job)
         pmix_argv_free(job->personality);
     }
     for (n = 0; n < job->apps->size; n++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(job->apps, n))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(job->apps, n))) {
             continue;
         }
-        PRTE_RELEASE(app);
+        PMIX_RELEASE(app);
     }
-    PRTE_RELEASE(job->apps);
+    PMIX_RELEASE(job->apps);
 
     /* release any pointers in the attributes */
     evtimer = NULL;
@@ -534,60 +534,60 @@ static void prte_job_destruct(prte_job_t *job)
         prte_event_evtimer_del(evtimer->ev);
         prte_remove_attribute(&job->attributes, PRTE_JOB_TIMEOUT_EVENT);
         /* the timer is a pointer to prte_timer_t */
-        PRTE_RELEASE(evtimer);
+        PMIX_RELEASE(evtimer);
     }
     evtimer = NULL;
     if (prte_get_attribute(&job->attributes, PRTE_SPAWN_TIMEOUT_EVENT, (void **) &evtimer, PMIX_POINTER)) {
         prte_event_evtimer_del(evtimer->ev);
         prte_remove_attribute(&job->attributes, PRTE_SPAWN_TIMEOUT_EVENT);
         /* the timer is a pointer to prte_timer_t */
-        PRTE_RELEASE(evtimer);
+        PMIX_RELEASE(evtimer);
     }
     proc = NULL;
     if (prte_get_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC, (void **) &proc, PMIX_POINTER)) {
         prte_remove_attribute(&job->attributes, PRTE_JOB_ABORTED_PROC);
         /* points to an prte_proc_t */
-        PRTE_RELEASE(proc);
+        PMIX_RELEASE(proc);
     }
 
     if (NULL != job->map) {
-        PRTE_RELEASE(job->map);
+        PMIX_RELEASE(job->map);
         job->map = NULL;
     }
 
     for (n = 0; n < job->procs->size; n++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(job->procs, n))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(job->procs, n))) {
             continue;
         }
-        PRTE_RELEASE(proc);
+        PMIX_RELEASE(proc);
     }
-    PRTE_RELEASE(job->procs);
+    PMIX_RELEASE(job->procs);
 
     /* release the attributes */
-    PRTE_LIST_DESTRUCT(&job->attributes);
+    PMIX_LIST_DESTRUCT(&job->attributes);
 
     PMIX_DATA_BUFFER_DESTRUCT(&job->launch_msg);
 
     /* Clear the child list before destroying the list */
-    PRTE_LIST_FOREACH(child_jdata, &job->children, prte_job_t)
+    PMIX_LIST_FOREACH(child_jdata, &job->children, prte_job_t)
     {
-        prte_list_remove_item(&job->children, &child_jdata->super);
+        pmix_list_remove_item(&job->children, &child_jdata->super);
     }
 
-    PRTE_LIST_DESTRUCT(&job->children);
+    PMIX_LIST_DESTRUCT(&job->children);
 
     if (NULL != prte_job_data && 0 <= job->index) {
         /* remove the job from the global array */
-        prte_pointer_array_set_item(prte_job_data, job->index, NULL);
+        pmix_pointer_array_set_item(prte_job_data, job->index, NULL);
     }
     if (NULL != job->traces) {
         pmix_argv_free(job->traces);
     }
-    PRTE_DESTRUCT(&job->cli);
+    PMIX_DESTRUCT(&job->cli);
 }
 
-PRTE_CLASS_INSTANCE(prte_job_t,
-                    prte_list_item_t,
+PMIX_CLASS_INSTANCE(prte_job_t,
+                    pmix_list_item_t,
                     prte_job_construct,
                     prte_job_destruct);
 
@@ -600,8 +600,8 @@ static void prte_node_construct(prte_node_t *node)
     node->daemon = NULL;
 
     node->num_procs = 0;
-    node->procs = PRTE_NEW(prte_pointer_array_t);
-    prte_pointer_array_init(node->procs, PRTE_GLOBAL_ARRAY_BLOCK_SIZE, PRTE_GLOBAL_ARRAY_MAX_SIZE,
+    node->procs = PMIX_NEW(pmix_pointer_array_t);
+    pmix_pointer_array_init(node->procs, PRTE_GLOBAL_ARRAY_BLOCK_SIZE, PRTE_GLOBAL_ARRAY_MAX_SIZE,
                             PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
     node->next_node_rank = 0;
 
@@ -613,7 +613,7 @@ static void prte_node_construct(prte_node_t *node)
     node->topology = NULL;
 
     node->flags = 0;
-    PRTE_CONSTRUCT(&node->attributes, prte_list_t);
+    PMIX_CONSTRUCT(&node->attributes, pmix_list_t);
 }
 
 static void prte_node_destruct(prte_node_t *node)
@@ -635,25 +635,25 @@ static void prte_node_destruct(prte_node_t *node)
     }
     if (NULL != node->daemon) {
         node->daemon->node = NULL;
-        PRTE_RELEASE(node->daemon);
+        PMIX_RELEASE(node->daemon);
         node->daemon = NULL;
     }
 
     for (i = 0; i < node->procs->size; i++) {
-        if (NULL != (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i))) {
-            prte_pointer_array_set_item(node->procs, i, NULL);
-            PRTE_RELEASE(proc);
+        if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, i))) {
+            pmix_pointer_array_set_item(node->procs, i, NULL);
+            PMIX_RELEASE(proc);
         }
     }
-    PRTE_RELEASE(node->procs);
+    PMIX_RELEASE(node->procs);
 
     /* do NOT destroy the topology */
 
     /* release the attributes */
-    PRTE_LIST_DESTRUCT(&node->attributes);
+    PMIX_LIST_DESTRUCT(&node->attributes);
 }
 
-PRTE_CLASS_INSTANCE(prte_node_t, prte_list_item_t, prte_node_construct, prte_node_destruct);
+PMIX_CLASS_INSTANCE(prte_node_t, pmix_list_item_t, prte_node_construct, prte_node_destruct);
 
 static void prte_proc_construct(prte_proc_t *proc)
 {
@@ -673,13 +673,13 @@ static void prte_proc_construct(prte_proc_t *proc)
     proc->exit_code = 0; /* Assume we won't fail unless otherwise notified */
     proc->rml_uri = NULL;
     proc->flags = 0;
-    PRTE_CONSTRUCT(&proc->attributes, prte_list_t);
+    PMIX_CONSTRUCT(&proc->attributes, pmix_list_t);
 }
 
 static void prte_proc_destruct(prte_proc_t *proc)
 {
     if (NULL != proc->node) {
-        PRTE_RELEASE(proc->node);
+        PMIX_RELEASE(proc->node);
         proc->node = NULL;
     }
 
@@ -688,10 +688,10 @@ static void prte_proc_destruct(prte_proc_t *proc)
         proc->rml_uri = NULL;
     }
 
-    PRTE_LIST_DESTRUCT(&proc->attributes);
+    PMIX_LIST_DESTRUCT(&proc->attributes);
 }
 
-PRTE_CLASS_INSTANCE(prte_proc_t, prte_list_item_t, prte_proc_construct, prte_proc_destruct);
+PMIX_CLASS_INSTANCE(prte_proc_t, pmix_list_item_t, prte_proc_construct, prte_proc_destruct);
 
 static void prte_job_map_construct(prte_job_map_t *map)
 {
@@ -703,8 +703,8 @@ static void prte_job_map_construct(prte_job_map_t *map)
     map->num_new_daemons = 0;
     map->daemon_vpid_start = PMIX_RANK_INVALID;
     map->num_nodes = 0;
-    map->nodes = PRTE_NEW(prte_pointer_array_t);
-    prte_pointer_array_init(map->nodes, PRTE_GLOBAL_ARRAY_BLOCK_SIZE, PRTE_GLOBAL_ARRAY_MAX_SIZE,
+    map->nodes = PMIX_NEW(pmix_pointer_array_t);
+    pmix_pointer_array_init(map->nodes, PRTE_GLOBAL_ARRAY_BLOCK_SIZE, PRTE_GLOBAL_ARRAY_MAX_SIZE,
                             PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
 }
 
@@ -720,15 +720,15 @@ static void prte_job_map_destruct(prte_job_map_t *map)
         free(map->last_mapper);
     }
     for (i = 0; i < map->nodes->size; i++) {
-        if (NULL != (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, i))) {
-            PRTE_RELEASE(node);
-            prte_pointer_array_set_item(map->nodes, i, NULL);
+        if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, i))) {
+            PMIX_RELEASE(node);
+            pmix_pointer_array_set_item(map->nodes, i, NULL);
         }
     }
-    PRTE_RELEASE(map->nodes);
+    PMIX_RELEASE(map->nodes);
 }
 
-PRTE_CLASS_INSTANCE(prte_job_map_t, prte_object_t, prte_job_map_construct, prte_job_map_destruct);
+PMIX_CLASS_INSTANCE(prte_job_map_t, pmix_object_t, prte_job_map_construct, prte_job_map_destruct);
 
 static void prte_attr_cons(prte_attribute_t *p)
 {
@@ -740,7 +740,7 @@ static void prte_attr_des(prte_attribute_t *p)
 {
     PMIX_VALUE_DESTRUCT(&p->data);
 }
-PRTE_CLASS_INSTANCE(prte_attribute_t, prte_list_item_t, prte_attr_cons, prte_attr_des);
+PMIX_CLASS_INSTANCE(prte_attribute_t, pmix_list_item_t, prte_attr_cons, prte_attr_des);
 
 static void tcon(prte_topology_t *t)
 {
@@ -756,7 +756,7 @@ static void tdes(prte_topology_t *t)
         free(t->sig);
     }
 }
-PRTE_CLASS_INSTANCE(prte_topology_t, prte_object_t, tcon, tdes);
+PMIX_CLASS_INSTANCE(prte_topology_t, pmix_object_t, tcon, tdes);
 
 #if PRTE_PICKY_COMPILERS
 void prte_hide_unused_params(int x, ...)

@@ -49,12 +49,12 @@
 
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/runtime.h"
-#include "src/threads/mutex.h"
+#include "src/threads/pmix_mutex.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
-#include "src/util/prte_environ.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_string_copy.h"
 
 /*
  * Private data
@@ -96,8 +96,8 @@ typedef struct {
 /*
  * Private functions
  */
-static void construct(prte_object_t *stream);
-static void destruct(prte_object_t *stream);
+static void construct(pmix_object_t *stream);
+static void destruct(pmix_object_t *stream);
 static int do_open(int output_id, prte_output_stream_t *lds);
 static int open_file(int i);
 static void free_descriptor(int output_id);
@@ -124,13 +124,13 @@ static int default_stderr_fd = -1;
 static output_desc_t info[PRTE_OUTPUT_MAX_STREAMS];
 static char *temp_str = 0;
 static size_t temp_str_len = 0;
-static prte_mutex_t mutex;
+static pmix_mutex_t mutex;
 #if defined(HAVE_SYSLOG)
 static bool syslog_opened = false;
 #endif
 static char *redirect_syslog_ident = NULL;
 
-PRTE_CLASS_INSTANCE(prte_output_stream_t, prte_object_t, construct, destruct);
+PMIX_CLASS_INSTANCE(prte_output_stream_t, pmix_object_t, construct, destruct);
 
 /*
  * Setup the output stream infrastructure
@@ -175,7 +175,7 @@ bool prte_output_init(void)
         redirect_syslog_ident = strdup(str);
     }
 
-    PRTE_CONSTRUCT(&verbose, prte_output_stream_t);
+    PMIX_CONSTRUCT(&verbose, prte_output_stream_t);
     if (prte_output_redirected_to_syslog) {
         verbose.lds_want_syslog = true;
         verbose.lds_syslog_priority = prte_output_redirected_syslog_pri;
@@ -207,13 +207,13 @@ bool prte_output_init(void)
 
     /* Initialize the mutex that protects the output */
 
-    PRTE_CONSTRUCT(&mutex, prte_mutex_t);
+    PMIX_CONSTRUCT(&mutex, pmix_mutex_t);
     initialized = true;
 
     /* Set some defaults */
 
     pmix_asprintf(&output_prefix, "prte-output-pid%d-", getpid());
-    output_dir = strdup(prte_tmp_directory());
+    output_dir = strdup(pmix_tmp_directory());
 
     /* Open the default verbose stream */
     verbose_stream = prte_output_open(&verbose);
@@ -341,7 +341,7 @@ void prte_output_close(int output_id)
     /* If it's valid, used, enabled, and has an open file descriptor,
      * free the resources associated with the descriptor */
 
-    prte_mutex_lock(&mutex);
+    pmix_mutex_lock(&mutex);
     if (output_id < PRTE_OUTPUT_MAX_STREAMS && info[output_id].ldi_used
         && info[output_id].ldi_enabled) {
         free_descriptor(output_id);
@@ -361,7 +361,7 @@ void prte_output_close(int output_id)
 #endif
     }
 
-    prte_mutex_unlock(&mutex);
+    pmix_mutex_unlock(&mutex);
 }
 
 /*
@@ -496,8 +496,8 @@ void prte_output_finalize(void)
             temp_str = NULL;
             temp_str_len = 0;
         }
-        PRTE_DESTRUCT(&verbose);
-        PRTE_DESTRUCT(&mutex);
+        PMIX_DESTRUCT(&verbose);
+        PMIX_DESTRUCT(&mutex);
     }
 
     initialized = false;
@@ -508,7 +508,7 @@ void prte_output_finalize(void)
 /*
  * Constructor
  */
-static void construct(prte_object_t *obj)
+static void construct(pmix_object_t *obj)
 {
     prte_output_stream_t *stream = (prte_output_stream_t *) obj;
 
@@ -525,7 +525,7 @@ static void construct(prte_object_t *obj)
     stream->lds_want_file_append = false;
     stream->lds_file_suffix = NULL;
 }
-static void destruct(prte_object_t *obj)
+static void destruct(pmix_object_t *obj)
 {
     prte_output_stream_t *stream = (prte_output_stream_t *) obj;
 
@@ -562,14 +562,14 @@ static int do_open(int output_id, prte_output_stream_t *lds)
      * PRTE_ERROR */
 
     if (-1 == output_id) {
-        prte_mutex_lock(&mutex);
+        pmix_mutex_lock(&mutex);
         for (i = 0; i < PRTE_OUTPUT_MAX_STREAMS; ++i) {
             if (!info[i].ldi_used) {
                 break;
             }
         }
         if (i >= PRTE_OUTPUT_MAX_STREAMS) {
-            prte_mutex_unlock(&mutex);
+            pmix_mutex_unlock(&mutex);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
@@ -593,7 +593,7 @@ static int do_open(int output_id, prte_output_stream_t *lds)
 
     info[i].ldi_used = true;
     if (-1 == output_id) {
-        prte_mutex_unlock(&mutex);
+        pmix_mutex_unlock(&mutex);
     }
     info[i].ldi_enabled = lds->lds_is_debugging ? (bool) PRTE_ENABLE_DEBUG : true;
     info[i].ldi_verbose_level = lds->lds_verbose_level;
@@ -749,7 +749,7 @@ static int open_file(int i)
         if (NULL == filename) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        prte_string_copy(filename, output_dir, PRTE_PATH_MAX);
+        pmix_string_copy(filename, output_dir, PRTE_PATH_MAX);
         strcat(filename, "/");
         if (NULL != output_prefix) {
             strcat(filename, output_prefix);
@@ -922,12 +922,12 @@ static int output(int output_id, const char *format, va_list arglist)
 
     if (output_id >= 0 && output_id < PRTE_OUTPUT_MAX_STREAMS && info[output_id].ldi_used
         && info[output_id].ldi_enabled) {
-        prte_mutex_lock(&mutex);
+        pmix_mutex_lock(&mutex);
         ldi = &info[output_id];
 
         /* Make the strings */
         if (PRTE_SUCCESS != (rc = make_string(&str, ldi, format, arglist))) {
-            prte_mutex_unlock(&mutex);
+            pmix_mutex_unlock(&mutex);
             return rc;
         }
 
@@ -946,7 +946,7 @@ static int output(int output_id, const char *format, va_list arglist)
         /* stdout output */
         if (ldi->ldi_stdout) {
             if (-1 == write(fileno(stdout), out, (int) strlen(out))) {
-                prte_mutex_unlock(&mutex);
+                pmix_mutex_unlock(&mutex);
                 return PRTE_ERR_FATAL;
             }
             fflush(stdout);
@@ -976,7 +976,7 @@ static int output(int output_id, const char *format, va_list arglist)
                              "did\n not exist when prte_output() was invoked]\n",
                              ldi->ldi_file_num_lines_lost);
                     if (-1 == write(ldi->ldi_fd, buffer, (int) strlen(buffer))) {
-                        prte_mutex_unlock(&mutex);
+                        pmix_mutex_unlock(&mutex);
                         return PRTE_ERR_FATAL;
                     }
                     ldi->ldi_file_num_lines_lost = 0;
@@ -984,12 +984,12 @@ static int output(int output_id, const char *format, va_list arglist)
             }
             if (ldi->ldi_fd != -1) {
                 if (-1 == write(ldi->ldi_fd, out, (int) strlen(out))) {
-                    prte_mutex_unlock(&mutex);
+                    pmix_mutex_unlock(&mutex);
                     return PRTE_ERR_FATAL;
                 }
             }
         }
-        prte_mutex_unlock(&mutex);
+        pmix_mutex_unlock(&mutex);
         free(str);
     }
 

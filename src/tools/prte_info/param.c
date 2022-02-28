@@ -41,8 +41,8 @@
 #    include <netdb.h>
 #endif
 
-#include "src/class/prte_pointer_array.h"
-#include "src/class/prte_value_array.h"
+#include "src/class/pmix_pointer_array.h"
+#include "src/class/pmix_value_array.h"
 #include "src/include/prte_portable_platform.h"
 #include "src/include/version.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
@@ -85,7 +85,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
     int i, j;
     bool want_all = false;
     prte_value_t *pval;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     prte_info_components_open();
     opt = prte_cmd_line_get_param(&prte_info_cmd_line, "param");
@@ -108,7 +108,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
     /* Show the params */
     if (want_all) {
         for (i = 0; i < mca_types.size; ++i) {
-            if (NULL == (type = (char *) prte_pointer_array_get_item(&mca_types, i))) {
+            if (NULL == (type = (char *) pmix_pointer_array_get_item(&mca_types, i))) {
                 continue;
             }
             prte_info_show_mca_params(type, prte_info_component_all, want_internal);
@@ -121,7 +121,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
 
                 for (j=0; NULL != tmp[j]; j++) {
                     for (found = false, i = 0; i < mca_types.size; ++i) {
-                        str = (char *) prte_pointer_array_get_item(&mca_types, i);
+                        str = (char *) pmix_pointer_array_get_item(&mca_types, i);
                         if (NULL == str) {
                             continue;
                         }
@@ -158,8 +158,8 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
     const int *groups;
     char **strings;
 
-    variables = PRTE_VALUE_ARRAY_GET_BASE(&group->group_vars, const int);
-    count = prte_value_array_get_size((prte_value_array_t *) &group->group_vars);
+    variables = PMIX_VALUE_ARRAY_GET_BASE(&group->group_vars, const int);
+    count = pmix_value_array_get_size((pmix_value_array_t *) &group->group_vars);
 
     for (i = 0; i < count; ++i) {
         ret = prte_mca_base_var_get(variables[i], &var);
@@ -190,8 +190,8 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
         free(strings);
     }
 
-    groups = PRTE_VALUE_ARRAY_GET_BASE(&group->group_subgroups, const int);
-    count = prte_value_array_get_size((prte_value_array_t *) &group->group_subgroups);
+    groups = PMIX_VALUE_ARRAY_GET_BASE(&group->group_subgroups, const int);
+    count = pmix_value_array_get_size((pmix_value_array_t *) &group->group_subgroups);
 
     for (i = 0; i < count; ++i) {
         ret = prte_mca_base_var_group_get(groups[i], &group);
@@ -232,7 +232,7 @@ void prte_info_do_path(bool want_all)
     int i, count;
     char *scope;
     prte_value_t *pval;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     /* Check bozo case */
     opt = prte_cmd_line_get_param(&prte_info_cmd_line, "path");

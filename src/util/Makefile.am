@@ -55,30 +55,17 @@ headers = \
         error_strings.h \
         ethtool.h \
         error.h \
-        fd.h \
-        few.h \
-        if.h \
         keyval_parse.h \
-        listener.h \
         malloc.h \
         name_fns.h \
-        net.h \
         nidmap.h \
         numtostr.h \
-        os_dirpath.h \
-        os_path.h \
         output.h \
-        parse_options.h \
-        path.h \
         proc_info.h \
-        prte_environ.h \
-        prte_getcwd.h \
-        prte_pty.h \
         session_dir.h \
         show_help_lex.h \
         show_help.h \
         stacktrace.h \
-        string_copy.h \
         sys_limits.h \
         uri.h
 
@@ -94,30 +81,17 @@ libprrteutil_la_SOURCES = \
         error_strings.c \
         ethtool.c \
         error.c \
-        fd.c \
-        few.c \
-        if.c \
         keyval_parse.c \
-        listener.c \
         malloc.c \
         name_fns.c \
-        net.c \
         nidmap.c \
         numtostr.c \
-        os_dirpath.c \
-        os_path.c \
         output.c \
-        parse_options.c \
-        path.c \
         proc_info.c \
-        prte_environ.c \
-        prte_getcwd.c \
-        prte_pty.c \
         session_dir.c \
         show_help.c \
         show_help_lex.l \
         stacktrace.c \
-        string_copy.c \
         sys_limits.c \
         uri.c
 

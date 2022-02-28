@@ -2,7 +2,7 @@
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +18,7 @@
 #include "constants.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/util/output.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 static int if_bsdx_open(void);
 
@@ -34,7 +34,7 @@ prte_if_base_component_t prte_prteif_bsdx_ipv4_component = {
     {PRTE_IF_BASE_VERSION_2_0_0,
 
      /* Component name and version */
-     "bsdx_ipv4", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION,
+     "bsdx_ipv4", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PMIX_RELEASE_VERSION,
 
      /* Component open and close functions */
      if_bsdx_open, NULL},
@@ -107,7 +107,7 @@ static int if_bsdx_open(void)
 
         sin_addr = (struct sockaddr_in *) cur_ifaddrs->ifa_addr;
 
-        intf = PRTE_NEW(prte_if_t);
+        intf = PMIX_NEW(prte_if_t);
         if (NULL == intf) {
             prte_output(0, "prte_ifinit: unable to allocate %d bytes\n", (int) sizeof(prte_if_t));
             return PRTE_ERR_OUT_OF_RESOURCE;
@@ -117,8 +117,8 @@ static int if_bsdx_open(void)
         /* fill values into the prte_if_t */
         memcpy(&a4, &(sin_addr->sin_addr), sizeof(struct in_addr));
 
-        prte_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PRTE_IF_NAMESIZE);
-        intf->if_index = prte_list_get_size(&prte_if_list) + 1;
+        pmix_string_copy(intf->if_name, cur_ifaddrs->ifa_name, PMIX_IF_NAMESIZE);
+        intf->if_index = pmix_list_get_size(&prte_if_list) + 1;
         ((struct sockaddr_in *) &intf->if_addr)->sin_addr = a4;
         ((struct sockaddr_in *) &intf->if_addr)->sin_family = AF_INET;
         ((struct sockaddr_in *) &intf->if_addr)->sin_len = cur_ifaddrs->ifa_addr->sa_len;
@@ -128,7 +128,7 @@ static int if_bsdx_open(void)
 
         intf->if_kernel_index = (uint16_t) if_nametoindex(cur_ifaddrs->ifa_name);
 
-        prte_list_append(&prte_if_list, &(intf->super));
+        pmix_list_append(&prte_if_list, &(intf->super));
     } /*  of for loop over ifaddrs list */
 
     return PRTE_SUCCESS;

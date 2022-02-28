@@ -6,7 +6,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,7 +28,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/util/output.h"
 
 #include "src/mca/plm/plm_types.h"
@@ -92,7 +92,7 @@ static void prte_state_construct(prte_state_t *state)
     state->cbfunc = NULL;
     state->priority = PRTE_INFO_PRI;
 }
-PRTE_CLASS_INSTANCE(prte_state_t, prte_list_item_t, prte_state_construct, NULL);
+PMIX_CLASS_INSTANCE(prte_state_t, pmix_list_item_t, prte_state_construct, NULL);
 
 static void prte_state_caddy_construct(prte_state_caddy_t *caddy)
 {
@@ -103,8 +103,8 @@ static void prte_state_caddy_destruct(prte_state_caddy_t *caddy)
 {
     prte_event_del(&caddy->ev);
     if (NULL != caddy->jdata) {
-        PRTE_RELEASE(caddy->jdata);
+        PMIX_RELEASE(caddy->jdata);
     }
 }
-PRTE_CLASS_INSTANCE(prte_state_caddy_t, prte_object_t, prte_state_caddy_construct,
+PMIX_CLASS_INSTANCE(prte_state_caddy_t, pmix_object_t, prte_state_caddy_construct,
                     prte_state_caddy_destruct);

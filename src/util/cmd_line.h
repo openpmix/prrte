@@ -36,30 +36,30 @@
 #include <string.h>
 #include <getopt.h>
 
-#include "src/class/prte_list.h"
-#include "src/class/prte_object.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_object.h"
 #include "src/util/pmix_argv.h"
 
 BEGIN_C_DECLS
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     char *key;
     char **values;
-} prte_cli_item_t;
-PRTE_CLASS_DECLARATION(prte_cli_item_t);
+} pmix_cli_item_t;
+PMIX_CLASS_DECLARATION(pmix_cli_item_t);
 
 typedef struct {
-    prte_object_t super;
-    prte_list_t instances;  // comprised of prte_cli_item_t's
+    pmix_object_t super;
+    pmix_list_t instances;  // comprised of pmix_cli_item_t's
     char **tail;  // remainder of argv
-} prte_cli_result_t;
-PRTE_CLASS_DECLARATION(prte_cli_result_t);
+} pmix_cli_result_t;
+PMIX_CLASS_DECLARATION(pmix_cli_result_t);
 
 #define PRTE_CLI_RESULT_STATIC_INIT                 \
 {                                                   \
-    .super = PRTE_OBJ_STATIC_INIT(prte_object_t),   \
-    .instances = PRTE_LIST_STATIC_INIT,             \
+    .super = PMIX_OBJ_STATIC_INIT(pmix_object_t),   \
+    .instances = PMIX_LIST_STATIC_INIT,             \
     .tail = NULL                                    \
 }
 
@@ -279,20 +279,20 @@ PRTE_CLASS_DECLARATION(prte_cli_result_t);
 #define PRTE_CLI_PATTERN    "pattern"
 
 typedef void (*prte_cmd_line_store_fn_t)(const char *name, const char *option,
-                                         prte_cli_result_t *results);
+                                         pmix_cli_result_t *results);
 
 PRTE_EXPORT int prte_cmd_line_parse(char **argv, char *shorts,
                                     struct option myoptions[],
                                     prte_cmd_line_store_fn_t storefn,
-                                    prte_cli_result_t *results,
+                                    pmix_cli_result_t *results,
                                     char *helpfile);
 
-static inline prte_cli_item_t* prte_cmd_line_get_param(prte_cli_result_t *results,
+static inline pmix_cli_item_t* prte_cmd_line_get_param(pmix_cli_result_t *results,
                                                        const char *key)
 {
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
-    PRTE_LIST_FOREACH(opt, &results->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH(opt, &results->instances, pmix_cli_item_t) {
         if (0 == strcmp(opt->key, key)) {
             return opt;
         }
@@ -300,7 +300,7 @@ static inline prte_cli_item_t* prte_cmd_line_get_param(prte_cli_result_t *result
     return NULL;
 }
 
-static inline bool prte_cmd_line_is_taken(prte_cli_result_t *results,
+static inline bool prte_cmd_line_is_taken(pmix_cli_result_t *results,
                                           const char *key)
 {
     if (NULL == prte_cmd_line_get_param(results, key)) {
@@ -309,10 +309,10 @@ static inline bool prte_cmd_line_is_taken(prte_cli_result_t *results,
     return true;
 }
 
-static inline int prte_cmd_line_get_ninsts(prte_cli_result_t *results,
+static inline int prte_cmd_line_get_ninsts(pmix_cli_result_t *results,
                                            const char *key)
 {
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     opt = prte_cmd_line_get_param(results, key);
     if (NULL == opt) {
@@ -321,10 +321,10 @@ static inline int prte_cmd_line_get_ninsts(prte_cli_result_t *results,
     return pmix_argv_count(opt->values);
 }
 
-static inline char* prte_cmd_line_get_nth_instance(prte_cli_result_t *results,
+static inline char* prte_cmd_line_get_nth_instance(pmix_cli_result_t *results,
                                                    const char *key, int idx)
 {
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
     int n, ninst;
 
     opt = prte_cmd_line_get_param(results, key);
@@ -340,9 +340,9 @@ static inline char* prte_cmd_line_get_nth_instance(prte_cli_result_t *results,
 
 #define PRTE_CLI_DEBUG_LIST(r)  \
 do {                                                                    \
-    prte_cli_item_t *_c;                                                \
+    pmix_cli_item_t *_c;                                                \
     prte_output(0, "\n[%s:%s:%d]", __FILE__, __func__, __LINE__);       \
-    PRTE_LIST_FOREACH(_c, &(r)->instances, prte_cli_item_t) {           \
+    PMIX_LIST_FOREACH(_c, &(r)->instances, pmix_cli_item_t) {           \
         prte_output(0, "KEY: %s", _c->key);                             \
         if (NULL != _c->values) {                                       \
             for (int _n=0; NULL != _c->values[_n]; _n++) {              \
@@ -355,8 +355,8 @@ do {                                                                    \
 
 #define PRTE_CLI_REMOVE_DEPRECATED(r, o)    \
 do {                                                        \
-    prte_list_remove_item(&(r)->instances, &(o)->super);    \
-    PRTE_RELEASE(o);                                        \
+    pmix_list_remove_item(&(r)->instances, &(o)->super);    \
+    PMIX_RELEASE(o);                                        \
 } while(0)
 END_C_DECLS
 

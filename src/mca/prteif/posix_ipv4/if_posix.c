@@ -7,7 +7,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,7 +24,7 @@
 #include "src/mca/prteif/base/base.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/util/output.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 static int if_posix_open(void);
 
@@ -37,7 +37,7 @@ prte_if_base_component_t prte_prteif_posix_ipv4_component = {
     {PRTE_IF_BASE_VERSION_2_0_0,
 
      /* Component name and version */
-     "posix_ipv4", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION,
+     "posix_ipv4", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PMIX_RELEASE_VERSION,
 
      /* Component open and close functions */
      if_posix_open, NULL},
@@ -196,7 +196,7 @@ static int if_posix_open(void)
             continue;
         }
 #endif
-        intf = PRTE_NEW(prte_if_t);
+        intf = PMIX_NEW(prte_if_t);
         if (NULL == intf) {
             prte_output(0, "prte_ifinit: unable to allocated %lu bytes\n",
                         (unsigned long) sizeof(prte_if_t));
@@ -208,11 +208,11 @@ static int if_posix_open(void)
 
         /* copy entry over into our data structure */
         memset(intf->if_name, 0, sizeof(intf->if_name));
-        prte_string_copy(intf->if_name, ifr->ifr_name, sizeof(intf->if_name));
+        pmix_string_copy(intf->if_name, ifr->ifr_name, sizeof(intf->if_name));
         intf->if_flags = ifr->ifr_flags;
 
         /* every new address gets its own internal if_index */
-        intf->if_index = prte_list_get_size(&prte_if_list) + 1;
+        intf->if_index = pmix_list_get_size(&prte_if_list) + 1;
 
         prte_output_verbose(1, prte_prteif_base_framework.framework_output, "found interface %s",
                             intf->if_name);
@@ -223,7 +223,7 @@ static int if_posix_open(void)
 #else
         if (ioctl(sd, SIOCGIFINDEX, ifr) < 0) {
             prte_output(0, "prte_ifinit: ioctl(SIOCGIFINDEX) failed with errno=%d", errno);
-            PRTE_RELEASE(intf);
+            PMIX_RELEASE(intf);
             continue;
         }
 #    if defined(ifr_ifindex)
@@ -239,11 +239,11 @@ static int if_posix_open(void)
            instead */
         if (ioctl(sd, SIOCGIFADDR, ifr) < 0) {
             prte_output(0, "prte_ifinit: ioctl(SIOCGIFADDR) failed with errno=%d", errno);
-            PRTE_RELEASE(intf);
+            PMIX_RELEASE(intf);
             break;
         }
         if (AF_INET != ifr->ifr_addr.sa_family) {
-            PRTE_RELEASE(intf);
+            PMIX_RELEASE(intf);
             continue;
         }
 
@@ -252,7 +252,7 @@ static int if_posix_open(void)
 
         if (ioctl(sd, SIOCGIFNETMASK, ifr) < 0) {
             prte_output(0, "prte_ifinit: ioctl(SIOCGIFNETMASK) failed with errno=%d", errno);
-            PRTE_RELEASE(intf);
+            PMIX_RELEASE(intf);
             continue;
         }
 
@@ -277,7 +277,7 @@ static int if_posix_open(void)
         intf->ifmtu = ifr->ifr_mtu;
 #endif
 
-        prte_list_append(&prte_if_list, &(intf->super));
+        pmix_list_append(&prte_if_list, &(intf->super));
     }
     free(ifconf.ifc_req);
     close(sd);

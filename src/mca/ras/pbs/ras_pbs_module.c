@@ -29,8 +29,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "src/util/net.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_net.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -43,10 +43,10 @@
 /*
  * Local functions
  */
-static int allocate(prte_job_t *jdata, prte_list_t *nodes);
+static int allocate(prte_job_t *jdata, pmix_list_t *nodes);
 static int finalize(void);
 
-static int discover(prte_list_t *nodelist, char *pbs_jobid);
+static int discover(pmix_list_t *nodelist, char *pbs_jobid);
 static char *pbs_getline(FILE *fp);
 
 #define PBS_FILE_MAX_LINE_LENGTH 512
@@ -63,7 +63,7 @@ prte_ras_base_module_t prte_ras_pbs_module = {NULL, allocate, NULL, finalize};
  * them back to the caller.
  *
  */
-static int allocate(prte_job_t *jdata, prte_list_t *nodes)
+static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     int ret;
     char *pbs_jobid;
@@ -87,13 +87,13 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
     /* in the PBS world, if we didn't find anything, then this
      * is an unrecoverable error - report it
      */
-    if (prte_list_is_empty(nodes)) {
+    if (pmix_list_is_empty(nodes)) {
         prte_show_help("help-ras-pbs.txt", "no-nodes-found", true, filename);
         return PRTE_ERR_NOT_FOUND;
     }
 
     /* record the number of allocated nodes */
-    prte_num_allocated_nodes = prte_list_get_size(nodes);
+    prte_num_allocated_nodes = pmix_list_get_size(nodes);
 
     /* All done */
     return PRTE_SUCCESS;
@@ -119,7 +119,7 @@ static int finalize(void)
  *  - check for additional nodes that have already been allocated
  */
 
-static int discover(prte_list_t *nodelist, char *pbs_jobid)
+static int discover(pmix_list_t *nodelist, char *pbs_jobid)
 {
     int32_t nodeid;
     prte_node_t *node;
@@ -178,7 +178,7 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
         /* Remember that PBS may list the same node more than once.  So
            we have to check for duplicates. */
         found = false;
-        PRTE_LIST_FOREACH(node, nodelist, prte_node_t) {
+        PMIX_LIST_FOREACH(node, nodelist, prte_node_t) {
             if (0 == strcmp(node->name, hostname)) {
                 if (prte_ras_pbs_component.smp_mode) {
                     /* this cannot happen in smp mode */
@@ -205,7 +205,7 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
                                  "%s ras:pbs:allocate:discover: not found -- added to list",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-            node = PRTE_NEW(prte_node_t);
+            node = PMIX_NEW(prte_node_t);
             node->name = hostname;
             prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID,
                                PRTE_ATTR_LOCAL, &nodeid, PMIX_INT32);
@@ -213,7 +213,7 @@ static int discover(prte_list_t *nodelist, char *pbs_jobid)
             node->slots_max = 0;
             node->slots = ppn;
             node->state = PRTE_NODE_STATE_UP;
-            prte_list_append(nodelist, &node->super);
+            pmix_list_append(nodelist, &node->super);
         } else {
 
             /* Yes, so we need to free the hostname that came back */

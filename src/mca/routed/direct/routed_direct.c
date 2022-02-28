@@ -6,7 +6,7 @@
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,7 +39,7 @@ static pmix_proc_t get_route(pmix_proc_t *target);
 static int route_lost(const pmix_proc_t *route);
 static bool route_is_defined(const pmix_proc_t *target);
 static void update_routing_plan(void);
-static void get_routing_list(prte_list_t *coll);
+static void get_routing_list(pmix_list_t *coll);
 static int set_lifeline(pmix_proc_t *proc);
 static size_t num_routes(void);
 static int get_num_contributors(pmix_rank_t *dmns, size_t ndmns);
@@ -61,7 +61,7 @@ prte_routed_module_t prte_routed_direct_module = {
 
 static pmix_proc_t mylifeline;
 static pmix_proc_t *lifeline = NULL;
-static prte_list_t my_children;
+static pmix_list_t my_children;
 
 static int init(void)
 {
@@ -80,14 +80,14 @@ static int init(void)
         }
     }
     /* setup the list of children */
-    PRTE_CONSTRUCT(&my_children, prte_list_t);
+    PMIX_CONSTRUCT(&my_children, pmix_list_t);
 
     return PRTE_SUCCESS;
 }
 
 static int finalize(void)
 {
-    PRTE_LIST_DESTRUCT(&my_children);
+    PMIX_LIST_DESTRUCT(&my_children);
     return PRTE_SUCCESS;
 }
 
@@ -155,7 +155,7 @@ found:
 
 static int route_lost(const pmix_proc_t *route)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_routed_tree_t *child;
 
     PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output, "%s route to %s lost",
@@ -178,12 +178,12 @@ static int route_lost(const pmix_proc_t *route)
      * see if it is one of our children - if so, remove it
      */
     if (PRTE_PROC_IS_MASTER && PMIX_CHECK_NSPACE(route->nspace, PRTE_PROC_MY_NAME->nspace)) {
-        for (item = prte_list_get_first(&my_children); item != prte_list_get_end(&my_children);
-             item = prte_list_get_next(item)) {
+        for (item = pmix_list_get_first(&my_children); item != pmix_list_get_end(&my_children);
+             item = pmix_list_get_next(item)) {
             child = (prte_routed_tree_t *) item;
             if (child->rank == route->rank) {
-                prte_list_remove_item(&my_children, item);
-                PRTE_RELEASE(item);
+                pmix_list_remove_item(&my_children, item);
+                PMIX_RELEASE(item);
                 return PRTE_SUCCESS;
             }
         }
@@ -226,8 +226,8 @@ static void update_routing_plan(void)
     }
 
     /* clear the current list */
-    PRTE_LIST_DESTRUCT(&my_children);
-    PRTE_CONSTRUCT(&my_children, prte_list_t);
+    PMIX_LIST_DESTRUCT(&my_children);
+    PMIX_CONSTRUCT(&my_children, pmix_list_t);
 
     /* HNP is directly connected to each daemon */
     if (NULL == (jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace))) {
@@ -235,18 +235,18 @@ static void update_routing_plan(void)
         return;
     }
     for (i = 1; i < jdata->procs->size; i++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, i))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, i))) {
             continue;
         }
-        child = PRTE_NEW(prte_routed_tree_t);
+        child = PMIX_NEW(prte_routed_tree_t);
         child->rank = proc->name.rank;
-        prte_list_append(&my_children, &child->super);
+        pmix_list_append(&my_children, &child->super);
     }
 
     return;
 }
 
-static void get_routing_list(prte_list_t *coll)
+static void get_routing_list(pmix_list_t *coll)
 {
 
     PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output,
@@ -260,7 +260,7 @@ static size_t num_routes(void)
     if (!PRTE_PROC_IS_MASTER) {
         return 0;
     }
-    return prte_list_get_size(&my_children);
+    return pmix_list_get_size(&my_children);
 }
 
 static int get_num_contributors(pmix_rank_t *dmns, size_t ndmns)

@@ -15,7 +15,7 @@
  *                         reserved.
  * Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -397,6 +397,6 @@ typedef struct prte_mca_base_component_data_2_0_0_t prte_mca_base_component_data
 
 #define PRTE_MCA_BASE_VERSION_2_1_0(type, type_major, type_minor, type_release)  \
     _PRTE_MCA_BASE_VERSION_2_1_0("prte", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, \
-                                 PRTE_RELEASE_VERSION, type, type_major, type_minor, type_release)
+                                 PMIX_RELEASE_VERSION, type, type_major, type_minor, type_release)
 
 #endif /* PRTE_MCA_H */

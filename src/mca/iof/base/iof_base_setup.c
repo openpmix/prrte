@@ -68,11 +68,11 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/name_fns.h"
-#include "src/util/os_dirpath.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/prte_environ.h"
-#include "src/util/prte_pty.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_pty.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/iof/base/base.h"
@@ -105,7 +105,7 @@ int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts)
             wp = &ws;
         }
 #endif
-        ret = prte_openpty(&(opts->p_stdout[0]), &(opts->p_stdout[1]), (char *) NULL,
+        ret = pmix_openpty(&(opts->p_stdout[0]), &(opts->p_stdout[1]), (char *) NULL,
                            (struct termios *) NULL, wp);
     }
 #else

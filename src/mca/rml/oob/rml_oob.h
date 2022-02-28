@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,7 +38,7 @@ BEGIN_C_DECLS
 
 typedef struct {
     prte_rml_base_module_t api;
-    prte_list_t queued_routing_messages;
+    pmix_list_t queued_routing_messages;
     prte_event_t *timer_event;
     struct timeval timeout;
     char *routed; // name of routed module to be used

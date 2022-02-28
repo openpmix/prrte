@@ -17,7 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2018 Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,10 +60,10 @@ static int mindist_map(prte_job_t *jdata)
     int i, j;
     unsigned int k;
     hwloc_obj_t obj = NULL;
-    prte_list_t node_list;
-    prte_list_t numa_list;
-    prte_list_item_t *item;
-    prte_list_item_t *numa_item;
+    pmix_list_t node_list;
+    pmix_list_t numa_list;
+    pmix_list_item_t *item;
+    pmix_list_item_t *numa_item;
     prte_rmaps_numa_node_t *numa;
     prte_node_t *node;
     prte_proc_t *proc;
@@ -169,12 +169,12 @@ static int mindist_map(prte_job_t *jdata)
 
     /* cycle through the app_contexts, mapping them sequentially */
     for (i = 0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
 
         /* setup the nodelist here in case we jump to error */
-        PRTE_CONSTRUCT(&node_list, prte_list_t);
+        PMIX_CONSTRUCT(&node_list, pmix_list_t);
 
         /* if the number of processes wasn't specified, then we know there can be only
          * one app_context allowed in the launch, and that we are to launch it across
@@ -209,7 +209,7 @@ static int mindist_map(prte_job_t *jdata)
             oversubscribed = true;
         }
 
-        num_nodes = (int32_t) prte_list_get_size(&node_list);
+        num_nodes = (int32_t) pmix_list_get_size(&node_list);
         /* flag that all subsequent requests should not reset the node->mapped flag */
         initial_map = false;
 
@@ -258,8 +258,8 @@ static int mindist_map(prte_job_t *jdata)
 
             num_nodes = 0;
             /* iterate through the list of nodes */
-            for (item = prte_list_get_first(&node_list); item != prte_list_get_end(&node_list);
-                 item = prte_list_get_next(item)) {
+            for (item = pmix_list_get_first(&node_list); item != pmix_list_get_end(&node_list);
+                 item = pmix_list_get_next(item)) {
                 node = (prte_node_t *) item;
 
                 if (NULL == node->topology || NULL == node->topology->topo) {
@@ -376,7 +376,7 @@ static int mindist_map(prte_job_t *jdata)
                 /* first we need to fill summary object for root with information about nodes
                  * so we call prte_hwloc_base_get_nbobjs_by_type */
                 prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_NUMANODE, 0);
-                PRTE_CONSTRUCT(&numa_list, prte_list_t);
+                PMIX_CONSTRUCT(&numa_list, pmix_list_t);
                 ret = prte_hwloc_get_sorted_numa_list(node->topology->topo, prte_rmaps_base.device,
                                                       &numa_list);
                 if (ret > 1) {
@@ -392,10 +392,10 @@ static int mindist_map(prte_job_t *jdata)
                     rc = PRTE_ERR_TAKE_NEXT_OPTION;
                     goto error;
                 }
-                if (prte_list_get_size(&numa_list) > 0) {
+                if (pmix_list_get_size(&numa_list) > 0) {
                     j = 0;
                     required = 0;
-                    PRTE_LIST_FOREACH(numa, &numa_list, prte_rmaps_numa_node_t)
+                    PMIX_LIST_FOREACH(numa, &numa_list, prte_rmaps_numa_node_t)
                     {
                         /* get the hwloc object for this numa */
                         if (NULL
@@ -432,9 +432,9 @@ static int mindist_map(prte_job_t *jdata)
                         /* add the node to the map, if needed */
                         if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
                             PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-                            PRTE_RETAIN(node); /* maintain accounting on object */
+                            PMIX_RETAIN(node); /* maintain accounting on object */
                             jdata->map->num_nodes++;
-                            prte_pointer_array_add(jdata->map->nodes, node);
+                            pmix_pointer_array_add(jdata->map->nodes, node);
                         }
                         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                                             "mca:rmaps:mindist: assigned %d procs to node %s", j,
@@ -452,10 +452,10 @@ static int mindist_map(prte_job_t *jdata)
                     rc = PRTE_ERR_TAKE_NEXT_OPTION;
                     goto error;
                 }
-                while (NULL != (numa_item = prte_list_remove_first(&numa_list))) {
-                    PRTE_RELEASE(numa_item);
+                while (NULL != (numa_item = pmix_list_remove_first(&numa_list))) {
+                    PMIX_RELEASE(numa_item);
                 }
-                PRTE_DESTRUCT(&numa_list);
+                PMIX_DESTRUCT(&numa_list);
                 if (bynode) {
                     nextra--;
                     if (nextra == 0) {
@@ -474,7 +474,7 @@ static int mindist_map(prte_job_t *jdata)
         /* cleanup the node list - it can differ from one app_context
          * to another, so we have to get it every time
          */
-        PRTE_LIST_DESTRUCT(&node_list);
+        PMIX_LIST_DESTRUCT(&node_list);
     }
     if (NULL != device) {
         free(device);
@@ -483,7 +483,7 @@ static int mindist_map(prte_job_t *jdata)
     return PRTE_SUCCESS;
 
 error:
-    PRTE_LIST_DESTRUCT(&node_list);
+    PMIX_LIST_DESTRUCT(&node_list);
     if (NULL != device) {
         free(device);
     }
@@ -498,7 +498,7 @@ static int assign_locations(prte_job_t *jdata)
     hwloc_obj_t obj = NULL;
     prte_mca_base_component_t *c = &prte_rmaps_mindist_component.base_version;
     int rc;
-    prte_list_t numa_list;
+    pmix_list_t numa_list;
     prte_rmaps_numa_node_t *numa;
     bool use_hwthread_cpus;
     char *job_cpuset;
@@ -535,12 +535,12 @@ static int assign_locations(prte_job_t *jdata)
      * then loop thru the list again to handle the oversubscription
      */
     for (n = 0; n < jdata->apps->size; n++) {
-        if (NULL == prte_pointer_array_get_item(jdata->apps, n)) {
+        if (NULL == pmix_pointer_array_get_item(jdata->apps, n)) {
             continue;
         }
         for (m = 0; m < jdata->map->nodes->size; m++) {
             if (NULL
-                == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m))) {
+                == (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m))) {
                 continue;
             }
             if (NULL == node->topology || NULL == node->topology->topo) {
@@ -561,31 +561,31 @@ static int assign_locations(prte_job_t *jdata)
             /* first we need to fill summary object for root with information about nodes
              * so we call prte_hwloc_base_get_nbobjs_by_type */
             prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_NUMANODE, 0);
-            PRTE_CONSTRUCT(&numa_list, prte_list_t);
+            PMIX_CONSTRUCT(&numa_list, pmix_list_t);
             rc = prte_hwloc_get_sorted_numa_list(node->topology->topo, prte_rmaps_base.device,
                                                  &numa_list);
             if (rc > 1) {
                 prte_show_help("help-prte-rmaps-md.txt", "prte-rmaps-mindist:several-devices", true,
                                prte_rmaps_base.device, rc, node->name);
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
-                PRTE_LIST_DESTRUCT(&numa_list);
+                PMIX_LIST_DESTRUCT(&numa_list);
                 return PRTE_ERR_TAKE_NEXT_OPTION;
             } else if (rc < 0) {
                 prte_show_help("help-prte-rmaps-md.txt", "prte-rmaps-mindist:device-not-found",
                                true, prte_rmaps_base.device, node->name);
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
-                PRTE_LIST_DESTRUCT(&numa_list);
+                PMIX_LIST_DESTRUCT(&numa_list);
                 return PRTE_ERR_TAKE_NEXT_OPTION;
             }
             j = 0;
-            PRTE_LIST_FOREACH(numa, &numa_list, prte_rmaps_numa_node_t)
+            PMIX_LIST_FOREACH(numa, &numa_list, prte_rmaps_numa_node_t)
             {
                 /* get the hwloc object for this numa */
                 if (NULL
                     == (obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, HWLOC_OBJ_NUMANODE,
                                                               0, numa->index))) {
                     PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-                    PRTE_LIST_DESTRUCT(&numa_list);
+                    PMIX_LIST_DESTRUCT(&numa_list);
                     return PRTE_ERR_NOT_FOUND;
                 }
                 npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus, available,
@@ -594,7 +594,7 @@ static int assign_locations(prte_job_t *jdata)
                  * have assigned everyone or the region is full */
                 for (k = j; k < node->procs->size && 0 < npus; k++) {
                     if (NULL
-                        == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, k))) {
+                        == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, k))) {
                         continue;
                     }
                     if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
@@ -609,7 +609,7 @@ static int assign_locations(prte_job_t *jdata)
                     --npus;
                 }
             }
-            PRTE_LIST_DESTRUCT(&numa_list);
+            PMIX_LIST_DESTRUCT(&numa_list);
             hwloc_bitmap_free(available);
         }
     }

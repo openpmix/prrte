@@ -33,7 +33,7 @@
 #    include <sys/time.h>
 #endif
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
@@ -49,7 +49,7 @@
 /* define an object to hold data */
 typedef struct {
     /* base object */
-    prte_object_t super;
+    pmix_object_t super;
     /* index of this object in the storage array */
     int32_t index;
     /* process that owns this data - only the
@@ -86,34 +86,34 @@ static void destruct(prte_data_object_t *ptr)
     }
 }
 
-static PRTE_CLASS_INSTANCE(prte_data_object_t, prte_object_t, construct, destruct);
+static PMIX_CLASS_INSTANCE(prte_data_object_t, pmix_object_t, construct, destruct);
 
 /* define a request object for delayed answers */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     pmix_proc_t proxy;
     pmix_proc_t requestor;
     int room_number;
     uint32_t uid;
     pmix_data_range_t range;
     char **keys;
-    prte_list_t answers;
+    pmix_list_t answers;
 } prte_data_req_t;
 static void rqcon(prte_data_req_t *p)
 {
     p->keys = NULL;
-    PRTE_CONSTRUCT(&p->answers, prte_list_t);
+    PMIX_CONSTRUCT(&p->answers, pmix_list_t);
 }
 static void rqdes(prte_data_req_t *p)
 {
     pmix_argv_free(p->keys);
-    PRTE_LIST_DESTRUCT(&p->answers);
+    PMIX_LIST_DESTRUCT(&p->answers);
 }
-static PRTE_CLASS_INSTANCE(prte_data_req_t, prte_list_item_t, rqcon, rqdes);
+static PMIX_CLASS_INSTANCE(prte_data_req_t, pmix_list_item_t, rqcon, rqdes);
 
 /* local globals */
-static prte_pointer_array_t prte_data_server_store;
-static prte_list_t pending;
+static pmix_pointer_array_t prte_data_server_store;
+static pmix_list_t pending;
 static bool initialized = false;
 static int prte_data_server_output = -1;
 static int prte_data_server_verbosity = -1;
@@ -139,13 +139,13 @@ int prte_data_server_init(void)
         prte_output_set_verbosity(prte_data_server_output, prte_data_server_verbosity);
     }
 
-    PRTE_CONSTRUCT(&prte_data_server_store, prte_pointer_array_t);
-    if (PRTE_SUCCESS != (rc = prte_pointer_array_init(&prte_data_server_store, 1, INT_MAX, 1))) {
+    PMIX_CONSTRUCT(&prte_data_server_store, pmix_pointer_array_t);
+    if (PRTE_SUCCESS != (rc = pmix_pointer_array_init(&prte_data_server_store, 1, INT_MAX, 1))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
 
-    PRTE_CONSTRUCT(&pending, prte_list_t);
+    PMIX_CONSTRUCT(&pending, pmix_list_t);
 
     prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_SERVER, PRTE_RML_PERSISTENT,
                             prte_data_server, NULL);
@@ -165,13 +165,13 @@ void prte_data_server_finalize(void)
 
     for (i = 0; i < prte_data_server_store.size; i++) {
         if (NULL
-            != (data = (prte_data_object_t *) prte_pointer_array_get_item(&prte_data_server_store,
+            != (data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_server_store,
                                                                           i))) {
-            PRTE_RELEASE(data);
+            PMIX_RELEASE(data);
         }
     }
-    PRTE_DESTRUCT(&prte_data_server_store);
-    PRTE_LIST_DESTRUCT(&pending);
+    PMIX_DESTRUCT(&prte_data_server_store);
+    PMIX_LIST_DESTRUCT(&pending);
 }
 
 void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
@@ -196,7 +196,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
     prte_ds_info_t *rinfo;
     size_t n, nanswers;
     pmix_info_t *info;
-    prte_list_t answers;
+    pmix_list_t answers;
     void *ilist;
     pmix_data_array_t darray;
 
@@ -237,14 +237,14 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
 
     switch (command) {
     case PRTE_PMIX_PUBLISH_CMD:
-        data = PRTE_NEW(prte_data_object_t);
+        data = PMIX_NEW(prte_data_object_t);
 
         /* unpack the publisher */
         count = 1;
         if (PMIX_SUCCESS
             != (ret = PMIx_Data_unpack(NULL, buffer, &data->owner, &count, PMIX_PROC))) {
             PMIX_ERROR_LOG(ret);
-            PRTE_RELEASE(data);
+            PMIX_RELEASE(data);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
@@ -258,7 +258,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         count = 1;
         if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &ninfo, &count, PMIX_SIZE))) {
             PMIX_ERROR_LOG(ret);
-            PRTE_RELEASE(data);
+            PMIX_RELEASE(data);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
@@ -267,7 +267,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         if (1 > ninfo) {
             ret = PMIX_ERR_BAD_PARAM;
             PMIX_ERROR_LOG(ret);
-            PRTE_RELEASE(data);
+            PMIX_RELEASE(data);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
         }
@@ -279,7 +279,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         count = ninfo;
         if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, info, &count, PMIX_INFO))) {
             PMIX_ERROR_LOG(ret);
-            PRTE_RELEASE(data);
+            PMIX_RELEASE(data);
             PMIX_INFO_FREE(info, ninfo);
             rc = PRTE_ERR_UNPACK_FAILURE;
             goto SEND_ERROR;
@@ -299,7 +299,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 PMIX_INFO_LIST_XFER(ret, ilist, &info[n]);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    PRTE_RELEASE(data);
+                    PMIX_RELEASE(data);
                     rc = PRTE_ERR_UNPACK_FAILURE;
                     PMIX_INFO_LIST_RELEASE(ilist);
                     PMIX_INFO_FREE(info, ninfo);
@@ -314,7 +314,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         PMIX_INFO_LIST_RELEASE(ilist);
 
         /* store this object */
-        data->index = prte_pointer_array_add(&prte_data_server_store, data);
+        data->index = pmix_pointer_array_add(&prte_data_server_store, data);
 
         prte_output_verbose(1, prte_data_server_output,
                             "%s data server: checking for pending requests",
@@ -322,7 +322,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
 
         /* check for pending requests that match this data */
         reply = NULL;
-        PRTE_LIST_FOREACH_SAFE(req, rqnext, &pending, prte_data_req_t)
+        PMIX_LIST_FOREACH_SAFE(req, rqnext, &pending, prte_data_req_t)
         {
             if (req->uid != data->uid) {
                 continue;
@@ -352,15 +352,15 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), data->info[n].key,
                             PMIx_Data_type_string(data->info[n].value.type), data->owner.nspace,
                             data->owner.rank);
-                        rinfo = PRTE_NEW(prte_ds_info_t);
+                        rinfo = PMIX_NEW(prte_ds_info_t);
                         memcpy(&rinfo->source, &data->owner, sizeof(pmix_proc_t));
                         rinfo->info = &data->info[n];
-                        prte_list_append(&req->answers, &rinfo->super);
+                        pmix_list_append(&req->answers, &rinfo->super);
                         break; // a key can only occur once
                     }
                 }
             }
-            if (0 < (n = prte_list_get_size(&req->answers))) {
+            if (0 < (n = pmix_list_get_size(&req->answers))) {
                 /* send it back to the requestor */
                 prte_output_verbose(1, prte_data_server_output,
                                     "%s data server: returning data to %s:%d",
@@ -408,7 +408,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                  * efficient than packing an info array, but avoids another malloc
                  * operation just to assemble all the return values into a contiguous
                  * array */
-                while (NULL != (rinfo = (prte_ds_info_t *) prte_list_remove_first(&req->answers))) {
+                while (NULL != (rinfo = (prte_ds_info_t *) pmix_list_remove_first(&req->answers))) {
                     /* pack the data owner */
                     if (PMIX_SUCCESS
                         != (ret = PMIx_Data_pack(NULL, &pbkt, &rinfo->source, 1, PMIX_PROC))) {
@@ -426,8 +426,8 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                         goto SEND_ERROR;
                     }
                 }
-                PRTE_LIST_DESTRUCT(&req->answers);
-                PRTE_CONSTRUCT(&req->answers, prte_list_t);
+                PMIX_LIST_DESTRUCT(&req->answers);
+                PMIX_CONSTRUCT(&req->answers, pmix_list_t);
 
                 /* unload the pmix buffer */
                 rc = PMIx_Data_unload(&pbkt, &pbo);
@@ -442,7 +442,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 if (0 > (rc = prte_rml.send_buffer_nb(&req->proxy, reply, PRTE_RML_TAG_DATA_CLIENT,
                                                       prte_rml_send_callback, NULL))) {
                     PRTE_ERROR_LOG(rc);
-                    PRTE_RELEASE(reply);
+                    PMIX_RELEASE(reply);
                 }
             }
         }
@@ -527,14 +527,14 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
 
         /* cycle across the provided keys */
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
-        PRTE_CONSTRUCT(&answers, prte_list_t);
+        PMIX_CONSTRUCT(&answers, pmix_list_t);
 
         for (i = 0; NULL != keys[i]; i++) {
             prte_output_verbose(10, prte_data_server_output, "%s data server: looking for %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), keys[i]);
             /* cycle across the stored data, looking for a match */
             for (k = 0; k < prte_data_server_store.size; k++) {
-                data = (prte_data_object_t *) prte_pointer_array_get_item(&prte_data_server_store,
+                data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_server_store,
                                                                           k);
                 if (NULL == data) {
                     continue;
@@ -564,11 +564,11 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), keys[i],
                                         data->info[n].key);
                     if (PMIX_CHECK_KEY(&data->info[n], keys[i])) {
-                        rinfo = PRTE_NEW(prte_ds_info_t);
+                        rinfo = PMIX_NEW(prte_ds_info_t);
                         memcpy(&rinfo->source, &data->owner, sizeof(pmix_proc_t));
                         rinfo->info = &data->info[n];
                         rinfo->persistence = data->persistence;
-                        prte_list_append(&answers, &rinfo->super);
+                        pmix_list_append(&answers, &rinfo->super);
                         prte_output_verbose(1, prte_data_server_output,
                                             "%s data server: adding %s to data from %s",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), data->info[n].key,
@@ -578,12 +578,12 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
             } // loop over stored data
         }     // loop over keys
 
-        if (0 < (nanswers = prte_list_get_size(&answers))) {
+        if (0 < (nanswers = pmix_list_get_size(&answers))) {
             /* pack the number of data items found */
             if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &nanswers, 1, PMIX_SIZE))) {
                 PMIX_ERROR_LOG(ret);
                 rc = PRTE_ERR_PACK_FAILURE;
-                PRTE_LIST_DESTRUCT(&answers);
+                PMIX_LIST_DESTRUCT(&answers);
                 pmix_argv_free(keys);
                 goto SEND_ERROR;
             }
@@ -591,14 +591,14 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
              * efficient than packing an info array, but avoids another malloc
              * operation just to assemble all the return values into a contiguous
              * array */
-            PRTE_LIST_FOREACH(rinfo, &answers, prte_ds_info_t)
+            PMIX_LIST_FOREACH(rinfo, &answers, prte_ds_info_t)
             {
                 /* pack the data owner */
                 if (PMIX_SUCCESS
                     != (ret = PMIx_Data_pack(NULL, &pbkt, &rinfo->source, 1, PMIX_PROC))) {
                     PMIX_ERROR_LOG(ret);
                     rc = PRTE_ERR_PACK_FAILURE;
-                    PRTE_LIST_DESTRUCT(&answers);
+                    PMIX_LIST_DESTRUCT(&answers);
                     pmix_argv_free(keys);
                     goto SEND_ERROR;
                 }
@@ -606,7 +606,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                     != (ret = PMIx_Data_pack(NULL, &pbkt, rinfo->info, 1, PMIX_INFO))) {
                     PMIX_ERROR_LOG(ret);
                     rc = PRTE_ERR_PACK_FAILURE;
-                    PRTE_LIST_DESTRUCT(&answers);
+                    PMIX_LIST_DESTRUCT(&answers);
                     pmix_argv_free(keys);
                     goto SEND_ERROR;
                 }
@@ -619,7 +619,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 }
             }
         }
-        PRTE_LIST_DESTRUCT(&answers);
+        PMIX_LIST_DESTRUCT(&answers);
 
         if (nanswers == (size_t) pmix_argv_count(keys)) {
             rc = PRTE_SUCCESS;
@@ -636,14 +636,14 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                                     "%s data server:lookup: pushing request to wait",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                 PMIX_DATA_BUFFER_RELEASE(answer);
-                req = PRTE_NEW(prte_data_req_t);
+                req = PMIX_NEW(prte_data_req_t);
                 req->room_number = room_number;
                 req->proxy = *sender;
                 memcpy(&req->requestor, &requestor, sizeof(pmix_proc_t));
                 req->uid = uid;
                 req->range = range;
                 req->keys = keys;
-                prte_list_append(&pending, &req->super);
+                pmix_list_append(&pending, &req->super);
                 /* drop the partial response we have - we'll build it when everything
                  * becomes available */
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
@@ -755,7 +755,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         for (i = 0; NULL != keys[i]; i++) {
             /* cycle across the stored data, looking for a match */
             for (k = 0; k < prte_data_server_store.size; k++) {
-                data = (prte_data_object_t *) prte_pointer_array_get_item(&prte_data_server_store,
+                data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_server_store,
                                                                           k);
                 if (NULL == data) {
                     continue;
@@ -788,8 +788,8 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 }
                 /* if all the data has been removed, then remove the object */
                 if (nanswers == data->ninfo) {
-                    prte_pointer_array_set_item(&prte_data_server_store, k, NULL);
-                    PRTE_RELEASE(data);
+                    pmix_pointer_array_set_item(&prte_data_server_store, k, NULL);
+                    PMIX_RELEASE(data);
                 }
             }
         }
@@ -819,7 +819,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
 
         /* cycle across the stored data, looking for a match */
         for (k = 0; k < prte_data_server_store.size; k++) {
-            data = (prte_data_object_t *) prte_pointer_array_get_item(&prte_data_server_store, k);
+            data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_server_store, k);
             if (NULL == data) {
                 continue;
             }
@@ -835,11 +835,11 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 continue;
             }
             /* remove the object */
-            prte_pointer_array_set_item(&prte_data_server_store, k, NULL);
-            PRTE_RELEASE(data);
+            pmix_pointer_array_set_item(&prte_data_server_store, k, NULL);
+            PMIX_RELEASE(data);
         }
         /* no response is required */
-        PRTE_RELEASE(answer);
+        PMIX_RELEASE(answer);
         return;
 
     default:
@@ -861,6 +861,6 @@ SEND_ANSWER:
     if (0 > (rc = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_DATA_CLIENT,
                                           prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(answer);
+        PMIX_RELEASE(answer);
     }
 }

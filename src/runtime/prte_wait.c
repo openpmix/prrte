@@ -15,7 +15,7 @@
  *                         et Automatique. All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -51,16 +51,16 @@
 #    include <sys/wait.h>
 #endif
 
-#include "src/class/prte_list.h"
-#include "src/class/prte_object.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_object.h"
 #include "src/event/event-internal.h"
-#include "src/threads/mutex.h"
+#include "src/threads/pmix_mutex.h"
 #include "src/util/output.h"
 
 #include "constants.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 
 #include "src/runtime/prte_wait.h"
@@ -75,7 +75,7 @@ static void timer_dest(prte_timer_t *tm)
 {
     prte_event_free(tm->ev);
 }
-PRTE_CLASS_INSTANCE(prte_timer_t, prte_object_t, timer_const, timer_dest);
+PMIX_CLASS_INSTANCE(prte_timer_t, pmix_object_t, timer_const, timer_dest);
 
 static void wccon(prte_wait_tracker_t *p)
 {
@@ -86,14 +86,14 @@ static void wccon(prte_wait_tracker_t *p)
 static void wcdes(prte_wait_tracker_t *p)
 {
     if (NULL != p->child) {
-        PRTE_RELEASE(p->child);
+        PMIX_RELEASE(p->child);
     }
 }
-PRTE_CLASS_INSTANCE(prte_wait_tracker_t, prte_list_item_t, wccon, wcdes);
+PMIX_CLASS_INSTANCE(prte_wait_tracker_t, pmix_list_item_t, wccon, wcdes);
 
 /* Local Variables */
 static prte_event_t handler;
-static prte_list_t pending_cbs;
+static pmix_list_t pending_cbs;
 
 /* Local Function Prototypes */
 static void wait_signal_callback(int fd, short event, void *arg);
@@ -112,7 +112,7 @@ void prte_wait_enable(void)
 
 int prte_wait_init(void)
 {
-    PRTE_CONSTRUCT(&pending_cbs, prte_list_t);
+    PMIX_CONSTRUCT(&pending_cbs, pmix_list_t);
 
     prte_event_set(prte_event_base, &handler, SIGCHLD, PRTE_EV_SIGNAL | PRTE_EV_PERSIST,
                    wait_signal_callback, &handler);
@@ -127,7 +127,7 @@ int prte_wait_finalize(void)
     prte_event_del(&handler);
 
     /* clear out the pending cbs */
-    PRTE_LIST_DESTRUCT(&pending_cbs);
+    PMIX_LIST_DESTRUCT(&pending_cbs);
 
     return PRTE_SUCCESS;
 }
@@ -149,8 +149,8 @@ void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback, prte_event_ba
     if (!PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE)) {
         if (NULL != callback) {
             /* already heard this proc is dead, so just do the callback */
-            t2 = PRTE_NEW(prte_wait_tracker_t);
-            PRTE_RETAIN(child); // protect against race conditions
+            t2 = PMIX_NEW(prte_wait_tracker_t);
+            PMIX_RETAIN(child); // protect against race conditions
             t2->child = child;
             t2->evb = evb;
             t2->cbfunc = callback;
@@ -163,7 +163,7 @@ void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback, prte_event_ba
     }
 
     /* we just override any existing registration */
-    PRTE_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t)
+    PMIX_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t)
     {
         if (t2->child == child) {
             t2->cbfunc = callback;
@@ -172,13 +172,13 @@ void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback, prte_event_ba
         }
     }
     /* get here if this is a new registration */
-    t2 = PRTE_NEW(prte_wait_tracker_t);
-    PRTE_RETAIN(child); // protect against race conditions
+    t2 = PMIX_NEW(prte_wait_tracker_t);
+    PMIX_RETAIN(child); // protect against race conditions
     t2->child = child;
     t2->evb = evb;
     t2->cbfunc = callback;
     t2->cbdata = data;
-    prte_list_append(&pending_cbs, &t2->super);
+    pmix_list_append(&pending_cbs, &t2->super);
 }
 
 static void cancel_callback(int fd, short args, void *cbdata)
@@ -186,19 +186,19 @@ static void cancel_callback(int fd, short args, void *cbdata)
     prte_wait_tracker_t *trk = (prte_wait_tracker_t *) cbdata;
     prte_wait_tracker_t *t2;
 
-    PRTE_ACQUIRE_OBJECT(trk);
+    PMIX_ACQUIRE_OBJECT(trk);
 
-    PRTE_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t)
+    PMIX_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t)
     {
         if (t2->child == trk->child) {
-            prte_list_remove_item(&pending_cbs, &t2->super);
-            PRTE_RELEASE(t2);
-            PRTE_RELEASE(trk);
+            pmix_list_remove_item(&pending_cbs, &t2->super);
+            PMIX_RELEASE(t2);
+            PMIX_RELEASE(trk);
             return;
         }
     }
 
-    PRTE_RELEASE(trk);
+    PMIX_RELEASE(trk);
 }
 
 void prte_wait_cb_cancel(prte_proc_t *child)
@@ -212,10 +212,10 @@ void prte_wait_cb_cancel(prte_proc_t *child)
     }
 
     /* push this into the event library for handling */
-    trk = PRTE_NEW(prte_wait_tracker_t);
-    PRTE_RETAIN(child); // protect against race conditions
+    trk = PMIX_NEW(prte_wait_tracker_t);
+    PMIX_RETAIN(child); // protect against race conditions
     trk->child = child;
-    PRTE_THREADSHIFT(trk, prte_event_base, cancel_callback, PRTE_SYS_PRI);
+    PMIX_THREADSHIFT(trk, prte_event_base, cancel_callback, PRTE_SYS_PRI);
 }
 
 /* callback from the event library whenever a SIGCHLD is received */
@@ -226,7 +226,7 @@ static void wait_signal_callback(int fd, short event, void *arg)
     pid_t pid;
     prte_wait_tracker_t *t2;
 
-    PRTE_ACQUIRE_OBJECT(signal);
+    PMIX_ACQUIRE_OBJECT(signal);
 
     if (SIGCHLD != PRTE_EVENT_SIGNAL(signal)) {
         return;
@@ -247,18 +247,18 @@ static void wait_signal_callback(int fd, short event, void *arg)
         }
 
         /* we are already in an event, so it is safe to access the list */
-        PRTE_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t)
+        PMIX_LIST_FOREACH(t2, &pending_cbs, prte_wait_tracker_t)
         {
             if (pid == t2->child->pid) {
                 /* found it! */
                 t2->child->exit_code = status;
-                prte_list_remove_item(&pending_cbs, &t2->super);
+                pmix_list_remove_item(&pending_cbs, &t2->super);
                 if (NULL != t2->cbfunc) {
                     prte_event_set(t2->evb, &t2->ev, -1, PRTE_EV_WRITE, t2->cbfunc, t2);
                     prte_event_set_priority(&t2->ev, PRTE_MSG_PRI);
                     prte_event_active(&t2->ev, PRTE_EV_WRITE, 1);
                 } else {
-                    PRTE_RELEASE(t2);
+                    PMIX_RELEASE(t2);
                 }
                 break;
             }

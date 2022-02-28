@@ -11,6 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
+ * Copyright (c) 2022      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,7 +27,6 @@
 
 #define PRTE_MAJOR_VERSION @PRTE_MAJOR_VERSION@
 #define PRTE_MINOR_VERSION @PRTE_MINOR_VERSION@
-#define PRTE_RELEASE_VERSION @PRTE_RELEASE_VERSION@
 #define PRTE_GREEK_VERSION "@PRTE_GREEK_VERSION@"
 #define PRTE_WANT_REPO_REV @PRTE_WANT_REPO_REV@
 #define PRTE_REPO_REV "@PRTE_REPO_REV@"

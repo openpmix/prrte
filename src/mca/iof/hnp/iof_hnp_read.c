@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2018-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,7 +41,7 @@
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 
 #include "src/mca/iof/base/base.h"
@@ -58,7 +58,7 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
     if (PMIX_SUCCESS != status) {
         PMIX_ERROR_LOG(status);
     }
-    PRTE_RELEASE(p);
+    PMIX_RELEASE(p);
 }
 
 /* this is the read handler for my own child procs. In this case,
@@ -74,7 +74,7 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     pmix_iof_channel_t pchan;
     pmix_status_t prc;
 
-    PRTE_ACQUIRE_OBJECT(rev);
+    PMIX_ACQUIRE_OBJECT(rev);
 
     /* As we may use timer events, fd can be bogus (-1)
      * use the right one here
@@ -124,7 +124,7 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
         pchan |= PMIX_FWD_STDDIAG_CHANNEL;
     }
     /* setup the byte object */
-    p = PRTE_NEW(prte_iof_deliver_t);
+    p = PMIX_NEW(prte_iof_deliver_t);
     PMIX_XFER_PROCID(&p->source, &proct->name);
     p->bo.bytes = (char*)malloc(numbytes);
     memcpy(p->bo.bytes, data, numbytes);
@@ -132,7 +132,7 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-        PRTE_RELEASE(p);
+        PMIX_RELEASE(p);
     }
 
     /* re-add the event */
@@ -144,12 +144,12 @@ CLEAN_RETURN:
      * nothing to output - release the appropriate event.
      * This will delete the read event and close the file descriptor */
     /* make sure we don't do recursive delete on the proct */
-    PRTE_RETAIN(proct);
+    PMIX_RETAIN(proct);
     if (rev->tag & PRTE_IOF_STDOUT) {
-        PRTE_RELEASE(proct->revstdout);
+        PMIX_RELEASE(proct->revstdout);
         proct->revstdout = NULL;
     } else if (rev->tag & PRTE_IOF_STDERR) {
-        PRTE_RELEASE(proct->revstderr);
+        PMIX_RELEASE(proct->revstderr);
         proct->revstderr = NULL;
     }
     /* check to see if they are all done */
@@ -157,6 +157,6 @@ CLEAN_RETURN:
         /* this proc's iof is complete */
         PRTE_ACTIVATE_PROC_STATE(&proct->name, PRTE_PROC_STATE_IOF_COMPLETE);
     }
-    PRTE_RELEASE(proct);
+    PMIX_RELEASE(proct);
     return;
 }

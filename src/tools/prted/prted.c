@@ -67,19 +67,19 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/daemon_init.h"
-#include "src/util/fd.h"
-#include "src/util/if.h"
-#include "src/util/net.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_fd.h"
+#include "src/util/pmix_if.h"
+#include "src/util/pmix_net.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/rml/base/rml_contact.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"
-#include "src/util/parse_options.h"
+#include "src/util/pmix_parse_options.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
@@ -129,7 +129,7 @@ static int ncollected = 0;
 static bool node_regex_waiting = false;
 static bool prted_abort = false;
 static char *prte_parent_uri = NULL;
-static prte_cli_result_t results;
+static pmix_cli_result_t results;
 
 typedef struct {
     prte_pmix_lock_t lock;
@@ -206,7 +206,7 @@ int main(int argc, char *argv[])
     char **pargv;
     int pargc;
     prte_schizo_base_module_t *schizo;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     char *umask_str = getenv("PRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
     }
 
     /* parse the CLI to load the MCA params */
-    PRTE_CONSTRUCT(&results, prte_cli_result_t);
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
     ret = schizo->parse_cli(pargv, &results, PRTE_CLI_SILENT);
     if (PRTE_SUCCESS != ret) {
         if (PRTE_ERR_SILENT != ret) {
@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
 #endif
 
     /* ensure we silence any compression warnings */
-    prte_setenv("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
+    pmix_setenv("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
 
     if (PRTE_SUCCESS != (ret = prte_init(&argc, &argv, PRTE_PROC_DAEMON))) {
         PRTE_ERROR_LOG(ret);
@@ -344,7 +344,7 @@ int main(int argc, char *argv[])
         /* could be a collection of comma-delimited ranges, so
          * use our handy utility to parse it
          */
-        prte_util_parse_range_options(prte_daemon_cores, &cores);
+        pmix_util_parse_range_options(prte_daemon_cores, &cores);
         if (NULL != cores) {
             ours = hwloc_bitmap_alloc();
             hwloc_bitmap_zero(ours);
@@ -832,7 +832,7 @@ int main(int argc, char *argv[])
     while (prte_event_base_active) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
     }
-    PRTE_ACQUIRE_OBJECT(prte_event_base_active);
+    PMIX_ACQUIRE_OBJECT(prte_event_base_active);
 
     /* ensure all local procs are dead */
     prte_odls.kill_local_procs(NULL);
@@ -861,7 +861,7 @@ static void shutdown_callback(int fd, short flags, void *arg)
 
     if (NULL != tm) {
         /* release the timer */
-        PRTE_RELEASE(tm);
+        PMIX_RELEASE(tm);
     }
 
     /* if we were ordered to abort, do so */

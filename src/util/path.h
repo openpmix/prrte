@@ -14,7 +14,7 @@
  * Copyright (c) 2016      University of Houston. All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -56,7 +56,7 @@ BEGIN_C_DECLS
  *
  * The caller is responsible for freeing the returned string.
  */
-PRTE_EXPORT char *prte_path_find(char *fname, char **pathv, int mode, char **envv)
+PRTE_EXPORT char *pmix_path_find(char *fname, char **pathv, int mode, char **envv)
     __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 /**
@@ -77,7 +77,7 @@ PRTE_EXPORT char *prte_path_find(char *fname, char **pathv, int mode, char **env
  *
  * The caller is responsible for freeing the returned string.
  */
-PRTE_EXPORT char *prte_path_findv(char *fname, int mode, char **envv, char *wrkdir)
+PRTE_EXPORT char *pmix_path_findv(char *fname, int mode, char **envv, char *wrkdir)
     __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 /**
  *  Detect if the requested path is absolute or relative.
@@ -91,7 +91,7 @@ PRTE_EXPORT char *prte_path_findv(char *fname, int mode, char **envv, char *wrkd
  *  with special care as an absolute path on Windows starts
  *  with [A-Za-z]: or \\ instead of the usual / on UNIX.
  */
-PRTE_EXPORT bool prte_path_is_absolute(const char *path);
+PRTE_EXPORT bool pmix_path_is_absolute(const char *path);
 
 /**
  * Find the absolute path for an executable and return it.
@@ -110,7 +110,7 @@ PRTE_EXPORT bool prte_path_is_absolute(const char *path);
  * function will return NULL. Otherwise, an newly allocated string
  * will be returned.
  */
-PRTE_EXPORT char *prte_find_absolute_path(char *app_name) __prte_attribute_warn_unused_result__;
+PRTE_EXPORT char *pmix_find_absolute_path(char *app_name) __prte_attribute_warn_unused_result__;
 
 /**
  * Forms a complete pathname and checks it for existance and
@@ -125,7 +125,7 @@ PRTE_EXPORT char *prte_find_absolute_path(char *app_name) __prte_attribute_warn_
  *
  * The caller is responsible for freeing the returned string.
  */
-PRTE_EXPORT char *prte_path_access(char *fname, char *path, int mode)
+PRTE_EXPORT char *pmix_path_access(char *fname, char *path, int mode)
     __prte_attribute_malloc__ __prte_attribute_warn_unused_result__;
 
 /**
@@ -145,7 +145,7 @@ PRTE_EXPORT char *prte_path_access(char *fname, char *path, int mode)
  * @retval true                If fname is on NFS, Lustre or Panasas
  * @retval false               otherwise
  */
-PRTE_EXPORT bool prte_path_nfs(char *fname, char **fstype) __prte_attribute_warn_unused_result__;
+PRTE_EXPORT bool pmix_path_nfs(char *fname, char **fstype) __prte_attribute_warn_unused_result__;
 
 /**
  * @brief Returns the disk usage of path.
@@ -156,7 +156,7 @@ PRTE_EXPORT bool prte_path_nfs(char *fname, char **fstype) __prte_attribute_warn
  * @retval PRTE_SUCCESS  If the operation was successful
  * @retval PRTE_ERROR    otherwise
  */
-PRTE_EXPORT int prte_path_df(const char *path,
+PRTE_EXPORT int pmix_path_df(const char *path,
                              uint64_t *out_avail) __prte_attribute_warn_unused_result__;
 
 END_C_DECLS

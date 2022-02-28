@@ -34,16 +34,16 @@
 #    include <fcntl.h>
 #endif
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
 
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/os_dirpath.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_dirpath.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_path.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -51,7 +51,7 @@
 #include "src/mca/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
@@ -82,9 +82,9 @@ prte_filem_base_module_t prte_filem_raw_module = {.filem_init = raw_init,
                                                   .preposition_files = raw_preposition_files,
                                                   .link_local_files = raw_link_local_files};
 
-static prte_list_t outbound_files;
-static prte_list_t incoming_files;
-static prte_list_t positioned_files;
+static pmix_list_t outbound_files;
+static pmix_list_t incoming_files;
+static pmix_list_t positioned_files;
 
 static void send_chunk(int fd, short argc, void *cbdata);
 static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
@@ -106,7 +106,7 @@ static char *filem_session_dir(void)
 
 static int raw_init(void)
 {
-    PRTE_CONSTRUCT(&incoming_files, prte_list_t);
+    PMIX_CONSTRUCT(&incoming_files, pmix_list_t);
 
     /* start a recv to catch any files sent to me */
     prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE, PRTE_RML_PERSISTENT,
@@ -114,8 +114,8 @@ static int raw_init(void)
 
     /* if I'm the HNP, start a recv to catch acks sent to me */
     if (PRTE_PROC_IS_MASTER) {
-        PRTE_CONSTRUCT(&outbound_files, prte_list_t);
-        PRTE_CONSTRUCT(&positioned_files, prte_list_t);
+        PMIX_CONSTRUCT(&outbound_files, pmix_list_t);
+        PMIX_CONSTRUCT(&positioned_files, pmix_list_t);
         prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE_RESP,
                                 PRTE_RML_PERSISTENT, recv_ack, NULL);
     }
@@ -125,22 +125,22 @@ static int raw_init(void)
 
 static int raw_finalize(void)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
 
-    while (NULL != (item = prte_list_remove_first(&incoming_files))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&incoming_files))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&incoming_files);
+    PMIX_DESTRUCT(&incoming_files);
 
     if (PRTE_PROC_IS_MASTER) {
-        while (NULL != (item = prte_list_remove_first(&outbound_files))) {
-            PRTE_RELEASE(item);
+        while (NULL != (item = pmix_list_remove_first(&outbound_files))) {
+            PMIX_RELEASE(item);
         }
-        PRTE_DESTRUCT(&outbound_files);
-        while (NULL != (item = prte_list_remove_first(&positioned_files))) {
-            PRTE_RELEASE(item);
+        PMIX_DESTRUCT(&outbound_files);
+        while (NULL != (item = pmix_list_remove_first(&positioned_files))) {
+            PMIX_RELEASE(item);
         }
-        PRTE_DESTRUCT(&positioned_files);
+        PMIX_DESTRUCT(&positioned_files);
     }
 
     return PRTE_SUCCESS;
@@ -156,26 +156,26 @@ static void xfer_complete(int status, prte_filem_raw_xfer_t *xfer)
     }
 
     /* this transfer is complete - remove it from list */
-    prte_list_remove_item(&outbound->xfers, &xfer->super);
+    pmix_list_remove_item(&outbound->xfers, &xfer->super);
     /* add it to the list of files that have been positioned */
-    prte_list_append(&positioned_files, &xfer->super);
+    pmix_list_append(&positioned_files, &xfer->super);
 
     /* if the list is now empty, then the xfer is complete */
-    if (0 == prte_list_get_size(&outbound->xfers)) {
+    if (0 == pmix_list_get_size(&outbound->xfers)) {
         /* do the callback */
         if (NULL != outbound->cbfunc) {
             outbound->cbfunc(outbound->status, outbound->cbdata);
         }
         /* release the object */
-        prte_list_remove_item(&outbound_files, &outbound->super);
-        PRTE_RELEASE(outbound);
+        pmix_list_remove_item(&outbound_files, &outbound->super);
+        PMIX_RELEASE(outbound);
     }
 }
 
 static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                      prte_rml_tag_t tag, void *cbdata)
 {
-    prte_list_item_t *item, *itm;
+    pmix_list_item_t *item, *itm;
     prte_filem_raw_outbound_t *outbound;
     prte_filem_raw_xfer_t *xfer;
     char *file;
@@ -202,11 +202,11 @@ static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender), file, st));
 
     /* find the corresponding outbound object */
-    for (item = prte_list_get_first(&outbound_files); item != prte_list_get_end(&outbound_files);
-         item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&outbound_files); item != pmix_list_get_end(&outbound_files);
+         item = pmix_list_get_next(item)) {
         outbound = (prte_filem_raw_outbound_t *) item;
-        for (itm = prte_list_get_first(&outbound->xfers);
-             itm != prte_list_get_end(&outbound->xfers); itm = prte_list_get_next(itm)) {
+        for (itm = pmix_list_get_first(&outbound->xfers);
+             itm != pmix_list_get_end(&outbound->xfers); itm = pmix_list_get_next(itm)) {
             xfer = (prte_filem_raw_xfer_t *) itm;
             if (0 == strcmp(file, xfer->file)) {
                 /* if the status isn't success, record it */
@@ -234,7 +234,7 @@ static int raw_preposition_files(prte_job_t *jdata,
                                  void *cbdata)
 {
     prte_app_context_t *app;
-    prte_list_item_t *item, *itm, *itm2;
+    pmix_list_item_t *item, *itm, *itm2;
     prte_filem_base_file_set_t *fs;
     int fd;
     prte_filem_raw_xfer_t *xfer, *xptr;
@@ -242,7 +242,7 @@ static int raw_preposition_files(prte_job_t *jdata,
     char **files = NULL;
     prte_filem_raw_outbound_t *outbound, *optr;
     char *cptr, *nxt, *filestring;
-    prte_list_t fsets;
+    pmix_list_t fsets;
     bool already_sent;
 
     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
@@ -252,9 +252,9 @@ static int raw_preposition_files(prte_job_t *jdata,
     /* cycle across the app_contexts looking for files or
      * binaries to be prepositioned
      */
-    PRTE_CONSTRUCT(&fsets, prte_list_t);
+    PMIX_CONSTRUCT(&fsets, pmix_list_t);
     for (i = 0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
         if (prte_get_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, NULL, PMIX_BOOL)) {
@@ -262,10 +262,10 @@ static int raw_preposition_files(prte_job_t *jdata,
             PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: preload executable %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), app->app));
-            fs = PRTE_NEW(prte_filem_base_file_set_t);
+            fs = PMIX_NEW(prte_filem_base_file_set_t);
             fs->local_target = strdup(app->app);
             fs->target_flag = PRTE_FILEM_TYPE_EXE;
-            prte_list_append(&fsets, &fs->super);
+            pmix_list_append(&fsets, &fs->super);
             /* if we are preloading the binary, then the app must be in relative
              * syntax or we won't find it - the binary will be positioned in the
              * session dir, so ensure the app is relative to that location
@@ -285,7 +285,7 @@ static int raw_preposition_files(prte_job_t *jdata,
             files = pmix_argv_split(filestring, ',');
             free(filestring);
             for (j = 0; NULL != files[j]; j++) {
-                fs = PRTE_NEW(prte_filem_base_file_set_t);
+                fs = PMIX_NEW(prte_filem_base_file_set_t);
                 fs->local_target = strdup(files[j]);
                 /* check any suffix for file type */
                 if (NULL != (cptr = strchr(files[j], '.'))) {
@@ -322,13 +322,13 @@ static int raw_preposition_files(prte_job_t *jdata,
                      * due to the potential for unintentional overwriting
                      * of files
                      */
-                    if (prte_path_is_absolute(files[j])) {
+                    if (pmix_path_is_absolute(files[j])) {
                         fs->remote_target = strdup(&files[j][1]);
                     } else {
                         fs->remote_target = strdup(files[j]);
                     }
                 }
-                prte_list_append(&fsets, &fs->super);
+                pmix_list_append(&fsets, &fs->super);
                 /* prep the filename for matching on the remote
                  * end by stripping any leading '.' directories to avoid
                  * stepping above the session dir location - all
@@ -379,7 +379,7 @@ static int raw_preposition_files(prte_job_t *jdata,
             free(filestring);
         }
     }
-    if (0 == prte_list_get_size(&fsets)) {
+    if (0 == pmix_list_get_size(&fsets)) {
         /* nothing to preposition */
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: nothing to preposition",
@@ -387,25 +387,25 @@ static int raw_preposition_files(prte_job_t *jdata,
         if (NULL != cbfunc) {
             cbfunc(PRTE_SUCCESS, cbdata);
         }
-        PRTE_DESTRUCT(&fsets);
+        PMIX_DESTRUCT(&fsets);
         return PRTE_SUCCESS;
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw: found %d files to position",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) prte_list_get_size(&fsets)));
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) pmix_list_get_size(&fsets)));
 
     /* track the outbound file sets */
-    outbound = PRTE_NEW(prte_filem_raw_outbound_t);
+    outbound = PMIX_NEW(prte_filem_raw_outbound_t);
     outbound->cbfunc = cbfunc;
     outbound->cbdata = cbdata;
-    prte_list_append(&outbound_files, &outbound->super);
+    pmix_list_append(&outbound_files, &outbound->super);
 
     /* only the HNP should ever call this function - loop thru the
      * fileset and initiate xcast transfer of each file to every
      * daemon
      */
-    while (NULL != (item = prte_list_remove_first(&fsets))) {
+    while (NULL != (item = pmix_list_remove_first(&fsets))) {
         fs = (prte_filem_base_file_set_t *) item;
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: checking prepositioning of file %s",
@@ -413,9 +413,9 @@ static int raw_preposition_files(prte_job_t *jdata,
 
         /* have we already sent this file? */
         already_sent = false;
-        for (itm = prte_list_get_first(&positioned_files);
-             !already_sent && itm != prte_list_get_end(&positioned_files);
-             itm = prte_list_get_next(itm)) {
+        for (itm = pmix_list_get_first(&positioned_files);
+             !already_sent && itm != pmix_list_get_end(&positioned_files);
+             itm = pmix_list_get_next(itm)) {
             xptr = (prte_filem_raw_xfer_t *) itm;
             if (0 == strcmp(fs->local_target, xptr->src)) {
                 already_sent = true;
@@ -426,19 +426,19 @@ static int raw_preposition_files(prte_job_t *jdata,
             PRTE_OUTPUT_VERBOSE((3, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: file %s is already in position - ignoring",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fs->local_target));
-            PRTE_RELEASE(item);
+            PMIX_RELEASE(item);
             continue;
         }
         /* also have to check if this file is already in the process
          * of being transferred, or was included multiple times
          * for transfer
          */
-        for (itm = prte_list_get_first(&outbound_files);
-             !already_sent && itm != prte_list_get_end(&outbound_files);
-             itm = prte_list_get_next(itm)) {
+        for (itm = pmix_list_get_first(&outbound_files);
+             !already_sent && itm != pmix_list_get_end(&outbound_files);
+             itm = pmix_list_get_next(itm)) {
             optr = (prte_filem_raw_outbound_t *) itm;
-            for (itm2 = prte_list_get_first(&optr->xfers); itm2 != prte_list_get_end(&optr->xfers);
-                 itm2 = prte_list_get_next(itm2)) {
+            for (itm2 = pmix_list_get_first(&optr->xfers); itm2 != pmix_list_get_end(&optr->xfers);
+                 itm2 = pmix_list_get_next(itm2)) {
                 xptr = (prte_filem_raw_xfer_t *) itm2;
                 if (0 == strcmp(fs->local_target, xptr->src)) {
                     already_sent = true;
@@ -450,7 +450,7 @@ static int raw_preposition_files(prte_job_t *jdata,
             PRTE_OUTPUT_VERBOSE((3, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: file %s is already queued for output - ignoring",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fs->local_target));
-            PRTE_RELEASE(item);
+            PMIX_RELEASE(item);
             continue;
         }
 
@@ -458,9 +458,9 @@ static int raw_preposition_files(prte_job_t *jdata,
         if (0 > (fd = open(fs->local_target, O_RDONLY))) {
             prte_output(0, "%s CANNOT ACCESS FILE %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         fs->local_target);
-            PRTE_RELEASE(item);
-            prte_list_remove_item(&outbound_files, &outbound->super);
-            PRTE_RELEASE(outbound);
+            PMIX_RELEASE(item);
+            pmix_list_remove_item(&outbound_files, &outbound->super);
+            PMIX_RELEASE(outbound);
             return PRTE_ERROR;
         }
         /* set the flags to non-blocking */
@@ -479,7 +479,7 @@ static int raw_preposition_files(prte_job_t *jdata,
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: setting up to position file %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fs->local_target));
-        xfer = PRTE_NEW(prte_filem_raw_xfer_t);
+        xfer = PMIX_NEW(prte_filem_raw_xfer_t);
         /* save the source so we can avoid duplicate transfers */
         xfer->src = strdup(fs->local_target);
         /* strip any leading '.' directories to avoid
@@ -522,21 +522,21 @@ static int raw_preposition_files(prte_job_t *jdata,
         xfer->type = fs->target_flag;
         xfer->app_idx = fs->app_idx;
         xfer->outbound = outbound;
-        prte_list_append(&outbound->xfers, &xfer->super);
-        PRTE_THREADSHIFT(xfer, prte_event_base, send_chunk, PRTE_MSG_PRI);
-        PRTE_RELEASE(item);
+        pmix_list_append(&outbound->xfers, &xfer->super);
+        PMIX_THREADSHIFT(xfer, prte_event_base, send_chunk, PRTE_MSG_PRI);
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&fsets);
+    PMIX_DESTRUCT(&fsets);
 
     /* check to see if anything remains to be sent - if everything
      * is a duplicate, then the list will be empty
      */
-    if (0 == prte_list_get_size(&outbound->xfers)) {
+    if (0 == pmix_list_get_size(&outbound->xfers)) {
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: all duplicate files - no positioning reqd",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        prte_list_remove_item(&outbound_files, &outbound->super);
-        PRTE_RELEASE(outbound);
+        pmix_list_remove_item(&outbound_files, &outbound->super);
+        PMIX_RELEASE(outbound);
         if (NULL != cbfunc) {
             cbfunc(PRTE_SUCCESS, cbdata);
         }
@@ -545,8 +545,8 @@ static int raw_preposition_files(prte_job_t *jdata,
 
     if (0 < prte_output_get_verbosity(prte_filem_base_framework.framework_output)) {
         prte_output(0, "%s Files to be positioned:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        for (itm2 = prte_list_get_first(&outbound->xfers);
-             itm2 != prte_list_get_end(&outbound->xfers); itm2 = prte_list_get_next(itm2)) {
+        for (itm2 = pmix_list_get_first(&outbound->xfers);
+             itm2 != pmix_list_get_end(&outbound->xfers); itm2 = pmix_list_get_next(itm2)) {
             xptr = (prte_filem_raw_xfer_t *) itm2;
             prte_output(0, "%s\t%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), xptr->src);
         }
@@ -562,9 +562,9 @@ static int create_link(char *my_dir, char *path, char *link_pt)
     int rc = PRTE_SUCCESS;
 
     /* form the full source path name */
-    mypath = prte_os_path(false, my_dir, link_pt, NULL);
+    mypath = pmix_os_path(false, my_dir, link_pt, NULL);
     /* form the full target path name */
-    fullname = prte_os_path(false, path, link_pt, NULL);
+    fullname = pmix_os_path(false, path, link_pt, NULL);
     /* there may have been multiple files placed under the
      * same directory, so check for existence first
      */
@@ -574,13 +574,14 @@ static int create_link(char *my_dir, char *path, char *link_pt)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), link_pt, mypath, fullname));
         /* create any required path to the link location */
         basedir = pmix_dirname(fullname);
-        if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(basedir, S_IRWXU))) {
-            PRTE_ERROR_LOG(rc);
+        if (PMIX_SUCCESS != (rc = pmix_os_dirpath_create(basedir, S_IRWXU))) {
+            PMIX_ERROR_LOG(rc);
             prte_output(0, "%s Failed to symlink %s to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         mypath, fullname);
             free(basedir);
             free(mypath);
             free(fullname);
+            rc = prte_pmix_convert_status(rc);
             return rc;
         }
         free(basedir);
@@ -602,7 +603,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
     prte_proc_t *proc;
     int i, j, rc;
     prte_filem_raw_incoming_t *inbnd;
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     char **files = NULL, *bname, *filestring;
 
     /* check my jobfam session directory for files I have received and
@@ -639,7 +640,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
     }
 
     for (i = 0; i < prte_local_children->size; i++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
             continue;
         }
         PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
@@ -673,18 +674,19 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
         path = prte_process_info.proc_session_dir;
 
         /* create it, if it doesn't already exist */
-        if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(path, S_IRWXU))) {
-            PRTE_ERROR_LOG(rc);
+        if (PMIX_SUCCESS != (rc = pmix_os_dirpath_create(path, S_IRWXU))) {
+            PMIX_ERROR_LOG(rc);
             /* doesn't exist with correct permissions, and/or we can't
              * create it - either way, we are done
              */
             free(files);
+            rc = prte_pmix_convert_status(rc);
             return rc;
         }
 
         /* cycle thru the incoming files */
-        for (item = prte_list_get_first(&incoming_files);
-             item != prte_list_get_end(&incoming_files); item = prte_list_get_next(item)) {
+        for (item = pmix_list_get_first(&incoming_files);
+             item != pmix_list_get_end(&incoming_files); item = pmix_list_get_next(item)) {
             inbnd = (prte_filem_raw_incoming_t *) item;
             PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                  "%s filem:raw: checking file %s",
@@ -731,7 +733,7 @@ static void send_chunk(int xxx, short argc, void *cbdata)
     pmix_data_buffer_t chunk;
     prte_grpcomm_signature_t *sig;
 
-    PRTE_ACQUIRE_OBJECT(rev);
+    PMIX_ACQUIRE_OBJECT(rev);
 
     /* read up to the fragment size */
     numbytes = read(fd, data, sizeof(data));
@@ -741,7 +743,7 @@ static void send_chunk(int xxx, short argc, void *cbdata)
 
         /* non-blocking, retry */
         if (EAGAIN == errno || EINTR == errno) {
-            PRTE_POST_OBJECT(rev);
+            PMIX_POST_OBJECT(rev);
             prte_event_add(&rev->ev, 0);
             return;
         }
@@ -762,7 +764,7 @@ static void send_chunk(int xxx, short argc, void *cbdata)
      * data and delete the read event
      */
     if (prte_job_term_ordered) {
-        PRTE_RELEASE(rev);
+        PMIX_RELEASE(rev);
         return;
     }
 
@@ -805,7 +807,7 @@ static void send_chunk(int xxx, short argc, void *cbdata)
     }
 
     /* goes to all daemons */
-    sig = PRTE_NEW(prte_grpcomm_signature_t);
+    sig = PMIX_NEW(prte_grpcomm_signature_t);
     sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
     sig->sz = 1;
     PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
@@ -816,7 +818,7 @@ static void send_chunk(int xxx, short argc, void *cbdata)
         return;
     }
     PMIX_DATA_BUFFER_DESTRUCT(&chunk);
-    PRTE_RELEASE(sig);
+    PMIX_RELEASE(sig);
     rev->nchunk++;
 
     /* if num_bytes was zero, then we need to terminate the event
@@ -828,7 +830,7 @@ static void send_chunk(int xxx, short argc, void *cbdata)
     } else {
         /* restart the read event */
         rev->pending = true;
-        PRTE_POST_OBJECT(rev);
+        PMIX_POST_OBJECT(rev);
         prte_event_active(&rev->ev, PRTE_EV_WRITE, 1);
     }
 }
@@ -854,7 +856,7 @@ static void send_complete(char *file, int status)
     if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_FILEM_BASE_RESP,
                                           prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_RELEASE(buf);
+        PMIX_RELEASE(buf);
     }
 }
 
@@ -925,7 +927,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     int rc;
     prte_filem_raw_output_t *output;
     prte_filem_raw_incoming_t *ptr, *incoming;
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     int32_t type;
     char *cptr;
 
@@ -977,8 +979,8 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
 
     /* do we already have this file on our list of incoming? */
     incoming = NULL;
-    for (item = prte_list_get_first(&incoming_files); item != prte_list_get_end(&incoming_files);
-         item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&incoming_files); item != pmix_list_get_end(&incoming_files);
+         item = pmix_list_get_next(item)) {
         ptr = (prte_filem_raw_incoming_t *) item;
         if (0 == strcmp(file, ptr->file)) {
             incoming = ptr;
@@ -990,10 +992,10 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: adding file %s to incoming list",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), file));
-        incoming = PRTE_NEW(prte_filem_raw_incoming_t);
+        incoming = PMIX_NEW(prte_filem_raw_incoming_t);
         incoming->file = strdup(file);
         incoming->type = type;
-        prte_list_append(&incoming_files, &incoming->super);
+        pmix_list_append(&incoming_files, &incoming->super);
     }
 
     /* if this is the first chunk, we need to open the file descriptor */
@@ -1010,19 +1012,19 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         /* define the full path to where we will put it */
         session_dir = filem_session_dir();
 
-        incoming->fullpath = prte_os_path(false, session_dir, file, NULL);
+        incoming->fullpath = pmix_os_path(false, session_dir, file, NULL);
 
         PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                              "%s filem:raw: opening target file %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), incoming->fullpath));
         /* create the path to the target, if not already existing */
         tmp = pmix_dirname(incoming->fullpath);
-        if (PRTE_SUCCESS != (rc = prte_os_dirpath_create(tmp, S_IRWXU))) {
-            PRTE_ERROR_LOG(rc);
+        if (PMIX_SUCCESS != (rc = pmix_os_dirpath_create(tmp, S_IRWXU))) {
+            PMIX_ERROR_LOG(rc);
             send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
             free(file);
             free(tmp);
-            PRTE_RELEASE(incoming);
+            PMIX_RELEASE(incoming);
             return;
         }
         /* open the file descriptor for writing */
@@ -1049,10 +1051,10 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         }
         free(tmp);
         incoming->pending = true;
-        PRTE_THREADSHIFT(incoming, prte_event_base, write_handler, PRTE_MSG_PRI);
+        PMIX_THREADSHIFT(incoming, prte_event_base, write_handler, PRTE_MSG_PRI);
     }
     /* create an output object for this data */
-    output = PRTE_NEW(prte_filem_raw_output_t);
+    output = PMIX_NEW(prte_filem_raw_output_t);
     if (0 < nbytes) {
         /* don't copy 0 bytes - we just need to pass
          * the zero bytes so the fd can be closed
@@ -1063,7 +1065,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     output->numbytes = nbytes;
 
     /* add this data to the write list for this fd */
-    prte_list_append(&incoming->outputs, &output->super);
+    pmix_list_append(&incoming->outputs, &output->super);
 
     if (!incoming->pending) {
         /* add the event */
@@ -1078,14 +1080,14 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
 static void write_handler(int fd, short event, void *cbdata)
 {
     prte_filem_raw_incoming_t *sink = (prte_filem_raw_incoming_t *) cbdata;
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_filem_raw_output_t *output;
     int num_written;
     char *dirname, *cmd;
     char homedir[MAXPATHLEN];
     int rc;
 
-    PRTE_ACQUIRE_OBJECT(sink);
+    PMIX_ACQUIRE_OBJECT(sink);
 
     PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s write:handler writing data to %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -1094,7 +1096,7 @@ static void write_handler(int fd, short event, void *cbdata)
     /* note that the event is off */
     sink->pending = false;
 
-    while (NULL != (item = prte_list_remove_first(&sink->outputs))) {
+    while (NULL != (item = pmix_list_remove_first(&sink->outputs))) {
         output = (prte_filem_raw_output_t *) item;
         if (0 == output->numbytes) {
             /* indicates we are to close this stream */
@@ -1166,12 +1168,12 @@ static void write_handler(int fd, short event, void *cbdata)
         if (num_written < 0) {
             if (EAGAIN == errno || EINTR == errno) {
                 /* push this item back on the front of the list */
-                prte_list_prepend(&sink->outputs, item);
+                pmix_list_prepend(&sink->outputs, item);
                 /* leave the write event running so it will call us again
                  * when the fd is ready.
                  */
                 sink->pending = true;
-                PRTE_POST_OBJECT(sink);
+                PMIX_POST_OBJECT(sink);
                 prte_event_add(&sink->ev, 0);
                 return;
             }
@@ -1181,25 +1183,25 @@ static void write_handler(int fd, short event, void *cbdata)
             PRTE_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                                  "%s write:handler error on write for file %s: %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sink->file, strerror(errno)));
-            PRTE_RELEASE(output);
-            prte_list_remove_item(&incoming_files, &sink->super);
+            PMIX_RELEASE(output);
+            pmix_list_remove_item(&incoming_files, &sink->super);
             send_complete(sink->file, PRTE_ERR_FILE_WRITE_FAILURE);
-            PRTE_RELEASE(sink);
+            PMIX_RELEASE(sink);
             return;
         } else if (num_written < output->numbytes) {
             /* incomplete write - adjust data to avoid duplicate output */
             memmove(output->data, &output->data[num_written], output->numbytes - num_written);
             /* push this item back on the front of the list */
-            prte_list_prepend(&sink->outputs, item);
+            pmix_list_prepend(&sink->outputs, item);
             /* leave the write event running so it will call us again
              * when the fd is ready
              */
             sink->pending = true;
-            PRTE_POST_OBJECT(sink);
+            PMIX_POST_OBJECT(sink);
             prte_event_active(&sink->ev, PRTE_EV_WRITE, 1);
             return;
         }
-        PRTE_RELEASE(output);
+        PMIX_RELEASE(output);
     }
 }
 
@@ -1228,23 +1230,23 @@ static void xfer_destruct(prte_filem_raw_xfer_t *ptr)
         free(ptr->file);
     }
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_xfer_t,
-                    prte_list_item_t,
+PMIX_CLASS_INSTANCE(prte_filem_raw_xfer_t,
+                    pmix_list_item_t,
                     xfer_construct, xfer_destruct);
 
 static void out_construct(prte_filem_raw_outbound_t *ptr)
 {
-    PRTE_CONSTRUCT(&ptr->xfers, prte_list_t);
+    PMIX_CONSTRUCT(&ptr->xfers, pmix_list_t);
     ptr->status = PRTE_SUCCESS;
     ptr->cbfunc = NULL;
     ptr->cbdata = NULL;
 }
 static void out_destruct(prte_filem_raw_outbound_t *ptr)
 {
-    PRTE_LIST_DESTRUCT(&ptr->xfers);
+    PMIX_LIST_DESTRUCT(&ptr->xfers);
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_outbound_t,
-                    prte_list_item_t,
+PMIX_CLASS_INSTANCE(prte_filem_raw_outbound_t,
+                    pmix_list_item_t,
                     out_construct, out_destruct);
 
 static void in_construct(prte_filem_raw_incoming_t *ptr)
@@ -1256,7 +1258,7 @@ static void in_construct(prte_filem_raw_incoming_t *ptr)
     ptr->top = NULL;
     ptr->fullpath = NULL;
     ptr->link_pts = NULL;
-    PRTE_CONSTRUCT(&ptr->outputs, prte_list_t);
+    PMIX_CONSTRUCT(&ptr->outputs, pmix_list_t);
 }
 static void in_destruct(prte_filem_raw_incoming_t *ptr)
 {
@@ -1276,16 +1278,16 @@ static void in_destruct(prte_filem_raw_incoming_t *ptr)
         free(ptr->fullpath);
     }
     pmix_argv_free(ptr->link_pts);
-    PRTE_LIST_DESTRUCT(&ptr->outputs);
+    PMIX_LIST_DESTRUCT(&ptr->outputs);
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_incoming_t,
-                    prte_list_item_t,
+PMIX_CLASS_INSTANCE(prte_filem_raw_incoming_t,
+                    pmix_list_item_t,
                     in_construct, in_destruct);
 
 static void output_construct(prte_filem_raw_output_t *ptr)
 {
     ptr->numbytes = 0;
 }
-PRTE_CLASS_INSTANCE(prte_filem_raw_output_t,
-                    prte_list_item_t,
+PMIX_CLASS_INSTANCE(prte_filem_raw_output_t,
+                    pmix_list_item_t,
                     output_construct, NULL);

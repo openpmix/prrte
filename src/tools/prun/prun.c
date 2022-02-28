@@ -69,20 +69,20 @@
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/threads/mutex.h"
+#include "src/threads/pmix_mutex.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
-#include "src/util/fd.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_fd.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/prte_environ.h"
-#include "src/util/prte_getcwd.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_getcwd.h"
 #include "src/util/show_help.h"
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
 
 #include "prun.h"
@@ -107,9 +107,9 @@ static pmix_proc_t myproc;
 static bool forcibly_die = false;
 static prte_event_t term_handler;
 static int term_pipe[2];
-static prte_mutex_t prun_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
+static pmix_mutex_t prun_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static bool verbose = false;
-static prte_list_t forwarded_signals;
+static pmix_list_t forwarded_signals;
 
 static void abort_signal_callback(int signal);
 static void clean_abort(int fd, short flags, void *arg);
@@ -119,7 +119,7 @@ static void epipe_signal_callback(int signal);
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
-    PRTE_ACQUIRE_OBJECT(lock);
+    PMIX_ACQUIRE_OBJECT(lock);
     evid = ref;
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
@@ -127,7 +127,7 @@ static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
-    PRTE_ACQUIRE_OBJECT(lock);
+    PMIX_ACQUIRE_OBJECT(lock);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
@@ -280,7 +280,7 @@ int prun(int argc, char *argv[])
     int rc = 1, i;
     char *param, *ptr, *cptr, **options;
     prte_pmix_lock_t lock, rellock;
-    prte_list_t apps;
+    pmix_list_t apps;
     prte_pmix_app_t *app;
     void *tinfo, *jinfo;
     pmix_info_t info, *iptr;
@@ -307,12 +307,12 @@ int prun(int argc, char *argv[])
     char *outfile = NULL;
     char *personality;
     pmix_proc_t parent;
-    prte_cli_result_t results;
-    prte_cli_item_t *opt;
+    pmix_cli_result_t results;
+    pmix_cli_item_t *opt;
 
     /* init the globals */
-    PRTE_CONSTRUCT(&apps, prte_list_t);
-    PRTE_CONSTRUCT(&forwarded_signals, prte_list_t);
+    PMIX_CONSTRUCT(&apps, pmix_list_t);
+    PMIX_CONSTRUCT(&forwarded_signals, pmix_list_t);
     prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "prun";
     pargc = argc;
@@ -363,8 +363,8 @@ int prun(int argc, char *argv[])
 
     /* Set both ends of this pipe to be close-on-exec so that no
        children inherit it */
-    if (prte_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS
-        || prte_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
+    if (pmix_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS
+        || pmix_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
         fprintf(stderr, "unable to set the pipe to CLOEXEC\n");
         prte_progress_thread_finalize(NULL);
         exit(1);
@@ -412,10 +412,10 @@ int prun(int argc, char *argv[])
     }
 
     /* parse the input argv to get values, including everyone's MCA params */
-    PRTE_CONSTRUCT(&results, prte_cli_result_t);
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
     rc = schizo->parse_cli(pargv, &results, PRTE_CLI_WARN);
     if (PRTE_SUCCESS != rc) {
-        PRTE_DESTRUCT(&results);
+        PMIX_DESTRUCT(&results);
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         } else {
@@ -433,7 +433,7 @@ int prun(int argc, char *argv[])
     }
 
     /** setup callbacks for signals we should forward */
-    PRTE_CONSTRUCT(&prte_ess_base_signals, prte_list_t);
+    PMIX_CONSTRUCT(&prte_ess_base_signals, pmix_list_t);
     opt = prte_cmd_line_get_param(&results, "forward-signals");
     if (NULL != opt) {
         param = opt->values[0];
@@ -443,14 +443,14 @@ int prun(int argc, char *argv[])
     if (PRTE_SUCCESS != (rc = prte_ess_base_setup_signals(param))) {
         return rc;
     }
-    PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+    PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
     {
         signal(sig->signal, signal_forward_callback);
     }
 
     /* setup the job data global table */
-    prte_job_data = PRTE_NEW(prte_pointer_array_t);
-    ret = prte_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+    prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+    ret = pmix_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                                           PRTE_GLOBAL_ARRAY_MAX_SIZE,
                                   PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
     if (PRTE_SUCCESS != ret) {
@@ -548,7 +548,7 @@ int prun(int argc, char *argv[])
     /* set our session directory to something hopefully unique so
      * our rendezvous files don't conflict with other prun/prte
      * instances */
-    pmix_asprintf(&ptr, "%s/%s.session.%s.%lu.%lu", prte_tmp_directory(), prte_tool_basename,
+    pmix_asprintf(&ptr, "%s/%s.session.%s.%lu.%lu", pmix_tmp_directory(), prte_tool_basename,
                   prte_process_info.nodename, (unsigned long) geteuid(), (unsigned long) getpid());
     PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_TMPDIR, ptr, PMIX_STRING);
     free(ptr);
@@ -711,13 +711,13 @@ int prun(int argc, char *argv[])
                      * convert it to one so the name will be relative to
                      * the directory where prun was given as that is what
                      * the user will have seen */
-                    if (!prte_path_is_absolute(ptr)) {
+                    if (!pmix_path_is_absolute(ptr)) {
                         char cwd[PRTE_PATH_MAX];
                         if (NULL == getcwd(cwd, sizeof(cwd))) {
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
                             goto DONE;
                         }
-                        outdir = prte_os_path(false, cwd, ptr, NULL);
+                        outdir = pmix_os_path(false, cwd, ptr, NULL);
                     } else {
                         outdir = strdup(ptr);
                     }
@@ -738,13 +738,13 @@ int prun(int argc, char *argv[])
                      * convert it to one so the name will be relative to
                      * the directory where prun was given as that is what
                      * the user will have seen */
-                    if (!prte_path_is_absolute(ptr)) {
+                    if (!pmix_path_is_absolute(ptr)) {
                         char cwd[PRTE_PATH_MAX];
                         if (NULL == getcwd(cwd, sizeof(cwd))) {
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
                             goto DONE;
                         }
-                        outfile = prte_os_path(false, cwd, ptr, NULL);
+                        outfile = pmix_os_path(false, cwd, ptr, NULL);
                     } else {
                         outfile = strdup(ptr);
                     }
@@ -801,7 +801,7 @@ int prun(int argc, char *argv[])
     opt = prte_cmd_line_get_param(&results, PRTE_CLI_MAX_RESTARTS);
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
-        PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t)
+        PMIX_LIST_FOREACH(app, &apps, prte_pmix_app_t)
         {
             PMIX_INFO_LIST_ADD(ret, app->info, PMIX_MAX_RESTARTS, &ui32, PMIX_UINT32);
         }
@@ -897,12 +897,12 @@ int prun(int argc, char *argv[])
 
     if (PRTE_SUCCESS != (rc = prte_parse_locals(schizo, &apps, pargv, NULL, NULL))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_LIST_DESTRUCT(&apps);
+        PMIX_LIST_DESTRUCT(&apps);
         goto DONE;
     }
 
     /* bozo check */
-    if (0 == prte_list_get_size(&apps)) {
+    if (0 == pmix_list_get_size(&apps)) {
         prte_output(0, "No application specified!");
         goto DONE;
     }
@@ -914,10 +914,10 @@ int prun(int argc, char *argv[])
     PMIX_INFO_LIST_RELEASE(jinfo);
 
     /* convert the apps to an array */
-    napps = prte_list_get_size(&apps);
+    napps = pmix_list_get_size(&apps);
     PMIX_APP_CREATE(papps, napps);
     n = 0;
-    PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t)
+    PMIX_LIST_FOREACH(app, &apps, prte_pmix_app_t)
     {
         papps[n].cmd = strdup(app->app.cmd);
         papps[n].argv = pmix_argv_copy(app->app.argv);
@@ -929,7 +929,7 @@ int prun(int argc, char *argv[])
         papps[n].ninfo = darray.size;
         ++n;
     }
-    PRTE_LIST_DESTRUCT(&apps);
+    PMIX_LIST_DESTRUCT(&apps);
 
     if (verbose) {
         prte_output(0, "Calling PMIx_Spawn");
@@ -1028,11 +1028,11 @@ int prun(int argc, char *argv[])
     PMIX_INFO_DESTRUCT(&info);
 
 DONE:
-    PRTE_LIST_FOREACH(evitm, &forwarded_signals, prte_event_list_item_t)
+    PMIX_LIST_FOREACH(evitm, &forwarded_signals, prte_event_list_item_t)
     {
         prte_event_signal_del(&evitm->ev);
     }
-    PRTE_LIST_DESTRUCT(&forwarded_signals);
+    PMIX_LIST_DESTRUCT(&forwarded_signals);
     if (NULL != papps) {
         PMIX_APP_FREE(papps, napps);
     }
@@ -1056,7 +1056,7 @@ static void clean_abort(int fd, short flags, void *arg)
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
      */
-    if (prte_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
+    if (pmix_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
         if (forcibly_die) {
             PMIx_tool_finalize();
             /* exit with a non-zero status */

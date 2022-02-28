@@ -16,7 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +30,7 @@
 #include "src/include/prte_socket_errno.h"
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_var.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
@@ -58,7 +58,7 @@ prte_ras_slurm_component_t prte_ras_slurm_component = {
             /* Component name and version */
             .mca_component_name = "slurm",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
 
             /* Component open and close functions */
             .mca_open_component = ras_slurm_open,

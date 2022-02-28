@@ -39,10 +39,9 @@
 #include "src/util/error.h"
 #include "src/util/error_strings.h"
 #include "src/util/keyval_parse.h"
-#include "src/util/listener.h"
 #include "src/util/malloc.h"
 #include "src/util/name_fns.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
@@ -51,7 +50,7 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/prted/pmix/pmix_server.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 #include "src/mca/base/base.h"
 #include "src/mca/errmgr/base/base.h"
@@ -161,8 +160,9 @@ int prte_init_util(prte_proc_type_t flags)
     /* load the output verbose stream */
     prte_output_setup_stream_prefix();
 
-    if (PRTE_SUCCESS != (ret = prte_net_init())) {
-        error = "prte_net_init";
+    if (PMIX_SUCCESS != (ret = pmix_net_init())) {
+        error = "pmix_net_init";
+        ret = prte_pmix_convert_status(ret);
         goto error;
     }
 
@@ -202,9 +202,6 @@ int prte_init_util(prte_proc_type_t flags)
                 __FILE__, __LINE__, ret);
         return ret;
     }
-    /* add network aliases to our list of alias hostnames */
-    prte_ifgetaliases(&prte_process_info.aliases);
-
     if (PRTE_SUCCESS
         != (ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework,
                                                PRTE_MCA_BASE_OPEN_DEFAULT))) {
@@ -228,12 +225,12 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     int ret;
     char *error = NULL;
 
-    PRTE_ACQUIRE_THREAD(&prte_init_lock);
+    PMIX_ACQUIRE_THREAD(&prte_init_lock);
     if (prte_initialized) {
-        PRTE_RELEASE_THREAD(&prte_init_lock);
+        PMIX_RELEASE_THREAD(&prte_init_lock);
         return PRTE_SUCCESS;
     }
-    PRTE_RELEASE_THREAD(&prte_init_lock);
+    PMIX_RELEASE_THREAD(&prte_init_lock);
 
     ret = prte_init_util(flags);
     if (PRTE_SUCCESS != ret) {
@@ -282,27 +279,27 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     prte_hwloc_base_open();
 
     /* setup the global job and node arrays */
-    prte_job_data = PRTE_NEW(prte_pointer_array_t);
+    prte_job_data = PMIX_NEW(pmix_pointer_array_t);
     if (PRTE_SUCCESS
-        != (ret = prte_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+        != (ret = pmix_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                                           PRTE_GLOBAL_ARRAY_MAX_SIZE,
                                           PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         error = "setup job array";
         goto error;
     }
-    prte_node_pool = PRTE_NEW(prte_pointer_array_t);
+    prte_node_pool = PMIX_NEW(pmix_pointer_array_t);
     if (PRTE_SUCCESS
-        != (ret = prte_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+        != (ret = pmix_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                                           PRTE_GLOBAL_ARRAY_MAX_SIZE,
                                           PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
         error = "setup node array";
         goto error;
     }
-    prte_node_topologies = PRTE_NEW(prte_pointer_array_t);
+    prte_node_topologies = PMIX_NEW(pmix_pointer_array_t);
     if (PRTE_SUCCESS
-        != (ret = prte_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+        != (ret = pmix_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
                                           PRTE_GLOBAL_ARRAY_MAX_SIZE,
                                           PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
         PRTE_ERROR_LOG(ret);
@@ -344,10 +341,12 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
         error = "prte_ess_init";
         goto error;
     }
+    /* add network aliases to our list of alias hostnames */
+    pmix_ifgetaliases(&prte_process_info.aliases);
 
     /* initialize the cache */
-    prte_cache = PRTE_NEW(prte_pointer_array_t);
-    prte_pointer_array_init(prte_cache, 1, INT_MAX, 1);
+    prte_cache = PMIX_NEW(pmix_pointer_array_t);
+    pmix_pointer_array_init(prte_cache, 1, INT_MAX, 1);
 
 #if PRTE_ENABLE_FT
     if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_DAEMON) {
@@ -357,18 +356,10 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     }
 #endif
 
-    /* start listening - will be ignored if no listeners
-     * were registered */
-    if (PRTE_SUCCESS != (ret = prte_start_listening())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_start_listening";
-        goto error;
-    }
-
     /* All done */
-    PRTE_ACQUIRE_THREAD(&prte_init_lock);
+    PMIX_ACQUIRE_THREAD(&prte_init_lock);
     prte_initialized = true;
-    PRTE_RELEASE_THREAD(&prte_init_lock);
+    PMIX_RELEASE_THREAD(&prte_init_lock);
     return PRTE_SUCCESS;
 
 error:

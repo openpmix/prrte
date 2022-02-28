@@ -17,7 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,27 +34,27 @@
 
 #include "oob_tcp.h"
 #include "oob_tcp_sendrecv.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     struct sockaddr_storage addr; // an address where a peer can be found
     int retries;                  // number of times we have tried to connect to this address
     prte_oob_tcp_state_t state;   // state of this address
     int if_mask;                  // if mask of this address
 } prte_oob_tcp_addr_t;
-PRTE_CLASS_DECLARATION(prte_oob_tcp_addr_t);
+PMIX_CLASS_DECLARATION(prte_oob_tcp_addr_t);
 
 /* object for tracking peers in the module */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     /* although not required, there is enough debug
      * value that retaining the name makes sense
      */
     pmix_proc_t name;
     char *auth_method; // method they used to authenticate
     int sd;
-    prte_list_t addrs;
+    pmix_list_t addrs;
     prte_oob_tcp_addr_t *active_addr;
     prte_oob_tcp_state_t state;
     int num_retries;
@@ -64,29 +64,29 @@ typedef struct {
     bool recv_ev_active;
     prte_event_t timer_event; /**< timer for retrying connection failures */
     bool timer_ev_active;
-    prte_list_t send_queue;        /**< list of messages to send */
+    pmix_list_t send_queue;        /**< list of messages to send */
     prte_oob_tcp_send_t *send_msg; /**< current send in progress */
     prte_oob_tcp_recv_t *recv_msg; /**< current recv in progress */
 } prte_oob_tcp_peer_t;
-PRTE_CLASS_DECLARATION(prte_oob_tcp_peer_t);
+PMIX_CLASS_DECLARATION(prte_oob_tcp_peer_t);
 
 /* state machine for processing peer data */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_event_t ev;
     pmix_proc_t peer;
     uint16_t af_family;
     char *net;
     char *port;
 } prte_oob_tcp_peer_op_t;
-PRTE_CLASS_DECLARATION(prte_oob_tcp_peer_op_t);
+PMIX_CLASS_DECLARATION(prte_oob_tcp_peer_op_t);
 
 #define PRTE_ACTIVATE_TCP_CMP_OP(p, cbfunc)                             \
     do {                                                                \
         prte_oob_tcp_peer_op_t *pop;                                    \
-        pop = PRTE_NEW(prte_oob_tcp_peer_op_t);                         \
+        pop = PMIX_NEW(prte_oob_tcp_peer_op_t);                         \
         PMIX_XFER_PROCID(&pop->peer, &(p)->name);                       \
-        PRTE_THREADSHIFT(pop, prte_event_base, (cbfunc), PRTE_MSG_PRI); \
+        PMIX_THREADSHIFT(pop, prte_event_base, (cbfunc), PRTE_MSG_PRI); \
     } while (0);
 
 #endif /* _MCA_OOB_TCP_PEER_H_ */

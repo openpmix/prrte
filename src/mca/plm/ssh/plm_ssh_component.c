@@ -46,9 +46,9 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
-#include "src/util/prte_environ.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_path.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
@@ -91,7 +91,7 @@ prte_plm_ssh_component_t prte_plm_ssh_component = {
             /* Component name and version */
             .mca_component_name = "ssh",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
 
             /* Component open and close functions */
             .mca_open_component = ssh_component_open,
@@ -361,7 +361,7 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
     if (NULL == path) {
         getcwd(cwd, PRTE_PATH_MAX);
     } else {
-        prte_string_copy(cwd, path, PRTE_PATH_MAX);
+        pmix_string_copy(cwd, path, PRTE_PATH_MAX);
     }
     if (NULL == agent_list) {
         lines = pmix_argv_split(prte_plm_ssh_component.agent, ':');
@@ -386,7 +386,7 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
         tokens = pmix_argv_split(line, ' ');
 
         /* Look for the first token in the PATH */
-        tmp = prte_path_findv(tokens[0], X_OK, environ, cwd);
+        tmp = pmix_path_findv(tokens[0], X_OK, environ, cwd);
         if (NULL != tmp) {
             free(tokens[0]);
             tokens[0] = tmp;

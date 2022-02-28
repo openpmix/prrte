@@ -63,7 +63,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -72,7 +72,7 @@
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 
 #include "plm_tm.h"
@@ -188,7 +188,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     int32_t launchid, *ldptr;
     char *prefix_dir = NULL;
 
-    PRTE_ACQUIRE_OBJECT(state);
+    PMIX_ACQUIRE_OBJECT(state);
 
     jdata = state->jdata;
 
@@ -210,7 +210,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          */
         jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -228,7 +228,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          */
         jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -290,14 +290,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* enable local launch by the orteds */
     (void) prte_mca_base_var_env_name("plm", &var);
-    prte_setenv(var, "ssh", true, &env);
+    pmix_setenv(var, "ssh", true, &env);
     free(var);
 
     /* add our umask -- see big note in orted.c */
     current_umask = umask(0);
     umask(current_umask);
     pmix_asprintf(&var, "0%o", current_umask);
-    prte_setenv("PRTE_DAEMON_UMASK_VALUE", var, true, &env);
+    pmix_setenv("PRTE_DAEMON_UMASK_VALUE", var, true, &env);
     free(var);
 
     /* If we have a prefix, then modify the PATH and
@@ -306,7 +306,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
        always be at least one app_context, we take it from
        there
     */
-    app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, 0);
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
     if (!prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &prefix_dir, PMIX_STRING) ||
         NULL == prefix_dir) {
         // see if it is in the environment
@@ -324,7 +324,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                 PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:tm: resetting PATH: %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
-                prte_setenv("PATH", newenv, true, &env);
+                pmix_setenv("PATH", newenv, true, &env);
                 free(newenv);
             }
 
@@ -334,7 +334,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                 PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:tm: resetting LD_LIBRARY_PATH: %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
-                prte_setenv("LD_LIBRARY_PATH", newenv, true, &env);
+                pmix_setenv("LD_LIBRARY_PATH", newenv, true, &env);
                 free(newenv);
             }
         }
@@ -346,7 +346,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
     ldptr = &launchid;
     for (i = 0; i < map->nodes->size; i++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, i))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
         /* if this daemon already exists, don't launch it! */
@@ -409,7 +409,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
 cleanup:
     /* cleanup */
-    PRTE_RELEASE(state);
+    PMIX_RELEASE(state);
 
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {
@@ -425,7 +425,7 @@ static void poll_spawns(int fd, short args, void *cbdata)
     int local_err;
     tm_event_t event;
 
-    PRTE_ACQUIRE_OBJECT(state);
+    PMIX_ACQUIRE_OBJECT(state);
 
     /* TM poll for all the spawns */
     for (i = 0; i < launched; ++i) {
@@ -443,7 +443,7 @@ static void poll_spawns(int fd, short args, void *cbdata)
 
 cleanup:
     /* cleanup */
-    PRTE_RELEASE(state);
+    PMIX_RELEASE(state);
 
     /* check for failed launch - if so, force terminate */
     if (failed_launch) {

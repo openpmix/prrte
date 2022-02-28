@@ -39,7 +39,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/show_help.h"
@@ -59,13 +59,13 @@ static bool show_help_initialized = false;
 
 /* List items for holding (filename, topic) tuples */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     /* The filename */
     char *tli_filename;
     /* The topic */
     char *tli_topic;
     /* List of process names that have displayed this (filename, topic) */
-    prte_list_t tli_processes;
+    pmix_list_t tli_processes;
     /* Time this message was displayed */
     time_t tli_time_displayed;
     /* Count of processes since last display (i.e., "new" processes
@@ -78,7 +78,7 @@ static void tuple_list_item_constructor(tuple_list_item_t *obj)
 {
     obj->tli_filename = NULL;
     obj->tli_topic = NULL;
-    PRTE_CONSTRUCT(&(obj->tli_processes), prte_list_t);
+    PMIX_CONSTRUCT(&(obj->tli_processes), pmix_list_t);
     obj->tli_time_displayed = time(NULL);
     obj->tli_count_since_last_display = 0;
     obj->tli_display = true;
@@ -92,13 +92,13 @@ static void tuple_list_item_destructor(tuple_list_item_t *obj)
     if (NULL != obj->tli_topic) {
         free(obj->tli_topic);
     }
-    PRTE_LIST_DESTRUCT(&(obj->tli_processes));
+    PMIX_LIST_DESTRUCT(&(obj->tli_processes));
 }
-static PRTE_CLASS_INSTANCE(tuple_list_item_t, prte_list_item_t, tuple_list_item_constructor,
+static PMIX_CLASS_INSTANCE(tuple_list_item_t, pmix_list_item_t, tuple_list_item_constructor,
                            tuple_list_item_destructor);
 
 /* List of (filename, topic) tuples that have already been displayed */
-static prte_list_t abd_tuples;
+static pmix_list_t abd_tuples;
 
 /* How long to wait between displaying duplicate show_help notices */
 static struct timeval show_help_interval = {5, 0};
@@ -123,12 +123,12 @@ int prte_show_help_init(void)
         return PRTE_SUCCESS;
     }
 
-    PRTE_CONSTRUCT(&lds, prte_output_stream_t);
+    PMIX_CONSTRUCT(&lds, prte_output_stream_t);
     lds.lds_want_stderr = true;
     output_stream = prte_output_open(&lds);
-    PRTE_DESTRUCT(&lds);
+    PMIX_DESTRUCT(&lds);
 
-    PRTE_CONSTRUCT(&abd_tuples, prte_list_t);
+    PMIX_CONSTRUCT(&abd_tuples, pmix_list_t);
 
     pmix_argv_append_nosize(&search_dirs, prte_install_dirs.prtedatadir);
     show_help_initialized = true;
@@ -144,7 +144,7 @@ void prte_show_help_finalize(void)
     /* Shutdown show_help, showing final messages */
     if (PRTE_PROC_IS_MASTER) {
         show_accumulated_duplicates(0, 0, NULL);
-        PRTE_LIST_DESTRUCT(&abd_tuples);
+        PMIX_LIST_DESTRUCT(&abd_tuples);
         if (show_help_timer_set) {
             prte_event_evtimer_del(&show_help_timer_event);
         }
@@ -154,7 +154,7 @@ void prte_show_help_finalize(void)
 
     prte_output_close(output_stream);
     output_stream = -1;
-    PRTE_LIST_DESTRUCT(&abd_tuples);
+    PMIX_LIST_DESTRUCT(&abd_tuples);
 
     /* destruct the search list */
     if (NULL != search_dirs) {
@@ -236,7 +236,7 @@ static int open_file(const char *base, const char *topic)
          * extension.
          */
         for (i = 0; NULL != search_dirs[i]; i++) {
-            filename = prte_os_path(false, search_dirs[i], base, NULL);
+            filename = pmix_os_path(false, search_dirs[i], base, NULL);
             prte_show_help_yyin = fopen(filename, "r");
             if (NULL == prte_show_help_yyin) {
                 pmix_asprintf(&err_msg, "%s: %s", filename, strerror(errno));
@@ -666,7 +666,7 @@ static int match(const char *a, const char *b)
 static int get_tli(const char *filename, const char *topic, tuple_list_item_t **tli)
 {
     /* Search the list for a duplicate. */
-    PRTE_LIST_FOREACH(*tli, &abd_tuples, tuple_list_item_t)
+    PMIX_LIST_FOREACH(*tli, &abd_tuples, tuple_list_item_t)
     {
         if (PRTE_SUCCESS == match((*tli)->tli_filename, filename)
             && PRTE_SUCCESS == match((*tli)->tli_topic, topic)) {
@@ -675,13 +675,13 @@ static int get_tli(const char *filename, const char *topic, tuple_list_item_t **
     }
 
     /* Nope, we didn't find it -- make a new one */
-    *tli = PRTE_NEW(tuple_list_item_t);
+    *tli = PMIX_NEW(tuple_list_item_t);
     if (NULL == *tli) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
     (*tli)->tli_filename = strdup(filename);
     (*tli)->tli_topic = strdup(topic);
-    prte_list_append(&abd_tuples, &((*tli)->super));
+    pmix_list_append(&abd_tuples, &((*tli)->super));
     return PRTE_ERR_NOT_FOUND;
 }
 
@@ -694,7 +694,7 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
     /* Loop through all the messages we've displayed and see if any
        processes have sent duplicates that have not yet been displayed
        yet */
-    PRTE_LIST_FOREACH(tli, &abd_tuples, tuple_list_item_t)
+    PMIX_LIST_FOREACH(tli, &abd_tuples, tuple_list_item_t)
     {
         if (tli->tli_display && tli->tli_count_since_last_display > 0) {
             static bool first = true;
@@ -796,14 +796,14 @@ static int show_help(const char *filename, const char *topic, const char *output
 after_output:
     /* If we're aggregating, add this process name to the list */
     if (prte_help_want_aggregate) {
-        pnli = PRTE_NEW(prte_namelist_t);
+        pnli = PMIX_NEW(prte_namelist_t);
         if (NULL == pnli) {
             rc = PRTE_ERR_OUT_OF_RESOURCE;
             PRTE_ERROR_LOG(rc);
             return rc;
         }
         pnli->name = *sender;
-        prte_list_append(&(tli->tli_processes), &(pnli->super));
+        pmix_list_append(&(tli->tli_processes), &(pnli->super));
     }
     return PRTE_SUCCESS;
 }

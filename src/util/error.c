@@ -40,7 +40,7 @@
 #include "src/util/error.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 const char *prte_strerror(int errnum)
 {

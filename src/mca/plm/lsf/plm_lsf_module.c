@@ -62,7 +62,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
@@ -70,7 +70,7 @@
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/show_help.h"
 
 #include "plm_lsf.h"
@@ -179,7 +179,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
 
-    PRTE_ACQUIRE_OBJECT(state);
+    PMIX_ACQUIRE_OBJECT(state);
     jdata = state->jdata;
 
     /* start by setting up the virtual machine */
@@ -200,7 +200,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          */
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -225,7 +225,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -234,7 +234,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     nodelist_argc = 0;
 
     for (nnode = 0; nnode < map->nodes->size; nnode++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, nnode))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, nnode))) {
             continue;
         }
         /* if the daemon already exists on this node, then
@@ -307,7 +307,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     cur_prefix = NULL;
     for (i = 0; i < jdata->apps->size; i++) {
         char *app_prefix_dir = NULL;
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
         if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &app_prefix_dir,
@@ -390,7 +390,7 @@ cleanup:
     }
 
     /* cleanup the caddy */
-    PRTE_RELEASE(state);
+    PMIX_RELEASE(state);
 }
 
 /**

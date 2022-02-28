@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Inria.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,8 +36,8 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
-#include "src/threads/tsd.h"
-#include "src/util/if.h"
+#include "src/threads/pmix_tsd.h"
+#include "src/util/pmix_if.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -87,7 +87,7 @@ static void reset_usage(prte_node_t *node, pmix_nspace_t jobid)
      * their usage in the topology
      */
     for (j = 0; j < node->procs->size; j++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
             continue;
         }
         /* ignore procs from this job */
@@ -111,7 +111,7 @@ static void reset_usage(prte_node_t *node, pmix_nspace_t jobid)
         /* get the userdata struct for this object - create it if necessary */
         data = (prte_hwloc_obj_data_t *) bound->userdata;
         if (NULL == data) {
-            data = PRTE_NEW(prte_hwloc_obj_data_t);
+            data = PMIX_NEW(prte_hwloc_obj_data_t);
             bound->userdata = data;
         }
         /* count that this proc is bound to this object */
@@ -129,7 +129,7 @@ static void unbind_procs(prte_job_t *jdata)
     prte_proc_t *proc;
 
     for (j = 0; j < jdata->procs->size; j++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, j))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, j))) {
             continue;
         }
         prte_remove_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND);
@@ -210,7 +210,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
 
     /* cycle thru the procs */
     for (j = 0; j < node->procs->size; j++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
             continue;
         }
         /* ignore procs from other jobs */
@@ -305,7 +305,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
 
             data = (prte_hwloc_obj_data_t *) tmp_obj->userdata;
             if (NULL == data) {
-                data = PRTE_NEW(prte_hwloc_obj_data_t);
+                data = PMIX_NEW(prte_hwloc_obj_data_t);
                 tmp_obj->userdata = data;
             }
             if (data->num_bound < min_bound) {
@@ -349,7 +349,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
                                              trg_obj);
             /* track the number bound */
             if (NULL == (data = (prte_hwloc_obj_data_t *) trg_obj->userdata)) {
-                data = PRTE_NEW(prte_hwloc_obj_data_t);
+                data = PMIX_NEW(prte_hwloc_obj_data_t);
                 trg_obj->userdata = data;
             }
             data->num_bound++;
@@ -496,7 +496,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
     }
 
     for (i = 0; i < map->nodes->size; i++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, i))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
         if ((int) PRTE_PROC_MY_NAME->rank != node->index && !dobind) {
@@ -591,7 +591,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
         }
         /* cycle thru the procs */
         for (j = 0; j < node->procs->size; j++) {
-            if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+            if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
                 continue;
             }
             /* ignore procs from other jobs */
@@ -631,7 +631,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
             }
             data = (prte_hwloc_obj_data_t *) locale->userdata;
             if (NULL == data) {
-                data = PRTE_NEW(prte_hwloc_obj_data_t);
+                data = PMIX_NEW(prte_hwloc_obj_data_t);
                 locale->userdata = data;
             }
             /* if we don't have enough cpus to support this additional proc, try
@@ -648,7 +648,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
                                                      available, sib);
                     data = (prte_hwloc_obj_data_t *) sib->userdata;
                     if (NULL == data) {
-                        data = PRTE_NEW(prte_hwloc_obj_data_t);
+                        data = PMIX_NEW(prte_hwloc_obj_data_t);
                         sib->userdata = data;
                     }
                     if ((data->num_bound + cpus_per_rank) <= ncpus) {
@@ -668,7 +668,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
                                                          available, sib);
                         data = (prte_hwloc_obj_data_t *) sib->userdata;
                         if (NULL == data) {
-                            data = PRTE_NEW(prte_hwloc_obj_data_t);
+                            data = PMIX_NEW(prte_hwloc_obj_data_t);
                             sib->userdata = data;
                         }
                         if ((data->num_bound + cpus_per_rank) <= ncpus) {
@@ -730,7 +730,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
             /* track the number bound */
             data = (prte_hwloc_obj_data_t *) locale->userdata; // just in case it changed
             if (NULL == data) {
-                data = PRTE_NEW(prte_hwloc_obj_data_t);
+                data = PMIX_NEW(prte_hwloc_obj_data_t);
                 locale->userdata = data;
             }
             data->num_bound++;
@@ -819,7 +819,7 @@ static int bind_to_cpuset(prte_job_t *jdata)
     }
 
     for (i = 0; i < map->nodes->size; i++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, i))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
         if ((int) PRTE_PROC_MY_NAME->rank != node->index && !dobind) {
@@ -895,7 +895,7 @@ static int bind_to_cpuset(prte_job_t *jdata)
         hwloc_bitmap_and(mycpus, mycpus, sum->available);
 
         for (j = 0; j < node->procs->size; j++) {
-            if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+            if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
                 continue;
             }
             /* ignore procs from other jobs */
@@ -1061,7 +1061,7 @@ execute:
     }
 
     for (i = 0; i < jdata->map->nodes->size; i++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, i))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, i))) {
             continue;
         }
         if ((int) PRTE_PROC_MY_NAME->rank != node->index && !dobind) {

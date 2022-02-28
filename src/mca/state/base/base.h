@@ -24,7 +24,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/util/pmix_printf.h"
 
 #include "src/mca/mca.h"

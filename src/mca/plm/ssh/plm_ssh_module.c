@@ -65,20 +65,20 @@
 #    include <pwd.h>
 #endif
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/event/event-internal.h"
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_path.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
-#include "src/util/fd.h"
+#include "src/threads/pmix_threads.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/show_help.h"
@@ -118,7 +118,7 @@ prte_plm_base_module_t prte_plm_ssh_module = {
     .finalize = ssh_finalize};
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     int argc;
     char **argv;
     prte_proc_t *daemon;
@@ -134,10 +134,10 @@ static void caddy_dest(prte_plm_ssh_caddy_t *ptr)
         pmix_argv_free(ptr->argv);
     }
     if (NULL != ptr->daemon) {
-        PRTE_RELEASE(ptr->daemon);
+        PMIX_RELEASE(ptr->daemon);
     }
 }
-PRTE_CLASS_INSTANCE(prte_plm_ssh_caddy_t, prte_list_item_t, caddy_const, caddy_dest);
+PMIX_CLASS_INSTANCE(prte_plm_ssh_caddy_t, pmix_list_item_t, caddy_const, caddy_dest);
 
 typedef enum {
     PRTE_PLM_SSH_SHELL_BASH = 0,
@@ -169,7 +169,7 @@ static void process_launch_list(int fd, short args, void *cbdata);
 
 /* local global storage */
 static int num_in_progress = 0;
-static prte_list_t launch_list;
+static pmix_list_t launch_list;
 static prte_event_t launch_event;
 static char *ssh_agent_path = NULL;
 static char **ssh_agent_argv = NULL;
@@ -232,7 +232,7 @@ static int ssh_init(void)
     }
 
     /* setup the event for metering the launch */
-    PRTE_CONSTRUCT(&launch_list, prte_list_t);
+    PMIX_CONSTRUCT(&launch_list, pmix_list_t);
     prte_event_set(prte_event_base, &launch_event, -1, 0, process_launch_list, NULL);
     prte_event_set_priority(&launch_event, PRTE_SYS_PRI);
 
@@ -262,8 +262,8 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
         /* ignore any such report - it will occur if we left the
          * session attached, e.g., while debugging
          */
-        PRTE_RELEASE(caddy);
-        PRTE_RELEASE(t2);
+        PMIX_RELEASE(caddy);
+        PMIX_RELEASE(t2);
         return;
     }
 
@@ -283,16 +283,16 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buf);
-                PRTE_RELEASE(caddy);
-                PRTE_RELEASE(t2);
+                PMIX_RELEASE(caddy);
+                PMIX_RELEASE(t2);
                 return;
             }
             rc = PMIx_Data_pack(NULL, buf, &daemon->exit_code, 1, PMIX_INT32);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buf);
-                PRTE_RELEASE(caddy);
-                PRTE_RELEASE(t2);
+                PMIX_RELEASE(caddy);
+                PMIX_RELEASE(t2);
                 return;
             }
             prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH,
@@ -328,7 +328,7 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
         prte_event_active(&launch_event, EV_WRITE, 1);
     }
     /* cleanup */
-    PRTE_RELEASE(t2);
+    PMIX_RELEASE(t2);
 }
 
 static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node_name_index1,
@@ -691,7 +691,7 @@ static void ssh_child(int argc, char **argv)
     close(fdin);
 
     /* close all file descriptors w/ exception of stdin/stdout/stderr */
-    prte_close_open_file_descriptors(-1);
+    pmix_close_open_file_descriptors(-1);
 
     /* Set signal handlers back to the default.  Do this close
      to the execve() because the event library may (and likely
@@ -744,7 +744,7 @@ static int remote_spawn(void)
     bool failed_launch = true;
     pmix_proc_t target;
     prte_plm_ssh_caddy_t *caddy;
-    prte_list_t coll;
+    pmix_list_t coll;
     prte_namelist_t *child;
     pmix_status_t ret;
 
@@ -764,17 +764,17 @@ static int remote_spawn(void)
     }
 
     /* get the updated routing list */
-    PRTE_CONSTRUCT(&coll, prte_list_t);
+    PMIX_CONSTRUCT(&coll, pmix_list_t);
     prte_routed.get_routing_list(&coll);
 
     /* if I have no children, just return */
-    if (0 == prte_list_get_size(&coll)) {
+    if (0 == pmix_list_get_size(&coll)) {
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: remote spawn - have no children!",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         failed_launch = false;
         rc = PRTE_SUCCESS;
-        PRTE_DESTRUCT(&coll);
+        PMIX_DESTRUCT(&coll);
         goto cleanup;
     }
 
@@ -783,12 +783,12 @@ static int remote_spawn(void)
                       &proc_vpid_index, prefix);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        PRTE_DESTRUCT(&coll);
+        PMIX_DESTRUCT(&coll);
         goto cleanup;
     }
 
     PMIX_LOAD_NSPACE(target.nspace, PRTE_PROC_MY_NAME->nspace);
-    PRTE_LIST_FOREACH(child, &coll, prte_namelist_t)
+    PMIX_LIST_FOREACH(child, &coll, prte_namelist_t)
     {
         target.rank = child->name.rank;
 
@@ -797,7 +797,7 @@ static int remote_spawn(void)
             prte_output(0, "%s unable to get hostname for daemon %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(child->name.rank));
             rc = PRTE_ERR_NOT_FOUND;
-            PRTE_DESTRUCT(&coll);
+            PMIX_DESTRUCT(&coll);
             goto cleanup;
         }
 
@@ -815,17 +815,17 @@ static int remote_spawn(void)
         free(var);
 
         /* we are in an event, so no need to protect the list */
-        caddy = PRTE_NEW(prte_plm_ssh_caddy_t);
+        caddy = PMIX_NEW(prte_plm_ssh_caddy_t);
         caddy->argc = argc;
         caddy->argv = pmix_argv_copy(argv);
         /* fake a proc structure for the new daemon - will be released
          * upon startup
          */
-        caddy->daemon = PRTE_NEW(prte_proc_t);
+        caddy->daemon = PMIX_NEW(prte_proc_t);
         PMIX_LOAD_PROCID(&caddy->daemon->name, PRTE_PROC_MY_NAME->nspace, target.rank);
-        prte_list_append(&launch_list, &caddy->super);
+        pmix_list_append(&launch_list, &caddy->super);
     }
-    PRTE_LIST_DESTRUCT(&coll);
+    PMIX_LIST_DESTRUCT(&coll);
     /* we NEVER use tree-spawn for secondary launches - e.g.,
      * due to a dynamic launch requesting add_hosts - so be
      * sure to turn it off here */
@@ -888,14 +888,14 @@ static int ssh_launch(prte_job_t *jdata)
 
 static void process_launch_list(int fd, short args, void *cbdata)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     pid_t pid;
     prte_plm_ssh_caddy_t *caddy;
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
 
     while (num_in_progress < prte_plm_ssh_component.num_concurrent) {
-        item = prte_list_remove_first(&launch_list);
+        item = pmix_list_remove_first(&launch_list);
         if (NULL == item) {
             /* we are done */
             break;
@@ -984,12 +984,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     prte_plm_ssh_caddy_t *caddy;
-    prte_list_t coll;
+    pmix_list_t coll;
     char *username, *nname;
     int port, *portptr;
     prte_namelist_t *child;
 
-    PRTE_ACQUIRE_OBJECT(state);
+    PMIX_ACQUIRE_OBJECT(state);
 
     /* setup the virtual machine */
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
@@ -1009,7 +1009,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          */
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -1027,7 +1027,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          */
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -1074,7 +1074,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * Since there always MUST be at least one app_context, we are safe in
      * doing this.
      */
-    app = (prte_app_context_t *) prte_pointer_array_get_item(state->jdata->apps, 0);
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(state->jdata->apps, 0);
     if (NULL == app) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         rc = PRTE_ERR_NOT_FOUND;
@@ -1098,7 +1098,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
     node = NULL;
     for (nnode = 0; nnode < map->nodes->size; nnode++) {
-        if (NULL != (nd = (prte_node_t *) prte_pointer_array_get_item(map->nodes, nnode))) {
+        if (NULL != (nd = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, nnode))) {
             node = nd;
             /* if the node is me, then we continue - we would
              * prefer to find some other node so we can tell what the remote
@@ -1120,7 +1120,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* if we are tree launching, find our children and create the launch cmd */
     if (!prte_plm_ssh_component.no_tree_spawn) {
         /* get the updated routing list */
-        PRTE_CONSTRUCT(&coll, prte_list_t);
+        PMIX_CONSTRUCT(&coll, pmix_list_t);
         prte_routed.get_routing_list(&coll);
     }
 
@@ -1135,13 +1135,13 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * Iterate through each of the nodes
      */
     for (nnode = 0; nnode < map->nodes->size; nnode++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, nnode))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, nnode))) {
             continue;
         }
 
         /* if we are tree launching, only launch our own children */
         if (!prte_plm_ssh_component.no_tree_spawn) {
-            PRTE_LIST_FOREACH(child, &coll, prte_namelist_t)
+            PMIX_LIST_FOREACH(child, &coll, prte_namelist_t)
             {
                 if (child->name.rank == node->daemon->name.rank) {
                     goto launch;
@@ -1206,7 +1206,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
 
         /* we are in an event, so no need to protect the list */
-        caddy = PRTE_NEW(prte_plm_ssh_caddy_t);
+        caddy = PMIX_NEW(prte_plm_ssh_caddy_t);
         caddy->argc = argc;
         caddy->argv = pmix_argv_copy(argv);
         /* insert the alternate port if any */
@@ -1219,8 +1219,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
             pmix_argv_insert_element(&caddy->argv, node_name_index1 + 2, portname);
         }
         caddy->daemon = node->daemon;
-        PRTE_RETAIN(caddy->daemon);
-        prte_list_append(&launch_list, &caddy->super);
+        PMIX_RETAIN(caddy->daemon);
+        pmix_list_append(&launch_list, &caddy->super);
     }
     /* we NEVER use tree-spawn for secondary launches - e.g.,
      * due to a dynamic launch requesting add_hosts - so be
@@ -1234,19 +1234,19 @@ static void launch_daemons(int fd, short args, void *cbdata)
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                          "%s plm:ssh: activating launch event",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-    PRTE_POST_OBJECT(state);
+    PMIX_POST_OBJECT(state);
     prte_event_active(&launch_event, EV_WRITE, 1);
 
     /* now that we've launched the daemons, let the daemon callback
      * function determine they are all alive and trigger the next stage
      */
-    PRTE_RELEASE(state);
+    PMIX_RELEASE(state);
     pmix_argv_free(argv);
     return;
 
 cleanup:
     PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
-    PRTE_RELEASE(state);
+    PMIX_RELEASE(state);
 }
 
 /**
@@ -1272,7 +1272,7 @@ static int ssh_finalize(void)
 
     /* remove launch event */
     prte_event_del(&launch_event);
-    PRTE_LIST_DESTRUCT(&launch_list);
+    PMIX_LIST_DESTRUCT(&launch_list);
 
     /* cleanup any pending recvs */
     if (PRTE_SUCCESS != (rc = prte_plm_base_comm_stop())) {
@@ -1285,7 +1285,7 @@ static int ssh_finalize(void)
             return rc;
         }
         for (i = 0; i < jdata->procs->size; i++) {
-            if (NULL == (proc = prte_pointer_array_get_item(jdata->procs, i))) {
+            if (NULL == (proc = pmix_pointer_array_get_item(jdata->procs, i))) {
                 continue;
             }
             if (0 < proc->pid) {
@@ -1376,7 +1376,7 @@ static int launch_agent_setup(const char *agent, char *path)
     }
 
     /* see if we can find the agent in the path */
-    ssh_agent_path = prte_path_findv(ssh_agent_argv[0], X_OK, environ, path);
+    ssh_agent_path = pmix_path_findv(ssh_agent_argv[0], X_OK, environ, path);
 
     if (NULL == ssh_agent_path) {
         /* not an error - just report not found */

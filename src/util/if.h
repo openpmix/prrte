@@ -14,7 +14,7 @@
  * Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2013-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,12 +42,12 @@
 /*
  * We previously defined IF_NAMESIZE to 32 if not already defined.
  * Due to this macro being reused from net/if.h, we could encounter
- * a macro mismatch. In particular, in cases where src/util/if.h was
+ * a macro mismatch. In particular, in cases where src/util/pmix_if.h was
  * included, but net/if.h was not, IF_NAMESIZE would be 32. If net/if.h
  * was included on Linux systems, IF_NAMESIZE would be 16. To avoid this
- * issue, we define our own PRTE_IF_NAMESIZE macro instead.
+ * issue, we define our own PMIX_IF_NAMESIZE macro instead.
  */
-#define PRTE_IF_NAMESIZE 32
+#define PMIX_IF_NAMESIZE 32
 
 BEGIN_C_DECLS
 
@@ -60,10 +60,10 @@ BEGIN_C_DECLS
         | ((n4) &0x000000FF)
 
 /**
- *  Lookup an interface by name and return its prte_list index.
+ *  Lookup an interface by name and return its pmix_list index.
  *
  *  @param if_name (IN)  Interface name
- *  @return              Interface prte_list index
+ *  @return              Interface pmix_list index
  */
 PRTE_EXPORT int prte_ifnametoindex(const char *if_name);
 
@@ -78,12 +78,12 @@ PRTE_EXPORT int prte_ifnametokindex(const char *if_name);
 /**
  *  Returns the number of available interfaces.
  */
-PRTE_EXPORT int prte_ifcount(void);
+PRTE_EXPORT int pmix_ifcount(void);
 
 /**
  *  Returns the index of the first available interface.
  */
-PRTE_EXPORT int prte_ifbegin(void);
+PRTE_EXPORT int pmix_ifbegin(void);
 
 /**
  *  Lookup the current position in the interface list by
@@ -92,7 +92,7 @@ PRTE_EXPORT int prte_ifbegin(void);
  *  @param if_index   Returns the next available index from the
  *                    current position.
  */
-PRTE_EXPORT int prte_ifnext(int if_index);
+PRTE_EXPORT int pmix_ifnext(int if_index);
 
 /**
  *  Lookup an interface by index and return its name.
@@ -101,7 +101,7 @@ PRTE_EXPORT int prte_ifnext(int if_index);
  *  @param if_name (OUT)  Interface name buffer
  *  @param size (IN)      Interface name buffer size
  */
-PRTE_EXPORT int prte_ifindextoname(int if_index, char *if_name, int);
+PRTE_EXPORT int pmix_ifindextoname(int if_index, char *if_name, int);
 
 /**
  *  Lookup an interface by index and return its primary address.
@@ -110,7 +110,7 @@ PRTE_EXPORT int prte_ifindextoname(int if_index, char *if_name, int);
  *  @param if_name (OUT)  Interface address buffer
  *  @param size (IN)      Interface address buffer size
  */
-PRTE_EXPORT int prte_ifindextoaddr(int if_index, struct sockaddr *, unsigned int);
+PRTE_EXPORT int pmix_ifindextoaddr(int if_index, struct sockaddr *, unsigned int);
 PRTE_EXPORT int prte_ifkindextoaddr(int if_kindex, struct sockaddr *if_addr, unsigned int length);
 
 /**
@@ -127,7 +127,7 @@ PRTE_EXPORT int prte_ifindextoflags(int if_index, uint32_t *);
  * @param hostname (IN)    Hostname (or stringified IP address)
  * @return                 true if \c hostname is local, false otherwise
  */
-PRTE_EXPORT bool prte_ifislocal(const char *hostname);
+PRTE_EXPORT bool pmix_ifislocal(const char *hostname);
 
 /**
  * Convert a dot-delimited network tuple to an IP address
@@ -145,17 +145,17 @@ PRTE_EXPORT int prte_iftupletoaddr(const char *addr, uint32_t *net, uint32_t *ma
  *
  *  @param if_index (IN)  Interface index
  */
-PRTE_EXPORT bool prte_ifisloopback(int if_index);
+PRTE_EXPORT bool pmix_ifisloopback(int if_index);
 
 /*
  * Determine if a specified interface is included in a NULL-terminated argv array
  */
-PRTE_EXPORT int prte_ifmatches(int kidx, char **nets);
+PRTE_EXPORT int pmix_ifmatches(int kidx, char **nets);
 
 /*
  * Provide a list of strings that contain all known aliases for this node
  */
-PRTE_EXPORT void prte_ifgetaliases(char ***aliases);
+PRTE_EXPORT void pmix_ifgetaliases(char ***aliases);
 
 END_C_DECLS
 

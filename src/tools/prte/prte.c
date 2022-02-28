@@ -69,22 +69,22 @@
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/threads/mutex.h"
+#include "src/threads/pmix_mutex.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/cmd_line.h"
 #include "src/util/daemon_init.h"
-#include "src/util/fd.h"
-#include "src/util/os_dirpath.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_fd.h"
+#include "src/util/pmix_os_dirpath.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/prte_environ.h"
-#include "src/util/prte_getcwd.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_getcwd.h"
 #include "src/util/show_help.h"
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -117,7 +117,7 @@ static bool forcibly_die = false;
 static prte_event_t term_handler;
 static prte_event_t epipe_handler;
 static int term_pipe[2];
-static prte_mutex_t prun_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
+static pmix_mutex_t prun_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static prte_event_t *forward_signals_events = NULL;
 static char *mypidfile = NULL;
 static bool verbose = false;
@@ -131,7 +131,7 @@ static int prep_singleton(const char *name);
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
-    PRTE_ACQUIRE_OBJECT(lock);
+    PMIX_ACQUIRE_OBJECT(lock);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
@@ -166,7 +166,7 @@ static void spcbfunc(pmix_status_t status, char nspace[], void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
 
-    PRTE_ACQUIRE_OBJECT(lock);
+    PMIX_ACQUIRE_OBJECT(lock);
     lock->status = status;
     if (PMIX_SUCCESS == status) {
         lock->msg = strdup(nspace);
@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
     int rc = 1, i, j;
     char *param, *timeoutenv, *ptr, *tpath, *cptr;
     prte_pmix_lock_t lock;
-    prte_list_t apps;
+    pmix_list_t apps;
     prte_pmix_app_t *app;
     pmix_info_t *iptr, info;
     pmix_status_t ret;
@@ -255,11 +255,11 @@ int main(int argc, char *argv[])
     char *outfile = NULL;
     pmix_status_t code;
     char *personality;
-    prte_cli_result_t results;
-    prte_cli_item_t *opt;
+    pmix_cli_result_t results;
+    pmix_cli_item_t *opt;
 
     /* init the globals */
-    PRTE_CONSTRUCT(&apps, prte_list_t);
+    PMIX_CONSTRUCT(&apps, pmix_list_t);
     if (NULL == (param = getenv("PRTE_BASENAME"))) {
         prte_tool_basename = pmix_basename(argv[0]);
     } else {
@@ -331,8 +331,8 @@ int main(int argc, char *argv[])
 
     /* Set both ends of this pipe to be close-on-exec so that no
      children inherit it */
-    if (prte_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS
-        || prte_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
+    if (pmix_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS
+        || pmix_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
         fprintf(stderr, "unable to set the pipe to CLOEXEC\n");
         prte_progress_thread_finalize(NULL);
         exit(1);
@@ -391,10 +391,10 @@ int main(int argc, char *argv[])
     }
 
     /* parse the input argv to get values, including everyone's MCA params */
-    PRTE_CONSTRUCT(&results, prte_cli_result_t);
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
     rc = schizo->parse_cli(pargv, &results, PRTE_CLI_WARN);
     if (PRTE_SUCCESS != rc) {
-        PRTE_DESTRUCT(&results);
+        PMIX_DESTRUCT(&results);
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         }
@@ -412,7 +412,7 @@ int main(int argc, char *argv[])
     /* if we were given a keepalive pipe, set up to monitor it now */
     opt = prte_cmd_line_get_param(&results, PRTE_CLI_KEEPALIVE);
     if (NULL != opt) {
-        prte_setenv("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
+        pmix_setenv("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
     }
 
     /* detach from controlling terminal
@@ -438,17 +438,17 @@ int main(int argc, char *argv[])
 
     if (prte_cmd_line_is_taken(&results, PRTE_CLI_SYSTEM_SERVER)) {
         /* we should act as system-level PMIx server */
-        prte_setenv("PRTE_MCA_pmix_system_server", "1", true, &environ);
+        pmix_setenv("PRTE_MCA_pmix_system_server", "1", true, &environ);
     }
     /* always act as session-level PMIx server */
-    prte_setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
+    pmix_setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
     /* if we were asked to report a uri, set the MCA param to do so */
     opt = prte_cmd_line_get_param(&results, PRTE_CLI_REPORT_URI);
     if (NULL != opt) {
         prte_pmix_server_globals.report_uri = strdup(opt->values[0]);
     }
     /* don't aggregate help messages as that will apply job-to-job */
-    prte_setenv("PRTE_MCA_prte_base_help_aggregate", "0", true, &environ);
+    pmix_setenv("PRTE_MCA_prte_base_help_aggregate", "0", true, &environ);
 
     /* if we are supporting a singleton, push its ID into the environ
      * so it can get picked up and registered by server init */
@@ -474,7 +474,7 @@ int main(int argc, char *argv[])
             goto DONE;
         }
         /* did they provide an app? */
-        if (PMIX_SUCCESS != rc || 0 == prte_list_get_size(&apps)) {
+        if (PMIX_SUCCESS != rc || 0 == pmix_list_get_size(&apps)) {
             if (proxyrun) {
                 prte_show_help("help-prun.txt", "prun:executable-not-specified", true,
                                prte_tool_basename, prte_tool_basename);
@@ -522,7 +522,7 @@ int main(int argc, char *argv[])
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     }
-    if (0 < (i = prte_list_get_size(&prte_ess_base_signals))) {
+    if (0 < (i = pmix_list_get_size(&prte_ess_base_signals))) {
         forward_signals_events = (prte_event_t *) malloc(sizeof(prte_event_t) * i);
         if (NULL == forward_signals_events) {
             ret = PRTE_ERR_OUT_OF_RESOURCE;
@@ -530,7 +530,7 @@ int main(int argc, char *argv[])
             goto DONE;
         }
         i = 0;
-        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+        PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
         {
             setup_sighandler(sig->signal, forward_signals_events + i, signal_forward_callback);
             ++i;
@@ -581,7 +581,7 @@ int main(int argc, char *argv[])
         goto DONE;
     }
     /* ess/hnp also should have created a daemon "app" */
-    if (NULL == (dapp = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, 0))) {
+    if (NULL == (dapp = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0))) {
         prte_show_help("help-prun.txt", "bad-app-object", true, prte_tool_basename);
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
@@ -736,7 +736,7 @@ int main(int argc, char *argv[])
                 /* stitch together the var names and URI */
                 pmix_asprintf(&leftover, "%lu", (unsigned long) getpid());
                 /* output to the pipe */
-                rc = prte_fd_write(outpipe, strlen(leftover) + 1, leftover);
+                rc = pmix_fd_write(outpipe, strlen(leftover) + 1, leftover);
                 free(leftover);
                 close(outpipe);
             } else {
@@ -867,13 +867,13 @@ int main(int argc, char *argv[])
                      * convert it to one so the name will be relative to
                      * the directory where prun was given as that is what
                      * the user will have seen */
-                    if (!prte_path_is_absolute(ptr)) {
+                    if (!pmix_path_is_absolute(ptr)) {
                         char cwd[PRTE_PATH_MAX];
                         if (NULL == getcwd(cwd, sizeof(cwd))) {
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
                             goto DONE;
                         }
-                        outdir = prte_os_path(false, cwd, ptr, NULL);
+                        outdir = pmix_os_path(false, cwd, ptr, NULL);
                     } else {
                         outdir = strdup(ptr);
                     }
@@ -893,13 +893,13 @@ int main(int argc, char *argv[])
                      * convert it to one so the name will be relative to
                      * the directory where prun was given as that is what
                      * the user will have seen */
-                    if (!prte_path_is_absolute(ptr)) {
+                    if (!pmix_path_is_absolute(ptr)) {
                         char cwd[PRTE_PATH_MAX];
                         if (NULL == getcwd(cwd, sizeof(cwd))) {
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
                             goto DONE;
                         }
-                        outfile = prte_os_path(false, cwd, ptr, NULL);
+                        outfile = pmix_os_path(false, cwd, ptr, NULL);
                     } else {
                         outfile = strdup(ptr);
                     }
@@ -953,7 +953,7 @@ int main(int argc, char *argv[])
     opt = prte_cmd_line_get_param(&results, PRTE_CLI_MAX_RESTARTS);
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
-        PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t)
+        PMIX_LIST_FOREACH(app, &apps, prte_pmix_app_t)
         {
             PMIX_INFO_LIST_ADD(ret, app->info, PMIX_MAX_RESTARTS, &ui32, PMIX_UINT32);
         }
@@ -1072,10 +1072,10 @@ int main(int argc, char *argv[])
     PMIX_INFO_LIST_RELEASE(jinfo);
 
     /* convert the apps to an array */
-    napps = prte_list_get_size(&apps);
+    napps = pmix_list_get_size(&apps);
     PMIX_APP_CREATE(papps, napps);
     n = 0;
-    PRTE_LIST_FOREACH(app, &apps, prte_pmix_app_t)
+    PMIX_LIST_FOREACH(app, &apps, prte_pmix_app_t)
     {
         papps[n].cmd = strdup(app->app.cmd);
         papps[n].argv = pmix_argv_copy(app->app.argv);
@@ -1118,7 +1118,7 @@ int main(int argc, char *argv[])
     while (prte_event_base_active && lock.active) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
     }
-    PRTE_ACQUIRE_OBJECT(&lock.lock);
+    PMIX_ACQUIRE_OBJECT(&lock.lock);
     if (PMIX_SUCCESS != lock.status) {
         PRTE_UPDATE_EXIT_STATUS(lock.status);
         goto DONE;
@@ -1150,7 +1150,7 @@ proceed:
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
     }
 
-    PRTE_ACQUIRE_OBJECT(prte_event_base_active);
+    PMIX_ACQUIRE_OBJECT(prte_event_base_active);
 
     /* close the push of our stdin */
     PMIX_INFO_LOAD(&info, PMIX_IOF_COMPLETE, NULL, PMIX_BOOL);
@@ -1183,7 +1183,7 @@ static void clean_abort(int fd, short flags, void *arg)
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
      */
-    if (prte_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
+    if (pmix_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
         if (forcibly_die) {
             /* exit with a non-zero status */
             exit(1);
@@ -1224,7 +1224,7 @@ static void surekill(void)
     pid_t pid;
 
     for (n=0; n < prte_local_children->size; n++) {
-        child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, n);
+        child = (prte_proc_t*)pmix_pointer_array_get_item(prte_local_children, n);
         if (NULL != child && 0 < child->pid) {
             pid = child->pid;
 #if HAVE_SETPGID
@@ -1274,7 +1274,7 @@ static void abort_signal_callback(int fd)
         second = false;
     } else {
         surekill();  // ensure we attempt to kill everything
-        prte_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, NULL);
+        pmix_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, NULL);
         exit(1);
     }
 }
@@ -1295,36 +1295,36 @@ static int prep_singleton(const char *name)
     *p1 = '\0';
     ++p1;
     rank = strtoul(p1, NULL, 10);
-    jdata = PRTE_NEW(prte_job_t);
+    jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, ptr);
     free(ptr);
     rc = prte_set_job_data_object(jdata);
     if (PRTE_SUCCESS != rc) {
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-        PRTE_RELEASE(jdata);
+        PMIX_RELEASE(jdata);
         return PRTE_ERR_FATAL;
     }
     /* must have an app */
-    app = PRTE_NEW(prte_app_context_t);
+    app = PMIX_NEW(prte_app_context_t);
     app->app = strdup(jdata->nspace);
     app->num_procs = 1;
     pmix_argv_append_nosize(&app->argv, app->app);
     getcwd(cwd, sizeof(cwd));
     app->cwd = strdup(cwd);
-    prte_pointer_array_set_item(jdata->apps, 0, app);
+    pmix_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps = 1;
 
     /* add a map */
-    jdata->map = PRTE_NEW(prte_job_map_t);
+    jdata->map = PMIX_NEW(prte_job_map_t);
     /* add our node to the map since the singleton must
      * be here */
-    node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, PRTE_PROC_MY_NAME->rank);
-    PRTE_RETAIN(node);
-    prte_pointer_array_add(jdata->map->nodes, node);
+    node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, PRTE_PROC_MY_NAME->rank);
+    PMIX_RETAIN(node);
+    pmix_pointer_array_add(jdata->map->nodes, node);
     ++(jdata->map->num_nodes);
 
     /* create a proc for the singleton */
-    proc = PRTE_NEW(prte_proc_t);
+    proc = PMIX_NEW(prte_proc_t);
     PMIX_LOAD_PROCID(&proc->name, jdata->nspace, rank);
     proc->rank = proc->name.rank;
     proc->parent = PRTE_PROC_MY_NAME->rank;
@@ -1334,22 +1334,22 @@ static int prep_singleton(const char *name)
     proc->node_rank = 0;
     proc->state = PRTE_PROC_STATE_RUNNING;
     /* link it to the job */
-    PRTE_RETAIN(jdata);
+    PMIX_RETAIN(jdata);
     proc->job = jdata;
     /* link it to the app */
-    PRTE_RETAIN(proc);
-    prte_pointer_array_set_item(&app->procs, rank, proc);
+    PMIX_RETAIN(proc);
+    pmix_pointer_array_set_item(&app->procs, rank, proc);
     app->first_rank = rank;
     /* link it to the node */
-    PRTE_RETAIN(node);
+    PMIX_RETAIN(node);
     proc->node = node;
     /* add it to the job */
-    prte_pointer_array_set_item(jdata->procs, rank, proc);
+    pmix_pointer_array_set_item(jdata->procs, rank, proc);
     jdata->num_procs = 1;
     jdata->num_local_procs = 1;
     /* add it to the node */
-    PRTE_RETAIN(proc);
-    prte_pointer_array_add(node->procs, proc);
+    PMIX_RETAIN(proc);
+    pmix_pointer_array_add(node->procs, proc);
     node->num_procs = 1;
     node->slots_inuse = 1;
 

@@ -4,7 +4,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +31,7 @@
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_quit.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
@@ -94,8 +94,8 @@ static int init(void)
     int num_states, i, rc;
 
     /* setup the state machine */
-    PRTE_CONSTRUCT(&prte_job_states, prte_list_t);
-    PRTE_CONSTRUCT(&prte_proc_states, prte_list_t);
+    PMIX_CONSTRUCT(&prte_job_states, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_proc_states, pmix_list_t);
 
     num_states = sizeof(job_states) / sizeof(prte_job_state_t);
     for (i = 0; i < num_states; i++) {
@@ -137,17 +137,17 @@ static int init(void)
 
 static int finalize(void)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
 
     /* cleanup the state machines */
-    while (NULL != (item = prte_list_remove_first(&prte_job_states))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&prte_job_states))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&prte_job_states);
-    while (NULL != (item = prte_list_remove_first(&prte_proc_states))) {
-        PRTE_RELEASE(item);
+    PMIX_DESTRUCT(&prte_job_states);
+    while (NULL != (item = pmix_list_remove_first(&prte_proc_states))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&prte_proc_states);
+    PMIX_DESTRUCT(&prte_proc_states);
 
     return PRTE_SUCCESS;
 }
@@ -161,7 +161,7 @@ static void track_jobs(int fd, short argc, void *cbdata)
     prte_proc_state_t running = PRTE_PROC_STATE_RUNNING;
     prte_proc_t *child;
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
 
     switch (caddy->job_state) {
     case PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE:
@@ -187,7 +187,7 @@ static void track_jobs(int fd, short argc, void *cbdata)
             goto cleanup;
         }
         for (i = 0; i < prte_local_children->size; i++) {
-            child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+            child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
             if (NULL == child) {
                 continue;
             }
@@ -257,7 +257,7 @@ static void track_jobs(int fd, short argc, void *cbdata)
             goto cleanup;
         }
         for (i = 0; i < prte_local_children->size; i++) {
-            child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+            child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
             if (NULL == child) {
                 continue;
             }
@@ -295,14 +295,14 @@ static void track_jobs(int fd, short argc, void *cbdata)
     }
 
 cleanup:
-    PRTE_RELEASE(caddy);
+    PMIX_RELEASE(caddy);
 }
 
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
 
-    PRTE_POST_OBJECT(lk);
+    PMIX_POST_OBJECT(lk);
     lk->status = prte_pmix_convert_status(status);
     PRTE_PMIX_WAKEUP_THREAD(lk);
 }
@@ -324,7 +324,7 @@ static void track_procs(int fd, short argc, void *cbdata)
     prte_pmix_lock_t lock;
     prte_app_context_t *app;
 
-    PRTE_ACQUIRE_OBJECT(caddy);
+    PMIX_ACQUIRE_OBJECT(caddy);
     proc = &caddy->name;
     state = caddy->proc_state;
 
@@ -363,7 +363,7 @@ static void track_procs(int fd, short argc, void *cbdata)
         goto cleanup;
     }
 
-    pdata = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, proc->rank);
+    pdata = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, proc->rank);
     if (NULL == pdata) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         goto cleanup;
@@ -411,7 +411,7 @@ static void track_procs(int fd, short argc, void *cbdata)
 
             /* pack all the local child vpids */
             for (i = 0; i < prte_local_children->size; i++) {
-                pptr = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i);
+                pptr = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
                 if (NULL == pptr) {
                     continue;
                 }
@@ -485,7 +485,7 @@ static void track_procs(int fd, short argc, void *cbdata)
         if (prte_prteds_term_ordered && 0 == prte_routed.num_routes()) {
             for (i = 0; i < prte_local_children->size; i++) {
                 if (NULL
-                        != (pdata = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
+                        != (pdata = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
                                                                                 i))
                     && PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
                     /* at least one is still alive */
@@ -536,15 +536,15 @@ static void track_procs(int fd, short argc, void *cbdata)
             /* cleanup the procs as these are gone */
             for (i = 0; i < prte_local_children->size; i++) {
                 if (NULL
-                    == (pptr = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
+                    == (pptr = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
                                                                            i))) {
                     continue;
                 }
                 /* if this child is part of the job... */
                 if (PMIX_CHECK_NSPACE(pptr->name.nspace, jdata->nspace)) {
                     /* clear the entry in the local children */
-                    prte_pointer_array_set_item(prte_local_children, i, NULL);
-                    PRTE_RELEASE(pptr); // maintain accounting
+                    pmix_pointer_array_set_item(prte_local_children, i, NULL);
+                    PMIX_RELEASE(pptr); // maintain accounting
                 }
             }
             /* tell the IOF that the job is complete */
@@ -562,7 +562,7 @@ static void track_procs(int fd, short argc, void *cbdata)
             if (NULL != jdata->map) {
                 map = jdata->map;
                 for (index = 0; index < map->nodes->size; index++) {
-                    node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, index);
+                    node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, index);
                     if (NULL == node) {
                         continue;
                     }
@@ -570,7 +570,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                                          "%s state:prted releasing procs from node %s",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
                     for (i = 0; i < node->procs->size; i++) {
-                        pptr = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i);
+                        pptr = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, i);
                         if (NULL == pptr) {
                             continue;
                         }
@@ -578,7 +578,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                             /* skip procs from another job */
                             continue;
                         }
-                        app = (prte_app_context_t*) prte_pointer_array_get_item(jdata->apps, pptr->app_idx);
+                        app = (prte_app_context_t*) pmix_pointer_array_get_item(jdata->apps, pptr->app_idx);
                         if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
                             !PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
                             node->slots_inuse--;
@@ -589,18 +589,18 @@ static void track_procs(int fd, short argc, void *cbdata)
                                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                              PRTE_NAME_PRINT(&pptr->name), node->name));
                         /* set the entry in the node array to NULL */
-                        prte_pointer_array_set_item(node->procs, i, NULL);
+                        pmix_pointer_array_set_item(node->procs, i, NULL);
                         /* release the proc once for the map entry */
-                        PRTE_RELEASE(pptr);
+                        PMIX_RELEASE(pptr);
                     }
                     /* set the node location to NULL */
-                    prte_pointer_array_set_item(map->nodes, index, NULL);
+                    pmix_pointer_array_set_item(map->nodes, index, NULL);
                     /* maintain accounting */
-                    PRTE_RELEASE(node);
+                    PMIX_RELEASE(node);
                     /* flag that the node is no longer in a map */
                     PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
                 }
-                PRTE_RELEASE(map);
+                PMIX_RELEASE(map);
                 jdata->map = NULL;
             }
 
@@ -617,13 +617,13 @@ static void track_procs(int fd, short argc, void *cbdata)
             }
 
             /* cleanup the job info */
-            prte_pointer_array_set_item(prte_job_data, jdata->index, NULL);
-            PRTE_RELEASE(jdata);
+            pmix_pointer_array_set_item(prte_job_data, jdata->index, NULL);
+            PMIX_RELEASE(jdata);
         }
     }
 
 cleanup:
-    PRTE_RELEASE(caddy);
+    PMIX_RELEASE(caddy);
 }
 
 static int pack_state_for_proc(pmix_data_buffer_t *alert, prte_proc_t *child)
@@ -671,7 +671,7 @@ static int pack_state_update(pmix_data_buffer_t *alert, prte_job_t *jdata)
         return rc;
     }
     for (i = 0; i < prte_local_children->size; i++) {
-        if (NULL == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, i))) {
+        if (NULL == (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
             continue;
         }
         /* if this child is part of the job... */

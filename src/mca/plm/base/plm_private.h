@@ -15,7 +15,7 @@
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,8 +38,8 @@
 #    include <sys/time.h>
 #endif /* HAVE_SYS_TIME_H */
 
-#include "src/class/prte_list.h"
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/mca/base/prte_mca_base_framework.h"
 
 #include "src/mca/odls/odls_types.h"
@@ -100,7 +100,7 @@ PRTE_EXPORT int prte_plm_base_setup_virtual_machine(prte_job_t *jdata);
  */
 PRTE_EXPORT int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command);
 PRTE_EXPORT int prte_plm_base_prted_terminate_job(pmix_nspace_t jobid);
-PRTE_EXPORT int prte_plm_base_prted_kill_local_procs(prte_pointer_array_t *procs);
+PRTE_EXPORT int prte_plm_base_prted_kill_local_procs(pmix_pointer_array_t *procs);
 PRTE_EXPORT int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal);
 
 /*

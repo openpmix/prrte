@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,9 +47,9 @@
  * Global variables
  */
 prte_grpcomm_base_t prte_grpcomm_base = {
-    .actives = PRTE_LIST_STATIC_INIT,
-    .ongoing = PRTE_LIST_STATIC_INIT,
-    .sig_table = PRTE_HASH_TABLE_STATIC_INIT,
+    .actives = PMIX_LIST_STATIC_INIT,
+    .ongoing = PMIX_LIST_STATIC_INIT,
+    .sig_table = PMIX_HASH_TABLE_STATIC_INIT,
     .transports = NULL,
     .context_id = 0
 };
@@ -86,21 +86,21 @@ static int prte_grpcomm_base_close(void)
     prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
 
     /* Close the active modules */
-    PRTE_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t)
+    PMIX_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t)
     {
         if (NULL != active->module->finalize) {
             active->module->finalize();
         }
     }
-    PRTE_LIST_DESTRUCT(&prte_grpcomm_base.actives);
-    PRTE_LIST_DESTRUCT(&prte_grpcomm_base.ongoing);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_base.actives);
+    PMIX_LIST_DESTRUCT(&prte_grpcomm_base.ongoing);
     for (void *_nptr = NULL;
          PRTE_SUCCESS
-         == prte_hash_table_get_next_key_ptr(&prte_grpcomm_base.sig_table, &key, &size,
+         == pmix_hash_table_get_next_key_ptr(&prte_grpcomm_base.sig_table, &key, &size,
                                              (void **) &seq_number, _nptr, &_nptr);) {
         free(seq_number);
     }
-    PRTE_DESTRUCT(&prte_grpcomm_base.sig_table);
+    PMIX_DESTRUCT(&prte_grpcomm_base.sig_table);
 
     return prte_mca_base_framework_components_close(&prte_grpcomm_base_framework, NULL);
 }
@@ -111,10 +111,10 @@ static int prte_grpcomm_base_close(void)
  */
 static int prte_grpcomm_base_open(prte_mca_base_open_flag_t flags)
 {
-    PRTE_CONSTRUCT(&prte_grpcomm_base.actives, prte_list_t);
-    PRTE_CONSTRUCT(&prte_grpcomm_base.ongoing, prte_list_t);
-    PRTE_CONSTRUCT(&prte_grpcomm_base.sig_table, prte_hash_table_t);
-    prte_hash_table_init(&prte_grpcomm_base.sig_table, 128);
+    PMIX_CONSTRUCT(&prte_grpcomm_base.actives, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_base.ongoing, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_grpcomm_base.sig_table, pmix_hash_table_t);
+    pmix_hash_table_init(&prte_grpcomm_base.sig_table, 128);
     prte_grpcomm_base.context_id = UINT32_MAX;
 
     return prte_mca_base_framework_components_open(&prte_grpcomm_base_framework, flags);
@@ -124,7 +124,7 @@ PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, grpcomm, "GRPCOMM", base_register, prte_gr
                                 prte_grpcomm_base_close, prte_grpcomm_base_static_components,
                                 PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
-PRTE_CLASS_INSTANCE(prte_grpcomm_base_active_t, prte_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_grpcomm_base_active_t, pmix_list_item_t, NULL, NULL);
 
 static void scon(prte_grpcomm_signature_t *p)
 {
@@ -137,14 +137,14 @@ static void sdes(prte_grpcomm_signature_t *p)
         free(p->signature);
     }
 }
-PRTE_CLASS_INSTANCE(prte_grpcomm_signature_t, prte_object_t, scon, sdes);
+PMIX_CLASS_INSTANCE(prte_grpcomm_signature_t, pmix_object_t, scon, sdes);
 
 static void ccon(prte_grpcomm_coll_t *p)
 {
     p->sig = NULL;
     p->status = PMIX_SUCCESS;
     PMIX_DATA_BUFFER_CONSTRUCT(&p->bucket);
-    PRTE_CONSTRUCT(&p->distance_mask_recv, prte_bitmap_t);
+    PMIX_CONSTRUCT(&p->distance_mask_recv, pmix_bitmap_t);
     p->dmns = NULL;
     p->ndmns = 0;
     p->nexpected = 0;
@@ -156,11 +156,11 @@ static void ccon(prte_grpcomm_coll_t *p)
 static void cdes(prte_grpcomm_coll_t *p)
 {
     if (NULL != p->sig) {
-        PRTE_RELEASE(p->sig);
+        PMIX_RELEASE(p->sig);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&p->bucket);
-    PRTE_DESTRUCT(&p->distance_mask_recv);
+    PMIX_DESTRUCT(&p->distance_mask_recv);
     free(p->dmns);
     free(p->buffers);
 }
-PRTE_CLASS_INSTANCE(prte_grpcomm_coll_t, prte_list_item_t, ccon, cdes);
+PMIX_CLASS_INSTANCE(prte_grpcomm_coll_t, pmix_list_item_t, ccon, cdes);

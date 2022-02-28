@@ -2,7 +2,7 @@
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +18,7 @@
 #include "constants.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/util/output.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_string_copy.h"
 
 static int if_solaris_ipv6_open(void);
 
@@ -29,7 +29,7 @@ prte_if_base_component_t prte_prteif_solaris_ipv6_component = {
     {PRTE_IF_BASE_VERSION_2_0_0,
 
      /* Component name and version */
-     "solaris_ipv6", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PRTE_RELEASE_VERSION,
+     "solaris_ipv6", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PMIX_RELEASE_VERSION,
 
      /* Component open and close functions */
      if_solaris_ipv6_open, NULL},
@@ -88,7 +88,7 @@ static int if_solaris_ipv6_open(void)
     for (i = 0; i + sizeof(struct lifreq) <= lifconf.lifc_len; i += sizeof(*lifreq)) {
 
         lifreq = (struct lifreq *) ((caddr_t) lifconf.lifc_buf + i);
-        prte_string_copy(lifquery.lifr_name, lifreq->lifr_name, sizeof(lifquery.lifr_name));
+        pmix_string_copy(lifquery.lifr_name, lifreq->lifr_name, sizeof(lifquery.lifr_name));
 
         /* lookup kernel index */
         error = ioctl(sd, SIOCGLIFINDEX, &lifquery);
@@ -120,22 +120,22 @@ static int if_solaris_ipv6_open(void)
                 /* create interface for newly found address */
                 prte_if_t *intf;
 
-                intf = PRTE_NEW(prte_if_t);
+                intf = PMIX_NEW(prte_if_t);
                 if (NULL == intf) {
                     prte_output(0, "prte_ifinit: unable to allocate %d bytes\n", sizeof(prte_if_t));
                     return PRTE_ERR_OUT_OF_RESOURCE;
                 }
                 intf->af_family = AF_INET6;
 
-                prte_string_copy(intf->if_name, lifreq->lifr_name, PRTE_IF_NAMESIZE);
-                intf->if_index = prte_list_get_size(&prte_if_list) + 1;
+                pmix_string_copy(intf->if_name, lifreq->lifr_name, PMIX_IF_NAMESIZE);
+                intf->if_index = pmix_list_get_size(&prte_if_list) + 1;
                 memcpy(&intf->if_addr, my_addr, sizeof(*my_addr));
                 intf->if_mask = 64;
                 /* lifrq flags are uint64_t */
                 intf->if_flags = (uint32_t)(0x00000000ffffffff) & lifquery.lifr_flags;
 
                 /* append to list */
-                prte_list_append(&prte_if_list, &(intf->super));
+                pmix_list_append(&prte_if_list, &(intf->super));
             }
         }
     } /* for */

@@ -42,7 +42,7 @@
 #include "src/mca/rml/rml.h"
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/show_help.h"
 
@@ -153,7 +153,7 @@ static void execute(int sd, short args, void *cbdata)
     pmix_data_buffer_t *xfer;
     pmix_proc_t *target;
 
-    PRTE_ACQUIRE_OBJECT(req);
+    PMIX_ACQUIRE_OBJECT(req);
 
     if (!prte_pmix_server_globals.pubsub_init) {
         /* we need to initialize our connection to the server */
@@ -166,7 +166,7 @@ static void execute(int sd, short args, void *cbdata)
 
     /* add this request to our tracker hotel */
     if (PRTE_SUCCESS
-        != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+        != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
         prte_show_help("help-prted.txt", "noroom", true, req->operation,
                        prte_pmix_server_globals.num_rooms);
         goto callback;
@@ -220,8 +220,8 @@ callback:
     } else if (NULL != req->lkcbfunc) {
         req->lkcbfunc(rc, NULL, 0, req->cbdata);
     }
-    prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
-    PRTE_RELEASE(req);
+    pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+    PMIX_RELEASE(req);
 }
 
 pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t info[],
@@ -237,7 +237,7 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* create the caddy */
-    req = PRTE_NEW(pmix_server_req_t);
+    req = PMIX_NEW(pmix_server_req_t);
     pmix_asprintf(&req->operation, "PUBLISH: %s:%d", __FILE__, __LINE__);
     req->opcbfunc = cbfunc;
     req->cbdata = cbdata;
@@ -246,7 +246,7 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
     ret = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return PMIX_ERR_PACK_FAILURE;
     }
 
@@ -263,14 +263,14 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
     if (PMIX_SUCCESS
         != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_proc_t *) proc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return rc;
     }
 
     /* pack the number of infos */
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return rc;
     }
 
@@ -278,14 +278,14 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
     if (PMIX_SUCCESS
         != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_info_t *) info, ninfo, PMIX_INFO))) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return rc;
     }
 
     /* thread-shift so we can store the tracker */
     prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, execute, req);
     prte_event_set_priority(&(req->ev), PRTE_MSG_PRI);
-    PRTE_POST_OBJECT(req);
+    PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 
     return PRTE_SUCCESS;
@@ -305,7 +305,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     }
 
     /* create the caddy */
-    req = PRTE_NEW(pmix_server_req_t);
+    req = PMIX_NEW(pmix_server_req_t);
     pmix_asprintf(&req->operation, "LOOKUP: %s:%d", __FILE__, __LINE__);
     req->lkcbfunc = cbfunc;
     req->cbdata = cbdata;
@@ -313,7 +313,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     /* load the command */
     if (PRTE_SUCCESS != (ret = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8))) {
         PRTE_ERROR_LOG(ret);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return PMIX_ERR_PACK_FAILURE;
     }
 
@@ -330,7 +330,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     if (PMIX_SUCCESS
         != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_proc_t *) proc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return rc;
     }
 
@@ -338,14 +338,14 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     n = pmix_argv_count(keys);
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &n, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return rc;
     }
     /* pack the keys */
     for (m = 0; NULL != keys[m]; m++) {
         if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &keys[m], 1, PMIX_STRING))) {
             PMIX_ERROR_LOG(rc);
-            PRTE_RELEASE(req);
+            PMIX_RELEASE(req);
             return rc;
         }
     }
@@ -353,7 +353,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     /* pack the number of infos */
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return rc;
     }
 
@@ -362,7 +362,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
         if (PMIX_SUCCESS
             != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_info_t *) info, ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(rc);
-            PRTE_RELEASE(req);
+            PMIX_RELEASE(req);
             return rc;
         }
     }
@@ -370,7 +370,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     /* thread-shift so we can store the tracker */
     prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, execute, req);
     prte_event_set_priority(&(req->ev), PRTE_MSG_PRI);
-    PRTE_POST_OBJECT(req);
+    PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 
     return PRTE_SUCCESS;
@@ -387,7 +387,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     pmix_status_t rc;
 
     /* create the caddy */
-    req = PRTE_NEW(pmix_server_req_t);
+    req = PMIX_NEW(pmix_server_req_t);
     pmix_asprintf(&req->operation, "UNPUBLISH: %s:%d", __FILE__, __LINE__);
     req->opcbfunc = cbfunc;
     req->cbdata = cbdata;
@@ -395,7 +395,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     /* load the command */
     if (PRTE_SUCCESS != (ret = PMIx_Data_pack(NULL, &req->msg, &cmd, 1, PMIX_UINT8))) {
         PRTE_ERROR_LOG(ret);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return PMIX_ERR_PACK_FAILURE;
     }
 
@@ -412,7 +412,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     if (PMIX_SUCCESS
         != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_proc_t *) proc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return rc;
     }
 
@@ -420,14 +420,14 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     n = pmix_argv_count(keys);
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &n, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return rc;
     }
     /* pack the keys */
     for (m = 0; m < n; m++) {
         if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &keys[m], 1, PMIX_STRING))) {
             PMIX_ERROR_LOG(rc);
-            PRTE_RELEASE(req);
+            PMIX_RELEASE(req);
             return rc;
         }
     }
@@ -435,7 +435,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     /* pack the number of infos */
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
         return rc;
     }
 
@@ -444,7 +444,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
         if (PMIX_SUCCESS
             != (rc = PMIx_Data_pack(NULL, &req->msg, (pmix_info_t *) info, ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(rc);
-            PRTE_RELEASE(req);
+            PMIX_RELEASE(req);
             return rc;
         }
     }
@@ -452,7 +452,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     /* thread-shift so we can store the tracker */
     prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, execute, req);
     prte_event_set_priority(&(req->ev), PRTE_MSG_PRI);
-    PRTE_POST_OBJECT(req);
+    PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 
     return PRTE_SUCCESS;
@@ -575,7 +575,7 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender, pmix_data_buffer
 release:
     if (0 <= room_num) {
         /* retrieve the tracker */
-        prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room_num,
+        pmix_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room_num,
                                                 (void **) &req);
     }
 
@@ -591,7 +591,7 @@ release:
         }
 
         /* cleanup */
-        PRTE_RELEASE(req);
+        PMIX_RELEASE(req);
     }
     if (NULL != pdata) {
         PMIX_PDATA_FREE(pdata, npdata);

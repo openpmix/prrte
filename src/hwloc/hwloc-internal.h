@@ -46,8 +46,8 @@ static inline hwloc_obj_t hwloc_get_numanode_obj_by_os_index(hwloc_topology_t to
 }
 #endif
 
-#include "src/class/prte_list.h"
-#include "src/class/prte_value_array.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_value_array.h"
 
 BEGIN_C_DECLS
 
@@ -115,32 +115,32 @@ typedef struct {
 
 /* structs for storing info on objects */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     hwloc_cpuset_t available;
     bool npus_calculated;
     unsigned int npus;
     unsigned int idx;
     unsigned int num_bound;
 } prte_hwloc_obj_data_t;
-PRTE_CLASS_DECLARATION(prte_hwloc_obj_data_t);
+PMIX_CLASS_DECLARATION(prte_hwloc_obj_data_t);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     hwloc_obj_type_t type;
     unsigned cache_level;
     unsigned int num_objs;
-    prte_list_t sorted_by_dist_list;
+    pmix_list_t sorted_by_dist_list;
 } prte_hwloc_summary_t;
-PRTE_CLASS_DECLARATION(prte_hwloc_summary_t);
+PMIX_CLASS_DECLARATION(prte_hwloc_summary_t);
 
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     hwloc_cpuset_t available;
-    prte_list_t summaries;
+    pmix_list_t summaries;
     hwloc_obj_t* numas;
     unsigned num_numas;
 } prte_hwloc_topo_data_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_hwloc_topo_data_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_hwloc_topo_data_t);
 
 /* define binding policies */
 typedef uint16_t prte_binding_policy_t;
@@ -274,12 +274,12 @@ PRTE_EXPORT int prte_hwloc_base_set_binding_policy(void *jdata, char *spec);
 PRTE_EXPORT void prte_hwloc_base_get_local_cpuset(void);
 
 struct prte_rmaps_numa_node_t {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     int index;
     float dist_from_closed;
 };
 typedef struct prte_rmaps_numa_node_t prte_rmaps_numa_node_t;
-PRTE_CLASS_DECLARATION(prte_rmaps_numa_node_t);
+PMIX_CLASS_DECLARATION(prte_rmaps_numa_node_t);
 
 /**
  * Enum for what memory allocation policy we want for user allocations.
@@ -340,7 +340,7 @@ PRTE_EXPORT hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
 PRTE_EXPORT unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj);
 
 PRTE_EXPORT int prte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char *device_name,
-                                                prte_list_t *sorted_list);
+                                                pmix_list_t *sorted_list);
 
 /**
  * Get the number of pu's under a given hwloc object.

@@ -4,7 +4,7 @@
  *                         Corporation.  All rights reserved.
  * Copyright (c) 2015-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,7 +17,7 @@
 
 #include "prte_config.h"
 #include "src/mca/prtedl/prtedl.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_framework.h"

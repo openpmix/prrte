@@ -68,7 +68,7 @@ prte_rml_component_t prte_rml_oob_component = {
 
         .mca_component_name = "oob",
         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PRTE_RELEASE_VERSION),
+                                    PMIX_RELEASE_VERSION),
         .mca_open_component = rml_oob_open,
         .mca_close_component = rml_oob_close,
         .mca_query_component = component_query,
@@ -93,13 +93,13 @@ static void recv_buffer_nb(pmix_proc_t *peer, prte_rml_tag_t tag, bool persisten
 
     /* push the request into the event base so we can add
      * the receive to our list of posted recvs */
-    req = PRTE_NEW(prte_rml_recv_request_t);
+    req = PMIX_NEW(prte_rml_recv_request_t);
     PMIX_XFER_PROCID(&req->post->peer, peer);
     req->post->tag = tag;
     req->post->persistent = persistent;
     req->post->cbfunc = cbfunc;
     req->post->cbdata = cbdata;
-    PRTE_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
+    PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
 }
 static void recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
 {
@@ -109,7 +109,7 @@ static void recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
                         "%s rml_recv_cancel for peer %s tag %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(peer), tag);
 
-    PRTE_ACQUIRE_OBJECT(prte_event_base_active);
+    PMIX_ACQUIRE_OBJECT(prte_event_base_active);
     if (!prte_event_base_active) {
         /* no event will be processed any more, so simply return. */
         return;
@@ -117,11 +117,11 @@ static void recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
 
     /* push the request into the event base so we can remove
      * the receive from our list of posted recvs */
-    req = PRTE_NEW(prte_rml_recv_request_t);
+    req = PMIX_NEW(prte_rml_recv_request_t);
     req->cancel = true;
     PMIX_XFER_PROCID(&req->post->peer, peer);
     req->post->tag = tag;
-    PRTE_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
+    PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
 }
 static int oob_ping(const char *uri, const struct timeval *tv)
 {

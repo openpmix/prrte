@@ -16,14 +16,14 @@
 
 #include <ctype.h>
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/show_help.h"
 
 prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath)
@@ -32,7 +32,7 @@ prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath)
     prte_schizo_base_module_t *md = NULL;
     int pri = -1, p;
 
-    PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+    PMIX_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
     {
         if (NULL != mod->module->detect_proxy) {
             p = mod->module->detect_proxy(cmdpath);
@@ -81,11 +81,11 @@ static bool check_multi(const char *target)
 }
 
 /* add directive to a PRRTE option that takes a single value */
-int prte_schizo_base_add_directive(prte_cli_result_t *results,
+int prte_schizo_base_add_directive(pmix_cli_result_t *results,
                                    const char *deprecated, const char *target,
                                    char *directive, bool report)
 {
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
     char *ptr, *tmp;
 
     /* does the matching key already exist? */
@@ -136,10 +136,10 @@ int prte_schizo_base_add_directive(prte_cli_result_t *results,
         }
     } else {
         // add the new option
-        opt = PRTE_NEW(prte_cli_item_t);
+        opt = PMIX_NEW(pmix_cli_item_t);
         opt->key = strdup(target);
         pmix_argv_append_nosize(&opt->values, directive);
-        prte_list_append(&results->instances, &opt->super);
+        pmix_list_append(&results->instances, &opt->super);
     }
 
     if (report) {
@@ -155,11 +155,11 @@ int prte_schizo_base_add_directive(prte_cli_result_t *results,
 }
 
 /* add qualifier to a PRRTE option that takes a single value */
-int prte_schizo_base_add_qualifier(prte_cli_result_t *results,
+int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
                                    char *deprecated, char *target,
                                    char *qualifier, bool report)
 {
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
     char *ptr, *tmp;
 
     /* does the matching key already exist? */
@@ -193,12 +193,12 @@ int prte_schizo_base_add_qualifier(prte_cli_result_t *results,
         }
     } else {
         // add the new option
-        opt = PRTE_NEW(prte_cli_item_t);
+        opt = PMIX_NEW(pmix_cli_item_t);
         opt->key = strdup(target);
         pmix_asprintf(&tmp, ":%s", qualifier);
         pmix_argv_append_nosize(&opt->values, tmp);
         free(tmp);
-        prte_list_append(&results->instances, &opt->super);
+        pmix_list_append(&results->instances, &opt->super);
     }
 
     if (report) {

@@ -40,18 +40,18 @@
 #endif
 #include <pmix_server.h>
 
-#include "src/class/prte_hotel.h"
+#include "src/class/pmix_hotel.h"
 #include "src/event/event-internal.h"
 #include "src/mca/base/base.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/sys/atomic.h"
+#include "src/include/pmix_atomic.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "types.h"
 
 #include "src/mca/grpcomm/base/base.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 BEGIN_C_DECLS
 
@@ -79,7 +79,7 @@ BEGIN_C_DECLS
 /* object for tracking requests so we can
  * correctly route the eventual reply */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_event_t ev;
     char *operation;
     char *cmdline;
@@ -112,11 +112,11 @@ typedef struct {
     pmix_tool_connection_cbfunc_t toolcbfunc;
     void *cbdata;
 } pmix_server_req_t;
-PRTE_CLASS_DECLARATION(pmix_server_req_t);
+PMIX_CLASS_DECLARATION(pmix_server_req_t);
 
 /* object for thread-shifting server operations */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_event_t ev;
     pmix_status_t status;
     pmix_status_t *codes;
@@ -143,10 +143,10 @@ typedef struct {
     pmix_spawn_cbfunc_t spcbfunc;
     void *cbdata;
 } prte_pmix_server_op_caddy_t;
-PRTE_CLASS_DECLARATION(prte_pmix_server_op_caddy_t);
+PMIX_CLASS_DECLARATION(prte_pmix_server_op_caddy_t);
 
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_grpcomm_signature_t *sig;
     pmix_data_buffer_t *buf;
     pmix_modex_cbfunc_t cbfunc;
@@ -157,19 +157,19 @@ typedef struct {
     size_t ninfo;
     void *cbdata;
 } prte_pmix_mdx_caddy_t;
-PRTE_CLASS_DECLARATION(prte_pmix_mdx_caddy_t);
+PMIX_CLASS_DECLARATION(prte_pmix_mdx_caddy_t);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     pmix_proc_t name;
     char *nsdir;
 } prte_pmix_tool_t;
-PRTE_CLASS_DECLARATION(prte_pmix_tool_t);
+PMIX_CLASS_DECLARATION(prte_pmix_tool_t);
 
 #define PRTE_IO_OP(t, nt, b, fn, cfn, cbd)                                         \
     do {                                                                           \
         prte_pmix_server_op_caddy_t *_cd;                                          \
-        _cd = PRTE_NEW(prte_pmix_server_op_caddy_t);                               \
+        _cd = PMIX_NEW(prte_pmix_server_op_caddy_t);                               \
         _cd->procs = (pmix_proc_t *) (t);                                          \
         _cd->nprocs = (nt);                                                        \
         _cd->server_object = (void *) (b);                                         \
@@ -177,14 +177,14 @@ PRTE_CLASS_DECLARATION(prte_pmix_tool_t);
         _cd->cbdata = (cbd);                                                       \
         prte_event_set(prte_event_base, &(_cd->ev), -1, PRTE_EV_WRITE, (fn), _cd); \
         prte_event_set_priority(&(_cd->ev), PRTE_MSG_PRI);                         \
-        PRTE_POST_OBJECT(_cd);                                                     \
+        PMIX_POST_OBJECT(_cd);                                                     \
         prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);                           \
     } while (0);
 
 #define PRTE_DMX_REQ(p, i, ni, cf, ocf, ocd)                                         \
     do {                                                                             \
         pmix_server_req_t *_req;                                                     \
-        _req = PRTE_NEW(pmix_server_req_t);                                          \
+        _req = PMIX_NEW(pmix_server_req_t);                                          \
         pmix_asprintf(&_req->operation, "DMDX: %s:%d", __FILE__, __LINE__);          \
         memcpy(&_req->tproc, (p), sizeof(pmix_proc_t));                              \
         _req->info = (pmix_info_t *) (i);                                            \
@@ -193,28 +193,28 @@ PRTE_CLASS_DECLARATION(prte_pmix_tool_t);
         _req->cbdata = (ocd);                                                        \
         prte_event_set(prte_event_base, &(_req->ev), -1, PRTE_EV_WRITE, (cf), _req); \
         prte_event_set_priority(&(_req->ev), PRTE_MSG_PRI);                          \
-        PRTE_POST_OBJECT(_req);                                                      \
+        PMIX_POST_OBJECT(_req);                                                      \
         prte_event_active(&(_req->ev), PRTE_EV_WRITE, 1);                            \
     } while (0);
 
 #define PRTE_SPN_REQ(j, cf, ocf, ocd)                                                \
     do {                                                                             \
         pmix_server_req_t *_req;                                                     \
-        _req = PRTE_NEW(pmix_server_req_t);                                          \
+        _req = PMIX_NEW(pmix_server_req_t);                                          \
         pmix_asprintf(&_req->operation, "SPAWN: %s:%d", __FILE__, __LINE__);         \
         _req->jdata = (j);                                                           \
         _req->spcbfunc = (ocf);                                                      \
         _req->cbdata = (ocd);                                                        \
         prte_event_set(prte_event_base, &(_req->ev), -1, PRTE_EV_WRITE, (cf), _req); \
         prte_event_set_priority(&(_req->ev), PRTE_MSG_PRI);                          \
-        PRTE_POST_OBJECT(_req);                                                      \
+        PMIX_POST_OBJECT(_req);                                                      \
         prte_event_active(&(_req->ev), PRTE_EV_WRITE, 1);                            \
     } while (0);
 
 #define PRTE_PMIX_OPERATION(p, np, i, ni, fn, cf, cb)                              \
     do {                                                                           \
         prte_pmix_server_op_caddy_t *_cd;                                          \
-        _cd = PRTE_NEW(prte_pmix_server_op_caddy_t);                               \
+        _cd = PMIX_NEW(prte_pmix_server_op_caddy_t);                               \
         _cd->procs = (pmix_proc_t *) (p);                                          \
         _cd->nprocs = (np);                                                        \
         _cd->info = (pmix_info_t *) (i);                                           \
@@ -223,14 +223,14 @@ PRTE_CLASS_DECLARATION(prte_pmix_tool_t);
         _cd->cbdata = (cb);                                                        \
         prte_event_set(prte_event_base, &(_cd->ev), -1, PRTE_EV_WRITE, (fn), _cd); \
         prte_event_set_priority(&(_cd->ev), PRTE_MSG_PRI);                         \
-        PRTE_POST_OBJECT(_cd);                                                     \
+        PMIX_POST_OBJECT(_cd);                                                     \
         prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);                           \
     } while (0);
 
 #define PRTE_PMIX_THREADSHIFT(p, s, st, m, pl, pn, fn, cf, cb)                     \
     do {                                                                           \
         prte_pmix_server_op_caddy_t *_cd;                                          \
-        _cd = PRTE_NEW(prte_pmix_server_op_caddy_t);                               \
+        _cd = PMIX_NEW(prte_pmix_server_op_caddy_t);                               \
         PMIX_LOAD_PROCID(&_cd->proc, (p)->nspace, (p)->rank);                      \
         _cd->server_object = (s);                                                  \
         _cd->status = (st);                                                        \
@@ -241,7 +241,7 @@ PRTE_CLASS_DECLARATION(prte_pmix_tool_t);
         _cd->cbdata = (cb);                                                        \
         prte_event_set(prte_event_base, &(_cd->ev), -1, PRTE_EV_WRITE, (fn), _cd); \
         prte_event_set_priority(&(_cd->ev), PRTE_MSG_PRI);                         \
-        PRTE_POST_OBJECT(_cd);                                                     \
+        PMIX_POST_OBJECT(_cd);                                                     \
         prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);                           \
     } while (0);
 
@@ -352,31 +352,31 @@ PRTE_EXPORT extern int prte_pmix_server_register_tool(pmix_nspace_t nspace);
 
 /* exposed shared variables */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     char *name;
     pmix_proc_t *members;
     size_t num_members;
 } pmix_server_pset_t;
-PRTE_CLASS_DECLARATION(pmix_server_pset_t);
+PMIX_CLASS_DECLARATION(pmix_server_pset_t);
 
 typedef struct {
     bool initialized;
     int verbosity;
     int output;
-    prte_hotel_t reqs;
+    pmix_hotel_t reqs;
     int num_rooms;
     int timeout;
     bool wait_for_server;
     pmix_proc_t server;
-    prte_list_t notifications;
+    pmix_list_t notifications;
     bool pubsub_init;
     bool session_server;
     bool system_server;
     char *report_uri;
     char *singleton;
     pmix_device_type_t generate_dist;
-    prte_list_t tools;
-    prte_list_t psets;
+    pmix_list_t tools;
+    pmix_list_t psets;
 } pmix_server_globals_t;
 
 extern pmix_server_globals_t prte_pmix_server_globals;

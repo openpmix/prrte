@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,15 +37,15 @@
 
 #include "oob_tcp.h"
 #include "oob_tcp_peer.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 /* State machine for connection operations */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_oob_tcp_peer_t *peer;
     prte_event_t ev;
 } prte_oob_tcp_conn_op_t;
-PRTE_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
+PMIX_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
 
 #define CLOSE_THE_SOCKET(socket) \
     do {                         \
@@ -59,18 +59,18 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
         prte_output_verbose(5, prte_oob_base_framework.framework_output,                    \
                             "%s:[%s:%d] connect to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT((&(p)->name)));             \
-        cop = PRTE_NEW(prte_oob_tcp_conn_op_t);                                             \
+        cop = PMIX_NEW(prte_oob_tcp_conn_op_t);                                             \
         cop->peer = (p);                                                                    \
-        PRTE_THREADSHIFT(cop, prte_event_base, (cbfunc), PRTE_MSG_PRI);                     \
+        PMIX_THREADSHIFT(cop, prte_event_base, (cbfunc), PRTE_MSG_PRI);                     \
     } while (0);
 
 #define PRTE_ACTIVATE_TCP_ACCEPT_STATE(s, a, cbfunc)                               \
     do {                                                                           \
         prte_oob_tcp_conn_op_t *cop;                                               \
-        cop = PRTE_NEW(prte_oob_tcp_conn_op_t);                                    \
+        cop = PMIX_NEW(prte_oob_tcp_conn_op_t);                                    \
         prte_event_set(prte_event_base, &cop->ev, s, PRTE_EV_READ, (cbfunc), cop); \
         prte_event_set_priority(&cop->ev, PRTE_MSG_PRI);                           \
-        PRTE_POST_OBJECT(cop);                                                     \
+        PMIX_POST_OBJECT(cop);                                                     \
         prte_event_add(&cop->ev, 0);                                               \
     } while (0);
 
@@ -80,10 +80,10 @@ PRTE_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
         prte_output_verbose(5, prte_oob_base_framework.framework_output,                          \
                             "%s:[%s:%d] retry connect to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT((&(p)->name)));                   \
-        cop = PRTE_NEW(prte_oob_tcp_conn_op_t);                                                   \
+        cop = PMIX_NEW(prte_oob_tcp_conn_op_t);                                                   \
         cop->peer = (p);                                                                          \
         prte_event_evtimer_set(prte_event_base, &cop->ev, (cbfunc), cop);                         \
-        PRTE_POST_OBJECT(cop);                                                                    \
+        PMIX_POST_OBJECT(cop);                                                                    \
         prte_event_evtimer_add(&cop->ev, (tv));                                                   \
     } while (0);
 

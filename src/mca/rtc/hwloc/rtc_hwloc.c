@@ -35,16 +35,16 @@
 #    include <fcntl.h>
 #endif
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/hwloc/hwloc-internal.h"
 #if HWLOC_API_VERSION >= 0x20000
 #    include "hwloc/shmem.h"
 #endif
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/fd.h"
-#include "src/util/path.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_fd.h"
+#include "src/util/pmix_path.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/odls/base/odls_private.h"

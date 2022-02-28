@@ -21,7 +21,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -110,10 +110,10 @@
 #    include <dirent.h>
 #endif
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/util/fd.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_fd.h"
+#include "src/util/pmix_environ.h"
 #include "src/util/show_help.h"
 #include "src/util/sys_limits.h"
 
@@ -136,7 +136,7 @@
  * Module functions (function pointers used in a struct)
  */
 static int prte_odls_alps_launch_local_procs(pmix_data_buffer_t *data);
-static int prte_odls_alps_kill_local_procs(prte_pointer_array_t *procs);
+static int prte_odls_alps_kill_local_procs(pmix_pointer_array_t *procs);
 static int prte_odls_alps_signal_local_procs(const pmix_proc_t *proc, int32_t signal);
 static int prte_odls_alps_restart_proc(prte_proc_t *child);
 
@@ -188,7 +188,7 @@ static int odls_alps_kill_local(pid_t pid, int signum)
     return 0;
 }
 
-int prte_odls_alps_kill_local_procs(prte_pointer_array_t *procs)
+int prte_odls_alps_kill_local_procs(pmix_pointer_array_t *procs)
 {
     int rc;
 
@@ -240,18 +240,18 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
     msg->msg_str_len = (int) strlen(str);
 
     /* Only keep writing if each write() succeeds */
-    if (PRTE_SUCCESS != (ret = prte_fd_write(fd, sizeof(*msg), msg))) {
+    if (PRTE_SUCCESS != (ret = pmix_fd_write(fd, sizeof(*msg), msg))) {
         goto out;
     }
     if (msg->file_str_len > 0
-        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->file_str_len, file))) {
+        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->file_str_len, file))) {
         goto out;
     }
     if (msg->topic_str_len > 0
-        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->topic_str_len, topic))) {
+        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->topic_str_len, topic))) {
         goto out;
     }
-    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->msg_str_len, str))) {
+    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->msg_str_len, str))) {
         goto out;
     }
 
@@ -346,7 +346,7 @@ static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
     sigset_t sigs;
 
     /* Setup the pipe to be close-on-exec */
-    prte_fd_set_cloexec(write_fd);
+    pmix_fd_set_cloexec(write_fd);
 
     if (NULL != cd->child) {
         /* setup stdout/stderr so that any error messages that we
@@ -460,21 +460,23 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
 
     /* Block reading a message from the pipe */
     while (1) {
-        rc = prte_fd_read(read_fd, sizeof(msg), &msg);
+        rc = pmix_fd_read(read_fd, sizeof(msg), &msg);
 
         /* If the pipe closed, then the child successfully launched */
-        if (PRTE_ERR_TIMEOUT == rc) {
+        if (PMIX_ERR_TIMEOUT == rc) {
+            rc = prte_pmix_convert_status(rc);
             break;
         }
 
         /* If Something Bad happened in the read, error out */
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             close(read_fd);
 
             if (NULL != cd->child) {
                 cd->child->state = PRTE_PROC_STATE_UNDEF;
             }
+            rc = prte_pmix_convert_status(rc);
             return rc;
         }
 
@@ -489,27 +491,29 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
 
         /* Read in the strings; ensure to terminate them with \0 */
         if (msg.file_str_len > 0) {
-            rc = prte_fd_read(read_fd, msg.file_str_len, file);
-            if (PRTE_SUCCESS != rc) {
+            rc = pmix_fd_read(read_fd, msg.file_str_len, file);
+            if (PMIX_SUCCESS != rc) {
                 prte_show_help("help-prte-odls-alps.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app, "prte_fd_read", __FILE__,
+                               prte_process_info.nodename, cd->app, "pmix_fd_read", __FILE__,
                                __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
+                rc = prte_pmix_convert_status(rc);
                 return rc;
             }
             file[msg.file_str_len] = '\0';
         }
         if (msg.topic_str_len > 0) {
-            rc = prte_fd_read(read_fd, msg.topic_str_len, topic);
-            if (PRTE_SUCCESS != rc) {
+            rc = pmix_fd_read(read_fd, msg.topic_str_len, topic);
+            if (PMIX_SUCCESS != rc) {
                 prte_show_help("help-prte-odls-alps.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app, "prte_fd_read", __FILE__,
+                               prte_process_info.nodename, cd->app, "pmix_fd_read", __FILE__,
                                __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
+                rc = prte_pmix_convert_status(rc);
                 return rc;
             }
             topic[msg.topic_str_len] = '\0';
@@ -518,14 +522,14 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
             str = calloc(1, msg.msg_str_len + 1);
             if (NULL == str) {
                 prte_show_help("help-prte-odls-alps.txt", "syscall fail", true,
-                               prte_process_info.nodename, cd->app, "prte_fd_read", __FILE__,
+                               prte_process_info.nodename, cd->app, "pmix_fd_read", __FILE__,
                                __LINE__);
                 if (NULL != cd->child) {
                     cd->child->state = PRTE_PROC_STATE_UNDEF;
                 }
                 return rc;
             }
-            rc = prte_fd_read(read_fd, msg.msg_str_len, str);
+            rc = pmix_fd_read(read_fd, msg.msg_str_len, str);
         }
 
         /* Print out what we got.  We already have a rendered string,

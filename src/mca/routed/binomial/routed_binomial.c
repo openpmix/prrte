@@ -6,7 +6,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,8 +19,8 @@
 
 #include <stddef.h>
 
-#include "src/class/prte_bitmap.h"
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_bitmap.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/util/bit_ops.h"
 #include "src/util/output.h"
 
@@ -46,7 +46,7 @@ static pmix_proc_t get_route(pmix_proc_t *target);
 static int route_lost(const pmix_proc_t *route);
 static bool route_is_defined(const pmix_proc_t *target);
 static void update_routing_plan(void);
-static void get_routing_list(prte_list_t *coll);
+static void get_routing_list(pmix_list_t *coll);
 static int set_lifeline(pmix_proc_t *proc);
 static size_t num_routes(void);
 static int get_num_contributors(pmix_rank_t *dmns, size_t ndmns);
@@ -70,7 +70,7 @@ prte_routed_module_t prte_routed_binomial_module = {
 static pmix_proc_t *lifeline = NULL;
 static pmix_proc_t local_lifeline;
 static int num_children;
-static prte_list_t my_children;
+static pmix_list_t my_children;
 static bool hnp_direct = true;
 
 static int init(void)
@@ -87,7 +87,7 @@ static int init(void)
     PMIX_LOAD_NSPACE(PRTE_PROC_MY_PARENT->nspace, PRTE_PROC_MY_NAME->nspace);
 
     /* setup the list of children */
-    PRTE_CONSTRUCT(&my_children, prte_list_t);
+    PMIX_CONSTRUCT(&my_children, pmix_list_t);
     num_children = 0;
 
     return PRTE_SUCCESS;
@@ -95,15 +95,15 @@ static int init(void)
 
 static int finalize(void)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
 
     lifeline = NULL;
 
     /* deconstruct the list of children */
-    while (NULL != (item = prte_list_remove_first(&my_children))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&my_children))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&my_children);
+    PMIX_DESTRUCT(&my_children);
     num_children = 0;
 
     return PRTE_SUCCESS;
@@ -153,7 +153,7 @@ static int update_route(pmix_proc_t *target, pmix_proc_t *route)
 static pmix_proc_t get_route(pmix_proc_t *target)
 {
     pmix_proc_t *ret, daemon;
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_routed_tree_t *child;
 
     if (!prte_routing_is_enabled) {
@@ -206,8 +206,8 @@ static pmix_proc_t get_route(pmix_proc_t *target)
     }
 
     /* search routing tree for next step to that daemon */
-    for (item = prte_list_get_first(&my_children); item != prte_list_get_end(&my_children);
-         item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&my_children); item != pmix_list_get_end(&my_children);
+         item = pmix_list_get_next(item)) {
         child = (prte_routed_tree_t *) item;
         if (child->rank == daemon.rank) {
             /* the child is hosting the proc - just send it there */
@@ -215,7 +215,7 @@ static pmix_proc_t get_route(pmix_proc_t *target)
             goto found;
         }
         /* otherwise, see if the daemon we need is below the child */
-        if (prte_bitmap_is_set_bit(&child->relatives, daemon.rank)) {
+        if (pmix_bitmap_is_set_bit(&child->relatives, daemon.rank)) {
             /* yep - we need to step through this child */
             daemon.rank = child->rank;
 
@@ -241,7 +241,7 @@ found:
 
 static int route_lost(const pmix_proc_t *route)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_routed_tree_t *child;
 
     PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output, "%s route to %s lost",
@@ -264,15 +264,15 @@ static int route_lost(const pmix_proc_t *route)
      * remove it from the child list
      */
     if (PMIX_CHECK_NSPACE(route->nspace, PRTE_PROC_MY_NAME->nspace)) {
-        for (item = prte_list_get_first(&my_children); item != prte_list_get_end(&my_children);
-             item = prte_list_get_next(item)) {
+        for (item = pmix_list_get_first(&my_children); item != pmix_list_get_end(&my_children);
+             item = pmix_list_get_next(item)) {
             child = (prte_routed_tree_t *) item;
             if (child->rank == route->rank) {
                 PRTE_OUTPUT_VERBOSE((4, prte_routed_base_framework.framework_output,
                                      "%s routed_binomial: removing route to child daemon %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(route)));
-                prte_list_remove_item(&my_children, item);
-                PRTE_RELEASE(item);
+                pmix_list_remove_item(&my_children, item);
+                PMIX_RELEASE(item);
                 return PRTE_SUCCESS;
             }
         }
@@ -304,11 +304,11 @@ static int set_lifeline(pmix_proc_t *proc)
 }
 
 static int binomial_tree(int rank, int parent, int me, int num_procs, int *nchildren,
-                         prte_list_t *childrn, prte_bitmap_t *relatives, bool mine)
+                         pmix_list_t *childrn, pmix_bitmap_t *relatives, bool mine)
 {
     int i, bitmap, peer, hibit, mask, found;
     prte_routed_tree_t *child;
-    prte_bitmap_t *relations;
+    pmix_bitmap_t *relations;
 
     PRTE_OUTPUT_VERBOSE((3, prte_routed_base_framework.framework_output,
                          "%s routed:binomial rank %d parent %d me %d num_procs %d",
@@ -324,7 +324,7 @@ static int binomial_tree(int rank, int parent, int me, int num_procs, int *nchil
         for (i = hibit + 1, mask = 1 << i; i <= bitmap; ++i, mask <<= 1) {
             peer = rank | mask;
             if (peer < num_procs) {
-                child = PRTE_NEW(prte_routed_tree_t);
+                child = PMIX_NEW(prte_routed_tree_t);
                 child->rank = peer;
                 PRTE_OUTPUT_VERBOSE((3, prte_routed_base_framework.framework_output,
                                      "%s routed:binomial %d found child %s",
@@ -333,16 +333,16 @@ static int binomial_tree(int rank, int parent, int me, int num_procs, int *nchil
 
                 if (mine) {
                     /* this is a direct child - add it to my list */
-                    prte_list_append(childrn, &child->super);
+                    pmix_list_append(childrn, &child->super);
                     (*nchildren)++;
                     /* setup the relatives bitmap */
-                    prte_bitmap_init(&child->relatives, num_procs);
+                    pmix_bitmap_init(&child->relatives, num_procs);
 
                     /* point to the relatives */
                     relations = &child->relatives;
                 } else {
                     /* we are recording someone's relatives - set the bit */
-                    prte_bitmap_set_bit(relatives, peer);
+                    pmix_bitmap_set_bit(relatives, peer);
                     /* point to this relations */
                     relations = relatives;
                 }
@@ -388,11 +388,11 @@ static void update_routing_plan(void)
 {
     prte_routed_tree_t *child;
     int j;
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
 
     /* clear the list of children if any are already present */
-    while (NULL != (item = prte_list_remove_first(&my_children))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&my_children))) {
+        PMIX_RELEASE(item);
     }
     num_children = 0;
 
@@ -406,12 +406,12 @@ static void update_routing_plan(void)
     if (0 < prte_output_get_verbosity(prte_routed_base_framework.framework_output)) {
         prte_output(0, "%s: parent %u num_children %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     PRTE_PROC_MY_PARENT->rank, num_children);
-        for (item = prte_list_get_first(&my_children); item != prte_list_get_end(&my_children);
-             item = prte_list_get_next(item)) {
+        for (item = pmix_list_get_first(&my_children); item != pmix_list_get_end(&my_children);
+             item = pmix_list_get_next(item)) {
             child = (prte_routed_tree_t *) item;
             prte_output(0, "%s: \tchild %u", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), child->rank);
             for (j = 0; j < (int) prte_process_info.num_daemons; j++) {
-                if (prte_bitmap_is_set_bit(&child->relatives, j)) {
+                if (pmix_bitmap_is_set_bit(&child->relatives, j)) {
                     prte_output(0, "%s: \t\trelation %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), j);
                 }
             }
@@ -419,7 +419,7 @@ static void update_routing_plan(void)
     }
 }
 
-static void get_routing_list(prte_list_t *coll)
+static void get_routing_list(pmix_list_t *coll)
 {
 
     prte_routed_base_xcast_routing(coll, &my_children);
@@ -429,8 +429,8 @@ static size_t num_routes(void)
 {
     PRTE_OUTPUT_VERBOSE((2, prte_routed_base_framework.framework_output, "%s num routes %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (int) prte_list_get_size(&my_children)));
-    return prte_list_get_size(&my_children);
+                         (int) pmix_list_get_size(&my_children)));
+    return pmix_list_get_size(&my_children);
 }
 
 static int get_num_contributors(pmix_rank_t *dmns, size_t ndmns)
@@ -439,13 +439,13 @@ static int get_num_contributors(pmix_rank_t *dmns, size_t ndmns)
     prte_routed_tree_t *child;
 
     if (NULL == dmns) {
-        return prte_list_get_size(&my_children);
+        return pmix_list_get_size(&my_children);
     }
 
     n = 0;
-    PRTE_LIST_FOREACH(child, &my_children, prte_routed_tree_t) {
+    PMIX_LIST_FOREACH(child, &my_children, prte_routed_tree_t) {
         for (j = 0; j < (int) ndmns; j++) {
-            if (prte_bitmap_is_set_bit(&child->relatives, dmns[j])) {
+            if (pmix_bitmap_is_set_bit(&child->relatives, dmns[j])) {
                 n++;
                 break;
             }
