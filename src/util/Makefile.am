@@ -48,7 +48,6 @@ headers = \
         bipartite_graph_internal.h \
         bit_ops.h \
         prte_cmd_line.h \
-        context_fns.h \
         crc.h \
         daemon_init.h \
         dash_host/dash_host.h \
@@ -73,7 +72,6 @@ libprrteutil_la_SOURCES = \
         $(headers) \
         attr.c \
         bipartite_graph.c \
-        context_fns.c \
         crc.c \
         daemon_init.c \
         dash_host/dash_host.c \
