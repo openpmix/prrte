@@ -51,7 +51,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
-#include "src/util/keyval_parse.h"
+#include "src/util/pmix_keyval_parse.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
 #include "src/util/pmix_path.h"
@@ -319,7 +319,7 @@ int prte_mca_base_var_init(void)
 
         filelist = pmix_argv_split(prte_mca_base_var_files, ';');
         for (n=0; NULL != filelist[n]; n++) {
-            ret = prte_util_keyval_parse(filelist[n], save_value);
+            ret = pmix_util_keyval_parse(filelist[n], save_value);
             if (PRTE_SUCCESS != ret && PRTE_ERR_NOT_FOUND != ret) {
                 PRTE_ERROR_LOG(ret);
                 pmix_argv_free(filelist);

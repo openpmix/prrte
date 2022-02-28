@@ -51,7 +51,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/error.h"
 #include "src/util/pmix_few.h"
-#include "src/util/keyval_parse.h"
+#include "src/util/pmix_keyval_parse.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
@@ -341,7 +341,7 @@ static int data_init(const char *appname)
     if (NULL == datafile)
         return PRTE_ERR_TEMP_OUT_OF_RESOURCE;
 
-    ret = prte_util_keyval_parse(datafile, data_callback);
+    ret = pmix_util_keyval_parse(datafile, data_callback);
     if (PRTE_SUCCESS != ret) {
         fprintf(stderr, "Cannot open configuration file %s\n", datafile);
     }

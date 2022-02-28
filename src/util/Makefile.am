@@ -25,7 +25,7 @@
 # $HEADER$
 #
 
-SUBDIRS = keyval hostfile
+SUBDIRS = hostfile
 
 dist_prtedata_DATA = help-prte-util.txt \
                      help-cli.txt \
@@ -54,7 +54,6 @@ headers = \
         error_strings.h \
         ethtool.h \
         error.h \
-        keyval_parse.h \
         malloc.h \
         name_fns.h \
         nidmap.h \
@@ -78,7 +77,6 @@ libprrteutil_la_SOURCES = \
         error_strings.c \
         ethtool.c \
         error.c \
-        keyval_parse.c \
         malloc.c \
         name_fns.c \
         nidmap.c \
@@ -93,10 +91,8 @@ libprrteutil_la_SOURCES = \
         uri.c
 
 libprrteutil_la_LIBADD = \
-        keyval/libprrteutilkeyval.la \
         hostfile/libprrteutilhostfile.la
 libprrteutil_la_DEPENDENCIES = \
-        keyval/libprrteutilkeyval.la \
         hostfile/libprrteutilhostfile.la
 
 # Conditionally install the header files
