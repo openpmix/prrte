@@ -23,7 +23,6 @@ AC_DEFUN([PRTE_CONFIG_FILES],[
         src/util/Makefile
         src/util/hostfile/Makefile
         src/tools/pcc/Makefile
-        src/tools/pcc/pcc-wrapper-data.txt
         src/tools/prted/Makefile
         src/tools/prun/Makefile
         src/tools/prte_info/Makefile

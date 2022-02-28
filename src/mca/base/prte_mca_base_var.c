@@ -320,10 +320,10 @@ int prte_mca_base_var_init(void)
         filelist = pmix_argv_split(prte_mca_base_var_files, ';');
         for (n=0; NULL != filelist[n]; n++) {
             ret = pmix_util_keyval_parse(filelist[n], save_value);
-            if (PRTE_SUCCESS != ret && PRTE_ERR_NOT_FOUND != ret) {
-                PRTE_ERROR_LOG(ret);
+            if (PMIX_SUCCESS != ret && PMIX_ERR_NOT_FOUND != ret) {
+                PMIX_ERROR_LOG(ret);
                 pmix_argv_free(filelist);
-                return ret;
+                return prte_pmix_convert_status(ret);
             }
         }
         pmix_argv_free(filelist);
