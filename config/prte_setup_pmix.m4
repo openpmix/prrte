@@ -37,9 +37,9 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     AC_ARG_WITH([pmix-libdir],
                 [AS_HELP_STRING([--with-pmix-libdir=DIR],
                                 [Look for libpmix in the given directory DIR, DIR/lib or DIR/lib64])])
-    AC_ARG_ENABLE([pmix-devel-support],
-                  [AS_HELP_STRING([--enable-pmix-devel-support],
-                                  [Add necessary flags to enable access to PMIx devel headers])])
+    AC_ARG_WITH([pmix-incdir],
+                 [AS_HELP_STRING([--with-pmix-incdir],
+                                 [Look for PMIx devel headers in the given directory])])
     AC_ARG_WITH([pmix-extra-libs],
                 [AS_HELP_STRING([--with-pmix-extra-libs=LIBS],
                                 [Add LIBS as dependencies of pmix])])
@@ -57,6 +57,9 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
     AS_IF([test "$with_pmix_extra_libs" = "yes" -o "$with_pmix_extra_libs" = "no"],
 	  [AC_MSG_ERROR([--with-pmix-extra-libs requires an argument other than yes or no])])
+
+    AS_IF([test "$with_pmix_incdir" = "yes" -o "$with_pmix_incdir" = "no"],
+	  [AC_MSG_ERROR([--with-pmix-incdir requires an argument other than yes or no])])
 
     # get rid of any trailing slash(es)
     pmix_prefix=$(echo $with_pmix | sed -e 'sX/*$XXg')
@@ -106,10 +109,15 @@ echo "--> $pmix_ext_install_libdir"
     if test ! -z "$pmix_ext_install_dir"; then
         prte_pmix_CPPFLAGS="$prte_pmix_CPPFLAGS -I$pmix_ext_install_dir/include/pmix"
     else
-        # need to figure out what to do if PMIx was installed in
-        # a standard location - still need to add the "pmix"
-        # extension, but what do we add it to?
-        prte_pmix_CPPFLAGS="$prte_pmix_CPPFLAGS -I/usr/include/pmix"
+        # if PMIx was installed in a standard location, then we must
+        # be given the location of the PMIx implementation headers
+        if test -z "$with_pmix_incdir"; then
+            AC_MSG_WARN([When building with PMIx installed in a standard])
+            AC_MSG_WARN([location, you must specify where the PMIx implementation])
+            AC_MSG_WARN([headers can be found using the --with-pmix-incdir option.])
+            AC_MSG_ERROR([Cannot continue.])
+        fi
+        prte_pmix_CPPFLAGS="$prte_pmix_CPPFLAGS -I$with_pmix_incdir"
     fi
 
     prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
@@ -130,30 +138,18 @@ echo "--> $pmix_ext_install_libdir"
 
     # if the version file exists, then we need to parse it to find
     # the actual release series
-    AC_MSG_CHECKING([version 4x])
+    AC_MSG_CHECKING([version 5x])
     AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
                                         #include <pmix_version.h>
-                                        #if (PMIX_VERSION_MAJOR < 4L)
-                                        #error "not version 4 or above"
+                                        #if (PMIX_VERSION_MAJOR < 5L)
+                                        #error "not version 5 or above"
                                         #endif
                                        ], [])],
                       [AC_MSG_RESULT([found])
-                       prte_external_pmix_version=4x
-                       prte_external_pmix_version_found=4],
+                       prte_external_pmix_version=5x
+                       prte_external_pmix_version_found=5],
                       [AC_MSG_RESULT([not found])
                        prte_external_pmix_version_found=0])
-
-    AS_IF([test "$prte_external_pmix_version_found" = "4"],
-          [AC_MSG_CHECKING([version 4.1 or greater])
-            AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
-                                                #include <pmix_version.h>
-                                                #if (PMIX_VERSION_MAJOR == 4L && PMIX_VERSION_MINOR < 1L)
-                                                #error "not version 4.1 or above"
-                                                #endif
-                                               ], [])],
-                              [AC_MSG_RESULT([found])],
-                              [AC_MSG_RESULT([not found])
-                               prte_external_pmix_version_found=0])])
 
     # restore the global flags
     CPPFLAGS=$prte_external_pmix_save_CPPFLAGS
@@ -162,8 +158,8 @@ echo "--> $pmix_ext_install_libdir"
 
     AS_IF([test "$prte_external_pmix_version_found" = "0"],
           [AC_MSG_WARN([PRTE does not support PMIx versions])
-           AC_MSG_WARN([less than v4.1 as only PMIx-based tools can])
-           AC_MSG_WARN([can connect to the server.])
+           AC_MSG_WARN([less than v5.0 as it requires access])
+           AC_MSG_WARN([to the internal PMIx library headers.])
            AC_MSG_ERROR([Please select a newer version and configure again])])
 
     if test ! -z "$prte_pmix_CPPFLAGS"; then
