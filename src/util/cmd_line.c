@@ -111,7 +111,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
 
     /* reset the parser - must be done each time we use it
      * to avoid hysteresis */
-    optind = 0;
+    optind = 1;
     opterr = 0;
     optopt = 0;
     optarg = NULL;
@@ -119,6 +119,11 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
     // run the parser
     while (1) {
         argind = optind;
+        // This is the executable, or we are at the last argument.
+        // Don't process any further.
+        if (optind == argc || '-' != argv[optind][0]) {
+            break;
+        }
         opt = getopt_long(argc, argv, shorts, myoptions, &option_index);
         if (-1 == opt) {
             break;
