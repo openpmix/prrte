@@ -79,7 +79,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
-#include "src/util/context_fns.h"
+#include "src/util/pmix_context_fns.h"
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"
 #include "src/util/proc_info.h"
@@ -859,6 +859,7 @@ static int setup_path(prte_app_context_t *app, char **wdir)
     int rc = PRTE_SUCCESS;
     char dir[MAXPATHLEN];
     char *session_dir;
+    bool usercwd = false;
 
     if (prte_get_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, NULL, PMIX_BOOL)) {
         /* move us to that location */
@@ -885,8 +886,12 @@ static int setup_path(prte_app_context_t *app, char **wdir)
            exists and is executable The function will
            take care of outputting a pretty error message, if required
         */
-        if (PRTE_SUCCESS != (rc = prte_util_check_context_cwd(app, true))) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_USER_CWD, NULL, PMIX_BOOL)) {
+            usercwd = true;
+        }
+        if (PMIX_SUCCESS != (rc = pmix_util_check_context_cwd(&app->cwd, true, usercwd))) {
             /* do not ERROR_LOG - it will be reported elsewhere */
+            rc = prte_pmix_convert_status(rc);
             goto CLEANUP;
         }
 
@@ -1370,12 +1375,12 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             argvptr = app->env;
         }
 
-        rc = prte_util_check_context_app(app, argvptr);
+        rc = pmix_util_check_context_app(&app->app, app->cwd, argvptr);
         /* do not ERROR_LOG - it will be reported elsewhere */
         if (NULL != mpiexec_pathenv) {
             pmix_argv_free(argvptr);
         }
-        if (PRTE_SUCCESS != rc) {
+        if (PMIX_SUCCESS != rc) {
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
                 child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, idx);
