@@ -88,7 +88,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
     pmix_cli_item_t *opt;
 
     prte_info_components_open();
-    opt = prte_cmd_line_get_param(&prte_info_cmd_line, "param");
+    opt = pmix_cmd_line_get_param(&prte_info_cmd_line, "param");
 
     if (want_all_in) {
         want_all = true;
@@ -235,7 +235,7 @@ void prte_info_do_path(bool want_all)
     pmix_cli_item_t *opt;
 
     /* Check bozo case */
-    opt = prte_cmd_line_get_param(&prte_info_cmd_line, "path");
+    opt = pmix_cmd_line_get_param(&prte_info_cmd_line, "path");
     if (NULL != opt) {
         for (i=0; NULL != opt->values[i]; i++) {
             scope = opt->values[i];

@@ -49,7 +49,7 @@
 #include "src/prted/pmix/pmix_server.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/cmd_line.h"
+#include "src/util/pmix_cmd_line.h"
 #include "src/util/error.h"
 #include "src/util/pmix_path.h"
 #include "src/util/proc_info.h"
@@ -67,7 +67,7 @@
  */
 
 bool prte_info_pretty = true;
-pmix_cli_result_t prte_info_cmd_line = PRTE_CLI_RESULT_STATIC_INIT;
+pmix_cli_result_t prte_info_cmd_line = PMIX_CLI_RESULT_STATIC_INIT;
 
 const char *prte_info_type_all = "all";
 const char *prte_info_type_prte = "prte";
@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
 
     /* parse the input argv to get values, including everyone's MCA params */
     PMIX_CONSTRUCT(&prte_info_cmd_line, pmix_cli_result_t);
-    ret = schizo->parse_cli(argv, &prte_info_cmd_line, PRTE_CLI_SILENT);
+    ret = schizo->parse_cli(argv, &prte_info_cmd_line, PMIX_CLI_SILENT);
     if (PRTE_SUCCESS != ret) {
         PMIX_DESTRUCT(&prte_info_cmd_line);
         if (PRTE_ERR_SILENT != ret) {
@@ -185,32 +185,32 @@ int main(int argc, char *argv[])
     }
 
     /* Execute the desired action(s) */
-    want_all = prte_cmd_line_is_taken(&prte_info_cmd_line, "all");
+    want_all = pmix_cmd_line_is_taken(&prte_info_cmd_line, "all");
     if (want_all) {
         prte_info_do_version(want_all);
         acted = true;
-    } else if (prte_cmd_line_is_taken(&prte_info_cmd_line, "show-version")) {
+    } else if (pmix_cmd_line_is_taken(&prte_info_cmd_line, "show-version")) {
         prte_info_do_version(false);
         acted = true;
     }
-    if (want_all || prte_cmd_line_is_taken(&prte_info_cmd_line, "path")) {
+    if (want_all || pmix_cmd_line_is_taken(&prte_info_cmd_line, "path")) {
         prte_info_do_path(want_all);
         acted = true;
     }
-    if (want_all || prte_cmd_line_is_taken(&prte_info_cmd_line, "arch")) {
+    if (want_all || pmix_cmd_line_is_taken(&prte_info_cmd_line, "arch")) {
         prte_info_do_arch();
         acted = true;
     }
-    if (want_all || prte_cmd_line_is_taken(&prte_info_cmd_line, "hostname")) {
+    if (want_all || pmix_cmd_line_is_taken(&prte_info_cmd_line, "hostname")) {
         prte_info_do_hostname();
         acted = true;
     }
-    if (want_all || prte_cmd_line_is_taken(&prte_info_cmd_line, "config")) {
+    if (want_all || pmix_cmd_line_is_taken(&prte_info_cmd_line, "config")) {
         prte_info_do_config(true);
         acted = true;
     }
-    if (want_all || prte_cmd_line_is_taken(&prte_info_cmd_line, "param")) {
-        prte_info_do_params(want_all, prte_cmd_line_is_taken(&prte_info_cmd_line, "internal"));
+    if (want_all || pmix_cmd_line_is_taken(&prte_info_cmd_line, "param")) {
+        prte_info_do_params(want_all, pmix_cmd_line_is_taken(&prte_info_cmd_line, "internal"));
         acted = true;
     }
 

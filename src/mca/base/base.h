@@ -41,7 +41,6 @@
 #include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/mca/mca.h"
-#include "src/util/cmd_line.h"
 #include "src/util/output.h"
 
 BEGIN_C_DECLS

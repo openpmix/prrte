@@ -54,7 +54,7 @@
 #include "src/mca/rml/rml_types.h"
 #include "src/runtime/runtime.h"
 #include "src/util/attr.h"
-#include "src/util/cmd_line.h"
+#include "src/util/pmix_cmd_line.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 

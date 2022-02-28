@@ -114,7 +114,7 @@ void prte_info_do_version(bool want_all)
                                              prte_info_type_all);
         }
     } else {
-        opt = prte_cmd_line_get_param(&prte_info_cmd_line, "show-version");
+        opt = pmix_cmd_line_get_param(&prte_info_cmd_line, "show-version");
         if (NULL != opt) {
             tmp = pmix_argv_split(opt->values[0], ':');
             arg1 = tmp[0];
