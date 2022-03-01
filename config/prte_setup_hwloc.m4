@@ -46,39 +46,14 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
     AS_IF([test "$with_hwloc_extra_libs" = "yes" -o "$with_hwloc_extra_libs" = "no"],
 	  [AC_MSG_ERROR([--with-hwloc-extra-libs requires an argument other than yes or no])])
 
-    # get rid of any trailing slash(es)
-    hwloc_prefix=$(echo $with_hwloc | sed -e 'sX/*$XXg')
-    hwlocdir_prefix=$(echo $with_hwloc_libdir | sed -e 'sX/*$XXg')
-
-    AS_IF([test ! -z "$hwloc_prefix" && test "$hwloc_prefix" != "yes"],
-                 [prte_hwloc_dir="$hwloc_prefix"],
-                 [prte_hwloc_dir=""])
-
-    AS_IF([test ! -z "$hwlocdir_prefix" && test "$hwlocdir_prefix" != "yes"],
-                 [prte_hwloc_libdir="$hwlocdir_prefix"],
-                 [AS_IF([test ! -z "$hwloc_prefix" && test "$hwloc_prefix" != "yes"],
-                        [if test -d $hwloc_prefix/lib64; then
-                            prte_hwloc_libdir=$hwloc_prefix/lib64
-                         elif test -d $hwloc_prefix/lib; then
-                            prte_hwloc_libdir=$hwloc_prefix/lib
-                         else
-                            AC_MSG_WARN([Could not find $hwloc_prefix/lib or $hwloc_prefix/lib64])
-                            AC_MSG_ERROR([Can not continue])
-                         fi
-                        ],
-                        [prte_hwloc_libdir=""])])
-
     AS_IF([test "$enable_hwloc_lib_checks" != "no"],
-          [PRTE_CHECK_PACKAGE([prte_hwloc],
-                              [hwloc.h],
-                              [hwloc],
-                              [hwloc_topology_init],
-                              [$with_hwloc_extra_libs],
-                              [$prte_hwloc_dir],
-                              [$prte_hwloc_libdir],
-                              [],
-                              [prte_hwloc_support=0],
-                              [])],
+          [OAC_CHECK_PACKAGE([hwloc],
+                             [prte_hwloc],
+                             [hwloc.h],
+                             [hwloc $with_hwloc_extra_libs],
+                             [hwloc_topology_init],
+                             [],
+                             [prte_hwloc_support=0])],
           [PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$with_hwloc_extra_libs])])
 
     if test $prte_hwloc_support -eq 0; then
@@ -142,14 +117,7 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
     AC_DEFINE_UNQUOTED([PRTE_HAVE_HWLOC_TOPOLOGY_DUP], [$prte_have_topology_dup],
                        [Whether or not hwloc_topology_dup is available])
 
-    prte_hwloc_support_will_build=yes
-    if test -z "$prte_hwloc_dir"; then
-        prte_hwloc_source="Standard locations"
-    else
-        prte_hwloc_source=$prte_hwloc_dir
-    fi
-
-    PRTE_SUMMARY_ADD([[Required Packages]],[[HWLOC]], [prte_hwloc], [$prte_hwloc_support_will_build ($prte_hwloc_source)])
+    PRTE_SUMMARY_ADD([[Required Packages]],[[HWLOC]], [prte_hwloc], [$prte_hwloc_SUMMARY])
 
     PRTE_VAR_SCOPE_POP
 ])

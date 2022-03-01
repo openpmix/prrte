@@ -56,46 +56,18 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
 	  [AC_MSG_ERROR([--with-libevent-extra-libs requires an argument other than yes or no])])
 
     AS_IF([test $prte_libevent_support -eq 1],
-          [PRTE_CHECK_WITHDIR([libevent], [$with_libevent], [include/event.h])
-           PRTE_CHECK_WITHDIR([libevent-libdir], [$with_libevent_libdir], [libevent.*])
-
-           prte_check_libevent_save_CPPFLAGS="$CPPFLAGS"
+          [prte_check_libevent_save_CPPFLAGS="$CPPFLAGS"
            prte_check_libevent_save_LDFLAGS="$LDFLAGS"
            prte_check_libevent_save_LIBS="$LIBS"
 
-           # get rid of any trailing slash(es)
-           libevent_prefix=$(echo $with_libevent | sed -e 'sX/*$XXg')
-           libeventdir_prefix=$(echo $with_libevent_libdir | sed -e 'sX/*$XXg')
-
-           AS_IF([test ! -z "$libevent_prefix" && test "$libevent_prefix" != "yes"],
-                 [prte_event_dir="$libevent_prefix"],
-                 [prte_event_dir=""])
-
-           AS_IF([test ! -z "$libeventdir_prefix" -a "$libeventdir_prefix" != "yes"],
-                 [prte_event_libdir="$libeventdir_prefix"],
-                 [AS_IF([test ! -z "$libevent_prefix" && test "$libevent_prefix" != "yes"],
-                        [if test -d $libevent_prefix/lib64; then
-                            prte_event_libdir=$libevent_prefix/lib64
-                         elif test -d $libevent_prefix/lib; then
-                            prte_event_libdir=$libevent_prefix/lib
-                         else
-                            AC_MSG_WARN([Could not find $libevent_prefix/lib or $libevent_prefix/lib64])
-                            AC_MSG_ERROR([Can not continue])
-                         fi
-                        ],
-                        [prte_event_libdir=""])])
-
            AS_IF([test "$enable_libevent_lib_checks" != "no"],
-                 [PRTE_CHECK_PACKAGE([prte_libevent],
-                                     [event.h],
-                                     [event_core],
-                                     [event_config_new],
-                                     [-levent_pthreads $with_libevent_extra_libs],
-                                     [$prte_event_dir],
-                                     [$prte_event_libdir],
-                                     [],
-                                     [prte_libevent_support=0],
-                                     [])],
+                 [OAC_CHECK_PACKAGE([libevent],
+                                    [prte_libevent],
+                                    [event.h],
+                                    [event_core event_pthreads $with_libevent_extra_libs],
+                                    [event_config_new],
+                                    [],
+                                    [prte_libevent_support=0])],
                  [PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$with_libevent_extra_libs])])])
 
     # Check to see if the above check failed because it conflicted with LSF's libevent.so
@@ -173,11 +145,6 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
                            AC_MSG_WARN([libevent version is too old (2.0.21 or later required)])
                            prte_libevent_support=0])
     fi
-    if test -z "$prte_event_dir"; then
-        prte_libevent_source="Standard locations"
-    else
-        prte_libevent_source=$prte_event_dir
-    fi
 
     # restore global flags
     CPPFLAGS="$prte_check_libevent_save_CPPFLAGS"
@@ -194,7 +161,7 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
         PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$prte_libevent_LIBS])
 
         # Set output variables
-        PRTE_SUMMARY_ADD([[Required Packages]],[[Libevent]], [prte_libevent], [yes ($prte_libevent_source)])
+        PRTE_SUMMARY_ADD([[Required Packages]],[[Libevent]], [prte_libevent], [$prte_libevent_SUMMARY])
 
         $1
     else
