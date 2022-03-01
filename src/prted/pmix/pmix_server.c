@@ -795,6 +795,7 @@ int pmix_server_init(void)
         rc = prte_pmix_convert_status(prc);
         return rc;
     }
+    PMIX_INFO_LIST_RELEASE(ilist);
     info = (pmix_info_t*)darray.array;
     ninfo = darray.size;
 
@@ -915,14 +916,22 @@ void pmix_server_finalize(void)
     /* finalize our local data server */
     prte_data_server_finalize();
 
-    /* shutdown the local server */
-    PMIx_server_finalize();
-
     /* cleanup collectives */
+    pmix_server_req_t *cd;
+    for (int i = 0; i < prte_pmix_server_globals.num_rooms; i++) {
+      pmix_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, i, (void **) &cd);
+      if (NULL != cd) {
+          PMIX_RELEASE(cd);
+      }
+    }
+
     PMIX_DESTRUCT(&prte_pmix_server_globals.reqs);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
     free(mytopology.source);
+
+    /* shutdown the local server */
+    PMIx_server_finalize();
     prte_pmix_server_globals.initialized = false;
 }
 
