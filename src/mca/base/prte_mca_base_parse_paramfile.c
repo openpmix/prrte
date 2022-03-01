@@ -30,7 +30,8 @@
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_vari.h"
 #include "src/mca/mca.h"
-#include "src/util/keyval_parse.h"
+#include "src/pmix/pmix-internal.h"
+#include "src/util/pmix_keyval_parse.h"
 
 static void save_value(const char *file, int lineno, const char *name, const char *value);
 
@@ -38,9 +39,12 @@ static pmix_list_t *_param_list;
 
 int prte_mca_base_parse_paramfile(const char *paramfile, pmix_list_t *list)
 {
+    int rc;
+
     _param_list = list;
 
-    return prte_util_keyval_parse(paramfile, save_value);
+    rc = pmix_util_keyval_parse(paramfile, save_value);
+    return prte_pmix_convert_status(rc);
 }
 
 static void save_value(const char *file, int lineno, const char *name, const char *value)

@@ -41,7 +41,6 @@
 #endif
 
 #include "src/util/pmix_argv.h"
-#include "src/util/keyval_parse.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"

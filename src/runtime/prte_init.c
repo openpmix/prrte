@@ -38,7 +38,7 @@
 
 #include "src/util/error.h"
 #include "src/util/error_strings.h"
-#include "src/util/keyval_parse.h"
+#include "src/util/pmix_keyval_parse.h"
 #include "src/util/malloc.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_net.h"
@@ -142,8 +142,8 @@ int prte_init_util(prte_proc_type_t flags)
     prte_show_help_init();
 
     /* keyval lex-based parser */
-    if (PRTE_SUCCESS != (ret = prte_util_keyval_parse_init())) {
-        error = "prte_util_keyval_parse_init";
+    if (PRTE_SUCCESS != (ret = pmix_util_keyval_parse_init())) {
+        error = "pmix_util_keyval_parse_init";
         goto error;
     }
 
