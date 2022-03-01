@@ -140,15 +140,15 @@ int prte_finalize(void)
     free(prte_process_info.nodename);
     prte_process_info.nodename = NULL;
 
-    /* call the finalize function for this environment */
-    if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {
-        return rc;
-    }
-
     /* Close the general debug stream */
     prte_output_close(prte_debug_output);
 
     prte_mca_base_alias_cleanup();
+
+    /* call the finalize function for this environment */
+    if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {
+        return rc;
+    }
 
     return PRTE_SUCCESS;
 }
