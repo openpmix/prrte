@@ -56,42 +56,18 @@ AC_DEFUN([PRTE_LIBEV_CONFIG],[
 	  [AC_MSG_ERROR([--with-libev-extra-libs requires an argument other than yes or no])])
 
     AS_IF([test $prte_libev_support -eq 1],
-          [PRTE_CHECK_WITHDIR([libev], [$with_libev], [include/event.h])
-           PRTE_CHECK_WITHDIR([libev-libdir], [$with_libev_libdir], [libev.*])
-
-           AC_MSG_CHECKING([for libev in])
-           prte_check_libev_save_CPPFLAGS="$CPPFLAGS"
+          [prte_check_libev_save_CPPFLAGS="$CPPFLAGS"
            prte_check_libeve_save_LDFLAGS="$LDFLAGS"
            prte_check_libev_save_LIBS="$LIBS"
-           if test -n "$with_libev" -a "$with_libev" != "yes"; then
-               prte_libev_dir=$with_libev/include
-               AS_IF([test -z "$with_libev_libdir" || test "$with_libev_libdir" = "yes"],
-                     [if test -d $with_libev/lib; then
-                          prte_libev_libdir=$with_libev/lib
-                      elif test -d $with_libev/lib64; then
-                          prte_libev_libdir=$with_libev/lib64
-                      else
-                          AC_MSG_RESULT([Could not find $with_libev/lib or $with_libev/lib64])
-                          AC_MSG_ERROR([Can not continue])
-                      fi
-                      AC_MSG_RESULT([$prte_libev_dir and $prte_libev_libdir])],
-                     [AC_MSG_RESULT([$with_libev_libdir])])
-           else
-               AC_MSG_RESULT([(default search paths)])
-           fi
-           AS_IF([test ! -z "$with_libev_libdir" && test "$with_libev_libdir" != "yes"],
-                 [prte_libev_libdir="$with_libev_libdir"])
 
            AS_IF([test "$enable_libev_lib_checks" != "no"],
-                 [PRTE_CHECK_PACKAGE([prte_libev],
-                                     [event.h],
-                                     [ev],
-                                     [ev_async_send],
-                                     [$with_libev_extra_libs],
-                                     [$prte_libev_dir],
-                                     [$prte_libev_libdir],
-                                     [],
-                                     [prte_libev_support=0])],
+                 [OAC_CHECK_PACKAGE([libev],
+                                    [prte_libev],
+                                    [event.h],
+                                    [ev ${with_libev_extra_libs}],
+                                    [ev_async_send],
+                                    [],
+                                    [prte_libev_support=0])],
                  [PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$with_libev_extra_libs])])
 
            CPPFLAGS="$prte_check_libev_save_CPPFLAGS"
@@ -109,7 +85,7 @@ AC_DEFUN([PRTE_LIBEV_CONFIG],[
     if test $prte_libev_support -eq 1; then
         AC_MSG_RESULT([yes])
         $1
-        PRTE_SUMMARY_ADD([[Required Packages]], [[Libev]], [prte_libev], [yes ($prte_libev_dir)])
+        PRTE_SUMMARY_ADD([[Required Packages]], [[Libev]], [prte_libev], [$prte_libev_SUMMARY])
     else
         AC_MSG_RESULT([no])
         # if they asked us to use it, then this is an error
