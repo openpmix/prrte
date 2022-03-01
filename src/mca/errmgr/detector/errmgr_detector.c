@@ -82,13 +82,13 @@ static prte_errmgr_detector_t prte_errmgr_world_detector = {0};
 /*
  * Local functions
  */
-static int pmix_fd.heartbeat_request(prte_errmgr_detector_t *detector);
-static void pmix_fd.heartbeat_send(prte_errmgr_detector_t *detector);
+static int pmix_fd_heartbeat_request(prte_errmgr_detector_t *detector);
+static void pmix_fd_heartbeat_send(prte_errmgr_detector_t *detector);
 
-static void pmix_fd.heartbeat_request_cb(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+static void pmix_fd_heartbeat_request_cb(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                                     prte_rml_tag_t tg, void *cbdata);
 
-static void pmix_fd.heartbeat_recv_cb(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+static void pmix_fd_heartbeat_recv_cb(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                                  prte_rml_tag_t tg, void *cbdata);
 
 static double Wtime(void);
@@ -243,9 +243,9 @@ static int init(void)
 
     if (PRTE_PROC_IS_DAEMON) {
         prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT_REQUEST,
-                                PRTE_RML_PERSISTENT, pmix_fd.heartbeat_request_cb, NULL);
+                                PRTE_RML_PERSISTENT, pmix_fd_heartbeat_request_cb, NULL);
         prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT, PRTE_RML_PERSISTENT,
-                                pmix_fd.heartbeat_recv_cb, NULL);
+                                pmix_fd_heartbeat_recv_cb, NULL);
     }
     return PRTE_SUCCESS;
 }
@@ -259,7 +259,7 @@ int finalize(void)
             detector->hb_observer = prte_process_info.myproc.rank;
             PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                  "errmgr:detector: send last heartbeat message"));
-            pmix_fd.heartbeat_send(detector);
+            pmix_fd_heartbeat_send(detector);
             detector->hb_period = INFINITY;
         }
         prte_event_del(&prte_errmgr_world_detector.fd_event);
@@ -360,7 +360,7 @@ static void enable_detector(bool enable_flag)
     }
 }
 
-static int pmix_fd.heartbeat_request(prte_errmgr_detector_t *detector)
+static int pmix_fd_heartbeat_request(prte_errmgr_detector_t *detector)
 {
 
     int rc, ndmns;
@@ -428,7 +428,7 @@ static int pmix_fd.heartbeat_request(prte_errmgr_detector_t *detector)
     return PRTE_SUCCESS;
 }
 
-static void pmix_fd.heartbeat_request_cb(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+static void pmix_fd_heartbeat_request_cb(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                                     prte_rml_tag_t tg, void *cbdata)
 {
     prte_errmgr_detector_t *detector = &prte_errmgr_world_detector;
@@ -462,7 +462,7 @@ static void pmix_fd.heartbeat_request_cb(int status, pmix_proc_t *sender, pmix_d
     detector->hb_observer = vpid;
     detector->hb_sstamp = 0.;
 
-    pmix_fd.heartbeat_send(detector);
+    pmix_fd_heartbeat_send(detector);
     return;
 }
 
@@ -480,7 +480,7 @@ static void fd_event_cb(int fd, short flags, void *pdetector)
     pmix_proc_t temp_proc_name;
 
     if ((stamp - detector->hb_sstamp) >= detector->hb_period) {
-        pmix_fd.heartbeat_send(detector);
+        pmix_fd_heartbeat_send(detector);
     }
     if (INFINITY == detector->hb_rstamp) {
         return;
@@ -505,7 +505,7 @@ static void fd_event_cb(int fd, short flags, void *pdetector)
             errmgr_set_daemon_status(temp_proc_name);
             /* increase the number of failed nodes */
             detector->failed_node_count++;
-            pmix_fd.heartbeat_request(detector);
+            pmix_fd_heartbeat_request(detector);
         }
     }
 }
@@ -513,7 +513,7 @@ static void fd_event_cb(int fd, short flags, void *pdetector)
 /*
  * send eager based heartbeats
  */
-static void pmix_fd.heartbeat_send(prte_errmgr_detector_t *detector)
+static void pmix_fd_heartbeat_send(prte_errmgr_detector_t *detector)
 {
 
     double now = Wtime();
@@ -550,7 +550,7 @@ static void pmix_fd.heartbeat_send(prte_errmgr_detector_t *detector)
     }
 }
 
-static void pmix_fd.heartbeat_recv_cb(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+static void pmix_fd_heartbeat_recv_cb(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                                  prte_rml_tag_t tg, void *cbdata)
 {
     prte_errmgr_detector_t *detector = &prte_errmgr_world_detector;
