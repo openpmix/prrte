@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -73,6 +73,7 @@ while test "$1" != ""; do
         --no-greek) nogreek=1 ;;
         --highok) highok=1 ;;
         --autogen-args) autogen_args=$2; shift ;;
+        --config-args=*) config_args="${i#*=}"; shift ;;
         --distdir) distdir=$2; shift ;;
         --dirtyok) dirty_ok=1 ;;
         --verok) gnu_version_ignore=1;;
@@ -86,6 +87,7 @@ Valid arguments:
   --no-greek      Do not build the greek tarball
   --highok        Ok if Autotools versions are too high
   --autogen-args  Arguments to pass to autogen
+  --config-args  Arguments to pass to configure
   --distdir       Move the tarball(s) to this directory when done
   --dirtyok       Ok if the source tree is dirty
   --verok         Ignore result of autotools version checking
@@ -267,7 +269,7 @@ make_tarball() {
     #
     echo "*** Running configure..."
     rm -f success
-    (./configure 2>&1 && touch success) | tee config.out
+    (./configure $config_args 2>&1 && touch success) | tee config.out
     if test ! -f success; then
         echo "Configure failed.  Aborting"
         exit 1
@@ -301,7 +303,7 @@ make_tarball() {
     # move
     #
     echo "*** Moving tarballs..."
-    mv prte-* $distdir
+    mv prrte-* $distdir
 
     echo "*** All done"
 }
@@ -314,13 +316,15 @@ start=`date`
 echo "*** Start time: $start"
 
 echo "*** Checking tools versions..."
-check_gnu_version m4 $M4_TARGET_VERSION
-check_gnu_version automake $AM_TARGET_VERSION
-check_gnu_version autoconf $AC_TARGET_VERSION
-check_gnu_version libtool $LT_TARGET_VERSION
-# Windows needs a recent version of flex; old versions don't generate
-# Windows-friendly *_lex.c files.
-check_gnu_version flex $FLEX_TARGET_VERSION
+if test "$gnu_version_ignore" = "0"; then
+    check_gnu_version m4 $M4_TARGET_VERSION
+    check_gnu_version automake $AM_TARGET_VERSION
+    check_gnu_version autoconf $AC_TARGET_VERSION
+    check_gnu_version libtool $LT_TARGET_VERSION
+    # Windows needs a recent version of flex; old versions don't generate
+    # Windows-friendly *_lex.c files.
+    check_gnu_version flex $FLEX_TARGET_VERSION
+fi
 
 #
 # Verify that we're in a top PRTE dir
