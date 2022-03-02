@@ -115,7 +115,7 @@ AC_DEFUN([PRTE_PROG_CC_C11],[
             for flag in $(echo $prte_prog_cc_c11_flags | tr ' ' '\n') ; do
                 PRTE_PROG_CC_C11_HELPER([$flag],[prte_cv_c11_flag=$flag],[])
                 if test "x$prte_cv_c11_flag" != "x" ; then
-                    CFLAGS="$CFLAGS $prte_cv_c11_flag"
+                    PRTE_APPEND_UNIQ([CFLAGS], ["$prte_cv_c11_flag"])
                     AC_MSG_NOTICE([using $flag to enable C11 support])
                     prte_cv_c11_supported=yes
                     break
@@ -244,7 +244,7 @@ AC_DEFUN([PRTE_SETUP_CC],[
         # compiling and linking to circumvent trouble with
         # libgcov.
         LDFLAGS_orig="$LDFLAGS"
-        LDFLAGS="$LDFLAGS_orig --coverage"
+        PRTE_APPEND_UNIQ([LDFLAGS], ["--coverage"])
         PRTE_COVERAGE_FLAGS=
 
         _PRTE_CHECK_SPECIFIC_CFLAGS(--coverage, coverage)
@@ -263,16 +263,12 @@ AC_DEFUN([PRTE_SETUP_CC],[
             CLEANFILES="*.bb *.bbg ${CLEANFILES}"
             PRTE_COVERAGE_FLAGS="-ftest-coverage -fprofile-arcs"
         fi
-        PRTE_FLAGS_UNIQ(CFLAGS)
-        PRTE_FLAGS_UNIQ(LDFLAGS)
         WANT_DEBUG=1
    fi
 
     # Do we want debugging?
     if test "$WANT_DEBUG" = "1" && test "$enable_debug_symbols" != "no" ; then
-        CFLAGS="$CFLAGS -g"
-
-        PRTE_FLAGS_UNIQ(CFLAGS)
+        PRTE_APPEND_UNIQ([CFLAGS], ["-g"])
         AC_MSG_WARN([-g has been added to CFLAGS (--enable-debug)])
     fi
 
@@ -305,7 +301,6 @@ AC_DEFUN([PRTE_SETUP_CC],[
         _PRTE_CHECK_SPECIFIC_CFLAGS($RESTRICT_CFLAGS, restrict)
     fi
 
-    PRTE_FLAGS_UNIQ([CFLAGS])
     AC_MSG_RESULT(CFLAGS result: $CFLAGS)
 
     # see if the C compiler supports __builtin_expect
