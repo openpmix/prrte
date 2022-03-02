@@ -33,11 +33,10 @@
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 
-#include "src/mca/rml/base/base.h"
-#include "src/mca/rml/base/rml_contact.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml_contact.h"
+#include "src/rml/rml.h"
 
-int prte_rml_base_parse_uris(const char *uri, pmix_proc_t *peer, char ***uris)
+int prte_rml_parse_uris(const char *uri, pmix_proc_t *peer, char ***uris)
 {
     int rc;
 

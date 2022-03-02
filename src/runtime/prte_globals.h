@@ -51,7 +51,7 @@
 #include "src/threads/pmix_threads.h"
 
 #include "src/mca/plm/plm_types.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/runtime/runtime.h"
 #include "src/util/attr.h"
 #include "src/util/pmix_cmd_line.h"

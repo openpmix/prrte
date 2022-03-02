@@ -33,7 +33,7 @@
 
 #include "oob_tcp.h"
 #include "oob_tcp_hdr.h"
-#include "src/mca/rml/base/base.h"
+#include "src/rml/rml.h"
 #include "src/threads/pmix_threads.h"
 
 /* forward declare */

@@ -24,7 +24,7 @@
 
 #include "src/mca/odls/odls_types.h"
 #include "src/mca/propagate/propagate.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 
 /*
  * Global functions for MCA overall collective open and close

@@ -40,7 +40,7 @@
 #include "src/class/pmix_pointer_array.h"
 #include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/odls/odls_types.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"

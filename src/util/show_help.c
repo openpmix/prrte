@@ -35,7 +35,7 @@
 
 #include "src/mca/iof/iof.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
@@ -463,8 +463,7 @@ int prte_show_help_norender(const char *filename, const char *topic,
      * or ROUTED has not been setup,
      * or we weren't given an HNP, then all we can do is process this locally
      */
-    if (PRTE_PROC_IS_MASTER || NULL == prte_rml.send_buffer_nb || NULL == prte_routed.get_route
-        || NULL == prte_process_info.my_hnp_uri) {
+    if (PRTE_PROC_IS_MASTER || NULL == prte_process_info.my_hnp_uri) {
         rc = show_help(filename, topic, output, PRTE_PROC_MY_NAME);
         goto CLEANUP;
     }
@@ -514,10 +513,8 @@ int prte_show_help_norender(const char *filename, const char *topic,
         }
 
         /* send it via RML to the HNP */
-
-        if (PRTE_SUCCESS
-            != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_SHOW_HELP,
-                                             prte_rml_send_callback, NULL))) {
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_SHOW_HELP);
+        if (PRTE_SUCCESS != rc) {
             PMIX_DATA_BUFFER_RELEASE(buf);
             /* okay, that didn't work, output locally  */
             prte_output(output_stream, "%s", output);
@@ -545,8 +542,7 @@ int prte_show_help_suppress(const char *filename, const char *topic)
     /* If we are the HNP, or the RML has not yet been setup, or ROUTED
        has not been setup, or we weren't given an HNP, then all we can
        do is process this locally. */
-    if (PRTE_PROC_IS_MASTER || NULL == prte_rml.send_buffer_nb || NULL == prte_routed.get_route
-        || NULL == prte_process_info.my_hnp_uri) {
+    if (PRTE_PROC_IS_MASTER || NULL == prte_process_info.my_hnp_uri) {
         rc = show_help(filename, topic, NULL, PRTE_PROC_MY_NAME);
         return rc;
     }
@@ -587,9 +583,8 @@ int prte_show_help_suppress(const char *filename, const char *topic)
             return PRTE_SUCCESS;
         }
         /* send it to the HNP */
-        if (PRTE_SUCCESS
-            != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_SHOW_HELP,
-                                             prte_rml_send_callback, NULL))) {
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_SHOW_HELP);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(buf);
             /* okay, that didn't work, just process locally error, just ignore return  */

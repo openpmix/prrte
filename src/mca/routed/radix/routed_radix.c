@@ -29,14 +29,14 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml.h"
+#include "src/rml/rml_types.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime.h"
 #include "src/util/name_fns.h"
 
-#include "src/mca/rml/base/rml_contact.h"
+#include "src/rml/rml_contact.h"
 
 #include "routed_radix.h"
 #include "src/mca/routed/base/base.h"

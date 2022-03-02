@@ -27,8 +27,7 @@
 #include "src/mca/errmgr/detector/errmgr_detector.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/base/base.h"
-#include "src/mca/rml/base/base.h"
-#include "src/mca/rml/base/rml_contact.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/base/base.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
@@ -95,8 +94,8 @@ static int bmg_init(void)
 {
     PMIX_CONSTRUCT(&tracker, pmix_list_t);
 
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST, PRTE_RML_PERSISTENT,
-                            rbcast_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST,
+                  PRTE_RML_PERSISTENT, rbcast_recv, NULL);
     return PRTE_SUCCESS;
 }
 
@@ -106,7 +105,7 @@ static int bmg_init(void)
 static void bmg_finalize(void)
 {
     /* cancel the rbcast recv */
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST);
     PMIX_LIST_DESTRUCT(&tracker);
     return;
 }
@@ -156,8 +155,8 @@ static int rbcast(pmix_data_buffer_t *buf)
                 PRTE_ERROR_LOG(rc);
                 return rc;
             }
-            if (0 > (rc = prte_rml.send_buffer_nb(&daemon, buf, PRTE_RML_TAG_RBCAST,
-                                                  prte_rml_send_callback, NULL))) {
+            PRTE_RML_SEND(rc, &daemon, buf, PRTE_RML_TAG_RBCAST);
+            if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
             }
         }

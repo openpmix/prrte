@@ -28,7 +28,7 @@
 #include "prte_config.h"
 
 #include "src/mca/filem/filem.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_printf.h"
 

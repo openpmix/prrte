@@ -37,7 +37,7 @@
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 #include "src/threads/pmix_threads.h"
@@ -213,8 +213,8 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
                 }
 
                 /* send this process's info to hnp */
-                if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                                      prte_rml_send_callback, NULL))) {
+                PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM, NULL);
+                if (PRTE_SUCCESS != rc) {
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                          "%s errmgr:detector: send to hnp failed",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -242,10 +242,10 @@ static int init(void)
     fd_event_base = prte_event_base;
 
     if (PRTE_PROC_IS_DAEMON) {
-        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT_REQUEST,
-                                PRTE_RML_PERSISTENT, pmix_fd_heartbeat_request_cb, NULL);
-        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT, PRTE_RML_PERSISTENT,
-                                pmix_fd_heartbeat_recv_cb, NULL);
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT_REQUEST,
+                      PRTE_RML_PERSISTENT, pmix_fd_heartbeat_request_cb, NULL);
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT, PRTE_RML_PERSISTENT,
+                      pmix_fd_heartbeat_recv_cb, NULL);
     }
     return PRTE_SUCCESS;
 }
@@ -263,8 +263,8 @@ int finalize(void)
             detector->hb_period = INFINITY;
         }
         prte_event_del(&prte_errmgr_world_detector.fd_event);
-        prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT_REQUEST);
-        prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT);
+        PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT_REQUEST);
+        PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_HEARTBEAT);
         if (prte_event_base != fd_event_base) {
             prte_event_base_free(fd_event_base);
         }
@@ -414,9 +414,10 @@ static int pmix_fd_heartbeat_request(prte_errmgr_detector_t *detector)
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
-        if (0 > (rc = prte_rml.send_buffer_nb(&daemon, buffer, PRTE_RML_TAG_HEARTBEAT_REQUEST,
-                                              prte_rml_send_callback, NULL))) {
+        PRTE_RML_SEND(rc, &daemon, buffer, PRTE_RML_TAG_HEARTBEAT_REQUEST, NULL);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
         }
         break;
     }
@@ -541,12 +542,13 @@ static void pmix_fd_heartbeat_send(prte_errmgr_detector_t *detector)
         PMIX_ERROR_LOG(rc);
     }
     /* send the heartbeat with eager send */
-    if (0 > (rc = prte_rml.send_buffer_nb(&daemon, buffer, PRTE_RML_TAG_HEARTBEAT,
-                                          prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(rc, &daemon, buffer, PRTE_RML_TAG_HEARTBEAT, NULL);
+    if (PRTE_SUCCESS != rc) {
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                              "errmgr:detector:failed to send heartbeat to %s",
                              PRTE_NAME_PRINT(&daemon)));
         PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buffer);
     }
 }
 

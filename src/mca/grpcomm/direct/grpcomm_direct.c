@@ -26,8 +26,7 @@
 #include "src/pmix/pmix-internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/rml/base/base.h"
-#include "src/mca/rml/base/rml_contact.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/util/name_fns.h"
@@ -76,13 +75,13 @@ static int init(void)
     PMIX_CONSTRUCT(&tracker, pmix_list_t);
 
     /* post the receives */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST,
-                            PRTE_RML_PERSISTENT, xcast_recv, NULL);
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_ALLGATHER_DIRECT,
-                            PRTE_RML_PERSISTENT, allgather_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST,
+                  PRTE_RML_PERSISTENT, xcast_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_ALLGATHER_DIRECT,
+                  PRTE_RML_PERSISTENT, allgather_recv, NULL);
     /* setup recv for barrier release */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_COLL_RELEASE,
-                            PRTE_RML_PERSISTENT, barrier_release, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_COLL_RELEASE,
+                  PRTE_RML_PERSISTENT, barrier_release, NULL);
 
     return PRTE_SUCCESS;
 }
@@ -101,8 +100,8 @@ static int xcast(pmix_rank_t *vpids, size_t nprocs, pmix_data_buffer_t *buf)
     int rc;
 
     /* send it to the HNP (could be myself) for relay */
-    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_XCAST,
-                                          prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_XCAST);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
         return rc;
@@ -169,9 +168,8 @@ static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf,
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* send the info to ourselves for tracking */
-    rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_NAME, relay,
-                                 PRTE_RML_TAG_ALLGATHER_DIRECT,
-                                 prte_rml_send_callback, NULL);
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME, relay,
+                  PRTE_RML_TAG_ALLGATHER_DIRECT);
     return rc;
 }
 
@@ -355,9 +353,14 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 return;
             }
             /* send the info to our parent */
-            rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_PARENT, reply,
-                                         PRTE_RML_TAG_ALLGATHER_DIRECT,
-                                         prte_rml_send_callback, NULL);
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_PARENT, reply,
+                          PRTE_RML_TAG_ALLGATHER_DIRECT);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
+                PMIX_PROC_FREE(sig.signature, sig.sz);
+                return;
+            }
         }
     }
     PMIX_PROC_FREE(sig.signature, sig.sz);
@@ -623,9 +626,8 @@ static void xcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 continue;
             }
-            if (PRTE_SUCCESS
-                != (ret = prte_rml.send_buffer_nb(&nm->name, rlycopy, PRTE_RML_TAG_XCAST,
-                                                  prte_rml_send_callback, NULL))) {
+            PRTE_RML_SEND(ret, &nm->name, rlycopy, PRTE_RML_TAG_XCAST);
+            if (PRTE_SUCCESS != ret) {
                 PRTE_ERROR_LOG(ret);
                 PMIX_DATA_BUFFER_RELEASE(rlycopy);
                 PMIX_RELEASE(item);

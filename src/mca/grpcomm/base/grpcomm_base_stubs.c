@@ -37,7 +37,7 @@
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"

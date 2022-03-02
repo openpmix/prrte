@@ -64,8 +64,8 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/grpcomm.h"
-#include "src/mca/rml/base/rml_contact.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml_contact.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
@@ -864,33 +864,33 @@ void pmix_server_start(void)
     prte_data_server_init();
 
     /* setup recv for direct modex requests */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DIRECT_MODEX, PRTE_RML_PERSISTENT,
-                            pmix_server_dmdx_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DIRECT_MODEX,
+                  PRTE_RML_PERSISTENT, pmix_server_dmdx_recv, NULL);
 
     /* setup recv for replies to direct modex requests */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DIRECT_MODEX_RESP, PRTE_RML_PERSISTENT,
-                            pmix_server_dmdx_resp, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DIRECT_MODEX_RESP,
+                  PRTE_RML_PERSISTENT, pmix_server_dmdx_resp, NULL);
 
     /* setup recv for replies to proxy launch requests */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LAUNCH_RESP, PRTE_RML_PERSISTENT,
-                            pmix_server_launch_resp, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LAUNCH_RESP,
+                  PRTE_RML_PERSISTENT, pmix_server_launch_resp, NULL);
 
     /* setup recv for replies from data server */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_CLIENT, PRTE_RML_PERSISTENT,
-                            pmix_server_keyval_client, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_CLIENT,
+                  PRTE_RML_PERSISTENT, pmix_server_keyval_client, NULL);
 
     /* setup recv for notifications */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_NOTIFICATION, PRTE_RML_PERSISTENT,
-                            pmix_server_notify, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_NOTIFICATION,
+                  PRTE_RML_PERSISTENT, pmix_server_notify, NULL);
 
     /* setup recv for jobid return */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_JOBID_RESP, PRTE_RML_PERSISTENT,
-                            pmix_server_jobid_return, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_JOBID_RESP,
+                  PRTE_RML_PERSISTENT, pmix_server_jobid_return, NULL);
 
     if (PRTE_PROC_IS_MASTER) {
         /* setup recv for logging requests */
-        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING, PRTE_RML_PERSISTENT,
-                                pmix_server_log, NULL);
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING,
+                      PRTE_RML_PERSISTENT, pmix_server_log, NULL);
     }
 }
 
@@ -904,13 +904,13 @@ void pmix_server_finalize(void)
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* stop receives */
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DIRECT_MODEX);
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DIRECT_MODEX_RESP);
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LAUNCH_RESP);
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_CLIENT);
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_NOTIFICATION);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DIRECT_MODEX);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DIRECT_MODEX_RESP);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LAUNCH_RESP);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_CLIENT);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_NOTIFICATION);
     if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_MASTER) {
-        prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING);
+        PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING);
     }
 
     /* finalize our local data server */
@@ -945,23 +945,29 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
     PMIX_DATA_BUFFER_CREATE(reply);
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &pstatus, 1, PMIX_STATUS))) {
         PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
         return;
     }
     /* pack the id of the requested proc */
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, idreq, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
         return;
     }
 
     /* pack the remote daemon's request room number */
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &remote_room, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
         return;
     }
 
     /* send the response */
-    prte_rml.send_buffer_nb(remote, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP, prte_rml_send_callback,
-                            NULL);
+    PRTE_RML_SEND(prc, remote, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
+    if (PRTE_SUCCESS != prc) {
+        PRTE_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+    }
 }
 
 static void _mdxresp(int sd, short args, void *cbdata)
@@ -982,29 +988,34 @@ static void _mdxresp(int sd, short args, void *cbdata)
     PMIX_DATA_BUFFER_CREATE(reply);
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->pstatus, 1, PMIX_STATUS))) {
         PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
         goto error;
     }
     /* pack the id of the requested proc */
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->tproc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
         goto error;
     }
 
     /* pack the remote daemon's request room number */
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->remote_room_num, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
         goto error;
     }
     if (PMIX_SUCCESS == req->pstatus) {
         /* return any provided data */
         if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->sz, 1, PMIX_SIZE))) {
             PMIX_ERROR_LOG(prc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
             goto error;
         }
         if (0 < req->sz) {
             if (PMIX_SUCCESS
                 != (prc = PMIx_Data_pack(NULL, reply, req->data, req->sz, PMIX_BYTE))) {
                 PMIX_ERROR_LOG(prc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
                 goto error;
             }
             free(req->data);
@@ -1012,8 +1023,11 @@ static void _mdxresp(int sd, short args, void *cbdata)
     }
 
     /* send the response */
-    prte_rml.send_buffer_nb(&req->proxy, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP,
-                            prte_rml_send_callback, NULL);
+    PRTE_RML_SEND(prc, &req->proxy, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
+    if (PRTE_SUCCESS != prc) {
+        PRTE_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+    }
 
 error:
     PMIX_RELEASE(req);

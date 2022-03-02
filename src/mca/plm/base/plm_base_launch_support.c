@@ -54,9 +54,8 @@
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/rmaps.h"
-#include "src/mca/rml/base/rml_contact.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_contact.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/rtc/rtc.h"
 #include "src/mca/state/base/base.h"
@@ -541,8 +540,8 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
         PMIx_server_IOF_deliver(&pc, PMIX_FWD_STDERR_CHANNEL, &bo, NULL, 0, NULL, NULL);
 
         /* set the recv */
-        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_STACK_TRACE, PRTE_RML_PERSISTENT,
-                                stack_trace_recv, NULL);
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_STACK_TRACE,
+                      PRTE_RML_PERSISTENT, stack_trace_recv, NULL);
 
         /* setup the buffer */
         PMIX_DATA_BUFFER_CONSTRUCT(&buffer);
@@ -1035,10 +1034,10 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
                          "%s plm:base:launch sending dyn release of job %s to %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
                          PRTE_NAME_PRINT(&jdata->originator)));
-    if (0 > (rc = prte_rml.send_buffer_nb(&jdata->originator, answer, PRTE_RML_TAG_LAUNCH_RESP,
-                                          prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(rc, &jdata->originator, answer, PRTE_RML_TAG_LAUNCH_RESP);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        PMIX_RELEASE(answer);
+        PMIX_DATA_BUFFER_RELEASE(answer);
         return rc;
     }
 
@@ -1758,8 +1757,13 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                     goto CLEANUP;
                 }
                 /* send it */
-                prte_rml.send_buffer_nb(&dname, relay, PRTE_RML_TAG_DAEMON, prte_rml_send_callback,
-                                        NULL);
+                PRTE_RML_SEND(ret, &dname, relay, PRTE_RML_TAG_DAEMON);
+                if (PRTE_SUCCESS != ret) {
+                    PRTE_ERROR_LOG(ret);
+                    PMIX_DATA_BUFFER_RELEASE(relay);
+                    prted_failed_launch = true;
+                    goto CLEANUP;
+                }
                 /* we will count this node as completed
                  * when we get the full topology back */
                 if (NULL != nodename) {

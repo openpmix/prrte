@@ -36,7 +36,7 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/mca/mca.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 

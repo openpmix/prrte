@@ -43,7 +43,7 @@
 #include "src/mca/odls/base/odls_private.h"
 #include "src/mca/odls/odls.h"
 #include "src/mca/plm/plm_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
@@ -213,8 +213,8 @@ static void prted_abort(int error_code, char *fmt, ...)
     }
 
     /* send it */
-    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                          prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(alert);
         /* we can't communicate, so give up */
@@ -306,8 +306,8 @@ static void job_errors(int fd, short args, void *cbdata)
         goto cleanup;
     }
     /* send it */
-    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                          prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(alert);
     }
@@ -514,8 +514,8 @@ static void proc_errors(int fd, short args, void *cbdata)
                                  "non-zero status (local procs = %d)",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
                                  jdata->num_local_procs));
-            if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                                  prte_rml_send_callback, NULL))) {
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+            if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_RELEASE(alert);
             }
@@ -627,9 +627,10 @@ static void proc_errors(int fd, short args, void *cbdata)
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
                  jdata->num_local_procs));
             /* send it */
-            if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                                  prte_rml_send_callback, NULL))) {
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+            if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(alert);
             }
             /* mark that we notified the HNP for this job so we don't do it again */
             prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
@@ -685,9 +686,10 @@ static void proc_errors(int fd, short args, void *cbdata)
         PMIX_RELEASE(jdata);
 
         /* send it */
-        if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                              prte_rml_send_callback, NULL))) {
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(alert);
         }
         return;
     }

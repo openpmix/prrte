@@ -69,8 +69,8 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/odls/odls.h"
 #include "src/mca/plm/plm.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml.h"
+#include "src/rml/rml_types.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 

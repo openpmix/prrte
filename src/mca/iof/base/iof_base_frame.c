@@ -36,7 +36,7 @@
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
 
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"

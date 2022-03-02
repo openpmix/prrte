@@ -37,6 +37,7 @@
 
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
+#include "src/rml/rml.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
@@ -681,6 +682,9 @@ int prte_register_params(void)
                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
                                PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_enable_ft);
 #endif
+
+    /* pickup the RML params */
+    prte_rml_register();
 
     return PRTE_SUCCESS;
 }

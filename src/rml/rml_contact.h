@@ -3,7 +3,7 @@
  *                         reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,6 +47,6 @@ BEGIN_C_DECLS
  * @retval PRTE_ERR_BAD_PARAM The contact_info was not a valid string
  * @retval PRTE_ERROR       An unspecified error occurred
  */
-PRTE_EXPORT int prte_rml_base_parse_uris(const char *contact_inf, pmix_proc_t *peer, char ***uris);
+PRTE_EXPORT int prte_rml_parse_uris(const char *contact_inf, pmix_proc_t *peer, char ***uris);
 
 END_C_DECLS

@@ -38,8 +38,8 @@
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/rml/base/rml_contact.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml_contact.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
@@ -106,7 +106,7 @@ static int init_server(void)
         }
         /* parse the URI to get the server's name */
         if (PRTE_SUCCESS
-            != (rc = prte_rml_base_parse_uris(server, &prte_pmix_server_globals.server, NULL))) {
+            != (rc = prte_rml_parse_uris(server, &prte_pmix_server_globals.server, NULL))) {
             PRTE_ERROR_LOG(rc);
             free(server);
             return rc;
@@ -126,20 +126,9 @@ static int init_server(void)
          */
         if (prte_pmix_server_globals.wait_for_server) {
             /* ping the server */
-            struct timeval timeout;
-            timeout.tv_sec = prte_pmix_server_globals.timeout;
-            timeout.tv_usec = 0;
-            if (PRTE_SUCCESS != (rc = prte_rml.ping(server, &timeout))) {
-                /* try it one more time */
-                if (PRTE_SUCCESS != (rc = prte_rml.ping(server, &timeout))) {
-                    /* okay give up */
-                    prte_show_help("help-prun.txt", "prun:server-not-found", true,
-                                   prte_tool_basename, server,
-                                   (long) prte_pmix_server_globals.timeout, PRTE_ERROR_NAME(rc));
-                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                    return rc;
-                }
-            }
+            struct timespec timeout = {prte_pmix_server_globals.timeout, 0};
+            /* just hang loose */
+            nanosleep(&timeout, NULL);
         }
     }
 
@@ -207,11 +196,13 @@ static void execute(int sd, short args, void *cbdata)
     }
 
     /* send the request to the target */
-    rc = prte_rml.send_buffer_nb(target, xfer, PRTE_RML_TAG_DATA_SERVER, prte_rml_send_callback,
-                                 NULL);
+    PRTE_RML_SEND(rc, target, xfer, PRTE_RML_TAG_DATA_SERVER);
     if (PRTE_SUCCESS == rc) {
         return;
     }
+    PRTE_ERROR_LOG(rc);
+    PMIX_DATA_BUFFER_RELEASE(xfer);
+    rc = prte_pmix_convert_rc(rc);
 
 callback:
     /* execute the callback to avoid having the client hang */

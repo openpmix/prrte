@@ -35,8 +35,7 @@
 #include "src/pmix/pmix-internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 
@@ -44,13 +43,6 @@
 #include "src/mca/iof/iof_types.h"
 
 #include "iof_prted.h"
-
-static void send_cb(int status, pmix_proc_t *peer, pmix_data_buffer_t *buf, prte_rml_tag_t tag,
-                    void *cbdata)
-{
-    /* nothing to do here - just release buffer and return */
-    PMIX_RELEASE(buf);
-}
 
 void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
 {
@@ -74,8 +66,8 @@ void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
                          (PRTE_IOF_XON == tag) ? "xon" : "xoff"));
 
     /* send the buffer to the HNP */
-    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP, send_cb,
-                                          NULL))) {
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
     }

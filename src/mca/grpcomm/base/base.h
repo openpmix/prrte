@@ -40,7 +40,7 @@
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/mca.h"
 #include "src/mca/odls/odls_types.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/pmix/pmix-internal.h"
 
 /*
