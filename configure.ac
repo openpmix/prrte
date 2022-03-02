@@ -1234,12 +1234,6 @@ AS_IF([test ! -z "$PRTE_CFLAGS_cache"], [CFLAGS="$CFLAGS $PRTE_CFLAGS_cache"])
 # setup "picky" compiler options if enabled
 PRTE_SETUP_PICKY_COMPILERS
 
-# Cleanup duplicate flags
-PRTE_FLAGS_UNIQ(CFLAGS)
-PRTE_FLAGS_UNIQ(CPPFLAGS)
-PRTE_FLAGS_UNIQ(LDFLAGS)
-PRTE_FLAGS_UNIQ(LIBS)
-
 #
 # Delayed the substitution of CFLAGS and CXXFLAGS until now because
 # they may have been modified throughout the course of this script.
