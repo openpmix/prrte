@@ -6,6 +6,8 @@
 # Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # Copyright (c) 2020      Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -22,24 +24,36 @@ AC_DEFUN([MCA_prte_prtereachable_netlink_CONFIG],[
     PRTE_VAR_SCOPE_PUSH([prte_reachable_netlink_happy])
 
     prte_reachable_netlink_happy=1
-    AC_CHECK_HEADER([linux/netlink.h], [],
-                    [prte_reachable_netlink_happy=0], [
+
+    # ugly hack to deal with potentially alternate locations for
+    # libnl3 headers.  Note that if the pkg-config file is found,
+    # this ugly hack won't be used.
+    AS_IF([test -n "$with_libnl_route_3_0_incdir"],
+          [# skip check if someone above set incdir],
+          [test -d "/usr/include/libnl3"],
+          [with_libnl_route_3_0_incdir="/usr/include/libnl3"],
+          [test -d "/usr/local/include/libnl3"],
+          [with_libnl_route_3_0_incdir="/usr/local/include/libnl3"])
+
+    # note we need the route package, not the basic package
+    # The first argument of OAC_CHECK_PACKAGE must be a valid
+    # shell variable name, which means no dashs.  Deal with that
+    # by being explicit with our module.
+    m4_define([libnl_route_pkgconfig_module], [libnl-route-3.0])
+    OAC_CHECK_PACKAGE([libnl_route],
+                      [prte_reachable_netlink],
+                      [netlink/route/route.h],
+                      [nl-route-3 nl-3],
+                      [rtnl_route_get],
+                      [prte_reachable_netlink_happy=1],
+                      [prte_reachable_netlink_happy=0])
+
+    AS_IF([test ${prte_reachable_netlink_happy} -eq 1],
+          [AC_CHECK_HEADER([linux/netlink.h], [],
+                           [prte_reachable_netlink_happy=0], [
 #include <sys/types.h>
 #include <net/if.h>
-])
-
-    # this is terrible, but libnl-1 and libnl-3 are incompatible in
-    # weird ways, and once there are libraries in LIBS for one, the
-    # other is hard to get right.  So if someone has already decided
-    # we have libnl version 1, get out.  Otherwise, see if we have
-    # libnl-3, which is the only version supported by the netlink
-    # component.
-    AS_IF([test $prte_libnl_version -eq 1],
-	      [prte_reachable_netlink_happy=0],
-          [PRTE_CHECK_LIBNL_V3([$prte_libnl_location],
-			                    [prte_reachable_netlink])
-	       AS_IF([test "$PRTE_HAVE_LIBNL3" != "1"],
-		         [prte_reachable_netlink_happy=0])])
+])])
 
     AS_IF([test $prte_reachable_netlink_happy -eq 1],
           [$1],
