@@ -44,7 +44,7 @@
 
 #include "src/mca/odls/odls_types.h"
 #include "src/mca/plm/plm_types.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/runtime/prte_globals.h"
 
 BEGIN_C_DECLS

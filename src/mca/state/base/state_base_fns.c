@@ -37,7 +37,7 @@
 #include "src/mca/iof/base/base.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_data_server.h"
@@ -445,10 +445,10 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
     }
 
     /* send the request to the server */
-    rc = prte_rml.send_buffer_nb(&prte_pmix_server_globals.server, buf, PRTE_RML_TAG_DATA_SERVER,
-                                 prte_rml_send_callback, NULL);
+    PRTE_RML_SEND(rc, &prte_pmix_server_globals.server,
+                  buf, PRTE_RML_TAG_DATA_SERVER);
     if (PRTE_SUCCESS != rc) {
-        PMIX_RELEASE(buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
     }
 }
 
@@ -544,9 +544,8 @@ static void _send_notification(int status, prte_proc_state_t state, pmix_proc_t 
                             "%s state:base:sending notification %s to proc %s at daemon %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(status),
                             PRTE_NAME_PRINT(target), PRTE_NAME_PRINT(&daemon));
-        if (PRTE_SUCCESS
-            != (rc = prte_rml.send_buffer_nb(&daemon, &pbkt, PRTE_RML_TAG_NOTIFICATION,
-                                             prte_rml_send_callback, NULL))) {
+        PRTE_RML_SEND(rc, &daemon, &pbkt, PRTE_RML_TAG_NOTIFICATION);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
         }

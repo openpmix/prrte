@@ -75,7 +75,7 @@
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 
-#include "src/mca/rml/base/rml_contact.h"
+#include "src/rml/rml_contact.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"
@@ -94,8 +94,7 @@
 #include "src/mca/plm/plm.h"
 #include "src/mca/ras/ras.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
@@ -441,8 +440,8 @@ int main(int argc, char *argv[])
     PMIX_VALUE_DESTRUCT(&val);
 
     /* setup the primary daemon command receive function */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON, PRTE_RML_PERSISTENT,
-                            prte_daemon_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON,
+                  PRTE_RML_PERSISTENT, prte_daemon_recv, NULL);
 
     /* output a message indicating we are alive, our name, and our pid
      * for debugging purposes
@@ -477,7 +476,7 @@ int main(int argc, char *argv[])
                                       PRTE_MCA_BASE_VAR_SCOPE_CONSTANT, &prte_parent_uri);
     if (NULL != prte_parent_uri) {
         /* set the contact info into our local database */
-        ret = prte_rml_base_parse_uris(prte_parent_uri, PRTE_PROC_MY_PARENT, NULL);
+        ret = prte_rml_parse_uris(prte_parent_uri, PRTE_PROC_MY_PARENT, NULL);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             goto DONE;
@@ -518,8 +517,8 @@ int main(int argc, char *argv[])
     }
 
     /* setup the rollup callback */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK, PRTE_RML_PERSISTENT,
-                            rollup, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK,
+                  PRTE_RML_PERSISTENT, rollup, NULL);
 
     /* define the target jobid */
     PMIX_LOAD_NSPACE(target.nspace, PRTE_PROC_MY_NAME->nspace);
@@ -531,12 +530,12 @@ int main(int argc, char *argv[])
          * a little time in the launch phase by "warming up" the
          * connection to our parent while we wait for our children */
         PMIX_DATA_BUFFER_CONSTRUCT(&pbuf); // zero-byte message
-        prte_rml.recv_buffer_nb(PRTE_PROC_MY_PARENT, PRTE_RML_TAG_NODE_REGEX_REPORT,
-                                PRTE_RML_PERSISTENT, node_regex_report, &node_regex_waiting);
+        PRTE_RML_RECV(PRTE_PROC_MY_PARENT, PRTE_RML_TAG_NODE_REGEX_REPORT,
+                      PRTE_RML_PERSISTENT, node_regex_report, &node_regex_waiting);
         node_regex_waiting = true;
-        if (0 > (ret = prte_rml.send_buffer_nb(PRTE_PROC_MY_PARENT, &pbuf,
-                                               PRTE_RML_TAG_WARMUP_CONNECTION,
-                                               prte_rml_send_callback, NULL))) {
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT, &pbuf,
+                      PRTE_RML_TAG_WARMUP_CONNECTION);
+        if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
             goto DONE;
@@ -759,8 +758,8 @@ int main(int argc, char *argv[])
     }
 
     /* send it to the designated target */
-    if (0 > (ret = prte_rml.send_buffer_nb(&target, &buffer, PRTE_RML_TAG_PRTED_CALLBACK,
-                                           prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(ret, &target, &buffer, PRTE_RML_TAG_PRTED_CALLBACK);
+    if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&buffer);
         goto DONE;
@@ -995,9 +994,9 @@ static void report_prted(void)
         }
         PMIX_DATA_BUFFER_RELEASE(bucket);
         /* relay this on to our parent */
-        if (0 > (ret = prte_rml.send_buffer_nb(PRTE_PROC_MY_PARENT, mybucket,
-                                               PRTE_RML_TAG_PRTED_CALLBACK, prte_rml_send_callback,
-                                               NULL))) {
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT, mybucket,
+                      PRTE_RML_TAG_PRTED_CALLBACK);
+        if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(mybucket);
         }

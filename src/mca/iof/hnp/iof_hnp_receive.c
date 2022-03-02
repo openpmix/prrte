@@ -43,7 +43,7 @@
 #include "src/pmix/pmix-internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"

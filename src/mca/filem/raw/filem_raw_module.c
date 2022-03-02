@@ -48,7 +48,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/base/base.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
@@ -109,15 +109,15 @@ static int raw_init(void)
     PMIX_CONSTRUCT(&incoming_files, pmix_list_t);
 
     /* start a recv to catch any files sent to me */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE, PRTE_RML_PERSISTENT,
-                            recv_files, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE,
+                  PRTE_RML_PERSISTENT, recv_files, NULL);
 
     /* if I'm the HNP, start a recv to catch acks sent to me */
     if (PRTE_PROC_IS_MASTER) {
         PMIX_CONSTRUCT(&outbound_files, pmix_list_t);
         PMIX_CONSTRUCT(&positioned_files, pmix_list_t);
-        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE_RESP,
-                                PRTE_RML_PERSISTENT, recv_ack, NULL);
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE_RESP,
+                      PRTE_RML_PERSISTENT, recv_ack, NULL);
     }
 
     return PRTE_SUCCESS;
@@ -853,8 +853,8 @@ static void send_complete(char *file, int status)
         PMIX_DATA_BUFFER_RELEASE(buf);
         return;
     }
-    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_FILEM_BASE_RESP,
-                                          prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_FILEM_BASE_RESP);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(buf);
     }

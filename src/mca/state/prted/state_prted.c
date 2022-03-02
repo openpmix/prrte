@@ -26,7 +26,7 @@
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_data_server.h"
@@ -287,8 +287,8 @@ static void track_jobs(int fd, short argc, void *cbdata)
 
     if (NULL != alert) {
         /* send it */
-        if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                              prte_rml_send_callback, NULL))) {
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(alert);
         }
@@ -425,8 +425,8 @@ static void track_procs(int fd, short argc, void *cbdata)
                 }
             }
             /* send it */
-            if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                                  prte_rml_send_callback, NULL))) {
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+            if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
             } else {
@@ -526,9 +526,10 @@ static void track_procs(int fd, short argc, void *cbdata)
                                  "%s state:prted: SENDING JOB LOCAL TERMINATION UPDATE FOR JOB %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_JOBID_PRINT(jdata->nspace)));
-            if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                                  prte_rml_send_callback, NULL))) {
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+            if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(alert);
             }
             /* mark that we sent it so we ensure we don't do it again */
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TERM_NOTIFIED, PRTE_ATTR_LOCAL, NULL,

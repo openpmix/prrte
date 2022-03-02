@@ -93,7 +93,7 @@
 #include "src/mca/plm/plm.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 #include "src/runtime/prte_globals.h"
@@ -653,8 +653,8 @@ int main(int argc, char *argv[])
      * there are times I need to send a command to "all daemons", and that means *I* have
      * to receive it too
      */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON, PRTE_RML_PERSISTENT,
-                            prte_daemon_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DAEMON,
+                  PRTE_RML_PERSISTENT, prte_daemon_recv, NULL);
 
     /* setup to capture job-level info */
     PMIX_INFO_LIST_START(jinfo);

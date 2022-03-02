@@ -39,7 +39,7 @@
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/util/name_fns.h"
@@ -147,8 +147,8 @@ int prte_data_server_init(void)
 
     PMIX_CONSTRUCT(&pending, pmix_list_t);
 
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_SERVER, PRTE_RML_PERSISTENT,
-                            prte_data_server, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_SERVER,
+                  PRTE_RML_PERSISTENT, prte_data_server, NULL);
 
     return PRTE_SUCCESS;
 }
@@ -372,6 +372,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 rc = PMIx_Data_pack(NULL, reply, &req->room_number, 1, PMIX_INT);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
                     goto SEND_ERROR;
                 }
                 /* we are responding to a lookup cmd */
@@ -379,6 +380,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 rc = PMIx_Data_pack(NULL, reply, &command, 1, PMIX_UINT8);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
                     goto SEND_ERROR;
                 }
                 /* if we found all of the requested keys, then indicate so */
@@ -391,6 +393,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 rc = PMIx_Data_pack(NULL, reply, &i, 1, PMIX_INT);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
                     goto SEND_ERROR;
                 }
 
@@ -402,6 +405,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                     rc = PRTE_ERR_PACK_FAILURE;
+                    PMIX_DATA_BUFFER_RELEASE(reply);
                     goto SEND_ERROR;
                 }
                 /* loop thru and pack the individual responses - this is somewhat less
@@ -415,6 +419,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                         PMIX_ERROR_LOG(ret);
                         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         rc = PRTE_ERR_PACK_FAILURE;
+                        PMIX_DATA_BUFFER_RELEASE(reply);
                         goto SEND_ERROR;
                     }
                     /* pack the data */
@@ -423,6 +428,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                         PMIX_ERROR_LOG(ret);
                         PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                         rc = PRTE_ERR_PACK_FAILURE;
+                        PMIX_DATA_BUFFER_RELEASE(reply);
                         goto SEND_ERROR;
                     }
                 }
@@ -437,12 +443,13 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
                     goto SEND_ERROR;
                 }
-                if (0 > (rc = prte_rml.send_buffer_nb(&req->proxy, reply, PRTE_RML_TAG_DATA_CLIENT,
-                                                      prte_rml_send_callback, NULL))) {
+                PRTE_RML_SEND(rc, &req->proxy, reply, PRTE_RML_TAG_DATA_CLIENT);
+                if (PRTE_SUCCESS != rc) {
                     PRTE_ERROR_LOG(rc);
-                    PMIX_RELEASE(reply);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
                 }
             }
         }
@@ -858,9 +865,9 @@ SEND_ERROR:
     }
 
 SEND_ANSWER:
-    if (0 > (rc = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_DATA_CLIENT,
-                                          prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(rc, sender, answer, PRTE_RML_TAG_DATA_CLIENT);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        PMIX_RELEASE(answer);
+        PMIX_DATA_BUFFER_RELEASE(answer);
     }
 }

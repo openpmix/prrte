@@ -43,7 +43,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
@@ -173,9 +173,8 @@ static void spawn(int sd, short args, void *cbdata)
     }
 
     /* send it to the HNP for processing - might be myself! */
-    if (PRTE_SUCCESS
-        != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_PLM,
-                                         prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_PLM);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
         PMIX_DATA_BUFFER_RELEASE(buf);

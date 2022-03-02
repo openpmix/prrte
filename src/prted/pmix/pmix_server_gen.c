@@ -46,7 +46,7 @@
 #include "src/mca/plm/plm.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/schizo/schizo.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
@@ -608,8 +608,8 @@ static void _toolconn(int sd, short args, void *cbdata)
                 PMIX_ERROR_LOG(rc);
             }
             /* send it to the HNP for processing - might be myself! */
-            rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_PLM,
-                                         prte_rml_send_callback, NULL);
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP,
+                          buf, PRTE_RML_TAG_PLM);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 xrc = prte_pmix_convert_rc(rc);
@@ -704,9 +704,9 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
             /* we don't "own" the data here, so we cannot just point to it
              * nor can we "adopt" it - we have to actually make a copy of it */
             rc = PMIx_Data_embed(buf, &data[n].value.data.bo);
-            if (PRTE_SUCCESS
-                != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_SHOW_HELP,
-                                                 prte_rml_send_callback, NULL))) {
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf,
+                          PRTE_RML_TAG_SHOW_HELP);
+            if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buf);
             }
@@ -731,8 +731,8 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
         }
         rc = PMIx_Data_pack(NULL, buf, &pbo, 1, PMIX_BYTE_OBJECT);
         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-        rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_LOGGING,
-                                     prte_rml_send_callback, NULL);
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf,
+                      PRTE_RML_TAG_LOGGING);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(buf);

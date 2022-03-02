@@ -70,8 +70,7 @@
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
@@ -595,8 +594,8 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         }
         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
         /* send the data */
-        if (0 > (ret = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_TOPOLOGY_REPORT,
-                                               prte_rml_send_callback, NULL))) {
+        PRTE_RML_SEND(ret, sender, answer, PRTE_RML_TAG_TOPOLOGY_REPORT);
+        if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(answer);
         }
@@ -705,8 +704,8 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
             free(gstack_exec);
         }
         /* always send our response */
-        if (0 > (ret = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, answer, PRTE_RML_TAG_STACK_TRACE,
-                                               prte_rml_send_callback, NULL))) {
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP, answer, PRTE_RML_TAG_STACK_TRACE);
+        if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(answer);
         }

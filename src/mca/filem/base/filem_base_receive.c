@@ -50,8 +50,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/filem/base/base.h"
 #include "src/mca/filem/filem.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
@@ -82,8 +81,8 @@ int prte_filem_base_comm_start(void)
                          "%s filem:base: Receive: Start command recv",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE, PRTE_RML_PERSISTENT,
-                            prte_filem_base_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE,
+                  PRTE_RML_PERSISTENT, prte_filem_base_recv, NULL);
 
     recv_issued = true;
 
@@ -103,7 +102,7 @@ int prte_filem_base_comm_stop(void)
     PRTE_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
                          "%s filem:base:receive stop comm", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE);
     recv_issued = false;
 
     return PRTE_SUCCESS;
@@ -205,8 +204,8 @@ static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t *sender,
         return;
     }
 
-    if (0 > (rc = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_FILEM_BASE_RESP,
-                                          prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(rc, sender, answer, PRTE_RML_TAG_FILEM_BASE_RESP);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(answer);
@@ -295,8 +294,8 @@ static void filem_base_process_get_remote_path_cmd(pmix_proc_t *sender, pmix_dat
         goto CLEANUP;
     }
 
-    if (0 > (rc = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_FILEM_BASE_RESP,
-                                          prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(rc, sender, answer, PRTE_RML_TAG_FILEM_BASE_RESP);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
         PMIX_DATA_BUFFER_RELEASE(answer);

@@ -38,7 +38,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/grpcomm.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
@@ -142,36 +142,44 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
     PMIX_DATA_BUFFER_CREATE(reply);
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &status, 1, PMIX_STATUS))) {
         PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
         goto error;
     }
     /* pack the id of the requested proc */
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->tproc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
         goto error;
     }
 
     /* pack the remote daemon's request room number */
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->remote_room_num, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
         goto error;
     }
     if (PMIX_SUCCESS == status) {
         /* return any provided data */
         if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &sz, 1, PMIX_SIZE))) {
             PMIX_ERROR_LOG(prc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
             goto error;
         }
         if (0 < sz) {
             if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, data, sz, PMIX_BYTE))) {
                 PMIX_ERROR_LOG(prc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
                 goto error;
             }
         }
     }
 
     /* send the response */
-    prte_rml.send_buffer_nb(&req->proxy, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP,
-                            prte_rml_send_callback, NULL);
+    PRTE_RML_SEND(prc, &req->proxy, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
+    if (PRTE_SUCCESS != prc) {
+        PRTE_ERROR_LOG(prc);
+        PMIX_DATA_BUFFER_RELEASE(reply);
+    }
 
 error:
     PMIX_RELEASE(req);
@@ -381,12 +389,11 @@ static void dmodex_req(int sd, short args, void *cbdata)
     }
 
     /* send it to the host daemon */
-    if (PRTE_SUCCESS
-        != (rc = prte_rml.send_buffer_nb(&dmn->name, buf, PRTE_RML_TAG_DIRECT_MODEX,
-                                         prte_rml_send_callback, NULL))) {
+    PRTE_RML_SEND(rc, &dmn->name, buf, PRTE_RML_TAG_DIRECT_MODEX);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
-        PMIX_RELEASE(buf);
+        PMIX_DATA_BUFFER_RELEASE(buf);
         prc = prte_pmix_convert_rc(rc);
         goto callback;
     }

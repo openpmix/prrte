@@ -52,8 +52,7 @@
 #include "src/mca/iof/base/base.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/ras/base/base.h"
-#include "src/mca/rml/base/base.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/base/base.h"
 #include "src/mca/routed/routed.h"
 

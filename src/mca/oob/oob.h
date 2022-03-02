@@ -46,7 +46,7 @@
 #include "src/class/pmix_pointer_array.h"
 #include "src/mca/mca.h"
 
-#include "src/mca/rml/base/base.h"
+#include "src/rml/rml_types.h"
 
 BEGIN_C_DECLS
 

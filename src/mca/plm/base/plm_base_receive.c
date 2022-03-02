@@ -47,8 +47,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/ras/base/base.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/state.h"
@@ -77,15 +76,15 @@ int prte_plm_base_comm_start(void)
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:receive start comm", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PLM, PRTE_RML_PERSISTENT,
-                            prte_plm_base_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PLM,
+                  PRTE_RML_PERSISTENT, prte_plm_base_recv, NULL);
     if (PRTE_PROC_IS_MASTER) {
-        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK,
-                                PRTE_RML_PERSISTENT, prte_plm_base_daemon_callback, NULL);
-        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH,
-                                PRTE_RML_PERSISTENT, prte_plm_base_daemon_failed, NULL);
-        prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_TOPOLOGY_REPORT,
-                                PRTE_RML_PERSISTENT, prte_plm_base_daemon_topology, NULL);
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK,
+                      PRTE_RML_PERSISTENT, prte_plm_base_daemon_callback, NULL);
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH,
+                      PRTE_RML_PERSISTENT, prte_plm_base_daemon_failed, NULL);
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_TOPOLOGY_REPORT,
+                      PRTE_RML_PERSISTENT, prte_plm_base_daemon_topology, NULL);
     }
     recv_issued = true;
 
@@ -101,11 +100,11 @@ int prte_plm_base_comm_stop(void)
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:receive stop comm", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PLM);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PLM);
     if (PRTE_PROC_IS_MASTER) {
-        prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK);
-        prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH);
-        prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_TOPOLOGY_REPORT);
+        PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK);
+        PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH);
+        PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_TOPOLOGY_REPORT);
     }
     recv_issued = false;
 
@@ -187,10 +186,10 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         }
 
         /* send the response back to the sender */
-        if (0 > (ret = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_JOBID_RESP,
-                                               prte_rml_send_callback, NULL))) {
+        PRTE_RML_SEND(ret, sender, answer, PRTE_RML_TAG_JOBID_RESP);
+        if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
-            PMIX_RELEASE(answer);
+            PMIX_DATA_BUFFER_RELEASE(answer);
         }
         break;
 
@@ -357,10 +356,10 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         }
 
         /* send the response back to the sender */
-        if (0 > (ret = prte_rml.send_buffer_nb(sender, answer, PRTE_RML_TAG_LAUNCH_RESP,
-                                               prte_rml_send_callback, NULL))) {
+        PRTE_RML_SEND(ret, sender, answer, PRTE_RML_TAG_LAUNCH_RESP);
+        if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
-            PMIX_RELEASE(answer);
+            PMIX_DATA_BUFFER_RELEASE(answer);
         }
         break;
 

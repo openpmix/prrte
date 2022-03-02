@@ -44,7 +44,7 @@
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/schizo/schizo.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"

@@ -35,7 +35,7 @@
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"
@@ -349,8 +349,8 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
                 }
 
                 /* send this process's info to hnp */
-                if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                                      prte_rml_send_callback, NULL))) {
+                PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM, NULL)
+                if (PRTE_SUCCESS != rc) {
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                          "%s errmgr:detector: send to hnp failed",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));

@@ -49,7 +49,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/odls/odls_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
@@ -99,8 +99,8 @@ static int init(void)
     /* post non-blocking recv to catch forwarded IO from
      * the orteds
      */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_HNP, PRTE_RML_PERSISTENT,
-                            prte_iof_hnp_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_HNP,
+                  PRTE_RML_PERSISTENT, prte_iof_hnp_recv, NULL);
 
     PMIX_CONSTRUCT(&prte_iof_hnp_component.procs, pmix_list_t);
     prte_iof_hnp_component.stdinev = NULL;

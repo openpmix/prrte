@@ -89,9 +89,8 @@
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/oob/base/base.h"
 #include "src/mca/rmaps/rmaps.h"
-#include "src/mca/rml/base/rml_contact.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_contact.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
@@ -295,8 +294,14 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
                 PMIX_RELEASE(t2);
                 return;
             }
-            prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH,
-                                    prte_rml_send_callback, NULL);
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(buf);
+                PMIX_RELEASE(caddy);
+                PMIX_RELEASE(t2);
+                return;
+            }
             /* note that this daemon failed */
             daemon->state = PRTE_PROC_STATE_FAILED_TO_START;
         } else {
@@ -862,8 +867,12 @@ cleanup:
             PMIX_DATA_BUFFER_RELEASE(buf);
             return ret;
         }
-        prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH,
-                                prte_rml_send_callback, NULL);
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return rc;
+        }
     }
 
     return rc;

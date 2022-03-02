@@ -30,7 +30,7 @@
 #include "src/mca/base/base.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/mca.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/output.h"
@@ -83,7 +83,7 @@ static int prte_grpcomm_base_close(void)
     size_t size;
     uint32_t *seq_number;
 
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
 
     /* Close the active modules */
     PMIX_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t)

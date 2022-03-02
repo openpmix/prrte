@@ -35,7 +35,7 @@
 #include "src/util/output.h"
 
 #include "src/mca/oob/base/base.h"
-#include "src/mca/rml/base/base.h"
+#include "src/rml/rml.h"
 
 /*
  * The following file was created by configure.  It contains extern

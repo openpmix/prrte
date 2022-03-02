@@ -34,7 +34,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/odls/odls_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
@@ -166,11 +166,11 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
                          "%s iof:prted:read handler sending %d bytes to HNP",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes));
 
-    prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
-                            PRTE_RML_TAG_IOF_HNP,
-                            prte_rml_send_callback,
-                            NULL);
-
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+    }
     /* re-add the event */
     PRTE_IOF_READ_ACTIVATE(rev);
 

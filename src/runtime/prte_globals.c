@@ -42,7 +42,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_net.h"

@@ -58,15 +58,17 @@
 #include "src/mca/plm/base/base.h"
 #include "src/mca/prtereachable/base/base.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/mca/rml/base/base.h"
-#include "src/mca/rml/base/rml_contact.h"
 #include "src/mca/routed/base/base.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/rtc/base/base.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
+
 #include "src/prted/pmix/pmix_server.h"
+#include "src/rml/rml.h"
+#include "src/rml/rml_contact.h"
+
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
@@ -364,18 +366,7 @@ int prte_ess_base_prted_setup(void)
         error = "prte_oob_base_select";
         goto error;
     }
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rml_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_rml_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_rml_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_rml_base_select";
-        goto error;
-    }
+    prte_rml_open();
 
     /* it is now safe to start the pmix server */
     pmix_server_start();
@@ -384,9 +375,10 @@ int prte_ess_base_prted_setup(void)
         pmix_value_t val;
 
         /* extract the HNP's name so we can update the routing table */
-        if (PRTE_SUCCESS
-            != (ret = prte_rml_base_parse_uris(prte_process_info.my_hnp_uri, PRTE_PROC_MY_HNP,
-                                               NULL))) {
+        ret = prte_rml_parse_uris(prte_process_info.my_hnp_uri,
+                                  PRTE_PROC_MY_HNP,
+                                  NULL);
+        if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             error = "prte_rml_parse_HNP";
             goto error;
@@ -606,7 +598,7 @@ int prte_ess_base_prted_finalize(void)
     (void) prte_mca_base_framework_close(&prte_odls_base_framework);
     (void) prte_mca_base_framework_close(&prte_routed_base_framework);
     (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);
-    (void) prte_mca_base_framework_close(&prte_rml_base_framework);
+    prte_rml_close();
     (void) prte_mca_base_framework_close(&prte_oob_base_framework);
     (void) prte_mca_base_framework_close(&prte_prtereachable_base_framework);
     (void) prte_mca_base_framework_close(&prte_state_base_framework);
@@ -680,8 +672,8 @@ static void signal_forward_callback(int fd, short event, void *arg)
     }
 
     /* send it to ourselves */
-    if (0
-        > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_NAME, cmd, PRTE_RML_TAG_DAEMON, NULL, NULL))) {
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME, cmd, PRTE_RML_TAG_DAEMON);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(cmd);
     }

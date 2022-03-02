@@ -46,7 +46,7 @@
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
@@ -199,13 +199,13 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
                 }
 
                 /* send this process's info to hnp */
-                if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM,
-                                                      prte_rml_send_callback, NULL))) {
+                PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM, NULL);
+                if (PRTE_SUCCESS != rc) {
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                          "%s errmgr:dvm: send to hnp failed",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                     PRTE_ERROR_LOG(rc);
-                    PMIX_RELEASE(alert);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
                 }
                 if (PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_IOF_COMPLETE)
                     && PRTE_FLAG_TEST(temp_orte_proc, PRTE_PROC_FLAG_WAITPID)

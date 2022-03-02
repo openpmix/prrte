@@ -23,7 +23,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/oob/base/base.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/threads/pmix_threads.h"
 

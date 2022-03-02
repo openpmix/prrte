@@ -47,7 +47,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/odls/odls_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
@@ -98,8 +98,8 @@ static int init(void)
 {
     /* post a non-blocking RML receive to get messages
      from the HNP IOF component */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_PROXY, PRTE_RML_PERSISTENT,
-                            prte_iof_prted_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_PROXY,
+                  PRTE_RML_PERSISTENT, prte_iof_prted_recv, NULL);
 
     /* setup the local global variables */
     PMIX_CONSTRUCT(&prte_iof_prted_component.procs, pmix_list_t);
@@ -296,7 +296,7 @@ static int finalize(void)
     PMIX_LIST_DESTRUCT(&prte_iof_prted_component.procs);
 
     /* Cancel the RML receive */
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_PROXY);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_PROXY);
     return PRTE_SUCCESS;
 }
 
@@ -437,8 +437,12 @@ static int prted_output(const pmix_proc_t *peer, prte_iof_tag_t source_tag, cons
                          "%s iof:prted:output sending %d bytes to HNP",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) strlen(msg) + 1));
 
-    prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP, prte_rml_send_callback,
-                            NULL);
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return rc;
+    }
 
     return PRTE_SUCCESS;
 }

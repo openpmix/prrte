@@ -49,7 +49,7 @@
 #include "src/event/event-internal.h"
 #include "src/util/output.h"
 
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "types.h"

@@ -67,8 +67,6 @@
 #include "src/mca/prtereachable/base/base.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/mca/rml/base/base.h"
-#include "src/mca/rml/rml_types.h"
 #include "src/mca/routed/base/base.h"
 #include "src/mca/routed/routed.h"
 #include "src/mca/rtc/base/base.h"
@@ -77,6 +75,7 @@
 #include "src/mca/state/state.h"
 
 #include "src/prted/pmix/pmix_server.h"
+#include "src/rml/rml.h"
 
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
@@ -228,7 +227,7 @@ static int rte_init(int argc, char **argv)
         != (ret = prte_mca_base_framework_open(&prte_routed_base_framework,
                                                PRTE_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
-        error = "prte_rml_base_open";
+        error = "prte_routed_base_open";
         goto error;
     }
     if (PRTE_SUCCESS != (ret = prte_routed_base_select())) {
@@ -265,23 +264,17 @@ static int rte_init(int argc, char **argv)
     /*
      * Runtime Messaging Layer
      */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rml_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        error = "prte_rml_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_rml_base_select())) {
-        error = "prte_rml_base_select";
-        goto error;
-    }
+    prte_rml_open();
 
     /* it is now safe to start the pmix server */
     pmix_server_start();
 
     /* and register our show_help recv */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SHOW_HELP, PRTE_RML_PERSISTENT,
-                            prte_show_help_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD,
+                  PRTE_RML_TAG_SHOW_HELP,
+                  PRTE_RML_PERSISTENT,
+                  prte_show_help_recv, NULL);
+
     /*
      * Group communications
      */
@@ -606,7 +599,7 @@ static int rte_finalize(void)
     (void) prte_mca_base_framework_close(&prte_rtc_base_framework);
     (void) prte_mca_base_framework_close(&prte_odls_base_framework);
     (void) prte_mca_base_framework_close(&prte_routed_base_framework);
-    (void) prte_mca_base_framework_close(&prte_rml_base_framework);
+    prte_rml_close();
     (void) prte_mca_base_framework_close(&prte_oob_base_framework);
     (void) prte_mca_base_framework_close(&prte_prtereachable_base_framework);
     (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);

@@ -28,7 +28,7 @@
 #include <time.h>
 
 #include "src/class/pmix_pointer_array.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/mca/schizo/schizo.h"
 
 BEGIN_C_DECLS

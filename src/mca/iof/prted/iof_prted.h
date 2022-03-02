@@ -55,7 +55,7 @@
 #include "src/class/pmix_list.h"
 
 #include "src/mca/iof/iof.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 
 BEGIN_C_DECLS
 

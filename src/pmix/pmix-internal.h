@@ -30,6 +30,7 @@
 #include "src/threads/pmix_threads.h"
 #include "src/util/error.h"
 #include "src/util/pmix_error.h"
+#include "src/util/pmix_name_fns.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 
