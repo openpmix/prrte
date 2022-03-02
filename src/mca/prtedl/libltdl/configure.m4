@@ -4,6 +4,8 @@
 #
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -50,38 +52,13 @@ AC_DEFUN([MCA_prte_prtedl_libltdl_CONFIG],[
        [AS_HELP_STRING([--with-libltdl-libdir=DIR],
              [Search for libltdl libraries in DIR])])
 
-    # Sanity check the --with values
-    PRTE_CHECK_WITHDIR([libltdl], [$with_libltdl],
-                       [include/ltprtedl.h])
-    PRTE_CHECK_WITHDIR([libltdl-libdir], [$with_libltdl_libdir],
-                       [libltdl.*])
-
-    # Defaults
-    prte_check_libltdl_dir_msg="compiler default"
-    prte_check_libltdl_libdir_msg="linker default"
-
-    # Save directory names if supplied
-    AS_IF([test ! -z "$with_libltdl" && test "$with_libltdl" != "yes"],
-          [prte_check_libltdl_dir=$with_libltdl
-           prte_check_libltdl_dir_msg="$prte_check_libltdl_dir (from --with-libltdl)"])
-    AS_IF([test ! -z "$with_libltdl_libdir" && test "$with_libltdl_libdir" != "yes"],
-          [prte_check_libltdl_libdir=$with_libltdl_libdir
-           prte_check_libltdl_libdir_msg="$prte_check_libltdl_libdir (from --with-libltdl-libdir)"])
-
     prte_prtedl_libltdl_happy=no
     AS_IF([test "$with_libltdl" != "no"],
-          [AC_MSG_CHECKING([for libltdl dir])
-           AC_MSG_RESULT([$prte_check_libltdl_dir_msg])
-           AC_MSG_CHECKING([for libltdl library dir])
-           AC_MSG_RESULT([$prte_check_libltdl_libdir_msg])
-
-           PRTE_CHECK_PACKAGE([prte_prtedl_libltdl],
+          [OAC_CHECK_PACKAGE([libltdl],
+                  [prte_prtedl_libltdl],
                   [ltprtedl.h],
                   [ltprtedl],
                   [lt_prtedlopen],
-                  [],
-                  [$prte_check_libltdl_dir],
-                  [$prte_check_libltdl_libdir],
                   [prte_prtedl_libltdl_happy=yes],
                   [prte_prtedl_libltdl_happy=no])
               ])

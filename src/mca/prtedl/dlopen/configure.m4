@@ -3,6 +3,8 @@
 # Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 #
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -36,13 +38,11 @@ AC_DEFUN([MCA_prte_prtedl_dlopen_CONFIG],[
 
     prte_prtedl_prtedlopen_happy=no
     AS_IF([test "$enable_prtedl_prtedlopen" != "no"],
-          [PRTE_CHECK_PACKAGE([prte_prtedl_dlopen],
+          [OAC_CHECK_PACKAGE([dlopen],
+              [prte_prtedl_dlopen],
               [dlfcn.h],
               [dl],
               [dlopen],
-              [],
-              [],
-              [],
               [prte_prtedl_dlopen_happy=yes],
               [prte_prtedl_dlopen_happy=no])
           ])
