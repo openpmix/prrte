@@ -119,9 +119,6 @@ AC_DEFINE_UNQUOTED([PRTE_CONFIGURE_HOST], "$PRTE_CONFIGURE_HOST",
 AC_SUBST(PRTE_CONFIGURE_DATE)
 AC_DEFINE_UNQUOTED([PRTE_CONFIGURE_DATE], "$PRTE_CONFIGURE_DATE",
                    [Date when PMIx was built])
-
-PRTE_LIBNL_SANITY_INIT
-
 ])dnl
 
 dnl #######################################################################
