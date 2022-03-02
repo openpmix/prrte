@@ -71,17 +71,17 @@ BEGIN_C_DECLS
  *                    receiving process is not available
  * @retval PRTE_ERROR  An unspecified error occurred
  */
-PRTE_EXPORT int prte_rml_send_buffer_nb(pmix_proc_t *peer,
+PRTE_EXPORT int prte_rml_send_buffer_nb(pmix_rank_t rank,
                                         pmix_data_buffer_t *buffer,
                                         prte_rml_tag_t tag);
 
-#define PRTE_RML_SEND(r, p, b, t)                               \
+#define PRTE_RML_SEND(_r, r, b, t)                              \
     do {                                                        \
-        prte_output_verbose(2, prte_rml_base.output,            \
+        prte_output_verbose(2, prte_rml_base.rml_output,        \
                             "RML-SEND(%s:%d): %s:%s:%d",        \
-                            PMIX_NAME_PRINT(p), t,              \
+                            PMIX_RANK_PRINT(r), t,              \
                             __FILE__, __func__, __LINE__);      \
-        (r) = prte_rml_send_buffer_nb(p, b, t);                 \
+        (_r) = prte_rml_send_buffer_nb(r, b, t);                \
     } while(0)
 
 /**
@@ -93,7 +93,7 @@ PRTE_EXPORT void prte_rml_purge(pmix_proc_t *peer);
 
 #define PRTE_RML_PURGE(p)                                       \
     do {                                                        \
-        prte_output_verbose(2, prte_rml_base.output,            \
+        prte_output_verbose(2, prte_rml_base.rml_output,            \
                             "RML-PURGE(%s): %s:%s:%d",          \
                             PMIX_NAME_PRINT(p),                 \
                             __FILE__, __func__, __LINE__);      \
@@ -116,7 +116,7 @@ PRTE_EXPORT void prte_rml_recv_buffer_nb(pmix_proc_t *peer, prte_rml_tag_t tag,
 
 #define PRTE_RML_RECV(p, t, prs, c, cb)                         \
     do {                                                        \
-        prte_output_verbose(2, prte_rml_base.output,            \
+        prte_output_verbose(2, prte_rml_base.rml_output,            \
                             "RML-RECV(%d): %s:%s:%d",           \
                             t, __FILE__, __func__, __LINE__);   \
         prte_rml_recv_buffer_nb(p, t, prs, c, cb);              \
@@ -136,17 +136,22 @@ PRTE_EXPORT void prte_rml_recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag);
 
 #define PRTE_RML_CANCEL(p, t)                                   \
     do {                                                        \
-        prte_output_verbose(2, prte_rml_base.output,            \
+        prte_output_verbose(2, prte_rml_base.rml_output,            \
                             "RML-CANCEL(%d): %s:%s:%d",         \
                             t, __FILE__, __func__, __LINE__);   \
         prte_rml_recv_cancel(p, t);                             \
     } while(0)
 
 typedef struct {
-    int output;
+    int rml_output;
+    int routed_output;
     int max_retries;
     pmix_list_t posted_recvs;
     pmix_list_t unmatched_msgs;
+    pmix_rank_t lifeline;
+    pmix_list_t children;
+    int radix;
+    bool static_ports;
 } prte_rml_base_t;
 
 PRTE_EXPORT extern prte_rml_base_t prte_rml_base;
@@ -160,13 +165,17 @@ PRTE_EXPORT void prte_rml_base_process_msg(int fd, short flags, void *cbdata);
 PRTE_EXPORT void prte_rml_send_callback(int status, pmix_proc_t *peer,
                                         pmix_data_buffer_t *buffer,
                                         prte_rml_tag_t tag, void *cbdata);
+PRTE_EXPORT void prte_rml_compute_routing_tree(void);
+PRTE_EXPORT int prte_rml_get_num_contributors(pmix_rank_t *dmns, size_t ndmns);
+PRTE_EXPORT int prte_rml_route_lost(pmix_rank_t route);
+PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
 
 #define PRTE_RML_POST_MESSAGE(p, t, s, b, l)                                                    \
     do {                                                                                        \
         prte_rml_recv_t *msg;                                                                   \
         pmix_status_t _rc;                                                                      \
         pmix_byte_object_t _bo;                                                                 \
-        prte_output_verbose(5, prte_rml_base.output,                                            \
+        prte_output_verbose(5, prte_rml_base.rml_output,                                            \
                             "%s Message posted at %s:%d for tag %d",                            \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__, (t));       \
         msg = PMIX_NEW(prte_rml_recv_t);                                                        \
@@ -197,7 +206,7 @@ PRTE_EXPORT void prte_rml_send_callback(int status, pmix_proc_t *peer,
 
 #define PRTE_RML_SEND_COMPLETE(m)                                                             \
     do {                                                                                      \
-        prte_output_verbose(5, prte_rml_base.output,                                          \
+        prte_output_verbose(5, prte_rml_base.rml_output,                                          \
                             "%s-%s Send message complete at %s:%d",                           \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&((m)->dst)), \
                             __FILE__, __LINE__);                                              \

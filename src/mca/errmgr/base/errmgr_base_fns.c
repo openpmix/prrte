@@ -51,12 +51,12 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
+
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
-
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
@@ -69,9 +69,6 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/odls/odls.h"
 #include "src/mca/plm/plm.h"
-#include "src/rml/rml.h"
-#include "src/rml/rml_types.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
 #include "src/mca/errmgr/base/base.h"

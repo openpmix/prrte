@@ -27,7 +27,6 @@
 #include "src/mca/odls/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_quit.h"
@@ -287,7 +286,7 @@ static void track_jobs(int fd, short argc, void *cbdata)
 
     if (NULL != alert) {
         /* send it */
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(alert);
@@ -425,7 +424,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                 }
             }
             /* send it */
-            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
@@ -482,7 +481,8 @@ static void track_procs(int fd, short argc, void *cbdata)
          * gone, then terminate ourselves IF no local procs
          * remain (might be some from another job)
          */
-        if (prte_prteds_term_ordered && 0 == prte_routed.num_routes()) {
+        if (prte_prteds_term_ordered &&
+            0 == pmix_list_get_size(&prte_rml_base.children)) {
             for (i = 0; i < prte_local_children->size; i++) {
                 if (NULL
                         != (pdata = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
@@ -526,7 +526,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                                  "%s state:prted: SENDING JOB LOCAL TERMINATION UPDATE FOR JOB %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_JOBID_PRINT(jdata->nspace)));
-            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);

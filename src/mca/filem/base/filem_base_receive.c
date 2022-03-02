@@ -204,7 +204,7 @@ static void filem_base_process_get_proc_node_name_cmd(pmix_proc_t *sender,
         return;
     }
 
-    PRTE_RML_SEND(rc, sender, answer, PRTE_RML_TAG_FILEM_BASE_RESP);
+    PRTE_RML_SEND(rc, sender->rank, answer, PRTE_RML_TAG_FILEM_BASE_RESP);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
@@ -294,7 +294,7 @@ static void filem_base_process_get_remote_path_cmd(pmix_proc_t *sender, pmix_dat
         goto CLEANUP;
     }
 
-    PRTE_RML_SEND(rc, sender, answer, PRTE_RML_TAG_FILEM_BASE_RESP);
+    PRTE_RML_SEND(rc, sender->rank, answer, PRTE_RML_TAG_FILEM_BASE_RESP);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);

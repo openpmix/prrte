@@ -196,7 +196,7 @@ static void execute(int sd, short args, void *cbdata)
     }
 
     /* send the request to the target */
-    PRTE_RML_SEND(rc, target, xfer, PRTE_RML_TAG_DATA_SERVER);
+    PRTE_RML_SEND(rc, target->rank, xfer, PRTE_RML_TAG_DATA_SERVER);
     if (PRTE_SUCCESS == rc) {
         return;
     }

@@ -28,8 +28,6 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/base/base.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"

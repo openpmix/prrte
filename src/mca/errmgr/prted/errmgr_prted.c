@@ -44,7 +44,6 @@
 #include "src/mca/odls/odls.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
 #include "src/runtime/prte_globals.h"
@@ -213,7 +212,7 @@ static void prted_abort(int error_code, char *fmt, ...)
     }
 
     /* send it */
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(alert);
@@ -306,7 +305,7 @@ static void job_errors(int fd, short args, void *cbdata)
         goto cleanup;
     }
     /* send it */
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(alert);
@@ -442,7 +441,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
             /* if all my routes and children are gone, then terminate
                ourselves nicely (i.e., this is a normal termination) */
-            if (0 == prte_routed.num_routes()) {
+            if (0 == pmix_list_get_size(&prte_rml_base.children)) {
                 PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                      "%s errmgr:default:prted all routes gone - exiting",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -451,7 +450,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                 PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                      "%s errmgr:default:prted not exiting, num_routes() == %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     (int) prte_routed.num_routes()));
+                                     (int) pmix_list_get_size(&prte_rml_base.children)));
             }
         }
         /* if not, then we can continue */
@@ -514,7 +513,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                                  "non-zero status (local procs = %d)",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
                                  jdata->num_local_procs));
-            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_RELEASE(alert);
@@ -580,7 +579,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             }
             /* if all my routes and children are gone, then terminate
                ourselves nicely (i.e., this is a normal termination) */
-            if (0 == prte_routed.num_routes()) {
+            if (0 == pmix_list_get_size(&prte_rml_base.children)) {
                 PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                      "%s errmgr:default:prted all routes gone - exiting",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -627,7 +626,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
                  jdata->num_local_procs));
             /* send it */
-            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
@@ -686,7 +685,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         PMIX_RELEASE(jdata);
 
         /* send it */
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM);
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(alert);

@@ -173,7 +173,7 @@ static void spawn(int sd, short args, void *cbdata)
     }
 
     /* send it to the HNP for processing - might be myself! */
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_PLM);
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_PLM);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);

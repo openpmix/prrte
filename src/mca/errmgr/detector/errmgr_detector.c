@@ -38,7 +38,6 @@
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 #include "src/threads/pmix_threads.h"
 
@@ -213,7 +212,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
                 }
 
                 /* send this process's info to hnp */
-                PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM, NULL);
+                PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM, NULL);
                 if (PRTE_SUCCESS != rc) {
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                          "%s errmgr:detector: send to hnp failed",
@@ -414,7 +413,7 @@ static int pmix_fd_heartbeat_request(prte_errmgr_detector_t *detector)
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
-        PRTE_RML_SEND(rc, &daemon, buffer, PRTE_RML_TAG_HEARTBEAT_REQUEST, NULL);
+        PRTE_RML_SEND(rc, daemon.rank, buffer, PRTE_RML_TAG_HEARTBEAT_REQUEST, NULL);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(buffer);
@@ -542,7 +541,7 @@ static void pmix_fd_heartbeat_send(prte_errmgr_detector_t *detector)
         PMIX_ERROR_LOG(rc);
     }
     /* send the heartbeat with eager send */
-    PRTE_RML_SEND(rc, &daemon, buffer, PRTE_RML_TAG_HEARTBEAT, NULL);
+    PRTE_RML_SEND(rc, daemon.rank, buffer, PRTE_RML_TAG_HEARTBEAT, NULL);
     if (PRTE_SUCCESS != rc) {
         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                              "errmgr:detector:failed to send heartbeat to %s",

@@ -48,7 +48,6 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/ras/base/base.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"
@@ -186,7 +185,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         }
 
         /* send the response back to the sender */
-        PRTE_RML_SEND(ret, sender, answer, PRTE_RML_TAG_JOBID_RESP);
+        PRTE_RML_SEND(ret, sender->rank, answer, PRTE_RML_TAG_JOBID_RESP);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(answer);
@@ -356,7 +355,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         }
 
         /* send the response back to the sender */
-        PRTE_RML_SEND(ret, sender, answer, PRTE_RML_TAG_LAUNCH_RESP);
+        PRTE_RML_SEND(ret, sender->rank, answer, PRTE_RML_TAG_LAUNCH_RESP);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(answer);

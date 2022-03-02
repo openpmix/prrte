@@ -58,8 +58,6 @@
 #include "src/mca/plm/base/base.h"
 #include "src/mca/prtereachable/base/base.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/mca/routed/base/base.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/rtc/base/base.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
@@ -329,19 +327,6 @@ int prte_ess_base_prted_setup(void)
     }
 
     /* Setup the communication infrastructure */
-    /* Routed system */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_routed_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_routed_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_routed_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_routed_base_select";
-        goto error;
-    }
     if (PRTE_SUCCESS
         != (ret = prte_mca_base_framework_open(&prte_prtereachable_base_framework,
                                                PRTE_MCA_BASE_OPEN_DEFAULT))) {
@@ -596,7 +581,6 @@ int prte_ess_base_prted_finalize(void)
     prte_odls.kill_local_procs(NULL);
     (void) prte_mca_base_framework_close(&prte_rtc_base_framework);
     (void) prte_mca_base_framework_close(&prte_odls_base_framework);
-    (void) prte_mca_base_framework_close(&prte_routed_base_framework);
     (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);
     prte_rml_close();
     (void) prte_mca_base_framework_close(&prte_oob_base_framework);
@@ -672,7 +656,7 @@ static void signal_forward_callback(int fd, short event, void *arg)
     }
 
     /* send it to ourselves */
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME, cmd, PRTE_RML_TAG_DAEMON);
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, cmd, PRTE_RML_TAG_DAEMON);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(cmd);

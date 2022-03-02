@@ -57,7 +57,6 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/mca/routed/routed.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
@@ -157,7 +156,8 @@ static void send_nb(prte_rml_send_t *msg)
     pmix_proc_t hop;
 
     /* do we have a route to this peer (could be direct)? */
-    hop = prte_routed.get_route(&msg->dst);
+    PMIX_LOAD_NSPACE(hop.nspace, PRTE_PROC_MY_NAME->nspace);
+    hop.rank = prte_rml_get_route(msg->dst.rank);
     /* do we know this hop? */
     if (NULL == (peer = prte_oob_tcp_peer_lookup(&hop))) {
         /* push this back to the component so it can try

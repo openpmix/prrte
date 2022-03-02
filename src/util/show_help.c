@@ -513,7 +513,7 @@ int prte_show_help_norender(const char *filename, const char *topic,
         }
 
         /* send it via RML to the HNP */
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_SHOW_HELP);
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_SHOW_HELP);
         if (PRTE_SUCCESS != rc) {
             PMIX_DATA_BUFFER_RELEASE(buf);
             /* okay, that didn't work, output locally  */
@@ -583,7 +583,7 @@ int prte_show_help_suppress(const char *filename, const char *topic)
             return PRTE_SUCCESS;
         }
         /* send it to the HNP */
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_SHOW_HELP);
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_SHOW_HELP);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(buf);

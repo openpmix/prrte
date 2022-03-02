@@ -91,7 +91,6 @@
 #include "src/mca/rmaps/rmaps.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
 #include "src/mca/plm/base/base.h"
@@ -294,7 +293,7 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
                 PMIX_RELEASE(t2);
                 return;
             }
-            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH);
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(buf);
@@ -320,7 +319,7 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
             /* remove it from the routing table to ensure num_routes
              * returns the correct value
              */
-            prte_routed.route_lost(&daemon->name);
+            prte_rml_route_lost(daemon->name.rank);
             /* report that the daemon has failed so we can exit */
             PRTE_ACTIVATE_PROC_STATE(&daemon->name, PRTE_PROC_STATE_FAILED_TO_START);
         }
@@ -749,8 +748,7 @@ static int remote_spawn(void)
     bool failed_launch = true;
     pmix_proc_t target;
     prte_plm_ssh_caddy_t *caddy;
-    pmix_list_t coll;
-    prte_namelist_t *child;
+    prte_routed_tree_t *child;
     pmix_status_t ret;
 
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
@@ -768,18 +766,13 @@ static int remote_spawn(void)
         prefix = NULL;
     }
 
-    /* get the updated routing list */
-    PMIX_CONSTRUCT(&coll, pmix_list_t);
-    prte_routed.get_routing_list(&coll);
-
     /* if I have no children, just return */
-    if (0 == pmix_list_get_size(&coll)) {
+    if (0 == pmix_list_get_size(&prte_rml_base.children)) {
         PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: remote spawn - have no children!",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         failed_launch = false;
         rc = PRTE_SUCCESS;
-        PMIX_DESTRUCT(&coll);
         goto cleanup;
     }
 
@@ -788,21 +781,19 @@ static int remote_spawn(void)
                       &proc_vpid_index, prefix);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        PMIX_DESTRUCT(&coll);
         goto cleanup;
     }
 
     PMIX_LOAD_NSPACE(target.nspace, PRTE_PROC_MY_NAME->nspace);
-    PMIX_LIST_FOREACH(child, &coll, prte_namelist_t)
+    PMIX_LIST_FOREACH(child, &prte_rml_base.children, prte_routed_tree_t)
     {
-        target.rank = child->name.rank;
+        target.rank = child->rank;
 
         /* get the host where this daemon resides */
         if (NULL == (hostname = prte_get_proc_hostname(&target))) {
             prte_output(0, "%s unable to get hostname for daemon %s",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(child->name.rank));
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_VPID_PRINT(child->rank));
             rc = PRTE_ERR_NOT_FOUND;
-            PMIX_DESTRUCT(&coll);
             goto cleanup;
         }
 
@@ -830,7 +821,6 @@ static int remote_spawn(void)
         PMIX_LOAD_PROCID(&caddy->daemon->name, PRTE_PROC_MY_NAME->nspace, target.rank);
         pmix_list_append(&launch_list, &caddy->super);
     }
-    PMIX_LIST_DESTRUCT(&coll);
     /* we NEVER use tree-spawn for secondary launches - e.g.,
      * due to a dynamic launch requesting add_hosts - so be
      * sure to turn it off here */
@@ -867,7 +857,7 @@ cleanup:
             PMIX_DATA_BUFFER_RELEASE(buf);
             return ret;
         }
-        PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH);
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_REPORT_REMOTE_LAUNCH);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(buf);
@@ -996,7 +986,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     pmix_list_t coll;
     char *username, *nname;
     int port, *portptr;
-    prte_namelist_t *child;
+    prte_routed_tree_t *child;
 
     PMIX_ACQUIRE_OBJECT(state);
 
@@ -1126,13 +1116,6 @@ static void launch_daemons(int fd, short args, void *cbdata)
         goto cleanup;
     }
 
-    /* if we are tree launching, find our children and create the launch cmd */
-    if (!prte_plm_ssh_component.no_tree_spawn) {
-        /* get the updated routing list */
-        PMIX_CONSTRUCT(&coll, pmix_list_t);
-        prte_routed.get_routing_list(&coll);
-    }
-
     /* setup the launch */
     rc = setup_launch(&argc, &argv, node->name, &node_name_index1, &proc_vpid_index, prefix_dir);
     if (PRTE_SUCCESS != rc) {
@@ -1150,9 +1133,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
         /* if we are tree launching, only launch our own children */
         if (!prte_plm_ssh_component.no_tree_spawn) {
-            PMIX_LIST_FOREACH(child, &coll, prte_namelist_t)
+            PMIX_LIST_FOREACH(child, &prte_rml_base.children, prte_routed_tree_t)
             {
-                if (child->name.rank == node->daemon->name.rank) {
+                if (child->rank == node->daemon->name.rank) {
                     goto launch;
                 }
             }

@@ -608,7 +608,7 @@ static void _toolconn(int sd, short args, void *cbdata)
                 PMIX_ERROR_LOG(rc);
             }
             /* send it to the HNP for processing - might be myself! */
-            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP,
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank,
                           buf, PRTE_RML_TAG_PLM);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
@@ -704,7 +704,7 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
             /* we don't "own" the data here, so we cannot just point to it
              * nor can we "adopt" it - we have to actually make a copy of it */
             rc = PMIx_Data_embed(buf, &data[n].value.data.bo);
-            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf,
+            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf,
                           PRTE_RML_TAG_SHOW_HELP);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
@@ -731,7 +731,7 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
         }
         rc = PMIx_Data_pack(NULL, buf, &pbo, 1, PMIX_BYTE_OBJECT);
         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf,
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf,
                       PRTE_RML_TAG_LOGGING);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);

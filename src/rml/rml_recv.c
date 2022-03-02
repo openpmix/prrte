@@ -41,7 +41,6 @@
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/routed/routed.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 
@@ -55,7 +54,7 @@ void prte_rml_recv_buffer_nb(pmix_proc_t *peer,
 {
     prte_rml_recv_request_t *req;
 
-    prte_output_verbose(10, prte_rml_base.output,
+    prte_output_verbose(10, prte_rml_base.rml_output,
                         "%s rml_recv_buffer_nb for peer %s tag %d",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(peer), tag);
@@ -74,7 +73,7 @@ void prte_rml_recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
 {
     prte_rml_recv_request_t *req;
 
-    prte_output_verbose(10, prte_rml_base.output,
+    prte_output_verbose(10, prte_rml_base.rml_output,
                         "%s rml_recv_cancel for peer %s tag %d",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(peer), tag);

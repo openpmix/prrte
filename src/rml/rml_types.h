@@ -43,6 +43,7 @@
 #    include <net/uio.h>
 #endif
 
+#include "src/class/pmix_bitmap.h"
 #include "src/class/pmix_list.h"
 #include "src/pmix/pmix-internal.h"
 
@@ -308,6 +309,13 @@ typedef struct {
 } prte_rml_recv_request_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rml_recv_request_t);
 
+/* struct for tracking routing trees */
+typedef struct {
+    pmix_list_item_t super;
+    pmix_rank_t rank;
+    pmix_bitmap_t relatives;
+} prte_routed_tree_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_routed_tree_t);
 
 END_C_DECLS
 

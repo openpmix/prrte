@@ -56,7 +56,6 @@
 #include "src/mca/rmaps/rmaps.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/rtc/rtc.h"
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
@@ -173,8 +172,6 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
     if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PMIX_BOOL)) {
         prte_ras_base_display_alloc(caddy->jdata);
     }
-    /* ensure we update the routing plan */
-    prte_routed.update_routing_plan();
 
     /* progress the job */
     caddy->jdata->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
@@ -1034,7 +1031,7 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
                          "%s plm:base:launch sending dyn release of job %s to %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
                          PRTE_NAME_PRINT(&jdata->originator)));
-    PRTE_RML_SEND(rc, &jdata->originator, answer, PRTE_RML_TAG_LAUNCH_RESP);
+    PRTE_RML_SEND(rc, jdata->originator.rank, answer, PRTE_RML_TAG_LAUNCH_RESP);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(answer);
@@ -1757,7 +1754,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                     goto CLEANUP;
                 }
                 /* send it */
-                PRTE_RML_SEND(ret, &dname, relay, PRTE_RML_TAG_DAEMON);
+                PRTE_RML_SEND(ret, dname.rank, relay, PRTE_RML_TAG_DAEMON);
                 if (PRTE_SUCCESS != ret) {
                     PRTE_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_RELEASE(relay);
@@ -2626,7 +2623,7 @@ process:
 
         /* ensure all routing plans are up-to-date - we need this
          * so we know how to tree-spawn and/or xcast info */
-        prte_routed.update_routing_plan();
+        prte_rml_compute_routing_tree();
     }
 
     /* mark that the daemon job changed */

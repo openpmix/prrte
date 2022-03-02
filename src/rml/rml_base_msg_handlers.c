@@ -60,7 +60,7 @@ void prte_rml_base_post_recv(int sd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(req);
 
-    prte_output_verbose(5, prte_rml_base.output,
+    prte_output_verbose(5, prte_rml_base.rml_output,
                         "%s posting recv",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -80,7 +80,7 @@ void prte_rml_base_post_recv(int sd, short args, void *cbdata)
         PMIX_LIST_FOREACH(recv, &prte_rml_base.posted_recvs, prte_rml_posted_recv_t)
         {
             if (PMIX_CHECK_PROCID(&post->peer, &recv->peer) && post->tag == recv->tag) {
-                prte_output_verbose(5, prte_rml_base.output,
+                prte_output_verbose(5, prte_rml_base.rml_output,
                                     "%s canceling recv %d for peer %s",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), post->tag,
                                     PRTE_NAME_PRINT(&recv->peer));
@@ -105,7 +105,7 @@ void prte_rml_base_post_recv(int sd, short args, void *cbdata)
         }
     }
 
-    prte_output_verbose(5, prte_rml_base.output,
+    prte_output_verbose(5, prte_rml_base.rml_output,
                         "%s posting %s recv on tag %d for peer %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         (post->persistent) ? "persistent" : "non-persistent", post->tag,
@@ -133,7 +133,7 @@ static void msg_match_recv(prte_rml_posted_recv_t *rcv, bool get_all)
     while (item != pmix_list_get_end(&prte_rml_base.unmatched_msgs)) {
         next = pmix_list_get_next(item);
         msg = (prte_rml_recv_t *) item;
-        prte_output_verbose(5, prte_rml_base.output,
+        prte_output_verbose(5, prte_rml_base.rml_output,
                             "%s checking recv for %s against unmatched msg from %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&rcv->peer),
                             PRTE_NAME_PRINT(&msg->sender));
@@ -161,7 +161,7 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
     PMIX_ACQUIRE_OBJECT(msg);
 
     PRTE_OUTPUT_VERBOSE(
-        (5, prte_rml_base.output, "%s message received from %s for tag %d",
+        (5, prte_rml_base.rml_output, "%s message received from %s for tag %d",
          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->sender), msg->tag));
 
     /* if this message is just to warmup the connection, then drop it */
@@ -178,7 +178,7 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
                 return;
             }
 
-            PRTE_RML_SEND(rc, &msg->sender, &buffer,
+            PRTE_RML_SEND(rc, msg->sender.rank, &buffer,
                           PRTE_RML_TAG_NODE_REGEX_REPORT);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
@@ -203,20 +203,20 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
             /* the user must have unloaded the buffer if they wanted
              * to retain ownership of it, so release whatever remains
              */
-            PRTE_OUTPUT_VERBOSE((5, prte_rml_base.output,
+            PRTE_OUTPUT_VERBOSE((5, prte_rml_base.rml_output,
                                  "%s message received %" PRIsize_t
                                  " bytes from %s for tag %d called callback",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), msg->dbuf.bytes_used,
                                  PRTE_NAME_PRINT(&msg->sender), msg->tag));
             /* release the message */
             PMIX_RELEASE(msg);
-            PRTE_OUTPUT_VERBOSE((5, prte_rml_base.output,
+            PRTE_OUTPUT_VERBOSE((5, prte_rml_base.rml_output,
                                  "%s message tag %d on released",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), post->tag));
             /* if the recv is non-persistent, remove it */
             if (!post->persistent) {
                 pmix_list_remove_item(&prte_rml_base.posted_recvs, &post->super);
-                /*PRTE_OUTPUT_VERBOSE((5, prte_rml_base.output,
+                /*PRTE_OUTPUT_VERBOSE((5, prte_rml_base.rml_output,
                                      "%s non persistent recv %p remove success releasing now",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      post));*/
@@ -229,7 +229,7 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
      * the message until such a recv is issued
      */
     PRTE_OUTPUT_VERBOSE(
-        (5, prte_rml_base.output,
+        (5, prte_rml_base.rml_output,
          "%s message received bytes from %s for tag %d Not Matched adding to unmatched msgs",
          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->sender), msg->tag));
     pmix_list_append(&prte_rml_base.unmatched_msgs, &msg->super);

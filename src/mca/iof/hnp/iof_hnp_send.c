@@ -109,7 +109,7 @@ int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host, pmix_proc_t *target, p
     /* send the buffer to the host - this is either a daemon or
      * a tool that requested IOF
      */
-    PRTE_RML_SEND(rc, host, buf, PRTE_RML_TAG_IOF_PROXY);
+    PRTE_RML_SEND(rc, host->rank, buf, PRTE_RML_TAG_IOF_PROXY);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
