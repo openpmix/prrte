@@ -963,7 +963,7 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
     }
 
     /* send the response */
-    PRTE_RML_SEND(prc, remote, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
+    PRTE_RML_SEND(prc, remote->rank, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
     if (PRTE_SUCCESS != prc) {
         PRTE_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(reply);
@@ -1023,7 +1023,7 @@ static void _mdxresp(int sd, short args, void *cbdata)
     }
 
     /* send the response */
-    PRTE_RML_SEND(prc, &req->proxy, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
+    PRTE_RML_SEND(prc, req->proxy.rank, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
     if (PRTE_SUCCESS != prc) {
         PRTE_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(reply);

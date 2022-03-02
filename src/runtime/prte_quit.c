@@ -54,7 +54,6 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/plm/plm.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
 #include "src/threads/pmix_threads.h"

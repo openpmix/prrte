@@ -26,7 +26,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/mca/routed/routed.h"
+#include "src/rml/rml.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
@@ -419,9 +419,8 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
     /* update num procs */
     if (prte_process_info.num_daemons != daemons->num_procs) {
         prte_process_info.num_daemons = daemons->num_procs;
+        prte_rml_compute_routing_tree();
     }
-    /* need to update the routing plan */
-    prte_routed.update_routing_plan();
 
 cleanup:
     if (NULL != vpid) {

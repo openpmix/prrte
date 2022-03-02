@@ -30,4 +30,5 @@ libprrte_la_SOURCES += \
     rml/rml_send.c \
     rml/rml_recv.c \
     rml/rml_base_contact.c \
-    rml/rml_base_msg_handlers.c
+    rml/rml_base_msg_handlers.c \
+    rml/routed_radix.c

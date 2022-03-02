@@ -70,8 +70,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/rml/rml_types.h"
-#include "src/mca/routed/routed.h"
+#include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
@@ -814,15 +813,6 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
 
 static bool component_is_reachable(pmix_proc_t *peer)
 {
-    pmix_proc_t hop;
-
-    /* if we have a route to this peer, then we can reach it */
-    hop = prte_routed.get_route(peer);
-    if (PMIX_PROCID_INVALID(&hop)) {
-        prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
-                            "%s is NOT reachable by TCP", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        return false;
-    }
     /* assume we can reach the hop - the module will tell us if it can't
      * when we try to send the first time, and then we'll correct it */
     return true;
@@ -875,7 +865,7 @@ void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
 
     if (!prte_finalizing) {
         /* activate the proc state */
-        if (PRTE_SUCCESS != prte_routed.route_lost(&pop->peer)) {
+        if (PRTE_SUCCESS != prte_rml_route_lost(pop->peer.rank)) {
             PRTE_ACTIVATE_PROC_STATE(&pop->peer, PRTE_PROC_STATE_LIFELINE_LOST);
         } else {
             PRTE_ACTIVATE_PROC_STATE(&pop->peer, PRTE_PROC_STATE_COMM_FAILED);

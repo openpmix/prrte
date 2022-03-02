@@ -71,7 +71,6 @@
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
 #include "src/mca/odls/base/odls_private.h"
@@ -359,12 +358,10 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         // ensure daemons know we were ordered to terminate
         prte_prteds_term_ordered = true;
         /* if all my routes and local children are gone, then terminate ourselves */
-        if (0 == (ret = prte_routed.num_routes())) {
+        if (0 == (ret = pmix_list_get_size(&prte_rml_base.children))) {
             for (i = 0; i < prte_local_children->size; i++) {
-                if (NULL
-                        != (proct = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
-                                                                                i))
-                    && PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
+                proct = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+                if (NULL != proct && PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
                     /* at least one is still alive */
                     if (prte_debug_daemons_flag) {
                         prte_output(0, "%s prted_cmd: exit cmd, but proc %s is alive",
@@ -417,12 +414,10 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         prte_prteds_term_ordered = true;
         if (PRTE_PROC_IS_MASTER) {
             /* if all my routes and local children are gone, then terminate ourselves */
-            if (0 == prte_routed.num_routes()) {
+            if (0 == pmix_list_get_size(&prte_rml_base.children)) {
                 for (i = 0; i < prte_local_children->size; i++) {
-                    if (NULL
-                            != (proct = (prte_proc_t *)
-                                    pmix_pointer_array_get_item(prte_local_children, i))
-                        && PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
+                    proct = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+                    if (NULL != proct && PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
                         /* at least one is still alive */
                         return;
                     }
@@ -594,7 +589,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         }
         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
         /* send the data */
-        PRTE_RML_SEND(ret, sender, answer, PRTE_RML_TAG_TOPOLOGY_REPORT);
+        PRTE_RML_SEND(ret, sender->rank, answer, PRTE_RML_TAG_TOPOLOGY_REPORT);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(answer);
@@ -704,7 +699,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
             free(gstack_exec);
         }
         /* always send our response */
-        PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP, answer, PRTE_RML_TAG_STACK_TRACE);
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP->rank, answer, PRTE_RML_TAG_STACK_TRACE);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             PMIX_DATA_BUFFER_RELEASE(answer);

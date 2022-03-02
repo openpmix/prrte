@@ -95,7 +95,6 @@
 #include "src/mca/ras/ras.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 
@@ -491,59 +490,28 @@ int main(int argc, char *argv[])
             goto DONE;
         }
         PMIX_VALUE_DESTRUCT(&val);
-
-        /* tell the routed module that we have a path
-         * back to the HNP
-         */
-        ret = prte_routed.update_route(PRTE_PROC_MY_HNP, PRTE_PROC_MY_PARENT);
-        if (PRTE_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
-            goto DONE;
-        }
-        /* and a path to our parent */
-        ret = prte_routed.update_route(PRTE_PROC_MY_PARENT, PRTE_PROC_MY_PARENT);
-        if (PRTE_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
-            goto DONE;
-        }
-        /* set the lifeline to point to our parent so that we
-         * can handle the situation if that lifeline goes away
-         */
-        ret = prte_routed.set_lifeline(PRTE_PROC_MY_PARENT);
-        if (PRTE_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
-            goto DONE;
-        }
     }
 
     /* setup the rollup callback */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK,
                   PRTE_RML_PERSISTENT, rollup, NULL);
 
-    /* define the target jobid */
-    PMIX_LOAD_NSPACE(target.nspace, PRTE_PROC_MY_NAME->nspace);
-    if (prte_static_ports || NULL != prte_parent_uri) {
-        /* we start by sending to ourselves */
-        target.rank = PRTE_PROC_MY_NAME->rank;
-        /* since we will be waiting for any children to send us
-         * their rollup info before sending to our parent, save
-         * a little time in the launch phase by "warming up" the
-         * connection to our parent while we wait for our children */
-        PMIX_DATA_BUFFER_CONSTRUCT(&pbuf); // zero-byte message
-        PRTE_RML_RECV(PRTE_PROC_MY_PARENT, PRTE_RML_TAG_NODE_REGEX_REPORT,
-                      PRTE_RML_PERSISTENT, node_regex_report, &node_regex_waiting);
-        node_regex_waiting = true;
-        PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT, &pbuf,
-                      PRTE_RML_TAG_WARMUP_CONNECTION);
-        if (PRTE_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-            goto DONE;
-        }
+    /* since we will be waiting for any children to send us
+     * their rollup info before sending to our parent, save
+     * a little time in the launch phase by "warming up" the
+     * connection to our parent while we wait for our children */
+    PMIX_DATA_BUFFER_CONSTRUCT(&pbuf); // zero-byte message
+    PRTE_RML_RECV(PRTE_PROC_MY_PARENT, PRTE_RML_TAG_NODE_REGEX_REPORT,
+                  PRTE_RML_PERSISTENT, node_regex_report, &node_regex_waiting);
+    node_regex_waiting = true;
+    PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT->rank, &pbuf,
+                  PRTE_RML_TAG_WARMUP_CONNECTION);
+    if (PRTE_SUCCESS != ret) {
+        PRTE_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-    } else {
-        target.rank = 0;
+        goto DONE;
     }
+    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
 
     /* send the information to the orted report-back point - this function
      * will process the data, but also counts the number of
@@ -757,8 +725,8 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* send it to the designated target */
-    PRTE_RML_SEND(ret, &target, &buffer, PRTE_RML_TAG_PRTED_CALLBACK);
+    /* start by sending it to ourselves */
+    PRTE_RML_SEND(ret, PRTE_PROC_MY_NAME->rank, &buffer, PRTE_RML_TAG_PRTED_CALLBACK);
     if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         PMIX_DATA_BUFFER_DESTRUCT(&buffer);
@@ -985,7 +953,7 @@ static void report_prted(void)
     int nreqd, ret;
 
     /* get the number of children */
-    nreqd = prte_routed.num_routes() + 1;
+    nreqd = pmix_list_get_size(&prte_rml_base.children) + 1;
     if (nreqd == ncollected && NULL != mybucket && !node_regex_waiting) {
         /* add the collection of our children's buckets to ours */
         ret = PMIx_Data_copy_payload(mybucket, bucket);
@@ -994,7 +962,7 @@ static void report_prted(void)
         }
         PMIX_DATA_BUFFER_RELEASE(bucket);
         /* relay this on to our parent */
-        PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT, mybucket,
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT->rank, mybucket,
                       PRTE_RML_TAG_PRTED_CALLBACK);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
@@ -1014,10 +982,6 @@ static void node_regex_report(int status, pmix_proc_t *sender, pmix_data_buffer_
         PRTE_ERROR_LOG(rc);
         return;
     }
-
-    /* update the routing tree so any tree spawn operation
-     * properly gets the number of children underneath us */
-    prte_routed.update_routing_plan();
 
     *active = false;
 

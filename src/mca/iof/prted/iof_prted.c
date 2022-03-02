@@ -437,7 +437,7 @@ static int prted_output(const pmix_proc_t *peer, prte_iof_tag_t source_tag, cons
                          "%s iof:prted:output sending %d bytes to HNP",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) strlen(msg) + 1));
 
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP);
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_IOF_HNP);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);

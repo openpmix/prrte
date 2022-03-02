@@ -38,7 +38,6 @@
 #include "src/mca/odls/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
@@ -331,7 +330,7 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
     }
 
     /* count the number of contributions we should get */
-    coll->nexpected = prte_routed.get_num_contributors(coll->dmns, coll->ndmns);
+    coll->nexpected = prte_rml_get_num_contributors(coll->dmns, coll->ndmns);
 
     /* see if I am in the array of participants - note that I may
      * be in the rollup tree even though I'm not participating

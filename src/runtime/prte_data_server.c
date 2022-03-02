@@ -446,7 +446,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                     PMIX_DATA_BUFFER_RELEASE(reply);
                     goto SEND_ERROR;
                 }
-                PRTE_RML_SEND(rc, &req->proxy, reply, PRTE_RML_TAG_DATA_CLIENT);
+                PRTE_RML_SEND(rc, req->proxy.rank, reply, PRTE_RML_TAG_DATA_CLIENT);
                 if (PRTE_SUCCESS != rc) {
                     PRTE_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
@@ -865,7 +865,7 @@ SEND_ERROR:
     }
 
 SEND_ANSWER:
-    PRTE_RML_SEND(rc, sender, answer, PRTE_RML_TAG_DATA_CLIENT);
+    PRTE_RML_SEND(rc, sender->rank, answer, PRTE_RML_TAG_DATA_CLIENT);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(answer);

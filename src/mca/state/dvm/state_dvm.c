@@ -38,7 +38,6 @@
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
@@ -533,7 +532,7 @@ static void check_complete(int fd, short args, void *cbdata)
             (2, prte_state_base_framework.framework_output,
              "%s state:dvm:check_job_complete - received NULL job, checking daemons",
              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        if (0 == prte_routed.num_routes()) {
+        if (0 == pmix_list_get_size(&prte_rml_base.children)) {
             /* orteds are done! */
             PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                  "%s prteds complete - exiting",
@@ -674,7 +673,7 @@ static void check_complete(int fd, short args, void *cbdata)
             goto release;
         }
         /* send it to the data server */
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME, buf, PRTE_RML_TAG_DATA_SERVER);
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, buf, PRTE_RML_TAG_DATA_SERVER);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(buf);

@@ -32,10 +32,15 @@
 #include "src/util/name_fns.h"
 
 prte_rml_base_t prte_rml_base = {
-    .output = -1,
+    .rml_output = -1,
+    .routed_output = -1,
     .posted_recvs = PMIX_LIST_STATIC_INIT,
     .unmatched_msgs = PMIX_LIST_STATIC_INIT,
-    .max_retries = 0
+    .max_retries = 0,
+    .lifeline = PMIX_RANK_INVALID,
+    .children = PMIX_LIST_STATIC_INIT,
+    .radix = 64,
+    .static_ports = false
 };
 
 static int verbosity = 0;
@@ -50,31 +55,56 @@ void prte_rml_register(void)
                                NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_rml_base.max_retries);
 
+    verbosity = 0;
     prte_mca_base_var_register("prte", "rml", "base", "verbose",
                                "Debug verbosity of the RML subsystem",
                                PRTE_MCA_BASE_VAR_TYPE_INT,
                                NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &verbosity);
     if (0 < verbosity) {
-        prte_rml_base.output = prte_output_open(NULL);
-        prte_output_set_verbosity(prte_rml_base.output, verbosity);
+        prte_rml_base.rml_output = prte_output_open(NULL);
+        prte_output_set_verbosity(prte_rml_base.rml_output, verbosity);
     }
+
+    verbosity = 0;
+    prte_mca_base_var_register("prte", "routed", "base", "verbose",
+                               "Debug verbosity of the Routed subsystem",
+                               PRTE_MCA_BASE_VAR_TYPE_INT,
+                               NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                               PRTE_MCA_BASE_VAR_SCOPE_READONLY, &verbosity);
+    if (0 < verbosity) {
+        prte_rml_base.routed_output = prte_output_open(NULL);
+        prte_output_set_verbosity(prte_rml_base.routed_output, verbosity);
+    }
+
+    prte_mca_base_var_register("prte", "rml", "base", "radix",
+                               "Radix to be used for routing tree",
+                               PRTE_MCA_BASE_VAR_TYPE_INT,
+                               NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                               PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_rml_base.radix);
 }
 
 void prte_rml_close(void)
 {
     PMIX_LIST_DESTRUCT(&prte_rml_base.posted_recvs);
-    if (0 <= prte_rml_base.output) {
-        prte_output_close(prte_rml_base.output);
+    PMIX_LIST_DESTRUCT(&prte_rml_base.unmatched_msgs);
+    PMIX_LIST_DESTRUCT(&prte_rml_base.children);
+    if (0 <= prte_rml_base.rml_output) {
+        prte_output_close(prte_rml_base.rml_output);
     }
 }
 
 void prte_rml_open(void)
 {
-
     /* construct object for holding the active plugin modules */
     PMIX_CONSTRUCT(&prte_rml_base.posted_recvs, pmix_list_t);
     PMIX_CONSTRUCT(&prte_rml_base.unmatched_msgs, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_rml_base.children, pmix_list_t);
+    prte_rml_base.lifeline = PRTE_PROC_MY_PARENT->rank;
+
+    /* compute the routing tree - only thing we need to know is the
+     * number of daemons in the DVM */
+    prte_rml_compute_routing_tree();
 }
 
 void prte_rml_send_callback(int status, pmix_proc_t *peer,
@@ -85,7 +115,7 @@ void prte_rml_send_callback(int status, pmix_proc_t *peer,
     PRTE_HIDE_UNUSED_PARAMS(buffer, cbdata);
 
     if (PRTE_SUCCESS != status) {
-        prte_output_verbose(2, prte_rml_base.output,
+        prte_output_verbose(2, prte_rml_base.rml_output,
                             "%s UNABLE TO SEND MESSAGE TO %s TAG %d: %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer), tag,
                             PRTE_ERROR_NAME(status));
@@ -162,3 +192,16 @@ static void prq_des(prte_rml_recv_request_t *ptr)
     }
 }
 PMIX_CLASS_INSTANCE(prte_rml_recv_request_t, pmix_object_t, prq_cons, prq_des);
+
+static void rtcon(prte_routed_tree_t *rt)
+{
+    rt->rank = PMIX_RANK_INVALID;
+    PMIX_CONSTRUCT(&rt->relatives, pmix_bitmap_t);
+}
+static void rtdes(prte_routed_tree_t *rt)
+{
+    PMIX_DESTRUCT(&rt->relatives);
+}
+PMIX_CLASS_INSTANCE(prte_routed_tree_t,
+                    pmix_list_item_t,
+                    rtcon, rtdes);

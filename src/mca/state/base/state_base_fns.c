@@ -38,7 +38,6 @@
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
@@ -445,7 +444,7 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
     }
 
     /* send the request to the server */
-    PRTE_RML_SEND(rc, &prte_pmix_server_globals.server,
+    PRTE_RML_SEND(rc, prte_pmix_server_globals.server.rank,
                   buf, PRTE_RML_TAG_DATA_SERVER);
     if (PRTE_SUCCESS != rc) {
         PMIX_DATA_BUFFER_RELEASE(buf);
@@ -544,7 +543,7 @@ static void _send_notification(int status, prte_proc_state_t state, pmix_proc_t 
                             "%s state:base:sending notification %s to proc %s at daemon %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(status),
                             PRTE_NAME_PRINT(target), PRTE_NAME_PRINT(&daemon));
-        PRTE_RML_SEND(rc, &daemon, &pbkt, PRTE_RML_TAG_NOTIFICATION);
+        PRTE_RML_SEND(rc, daemon.rank, &pbkt, PRTE_RML_TAG_NOTIFICATION);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
@@ -695,12 +694,11 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
          * gone, then terminate ourselves IF no local procs
          * remain (might be some from another job)
          */
-        if (prte_prteds_term_ordered && 0 == prte_routed.num_routes()) {
+        if (prte_prteds_term_ordered && 0 == pmix_list_get_size(&prte_rml_base.children)) {
             for (i = 0; i < prte_local_children->size; i++) {
-                if (NULL
-                        != (pdata = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
-                                                                                i))
-                    && PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
+                pdata = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+                if (NULL != pdata &&
+                    PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
                     /* at least one is still alive */
                     goto cleanup;
                 }
@@ -842,7 +840,7 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
      */
 CHECK_DAEMONS:
     if (jdata == NULL || PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
-        if (0 == prte_routed.num_routes()) {
+        if (0 == pmix_list_get_size(&prte_rml_base.children)) {
             /* orteds are done! */
             PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                  "%s orteds complete - exiting",

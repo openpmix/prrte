@@ -70,7 +70,6 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/prteif/prteif.h"
 #include "src/mca/prtereachable/base/base.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
@@ -1032,9 +1031,6 @@ static void tcp_peer_connected(prte_oob_tcp_peer_t *peer)
     if (NULL != peer->active_addr) {
         peer->active_addr->retries = 0;
     }
-
-    /* update the route */
-    prte_routed.update_route(&peer->name, &peer->name);
 
     /* initiate send of first message on queue */
     if (NULL == peer->send_msg) {

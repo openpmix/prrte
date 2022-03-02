@@ -66,7 +66,7 @@ void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
                          (PRTE_IOF_XON == tag) ? "xon" : "xoff"));
 
     /* send the buffer to the HNP */
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP);
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_IOF_HNP);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);

@@ -47,7 +47,6 @@
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
 #include "src/threads/pmix_threads.h"
@@ -199,7 +198,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
                 }
 
                 /* send this process's info to hnp */
-                PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP, alert, PRTE_RML_TAG_PLM, NULL);
+                PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM, NULL);
                 if (PRTE_SUCCESS != rc) {
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                          "%s errmgr:dvm: send to hnp failed",
@@ -433,15 +432,14 @@ static void proc_errors(int fd, short args, void *cbdata)
                  "%s Comm failure: daemons terminating - recording daemon %s as gone",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
             /* remove from dependent routes, if it is one */
-            prte_routed.route_lost(proc);
+            prte_rml_route_lost(proc->rank);
             /* if all my routes and local children are gone, then terminate ourselves */
-            if (0 == prte_routed.num_routes()) {
+            if (0 == pmix_list_get_size(&prte_rml_base.children)) {
                 for (i = 0; i < prte_local_children->size; i++) {
-                    if (NULL
-                            != (proct = (prte_proc_t *)
-                                    pmix_pointer_array_get_item(prte_local_children, i))
-                        && PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_ALIVE)
-                        && proct->state < PRTE_PROC_STATE_UNTERMINATED) {
+                    proct = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+                    if (NULL != proct &&
+                        PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_ALIVE) &&
+                        proct->state < PRTE_PROC_STATE_UNTERMINATED) {
                         /* at least one is still alive */
                         PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                              "%s Comm failure: at least one proc (%s) still alive",
@@ -459,7 +457,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                 PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                      "%s Comm failure: %d routes remain alive",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     (int) prte_routed.num_routes()));
+                                     (int) pmix_list_get_size(&prte_rml_base.children)));
             }
             goto cleanup;
         }
@@ -512,7 +510,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         }
         /* if all my routes and children are gone, then terminate
            ourselves nicely (i.e., this is a normal termination) */
-        if (0 == prte_routed.num_routes()) {
+        if (0 == pmix_list_get_size(&prte_rml_base.children)) {
             PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                  "%s errmgr:default:dvm all routes gone - exiting",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -725,7 +723,7 @@ keep_going:
             _terminate_job(jdata->nspace);
         }
         /* remove from dependent routes, if it is one */
-        prte_routed.route_lost(proc);
+        prte_rml_route_lost(proc->rank);
         break;
 
     case PRTE_PROC_STATE_UNABLE_TO_SEND_MSG:

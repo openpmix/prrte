@@ -69,7 +69,6 @@
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/rtc/rtc.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/state.h"

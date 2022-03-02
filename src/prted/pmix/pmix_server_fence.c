@@ -175,7 +175,7 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
     }
 
     /* send the response */
-    PRTE_RML_SEND(prc, &req->proxy, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
+    PRTE_RML_SEND(prc, req->proxy.rank, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
     if (PRTE_SUCCESS != prc) {
         PRTE_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(reply);
@@ -389,7 +389,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     }
 
     /* send it to the host daemon */
-    PRTE_RML_SEND(rc, &dmn->name, buf, PRTE_RML_TAG_DIRECT_MODEX);
+    PRTE_RML_SEND(rc, dmn->name.rank, buf, PRTE_RML_TAG_DIRECT_MODEX);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
