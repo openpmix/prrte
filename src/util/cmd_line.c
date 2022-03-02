@@ -111,7 +111,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
 
     /* reset the parser - must be done each time we use it
      * to avoid hysteresis */
-    optind = 1;
+    optind = 0;
     opterr = 0;
     optopt = 0;
     optarg = NULL;
@@ -121,7 +121,8 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
         argind = optind;
         // This is the executable, or we are at the last argument.
         // Don't process any further.
-        if (optind == argc || '-' != argv[optind][0]) {
+        // Check for > 0 to ignore the launcher itself.
+        if (optind == argc || (optind > 0 && '-' != argv[optind][0])) {
             break;
         }
         opt = getopt_long(argc, argv, shorts, myoptions, &option_index);
