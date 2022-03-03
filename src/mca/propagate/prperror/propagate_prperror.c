@@ -348,7 +348,7 @@ static int prte_propagate_prperror(const pmix_nspace_t job, const pmix_proc_t *s
                 }
 
                 /* send this process's info to hnp */
-                PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM, NULL)
+                PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
                 if (PRTE_SUCCESS != rc) {
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                          "%s errmgr:detector: send to hnp failed",
