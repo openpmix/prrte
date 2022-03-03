@@ -198,7 +198,7 @@ static void error_notify_cbfunc(size_t evhdlr_registration_id, pmix_status_t sta
                 }
 
                 /* send this process's info to hnp */
-                PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM, NULL);
+                PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
                 if (PRTE_SUCCESS != rc) {
                     PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                          "%s errmgr:dvm: send to hnp failed",
