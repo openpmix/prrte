@@ -201,26 +201,26 @@ static void allgather_stub(int fd, short args, void *cbdata)
      * for releasing it upon completion of the collective */
     ret = pmix_hash_table_get_value_ptr(&prte_grpcomm_base.sig_table, (void *) cd->sig->signature,
                                         cd->sig->sz * sizeof(pmix_proc_t), (void **) &seq_number);
-    if (PRTE_ERR_NOT_FOUND == ret) {
+    if (PMIX_ERR_NOT_FOUND == ret) {
         seq_number = (uint32_t *) malloc(sizeof(uint32_t));
         *seq_number = 0;
-    } else if (PRTE_SUCCESS == ret) {
+    } else if (PMIX_SUCCESS == ret) {
         *seq_number = *seq_number + 1;
     } else {
         PRTE_OUTPUT((prte_grpcomm_base_framework.framework_output,
                      "%s rpcomm:base:allgather cannot get signature from hash table",
                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        PRTE_ERROR_LOG(ret);
+        PMIX_ERROR_LOG(ret);
         PMIX_RELEASE(cd);
         return;
     }
     ret = pmix_hash_table_set_value_ptr(&prte_grpcomm_base.sig_table, (void *) cd->sig->signature,
                                         cd->sig->sz * sizeof(pmix_proc_t), (void *) seq_number);
-    if (PRTE_SUCCESS != ret) {
+    if (PMIX_SUCCESS != ret) {
         PRTE_OUTPUT((prte_grpcomm_base_framework.framework_output,
                      "%s rpcomm:base:allgather cannot add new signature to hash table",
                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        PRTE_ERROR_LOG(ret);
+        PMIX_ERROR_LOG(ret);
         PMIX_RELEASE(cd);
         return;
     }

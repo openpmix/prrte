@@ -28,10 +28,9 @@
 #    include <math.h>
 #endif
 
-#include "src/mca/prteif/prteif.h"
-
 #include "reachable_weighted.h"
 #include "src/mca/prtereachable/base/base.h"
+#include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_string_copy.h"
 
@@ -39,7 +38,7 @@ static int weighted_init(void);
 static int weighted_fini(void);
 static prte_reachable_t *weighted_reachable(pmix_list_t *local_ifs, pmix_list_t *remote_ifs);
 
-static int get_weights(prte_if_t *local_if, prte_if_t *remote_if);
+static int get_weights(pmix_pif_t *local_if, pmix_pif_t *remote_if);
 static int calculate_weight(int bandwidth_local, int bandwidth_remote, int connection_quality);
 
 /*
@@ -83,7 +82,7 @@ static prte_reachable_t *weighted_reachable(pmix_list_t *local_ifs, pmix_list_t 
 {
     prte_reachable_t *reachable_results = NULL;
     int i, j;
-    prte_if_t *local_iter, *remote_iter;
+    pmix_pif_t *local_iter, *remote_iter;
 
     reachable_results = prte_reachable_allocate(pmix_list_get_size(local_ifs),
                                                 pmix_list_get_size(remote_ifs));
@@ -92,10 +91,10 @@ static prte_reachable_t *weighted_reachable(pmix_list_t *local_ifs, pmix_list_t 
     }
 
     i = 0;
-    PMIX_LIST_FOREACH(local_iter, local_ifs, prte_if_t)
+    PMIX_LIST_FOREACH(local_iter, local_ifs, pmix_pif_t)
     {
         j = 0;
-        PMIX_LIST_FOREACH(remote_iter, remote_ifs, prte_if_t)
+        PMIX_LIST_FOREACH(remote_iter, remote_ifs, pmix_pif_t)
         {
             reachable_results->weights[i][j] = get_weights(local_iter, remote_iter);
             j++;
@@ -106,7 +105,7 @@ static prte_reachable_t *weighted_reachable(pmix_list_t *local_ifs, pmix_list_t 
     return reachable_results;
 }
 
-static int get_weights(prte_if_t *local_if, prte_if_t *remote_if)
+static int get_weights(pmix_pif_t *local_if, pmix_pif_t *remote_if)
 {
     char str_local[128], str_remote[128], *conn_type;
     struct sockaddr *local_sockaddr, *remote_sockaddr;

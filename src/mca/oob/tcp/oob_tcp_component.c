@@ -60,9 +60,9 @@
 #include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
 #include "src/include/prte_socket_errno.h"
-#include "src/mca/prteif/prteif.h"
 #include "src/runtime/prte_progress_threads.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_if.h"
 #include "src/util/error.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
@@ -401,7 +401,7 @@ static int tcp_component_register(void)
 
 static int component_available(void)
 {
-    prte_if_t *copied_interface, *selected_interface;
+    pmix_pif_t *copied_interface, *selected_interface;
     struct sockaddr_storage my_ss;
     char name[PMIX_IF_NAMESIZE];
     /* Larger than necessary, used for copying mask */
@@ -413,7 +413,7 @@ static int component_available(void)
                         "oob:tcp: component_available called");
 
     /* look at all available interfaces */
-    PMIX_LIST_FOREACH(selected_interface, &prte_if_list, prte_if_t)
+    PMIX_LIST_FOREACH(selected_interface, &pmix_if_list, pmix_pif_t)
     {
         i = selected_interface->if_index;
         kindex = selected_interface->if_kernel_index;
@@ -454,7 +454,7 @@ static int component_available(void)
                                 pmix_net_get_hostname((struct sockaddr *) &my_ss));
             continue;
         }
-        copied_interface = PMIX_NEW(prte_if_t);
+        copied_interface = PMIX_NEW(pmix_pif_t);
         if (NULL == copied_interface) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }

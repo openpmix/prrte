@@ -28,7 +28,6 @@
 #include "constants.h"
 
 #include "src/mca/base/base.h"
-#include "src/mca/prteif/prteif.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"

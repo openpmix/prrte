@@ -73,7 +73,7 @@ typedef struct {
     char **ipv6ports;
 
     /* connection support */
-    pmix_list_t local_ifs; /**< prte list of local prte_if_t interfaces */
+    pmix_list_t local_ifs; /**< prte list of local pmix_pif_t interfaces */
     char **if_masks;
     char *my_uri;                /**< uri for connecting to the TCP module */
     int num_hnp_ports;           /**< number of ports the HNP should listen on */

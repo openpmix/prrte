@@ -61,6 +61,7 @@
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/util/error.h"
 #include "src/util/pmix_fd.h"
+#include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/show_help.h"
@@ -68,7 +69,6 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/mca/prteif/prteif.h"
 #include "src/mca/prtereachable/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
@@ -159,7 +159,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     prte_oob_tcp_peer_t *peer;
     prte_oob_tcp_addr_t *addr;
     bool connected = false;
-    prte_if_t *intf;
+    pmix_pif_t *intf;
     char *host;
 
     remote_list = PMIX_NEW(pmix_list_t);
@@ -173,10 +173,10 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     PMIX_ACQUIRE_OBJECT(op);
     peer = op->peer;
 
-    /* Construct a list of remote prte_if_t from peer */
+    /* Construct a list of remote pmix_pif_t from peer */
     PMIX_LIST_FOREACH(addr, &peer->addrs, prte_oob_tcp_addr_t)
     {
-        intf = PMIX_NEW(prte_if_t);
+        intf = PMIX_NEW(pmix_pif_t);
         if (NULL == intf) {
             prte_output(0, "%s CANNOT CREATE SOCKET, OUT OF MEMORY",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -250,7 +250,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         for (i = 0; i < best_i; i++) {
             ptr = ptr->pmix_list_next;
         }
-        intf = (prte_if_t *) ptr;
+        intf = (pmix_pif_t *) ptr;
         prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                             "%s prte_tcp_peer_try_connect: "
                             "attempting to connect to proc %s on %s:%d - %d retries",
