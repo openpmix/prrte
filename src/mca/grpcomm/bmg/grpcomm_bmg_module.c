@@ -153,7 +153,7 @@ static int rbcast(pmix_data_buffer_t *buf)
                 PRTE_ERROR_LOG(rc);
                 return rc;
             }
-            PRTE_RML_SEND(rc, &daemon, buf, PRTE_RML_TAG_RBCAST);
+            PRTE_RML_SEND(rc, daemon.rank, buf, PRTE_RML_TAG_RBCAST);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
             }
