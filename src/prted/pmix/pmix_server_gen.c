@@ -588,7 +588,7 @@ static void _toolconn(int sd, short args, void *cbdata)
             prte_plm_globals.next_jobid++;
         } else {
             rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, cd, &cd->room_num);
-            if (PRTE_SUCCESS != rc) {
+            if (PMIX_SUCCESS != rc) {
                 prte_show_help("help-prted.txt", "noroom", true, cd->operation,
                                prte_pmix_server_globals.num_rooms);
                 if (NULL != cd->toolcbfunc) {
