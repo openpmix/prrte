@@ -41,6 +41,7 @@
 #include "src/util/pmix_keyval_parse.h"
 #include "src/util/malloc.h"
 #include "src/util/name_fns.h"
+#include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
@@ -63,7 +64,6 @@
 #include "src/mca/oob/base/base.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/prtebacktrace/base/base.h"
-#include "src/mca/prteif/base/base.h"
 #include "src/mca/prteinstalldirs/base/base.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
@@ -71,6 +71,7 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 
+#include "src/runtime/pmix_init_util.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/runtime.h"
@@ -116,6 +117,10 @@ int prte_init_util(prte_proc_type_t flags)
     }
     util_initialized = true;
 
+    if (PMIX_SUCCESS != (ret = pmix_init_util(NULL, 0))) {
+        return prte_pmix_convert_status(ret);
+    }
+
     /* ensure we know the type of proc for when we finalize */
     prte_process_info.proc_type = flags;
 
@@ -126,9 +131,9 @@ int prte_init_util(prte_proc_type_t flags)
     prte_output_init();
 
     /* initialize install dirs code */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    ret = prte_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
+                                       PRTE_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != ret) {
         fprintf(stderr,
                 "prte_prteinstalldirs_base_open() failed -- process will likely abort (%s:%d, "
                 "returned %d instead of PRTE_SUCCESS)\n",
@@ -140,11 +145,6 @@ int prte_init_util(prte_proc_type_t flags)
     prte_show_help_init();
 
     /* keyval lex-based parser */
-    if (PRTE_SUCCESS != (ret = pmix_util_keyval_parse_init())) {
-        error = "pmix_util_keyval_parse_init";
-        goto error;
-    }
-
     /* Setup the parameter system */
     if (PRTE_SUCCESS != (ret = prte_mca_base_var_init())) {
         error = "mca_base_var_init";
@@ -157,12 +157,6 @@ int prte_init_util(prte_proc_type_t flags)
     prte_setup_hostname();
     /* load the output verbose stream */
     prte_output_setup_stream_prefix();
-
-    if (PMIX_SUCCESS != (ret = pmix_net_init())) {
-        error = "pmix_net_init";
-        ret = prte_pmix_convert_status(ret);
-        goto error;
-    }
 
     /* pretty-print stack handlers */
     if (PRTE_SUCCESS != (ret = prte_util_register_stackhandlers())) {
@@ -190,19 +184,9 @@ int prte_init_util(prte_proc_type_t flags)
         goto error;
     }
 
-    /* initialize if framework */
-    ret = prte_mca_base_framework_open(&prte_prteif_base_framework,
+    ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework,
                                        PRTE_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != ret) {
-        fprintf(stderr,
-                "prte_prteif_base_open() failed -- process will likely abort (%s:%d, returned %d "
-                "instead of PRTE_SUCCESS)\n",
-                __FILE__, __LINE__, ret);
-        return ret;
-    }
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_backtrace_base_open";
         goto error;
     }

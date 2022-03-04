@@ -91,7 +91,6 @@
 #include "src/mca/ess/base/base.h"
 #include "src/mca/odls/odls.h"
 #include "src/mca/plm/plm.h"
-#include "src/mca/prteif/prteif.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
 #include "src/mca/schizo/base/base.h"
