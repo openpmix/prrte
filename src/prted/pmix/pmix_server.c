@@ -454,9 +454,9 @@ static void eviction_cbfunc(struct pmix_hotel_t *hotel, int room_num, void *occu
                 /* it has - ask our local pmix server for the data */
                 PMIX_VALUE_RELEASE(pval);
                 /* check us back into hotel so the modex_resp function can safely remove us */
-                pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
-                if (PMIX_SUCCESS
-                    != (prc = PMIx_server_dmodex_request(&req->tproc, modex_resp, req))) {
+                pmix_hotel_recheck(&prte_pmix_server_globals.reqs, req, req->room_num);
+                prc = PMIx_server_dmodex_request(&req->tproc, modex_resp, req);
+                if (PMIX_SUCCESS != prc) {
                     PMIX_ERROR_LOG(prc);
                     send_error(rc, &req->tproc, &req->proxy, req->remote_room_num);
                     pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
@@ -470,8 +470,8 @@ static void eviction_cbfunc(struct pmix_hotel_t *hotel, int room_num, void *occu
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->key);
         }
         /* not done yet - check us back in */
-        rc = pmix_hotel_recheck(&prte_pmix_server_globals.reqs, req, req->room_num);
-        if (PRTE_SUCCESS == rc) {
+        prc = pmix_hotel_recheck(&prte_pmix_server_globals.reqs, req, req->room_num);
+        if (PMIX_SUCCESS == prc) {
             prte_output_verbose(2, prte_pmix_server_globals.output,
                                 "%s server:evict checked back in to room %d",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->room_num);
@@ -1136,11 +1136,12 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
         /* adjust the timeout to reflect the size of the job as it can take some
          * amount of time to start the job */
         PRTE_ADJUST_TIMEOUT(req);
-        if (PRTE_SUCCESS
-            != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+        rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+        if (PMIX_SUCCESS != rc) {
             prte_show_help("help-prted.txt", "noroom", true, req->operation,
                            prte_pmix_server_globals.num_rooms);
             PMIX_RELEASE(req);
+            rc = prte_pmix_convert_status(rc);
             send_error(rc, &pproc, sender, room_num);
         }
         return;
@@ -1179,11 +1180,12 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
             /* we no longer need the info */
             PMIX_INFO_FREE(info, ninfo);
             /* check us into the hotel */
-            if (PRTE_SUCCESS
-                != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+            rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+            if (PMIX_SUCCESS != rc) {
                 prte_show_help("help-prted.txt", "noroom", true, req->operation,
                                prte_pmix_server_globals.num_rooms);
                 PMIX_RELEASE(req);
+                rc = prte_pmix_convert_status(rc);
                 send_error(rc, &pproc, sender, room_num);
             }
             prte_output_verbose(2, prte_pmix_server_globals.output,
@@ -1210,11 +1212,12 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
     /* adjust the timeout to reflect the size of the job as it can take some
      * amount of time to start the job */
     PRTE_ADJUST_TIMEOUT(req);
-    if (PRTE_SUCCESS
-        != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+    rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+    if (PMIX_SUCCESS != rc) {
         prte_show_help("help-prted.txt", "noroom", true, req->operation,
                        prte_pmix_server_globals.num_rooms);
         PMIX_RELEASE(req);
+        rc = prte_pmix_convert_status(rc);
         send_error(rc, &pproc, sender, room_num);
         return;
     }

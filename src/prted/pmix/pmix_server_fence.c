@@ -234,13 +234,12 @@ static void dmodex_req(int sd, short args, void *cbdata)
             req->proxy = *PRTE_PROC_MY_NAME;
             /* save the request in the hotel until the
              * data is returned */
-            if (PRTE_SUCCESS
-                != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+            prc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+            if (PMIX_SUCCESS != prc) {
                 prte_show_help("help-prted.txt", "noroom", true, req->operation,
                                prte_pmix_server_globals.num_rooms);
                 /* can't just return as that would cause the requestor
                  * to hang, so instead execute the callback */
-                prc = prte_pmix_convert_rc(rc);
                 goto callback;
             }
             /* set the "remote" room number to our own */
@@ -270,13 +269,12 @@ static void dmodex_req(int sd, short args, void *cbdata)
         if (PMIX_CHECK_PROCID(&r->target, &req->tproc)) {
             /* save the request in the hotel until the
              * data is returned */
-            if (PRTE_SUCCESS
-                != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+            prc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+            if (PMIX_SUCCESS != prc) {
                 prte_show_help("help-prted.txt", "noroom", true, req->operation,
                                prte_pmix_server_globals.num_rooms);
                 /* can't just return as that would cause the requestor
                  * to hang, so instead execute the callback */
-                prc = prte_pmix_convert_rc(rc);
                 goto callback;
             }
             return;
@@ -289,13 +287,12 @@ static void dmodex_req(int sd, short args, void *cbdata)
          * condition where we are being asked about a process
          * that we don't know about yet. In this case, just
          * record the request and we will process it later */
-        if (PRTE_SUCCESS
-            != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+        prc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+        if (PMIX_SUCCESS != prc) {
             prte_show_help("help-prted.txt", "noroom", true, req->operation,
                            prte_pmix_server_globals.num_rooms);
             /* can't just return as that would cause the requestor
              * to hang, so instead execute the callback */
-            prc = prte_pmix_convert_rc(rc);
             goto callback;
         }
         return;
@@ -319,12 +316,11 @@ static void dmodex_req(int sd, short args, void *cbdata)
     }
 
     /* if they are asking about a specific proc, then fetch it */
-    if (NULL
-        == (proct = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, req->tproc.rank))) {
+    proct = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, req->tproc.rank);
+    if (NULL == proct) {
         /* if we find the job, but not the process, then that is an error */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        rc = PRTE_ERR_NOT_FOUND;
-        prc = prte_pmix_convert_rc(rc);
+        prc = PMIX_ERR_NOT_FOUND;
         goto callback;
     }
 
@@ -333,8 +329,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
          * found the job, and therefore know about its locations, this
          * must be an error */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        rc = PRTE_ERR_NOT_FOUND;
-        prc = prte_pmix_convert_rc(rc);
+        prc = PMIX_ERR_NOT_FOUND;
         goto callback;
     }
     /* point the request to the daemon that is hosting the
@@ -342,11 +337,10 @@ static void dmodex_req(int sd, short args, void *cbdata)
     req->proxy = dmn->name;
     /* track the request so we know the function and cbdata
      * to callback upon completion */
-    if (PRTE_SUCCESS
-        != (rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
+    prc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+    if (PMIX_SUCCESS != prc) {
         prte_show_help("help-prted.txt", "noroom", true, req->operation,
                        prte_pmix_server_globals.num_rooms);
-        prc = prte_pmix_convert_rc(rc);
         goto callback;
     }
     prte_output_verbose(2, prte_pmix_server_globals.output, "%s:%d MY REQ ROOM IS %d FOR KEY %s",
