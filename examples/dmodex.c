@@ -202,7 +202,6 @@ int main(int argc, char **argv)
         if (0 > asprintf(&tmp, "%s-%d-remote", myproc.nspace, n)) {
             exit(1);
         }
-        (void) strncpy(proc.nspace, tmp, PMIX_MAX_NSLEN);
         if (PMIX_SUCCESS != (rc = PMIx_Get_nb(&proc, tmp, NULL, 0, valcbfunc, tmp))) {
             fprintf(stderr, "Client ns %s rank %d: PMIx_Get %s failed: %d\n", myproc.nspace, n, tmp,
                     rc);
