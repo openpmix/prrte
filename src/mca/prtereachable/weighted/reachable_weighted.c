@@ -166,8 +166,8 @@ static int get_weights(pmix_pif_t *local_if, pmix_pif_t *remote_if)
         memcpy(&laddr, local_sockaddr, sizeof(struct sockaddr));
         memset(&raddr, 0, sizeof(raddr));
         memcpy(&raddr, remote_sockaddr, sizeof(struct sockaddr));
-        if (prte_net_addr_isipv6linklocal(local_sockaddr)
-            && prte_net_addr_isipv6linklocal(remote_sockaddr)) {
+        if (pmix_net_addr_isipv6linklocal(local_sockaddr)
+            && pmix_net_addr_isipv6linklocal(remote_sockaddr)) {
             /* we can't actually tell if link local addresses are on
              * the same network or not with the weighted component.
              * Assume they are on the same network, so that they'll be
@@ -184,8 +184,8 @@ static int get_weights(pmix_pif_t *local_if, pmix_pif_t *remote_if)
             conn_type = "IPv6 LINK-LOCAL SAME NETWORK";
             weight = calculate_weight(local_if->if_bandwidth, remote_if->if_bandwidth,
                                       CQ_PRIVATE_SAME_NETWORK);
-        } else if (!prte_net_addr_isipv6linklocal(local_sockaddr)
-                   && !prte_net_addr_isipv6linklocal(remote_sockaddr)) {
+        } else if (!pmix_net_addr_isipv6linklocal(local_sockaddr)
+                   && !pmix_net_addr_isipv6linklocal(remote_sockaddr)) {
             if (pmix_net_samenetwork(&laddr, &raddr, local_if->if_mask)) {
                 conn_type = "IPv6 PUBLIC SAME NETWORK";
                 weight = calculate_weight(local_if->if_bandwidth, remote_if->if_bandwidth,
