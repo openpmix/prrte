@@ -23,6 +23,8 @@
 #include "libnl_utils.h"
 #include "reachable_netlink.h"
 #include "src/mca/prtereachable/base/base.h"
+#include "src/util/output.h"
+#include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_string_copy.h"
 

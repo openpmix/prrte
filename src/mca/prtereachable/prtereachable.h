@@ -18,7 +18,7 @@
 #define PRTE_REACHABLE_H
 
 #include "prte_config.h"
-#include "src/class/pmix_object.h"
+#include "src/class/pmix_list.h"
 #include "src/include/types.h"
 
 #include "src/mca/mca.h"
