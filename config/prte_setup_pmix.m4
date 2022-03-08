@@ -73,6 +73,7 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
            AC_MSG_ERROR([Cannot continue.])])
 
     prte_external_pmix_save_CPPFLAGS=$CPPFLAGS
+    PRTE_FLAGS_PREPEND_UNIQ(CPPFLAGS, $prte_pmix_CPPFLAGS/pmix)
     PRTE_FLAGS_PREPEND_UNIQ(CPPFLAGS, $prte_pmix_CPPFLAGS)
 
     # if the version file exists, then we need to parse it to find
@@ -98,6 +99,7 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     CPPFLAGS=$prte_external_pmix_save_CPPFLAGS
 
     PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_pmix_CPPFLAGS)
+    PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_CPPFLAGS, $prte_pmix_CPPFLAGS/pmix)
     PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_pmix_LDFLAGS)
     PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_pmix_LIBS)
 
