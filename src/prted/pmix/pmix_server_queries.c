@@ -37,6 +37,8 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/argv.h"
+#include "src/util/os_path.h"
+#include "src/util/path.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -387,8 +389,8 @@ static void _query(int sd, short args, void *cbdata)
                 procinfo = (pmix_proc_info_t *) darray->array;
                 p = 0;
                 for (k = 0; k < jdata->procs->size; k++) {
-                    if (NULL
-                        == (proct = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, k))) {
+                    proct = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, k);
+                    if (NULL == proct) {
                         continue;
                     }
                     PMIX_LOAD_PROCID(&procinfo[p].proc, proct->name.nspace, proct->name.rank);
@@ -398,7 +400,11 @@ static void _query(int sd, short args, void *cbdata)
                     app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps,
                                                                              proct->app_idx);
                     if (NULL != app && NULL != app->app) {
-                        procinfo[p].executable_name = strdup(app->app);
+                        if (pmix_path_is_absolute(app->app)) {
+                            procinfo[p].executable_name = strdup(app->app);
+                        } else {
+                            procinfo[p].executable_name = prte_os_path(false, app->cwd, app->app, NULL);
+                        }
                     }
                     procinfo[p].pid = proct->pid;
                     procinfo[p].exit_code = proct->exit_code;
@@ -441,7 +447,11 @@ static void _query(int sd, short args, void *cbdata)
                         app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps,
                                                                                  proct->app_idx);
                         if (NULL != app && NULL != app->app) {
-                            procinfo[p].executable_name = strdup(app->app);
+                            if (pmix_path_is_absolute(app->app)) {
+                                procinfo[p].executable_name = strdup(app->app);
+                            } else {
+                                procinfo[p].executable_name = prte_os_path(false, app->cwd, app->app, NULL);
+                            }
                         }
                         procinfo[p].pid = proct->pid;
                         procinfo[p].exit_code = proct->exit_code;
