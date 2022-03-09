@@ -117,6 +117,9 @@ int prte_init_util(prte_proc_type_t flags)
     }
     util_initialized = true;
 
+    /* carry across the toolname */
+    pmix_tool_basename = prte_tool_basename;
+
     /* initialize install dirs code */
     ret = prte_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
                                        PRTE_MCA_BASE_OPEN_DEFAULT);
