@@ -35,14 +35,4 @@ PRTE_EXPORT int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_bu
 
 PRTE_EXPORT int prte_util_decode_nidmap(pmix_data_buffer_t *buf);
 
-/* pass topology and #slots info */
-PRTE_EXPORT int prte_util_pass_node_info(pmix_data_buffer_t *buf);
-
-PRTE_EXPORT int prte_util_parse_node_info(pmix_data_buffer_t *buf);
-
-/* pass info about node assignments for a specific job */
-PRTE_EXPORT int prte_util_generate_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf);
-
-PRTE_EXPORT int prte_util_decode_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf);
-
 #endif /* PRTE_NIDMAP_H */

@@ -55,7 +55,6 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     char prefix[6];
     bool use_hwthread_cpus = false;
     hwloc_obj_t root;
-    prte_hwloc_topo_data_t *rdata;
     hwloc_cpuset_t available, mycpus;
 
     node_cnt = pmix_argv_split(prte_ras_simulator_component.num_nodes, ',');
@@ -98,6 +97,11 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         return PRTE_ERR_NOT_FOUND;
     }
     topo = t->topo;
+    if (NULL != job_cpuset) {
+        available = prte_hwloc_base_generate_cpuset(topo, use_hwthread_cpus, job_cpuset);
+    } else {
+        available = prte_hwloc_base_filter_cpus(topo);
+    }
 
     /* process the request */
     for (n = 0; NULL != node_cnt[n]; n++) {
@@ -111,22 +115,6 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
         /* set the prefix for this group of nodes */
         prefix[4] += n;
-
-        /* get the available processors on this node */
-        root = hwloc_get_root_obj(topo);
-        if (NULL == root->userdata) {
-            /* incorrect */
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            return PRTE_ERR_BAD_PARAM;
-        }
-        rdata = (prte_hwloc_topo_data_t *) root->userdata;
-        available = hwloc_bitmap_dup(rdata->available);
-
-        if (NULL != job_cpuset) {
-            mycpus = prte_hwloc_base_generate_cpuset(topo, use_hwthread_cpus, job_cpuset);
-            hwloc_bitmap_and(available, mycpus, available);
-            hwloc_bitmap_free(mycpus);
-        }
 
         for (i = 0; i < num_nodes; i++) {
             node = PMIX_NEW(prte_node_t);
@@ -151,10 +139,11 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
             prte_output_verbose(1, prte_ras_base_framework.framework_output,
                                 "Created Node <%10s> [%3d : %3d]", node->name, node->slots,
                                 node->slots_max);
+            node->available = hwloc_bitmap_dup(available);
             pmix_list_append(nodes, &node->super);
         }
-        hwloc_bitmap_free(available);
     }
+    hwloc_bitmap_free(available);
 
     /* record the number of allocated nodes */
     prte_num_allocated_nodes = pmix_list_get_size(nodes);

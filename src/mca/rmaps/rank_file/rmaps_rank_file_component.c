@@ -52,11 +52,13 @@ prte_rmaps_rf_component_t prte_rmaps_rank_file_component = {
            information about the component itself */
 
         .base_version = {
-            PRTE_RMAPS_BASE_VERSION_2_0_0,
+            PRTE_RMAPS_BASE_VERSION_4_0_0,
 
             .mca_component_name = "rank_file",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
+            PRTE_MCA_BASE_MAKE_VERSION(component,
+                                       PRTE_MAJOR_VERSION,
+                                       PRTE_MINOR_VERSION,
+                                       PMIX_RELEASE_VERSION),
             .mca_query_component = prte_rmaps_rank_file_query,
         },
         .base_data = {

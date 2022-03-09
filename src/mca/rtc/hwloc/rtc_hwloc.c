@@ -88,10 +88,8 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
     prte_app_context_t *context = cd->app;
     hwloc_cpuset_t cpuset;
     hwloc_obj_t root;
-    prte_hwloc_topo_data_t *sum;
     int rc = PRTE_ERROR;
     char *msg;
-    char *cpu_bitmap;
 
     prte_output_verbose(2, prte_rtc_base_framework.framework_output, "%s hwloc:set on child %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -108,10 +106,7 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
     }
 
     /* Set process affinity, if given */
-    cpu_bitmap = NULL;
-    if (!prte_get_attribute(&child->attributes, PRTE_PROC_CPU_BITMAP, (void **) &cpu_bitmap,
-                            PMIX_STRING)
-        || NULL == cpu_bitmap || 0 == strlen(cpu_bitmap)) {
+    if (NULL == child->cpuset || 0 == strlen(child->cpuset)) {
         /* if the daemon is bound, then we need to "free" this proc */
         if (NULL != prte_daemon_cores) {
             root = hwloc_get_root_obj(prte_hwloc_topology);
@@ -120,9 +115,13 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
                                                   "incorrectly bound", prte_process_info.nodename,
                                                   context->app, __FILE__, __LINE__);
             }
-            sum = (prte_hwloc_topo_data_t *) root->userdata;
             /* bind this proc to all available processors */
-            rc = hwloc_set_cpubind(prte_hwloc_topology, sum->available, 0);
+#if HWLOC_API_VERSION < 0x20000
+            cpuset = root->allowed_cpuset;
+#else
+            cpuset = (hwloc_cpuset_t)hwloc_topology_get_allowed_cpuset(prte_hwloc_topology);
+#endif
+            rc = hwloc_set_cpubind(prte_hwloc_topology, cpuset, 0);
             /* if we got an error and this wasn't a default binding policy, then report it */
             if (rc < 0 && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
                 if (errno == ENOSYS) {
@@ -131,7 +130,7 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
                     msg = "hwloc indicates cpu binding cannot be enforced";
                 } else {
                     char *tmp;
-                    (void) hwloc_bitmap_list_asprintf(&tmp, sum->available);
+                    (void) hwloc_bitmap_list_asprintf(&tmp, cpuset);
                     pmix_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
                                   prte_strerror(rc), tmp);
                     free(tmp);
@@ -168,10 +167,10 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
     } else {
         /* convert the list to a cpuset */
         cpuset = hwloc_bitmap_alloc();
-        if (0 != (rc = hwloc_bitmap_list_sscanf(cpuset, cpu_bitmap))) {
+        if (0 != (rc = hwloc_bitmap_list_sscanf(cpuset, child->cpuset))) {
             /* See comment above about "This may be a small memory leak" */
             pmix_asprintf(&msg, "hwloc_bitmap_sscanf returned \"%s\" for the string \"%s\"",
-                          prte_strerror(rc), cpu_bitmap);
+                          prte_strerror(rc), child->cpuset);
             if (NULL == msg) {
                 msg = "failed to convert bitmap list to hwloc bitmap";
             }
@@ -189,12 +188,13 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
                 prte_rtc_base_send_warn_show_help(write_fd, "help-prte-odls-default.txt",
                                                   "not bound", prte_process_info.nodename,
                                                   context->app, msg, __FILE__, __LINE__);
-                free(cpu_bitmap);
+                hwloc_bitmap_free(cpuset);
                 return;
             }
         }
         /* bind as specified */
         rc = hwloc_set_cpubind(prte_hwloc_topology, cpuset, 0);
+        hwloc_bitmap_free(cpuset);
         /* if we got an error and this wasn't a default binding policy, then report it */
         if (rc < 0 && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {
             char *tmp = NULL;
@@ -204,7 +204,7 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
                 msg = "hwloc indicates cpu binding cannot be enforced";
             } else {
                 pmix_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
-                              prte_strerror(rc), cpu_bitmap);
+                              prte_strerror(rc), child->cpuset);
             }
             if (PRTE_BINDING_REQUIRED(jobdat->map->binding)) {
                 /* If binding is required, send an error up the pipe (which exits
@@ -257,13 +257,9 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
                 prte_rtc_base_send_warn_show_help(write_fd, "help-prte-odls-default.txt",
                                                   "memory not bound", prte_process_info.nodename,
                                                   context->app, msg, __FILE__, __LINE__);
-                free(cpu_bitmap);
                 return;
             }
         }
-    }
-    if (NULL != cpu_bitmap) {
-        free(cpu_bitmap);
     }
 }
 

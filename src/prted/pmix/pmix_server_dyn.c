@@ -347,8 +347,8 @@ static void interim(int sd, short args, void *cbdata)
             /***   DISPLAY MAP   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP)) {
             if (PMIX_INFO_TRUE(info)) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, PRTE_ATTR_GLOBAL, NULL,
-                                   PMIX_BOOL);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
             }
 
             /***   PPR (PROCS-PER-RESOURCE)   ***/
@@ -414,8 +414,8 @@ static void interim(int sd, short args, void *cbdata)
             /***   CPUS/RANK   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_CPUS_PER_PROC)) {
             u16 = info->value.data.uint32;
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL, &u16,
-                               PMIX_UINT16);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC,
+                               PRTE_ATTR_GLOBAL, &u16, PMIX_UINT16);
 
             /***   NO USE LOCAL   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_NO_PROCS_ON_HEAD)) {
@@ -693,12 +693,6 @@ static void interim(int sd, short args, void *cbdata)
                                PMIX_ENVAR);
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
-            for (n=0; n < (size_t)jdata->apps->size; n++) {
-                app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, n);
-                if (NULL != app) {
-                    PRTE_FLAG_SET(app, PRTE_APP_FLAG_TOOL);
-                }
-            }
 
 #ifdef PMIX_SPAWN_TIMEOUT
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TIMEOUT) ||

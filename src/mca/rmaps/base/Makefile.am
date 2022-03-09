@@ -13,6 +13,7 @@
 # Copyright (c) 2011      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -31,8 +32,7 @@ libmca_rmaps_la_SOURCES += \
         base/rmaps_base_support_fns.c \
         base/rmaps_base_ranking.c \
         base/rmaps_base_print_fns.c \
-        base/rmaps_base_binding.c \
-        base/rmaps_base_assign_locations.c
+        base/rmaps_base_binding.c
 
 
 dist_prtedata_DATA = base/help-prte-rmaps-base.txt

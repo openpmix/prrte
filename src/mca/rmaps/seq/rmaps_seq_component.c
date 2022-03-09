@@ -45,11 +45,13 @@ static int my_priority;
 
 prte_rmaps_base_component_t prte_rmaps_seq_component = {
     .base_version = {
-        PRTE_RMAPS_BASE_VERSION_2_0_0,
+        PRTE_RMAPS_BASE_VERSION_4_0_0,
 
         .mca_component_name = "seq",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PMIX_RELEASE_VERSION),
+        PRTE_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
         .mca_open_component = prte_rmaps_seq_open,
         .mca_close_component = prte_rmaps_seq_close,
         .mca_query_component = prte_rmaps_seq_query,

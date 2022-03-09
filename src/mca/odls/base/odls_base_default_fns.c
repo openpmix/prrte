@@ -276,14 +276,6 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
         return rc;
     }
 
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
-        /* compute and pack the ppn */
-        if (PRTE_SUCCESS != (rc = prte_util_generate_ppn(jdata, buffer))) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-    }
-
     /* assemble the node and proc map info */
     list = NULL;
     procs = NULL;
@@ -600,40 +592,6 @@ next:
         free(tmp);
     }
 
-    /* if the job is fully described, then mpirun will have computed
-     * and sent us the complete array of procs in the prte_job_t, so we
-     * don't need to do anything more here */
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
-        /* load the ppn info into the job and node arrays - the
-         * function will ignore the data on the HNP as it already
-         * has the info */
-        if (PRTE_SUCCESS != (rc = prte_util_decode_ppn(jdata, buffer))) {
-            PRTE_ERROR_LOG(rc);
-            goto REPORT_ERROR;
-        }
-
-        if (!PRTE_PROC_IS_MASTER) {
-            /* assign locations to the procs */
-            if (PRTE_SUCCESS != (rc = prte_rmaps_base_assign_locations(jdata))) {
-                PRTE_ERROR_LOG(rc);
-                goto REPORT_ERROR;
-            }
-
-            /* compute the ranks and add the proc objects
-             * to the jdata->procs array */
-            if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_vpids(jdata))) {
-                PRTE_ERROR_LOG(rc);
-                goto REPORT_ERROR;
-            }
-        }
-
-        /* and finally, compute the local and node ranks */
-        if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_local_ranks(jdata))) {
-            PRTE_ERROR_LOG(rc);
-            goto REPORT_ERROR;
-        }
-    }
-
     /* unpack the byte object containing any application setup info - there
      * might not be any, so it isn't an error if we don't find things */
     cnt = 1;
@@ -711,10 +669,8 @@ next:
             /* not ready for use yet */
             continue;
         }
-        if (!PRTE_PROC_IS_MASTER
-            && prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
-            /* the parser will have already made the connection, but the fully described
-             * case won't have done it, so connect the proc to its node here */
+        if (!PRTE_PROC_IS_MASTER) {
+            /* connect the proc to its node here */
             prte_output_verbose(5, prte_odls_base_framework.framework_output,
                                 "%s GETTING DAEMON FOR PROC %s WITH PARENT %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&pptr->name),
@@ -779,21 +735,11 @@ next:
         }
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
-        /* reset the mapped flags */
-        for (n = 0; n < jdata->map->nodes->size; n++) {
-            if (NULL
-                != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, n))) {
-                PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
-            }
-        }
-    }
-
-    if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
-        /* compute and save bindings of local children */
-        if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_bindings(jdata))) {
-            PRTE_ERROR_LOG(rc);
-            goto REPORT_ERROR;
+    /* reset the mapped flags */
+    for (n = 0; n < jdata->map->nodes->size; n++) {
+        if (NULL
+            != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, n))) {
+            PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
         }
     }
 

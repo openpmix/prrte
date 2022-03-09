@@ -759,9 +759,8 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
                  */
                 PRTE_HASH_STR(serial_number, h);
                 free(serial_number);
-                if (PRTE_SUCCESS
-                    != (rc = pmix_hash_table_get_value_uint32(prte_coprocessors, h,
-                                                              (void **) &vptr))) {
+                rc = pmix_hash_table_get_value_uint32(prte_coprocessors, h, (void **) &vptr);
+                if (PRTE_SUCCESS != rc) {
                     PRTE_ERROR_LOG(rc);
                     break;
                 }
@@ -868,8 +867,14 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
         }
-        prte_never_launched = true;
-        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALL_JOBS_COMPLETE);
+        /* if we are persistent, then we remain alive - otherwise, declare
+         * all jobs complete and terminate */
+        if (prte_persistent) {
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
+        } else {
+            prte_never_launched = true;
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALL_JOBS_COMPLETE);
+        }
         PMIX_RELEASE(caddy);
         if (NULL != cmpdata) {
             free(cmpdata);
@@ -1129,7 +1134,6 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
 {
     hwloc_topology_t topo;
     hwloc_obj_t root;
-    prte_hwloc_topo_data_t *sum;
     int rc, idx;
     char *sig, *coprocessors, **sns;
     prte_proc_t *daemon = NULL;
@@ -1151,8 +1155,8 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     if (NULL == jdatorted) {
         jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     }
-    if (NULL
-        == (daemon = (prte_proc_t *) pmix_pointer_array_get_item(jdatorted->procs, sender->rank))) {
+    daemon = (prte_proc_t *) pmix_pointer_array_get_item(jdatorted->procs, sender->rank);
+    if (NULL == daemon) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         prted_failed_launch = true;
         goto CLEANUP;
@@ -1206,8 +1210,8 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     /* find it in the array */
     t = NULL;
     for (i = 0; i < prte_node_topologies->size; i++) {
-        if (NULL
-            == (t2 = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, i))) {
+        t2 = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, i);
+        if (NULL == t2) {
             continue;
         }
         /* just check the signature */
@@ -1234,16 +1238,14 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     topo = ptopo.topology;
     ptopo.topology = NULL;
     PMIX_TOPOLOGY_DESTRUCT(&ptopo);
-    /* Apply any CPU filters (not preserved by the XML) */
-    prte_hwloc_base_filter_cpus(topo);
     /* record the final topology */
     t->topo = topo;
-    /* setup the summary data for this topology as we will need
-     * it when we go to map/bind procs to it */
-    root = hwloc_get_root_obj(topo);
-    root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
-    sum = (prte_hwloc_topo_data_t *) root->userdata;
-    sum->available = prte_hwloc_base_setup_summary(topo);
+    /* update the node's available processors */
+    if (NULL != daemon->node->available) {
+        hwloc_bitmap_free(daemon->node->available);
+    }
+    /* Apply any CPU filters (not preserved by the XML) */
+    daemon->node->available = prte_hwloc_base_filter_cpus(topo);
 
     /* unpack any coprocessors */
     idx = 1;
@@ -1364,7 +1366,6 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     char *alias;
     uint8_t naliases, ni;
     hwloc_obj_t root;
-    prte_hwloc_topo_data_t *sum;
     char *nodename = NULL;
     pmix_info_t *info;
     size_t n, ninfo;
@@ -1522,8 +1523,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 prte_hetero_nodes = true;
             }
         } else if (!prte_hetero_nodes) {
-            if (0 != strcmp(sig, prte_base_compute_node_sig)
-                || (prte_hnp_is_allocated && 0 != strcmp(sig, mytopo->sig))) {
+            if (0 != strcmp(sig, prte_base_compute_node_sig) ||
+                (prte_hnp_is_allocated && 0 != strcmp(sig, mytopo->sig))) {
                 prte_hetero_nodes = true;
             }
         }
@@ -1596,12 +1597,11 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 topo = ptopo.topology;
                 ptopo.topology = NULL;
                 PMIX_TOPOLOGY_DESTRUCT(&ptopo);
-                /* setup the summary data for this topology as we will need
-                 * it when we go to map/bind procs to it */
-                root = hwloc_get_root_obj(topo);
-                root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
-                sum = (prte_hwloc_topo_data_t *) root->userdata;
-                sum->available = prte_hwloc_base_setup_summary(topo);
+                /* update the node's available processors */
+                if (NULL != daemon->node->available) {
+                    hwloc_bitmap_free(daemon->node->available);
+                }
+                daemon->node->available = prte_hwloc_base_filter_cpus(topo);
                 /* cleanup */
                 PMIX_DATA_BUFFER_DESTRUCT(data);
             }
@@ -1680,6 +1680,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                 found = true;
                 daemon->node->topology = t;
+                daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
                 if (NULL != topo) {
                     hwloc_topology_destroy(topo);
                 }
@@ -1698,7 +1699,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             daemon->node->topology = t;
             if (NULL != topo) {
                 /* Apply any CPU filters (not preserved by the XML) */
-                prte_hwloc_base_filter_cpus(topo);
+                daemon->node->available = prte_hwloc_base_filter_cpus(topo);
                 t->topo = topo;
             } else {
                 PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,

@@ -146,9 +146,9 @@ bool prte_schizo_base_check_directives(char *directive,
     bool found;
     char *str;
 
-    /* if it starts with a ':', then these are just modifiers */
+    /* if it starts with a ':', then these are just qualifiers */
     if (':' == dir[0]) {
-        qls = pmix_argv_split(&dir[1], ',');
+        qls = pmix_argv_split(&dir[1], ':');
         for (m=0; NULL != qls[m]; m++) {
             if (!prte_schizo_base_check_qualifiers(directive, quals, qls[m])) {
                 pmix_argv_free(qls);
@@ -197,13 +197,13 @@ bool prte_schizo_base_check_directives(char *directive,
                     }
                     found = false;
                     for (m=0; NULL != pproptions[m]; m++) {
-                        if (0 == strcasecmp(args[2], pproptions[m])) {
+                        if (0 == strncasecmp(args[2], pproptions[m], strlen(args[2]))) {
                             found = true;
                             break;
                         }
                     }
                     if (!found) {
-                        v = pmix_argv_join(pproptions, ',');
+                        v = pmix_argv_join(pproptions, ':');
                         pmix_asprintf(&q, "ppr:%s:[%s]", args[1], v);
                         free(v);
                         pmix_show_help("help-prte-rmaps-base.txt",
@@ -214,13 +214,13 @@ bool prte_schizo_base_check_directives(char *directive,
                         return false;
                     }
                     if (NULL != args[3]) {
-                        qls = pmix_argv_split(args[3], ',');
+                        qls = pmix_argv_split(args[3], ':');
                     } else {
                         pmix_argv_free(args);
                         return true;
                     }
                 } else {
-                    qls = pmix_argv_split(args[1], ',');
+                    qls = pmix_argv_split(args[1], ':');
                 }
                for (m=0; NULL != qls[m]; m++) {
                     if (!prte_schizo_base_check_qualifiers(directive, quals, qls[m])) {
@@ -237,7 +237,7 @@ bool prte_schizo_base_check_directives(char *directive,
             return true;
         }
     }
-    v = pmix_argv_join(valid, ',');
+    v = pmix_argv_join(valid, ':');
     pmix_show_help("help-prte-rmaps-base.txt",
                    "unrecognized-directive", true,
                    directive, dir, v);
@@ -313,9 +313,10 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_PACKAGE,
         PRTE_CLI_NODE,
         PRTE_CLI_SEQ,
-        PRTE_CLI_DIST,
+//        PRTE_CLI_DIST,
         PRTE_CLI_PPR,
         PRTE_CLI_RANKFILE,
+        PRTE_CLI_PELIST,
         NULL
     };
     char *mapquals[] = {
@@ -326,30 +327,23 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_NOLOCAL,
         PRTE_CLI_HWTCPUS,
         PRTE_CLI_CORECPUS,
-        PRTE_CLI_DEVICE,
+//        PRTE_CLI_DEVICE,
         PRTE_CLI_INHERIT,
         PRTE_CLI_NOINHERIT,
-        PRTE_CLI_PELIST,
         PRTE_CLI_QFILE,
         PRTE_CLI_NOLAUNCH,
+        PRTE_CLI_ORDERED,
         NULL
     };
 
     char *rankers[] = {
         PRTE_CLI_SLOT,
-        PRTE_CLI_HWT,
-        PRTE_CLI_CORE,
-        PRTE_CLI_L1CACHE,
-        PRTE_CLI_L2CACHE,
-        PRTE_CLI_L3CACHE,
-        PRTE_CLI_NUMA,
-        PRTE_CLI_PACKAGE,
         PRTE_CLI_NODE,
+        PRTE_CLI_FILL,
+        PRTE_CLI_SPAN,
         NULL
     };
     char *rkquals[] = {
-        PRTE_CLI_SPAN,
-        PRTE_CLI_FILL,
         NULL
     };
 
@@ -368,7 +362,6 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_OVERLOAD,
         PRTE_CLI_NOOVERLOAD,
         PRTE_CLI_IF_SUPP,
-        PRTE_CLI_ORDERED,
         PRTE_CLI_REPORT,
         NULL
     };
@@ -495,4 +488,5 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     return PRTE_SUCCESS;
 }
 
-PMIX_CLASS_INSTANCE(prte_schizo_base_active_module_t, pmix_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_schizo_base_active_module_t,
+                    pmix_list_item_t, NULL, NULL);

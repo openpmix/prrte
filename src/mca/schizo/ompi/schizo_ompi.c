@@ -65,7 +65,7 @@ static int detect_proxy(char *argv);
 static int parse_env(char **srcenv, char ***dstenv, pmix_cli_result_t *cli);
 static void allow_run_as_root(pmix_cli_result_t *results);
 static int set_default_ranking(prte_job_t *jdata,
-                               prte_schizo_options_t *options);
+                               prte_rmaps_options_t *options);
 static int setup_fork(prte_job_t *jdata, prte_app_context_t *context);
 static void job_info(pmix_cli_result_t *results,
                      void *jobinfo);
@@ -216,7 +216,7 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE("use-hwthread-cpus", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("cpu-set", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("cpu-list", PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE("--bind-to-core", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("bind-to-core", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("bynode", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("bycore", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("byslot", PMIX_ARG_NONE),
@@ -495,7 +495,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         }
         /* --use-hwthread-cpus -> --bind-to hwthread */
         else if (0 == strcmp(option, "use-hwthread-cpus")) {
-            rc = prte_schizo_base_add_directive(results, option,
+            rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_BINDTO, PRTE_CLI_HWT,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
@@ -1950,7 +1950,7 @@ static void allow_run_as_root(pmix_cli_result_t *results)
 }
 
 static int set_default_ranking(prte_job_t *jdata,
-                               prte_schizo_options_t *options)
+                               prte_rmaps_options_t *options)
 {
     int rc;
     prte_mapping_policy_t map;

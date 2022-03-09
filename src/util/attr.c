@@ -387,8 +387,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "PRTE_JOB_TRANSPORT_KEY";
         case PRTE_JOB_INFO_CACHE:
             return "PRTE_JOB_INFO_CACHE";
-        case PRTE_JOB_FULLY_DESCRIBED:
-            return "PRTE_JOB_FULLY_DESCRIBED";
         case PRTE_JOB_SILENT_TERMINATION:
             return "PRTE_JOB_SILENT_TERMINATION";
         case PRTE_JOB_SET_ENVAR:
@@ -480,12 +478,6 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
-        case PRTE_PROC_CPU_BITMAP:
-            return "PROC-CPU-BITMAP";
-        case PRTE_PROC_HWLOC_LOCALE:
-            return "PROC-HWLOC-LOCALE";
-        case PRTE_PROC_HWLOC_BOUND:
-            return "PROC-HWLOC-BOUND";
         case PRTE_PROC_PRIOR_NODE:
             return "PROC-PRIOR-NODE";
         case PRTE_PROC_NRESTARTS:

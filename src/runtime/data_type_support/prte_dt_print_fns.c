@@ -160,7 +160,7 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
     }
 
     tmp3 = prte_ras_base_flag_string(src);
-    pmix_asprintf(&tmp, "\nData for node: %s\tState: %0x\tFlags: %s",
+    pmix_asprintf(&tmp, "\nData for node: %s\tState: %0x\t%s",
                   (NULL == src->name) ? "UNKNOWN" : src->name, src->state, tmp3);
     free(tmp3);
     /* does this node have any aliases? */
@@ -188,8 +188,8 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
     free(tmp);
     tmp = tmp2;
 
-    pmix_asprintf(&tmp2, "%s\n            Num slots allocated: %ld\tMax slots: %ld", tmp,
-                  (long) src->slots, (long) src->slots_max);
+    pmix_asprintf(&tmp2, "%s\n            Num slots allocated: %ld\tMax slots: %ld\tNum procs: %ld", tmp,
+                  (long) src->slots, (long) src->slots_max, (long) src->num_procs);
     free(tmp);
     tmp = tmp2;
 
@@ -214,11 +214,6 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
         free(tmp2);
         tmp = tmp3;
     }
-
-    pmix_asprintf(&tmp2, "%s\n            Num procs: %ld\tNext node_rank: %ld", tmp,
-                  (long) src->num_procs, (long) src->next_node_rank);
-    free(tmp);
-    tmp = tmp2;
 
 PRINT_PROCS:
     /* we want to print these procs in their job-rank'd order, but they
@@ -253,7 +248,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     hwloc_obj_t loc = NULL;
     char *locale, *tmp2;
     hwloc_cpuset_t mycpus;
-    char *str, *cpu_bitmap = NULL;
+    char *str;
     bool use_hwthread_cpus;
 
     /* set default result */
@@ -280,12 +275,10 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     }
 
     if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
-        if (prte_get_attribute(&src->attributes, PRTE_PROC_CPU_BITMAP, (void **) &cpu_bitmap,
-                               PMIX_STRING)
-            && NULL != cpu_bitmap && NULL != src->node->topology
+        if (NULL != src->cpuset && NULL != src->node->topology
             && NULL != src->node->topology->topo) {
             mycpus = hwloc_bitmap_alloc();
-            hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
+            hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
             if (NULL
                 == (str = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus,
                                                    src->node->topology->topo))) {
@@ -296,7 +289,6 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
                           PRTE_JOBID_PRINT(src->name.nspace), (long) src->app_idx,
                           PRTE_VPID_PRINT(src->name.rank), str);
             free(str);
-            free(cpu_bitmap);
         } else {
             /* just print a very simple output for users */
             pmix_asprintf(&tmp, "\n%sProcess jobid: %s App: %ld Process rank: %s Bound: N/A", pfx2,
@@ -317,22 +309,15 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     free(tmp);
     tmp = tmp3;
 
-    if (prte_get_attribute(&src->attributes, PRTE_PROC_HWLOC_LOCALE, (void **) &loc,
-                           PMIX_POINTER)) {
-        if (NULL != loc) {
-            locale = prte_hwloc_base_cset2str(loc->cpuset, use_hwthread_cpus,
-                                              src->node->topology->topo);
-        } else {
-            locale = strdup("UNKNOWN");
-        }
+    if (NULL != src->obj) {
+        locale = prte_hwloc_base_cset2str(src->obj->cpuset, use_hwthread_cpus,
+                                          src->node->topology->topo);
     } else {
         locale = strdup("UNKNOWN");
     }
-    if (prte_get_attribute(&src->attributes, PRTE_PROC_CPU_BITMAP, (void **) &cpu_bitmap,
-                           PMIX_STRING)
-        && NULL != src->node->topology && NULL != src->node->topology->topo) {
+    if (NULL != src->cpuset) {
         mycpus = hwloc_bitmap_alloc();
-        hwloc_bitmap_list_sscanf(mycpus, cpu_bitmap);
+        hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
         tmp2 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, src->node->topology->topo);
         hwloc_bitmap_free(mycpus);
     } else {
@@ -345,9 +330,6 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     free(locale);
     free(tmp);
     free(tmp2);
-    if (NULL != cpu_bitmap) {
-        free(cpu_bitmap);
-    }
 
     /* set the return */
     *output = tmp4;

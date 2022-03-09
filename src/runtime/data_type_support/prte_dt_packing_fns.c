@@ -174,18 +174,14 @@ int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job)
     }
 
     if (0 < job->num_procs) {
-        /* check attributes to see if this job is to be fully
-         * described in the launch msg */
-        if (prte_get_attribute(&job->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
-            for (j = 0; j < job->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(job->procs, j))) {
-                    continue;
-                }
-                rc = prte_proc_pack(bkt, proc);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                    return prte_pmix_convert_status(rc);
-                }
+        for (j = 0; j < job->procs->size; j++) {
+            if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(job->procs, j))) {
+                continue;
+            }
+            rc = prte_proc_pack(bkt, proc);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                return prte_pmix_convert_status(rc);
             }
         }
     }
@@ -390,6 +386,13 @@ int prte_proc_pack(pmix_data_buffer_t *bkt, prte_proc_t *proc)
 
     /* pack the app rank */
     rc = PMIx_Data_pack(NULL, bkt, &proc->app_rank, 1, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    /* pack the cpuset */
+    rc = PMIx_Data_pack(NULL, bkt, (void *) &proc->cpuset, 1, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
