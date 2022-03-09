@@ -117,7 +117,18 @@ int prte_init_util(prte_proc_type_t flags)
     }
     util_initialized = true;
 
-    if (PMIX_SUCCESS != (ret = pmix_init_util(NULL, 0))) {
+    /* initialize install dirs code */
+    ret = prte_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
+                                       PRTE_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != ret) {
+        fprintf(stderr,
+                "prte_prteinstalldirs_base_open() failed -- process will likely abort (%s:%d, "
+                "returned %d instead of PRTE_SUCCESS)\n",
+                __FILE__, __LINE__, ret);
+        return ret;
+    }
+
+    if (PMIX_SUCCESS != (ret = pmix_init_util(NULL, 0, prte_install_dirs.prtedatadir))) {
         return prte_pmix_convert_status(ret);
     }
 
@@ -129,17 +140,6 @@ int prte_init_util(prte_proc_type_t flags)
 
     /* initialize the output system */
     prte_output_init();
-
-    /* initialize install dirs code */
-    ret = prte_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
-                                       PRTE_MCA_BASE_OPEN_DEFAULT);
-    if (PRTE_SUCCESS != ret) {
-        fprintf(stderr,
-                "prte_prteinstalldirs_base_open() failed -- process will likely abort (%s:%d, "
-                "returned %d instead of PRTE_SUCCESS)\n",
-                __FILE__, __LINE__, ret);
-        return ret;
-    }
 
     /* initialize the help system */
     prte_show_help_init();

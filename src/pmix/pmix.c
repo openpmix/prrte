@@ -245,6 +245,8 @@ int prte_pmix_convert_status(pmix_status_t status)
 
     case PMIX_ERROR:
         return PRTE_ERROR;
+    case PMIX_ERR_SILENT:
+        return PRTE_ERR_SILENT;
     case PMIX_SUCCESS:
     case PMIX_OPERATION_SUCCEEDED:
         return PRTE_SUCCESS;
