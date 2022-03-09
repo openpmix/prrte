@@ -21,7 +21,7 @@
 #
 # $HEADER$
 #
-# This is the US/English general help file for PRTE's prun.
+# This is the US/English general help file for PRRTE's prun.
 #
 [prte-rmaps-base:alloc-error]
 There are not enough slots available in the system to satisfy the %d
@@ -32,9 +32,9 @@ slots that were requested by the application:
 Either request fewer slots for your application, or make more slots
 available for use.
 
-A "slot" is the PRTE term for an allocatable unit where we can
+A "slot" is the PRRTE term for an allocatable unit where we can
 launch a process.  The number of slots available are defined by the
-environment in which PRTE processes are run:
+environment in which PRRTE processes are run:
 
   1. Hostfile, via "slots=N" clauses (N defaults to number of
      processor cores if not provided)
@@ -42,9 +42,9 @@ environment in which PRTE processes are run:
      hostname (N defaults to 1 if not provided)
   3. Resource manager (e.g., SLURM, PBS/Torque, LSF, etc.)
   4. If none of a hostfile, the --host command line parameter, or an
-     RM is present, PRTE defaults to the number of processor cores
+     RM is present, PRRTE defaults to the number of processor cores
 
-In all the above cases, if you want PRTE to default to the number
+In all the above cases, if you want PRRTE to default to the number
 of hardware threads instead of the number of processor cores, use the
 --use-hwthread-cpus option.
 
@@ -180,7 +180,7 @@ support binding processes to cpus.
 
 Node: %s
 
-PRTE uses the "hwloc" library to perform process and memory
+PRRTE uses the "hwloc" library to perform process and memory
 binding. This error message means that hwloc has indicated that
 processor binding support is not available on this machine.
 
@@ -190,8 +190,8 @@ the OS does not expose this functionality).
 On Linux, lack of the functionality can mean that you are on a
 platform where processor and memory affinity is not supported in Linux
 itself, or that hwloc was built without NUMA and/or processor affinity
-support. When building hwloc (which, depending on your PRTE
-installation, may be embedded in PRTE itself), it is important to
+support. When building hwloc (which, depending on your PRRTE
+installation, may be embedded in PRRTE itself), it is important to
 have the libnuma header and library files available. Different linux
 distributions package these files under different names; look for
 packages with the word "numa" in them. You may also need a developer
@@ -211,7 +211,7 @@ support binding memory to the process location.
 
   Node:  %s
 
-PRTE uses the "hwloc" library to perform process and memory
+PRRTE uses the "hwloc" library to perform process and memory
 binding. This error message means that hwloc has indicated that
 processor binding support is not available on this machine.
 
@@ -221,8 +221,8 @@ the OS does not expose this functionality).
 On Linux, lack of the functionality can mean that you are on a
 platform where processor and memory affinity is not supported in Linux
 itself, or that hwloc was built without NUMA and/or processor affinity
-support. When building hwloc (which, depending on your PRTE
-installation, may be embedded in PRTE itself), it is important to
+support. When building hwloc (which, depending on your PRRTE
+installation, may be embedded in PRRTE itself), it is important to
 have the libnuma header and library files available. Different linux
 distributions package these files under different names; look for
 packages with the word "numa" in them. You may also need a developer
@@ -245,7 +245,7 @@ support binding memory to the process location.
 
   Node:  %s
 
-PRTE uses the "hwloc" library to perform process and memory
+PRRTE uses the "hwloc" library to perform process and memory
 binding. This error message means that hwloc has indicated that
 processor binding support is not available on this machine.
 
@@ -255,8 +255,8 @@ the OS does not expose this functionality).
 On Linux, lack of the functionality can mean that you are on a
 platform where processor and memory affinity is not supported in Linux
 itself, or that hwloc was built without NUMA and/or processor affinity
-support. When building hwloc (which, depending on your PRTE
-installation, may be embedded in PRTE itself), it is important to
+support. When building hwloc (which, depending on your PRRTE
+installation, may be embedded in PRRTE itself), it is important to
 have the libnuma header and library files available. Different linux
 distributions package these files under different names; look for
 packages with the word "numa" in them. You may also need a developer
@@ -269,7 +269,7 @@ platform. If the OS/platform does actually support processor / memory
 affinity, then you should contact the hwloc maintainers:
 https://github.com/open-mpi/hwloc.
 
-The provided memory binding policy requires that PRTE abort the
+The provided memory binding policy requires that PRRTE abort the
 job at this time.
 #
 [rmaps:no-bindable-objects]
@@ -326,7 +326,7 @@ been deprecated and replaced as follows:
     Deprecated:  %s
     Replacement: %s
 
-The deprecated forms *will* disappear in a future version of PRTE.
+The deprecated forms *will* disappear in a future version of PRRTE.
 Please update to the new syntax.
 #
 [mismatch-binding]
@@ -557,3 +557,222 @@ attempting to map a job that lacks an assigned personality.
   Job: %s
 
 Please report this to the PRRTE developers (https://github.com/openpmix/prrte/issues)
+#
+[unsupported-combination]
+A %s policy was provided that is not supported in combination
+with the "PE=N" option:
+
+  Policy:  %s
+
+When specifying the number of CPUs to use for each process in a job,
+the processes must be bound at the CPU level - either HWThread if
+"HWTCPUS" was specified, or CORE. Please remove the bind policy
+specification and try again.
+#
+[unsupported-mapping-combo]
+A mapping policy was provided that is not supported in combination
+with the "PE-LIST=x,y,z" option:
+
+  Policy:  %s
+
+When specifying the CPUs to be used for the job, the mapper can
+only look at those CPUs. It is therefore not possible to map
+the job according to some other target object. Please either
+remove the mapping policy or change it to "slot" and try again.
+#
+[map-by-option]
+Processes are mapped in a round-robin fashion based on
+one of the following directives as applied at the job level:
+
+-   SLOT assigns procs to each node up to the number of available
+    slots on that node before moving to the next node in the
+    allocation
+
+-   HWTHREAD assigns a proc to each hardware thread on a node in a
+    round-robin manner up to the number of available slots on that
+    node before moving to the next node in the allocation
+
+-   CORE (default) assigns a proc to each core on a node in a
+    round-robin manner up to the number of available slots on that
+    node before moving to the next node in the allocation
+
+-   L1CACHE assigns a proc to each L1 cache on a node in a
+    round-robin manner up to the number of available slots on that
+    node before moving to the next node in the allocation
+
+-   L2CACHE assigns a proc to each L2 cache on a node in a
+    round-robin manner up to the number of available slots on that
+    node before moving to the next node in the allocation
+
+-   L3CACHE assigns a proc to each L3 cache on a node in a
+    round-robin manner up to the number of available slots on that
+    node before moving to the next node in the allocation
+
+-   NUMA assigns a proc to each NUMA region on a node in a
+    round-robin manner up to the number of available slots on that
+    node before moving to the next node in the allocation
+
+-   PACKAGE assigns a proc to each package on a node in a
+    round-robin manner up to the number of available slots on that
+    node before moving to the next node in the allocation
+
+-   NODE assigns processes in a round-robin fashion to all nodes
+    in the allocation, with the number assigned to each node capped
+    by the number of available slots on that node
+
+-   SEQ (often accompanied by the file=<path> qualifier) assigns
+    one process to each node specified in the file. The sequential
+    file is to contain an entry for each desired process, one per
+    line of the file.
+
+-   PPR:N:resource maps N procs to each instance of the specified
+    resource type in the allocation
+
+-   RANKFILE (often accompanied by the file=<path> qualifier) assigns
+    one process to the node/resource specified in each entry of the
+    file, one per line of the file.
+
+-   PE-LIST=a,b assigns procs to each node in the allocation based on
+    the ORDERED qualifier. The list is comprised of comma-delimited
+    ranges of CPUs to use for this job. If the ORDERED qualifier is not
+    provided, then each node will be assigned procs up to the number of
+    available slots, capped by the availability of the specified CPUs.
+    If ORDERED is given, then one proc will be assigned to each of the
+    specified CPUs, if available, capped by the number of slots on each
+    node and the total number of specified processes. Providing the
+    OVERLOAD qualifier to the "bind-to" option removes the check on
+    availability of the CPU in both cases.
+
+Any directive can include qualifiers by adding a colon (:) and any
+combination of one or more of the following to the --map-by option
+(except where noted):
+
+-   PE=n bind n processing elements to each process (can not be
+    used in combination with rankfile or pe-list directives)
+
+-   SPAN load balance the processes across the allocation by treating
+    the allocation as a single "super-node" (can not be used in
+    combination with slot, node, seq, ppr, rankfile, or
+    pe-list directives)
+
+-   OVERSUBSCRIBE allow more processes on a node than processing elements
+-   NOOVERSUBSCRIBE means !OVERSUBSCRIBE
+
+-   NOLOCAL do not launch processes on the same node as prun
+
+-   HWTCPUS use hardware threads as CPU slots
+
+-   CORECPUS use cores as CPU slots (default)
+
+-   INHERIT
+-   NOINHERIT means !INHERIT
+
+-   FILE=<path> (path to file containing sequential or rankfile entries).
+
+-   ORDERED only applies to the PE-LIST option to indicate that procs
+    are to be bound to each of the specified CPUs in the order
+    in which they are assigned (i.e., the first proc on a node shall
+    be bound to the first CPU in the list, the second proc shall be
+    bound to the second CPU, etc.)
+
+-   DISPLAY outputs a table showing the mapped location of each process
+    prior to launch.
+
+-   DISPLAYALLOC outputs the detected allocation of resources (e.g., nodes,
+    slots) for the job
+
+-   DONOTLAUNCH directs PRRTE to map by not launch the specified job.
+    This is provided to help explore possible process placement patterns
+    before actually starting execution.
+
+Note that directives and qualifiers are case-insensitive
+and can be shortened to the minimum number of characters
+to uniquely identify them. Thus, "L1CACHE" can be given
+as "l1cache" or simply as "L1".
+
+A more detailed description of the mapping, ranking, and binding procedure
+can be obtained via the "--help placement" option.
+#
+[rank-by-option]
+By default, process ranks are assigned in accordance with the mapping
+directive - e.g., jobs that are mapped by-node will have the process
+ranks assigned round-robin on a per-node basis. However, users can override
+the default by specifying any of the following directives using the
+--rank-by command line option:
+
+-   SLOT assigns ranks to each process on a node in the order in
+    which the mapper assigned them. This is the default behavior,
+    but is provided as an explicit option to allow users to override
+    any alternative default specified in the environment. When mapping
+    to a specific resource type, procs assigned to a given instance
+    of that resource on a node will be ranked on a per-resource basis
+    on that node before moving to the next node.
+
+-   NODE assigns ranks round-robin on a per-node basis
+
+-   FILL assigns ranks to procs mapped to a particular resource type
+    on each node, filling all ranks on that resource before moving to
+    the next resource on that node. For example, procs mapped by-L1cache
+    would have all procs on the first L1cache ranked sequentially before
+    moving to the second L1cache on the node. Once all procs on the
+    node have been ranked, ranking would continue on the next node.
+
+-   SPAN assigns ranks round-robin to procs mapped to a particular
+    resource type, treating the collection of resource instances
+    spanning the entire allocation as a single "super node" before
+    looping around for the next pass. Thus, ranking would begin with
+    the first proc on the first L1cache on the first node, then the
+    next rank would be assiged to the first proc on the second L1cache
+    on that node, proceeding across until the first proc had been
+    ranked on all L1caches used by the job before circling around to
+    rank the second proc on each object.
+
+The rank-by command line option has no qualifiers. Note that directives
+are case-insensitive.
+
+A more detailed description of the mapping, ranking, and binding procedure
+can be obtained via the "--help placement" option.
+#
+[must-map-by-obj]
+When ranking by FILL or by SPAN, you must map by an object
+type (e.g., HWTHREAD, NUMA, or cache level):
+
+  Map policy:   %s
+  Rank policy:  %s
+
+Please specify a supported combination and try again.
+#
+[out-of-resource]
+Either there are not enough slots available in the system to launch
+the %d processes that were requested by the application, or there are
+not enough CPUs to bind them as requested:
+
+  App: %s
+  Mapping: %s
+  Binding: %s
+
+Either request fewer processes for your application, make more slots
+available for use by expanding the allocation, or do not bind the
+processes so that the number of CPUs is no longer a limiting factor.
+
+A "slot" is the PRRTE term for an allocatable unit where we can
+launch a process.  The number of slots available are defined by the
+environment in which PRRTE processes are run:
+
+  1. Hostfile, via "slots=N" clauses (N defaults to number of
+     processor cores if not provided)
+  2. The --host command line parameter, via a ":N" suffix on the
+     hostname (N defaults to 1 if not provided)
+  3. Resource manager (e.g., SLURM, PBS/Torque, LSF, etc.)
+  4. If none of a hostfile, the --host command line parameter, or an
+     RM is present, PRRTE defaults to the number of processor cores
+
+In all the above cases, if you want PRRTE to default to the number
+of hardware threads instead of the number of processor cores, use the
+--use-hwthread-cpus option.
+
+Alternatively, you can use the --map-by :OVERSUBSCRIBE option to ignore the
+number of available slots when deciding the number of processes to
+launch. Similarly, you can use the --bind-to :OVERLOAD option to bind
+more than one process to a CPU, if desired, or --bind-to NONE to avoid
+binding altogether.

@@ -438,18 +438,14 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             PMIX_INFO_LIST_ADD(ret, pmap, PMIX_RANK, &pptr->name.rank, PMIX_PROC_RANK);
 
             /* location, for local procs */
-            tmp = NULL;
-            if (prte_get_attribute(&pptr->attributes, PRTE_PROC_CPU_BITMAP,
-                                   (void **) &tmp, PMIX_STRING)
-                && NULL != tmp) {
+            if (NULL != pptr->cpuset) {
                 /* provide the cpuset string for this proc */
-                PMIX_INFO_LIST_ADD(ret, pmap, PMIX_CPUSET, tmp, PMIX_STRING);
+                PMIX_INFO_LIST_ADD(ret, pmap, PMIX_CPUSET, pptr->cpuset, PMIX_STRING);
                 /* let PMIx generate the locality string */
                 PMIX_CPUSET_CONSTRUCT(&cpuset);
                 cpuset.source = "hwloc";
                 cpuset.bitmap = hwloc_bitmap_alloc();
-                hwloc_bitmap_list_sscanf(cpuset.bitmap, tmp);
-                free(tmp);
+                hwloc_bitmap_list_sscanf(cpuset.bitmap, pptr->cpuset);
                 ret = PMIx_server_generate_locality_string(&cpuset, &tmp);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);

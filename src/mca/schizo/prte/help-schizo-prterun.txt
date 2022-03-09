@@ -31,13 +31,13 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
    --debug-daemons                   Debug daemons - if not set, the "verbose" setting will be limited to
                                      the DVM controller to reduce clutter
-   --debug-daemons-file              Enable debugging of any PRTE daemons used by this application, storing
+   --debug-daemons-file              Enable debugging of any PRRTE daemons used by this application, storing
                                      their verbose output in files
    --display <arg0>                  Comma-delimited list of options for displaying information about the
                                      allocation and job. Allowed values: allocation, bind, map, map-devel,
                                      topo
    --get-stack-traces                Get stack traces of all application procs on timeout
-   --leave-session-attached          Do not discard stdout/stderr of remote PRTE daemons
+   --leave-session-attached          Do not discard stdout/stderr of remote PRRTE daemons
    --report-state-on-timeout         Report all job and process states upon timeout
    --spawn-timeout <arg0>            Timeout the job if spawn takes more than the specified number of seconds
    --stop-on-exec                    If supported, stop each specified process at start of execution
@@ -76,19 +76,23 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
    --map-by <arg0>                   Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache
                                      | l2cache | l3cache | numa (default:np>2) | package | node | seq | dist |
-                                     ppr |,rankfile] with supported colon-delimited modifiers: PE=y (for
+                                     ppr | rankfile | PE-LIST=a,b (comma-delimited ranges of cpus to use for
+                                     this job)] with supported colon-delimited qualifiers: PE=y (for
                                      multiple cpus/proc), SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL,
-                                     HWTCPUS, CORECPUS, DEVICE(for dist policy), INHERIT, NOINHERIT,
-                                     PE-LIST=a,b (comma-delimited ranges of cpus to use for this job),
-                                     FILE=<path> for seq and rankfile options
+                                     HWTCPUS, CORECPUS, DEVICE(for dist policy), INHERIT, NOINHERIT, DONOTLAUNCH,
+                                     FILE=<path> for seq and rankfile options, ORDERED to indicate that the
+                                     CPUs specified in PE-LIST should be assigned to individual procs in
+                                     specified order (i.e., the first proc on a node is bound to the first
+                                     CPU in the list, the second proc to the second CPU, etc.). The PE-LIST
+                                     option without the ORDERED qualifier will result in each proc being
+                                     bound to the complete list of CPUs.
 
 
 
 /*****      Ranking Options      *****/
 
-   --rank-by <arg0>                  Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache
-                                     | l2cache | l3cache | numa (default:np>2) | package | node], with
-                                     modifier :SPAN or :FILL
+   --rank-by <arg0>                  Ranking Policy for job [slot (default) | node | fill | object | span]
+                                     with no qualifiers
 
 
 
@@ -127,7 +131,7 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
                                      is the parameter name; arg1 is the parameter value)
    --preload-files <arg0>            Preload the comma separated list of files to the remote machines current
                                      working directory before starting the remote process.
-   --prtemca <arg0> <arg1>           Pass context-specific PRTE MCA parameters to the DVM
+   --prtemca <arg0> <arg1>           Pass context-specific PRRTE MCA parameters to the DVM
    --pset <arg0>                     User-specified name assigned to the processes in their given application
    --rankfile <arg0>                 Name of file to specify explicit task mapping
 -s|--preload-binary                  Preload the binary on the remote machine before starting the remote
@@ -243,10 +247,10 @@ Maximum number of daemons to start
 Debug daemon output enabled
 #
 [debug-daemons-file]
-Enable debugging of any PRTE daemons used by this application, storing output in files
+Enable debugging of any PRRTE daemons used by this application, storing output in files
 #
 [leave-session-attached]
-Do not discard stdout/stderr of remote PRTE daemons
+Do not discard stdout/stderr of remote PRRTE daemons
 #
 [tmpdir]
 Set the root for the session directory tree
@@ -387,65 +391,107 @@ Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buf
 Specify procs to receive stdin [rank, "all", "none"] (default: 0, indicating rank 0)
 #
 [map-by]
-Mapping Policy for job:
-    slot
-    hwthread
-    core (default: np <= 2)
-    l1cache
-    l2cache
-    l3cache
-    numa (default: np > 2)
-    package
-    node
-    seq
-    dist
-    ppr
-    rankfile
-with supported colon-delimited qualifiers:
-    PE=y (for multiple cpus/proc)
-    SPAN
-    OVERSUBSCRIBE
-    NOOVERSUBSCRIBE
-    NOLOCAL
-    HWTCPUS
-    CORECPUS
-    DEVICE(for dist policy)
-    INHERIT
-    NOINHERIT
-    PE-LIST=a,b (comma-delimited ranges of cpus to use for this job)
-    FILE=<path> for seq and rankfile options
+#include#help-prte-rmaps-base#map-by-option
 #
 [rank-by]
-Ranking Policy for job:
-    slot (default: np <= 2)
-    hwthread
-    core
-    l1cache
-    l2cache
-    l3cache
-    numa (default: np > 2)
-    package
-    node
-with supported colon-delimited qualifiers:
-    SPAN
-    FILL
+#include#help-prte-rmaps-base#rank-by-option
 #
 [bind-to]
-Binding Policy for job:
-    none (default: oversubscribed)
-    hwthread
-    core (default: np <= 2)
-    l1cache
-    l2cache
-    l3cache
-    numa (default: np > 2)
-    package
-with supported colon-delimited qualifiers:
-    overload-allowed
-    if-supported
+#include#help-prte-hwloc-base#bind-to-option
 #
 [rankfile]
 Name of file to specify explicit task mapping
+#
+[placement]
+Process Mapping / Ranking / Binding Options in detail
+
+Processes are mapped to the resources in an allocation according to the
+directive provided by the user via the --map-by command line option. Supported
+directives include:
+
+-   SLOT fills each node up to the number of available slots before moving
+    on to the next node in the allocation.
+-   NODE places processes in a round-robin fashion across all nodes in the
+    allocation, subject to limitations on the number of available slots on
+    each node.
+-   HWTHREAD places one process on each available hwthread on a node before
+    moving on to the next node in the allocation, subject to limitations on
+    the number of available slots on each node.
+-   CORE places one process on each available core on a node before
+    moving on to the next node in the allocation, subject to limitations on
+    the number of available slots on each node.
+-   L1CACHE places one process on each available L1 cache on a node before
+    moving on to the next node in the allocation, subject to limitations on
+    the number of available slots on each node.
+-   L2CACHE places one process on each available L2 cache on a node before
+    moving on to the next node in the allocation, subject to limitations on
+    the number of available slots on each node.
+-   L3CACHE places one process on each available L3 cache on a node before
+    moving on to the next node in the allocation, subject to limitations on
+    the number of available slots on each node.
+-   NUMA places one process on each available NUMA region on a node before
+    moving on to the next node in the allocation, subject to limitations on
+    the number of available slots on each node.
+-   PACKAGE places one process on each available package on a node before
+    moving on to the next node in the allocation, subject to limitations on
+    the number of available slots on each node.
+
+--map-by <object>
+    Map to the specified object. See defaults in Quick Summary. Supported options
+    include slot, hwthread, core, l1cache, l2cache, l3cache, numa, package, node,
+    seq, ppr, rankfile, and pe-list
+
+Mapping by slot
+Any directive can include qualifiers by adding a colon (:) and any
+combination of one or more of the following to the --map-by option
+(except where noted):
+
+-   PE=n bind n processing elements to each process (can not be
+    used in combination with rankfile or pe-list directives)
+-   SPAN load balance the processes across the allocation by treating
+    the allocation as a single "super-node" (can not be
+    used in combination with slot, node, seq, ppr, rankfile, or
+    pe-list directives)
+-   OVERSUBSCRIBE allow more processes on a node than processing elements
+-   NOOVERSUBSCRIBE means !OVERSUBSCRIBE
+-   NOLOCAL do not launch processes on the same node as prun
+-   HWTCPUS use hardware threads as CPU slots
+-   CORECPUS use cores as CPU slots (default)
+-   INHERIT
+-   NOINHERIT means !INHERIT
+-   FILE=<path> (path to file containing sequential or rankfile entries).
+-   ORDERED only applies to the PE-LIST option and indicates that
+    procs are to be bound to each of the specified CPUs in the order
+    in which they are assigned (i.e., the first proc on a node shall
+    be bound to the first CPU in the list, the second proc shall be
+    bound to the second CPU, etc.)
+
+
+ppr policy example: --map-by ppr:N:<object> will launch N times the number
+of objects of the specified type on each node.
+
+By default, process ranks are assigned in accordance with the mapping
+directive - e.g., jobs that are mapped by node will have the process
+ranks assigned on a per-node basis. However, users can override the
+default by specifying any of the following directives using the --rank-by
+command line option:
+
+-   SLOT assigns ranks to each process on a node in the order in
+    which the mapper assigned them.
+-   NODE assigns ranks
+-   FILL
+
+To bind processes to sets of objects:
+
+--bind-to <object>
+
+    Bind processes to the specified object. See defaults in Quick Summary. Supported options include none, hwthread, core, l1cache, l2cache, l3cache, numa, and package, cpu-set (bind each proc to the specified set, effectively a "soft" c-group)
+
+Any object can include qualifiers by adding a colon (:) and any combination of one or more of the following to the --bind-to option:
+
+-   overload-allowed allows for binding more than one process in relation to a CPU
+-   if-supported if that object is supported on this system
+
 #
 [display]
 Comma-delimited list of options for displaying information about the allocation and job.

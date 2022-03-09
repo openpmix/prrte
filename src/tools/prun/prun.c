@@ -771,9 +771,6 @@ int prun(int argc, char *argv[])
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, opt->values[0], PMIX_STRING);
-        if (NULL != strcasestr(opt->values[0], "DONOTLAUNCH")) {
-            PMIX_INFO_LIST_ADD(ret, jinfo, "PRTE_JOB_DO_NOT_LAUNCH", NULL, PMIX_BOOL);
-        }
     }
 
     /* if the user specified a ranking policy, then set it */

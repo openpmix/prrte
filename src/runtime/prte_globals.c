@@ -475,7 +475,6 @@ static void prte_job_construct(prte_job_t *job)
                             PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
     job->map = NULL;
     job->bookmark = NULL;
-    job->bkmark_obj = UINT_MAX; // mark that we haven't assigned a bkmark yet
     job->state = PRTE_JOB_STATE_UNDEF;
 
     job->num_mapped = 0;
@@ -599,6 +598,7 @@ static void prte_node_construct(prte_node_t *node)
     node->rawname = NULL;
     node->aliases = NULL;
     node->daemon = NULL;
+    node->available = NULL;
 
     node->num_procs = 0;
     node->procs = PMIX_NEW(pmix_pointer_array_t);
@@ -639,7 +639,9 @@ static void prte_node_destruct(prte_node_t *node)
         PMIX_RELEASE(node->daemon);
         node->daemon = NULL;
     }
-
+    if (NULL != node->available) {
+        hwloc_bitmap_free(node->available);
+    }
     for (i = 0; i < node->procs->size; i++) {
         if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, i))) {
             pmix_pointer_array_set_item(node->procs, i, NULL);
@@ -671,6 +673,8 @@ static void prte_proc_construct(prte_proc_t *proc)
     proc->state = PRTE_PROC_STATE_UNDEF;
     proc->app_idx = 0;
     proc->node = NULL;
+    proc->obj = NULL;
+    proc->cpuset = NULL;
     proc->exit_code = 0; /* Assume we won't fail unless otherwise notified */
     proc->rml_uri = NULL;
     proc->flags = 0;
@@ -683,7 +687,10 @@ static void prte_proc_destruct(prte_proc_t *proc)
         PMIX_RELEASE(proc->node);
         proc->node = NULL;
     }
-
+    if (NULL != proc->cpuset) {
+        free(proc->cpuset);
+        proc->cpuset = NULL;
+    }
     if (NULL != proc->rml_uri) {
         free(proc->rml_uri);
         proc->rml_uri = NULL;
@@ -751,7 +758,7 @@ static void tcon(prte_topology_t *t)
 static void tdes(prte_topology_t *t)
 {
     if (NULL != t->topo) {
-        prte_hwloc_base_free_topology(t->topo);
+        hwloc_topology_destroy(t->topo);
     }
     if (NULL != t->sig) {
         free(t->sig);

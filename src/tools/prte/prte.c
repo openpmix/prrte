@@ -603,14 +603,6 @@ int main(int argc, char *argv[])
         goto DONE;
     }
 
-    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_MAPBY);
-    if (NULL != opt) {
-        if (NULL != strcasestr(opt->values[0], PRTE_CLI_NOLAUNCH)) {
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH,
-                               PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-        }
-    }
-
     /* Did the user specify a prefix, or want prefix by default? */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PREFIX);
     if (NULL != opt || want_prefix_by_default) {

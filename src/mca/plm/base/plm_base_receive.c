@@ -307,8 +307,6 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
             } else {
                 jdata->bookmark = parent->bookmark;
             }
-            /* provide the parent's last object */
-            jdata->bkmark_obj = parent->bkmark_obj;
         }
 
         if (!prte_dvm_ready) {

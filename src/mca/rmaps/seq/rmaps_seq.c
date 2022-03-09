@@ -52,10 +52,13 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
 
-static int prte_rmaps_seq_map(prte_job_t *jdata);
+static int prte_rmaps_seq_map(prte_job_t *jdata,
+                              prte_rmaps_options_t *options);
 
 /* define the module */
-prte_rmaps_base_module_t prte_rmaps_seq_module = {.map_job = prte_rmaps_seq_map};
+prte_rmaps_base_module_t prte_rmaps_seq_module = {
+    .map_job = prte_rmaps_seq_map
+};
 
 /* local object for tracking rank locations */
 typedef struct {
@@ -84,20 +87,43 @@ PMIX_CLASS_INSTANCE(seq_node_t, pmix_list_item_t, sn_con, sn_des);
 static char *prte_getline(FILE *fp);
 static int process_file(char *path, pmix_list_t *list);
 
+static bool quickmatch(prte_node_t *nd, char *name)
+{
+    int n;
+
+    if (0 == strcmp(nd->name, name)) {
+        return true;
+    }
+    if (0 == strcmp(nd->name, prte_process_info.nodename) &&
+        (0 == strcmp(name, "localhost") ||
+         0 == strcmp(name, "127.0.0.1"))) {
+        return true;
+    }
+    if (NULL != nd->aliases) {
+        for (n=0; NULL != nd->aliases[n]; n++) {
+            if (0 == strcmp(nd->aliases[n], name)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 /*
  * Sequentially map the ranks according to the placement in the
  * specified hostfile
  */
-static int prte_rmaps_seq_map(prte_job_t *jdata)
+static int prte_rmaps_seq_map(prte_job_t *jdata,
+                              prte_rmaps_options_t *options)
 {
     prte_job_map_t *map;
     prte_app_context_t *app;
     int i, n;
     int32_t j;
     pmix_list_item_t *item;
-    prte_node_t *node, *nd;
+    prte_node_t *node, *nd, *nsave = NULL;
     seq_node_t *sq, *save = NULL, *seq;
-    pmix_rank_t vpid;
+    pmix_rank_t vpid, apprank;
     int32_t num_nodes;
     int rc;
     pmix_list_t default_seq_list;
@@ -105,7 +131,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     prte_proc_t *proc;
     prte_mca_base_component_t *c = &prte_rmaps_seq_component.base_version;
     char *hosts = NULL;
-    bool use_hwthread_cpus, match;
+    bool match;
 
     PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
                          "%s rmaps:seq called on job %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -129,8 +155,6 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
                                 PRTE_JOBID_PRINT(jdata->nspace));
             return PRTE_ERR_TAKE_NEXT_OPTION;
         }
-        /* we need to process it */
-        goto process;
     }
     if (PRTE_MAPPING_SEQ != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         /* I don't know how to do these - defer */
@@ -140,9 +164,9 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
-process:
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                        "mca:rmaps:seq: mapping job %s", PRTE_JOBID_PRINT(jdata->nspace));
+                        "mca:rmaps:seq: mapping job %s",
+                        PRTE_JOBID_PRINT(jdata->nspace));
 
     /* flag that I did the mapping */
     if (NULL != jdata->map->last_mapper) {
@@ -163,14 +187,6 @@ process:
         }
     }
 
-    /* check for type of cpu being used */
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)
-        && PRTE_BIND_TO_HWTHREAD == PRTE_GET_BINDING_POLICY(jdata->map->binding)) {
-        use_hwthread_cpus = true;
-    } else {
-        use_hwthread_cpus = false;
-    }
-
     /* start at the beginning... */
     vpid = 0;
     jdata->num_procs = 0;
@@ -178,18 +194,13 @@ process:
         save = (seq_node_t *) pmix_list_get_first(&default_seq_list);
     }
 
-    /* initialize all the nodes as not included in this job map */
-    for (j = 0; j < prte_node_pool->size; j++) {
-        if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, j))) {
-            PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
-        }
-    }
-
     /* cycle through the app_contexts, mapping them sequentially */
     for (i = 0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
+        if (NULL == app) {
             continue;
         }
+        apprank = 0;
 
         /* specified seq file trumps all */
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING)) {
@@ -311,7 +322,7 @@ process:
                 if (NULL == node) {
                     continue;
                 }
-                if (0 == strcmp(node->name, sq->hostname)) {
+                if (quickmatch(node, sq->hostname)) {
                     match = true;
                     break;
                 }
@@ -323,134 +334,38 @@ process:
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
-            /* ensure the node is in the map */
-            if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
-                PMIX_RETAIN(node);
-                pmix_pointer_array_add(map->nodes, node);
-                jdata->map->num_nodes++;
-                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-            }
-            proc = prte_rmaps_base_setup_proc(jdata, node, i);
-            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
-                /* check if we are oversubscribed */
-                if ((node->slots < (int) node->num_procs) ||
-                    (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
-                    if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                                       node->num_procs, app->app);
-                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                        rc = PRTE_ERR_SILENT;
-                        goto error;
-                    }
-                    /* flag the node as oversubscribed so that sched-yield gets
-                     * properly set
-                     */
-                    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
-                    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
-                    /* check for permission */
-                    if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
-                        /* if we weren't given a directive either way, then we will error out
-                         * as the #slots were specifically given, either by the host RM or
-                         * via hostfile/dash-host */
-                        if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
-                            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
-                                           true, app->num_procs, app->app);
-                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                            rc = PRTE_ERR_SILENT;
-                            goto error;
-                        } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                            /* if we were explicitly told not to oversubscribe, then don't */
-                            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
-                                           true, app->num_procs, app->app);
-                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                            rc = PRTE_ERR_SILENT;
-                            goto error;
-                        }
-                    }
-                }
-            }
-            /* assign the vpid */
-            proc->name.rank = vpid++;
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps:seq: assign proc %s to node %s for app %s",
-                                PRTE_VPID_PRINT(proc->name.rank), sq->hostname, app->app);
-
-            /* record the cpuset, if given */
-            if (NULL != sq->cpuset) {
-                hwloc_cpuset_t bitmap;
-                char *cpu_bitmap;
-                if (NULL == node->topology || NULL == node->topology->topo) {
-                    /* not allowed - for sequential cpusets, we must have
-                     * the topology info
-                     */
-                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
-                                   node->name);
-                    rc = PRTE_ERR_SILENT;
-                    goto error;
-                }
-                /* if we are using hwthreads as cpus and binding to hwthreads, then
-                 * we can just copy the cpuset across as it already specifies things
-                 * at that level */
-                if (use_hwthread_cpus) {
-                    cpu_bitmap = strdup(sq->cpuset);
-                } else {
-                    /* setup the bitmap */
-                    bitmap = hwloc_bitmap_alloc();
-                    /* parse the slot_list to find the package and core */
-                    rc = prte_hwloc_base_cpu_list_parse(sq->cpuset, node->topology->topo, bitmap);
-                    if (PRTE_ERR_NOT_FOUND == rc) {
-                        char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
-                                                             false, node->topology->topo);
-                        pmix_show_help("help-rmaps-seq.txt", "missing-cpu", true,
-                                       prte_tool_basename, sq->cpuset, tmp);
-                        free(tmp);
-                    } else if (PRTE_ERROR == rc) {
-                        pmix_show_help("help-rmaps-seq.txt", "bad-syntax", true, hosts);
-                        rc = PRTE_ERR_SILENT;
-                        hwloc_bitmap_free(bitmap);
-                        goto error;
-                    } else {
-                        PRTE_ERROR_LOG(rc);
-                        hwloc_bitmap_free(bitmap);
-                        goto error;
-                    }
-                    /* note that we cannot set the proc locale to any specific object
-                     * as the slot list may have assigned it to more than one - so
-                     * leave that field NULL
-                     */
-                    /* set the proc to the specified map */
-                    hwloc_bitmap_list_asprintf(&cpu_bitmap, bitmap);
-                    hwloc_bitmap_free(bitmap);
-                }
-                prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL,
-                                   cpu_bitmap, PMIX_STRING);
-                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps:seq: binding proc %s to cpuset %s bitmap %s",
-                                    PRTE_VPID_PRINT(proc->name.rank), sq->cpuset, cpu_bitmap);
-                /* note that the user specified the mapping */
-                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYUSER);
-                PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_GIVEN);
-                /* cleanup */
-                free(cpu_bitmap);
-            } else {
-                hwloc_obj_t locale;
-
-                /* assign the locale - okay for the topo to be null as
-                 * it just means it wasn't returned
-                 */
-                if (NULL != node->topology && NULL != node->topology->topo) {
-                    locale = hwloc_get_root_obj(node->topology->topo);
-                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, PRTE_ATTR_LOCAL,
-                                       locale, PMIX_POINTER);
-                }
+            /* check availability */
+            prte_rmaps_base_get_cpuset(jdata, node, options);
+            if (!prte_rmaps_base_check_avail(jdata, app, node, seq_list, NULL, options)) {
+                continue;
             }
 
-            /* add to the jdata proc array */
-            if (PRTE_SUCCESS
-                != (rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc))) {
-                PRTE_ERROR_LOG(rc);
+            /* map the proc */
+            proc = prte_rmaps_base_setup_proc(jdata, i, node, NULL, options);
+            if (NULL == proc) {
+                pmix_show_help("help-prte-rmaps-seq.txt", "proc-failed-to-map", true,
+                               sq->hostname, app->app);
+                rc = PRTE_ERR_SILENT;
                 goto error;
             }
+            proc->name.rank = vpid;
+            vpid++;
+            proc->app_rank = apprank;
+            apprank++;
+            PMIX_RETAIN(proc);
+            rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_RELEASE(proc);
+                return rc;
+            }
+            rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
+            if (PRTE_SUCCESS != rc) {
+                return rc;
+            }
+            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "mca:rmaps:seq: assigned proc %s to node %s for app %s",
+                                PRTE_VPID_PRINT(proc->name.rank), sq->hostname, app->app);
+
             /* move to next node */
             sq = (seq_node_t *) pmix_list_get_next(&sq->super);
         }
@@ -469,10 +384,25 @@ process:
         }
     }
 
-    /* mark that this job is to be fully
-     * described in the launch msg */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL,
-                       PMIX_BOOL);
+    /* compute local ranks */
+    for (i=0; i < jdata->map->nodes->size; i++) {
+        node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, i);
+        if (NULL == node) {
+            continue;
+        }
+        vpid = 0;
+        for (n=0; n < node->procs->size; n++) {
+            proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, n);
+            if (NULL == proc) {
+                continue;
+            }
+            if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
+                continue;
+            }
+            proc->local_rank = vpid;
+            ++vpid;
+        }
+    }
 
     return PRTE_SUCCESS;
 

@@ -104,11 +104,8 @@ static prte_rmaps_print_buffers_t *get_print_buffer(void)
 char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
 {
     char *ret, *map, *mymap, *tmp;
+    char **qls = NULL;
     prte_rmaps_print_buffers_t *ptr;
-
-    if (PRTE_MAPPING_CONFLICTED & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        return "CONFLICTED";
-    }
 
     ptr = get_print_buffer();
     if (NULL == ptr) {
@@ -151,46 +148,48 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
     case PRTE_MAPPING_SEQ:
         map = "SEQUENTIAL";
         break;
+    case PRTE_MAPPING_COLOCATE:
+        map = "COLOCATE";
+        break;
     case PRTE_MAPPING_BYUSER:
         map = "BYUSER";
         break;
     case PRTE_MAPPING_BYDIST:
         map = "MINDIST";
         break;
+    case PRTE_MAPPING_PELIST:
+        map = "PE-LIST";
+        break;
+    case PRTE_MAPPING_PPR:
+        map = "PPR";
+        break;
     default:
-        if (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(mapping)) {
-            map = "PPR";
-        } else {
-            map = "UNKNOWN";
-        }
+        map = "UNKNOWN";
     }
-    if (0 != strcmp(map, "PPR") && (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(mapping))) {
-        pmix_asprintf(&mymap, "%s[PPR]:", map);
-    } else {
-        pmix_asprintf(&mymap, "%s:", map);
-    }
+    pmix_asprintf(&mymap, "%s:", map);
     if (PRTE_MAPPING_NO_USE_LOCAL & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        pmix_asprintf(&tmp, "%sNO_USE_LOCAL,", mymap);
-        free(mymap);
-        mymap = tmp;
+        pmix_argv_append_nosize(&qls, "NO_USE_LOCAL");
     }
     if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        pmix_asprintf(&tmp, "%sNOOVERSUBSCRIBE,", mymap);
-        free(mymap);
-        mymap = tmp;
+        pmix_argv_append_nosize(&qls, "NOOVERSUBSCRIBE");
     } else if (PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        pmix_asprintf(&tmp, "%sOVERSUBSCRIBE,", mymap);
-        free(mymap);
-        mymap = tmp;
+        pmix_argv_append_nosize(&qls, "OVERSUBSCRIBE");
     }
     if (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        pmix_asprintf(&tmp, "%sSPAN,", mymap);
-        free(mymap);
-        mymap = tmp;
+        pmix_argv_append_nosize(&qls, "SPAN");
+    }
+    if (PRTE_MAPPING_ORDERED & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
+        pmix_argv_append_nosize(&qls, "ORDERED");
     }
 
-    /* remove the trailing mark */
-    mymap[strlen(mymap) - 1] = '\0';
+    if (NULL != qls) {
+        tmp = pmix_argv_join(qls, ':');
+        pmix_argv_free(qls);
+        pmix_asprintf(&mymap, "%s:%s", map, tmp);
+        free(tmp);
+    } else {
+        mymap = strdup(map);
+    }
 
     snprintf(ptr->buffers[ptr->cntr], PRTE_RMAPS_PRINT_MAX_SIZE, "%s", mymap);
     free(mymap);
@@ -202,20 +201,28 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
 
 char *prte_rmaps_base_print_ranking(prte_ranking_policy_t ranking)
 {
+    char *ret;
+
     switch (PRTE_GET_RANKING_POLICY(ranking)) {
     case PRTE_RANK_BY_NODE:
-        return "NODE";
-    case PRTE_RANK_BY_PACKAGE:
-        return "PACKAGE";
-    case PRTE_RANK_BY_NUMA:
-        return "NUMA";
-    case PRTE_RANK_BY_CORE:
-        return "CORE";
-    case PRTE_RANK_BY_HWTHREAD:
-        return "HWTHREAD";
+        ret = "NODE";
+        break;
     case PRTE_RANK_BY_SLOT:
-        return "SLOT";
+        ret = "SLOT";
+        break;
+    case PRTE_RANK_BY_FILL:
+        ret = "FILL";
+        break;
+    case PRTE_RANK_BY_SPAN:
+        ret = "SPAN";
+        break;
+    case PRTE_RANKING_BYUSER:
+        ret = "BYUSER";
+        break;
     default:
-        return "UNKNOWN";
+        ret = "UNKNOWN";
+        break;
     }
+
+    return ret;
 }

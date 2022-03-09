@@ -103,13 +103,13 @@ hwloc_obj_t prte_hwloc_base_get_pu(hwloc_topology_t topo, bool use_hwthread_cpus
     return obj;
 }
 
-hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo, bool use_hwthread_cpus,
+hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
+                                               bool use_hwthread_cpus,
                                                char *cpulist)
 {
     hwloc_cpuset_t avail = NULL, pucpus, res;
     char **ranges = NULL, **range = NULL;
     int idx, cpu, start, end;
-    prte_hwloc_obj_data_t *data;
     hwloc_obj_t pu;
 
     /* find the specified logical cpus */
@@ -132,12 +132,6 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo, bool use_h
 #endif
                 hwloc_bitmap_or(res, avail, pucpus);
                 hwloc_bitmap_copy(avail, res);
-                data = (prte_hwloc_obj_data_t *) pu->userdata;
-                if (NULL == data) {
-                    pu->userdata = (void *) PMIX_NEW(prte_hwloc_obj_data_t);
-                    data = (prte_hwloc_obj_data_t *) pu->userdata;
-                }
-                data->npus++;
             }
             break;
         case 2:
@@ -153,12 +147,6 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo, bool use_h
 #endif
                     hwloc_bitmap_or(res, avail, pucpus);
                     hwloc_bitmap_copy(avail, res);
-                    data = (prte_hwloc_obj_data_t *) pu->userdata;
-                    if (NULL == data) {
-                        pu->userdata = (void *) PMIX_NEW(prte_hwloc_obj_data_t);
-                        data = (prte_hwloc_obj_data_t *) pu->userdata;
-                    }
-                    data->npus++;
                 }
             }
             break;
@@ -180,6 +168,12 @@ hwloc_cpuset_t prte_hwloc_base_setup_summary(hwloc_topology_t topo)
 {
     hwloc_cpuset_t avail = NULL;
 
+    avail = hwloc_bitmap_alloc();
+    /* get the cpus we are bound to */
+    if (0 <= hwloc_get_cpubind(topo, avail, HWLOC_CPUBIND_PROCESS)) {
+        return avail;
+    }
+
     /* get the root available cpuset */
 #if HWLOC_API_VERSION < 0x20000
     hwloc_obj_t root;
@@ -190,15 +184,14 @@ hwloc_cpuset_t prte_hwloc_base_setup_summary(hwloc_topology_t topo)
         return NULL;
     }
     if (NULL == root->online_cpuset) {
-        avail = hwloc_bitmap_dup(root->allowed_cpuset);
+        hwloc_bitmap_copy(avail, root->allowed_cpuset);
     } else if (NULL == root->allowed_cpuset) {
-        avail = hwloc_bitmap_dup(root->online_cpuset);
+        hwloc_bitmap_copy(avail, root->online_cpuset);
     } else {
-        avail = hwloc_bitmap_alloc();
         hwloc_bitmap_and(avail, root->online_cpuset, root->allowed_cpuset);
     }
 #else
-    avail = hwloc_bitmap_dup(hwloc_topology_get_allowed_cpuset(topo));
+    hwloc_bitmap_copy(avail, hwloc_topology_get_allowed_cpuset(topo));
 #endif
 
     return avail;
@@ -207,25 +200,9 @@ hwloc_cpuset_t prte_hwloc_base_setup_summary(hwloc_topology_t topo)
 /* determine the node-level available cpuset based on
  * online vs allowed vs user-specified cpus
  */
-int prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
+hwloc_cpuset_t prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
 {
-    hwloc_obj_t root;
     hwloc_cpuset_t avail = NULL;
-    prte_hwloc_topo_data_t *sum;
-    unsigned width, w, m, N, last;
-    hwloc_obj_t obj;
-
-    root = hwloc_get_root_obj(topo);
-
-    if (NULL == root->userdata) {
-        root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
-    }
-    sum = (prte_hwloc_topo_data_t *) root->userdata;
-
-    /* should only ever enter here once, but check anyway */
-    if (NULL != sum->available) {
-        return PRTE_SUCCESS;
-    }
 
     /* process any specified default cpu set against this topology */
     if (NULL == prte_hwloc_default_cpu_list) {
@@ -237,63 +214,7 @@ int prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
         avail = prte_hwloc_base_generate_cpuset(topo, prte_hwloc_default_use_hwthread_cpus,
                                                 prte_hwloc_default_cpu_list);
     }
-    if (NULL == avail) {
-        return PRTE_ERR_NOT_SUPPORTED;
-    }
-
-    /* cache this info */
-    sum->available = avail;
-
-    /* Historically, CPU packages contained a single cpu die
-     * and nothing else. NUMA was therefore determined by simply
-     * looking at the memory bus attached to the socket where
-     * the package resided - all cpus in the package were
-     * exclusively "under" that NUMA. Since each socket had a
-     * unique NUMA, you could easily map by them.
-
-     * More recently, packages have started to contain multiple
-     * cpu dies as well as memory and sometimes even fabric die.
-     * In these cases, the memory bus of the cpu dies in the
-     * package generally share any included memory die. This
-     * complicates the memory situation, leaving NUMA domains
-     * no longer cleanly delineated by processor (i.e.., the
-     * NUMA domains overlap each other).
-     *
-     * Fortunately, the OS index of non-CPU NUMA domains starts
-     * at 255 and counts downward (at least for GPUs) - while
-     * the index of CPU NUMA domains starts at 0 and counts
-     * upward. We can therefore separate the two by excluding
-     * NUMA domains with an OS index above the level where
-     * they first begin to intersect
-     */
-
-    /* compute the CPU NUMA cutoff for this node */
-    width = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
-    if (0 == width) {
-        sum->num_numas = 0;
-        return PRTE_SUCCESS;
-    }
-    sum->numas = (hwloc_obj_t*)malloc(width * sizeof(hwloc_obj_t));
-    sum->num_numas = 0;
-    for (w=0; w < UINT_MAX && sum->num_numas < width; w++) {
-        /* get the object at this index */
-        obj = hwloc_get_numanode_obj_by_os_index(topo, w);
-        if (NULL == obj) {
-            continue;
-        }
-        /* check for overlap with all preceding numas */
-        for (m=0; m < sum->num_numas; m++) {
-            if (hwloc_bitmap_intersects(obj->cpuset, sum->numas[m]->cpuset)) {
-                // if it intersects anyone, then we are done
-                return PRTE_SUCCESS;
-            }
-        }
-        /* cache this objet */
-        sum->numas[sum->num_numas] = obj;
-        sum->num_numas++;
-    }
-
-    return PRTE_SUCCESS;
+    return avail;
 }
 
 static void fill_cache_line_size(void)
@@ -337,7 +258,8 @@ int prte_hwloc_base_get_topology(void)
 {
     int rc;
 
-    prte_output_verbose(2, prte_hwloc_base_output, "hwloc:base:get_topology");
+    prte_output_verbose(2, prte_hwloc_base_output,
+                        "hwloc:base:get_topology");
 
     /* see if we already have it */
     if (NULL != prte_hwloc_topology) {
@@ -345,7 +267,8 @@ int prte_hwloc_base_get_topology(void)
     }
 
     if (NULL == prte_hwloc_base_topo_file) {
-        prte_output_verbose(1, prte_hwloc_base_output, "hwloc:base discovering topology");
+        prte_output_verbose(1, prte_hwloc_base_output,
+                            "hwloc:base discovering topology");
         if (0 != hwloc_topology_init(&prte_hwloc_topology) ||
             0 != prte_hwloc_base_topology_set_flags(prte_hwloc_topology, 0, true) ||
             0 != hwloc_topology_load(prte_hwloc_topology)) {
@@ -361,20 +284,9 @@ int prte_hwloc_base_get_topology(void)
         }
     }
 
-    /* filter the cpus thru any default cpu set */
-    if (PRTE_SUCCESS != (rc = prte_hwloc_base_filter_cpus(prte_hwloc_topology))) {
-        hwloc_topology_destroy(prte_hwloc_topology);
-        return rc;
-    }
-
     /* fill prte_cache_line_size global with the smallest L1 cache
        line size */
     fill_cache_line_size();
-
-    /* get or update our local cpuset - it will get used multiple
-     * times, so it's more efficient to keep a global copy
-     */
-    prte_hwloc_base_get_local_cpuset();
 
     return PRTE_SUCCESS;
 }
@@ -453,84 +365,6 @@ int prte_hwloc_base_set_topology(char *topofile)
 
     /* all done */
     return PRTE_SUCCESS;
-}
-
-static void free_object(hwloc_obj_t obj)
-{
-    prte_hwloc_obj_data_t *data;
-    unsigned k;
-
-    /* free any data hanging on this object */
-    if (NULL != obj->userdata) {
-        data = (prte_hwloc_obj_data_t *) obj->userdata;
-        PMIX_RELEASE(data);
-        obj->userdata = NULL;
-    }
-
-    /* loop thru our children */
-    for (k = 0; k < obj->arity; k++) {
-        free_object(obj->children[k]);
-    }
-}
-
-void prte_hwloc_base_free_topology(hwloc_topology_t topo)
-{
-    hwloc_obj_t obj;
-    prte_hwloc_topo_data_t *rdata;
-    unsigned k;
-
-    if (!topo_in_shmem) {
-        obj = hwloc_get_root_obj(topo);
-        /* release the root-level userdata */
-        if (NULL != obj->userdata) {
-            rdata = (prte_hwloc_topo_data_t *) obj->userdata;
-            PMIX_RELEASE(rdata);
-            obj->userdata = NULL;
-        }
-        /* now recursively descend and release userdata
-         * in the rest of the objects
-         */
-        for (k = 0; k < obj->arity; k++) {
-            free_object(obj->children[k]);
-        }
-    }
-    hwloc_topology_destroy(topo);
-}
-
-void prte_hwloc_base_get_local_cpuset(void)
-{
-#if HWLOC_API_VERSION < 0x20000
-    hwloc_obj_t root;
-#endif
-
-    if (NULL != prte_hwloc_topology) {
-        if (NULL == prte_hwloc_my_cpuset) {
-            prte_hwloc_my_cpuset = hwloc_bitmap_alloc();
-        }
-
-        /* get the cpus we are bound to */
-        if (hwloc_get_cpubind(prte_hwloc_topology, prte_hwloc_my_cpuset, HWLOC_CPUBIND_PROCESS)
-            < 0) {
-/* we are not bound - use the root's available cpuset */
-#if HWLOC_API_VERSION < 0x20000
-            root = hwloc_get_root_obj(prte_hwloc_topology);
-            if (NULL == root->online_cpuset && NULL == root->allowed_cpuset) {
-                /* we are hosed */
-                PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
-            }
-            if (NULL == root->online_cpuset) {
-                hwloc_bitmap_copy(prte_hwloc_my_cpuset, root->allowed_cpuset);
-            } else if (NULL == root->allowed_cpuset) {
-                hwloc_bitmap_copy(prte_hwloc_my_cpuset, root->online_cpuset);
-            } else {
-                hwloc_bitmap_and(prte_hwloc_my_cpuset, root->online_cpuset, root->allowed_cpuset);
-            }
-#else
-            hwloc_bitmap_copy(prte_hwloc_my_cpuset,
-                              hwloc_topology_get_allowed_cpuset(prte_hwloc_topology));
-#endif
-        }
-    }
 }
 
 int prte_hwloc_base_report_bind_failure(const char *file, int line, const char *msg, int rc)
@@ -623,25 +457,10 @@ unsigned int prte_hwloc_base_get_npus(hwloc_topology_t topo, bool use_hwthread_c
 unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj)
 {
     unsigned cache_level = 0;
-    prte_hwloc_obj_data_t *data;
     hwloc_obj_t ptr;
     unsigned int nobjs, i;
 
     PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:get_idx"));
-
-    /* see if we already have the info */
-    data = (prte_hwloc_obj_data_t *) obj->userdata;
-
-    if (NULL == data) {
-        data = PMIX_NEW(prte_hwloc_obj_data_t);
-        obj->userdata = (void *) data;
-    }
-
-    if (data->idx < UINT_MAX) {
-        PRTE_OUTPUT_VERBOSE(
-            (5, prte_hwloc_base_output, "hwloc:base:get_idx already have data: %u", data->idx));
-        return data->idx;
-    }
 
 #if HWLOC_API_VERSION < 0x20000
     /* determine the number of objects of this type */
@@ -660,7 +479,6 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj)
     for (i = 0; i < nobjs; i++) {
         ptr = prte_hwloc_base_get_obj_by_type(topo, obj->type, cache_level, i);
         if (ptr == obj) {
-            data->idx = i;
             return i;
         }
     }
@@ -712,19 +530,6 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
         return 0;
     }
 
-    /* if the type is NUMA, then we just return the cached number */
-    if (HWLOC_OBJ_NUMANODE == target) {
-        hwloc_obj_t root;
-        prte_hwloc_topo_data_t *sum;
-
-        root = hwloc_get_root_obj(topo);
-        sum = (prte_hwloc_topo_data_t *) root->userdata;
-        if (NULL == sum) {
-            return 0;
-        }
-        return sum->num_numas;
-    }
-
 #if HWLOC_API_VERSION >= 0x20000
     if (0 > (rc = hwloc_get_nbobjs_by_type(topo, target))) {
         prte_output(0, "UNKNOWN HWLOC ERROR");
@@ -734,8 +539,6 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
 #else
     unsigned int num_objs;
     hwloc_obj_t obj;
-    prte_hwloc_summary_t *sum;
-    prte_hwloc_topo_data_t *data;
 
     /* we can just use the hwloc accessor to get it,
      * unless it is a CACHE as these are treated as special cases
@@ -753,33 +556,7 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
     num_objs = 0;
     obj = hwloc_get_root_obj(topo);
 
-    /* first see if the topology already has this summary */
-    data = (prte_hwloc_topo_data_t *) obj->userdata;
-    if (NULL == data) {
-        data = PMIX_NEW(prte_hwloc_topo_data_t);
-        obj->userdata = (void *) data;
-    } else {
-        PMIX_LIST_FOREACH(sum, &data->summaries, prte_hwloc_summary_t)
-        {
-            if (target == sum->type && cache_level == sum->cache_level) {
-                /* yep - return the value */
-                PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
-                                     "hwloc:base:get_nbojbs pre-existing data %u of %s:%u",
-                                     sum->num_objs, hwloc_obj_type_string(target), cache_level));
-                return sum->num_objs;
-            }
-        }
-    }
-
-    /* don't already know it - go get it */
     df_search(topo, obj, target, cache_level, 0, &num_objs);
-
-    /* cache the results for later */
-    sum = PMIX_NEW(prte_hwloc_summary_t);
-    sum->type = target;
-    sum->cache_level = cache_level;
-    sum->num_objs = num_objs;
-    pmix_list_append(&data->summaries, &sum->super);
 
     PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:get_nbojbs computed data %u of %s:%u", num_objs,
@@ -800,19 +577,6 @@ hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo, hwloc_obj_typ
         return NULL;
     }
 
-    /* if we are looking for NUMA, then just return the cached object */
-    if (HWLOC_OBJ_NUMANODE == target) {
-        hwloc_obj_t obj, root;
-        prte_hwloc_topo_data_t *sum;
-
-        root = hwloc_get_root_obj(topo);
-        sum = (prte_hwloc_topo_data_t *) root->userdata;
-        if (NULL == sum || sum->num_numas <= instance) {
-            return NULL;
-        }
-        return sum->numas[instance];
-    }
-
 #if HWLOC_API_VERSION >= 0x20000
     return hwloc_get_obj_by_type(topo, target, instance);
 #else
@@ -829,42 +593,6 @@ hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo, hwloc_obj_typ
     obj = hwloc_get_root_obj(topo);
     return df_search(topo, obj, target, cache_level, instance, NULL);
 #endif
-}
-
-static void df_clear(hwloc_topology_t topo, hwloc_obj_t start)
-{
-    unsigned k;
-    prte_hwloc_obj_data_t *data;
-
-    /* see how many procs are bound to us */
-    data = (prte_hwloc_obj_data_t *) start->userdata;
-    if (NULL != data) {
-        data->num_bound = 0;
-    }
-
-    for (k = 0; k < start->arity; k++) {
-        df_clear(topo, start->children[k]);
-    }
-}
-
-void prte_hwloc_base_clear_usage(hwloc_topology_t topo)
-{
-    hwloc_obj_t root;
-    unsigned k;
-
-    /* bozo check */
-    if (NULL == topo) {
-        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:clear_usage: NULL topology"));
-        return;
-    }
-
-    root = hwloc_get_root_obj(topo);
-    /* must not start at root as the root object has
-     * a different userdata attached to it
-     */
-    for (k = 0; k < root->arity; k++) {
-        df_clear(topo, root->children[k]);
-    }
 }
 
 /* The current slot_list notation only goes to the core level - i.e., the location
@@ -1573,218 +1301,6 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
         hwloc_bitmap_free(coreset);
     }
     return result;
-}
-
-static int dist_cmp_fn(pmix_list_item_t **a, pmix_list_item_t **b)
-{
-    prte_rmaps_numa_node_t *aitem = *((prte_rmaps_numa_node_t **) a);
-    prte_rmaps_numa_node_t *bitem = *((prte_rmaps_numa_node_t **) b);
-
-    if (aitem->dist_from_closed > bitem->dist_from_closed) {
-        return 1;
-    } else if (aitem->dist_from_closed == bitem->dist_from_closed) {
-        return 0;
-    } else {
-        return -1;
-    }
-}
-
-static void sort_by_dist(hwloc_topology_t topo, char *device_name, pmix_list_t *sorted_list)
-{
-    hwloc_obj_t device_obj = NULL;
-    hwloc_obj_t obj = NULL;
-    struct hwloc_distances_s *distances;
-    prte_rmaps_numa_node_t *numa_node;
-    int close_node_index;
-    float latency;
-    unsigned int j;
-#if HWLOC_API_VERSION < 0x20000
-    hwloc_obj_t root = NULL;
-    int depth;
-    unsigned i;
-#else
-    unsigned distances_nr = 0;
-#endif
-
-    for (device_obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_OS_DEVICE, 0); device_obj;
-         device_obj = hwloc_get_next_osdev(topo, device_obj)) {
-        if (device_obj->attr->osdev.type == HWLOC_OBJ_OSDEV_OPENFABRICS
-            || device_obj->attr->osdev.type == HWLOC_OBJ_OSDEV_NETWORK) {
-            if (!strcmp(device_obj->name, device_name)) {
-                /* find numa node containing this device */
-                obj = device_obj->parent;
-#if HWLOC_API_VERSION < 0x20000
-                while ((obj != NULL) && (obj->type != HWLOC_OBJ_NUMANODE)) {
-                    obj = obj->parent;
-                }
-#else
-                while (obj && !obj->memory_arity) {
-                    obj = obj->parent; /* no memory child, walk up */
-                }
-                if (obj != NULL) {
-                    obj = obj->memory_first_child;
-                }
-#endif
-                if (obj == NULL) {
-                    prte_output_verbose(
-                        5, prte_hwloc_base_output,
-                        "hwloc:base:get_sorted_numa_list: NUMA node closest to %s wasn't found.",
-                        device_name);
-                    return;
-                } else {
-                    close_node_index = obj->logical_index;
-                }
-
-                /* find distance matrix for all numa nodes */
-#if HWLOC_API_VERSION < 0x20000
-                distances = (struct hwloc_distances_s *)
-                    hwloc_get_whole_distance_matrix_by_type(topo, HWLOC_OBJ_NUMANODE);
-                if (NULL == distances) {
-                    /* we can try to find distances under group object. This info can be there. */
-                    depth = hwloc_get_type_depth(topo, HWLOC_OBJ_NUMANODE);
-                    if (HWLOC_TYPE_DEPTH_UNKNOWN == depth) {
-                        prte_output_verbose(5, prte_hwloc_base_output,
-                                            "hwloc:base:get_sorted_numa_list: There is no "
-                                            "information about distances on the node.");
-                        return;
-                    }
-                    root = hwloc_get_root_obj(topo);
-                    for (i = 0; i < root->arity; i++) {
-                        obj = root->children[i];
-                        if (obj->distances_count > 0) {
-                            for (j = 0; j < obj->distances_count; j++) {
-                                if (obj->distances[j]->relative_depth + 1 == (unsigned) depth) {
-                                    distances = obj->distances[j];
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                /* find all distances for our close node with logical index = close_node_index as
-                 * close_node_index + nbobjs*j */
-                if ((NULL == distances) || (0 == distances->nbobjs)) {
-                    prte_output_verbose(5, prte_hwloc_base_output,
-                                        "hwloc:base:get_sorted_numa_list: There is no information "
-                                        "about distances on the node.");
-                    return;
-                }
-                /* fill list of numa nodes */
-                for (j = 0; j < distances->nbobjs; j++) {
-                    latency = distances->latency[close_node_index + distances->nbobjs * j];
-                    numa_node = PMIX_NEW(prte_rmaps_numa_node_t);
-                    numa_node->index = j;
-                    numa_node->dist_from_closed = latency;
-                    pmix_list_append(sorted_list, &numa_node->super);
-                }
-#else
-                distances_nr = 1;
-                if (0 != hwloc_distances_get_by_type(topo, HWLOC_OBJ_NUMANODE, &distances_nr,
-                                                    &distances, HWLOC_DISTANCES_KIND_MEANS_LATENCY, 0) ||
-                    0 == distances_nr) {
-                    prte_output_verbose(5, prte_hwloc_base_output,
-                                        "hwloc:base:get_sorted_numa_list: There is no information "
-                                        "about distances on the node.");
-                    return;
-                }
-                /* fill list of numa nodes */
-                for (j = 0; j < distances->nbobjs; j++) {
-                    latency = distances->values[close_node_index + distances->nbobjs * j];
-                    numa_node = PMIX_NEW(prte_rmaps_numa_node_t);
-                    numa_node->index = j;
-                    numa_node->dist_from_closed = latency;
-                    pmix_list_append(sorted_list, &numa_node->super);
-                }
-                hwloc_distances_release(topo, distances);
-#endif
-                /* sort numa nodes by distance from the closest one to PCI */
-                pmix_list_sort(sorted_list, dist_cmp_fn);
-                return;
-            }
-        }
-    }
-}
-
-static int find_devices(hwloc_topology_t topo, char **device_name)
-{
-    hwloc_obj_t device_obj = NULL;
-    int count = 0;
-    for (device_obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_OS_DEVICE, 0); device_obj;
-         device_obj = hwloc_get_next_osdev(topo, device_obj)) {
-        if (device_obj->attr->osdev.type == HWLOC_OBJ_OSDEV_OPENFABRICS) {
-            count++;
-            free(*device_name);
-            *device_name = strdup(device_obj->name);
-        }
-    }
-    return count;
-}
-
-int prte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char *device_name,
-                                    pmix_list_t *sorted_list)
-{
-    hwloc_obj_t obj;
-    prte_hwloc_summary_t *sum;
-    prte_hwloc_topo_data_t *data;
-    prte_rmaps_numa_node_t *numa, *copy_numa;
-    int count;
-
-    obj = hwloc_get_root_obj(topo);
-
-    /* first see if the topology already has this info */
-    /* we call prte_hwloc_base_get_nbobjs_by_type() before it to fill summary object so it should
-     * exist*/
-    data = (prte_hwloc_topo_data_t *) obj->userdata;
-    if (NULL != data) {
-        PMIX_LIST_FOREACH(sum, &data->summaries, prte_hwloc_summary_t)
-        {
-            if (HWLOC_OBJ_NUMANODE == sum->type) {
-                if (pmix_list_get_size(&sum->sorted_by_dist_list) > 0) {
-                    PMIX_LIST_FOREACH(numa, &(sum->sorted_by_dist_list), prte_rmaps_numa_node_t)
-                    {
-                        copy_numa = PMIX_NEW(prte_rmaps_numa_node_t);
-                        copy_numa->index = numa->index;
-                        copy_numa->dist_from_closed = numa->dist_from_closed;
-                        pmix_list_append(sorted_list, &copy_numa->super);
-                    }
-                    return PRTE_SUCCESS;
-                } else {
-                    /* don't already know it - go get it */
-                    /* firstly we check if we need to autodetect OpenFabrics  devices or we have the
-                     * specified one */
-                    bool free_device_name = false;
-                    if (!strcmp(device_name, "auto")) {
-                        count = find_devices(topo, &device_name);
-                        if (count > 1) {
-                            free(device_name);
-                            return count;
-                        }
-                        free_device_name = true;
-                    }
-                    if (!device_name) {
-                        return PRTE_ERR_NOT_FOUND;
-                    } else if (free_device_name && (0 == strlen(device_name))) {
-                        free(device_name);
-                        return PRTE_ERR_NOT_FOUND;
-                    }
-                    sort_by_dist(topo, device_name, sorted_list);
-                    if (free_device_name) {
-                        free(device_name);
-                    }
-                    /* store this info in summary object for later usage */
-                    PMIX_LIST_FOREACH(numa, sorted_list, prte_rmaps_numa_node_t)
-                    {
-                        copy_numa = PMIX_NEW(prte_rmaps_numa_node_t);
-                        copy_numa->index = numa->index;
-                        copy_numa->dist_from_closed = numa->dist_from_closed;
-                        pmix_list_append(&(sum->sorted_by_dist_list), &copy_numa->super);
-                    }
-                    return PRTE_SUCCESS;
-                }
-            }
-        }
-    }
-    return PRTE_ERR_NOT_FOUND;
 }
 
 char *prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)

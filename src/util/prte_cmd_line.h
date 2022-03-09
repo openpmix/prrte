@@ -171,6 +171,13 @@ BEGIN_C_DECLS
 #define PRTE_CLI_RANKFILE   "rankfile"
 #define PRTE_CLI_NONE       "none"
 #define PRTE_CLI_HWTCPUS    "hwtcpus"
+#define PRTE_CLI_PELIST     "pe-list="
+
+// Ranking directives
+// PRTE_CLI_SLOT, PRTE_CLI_NODE, PRTE_CLI_SPAN reused here
+#define PRTE_CLI_FILL       "fill"
+#define PRTE_CLI_OBJ        "object"
+
 
 // Output directives
 #define PRTE_CLI_TAG        "tag"
@@ -201,11 +208,9 @@ BEGIN_C_DECLS
 #define PRTE_CLI_DEVICE     "device="
 #define PRTE_CLI_INHERIT    "inherit"
 #define PRTE_CLI_NOINHERIT  "noinherit"
-#define PRTE_CLI_PELIST     "pe-list="
 #define PRTE_CLI_QDIR       "dir="
 #define PRTE_CLI_QFILE      "file="
 #define PRTE_CLI_NOLAUNCH   "donotlaunch"
-#define PRTE_CLI_FILL       "fill"
 #define PRTE_CLI_OVERLOAD   "overload-allowed"
 #define PRTE_CLI_NOOVERLOAD "no-overload"
 #define PRTE_CLI_IF_SUPP    "if-supported"

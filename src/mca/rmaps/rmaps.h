@@ -13,7 +13,7 @@
  * Copyright (c) 2011      Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -69,27 +69,20 @@ BEGIN_C_DECLS
 /* map a job - used by the HNP to compute the #procs on each node.
  * This is passed to the backend daemons as a regex which they
  * use to create an prte_job_map_t for the job */
-typedef int (*prte_rmaps_base_module_map_fn_t)(prte_job_t *jdata);
-
-/* assign a location to each process. Used by the backend daemons,
- * this function takes the prte_job_map_t created from the regex
- * and assigns each process to a specific location within the
- * hardware topology based on the --map-by directive */
-typedef int (*prte_rmaps_base_module_assign_loc_fn_t)(prte_job_t *jdata);
+typedef int (*prte_rmaps_base_module_map_fn_t)(prte_job_t *jdata,
+                                               prte_rmaps_options_t *options);
 
 /*
- * rmaps module version 3.0.0
+ * rmaps module version 4.0.0
  */
-struct prte_rmaps_base_module_3_0_0_t {
+struct prte_rmaps_base_module_4_0_0_t {
     /** Mapping function pointer */
     prte_rmaps_base_module_map_fn_t map_job;
-    /* assign locations */
-    prte_rmaps_base_module_assign_loc_fn_t assign_locations;
 };
 /** Convenience typedef */
-typedef struct prte_rmaps_base_module_3_0_0_t prte_rmaps_base_module_3_0_0_t;
+typedef struct prte_rmaps_base_module_4_0_0_t prte_rmaps_base_module_4_0_0_t;
 /** Convenience typedef */
-typedef prte_rmaps_base_module_3_0_0_t prte_rmaps_base_module_t;
+typedef prte_rmaps_base_module_4_0_0_t prte_rmaps_base_module_t;
 
 /*
  * rmaps component
@@ -98,16 +91,16 @@ typedef prte_rmaps_base_module_3_0_0_t prte_rmaps_base_module_t;
 /**
  * rmaps component version 3.0.0
  */
-struct prte_rmaps_base_component_3_0_0_t {
+struct prte_rmaps_base_component_4_0_0_t {
     /** Base MCA structure */
     prte_mca_base_component_t base_version;
     /** Base MCA data */
     prte_mca_base_component_data_t base_data;
 };
 /** Convenience typedef */
-typedef struct prte_rmaps_base_component_3_0_0_t prte_rmaps_base_component_3_0_0_t;
+typedef struct prte_rmaps_base_component_4_0_0_t prte_rmaps_base_component_4_0_0_t;
 /** Convenience typedef */
-typedef prte_rmaps_base_component_3_0_0_t prte_rmaps_base_component_t;
+typedef prte_rmaps_base_component_4_0_0_t prte_rmaps_base_component_t;
 
 END_C_DECLS
 

@@ -519,15 +519,6 @@ static void xcast_recv(int status, pmix_proc_t *sender,
             PMIX_DATA_BUFFER_RELEASE(relay);
             return;
         }
-        if (PRTE_SUCCESS != (ret = prte_util_parse_node_info(data))) {
-            PRTE_ERROR_LOG(ret);
-            PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-            PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-            PMIX_DESTRUCT(&coll);
-            PMIX_DATA_BUFFER_RELEASE(rly);
-            PMIX_DATA_BUFFER_RELEASE(relay);
-            return;
-        }
         /* unpack the wireup info */
         cnt = 1;
         while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, data, &dmn, &cnt, PMIX_PROC))) {

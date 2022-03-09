@@ -53,9 +53,12 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_show_help.h"
 
-static int prte_rmaps_rf_map(prte_job_t *jdata);
+static int prte_rmaps_rf_map(prte_job_t *jdata,
+                             prte_rmaps_options_t *options);
 
-prte_rmaps_base_module_t prte_rmaps_rank_file_module = {.map_job = prte_rmaps_rf_map};
+prte_rmaps_base_module_t prte_rmaps_rank_file_module = {
+    .map_job = prte_rmaps_rf_map
+};
 
 static int prte_rmaps_rank_file_parse(const char *);
 static char *prte_rmaps_rank_file_parse_string_or_int(void);
@@ -70,7 +73,8 @@ static int num_ranks = 0;
 /*
  * Create a rank_file  mapping for the job.
  */
-static int prte_rmaps_rf_map(prte_job_t *jdata)
+static int prte_rmaps_rf_map(prte_job_t *jdata,
+                             prte_rmaps_options_t *options)
 {
     prte_job_map_t *map;
     prte_app_context_t *app = NULL;
@@ -85,7 +89,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
     int rc;
     prte_proc_t *proc;
     prte_mca_base_component_t *c = &prte_rmaps_rank_file_component.super.base_version;
-    char *slots, *jobslots = NULL;
+    char *slots;
     bool initial_map = true;
     char *rankfile = NULL;
     prte_binding_policy_t bind;
@@ -112,7 +116,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
-    if (PRTE_BIND_ORDERED_REQUESTED(jdata->map->binding)) {
+    if (options->ordered) {
         /* NOT FOR US */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rf: job %s binding order requested - rank_file cannot map",
@@ -139,13 +143,13 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
 
     /* convenience def */
     map = jdata->map;
-    bind = PRTE_GET_BINDING_POLICY(jdata->map->binding);
 
     /* setup the node list */
     PMIX_CONSTRUCT(&node_list, pmix_list_t);
 
     /* pickup the first app - there must be at least one */
-    if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0))) {
+    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0);
+    if (NULL == app) {
         rc = PRTE_ERR_SILENT;
         goto error;
     }
@@ -165,9 +169,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
 
     /* END SANITY CHECKS */
 
-    /* see if the job was given a slot list */
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_CPUSET, (void **) &jobslots, PMIX_STRING);
-
     /* start at the beginning... */
     vpid_start = 0;
     jdata->num_procs = 0;
@@ -181,7 +182,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
 
     /* cycle through the app_contexts, mapping them sequentially */
     for (i = 0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
+        if (NULL == app) {
             continue;
         }
 
@@ -189,9 +191,9 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
          * use since that can now be modified with a hostfile and/or -host
          * option
          */
-        if (PRTE_SUCCESS
-            != (rc = prte_rmaps_base_get_target_nodes(&node_list, &num_slots, app, map->mapping,
-                                                      initial_map, false))) {
+        rc = prte_rmaps_base_get_target_nodes(&node_list, &num_slots, jdata, app,
+                                              options->map, initial_map, false);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             goto error;
         }
@@ -211,12 +213,11 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
         for (k = 0; k < app->num_procs; k++) {
             rank = vpid_start + k;
             /* get the rankfile entry for this rank */
-            if (NULL
-                == (rfmap = (prte_rmaps_rank_file_map_t *) pmix_pointer_array_get_item(&rankmap,
-                                                                                       rank))) {
+            rfmap = (prte_rmaps_rank_file_map_t *) pmix_pointer_array_get_item(&rankmap, rank);
+            if (NULL == rfmap) {
                 /* if this job was given a slot-list, then use it */
-                if (NULL != jobslots) {
-                    slots = jobslots;
+                if (NULL != options->cpuset) {
+                    slots = options->cpuset;
                 } else if (NULL != prte_hwloc_default_cpu_list) {
                     /* if we were give a default slot-list, then use it */
                     slots = prte_hwloc_default_cpu_list;
@@ -300,90 +301,36 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
-            /* ensure the node is in the map */
-            if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
-                PMIX_RETAIN(node);
-                pmix_pointer_array_add(map->nodes, node);
-                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-                ++(jdata->map->num_nodes);
+            if (!options->donotlaunch) {
+                rc = prte_rmaps_base_check_support(jdata, node, options);
+                if (PRTE_SUCCESS != rc) {
+                    return rc;
+                }
             }
-            if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, i))) {
+            prte_rmaps_base_get_cpuset(jdata, node, options);
+            if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, NULL, options)) {
+                pmix_show_help("help-rmaps_rank_file.txt", "bad-host", true, rfmap->node_name);
+                rc = PRTE_ERR_SILENT;
+                goto error;
+            }
+            proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
+            if (NULL == proc) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 rc = PRTE_ERR_OUT_OF_RESOURCE;
                 goto error;
             }
             /* check if we are oversubscribed */
-            if ((node->slots < (int) node->num_procs) ||
-                (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
-                if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                    pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                                   node->num_procs, app->app);
-                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                    rc = PRTE_ERR_SILENT;
-                    goto error;
-                }
-                /* flag the node as oversubscribed so that sched-yield gets
-                 * properly set
-                 */
-                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
-                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+            rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
+            if (PRTE_SUCCESS != rc) {
+                goto error;
             }
-            /* set the vpid */
+          /* set the vpid */
             proc->name.rank = rank;
-
-            if (NULL != slots && PRTE_BIND_TO_NONE != bind) {
-                /* setup the bitmap */
-                hwloc_cpuset_t bitmap;
-                char *cpu_bitmap;
-                if (NULL == node->topology || NULL == node->topology->topo) {
-                    /* not allowed - for rank-file, we must have
-                     * the topology info
-                     */
-                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
-                                   node->name);
-                    rc = PRTE_ERR_SILENT;
-                    goto error;
-                }
-                bitmap = hwloc_bitmap_alloc();
-                /* parse the slot_list to find the package and core */
-                rc = prte_hwloc_base_cpu_list_parse(slots, node->topology->topo, bitmap);
-                if (PRTE_ERR_NOT_FOUND == rc) {
-                    char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
-                                                         false, node->topology->topo);
-                    pmix_show_help("help-rmaps_rank_file.txt", "missing-cpu", true,
-                                   prte_tool_basename, slots, tmp);
-                    free(tmp);
-                    rc = PRTE_ERR_SILENT;
-                    hwloc_bitmap_free(bitmap);
-                    goto error;
-                } else if (PRTE_ERROR == rc) {
-                    pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
-                    rc = PRTE_ERR_SILENT;
-                    hwloc_bitmap_free(bitmap);
-                    goto error;
-               } else {
-                    PRTE_ERROR_LOG(rc);
-                    hwloc_bitmap_free(bitmap);
-                    goto error;
-                }
-                /* note that we cannot set the proc locale to any specific object
-                 * as the slot list may have assigned it to more than one - so
-                 * leave that field NULL
-                 */
-                /* set the proc to the specified map */
-                hwloc_bitmap_list_asprintf(&cpu_bitmap, bitmap);
-                prte_set_attribute(&proc->attributes, PRTE_PROC_CPU_BITMAP, PRTE_ATTR_GLOBAL,
-                                   cpu_bitmap, PMIX_STRING);
-                /* cleanup */
-                free(cpu_bitmap);
-                hwloc_bitmap_free(bitmap);
-            }
-
             /* insert the proc into the proper place */
-            if (PRTE_SUCCESS
-                != (rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc))) {
+            rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+            if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
-                return rc;
+                goto error;
             }
             jdata->num_procs++;
         }
@@ -392,13 +339,10 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
         /* cleanup the node list - it can differ from one app_context
          * to another, so we have to get it every time
          */
-        while (NULL != (item = pmix_list_remove_first(&node_list))) {
-            PMIX_RELEASE(item);
-        }
-        PMIX_DESTRUCT(&node_list);
+        PMIX_LIST_DESTRUCT(&node_list);
         PMIX_CONSTRUCT(&node_list, pmix_list_t);
     }
-    PMIX_DESTRUCT(&node_list);
+    PMIX_LIST_DESTRUCT(&node_list);
 
     /* cleanup the rankmap */
     for (i = 0; i < rankmap.size; i++) {
@@ -407,10 +351,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
         }
     }
     PMIX_DESTRUCT(&rankmap);
-    /* mark the job as fully described */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL,
-                       PMIX_BOOL);
-
     if (NULL != rankfile) {
         free(rankfile);
     }

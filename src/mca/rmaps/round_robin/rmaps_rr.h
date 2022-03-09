@@ -42,20 +42,21 @@ extern prte_rmaps_base_module_t prte_rmaps_round_robin_module;
 
 PRTE_MODULE_EXPORT int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app,
                                             pmix_list_t *node_list, int32_t num_slots,
-                                            pmix_rank_t nprocs);
+                                            pmix_rank_t nprocs, prte_rmaps_options_t *options);
 PRTE_MODULE_EXPORT int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app,
                                             pmix_list_t *node_list, int32_t num_slots,
-                                            pmix_rank_t nprocs);
+                                            pmix_rank_t nprocs, prte_rmaps_options_t *options);
 
-PRTE_MODULE_EXPORT int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
+PRTE_MODULE_EXPORT int prte_rmaps_rr_byobj(prte_job_t *jdata,
+                                           prte_app_context_t *app,
+                                           pmix_list_t *node_list,
+                                           int32_t num_slots,
+                                           pmix_rank_t num_procs,
+                                           prte_rmaps_options_t *options);
+
+PRTE_MODULE_EXPORT int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
                                            pmix_list_t *node_list, int32_t num_slots,
-                                           pmix_rank_t num_procs, hwloc_obj_type_t target,
-                                           unsigned cache_level);
-
-PRTE_MODULE_EXPORT int prte_rmaps_rr_assign_root_level(prte_job_t *jdata);
-
-PRTE_MODULE_EXPORT int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target,
-                                                  unsigned cache_level);
+                                           pmix_rank_t num_procs, prte_rmaps_options_t *options);
 
 END_C_DECLS
 

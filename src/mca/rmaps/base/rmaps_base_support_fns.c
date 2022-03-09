@@ -141,8 +141,10 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
 /*
  * Query the registry for all nodes allocated to a specified app_context
  */
-int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes, int32_t *total_num_slots,
-                                     prte_app_context_t *app, prte_mapping_policy_t policy,
+int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
+                                     int32_t *total_num_slots,
+                                     prte_job_t *jdata, prte_app_context_t *app,
+                                     prte_mapping_policy_t policy,
                                      bool initial_map, bool silent)
 {
     pmix_list_item_t *item;
@@ -154,7 +156,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes, int32_t *tota
     bool novm;
     pmix_list_t nodes;
     char *hosts = NULL;
-
+    bool needhosts = false;
     /** set default answer */
     *total_num_slots = 0;
 
@@ -170,17 +172,16 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes, int32_t *tota
      * However, if it is a managed allocation AND the hostfile or the hostlist was
      * provided, those take precedence, so process them and filter as we normally do.
      */
-    if (!prte_managed_allocation
-        || (prte_managed_allocation
-            && (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts,
-                                   PMIX_STRING)
-                || prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts,
-                                      PMIX_STRING)))) {
+    if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING) ||
+        prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) {
+        needhosts = true;
+    }
+    if (!prte_managed_allocation ||
+        (prte_managed_allocation && needhosts)) {
         PMIX_CONSTRUCT(&nodes, pmix_list_t);
         /* if the app provided a dash-host, then use those nodes */
         hosts = NULL;
-        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts,
-                               PMIX_STRING)) {
+        if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING)) {
             PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                  "%s using dash_host %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  hosts));
@@ -190,8 +191,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes, int32_t *tota
                 return rc;
             }
             free(hosts);
-        } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts,
-                                      PMIX_STRING)) {
+        } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) {
             /* otherwise, if the app provided a hostfile, then use that */
             PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                  "%s using hostfile %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -230,8 +230,8 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes, int32_t *tota
         PMIX_LIST_FOREACH_SAFE(nptr, next, &nodes, prte_node_t)
         {
             for (i = 0; i < prte_node_pool->size; i++) {
-                if (NULL
-                    == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
+                node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
+                if (NULL == node) {
                     continue;
                 }
                 /* ignore nodes that are non-usable */
@@ -362,8 +362,9 @@ addknown:
                  */
                 PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
             }
-            if (NULL == nd || NULL == nd->daemon || NULL == node->daemon
-                || nd->daemon->name.rank < node->daemon->name.rank) {
+            if (NULL == nd || NULL == nd->daemon ||
+                NULL == node->daemon ||
+                nd->daemon->name.rank < node->daemon->name.rank) {
                 /* just append to end */
                 pmix_list_append(allocated_nodes, &node->super);
                 nd = node;
@@ -423,25 +424,36 @@ complete:
      * the allocation */
     if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
         num_slots = INT32_MAX;
-        if (!prte_hnp_is_allocated
-            || (PRTE_GET_MAPPING_DIRECTIVE(policy) & PRTE_MAPPING_NO_USE_LOCAL)) {
-            PMIX_LIST_FOREACH_SAFE(node, next, allocated_nodes, prte_node_t)
-            {
-                if (0 == node->index) {
+        PMIX_LIST_FOREACH_SAFE(node, next, allocated_nodes, prte_node_t)
+        {
+            if (0 == node->index) {
+                if (!prte_hnp_is_allocated ||
+                    (PRTE_GET_MAPPING_DIRECTIVE(policy) & PRTE_MAPPING_NO_USE_LOCAL)) {
                     pmix_list_remove_item(allocated_nodes, &node->super);
                     PMIX_RELEASE(node); /* "un-retain" it */
-                    break;
+                    continue;
                 }
+            }
+            if (NULL == node->topology || NULL == node->topology->topo) {
+                /* cannot use this node - should never happen */
+                pmix_list_remove_item(allocated_nodes, &node->super);
+                PMIX_RELEASE(node);
             }
         }
     } else {
         num_slots = 0;
         PMIX_LIST_FOREACH_SAFE(node, next, allocated_nodes, prte_node_t)
         {
+            if (NULL == node->topology || NULL == node->topology->topo) {
+                /* cannot use this node - should never happen */
+                pmix_list_remove_item(allocated_nodes, &node->super);
+                PMIX_RELEASE(node);
+                continue;
+            }
             /* if the hnp was not allocated, or flagged not to be used,
              * then remove it here */
-            if (!prte_hnp_is_allocated
-                || (PRTE_GET_MAPPING_DIRECTIVE(policy) & PRTE_MAPPING_NO_USE_LOCAL)) {
+            if (!prte_hnp_is_allocated ||
+                (PRTE_GET_MAPPING_DIRECTIVE(policy) & PRTE_MAPPING_NO_USE_LOCAL)) {
                 if (0 == node->index) {
                     pmix_list_remove_item(allocated_nodes, &node->super);
                     PMIX_RELEASE(node); /* "un-retain" it */
@@ -458,8 +470,8 @@ complete:
                 PMIX_RELEASE(node); /* "un-retain" it */
                 continue;
             }
-            if (node->slots <= node->slots_inuse
-                && (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(policy))) {
+            if (node->slots <= node->slots_inuse &&
+                (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(policy))) {
                 /* remove the node as fully used */
                 PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s Removing node %s slots %d inuse %d",
@@ -519,6 +531,9 @@ complete:
     /* pass back the total number of available slots */
     *total_num_slots = num_slots;
 
+    /* check for prior bookmark */
+    prte_rmaps_base_get_starting_point(allocated_nodes, jdata);
+
     if (4 < prte_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
         prte_output(0, "AVAILABLE NODES FOR MAPPING:");
         for (item = pmix_list_get_first(allocated_nodes);
@@ -533,7 +548,11 @@ complete:
     return PRTE_SUCCESS;
 }
 
-prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata, prte_node_t *node, prte_app_idx_t idx)
+prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
+                                        prte_app_idx_t idx,
+                                        prte_node_t *node,
+                                        hwloc_obj_t obj,
+                                        prte_rmaps_options_t *options)
 {
     prte_proc_t *proc;
     int rc;
@@ -560,19 +579,36 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata, prte_node_t *node, pr
         proc->parent = node->daemon->name.rank;
     }
 
-    PMIX_RETAIN(node); /* maintain accounting on object */
+    // point the proc at its node
     proc->node = node;
-    /* if this is a debugger job, then it doesn't count against
+    PMIX_RETAIN(node); /* maintain accounting on object */
+    /* if this is a tool app, then it doesn't count against
      * available slots - otherwise, it does */
-    if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
+    if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
+        proc->local_rank = 0;
+        proc->node_rank = UINT16_MAX;
+    } else {
+        proc->node_rank = node->num_procs;
         node->num_procs++;
         ++node->slots_inuse;
     }
-    if (0 > (rc = pmix_pointer_array_add(node->procs, (void *) proc))) {
+    if (0 > (idx = pmix_pointer_array_add(node->procs, (void *) proc))) {
         PRTE_ERROR_LOG(rc);
-        PMIX_RELEASE(proc);
+        PMIX_RELEASE(proc); // releases node to maintain accounting
         return NULL;
     }
+
+    /* point the proc to its locale */
+    proc->obj = obj;
+
+    /* bind the process so we know which cpus have been taken */
+    rc = prte_rmaps_base_bind_proc(jdata, proc, node, obj, options);
+    if (PRTE_SUCCESS != rc) {
+        pmix_pointer_array_set_item(node->procs, idx, NULL);
+        PMIX_RELEASE(proc); // releases node to maintain accounting
+        return NULL;
+    }
+
     /* retain the proc struct so that we correctly track its release */
     PMIX_RETAIN(proc);
 
@@ -582,91 +618,251 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata, prte_node_t *node, pr
 /*
  * determine the proper starting point for the next mapping operation
  */
-prte_node_t *prte_rmaps_base_get_starting_point(pmix_list_t *node_list, prte_job_t *jdata)
+void prte_rmaps_base_get_starting_point(pmix_list_t *node_list, prte_job_t *jdata)
 {
-    pmix_list_item_t *item, *cur_node_item;
     prte_node_t *node, *nd1, *ndmin;
     int overload;
+    bool first = true;
 
     /* if a bookmark exists from some prior mapping, set us to start there */
+    node = NULL;
     if (NULL != jdata->bookmark) {
-        cur_node_item = NULL;
         /* find this node on the list */
-        for (item = pmix_list_get_first(node_list); item != pmix_list_get_end(node_list);
-             item = pmix_list_get_next(item)) {
-            node = (prte_node_t *) item;
-
-            if (node->index == jdata->bookmark->index) {
-                cur_node_item = item;
+        PMIX_LIST_FOREACH(nd1, node_list, prte_node_t) {
+            if (nd1->index == jdata->bookmark->index) {
+                node = nd1;
                 break;
             }
+            first = false;
         }
-        /* see if we found it - if not, just start at the beginning */
-        if (NULL == cur_node_item) {
-            cur_node_item = pmix_list_get_first(node_list);
-        }
-    } else {
-        /* if no bookmark, then just start at the beginning of the list */
-        cur_node_item = pmix_list_get_first(node_list);
+    }
+    if (NULL == node || first) {
+        return;
     }
 
     PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
-                         "%s Starting bookmark at node %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         ((prte_node_t *) cur_node_item)->name));
+                         "%s Starting bookmark at node %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         node->name));
 
-    /* is this node fully subscribed? If so, then the first
-     * proc we assign will oversubscribe it, so let's look
-     * for another candidate
-     */
-    node = (prte_node_t *) cur_node_item;
-    ndmin = node;
-    overload = ndmin->slots_inuse - ndmin->slots;
-    if (node->slots_inuse >= node->slots) {
-        /* work down the list - is there another node that
-         * would not be oversubscribed?
-         */
-        if (cur_node_item != pmix_list_get_last(node_list)) {
-            item = pmix_list_get_next(cur_node_item);
-        } else {
-            item = pmix_list_get_first(node_list);
-        }
-        nd1 = NULL;
-        while (item != cur_node_item) {
-            nd1 = (prte_node_t *) item;
-            if (nd1->slots_inuse < nd1->slots) {
-                /* this node is not oversubscribed! use it! */
-                cur_node_item = item;
-                goto process;
-            }
-            /* this one was also oversubscribed, keep track of the
-             * node that has the least usage - if we can't
-             * find anyone who isn't fully utilized, we will
-             * start with the least used node
-             */
-            if (overload >= (nd1->slots_inuse - nd1->slots)) {
-                ndmin = nd1;
-                overload = ndmin->slots_inuse - ndmin->slots;
-            }
-            if (item == pmix_list_get_last(node_list)) {
-                item = pmix_list_get_first(node_list);
-            } else {
-                item = pmix_list_get_next(item);
-            }
-        }
-        /* if we get here, then we cycled all the way around the
-         * list without finding a better answer - just use the node
-         * that is minimally overloaded if it is better than
-         * what we already have
-         */
-        if (NULL != nd1 && (nd1->slots_inuse - nd1->slots) < (node->slots_inuse - node->slots)) {
-            cur_node_item = (pmix_list_item_t *) ndmin;
-        }
+    /* put this node at the front of the list */
+    pmix_list_remove_item(node_list, &node->super);
+    pmix_list_prepend(node_list, &node->super);
+
+    return;
+}
+
+bool prte_rmaps_base_check_avail(prte_job_t *jdata,
+                                 prte_app_context_t *app,
+                                 prte_node_t *node,
+                                 pmix_list_t *node_list,
+                                 hwloc_obj_t obj,
+                                 prte_rmaps_options_t *options)
+{
+    hwloc_obj_t root;
+    hwloc_cpuset_t available;
+    int nprocs;
+    bool avail = false;
+
+    prte_output_verbose(10, prte_rmaps_base_framework.framework_output,
+                        "%s get_avail_ncpus: node %s has %d procs on it",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->num_procs);
+
+    if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
+        avail = true;
+        goto done;
     }
 
-process:
-    PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output, "%s Starting at node %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         ((prte_node_t *) cur_node_item)->name));
+    if (!options->oversubscribe) {
+        if (node->slots <= node->slots_inuse) {
+            prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+                                "mca:rmaps: node %s is full - skipping",
+                                node->name);
+            goto done;
+        }
+    }
+    if (0 != node->slots_max &&
+        node->slots_max <= node->slots_inuse) {
+        /* cannot use this node - already at max_slots */
+        pmix_list_remove_item(node_list, &node->super);
+        PMIX_RELEASE(node);
+        goto done;
+    }
 
-    return (prte_node_t *) cur_node_item;
+    if (PRTE_BIND_TO_NONE == options->bind) {
+        options->target = NULL;
+        avail = true;
+        goto done;
+    }
+
+#if HWLOC_API_VERSION < 0x20000
+    root = hwloc_get_root_obj(node->topology->topo);
+    if (NULL == options->job_cpuset) {
+        available = hwloc_bitmap_dup(root->allowed_cpuset);
+    } else {
+        available = hwloc_bitmap_alloc();
+        hwloc_bitmap_and(available, root->allowed_cpuset, options->job_cpuset);
+    }
+    if (NULL != obj) {
+        hwloc_bitmap_and(available, available, obj->allowed_cpuset);
+    }
+#else
+    if (NULL == options->job_cpuset) {
+        available = hwloc_bitmap_dup(hwloc_topology_get_allowed_cpuset(node->topology->topo));
+    } else {
+        available = hwloc_bitmap_alloc();
+        hwloc_bitmap_and(available, hwloc_topology_get_allowed_cpuset(node->topology->topo), options->job_cpuset);
+    }
+    if (NULL != obj) {
+        hwloc_bitmap_and(available, available, obj->cpuset);
+    }
+#endif
+    if (options->use_hwthreads) {
+        options->ncpus = hwloc_bitmap_weight(available);
+    } else {
+        /* if we are treating cores as cpus, then we really
+         * want to know how many cores are in this object.
+         * hwloc sets a bit for each "pu", so we can't just
+         * count bits in this case as there may be more than
+         * one hwthread/core. Instead, find the number of cores
+         * under the object
+         */
+        options->ncpus = hwloc_get_nbobjs_inside_cpuset_by_type(node->topology->topo, available, HWLOC_OBJ_CORE);
+    }
+    options->target = available;
+
+    nprocs = options->ncpus / options->cpus_per_rank;
+    if (options->nprocs < nprocs) {
+        avail = true;
+    } else if (options->overload) {
+        /* doesn't matter how many cpus are in use */
+        avail = true;
+    } else if (0 < nprocs) {
+        options->nprocs = nprocs;
+        avail = true;
+    }
+
+done:
+    /* add this node to the map - do it only once */
+    if (avail && !PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
+        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
+        PMIX_RETAIN(node);
+        pmix_pointer_array_add(jdata->map->nodes, node);
+        ++(jdata->map->num_nodes);
+        options->nnodes++;  // track #nodes for this app
+    }
+
+    return avail;
+}
+
+void prte_rmaps_base_get_cpuset(prte_job_t *jdata,
+                                prte_node_t *node,
+                                prte_rmaps_options_t *options)
+{
+    if (NULL != options->cpuset) {
+        options->job_cpuset = prte_hwloc_base_generate_cpuset(node->topology->topo,
+                                                              options->use_hwthreads,
+                                                              options->cpuset);
+    } else {
+        options->job_cpuset = hwloc_bitmap_dup(node->available);
+    }
+}
+
+int prte_rmaps_base_check_support(prte_job_t *jdata,
+                                  prte_node_t *node,
+                                  prte_rmaps_options_t *options)
+{
+    struct hwloc_topology_support *support;
+
+    if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) ||
+        PRTE_BIND_TO_NONE == PRTE_GET_BINDING_POLICY(jdata->map->binding)) {
+        return PRTE_SUCCESS;
+    }
+
+    /* if we don't want to launch, then we are just testing the system,
+     * so ignore questions about support capabilities
+     */
+    support = (struct hwloc_topology_support *) hwloc_topology_get_support(node->topology->topo);
+    /* check if topology supports cpubind - have to be careful here
+     * as Linux doesn't currently support thread-level binding. This
+     * may change in the future, though, and it isn't clear how hwloc
+     * interprets the current behavior. So check both flags to be sure.
+     */
+    if (support->cpubind->set_thisproc_cpubind ||
+        support->cpubind->set_thisthread_cpubind) {
+        if (PRTE_BINDING_REQUIRED(jdata->map->binding) &&
+            PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+            /* we are required to bind but cannot */
+            pmix_show_help("help-prte-rmaps-base.txt", "rmaps:cpubind-not-supported",
+                           true, node->name);
+            return PRTE_ERR_SILENT;
+        }
+    }
+    /* check if topology supports membind - have to be careful here
+     * as hwloc treats this differently than I (at least) would have
+     * expected. Per hwloc, Linux memory binding is at the thread,
+     * and not process, level. Thus, hwloc sets the "thisproc" flag
+     * to "false" on all Linux systems, and uses the "thisthread" flag
+     * to indicate binding capability - don't warn if the user didn't
+     * specifically request binding
+     */
+    if (!support->membind->set_thisproc_membind &&
+        !support->membind->set_thisthread_membind &&
+        PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+        if (PRTE_HWLOC_BASE_MBFA_WARN == prte_hwloc_base_mbfa && !options->membind_warned) {
+            pmix_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported", true,
+                           node->name);
+            options->membind_warned = true;
+        } else if (PRTE_HWLOC_BASE_MBFA_ERROR == prte_hwloc_base_mbfa) {
+            pmix_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported-fatal",
+                           true, node->name);
+            return PRTE_ERR_SILENT;
+        }
+    }
+    return PRTE_SUCCESS;
+}
+
+int prte_rmaps_base_check_oversubscribed(prte_job_t *jdata,
+                                         prte_app_context_t *app,
+                                         prte_node_t *node,
+                                         prte_rmaps_options_t *options)
+{
+    if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
+        return PRTE_SUCCESS;
+    }
+    if (!options->oversubscribe &&
+        node->slots == node->num_procs) {
+        return PRTE_ERR_TAKE_NEXT_OPTION;  // this node is full
+    }
+
+    /* not all nodes are equal, so only set oversubscribed for
+     * this node if it is in that state
+     */
+    if (node->slots < (int) node->num_procs) {
+        /* flag the node as oversubscribed so that sched-yield gets
+         * properly set
+         */
+        PRTE_FLAG_SET(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
+        PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+        /* check for permission */
+        if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
+            /* if we weren't given a directive either way, then we will error out
+             * as the #slots were specifically given, either by the host RM or
+             * via hostfile/dash-host */
+            if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN &
+                  PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
+                pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                               true, app->num_procs, app->app, prte_process_info.nodename);
+                PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                return PRTE_ERR_SILENT;
+            } else if (!options->oversubscribe) {
+                /* if we were explicitly told not to oversubscribe, then don't */
+                pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                               true, app->num_procs, app->app, prte_process_info.nodename);
+                PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                return PRTE_ERR_SILENT;
+            }
+        }
+    }
+    return PRTE_SUCCESS;
 }

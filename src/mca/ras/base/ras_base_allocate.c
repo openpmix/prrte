@@ -57,49 +57,38 @@
 
 char *prte_ras_base_flag_string(prte_node_t *node)
 {
-    char *tmp, *t2;
+    char *tmp, *t3, **t2 = NULL;
 
     if (0 == node->flags) {
-        tmp = strdup("flags: NONE");
+        tmp = strdup("Flags: NONE");
         return tmp;
     }
 
-    tmp = strdup("flags: ");
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
-        pmix_asprintf(&t2, "%sDAEMON_LAUNCHED:", tmp);
-        free(tmp);
-        tmp = t2;
+        pmix_argv_append_nosize(&t2, "DAEMON_LAUNCHED");
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_LOC_VERIFIED)) {
-        pmix_asprintf(&t2, "%sLOCATION_VERIFIED:", tmp);
-        free(tmp);
-        tmp = t2;
+        pmix_argv_append_nosize(&t2, "LOCATION_VERIFIED");
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_OVERSUBSCRIBED)) {
-        pmix_asprintf(&t2, "%sOVERSUBSCRIBED:", tmp);
-        free(tmp);
-        tmp = t2;
+        pmix_argv_append_nosize(&t2, "OVERSUBSCRIBED");
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
-        pmix_asprintf(&t2, "%sMAPPED:", tmp);
-        free(tmp);
-        tmp = t2;
+        pmix_argv_append_nosize(&t2, "MAPPED");
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
-        pmix_asprintf(&t2, "%sSLOTS_GIVEN:", tmp);
-        free(tmp);
-        tmp = t2;
+        pmix_argv_append_nosize(&t2, "SLOTS_GIVEN");
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_NON_USABLE)) {
-        pmix_asprintf(&t2, "%sNONUSABLE:", tmp);
-        free(tmp);
-        tmp = t2;
+        pmix_argv_append_nosize(&t2, "NONUSABLE");
     }
-    if (':' == tmp[strlen(tmp) - 1]) {
-        tmp[strlen(tmp) - 1] = '\0';
+    if (NULL != t2) {
+        t3 = pmix_argv_join(t2, ':');
+        pmix_asprintf(&tmp, "Flags: %s", t3);
+        free(t3);
+        pmix_argv_free(t2);
     } else {
-        free(tmp);
-        tmp = strdup("flags: NONE");
+        tmp = strdup("Flags: NONE");
     }
     return tmp;
 }

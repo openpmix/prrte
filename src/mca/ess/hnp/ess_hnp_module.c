@@ -416,6 +416,7 @@ static int rte_init(int argc, char **argv)
     t->sig = strdup(prte_topo_signature);
     pmix_pointer_array_add(prte_node_topologies, t);
     node->topology = t;
+    node->available = prte_hwloc_base_filter_cpus(prte_hwloc_topology);
     if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         char *output = NULL;
         prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));

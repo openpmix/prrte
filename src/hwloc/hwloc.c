@@ -282,19 +282,13 @@ void prte_hwloc_base_close(void)
         return;
     }
 
-    /* free memory */
-    if (NULL != prte_hwloc_my_cpuset) {
-        hwloc_bitmap_free(prte_hwloc_my_cpuset);
-        prte_hwloc_my_cpuset = NULL;
-    }
-
     if (NULL != prte_hwloc_default_cpu_list) {
         free(prte_hwloc_default_cpu_list);
     }
 
     /* destroy the topology */
     if (NULL != prte_hwloc_topology) {
-        prte_hwloc_base_free_topology(prte_hwloc_topology);
+        hwloc_topology_destroy(prte_hwloc_topology);
         prte_hwloc_topology = NULL;
     }
 
@@ -305,7 +299,7 @@ void prte_hwloc_base_close(void)
 int prte_hwloc_base_set_default_binding(void *jd, void *opt)
 {
     prte_job_t *jdata = (prte_job_t*)jd;
-    prte_schizo_options_t *options = (prte_schizo_options_t*)opt;
+    prte_rmaps_options_t *options = (prte_rmaps_options_t*)opt;
     prte_mapping_policy_t mpol;
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16)) {
@@ -322,6 +316,9 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
                                 "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
             PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
         }
+    } else if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL)) {
+        /* tools are never bound */
+        PRTE_SET_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NONE);
     } else {
         /* if the user explicitly mapped-by some object, then we default
          * to binding to that object */
@@ -358,41 +355,21 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
             } else {
                 /* we are mapping by node or some other non-object method */
-                if (options->nprocs <= 2) {
-                    if (options->use_hwthreads) {
-                        /* if we are using hwthread cpus, then bind to those */
-                        prte_output_verbose(options->verbosity, options->stream,
-                                            "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
-                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
-                                                        PRTE_BIND_TO_HWTHREAD);
-                    } else {
-                        /* for performance, bind to core */
-                        prte_output_verbose(options->verbosity, options->stream,
-                                            "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
-                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
-                                                        PRTE_BIND_TO_CORE);
-                    }
+                if (options->use_hwthreads) {
+                    /* if we are using hwthread cpus, then bind to those */
+                    prte_output_verbose(options->verbosity, options->stream,
+                                        "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
+                    PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                    PRTE_BIND_TO_HWTHREAD);
                 } else {
-                    /* bind to numa (if present), or by package (if numa isn't present and package is) */
-                    if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
-                        prte_output_verbose(options->verbosity, options->stream,
-                                            "setdefaultbinding[%d] binding not given - using bynuma", __LINE__);
-                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
-                    } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
-                        prte_output_verbose(options->verbosity, options->stream,
-                                            "setdefaultbinding[%d] binding not given - using bypackage", __LINE__);
-                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
-                    } else {
-                        /* if we have neither, then just don't bind */
-                        prte_output_verbose(options->verbosity, options->stream,
-                                            "setdefaultbinding[%d] binding not given and no NUMA "
-                                            "or packages - not binding",
-                                            __LINE__);
-                        PRTE_SET_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NONE);
-                    }
+                    /* otherwise bind to core */
+                    prte_output_verbose(options->verbosity, options->stream,
+                                        "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
+                    PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                    PRTE_BIND_TO_CORE);
                 }
             }
-        } else if (options->nprocs <= 2) {
+        } else {
             if (options->use_hwthreads) {
                 /* if we are using hwthread cpus, then bind to those */
                 prte_output_verbose(options->verbosity, options->stream,
@@ -400,30 +377,11 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
                                     __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
             } else {
-                /* for performance, bind to core */
+                /* otherwise bind to core */
                 prte_output_verbose(options->verbosity, options->stream,
                                     "setdefaultbinding[%d] binding not given - using bycore",
                                     __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
-            }
-        } else {
-            /* for performance, bind to numa, if available, else try package */
-            if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
-                prte_output_verbose(options->verbosity, options->stream,
-                                    "setdefaultbinding[%d] binding not given - using bynuma",
-                                    __LINE__);
-                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
-            } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
-                prte_output_verbose(options->verbosity, options->stream,
-                                    "setdefaultbinding[%d] binding not given - using bypackage",
-                                    __LINE__);
-                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
-            } else {
-                /* just don't bind */
-                prte_output_verbose(options->verbosity, options->stream,
-                                    "setdefaultbinding[%d] binding not given and no packages - not binding",
-                                    __LINE__);
-                PRTE_SET_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NONE);
             }
         }
     }
@@ -566,55 +524,6 @@ char *prte_hwloc_base_print_locality(prte_hwloc_locality_t locality)
     return ptr->buffers[ptr->cntr];
 }
 
-static void obj_data_const(prte_hwloc_obj_data_t *ptr)
-{
-    ptr->npus_calculated = false;
-    ptr->npus = 0;
-    ptr->idx = UINT_MAX;
-    ptr->num_bound = 0;
-}
-PMIX_CLASS_INSTANCE(prte_hwloc_obj_data_t, pmix_object_t, obj_data_const, NULL);
-
-static void sum_const(prte_hwloc_summary_t *ptr)
-{
-    ptr->num_objs = 0;
-    PMIX_CONSTRUCT(&ptr->sorted_by_dist_list, pmix_list_t);
-}
-static void sum_dest(prte_hwloc_summary_t *ptr)
-{
-    pmix_list_item_t *item;
-    while (NULL != (item = pmix_list_remove_first(&ptr->sorted_by_dist_list))) {
-        PMIX_RELEASE(item);
-    }
-    PMIX_DESTRUCT(&ptr->sorted_by_dist_list);
-}
-PMIX_CLASS_INSTANCE(prte_hwloc_summary_t, pmix_list_item_t, sum_const, sum_dest);
-static void topo_data_const(prte_hwloc_topo_data_t *ptr)
-{
-    ptr->available = NULL;
-    PMIX_CONSTRUCT(&ptr->summaries, pmix_list_t);
-    ptr->numas = NULL;
-    ptr->num_numas = 0;
-}
-static void topo_data_dest(prte_hwloc_topo_data_t *ptr)
-{
-    pmix_list_item_t *item;
-
-    if (NULL != ptr->available) {
-        hwloc_bitmap_free(ptr->available);
-    }
-    while (NULL != (item = pmix_list_remove_first(&ptr->summaries))) {
-        PMIX_RELEASE(item);
-    }
-    PMIX_DESTRUCT(&ptr->summaries);
-    if (NULL != ptr->numas) {
-        free(ptr->numas);
-    }
-}
-PMIX_CLASS_INSTANCE(prte_hwloc_topo_data_t, pmix_object_t, topo_data_const, topo_data_dest);
-
-PMIX_CLASS_INSTANCE(prte_rmaps_numa_node_t, pmix_list_item_t, NULL, NULL);
-
 int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 {
     int i;
@@ -647,8 +556,6 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
             } else if (0 == strcasecmp(quals[i], "no-overload")) {
                 tmp = (tmp & ~PRTE_BIND_ALLOW_OVERLOAD);
                 tmp |= PRTE_BIND_OVERLOAD_GIVEN;
-            } else if (0 == strcasecmp(quals[i], "ordered")) {
-                tmp |= PRTE_BIND_ORDERED;
             } else if (0 == strcasecmp(quals[i], "REPORT")) {
                 if (NULL == jdata) {
                     pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,

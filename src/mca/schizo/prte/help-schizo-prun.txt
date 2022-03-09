@@ -69,11 +69,16 @@ Submit job to the PMIx Reference RTE
 
    --map-by <arg0>                   Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache
                                      | l2cache | l3cache | numa (default:np>2) | package | node | seq | dist |
-                                     ppr |,rankfile] with supported colon-delimited modifiers: PE=y (for
+                                     ppr | rankfile | PE-LIST=a,b (comma-delimited ranges of cpus to use for
+                                     this job)] with supported colon-delimited qualifiers: PE=y (for
                                      multiple cpus/proc), SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL,
-                                     HWTCPUS, CORECPUS, DEVICE(for dist policy), INHERIT, NOINHERIT,
-                                     PE-LIST=a,b (comma-delimited ranges of cpus to use for this job),
-                                     FILE=<path> for seq and rankfile options
+                                     HWTCPUS, CORECPUS, DEVICE(for dist policy), INHERIT, NOINHERIT, DONOTLAUNCH,
+                                     FILE=<path> for seq and rankfile options, ORDERED to indicate that the
+                                     CPUs specified in PE-LIST should be assigned to individual procs in
+                                     specified order (i.e., the first proc on a node is bound to the first
+                                     CPU in the list, the second proc to the second CPU, etc.). The PE-LIST
+                                     option without the ORDERED qualifier will result in each proc being
+                                     bound to the complete list of CPUs.
 
 
 

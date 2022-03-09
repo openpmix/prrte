@@ -127,7 +127,6 @@ static struct option prteoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_STREAM_BUF, PMIX_ARG_REQD),
 
     /* developer options */
-    PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_LAUNCH, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_DISPLAY, PMIX_ARG_REQD),
 
     // deprecated options
@@ -140,6 +139,7 @@ static struct option prteoptions[] = {
     PMIX_OPTION_DEFINE("display-devel-allocation", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-map", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-allocation", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("do-not-launch", PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };
@@ -232,9 +232,6 @@ static struct option prterunoptions[] = {
     /* display options */
     PMIX_OPTION_DEFINE(PRTE_CLI_DISPLAY, PMIX_ARG_REQD),
 
-    /* developer options */
-    PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_LAUNCH, PMIX_ARG_NONE),
-
 #if PRTE_ENABLE_FT
     PMIX_OPTION_DEFINE(PRTE_CLI_ENABLE_RECOVERY, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_MAX_RESTARTS, PMIX_ARG_REQD),
@@ -257,6 +254,24 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_DEFINE("display-map", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-allocation", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("rankfile", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("nolocal", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("oversubscribe", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("nooversubscribe", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("use-hwthread-cpus", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("cpu-set", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("cpu-list", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("bind-to-core", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("bynode", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("bycore", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("byslot", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("cpus-per-proc", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("cpus-per-rank", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("npernode", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("pernode", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("npersocket", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("ppr", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("do-not-launch", PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };
@@ -337,9 +352,6 @@ static struct option prunoptions[] = {
     /* display options */
     PMIX_OPTION_DEFINE(PRTE_CLI_DISPLAY, PMIX_ARG_REQD),
 
-    /* developer options */
-    PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_LAUNCH, PMIX_ARG_NONE),
-
 #if PRTE_ENABLE_FT
     PMIX_OPTION_DEFINE(PRTE_CLI_ENABLE_RECOVERY, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_MAX_RESTARTS, PMIX_ARG_REQD),
@@ -349,7 +361,6 @@ static struct option prunoptions[] = {
 
     // deprecated options
     PMIX_OPTION_DEFINE("mca", PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE("gmca", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("xml", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("tag-output", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("timestamp-output", PMIX_ARG_NONE),
@@ -363,6 +374,24 @@ static struct option prunoptions[] = {
     PMIX_OPTION_DEFINE("display-map", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-allocation", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("rankfile", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("nolocal", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("oversubscribe", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("nooversubscribe", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("use-hwthread-cpus", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("cpu-set", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("cpu-list", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("bind-to-core", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("bynode", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("bycore", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("byslot", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("cpus-per-proc", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("cpus-per-rank", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("npernode", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("pernode", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("npersocket", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("ppr", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("do-not-launch", PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };
@@ -554,7 +583,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         }
         /* --use-hwthread-cpus -> --bind-to hwthread */
         else if (0 == strcmp(option, "use-hwthread-cpus")) {
-            rc = prte_schizo_base_add_directive(results, option,
+            rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_BINDTO, PRTE_CLI_HWT,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
@@ -761,6 +790,13 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
             }
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
+        /* --do-not-launch  ->  --map-by :donotlaunch */
+        else if (0 == strcmp(option, "do-not-launch")) {
+            rc = prte_schizo_base_add_qualifier(results, option,
+                                                PRTE_CLI_MAPBY, PRTE_CLI_NOLAUNCH,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
         /* --map-by socket ->  --map-by package */
         else if (0 == strcmp(option, PRTE_CLI_MAPBY)) {
             /* check the value of the option for "socket" */
@@ -779,8 +815,9 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                     pmix_asprintf(&p2, "%s %s", option, p1);
                     pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
-                    output = pmix_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
-                                                   tmp2);
+                    output = pmix_show_help_string("help-schizo-base.txt",
+                                                   "deprecated-converted", true,
+                                                   p2, tmp2);
                     fprintf(stderr, "%s\n", output);
                     free(output);
                     free(p2);
@@ -791,10 +828,17 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                 opt->values[0] = tmp;
             }
         }
-        /* --rank-by socket ->  --rank-by package */
+        /* --rank-by */
         else if (0 == strcmp(option, PRTE_CLI_RANKBY)) {
-            /* check the value of the option for "socket" */
-            if (0 == strncasecmp(opt->values[0], "socket", strlen("socket"))) {
+            /* check the value of the option for object-level directives - show help
+             * for ranking if given */
+            if (0 == strncasecmp(opt->values[0], "socket", strlen("socket")) ||
+                0 == strncasecmp(opt->values[0], "l1cache", strlen("l1cache"))  ||
+                0 == strncasecmp(opt->values[0], "l2cache", strlen("l2cache")) ||
+                0 == strncasecmp(opt->values[0], "l3cache", strlen("l3cache")) ||
+                0 == strncasecmp(opt->values[0], "numa", strlen("numa")) ||
+                0 == strncasecmp(opt->values[0], "hwthread", strlen("hwthread")) ||
+                0 == strncasecmp(opt->values[0], "core", strlen("core"))) {
                 p1 = strdup(opt->values[0]); // save the original option
                 /* replace "socket" with "package" */
                 if (NULL == (p2 = strchr(opt->values[0], ':'))) {

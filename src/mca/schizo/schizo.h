@@ -28,6 +28,8 @@
 #include "types.h"
 
 #include "src/class/pmix_list.h"
+#include "src/hwloc/hwloc-internal.h"
+#include "src/mca/rmaps/rmaps_types.h"
 #include "src/util/pmix_cmd_line.h"
 
 #include "src/mca/mca.h"
@@ -37,14 +39,6 @@
 BEGIN_C_DECLS
 
 typedef int (*prte_schizo_convertor_fn_t)(char *option, char ***argv, int idx);
-
-typedef struct {
-    pmix_rank_t nprocs;
-    uint16_t cpus_per_rank;
-    bool use_hwthreads;
-    int stream;
-    int verbosity;
-} prte_schizo_options_t;
 
 /*
  * schizo module functions
@@ -86,13 +80,13 @@ typedef void (*prte_schizo_base_module_allow_run_as_root_fn_t)(pmix_cli_result_t
 
 /* Set the default mapping policy for a job */
 typedef int (*prte_schizo_base_module_set_default_mapping_fn_t)(prte_job_t *jdata,
-                                                                prte_schizo_options_t *options);
+                                                                prte_rmaps_options_t *options);
 
 typedef int (*prte_schizo_base_module_set_default_ranking_fn_t)(prte_job_t *jdata,
-                                                                prte_schizo_options_t *options);
+                                                                prte_rmaps_options_t *options);
 
 typedef int (*prte_schizo_base_module_set_default_binding_fn_t)(prte_job_t *jdata,
-                                                                prte_schizo_options_t *options);
+                                                                prte_rmaps_options_t *options);
 
 /* do whatever preparation work
  * is required to setup the app for execution. This is intended to be

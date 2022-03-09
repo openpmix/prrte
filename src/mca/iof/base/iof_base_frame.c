@@ -32,6 +32,7 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
@@ -100,6 +101,39 @@ PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, iof, "PRTE I/O Forwarding",
                                 prte_iof_base_open, prte_iof_base_close,
                                 prte_iof_base_static_components,
                                 PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+
+
+static void lkcbfunc(pmix_status_t status, void *cbdata)
+{
+    prte_iof_deliver_t *p = (prte_iof_deliver_t*)cbdata;
+
+    /* nothing to do here - we use this solely to
+     * ensure that IOF_deliver doesn't block */
+    if (PMIX_SUCCESS != status) {
+        PMIX_ERROR_LOG(status);
+    }
+    PMIX_RELEASE(p);
+}
+
+
+void prte_iof_base_output(const pmix_proc_t *source,
+                          pmix_iof_channel_t channel,
+                          char *string)
+{
+    prte_iof_deliver_t *p;
+    pmix_status_t rc;
+
+    p = PMIX_NEW(prte_iof_deliver_t);
+    PMIX_XFER_PROCID(&p->source, source);
+    p->bo.bytes = string;
+    p->bo.size = strlen(string);
+    rc = PMIx_server_IOF_deliver(&p->source, channel, &p->bo, NULL, 0, lkcbfunc, (void*)p);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(p);  // releases string
+    }
+}
+
 
 /* class instances */
 static void prte_iof_base_proc_construct(prte_iof_proc_t *ptr)

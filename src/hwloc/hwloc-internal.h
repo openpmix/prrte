@@ -113,35 +113,6 @@ typedef struct {
     size_t mbs_len;
 } prte_hwloc_base_memory_segment_t;
 
-/* structs for storing info on objects */
-typedef struct {
-    pmix_object_t super;
-    hwloc_cpuset_t available;
-    bool npus_calculated;
-    unsigned int npus;
-    unsigned int idx;
-    unsigned int num_bound;
-} prte_hwloc_obj_data_t;
-PMIX_CLASS_DECLARATION(prte_hwloc_obj_data_t);
-
-typedef struct {
-    pmix_list_item_t super;
-    hwloc_obj_type_t type;
-    unsigned cache_level;
-    unsigned int num_objs;
-    pmix_list_t sorted_by_dist_list;
-} prte_hwloc_summary_t;
-PMIX_CLASS_DECLARATION(prte_hwloc_summary_t);
-
-typedef struct {
-    pmix_object_t super;
-    hwloc_cpuset_t available;
-    pmix_list_t summaries;
-    hwloc_obj_t* numas;
-    unsigned num_numas;
-} prte_hwloc_topo_data_t;
-PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_hwloc_topo_data_t);
-
 /* define binding policies */
 typedef uint16_t prte_binding_policy_t;
 #define PRTE_BINDING_POLICY PRTE_UINT16
@@ -150,9 +121,6 @@ typedef uint16_t prte_binding_policy_t;
 #define PRTE_BIND_IF_SUPPORTED   0x1000
 #define PRTE_BIND_ALLOW_OVERLOAD 0x2000
 #define PRTE_BIND_GIVEN          0x4000
-/* bind each rank to the cpu in the given
- * cpu list based on its node-local-rank */
-#define PRTE_BIND_ORDERED 0x8000
 // overload policy was given
 #define PRTE_BIND_OVERLOAD_GIVEN 0x0100
 
@@ -184,12 +152,10 @@ typedef uint16_t prte_binding_policy_t;
 /* macro to detect if binding is forced */
 #define PRTE_BIND_OVERLOAD_ALLOWED(n)  (PRTE_BIND_ALLOW_OVERLOAD & (n))
 #define PRTE_BIND_OVERLOAD_SET(n) (PRTE_BIND_OVERLOAD_GIVEN & (n))
-#define PRTE_BIND_ORDERED_REQUESTED(n) (PRTE_BIND_ORDERED & (n))
 
 /* some global values */
 PRTE_EXPORT extern hwloc_topology_t prte_hwloc_topology;
 PRTE_EXPORT extern prte_binding_policy_t prte_hwloc_default_binding_policy;
-PRTE_EXPORT extern hwloc_cpuset_t prte_hwloc_my_cpuset;
 PRTE_EXPORT extern hwloc_obj_type_t prte_hwloc_levels[];
 PRTE_EXPORT extern char *prte_hwloc_default_cpu_list;
 PRTE_EXPORT extern bool prte_hwloc_default_use_hwthread_cpus;
@@ -264,15 +230,6 @@ PRTE_EXPORT int prte_hwloc_base_set_default_binding(void *jdata,
                                                     void *options);
 PRTE_EXPORT int prte_hwloc_base_set_binding_policy(void *jdata, char *spec);
 
-/**
- * Loads prte_hwloc_my_cpuset (global variable in
- * src/hwloc/hwloc-internal.h) for this process.  prte_hwloc_my_cpuset
- * will be loaded with this process' binding, or, if the process is
- * not bound, use the hwloc root object's (available and online)
- * cpuset.
- */
-PRTE_EXPORT void prte_hwloc_base_get_local_cpuset(void);
-
 struct prte_rmaps_numa_node_t {
     pmix_list_item_t super;
     int index;
@@ -322,25 +279,20 @@ PRTE_EXPORT int prte_hwloc_base_set_topology(char *topofile);
 PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
                                                            bool use_hwthread_cpus, char *cpulist);
 
-PRTE_EXPORT int prte_hwloc_base_filter_cpus(hwloc_topology_t topo);
+PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_filter_cpus(hwloc_topology_t topo);
 
 /**
  * Free the hwloc topology.
  */
-PRTE_EXPORT void prte_hwloc_base_free_topology(hwloc_topology_t topo);
 PRTE_EXPORT unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
                                                             hwloc_obj_type_t target,
                                                             unsigned cache_level);
-PRTE_EXPORT void prte_hwloc_base_clear_usage(hwloc_topology_t topo);
 
 PRTE_EXPORT hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
                                                         hwloc_obj_type_t target,
                                                         unsigned cache_level,
                                                         unsigned int instance);
 PRTE_EXPORT unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj);
-
-PRTE_EXPORT int prte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char *device_name,
-                                                pmix_list_t *sorted_list);
 
 /**
  * Get the number of pu's under a given hwloc object.

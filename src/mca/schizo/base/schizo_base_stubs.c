@@ -112,8 +112,10 @@ int prte_schizo_base_add_directive(pmix_cli_result_t *results,
                 // do we allow multiple directives?
                 if (!check_multi(target)) {
                     // report the error
+                    tmp = pmix_argv_join(opt->values, ',');
                     ptr = pmix_show_help_string("help-schizo-base.txt", "too-many-directives",
-                                                true, target, opt->values, deprecated, directive);
+                                                true, target, tmp, deprecated, directive);
+                    free(tmp);
                     fprintf(stderr, "%s\n", ptr);
                     return PRTE_ERR_SILENT;
                 }
@@ -178,18 +180,10 @@ int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
             fprintf(stderr, "%s\n", ptr);
             return PRTE_ERR_SILENT;
         } else {
-            // does it already contain a qualifier?
-            if (NULL != strchr(opt->values[0], ':')) {
-                // can just add this one to the end
-                pmix_asprintf(&tmp, "%s:%s", opt->values[0], qualifier);
-                free(opt->values[0]);
-                opt->values[0] = tmp;
-            } else {
-                // append with a colon delimiter
-                pmix_asprintf(&tmp, "%s:%s", opt->values[0], qualifier);
-                free(opt->values[0]);
-                opt->values[0] = tmp;
-            }
+            // append with a colon delimiter
+            pmix_asprintf(&tmp, "%s:%s", opt->values[0], qualifier);
+            free(opt->values[0]);
+            opt->values[0] = tmp;
         }
     } else {
         // add the new option

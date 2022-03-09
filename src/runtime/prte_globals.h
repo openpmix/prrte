@@ -268,6 +268,8 @@ typedef struct {
     char **aliases;
     /* daemon on this node */
     struct prte_proc_t *daemon;
+    /* track the unassigned cpus */
+    hwloc_cpuset_t available;
     /** number of procs on this node */
     prte_node_rank_t num_procs;
     /* array of pointers to procs on this node */
@@ -342,9 +344,6 @@ typedef struct {
      * indicates the node where we stopped
      */
     prte_node_t *bookmark;
-    /* if we are binding, bookmark the index of the
-     * last object we bound to */
-    unsigned int bkmark_obj;
     /* state of the overall job */
     prte_job_state_t state;
     /* number of procs mapped */
@@ -425,6 +424,11 @@ struct prte_proc_t {
     prte_app_idx_t app_idx;
     /* pointer to the node where this proc is executing */
     prte_node_t *node;
+    /* pointer to the object on that node where the
+     * proc is mapped */
+    hwloc_obj_t obj;
+    /* cpuset where the proc is bound */
+    char *cpuset;
     /* RML contact info */
     char *rml_uri;
     /* some boolean flags */
