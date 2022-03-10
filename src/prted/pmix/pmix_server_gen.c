@@ -761,8 +761,10 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
     prte_grpcomm_signature_t *sig;
     pmix_proc_t *proct;
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s job control request from %s:%d",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), requestor->nspace, requestor->rank);
+    prte_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s job control request from %s:%d",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        requestor->nspace, requestor->rank);
 
     for (m = 0; m < ndirs; m++) {
         if (0 == strncmp(directives[m].key, PMIX_JOB_CTRL_KILL, PMIX_MAX_KEYLEN)) {
@@ -1090,8 +1092,10 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata)
     size_t n;
 
     for (n = 0; n < cd->nprocs; n++) {
-        PRTE_OUTPUT_VERBOSE((1, prte_debug_output, "%s pmix_server_stdin_push to dest %s: size %zu",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&cd->procs[n]),
+        PRTE_OUTPUT_VERBOSE((1, prte_pmix_server_globals.output,
+                             "%s pmix_server_stdin_push to dest %s: size %zu",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_NAME_PRINT(&cd->procs[n]),
                              bo->size));
         prte_iof.push_stdin(&cd->procs[n], (uint8_t *) bo->bytes, bo->size);
     }
