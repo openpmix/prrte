@@ -636,7 +636,7 @@ keep_going:
             /* just in case the exit code hadn't been set, do it here - this
              * won't override any reported exit code */
             if (0 == jdata->exit_code) {
-                jdata->exit_code = PRTE_ERR_FAILED_TO_START;
+                jdata->exit_code = PRTE_ERR_JOB_FAILED_TO_LAUNCH;
             }
             /* retain the object so it doesn't get free'd */
             PMIX_RETAIN(pptr);

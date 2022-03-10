@@ -36,222 +36,66 @@
 #include "src/threads/pmix_threads.h"
 #include "src/util/proc_info.h"
 
+// Map additional prrte specific error
+// codes to PMIx. This mapping isn't perfect,
+// but in most cases it'll drop to the default
+// and return the mapped PMIx error code.
 pmix_status_t prte_pmix_convert_rc(int rc)
 {
     switch (rc) {
-
-    case PRTE_ERR_HEARTBEAT_ALERT:
-    case PRTE_ERR_FILE_ALERT:
-    case PRTE_ERR_HEARTBEAT_LOST:
-    case PRTE_ERR_SENSOR_LIMIT_EXCEEDED:
-        return PMIX_ERR_JOB_SENSOR_BOUND_EXCEEDED;
-
-    case PRTE_ERR_NO_EXE_SPECIFIED:
-    case PRTE_ERR_NO_APP_SPECIFIED:
-        return PMIX_ERR_JOB_NO_EXE_SPECIFIED;
-
-    case PRTE_ERR_SLOT_LIST_RANGE:
-    case PRTE_ERR_TOPO_SOCKET_NOT_SUPPORTED:
-    case PRTE_ERR_INVALID_PHYS_CPU:
-    case PRTE_ERR_TOPO_CORE_NOT_SUPPORTED:
-    case PRTE_ERR_TOPO_SLOT_LIST_NOT_SUPPORTED:
-    case PRTE_ERR_MULTIPLE_AFFINITIES:
-    case PRTE_ERR_FAILED_TO_MAP:
-        return PMIX_ERR_JOB_FAILED_TO_MAP;
-
-    case PRTE_ERR_JOB_CANCELLED:
-        return PMIX_ERR_JOB_CANCELED;
-
-    case PRTE_ERR_DEBUGGER_RELEASE:
-        return PMIX_ERR_DEBUGGER_RELEASE;
-
-    case PRTE_ERR_HANDLERS_COMPLETE:
-        return PMIX_EVENT_ACTION_COMPLETE;
-
-    case PRTE_ERR_PROC_ABORTED:
-        return PMIX_ERR_PROC_ABORTED;
-
-    case PRTE_ERR_PROC_REQUESTED_ABORT:
-        return PMIX_ERR_PROC_REQUESTED_ABORT;
-
-    case PRTE_ERR_PROC_ABORTING:
-        return PMIX_ERR_PROC_ABORTING;
-
-    case PRTE_ERR_NODE_DOWN:
-        return PMIX_ERR_NODE_DOWN;
-
-    case PRTE_ERR_NODE_OFFLINE:
-        return PMIX_ERR_NODE_OFFLINE;
-
-    case PRTE_ERR_JOB_TERMINATED:
-        return PMIX_EVENT_JOB_END;
-
-    case PRTE_ERR_PROC_RESTART:
-        return PMIX_ERR_PROC_RESTART;
-
-    case PRTE_ERR_PROC_CHECKPOINT:
-        return PMIX_ERR_PROC_CHECKPOINT;
-
-    case PRTE_ERR_PROC_MIGRATE:
-        return PMIX_ERR_PROC_MIGRATE;
-
-    case PRTE_ERR_EVENT_REGISTRATION:
-        return PMIX_ERR_EVENT_REGISTRATION;
 
     case PRTE_ERR_NOT_IMPLEMENTED:
     case PRTE_ERR_NOT_SUPPORTED:
         return PMIX_ERR_NOT_SUPPORTED;
 
-    case PRTE_ERR_NOT_FOUND:
-        return PMIX_ERR_NOT_FOUND;
-
-    case PRTE_ERR_PERM:
-    case PRTE_ERR_UNREACH:
-    case PRTE_ERR_SERVER_NOT_AVAIL:
-        return PMIX_ERR_UNREACH;
-
-    case PRTE_ERR_BAD_PARAM:
-        return PMIX_ERR_BAD_PARAM;
-
     case PRTE_ERR_SYS_LIMITS_PIPES:
     case PRTE_ERR_SYS_LIMITS_CHILDREN:
+    case PRTE_ERR_SYS_LIMITS_SOCKETS:
     case PRTE_ERR_SOCKET_NOT_AVAILABLE:
-    case PRTE_ERR_NOT_ENOUGH_CORES:
-    case PRTE_ERR_NOT_ENOUGH_SOCKETS:
-        return PMIX_ERR_JOB_INSUFFICIENT_RESOURCES;
-
-    case PRTE_ERR_PIPE_READ_FAILURE:
-        return PMIX_ERR_JOB_SYS_OP_FAILED;
-
-    case PRTE_ERR_OUT_OF_RESOURCE:
         return PMIX_ERR_OUT_OF_RESOURCE;
 
-    case PRTE_ERR_DATA_VALUE_NOT_FOUND:
-        return PMIX_ERR_DATA_VALUE_NOT_FOUND;
+    case PRTE_ERR_NOT_AVAILABLE:
+    case PRTE_ERR_CONNECTION_REFUSED:
+        return PMIX_ERR_UNREACH;
 
-    case PRTE_ERR_WDIR_NOT_FOUND:
-        return PMIX_ERR_JOB_WDIR_NOT_FOUND;
+    case PRTE_ERR_NOT_INITIALIZED:
+    case PRTE_ERR_VALUE_OUT_OF_BOUNDS:
+    case PRTE_ERR_ADDRESSEE_UNKNOWN:
+    case PRTE_ERR_PIPE_SETUP_FAILURE:
+        return PMIX_ERR_BAD_PARAM;
 
-    case PRTE_ERR_EXE_NOT_FOUND:
-    case PRTE_ERR_EXE_NOT_ACCESSIBLE:
-        return PMIX_ERR_JOB_EXE_NOT_FOUND;
+    case PRTE_ERR_ALLOCATION_PENDING:
+        return PMIX_OPERATION_IN_PROGRESS;
 
-    case PRTE_ERR_TIMEOUT:
-        return PMIX_ERR_TIMEOUT;
+    case PRTE_ERR_NO_PATH_TO_TARGET:
+        return PMIX_ERR_COMM_FAILURE;
 
-    case PRTE_ERR_WOULD_BLOCK:
-        return PMIX_ERR_WOULD_BLOCK;
+    case PRTE_ERR_FILE_OPEN_FAILURE:
+    case PRTE_ERR_FILE_WRITE_FAILURE:
+    case PRTE_ERR_FILE_READ_FAILURE:
+       return PMIX_ERR_IOF_FAILURE;
 
-    case PRTE_EXISTS:
-        return PMIX_EXISTS;
+    case PRTE_ERR_TAKE_NEXT_OPTION:
+        return PMIX_ERR_SILENT; // No good mapping for this.
 
-    case PRTE_ERR_PARTIAL_SUCCESS:
-        return PMIX_QUERY_PARTIAL_SUCCESS;
-
-    case PRTE_ERR_MODEL_DECLARED:
-        return PMIX_MODEL_DECLARED;
-
-    case PRTE_ERROR:
+    case PRTE_ERR_FATAL:
         return PMIX_ERROR;
-    case PRTE_SUCCESS:
-        return PMIX_SUCCESS;
 
     default:
-        return PMIX_ERROR;
+        // Mode PRRTE status codes map to PMIx codes,
+        // so if that is the case there is no conversion needed.
+        return rc;
     }
 }
 
+// All PMIx codes should be mapped to PRRTE,
+// so very little conversion is needed.
 int prte_pmix_convert_status(pmix_status_t status)
 {
     switch (status) {
-    case PMIX_ERR_DEBUGGER_RELEASE:
-        return PRTE_ERR_DEBUGGER_RELEASE;
 
-    case PMIX_EVENT_ACTION_COMPLETE:
-        return PRTE_ERR_HANDLERS_COMPLETE;
-
-    case PMIX_ERR_PROC_ABORTED:
-        return PRTE_ERR_PROC_ABORTED;
-
-    case PMIX_ERR_PROC_REQUESTED_ABORT:
-        return PRTE_ERR_PROC_REQUESTED_ABORT;
-
-    case PMIX_ERR_PROC_ABORTING:
-        return PRTE_ERR_PROC_ABORTING;
-
-    case PMIX_ERR_NODE_DOWN:
-        return PRTE_ERR_NODE_DOWN;
-
-    case PMIX_ERR_NODE_OFFLINE:
-        return PRTE_ERR_NODE_OFFLINE;
-
-    case PMIX_EVENT_JOB_END:
-        return PRTE_ERR_JOB_TERMINATED;
-
-    case PMIX_ERR_PROC_RESTART:
-        return PRTE_ERR_PROC_RESTART;
-
-    case PMIX_ERR_PROC_CHECKPOINT:
-        return PRTE_ERR_PROC_CHECKPOINT;
-
-    case PMIX_ERR_PROC_MIGRATE:
-        return PRTE_ERR_PROC_MIGRATE;
-
-    case PMIX_ERR_EVENT_REGISTRATION:
-        return PRTE_ERR_EVENT_REGISTRATION;
-
-    case PMIX_ERR_NOT_SUPPORTED:
-        return PRTE_ERR_NOT_SUPPORTED;
-
-    case PMIX_ERR_NOT_FOUND:
-        return PRTE_ERR_NOT_FOUND;
-
-    case PMIX_ERR_OUT_OF_RESOURCE:
-        return PRTE_ERR_OUT_OF_RESOURCE;
-
-    case PMIX_ERR_INIT:
-        return PRTE_ERROR;
-
-    case PMIX_ERR_BAD_PARAM:
-        return PRTE_ERR_BAD_PARAM;
-
-    case PMIX_ERR_UNREACH:
-    case PMIX_ERR_NO_PERMISSIONS:
-        return PRTE_ERR_UNREACH;
-
-    case PMIX_ERR_TIMEOUT:
-        return PRTE_ERR_TIMEOUT;
-
-    case PMIX_ERR_WOULD_BLOCK:
-        return PRTE_ERR_WOULD_BLOCK;
-
-    case PMIX_ERR_LOST_CONNECTION:
-        return PRTE_ERR_COMM_FAILURE;
-
-    case PMIX_EXISTS:
-        return PRTE_EXISTS;
-
-    case PMIX_QUERY_PARTIAL_SUCCESS:
-        return PRTE_ERR_PARTIAL_SUCCESS;
-
-    case PMIX_MONITOR_HEARTBEAT_ALERT:
-        return PRTE_ERR_HEARTBEAT_ALERT;
-
-    case PMIX_MONITOR_FILE_ALERT:
-        return PRTE_ERR_FILE_ALERT;
-
-    case PMIX_MODEL_DECLARED:
-        return PRTE_ERR_MODEL_DECLARED;
-
-    case PMIX_ERROR:
-        return PRTE_ERROR;
-    case PMIX_ERR_SILENT:
-        return PRTE_ERR_SILENT;
-    case PMIX_SUCCESS:
     case PMIX_OPERATION_SUCCEEDED:
         return PRTE_SUCCESS;
-    case PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER:
-        return PRTE_ERR_UNPACK_READ_PAST_END_OF_BUFFER;
 
     default:
         return status;

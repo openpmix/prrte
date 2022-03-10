@@ -332,7 +332,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
     if (0 == pmix_argv_count(nodelist_argv)) {
         prte_show_help("help-plm-slurm.txt", "no-hosts-in-list", true);
-        rc = PRTE_ERR_FAILED_TO_START;
+        rc = PRTE_ERR_JOB_FAILED_TO_LAUNCH;
         goto cleanup;
     }
     nodelist_flat = pmix_argv_join(nodelist_argv, ',');

@@ -405,7 +405,7 @@ static int rank_fill(prte_job_t *jdata,
 
         /* Are all the procs ranked? we don't want to crash on INVALID ranks */
         if (cnt < app->num_procs) {
-            return PRTE_ERR_FAILED_TO_MAP;
+            return PRTE_ERR_JOB_FAILED_TO_MAP;
         }
     }
 
@@ -654,7 +654,7 @@ static int rank_by(prte_job_t *jdata,
 
         /* Are all the procs ranked? we don't want to crash on INVALID ranks */
         if (cnt < app->num_procs) {
-            return PRTE_ERR_FAILED_TO_MAP;
+            return PRTE_ERR_JOB_FAILED_TO_MAP;
         }
     }
     return PRTE_SUCCESS;

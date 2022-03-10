@@ -79,7 +79,7 @@ int prte_oob_base_select(void)
         /* If the component is not available, then skip it as
          * it has no available interfaces
          */
-        if (PRTE_SUCCESS != rc && PRTE_ERR_FORCE_SELECT != rc) {
+        if (PRTE_SUCCESS != rc) {
             prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                 "mca:oob:select: Skipping component [%s] - no available interfaces",
                                 component->oob_base.mca_component_name);
@@ -92,24 +92,6 @@ int prte_oob_base_select(void)
                                 "mca:oob:select: Skipping component [%s] - failed to startup",
                                 component->oob_base.mca_component_name);
             continue;
-        }
-
-        if (PRTE_ERR_FORCE_SELECT == rc) {
-            /* this component shall be the *only* component allowed
-             * for use, so shutdown and remove any prior ones */
-            while (NULL
-                   != (cmp = (prte_mca_base_component_list_item_t *) pmix_list_remove_first(
-                           &prte_oob_base.actives))) {
-                c3 = (prte_oob_base_component_t *) cmp->cli_component;
-                if (NULL != c3->shutdown) {
-                    c3->shutdown();
-                }
-                PMIX_RELEASE(cmp);
-            }
-            c2 = PMIX_NEW(prte_mca_base_component_list_item_t);
-            c2->cli_component = (prte_mca_base_component_t *) component;
-            pmix_list_append(&prte_oob_base.actives, &c2->super);
-            break;
         }
 
         /* record it, but maintain priority order */

@@ -117,13 +117,7 @@ void prte_errmgr_base_abort(int error_code, char *fmt, ...)
         prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
     }
 
-    /* if a critical connection failed, or a sensor limit was exceeded, exit without dropping a core
-     */
-    if (PRTE_ERR_CONNECTION_FAILED == error_code || PRTE_ERR_SENSOR_LIMIT_EXCEEDED == error_code) {
-        prte_ess.abort(error_code, false);
-    } else {
-        prte_ess.abort(error_code, true);
-    }
+    prte_ess.abort(error_code, true);
 
     /*
      * We must exit in prte_ess.abort; all implementations of prte_ess.abort

@@ -562,7 +562,7 @@ static void check_complete(int fd, short args, void *cbdata)
         rc = prte_pmix_convert_rc(jdata->exit_code);
         /* or whether we got cancelled by the user */
     } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CANCELLED, NULL, PMIX_BOOL)) {
-        rc = prte_pmix_convert_rc(PRTE_ERR_JOB_CANCELLED);
+        rc = prte_pmix_convert_rc(PRTE_ERR_JOB_CANCELED);
     } else {
         rc = prte_pmix_convert_rc(jdata->exit_code);
     }
@@ -823,7 +823,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         rc = jdata->exit_code;
         /* or whether we got cancelled by the user */
     } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CANCELLED, NULL, PMIX_BOOL)) {
-        rc = PRTE_ERR_JOB_CANCELLED;
+        rc = PRTE_ERR_JOB_CANCELED;
     } else {
         rc = jdata->exit_code;
     }

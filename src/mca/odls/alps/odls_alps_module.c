@@ -551,7 +551,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
                 PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
             }
             close(read_fd);
-            return PRTE_ERR_FAILED_TO_START;
+            return PRTE_ERR_JOB_FAILED_TO_LAUNCH;
         }
     }
 

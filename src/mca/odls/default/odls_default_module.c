@@ -449,7 +449,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
                     cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
                     PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
                     close(read_fd);
-                    return PRTE_ERR_FAILED_TO_START;
+                    return PRTE_ERR_JOB_FAILED_TO_LAUNCH;
                 }
                 /* tell the child to stop */
                 if (WIFSTOPPED(status)) {
@@ -459,7 +459,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
                         cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
                         PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
                         close(read_fd);
-                        return PRTE_ERR_FAILED_TO_START;
+                        return PRTE_ERR_JOB_FAILED_TO_LAUNCH;
                     }
                     errno = 0;
 #    if PRTE_HAVE_LINUX_PTRACE
@@ -472,7 +472,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
                         cd->child->state = PRTE_PROC_STATE_FAILED_TO_START;
                         PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
                         close(read_fd);
-                        return PRTE_ERR_FAILED_TO_START;
+                        return PRTE_ERR_JOB_FAILED_TO_LAUNCH;
                     }
                     /* record that this proc is ready for debug */
                     PRTE_ACTIVATE_PROC_STATE(&cd->child->name, PRTE_PROC_STATE_READY_FOR_DEBUG);
@@ -579,7 +579,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
                 PRTE_FLAG_UNSET(cd->child, PRTE_PROC_FLAG_ALIVE);
             }
             close(read_fd);
-            return PRTE_ERR_FAILED_TO_START;
+            return PRTE_ERR_JOB_FAILED_TO_LAUNCH;
         }
     }
 
@@ -709,7 +709,7 @@ static int send_signal(pid_t pd, int signal)
                ignore the error.  */
             break;
         case EPERM:
-            rc = PRTE_ERR_PERM;
+            rc = PRTE_ERR_NO_PERMISSIONS;
             break;
         default:
             rc = PRTE_ERROR;

@@ -236,13 +236,6 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                 PMIX_RELEASE(caddy);
                 return;
             }
-            if (PRTE_ERR_SYSTEM_WILL_BOOTSTRAP == rc) {
-                /* this module indicates that nodes will be discovered
-                 * on a bootstrap basis, so all we do here is add our
-                 * own node to the list
-                 */
-                goto addlocal;
-            }
             if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
                 /* we have an active module, but it is unable to
                  * allocate anything for this job - this indicates

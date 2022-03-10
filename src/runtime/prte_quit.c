@@ -126,73 +126,9 @@ static char *print_aborted_job(prte_job_t *job, prte_app_context_t *approc, prte
                                            prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
-        case PRTE_ERR_FAILED_GET_TERM_ATTRS:
-            output = prte_show_help_string("help-prun.txt", "prun:failed-term-attrs", true,
-                                           prte_tool_basename, node->name,
-                                           (unsigned long) proc->name.rank);
-            break;
-        case PRTE_ERR_WDIR_NOT_FOUND:
+        case PRTE_ERR_JOB_WDIR_NOT_FOUND:
             output = prte_show_help_string("help-prun.txt", "prun:wdir-not-found", true,
                                            prte_tool_basename, approc->cwd, node->name,
-                                           (unsigned long) proc->name.rank);
-            break;
-        case PRTE_ERR_EXE_NOT_FOUND:
-            output = prte_show_help_string("help-prun.txt", "prun:exe-not-found", true,
-                                           prte_tool_basename, (unsigned long) proc->name.rank,
-                                           prte_tool_basename, prte_tool_basename, node->name,
-                                           approc->app);
-            break;
-        case PRTE_ERR_EXE_NOT_ACCESSIBLE:
-            output = prte_show_help_string("help-prun.txt", "prun:exe-not-accessible", true,
-                                           prte_tool_basename, approc->app, node->name,
-                                           (unsigned long) proc->name.rank);
-            break;
-        case PRTE_ERR_MULTIPLE_AFFINITIES:
-            output = prte_show_help_string("help-prun.txt", "prun:multiple-paffinity-schemes", true,
-                                           NULL);
-            break;
-        case PRTE_ERR_TOPO_SLOT_LIST_NOT_SUPPORTED:
-            output = prte_show_help_string("help-prun.txt", "prun:topo-not-supported", true,
-                                           prte_process_info.nodename,
-                                           "rankfile containing a slot_list of ", NULL,
-                                           approc->app);
-            break;
-        case PRTE_ERR_INVALID_NODE_RANK:
-            output = prte_show_help_string("help-prun.txt", "prun:invalid-node-rank", true);
-            break;
-        case PRTE_ERR_INVALID_LOCAL_RANK:
-            output = prte_show_help_string("help-prun.txt", "prun:invalid-local-rank", true);
-            break;
-        case PRTE_ERR_NOT_ENOUGH_CORES:
-            output = prte_show_help_string("help-prun.txt", "prun:not-enough-resources", true,
-                                           "sockets", node->name, "bind-to-core", approc->app);
-            break;
-        case PRTE_ERR_TOPO_CORE_NOT_SUPPORTED:
-            output = prte_show_help_string("help-prun.txt", "prun:topo-not-supported", true,
-                                           node->name, "bind-to-core", "", approc->app);
-            break;
-        case PRTE_ERR_INVALID_PHYS_CPU:
-            output = prte_show_help_string("help-prun.txt", "prun:invalid-phys-cpu", true);
-            break;
-        case PRTE_ERR_NOT_ENOUGH_SOCKETS:
-            output = prte_show_help_string("help-prun.txt", "prun:not-enough-resources", true,
-                                           "sockets", node->name, "bind-to-socket", approc->app);
-            break;
-        case PRTE_ERR_TOPO_SOCKET_NOT_SUPPORTED:
-            output = prte_show_help_string("help-prun.txt", "prun:topo-not-supported", true,
-                                           node->name, "bind-to-socket", "", approc->app);
-            break;
-        case PRTE_ERR_MODULE_NOT_FOUND:
-            output = prte_show_help_string("help-prun.txt", "prun:paffinity-missing-module", true,
-                                           node->name);
-            break;
-        case PRTE_ERR_SLOT_LIST_RANGE:
-            output = prte_show_help_string("help-prun.txt", "prun:invalid-slot-list-range", true,
-                                           node->name, NULL);
-            break;
-        case PRTE_ERR_PIPE_READ_FAILURE:
-            output = prte_show_help_string("help-prun.txt", "prun:pipe-read-failure", true,
-                                           prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
         case PRTE_ERR_SOCKET_NOT_AVAILABLE:
@@ -249,18 +185,7 @@ static char *print_aborted_job(prte_job_t *job, prte_app_context_t *approc, prte
                                        PRTE_NAME_PRINT(&proc->name), node->name);
         return output;
     } else if (PRTE_PROC_STATE_SENSOR_BOUND_EXCEEDED == proc->state) {
-        switch (proc->exit_code) {
-        case PRTE_ERR_MEM_LIMIT_EXCEEDED:
-            output = prte_show_help_string("help-prun.txt", "prun:proc-mem-exceeded", true,
-                                           PRTE_NAME_PRINT(&proc->name), node->name);
-            break;
-        case PRTE_ERR_PROC_STALLED:
-            output = prte_show_help_string("help-prun.txt", "prun:proc-stalled", true);
-            break;
-
-        default:
-            output = prte_show_help_string("help-prun.txt", "prun:proc-sensor-exceeded", true);
-        }
+        output = prte_show_help_string("help-prun.txt", "prun:proc-sensor-exceeded", true);
         return output;
     } else if (PRTE_PROC_STATE_HEARTBEAT_FAILED == proc->state) {
         output = prte_show_help_string("help-prun.txt", "prun:proc-heartbeat-failed", true,

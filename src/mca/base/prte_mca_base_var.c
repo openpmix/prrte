@@ -587,7 +587,7 @@ int prte_mca_base_var_set_value(int vari, const void *value, size_t size,
     }
 
     if (!PRTE_VAR_IS_SETTABLE(var[0])) {
-        return PRTE_ERR_PERM;
+        return PRTE_ERR_NO_PERMISSIONS;
     }
 
     if (NULL != var->mbv_enumerator) {

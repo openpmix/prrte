@@ -318,7 +318,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             if (NULL != cur_prefix && 0 != strcmp(cur_prefix, app_prefix_dir)) {
                 prte_show_help("help-plm-lsf.txt", "multiple-prefixes", true, cur_prefix,
                                app_prefix_dir);
-                rc = PRTE_ERR_FAILED_TO_START;
+                rc = PRTE_ERR_JOB_FAILED_TO_LAUNCH;
                 goto cleanup;
             }
 
@@ -357,13 +357,13 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * failures and deal with them elsewhere
      */
     if ((rc = lsb_launch(nodelist_argv, argv, LSF_DJOB_REPLACE_ENV | LSF_DJOB_NOWAIT, env)) < 0) {
-        PRTE_ERROR_LOG(PRTE_ERR_FAILED_TO_START);
+        PRTE_ERROR_LOG(PRTE_ERR_JOB_FAILED_TO_LAUNCH);
         char *flattened_nodelist = NULL;
         flattened_nodelist = pmix_argv_join(nodelist_argv, '\n');
         prte_show_help("help-plm-lsf.txt", "lsb_launch-failed", true, rc, lsberrno, lsb_sysmsg(),
                        pmix_argv_count(nodelist_argv), flattened_nodelist);
         free(flattened_nodelist);
-        rc = PRTE_ERR_FAILED_TO_START;
+        rc = PRTE_ERR_JOB_FAILED_TO_LAUNCH;
         prte_wait_enable(); /* re-enable our SIGCHLD handler */
         goto cleanup;
     }
