@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -1038,19 +1038,33 @@ int prun(int argc, char *argv[])
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(iptr, 2);
 
-    /* push our stdin to the apps */
-    PMIX_LOAD_PROCID(&pname, spawnednspace, 0); // forward stdin to rank=0
-    PMIX_INFO_CREATE(iptr, 1);
-    PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
-    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    ret = PMIx_IOF_push(&pname, 1, NULL, iptr, 1, opcbfunc, &lock);
-    if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
-        prte_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
-    } else if (PMIX_SUCCESS == ret) {
-        PRTE_PMIX_WAIT_THREAD(&lock);
+    /* check what user wants us to do with stdin */
+    PMIX_LOAD_NSPACE(pname.nspace, spawnednspace);
+    pval = prte_cmd_line_get_param(prte_cmd_line, "stdin", 0, 0);
+    if (NULL != pval) {
+        if (0 == strcmp(pval->value.data.string, "all")) {
+            pname.rank = PMIX_RANK_WILDCARD;
+        } else if (0 == strcmp(pval->value.data.string, "none")) {
+            pname.rank = PMIX_RANK_INVALID;
+        } else {
+            pname.rank = 0;
+        }
+    } else {
+        pname.rank = 0;
     }
-    PRTE_PMIX_DESTRUCT_LOCK(&lock);
-    PMIX_INFO_FREE(iptr, 1);
+    if (PMIX_RANK_INVALID != pname.rank) {
+        PMIX_INFO_CREATE(iptr, 1);
+        PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
+        PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+        ret = PMIx_IOF_push(&pname, 1, NULL, iptr, 1, opcbfunc, &lock);
+        if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
+            prte_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
+        } else if (PMIX_SUCCESS == ret) {
+            PRTE_PMIX_WAIT_THREAD(&lock);
+        }
+        PRTE_PMIX_DESTRUCT_LOCK(&lock);
+        PMIX_INFO_FREE(iptr, 1);
+    }
 
     /* register to be notified when
      * our job completes */

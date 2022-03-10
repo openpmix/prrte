@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -383,7 +383,7 @@ static void _query(int sd, short args, void *cbdata)
                 procinfo = (pmix_proc_info_t *) darray->array;
                 p = 0;
                 for (k = 0; k < jdata->procs->size; k++) {
-                    proct = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, k);
+                    proct = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, k);
                     if (NULL == proct) {
                         continue;
                     }
