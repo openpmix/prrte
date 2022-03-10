@@ -49,18 +49,20 @@ static int finalize(void);
 /******************
  * PRTED module
  ******************/
-prte_state_base_module_t prte_state_prted_module = {init,
-                                                    finalize,
-                                                    prte_state_base_activate_job_state,
-                                                    prte_state_base_add_job_state,
-                                                    prte_state_base_set_job_state_callback,
-                                                    prte_state_base_set_job_state_priority,
-                                                    prte_state_base_remove_job_state,
-                                                    prte_state_base_activate_proc_state,
-                                                    prte_state_base_add_proc_state,
-                                                    prte_state_base_set_proc_state_callback,
-                                                    prte_state_base_set_proc_state_priority,
-                                                    prte_state_base_remove_proc_state};
+prte_state_base_module_t prte_state_prted_module = {
+    init,
+    finalize,
+    prte_state_base_activate_job_state,
+    prte_state_base_add_job_state,
+    prte_state_base_set_job_state_callback,
+    prte_state_base_set_job_state_priority,
+    prte_state_base_remove_job_state,
+    prte_state_base_activate_proc_state,
+    prte_state_base_add_proc_state,
+    prte_state_base_set_proc_state_callback,
+    prte_state_base_set_proc_state_priority,
+    prte_state_base_remove_proc_state
+};
 
 /* Local functions */
 static void track_jobs(int fd, short argc, void *cbdata);
@@ -68,22 +70,31 @@ static void track_procs(int fd, short argc, void *cbdata);
 static int pack_state_update(pmix_data_buffer_t *buf, prte_job_t *jdata);
 
 /* defined default state machines */
-static prte_job_state_t job_states[] = {PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE,
-                                        PRTE_JOB_STATE_READY_FOR_DEBUG};
-static prte_state_cbfunc_t job_callbacks[] = {track_jobs, track_jobs};
+static prte_job_state_t job_states[] = {
+    PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE,
+    PRTE_JOB_STATE_READY_FOR_DEBUG
+};
+static prte_state_cbfunc_t job_callbacks[] = {
+    track_jobs,
+    track_jobs
+};
 
-static prte_proc_state_t proc_states[] = {PRTE_PROC_STATE_RUNNING,
-                                          PRTE_PROC_STATE_READY_FOR_DEBUG,
-                                          PRTE_PROC_STATE_REGISTERED,
-                                          PRTE_PROC_STATE_IOF_COMPLETE,
-                                          PRTE_PROC_STATE_WAITPID_FIRED,
-                                          PRTE_PROC_STATE_TERMINATED};
-static prte_state_cbfunc_t proc_callbacks[] = {track_procs,
-                                               track_procs,
-                                               track_procs,
-                                               track_procs,
-                                               track_procs,
-                                               track_procs};
+static prte_proc_state_t proc_states[] = {
+    PRTE_PROC_STATE_RUNNING,
+    PRTE_PROC_STATE_READY_FOR_DEBUG,
+    PRTE_PROC_STATE_REGISTERED,
+    PRTE_PROC_STATE_IOF_COMPLETE,
+    PRTE_PROC_STATE_WAITPID_FIRED,
+    PRTE_PROC_STATE_TERMINATED
+};
+static prte_state_cbfunc_t proc_callbacks[] = {
+    track_procs,
+    track_procs,
+    track_procs,
+    track_procs,
+    track_procs,
+    track_procs
+};
 
 /************************
  * API Definitions
@@ -98,20 +109,20 @@ static int init(void)
 
     num_states = sizeof(job_states) / sizeof(prte_job_state_t);
     for (i = 0; i < num_states; i++) {
-        if (PRTE_SUCCESS
-            != (rc = prte_state.add_job_state(job_states[i], job_callbacks[i], PRTE_SYS_PRI))) {
+        rc = prte_state.add_job_state(job_states[i], job_callbacks[i], PRTE_SYS_PRI);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
         }
     }
     /* add a default error response */
-    if (PRTE_SUCCESS
-        != (rc = prte_state.add_job_state(PRTE_JOB_STATE_FORCED_EXIT, prte_quit, PRTE_ERROR_PRI))) {
+    rc = prte_state.add_job_state(PRTE_JOB_STATE_FORCED_EXIT, prte_quit, PRTE_ERROR_PRI);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
     /* add a state for when we are ordered to terminate */
-    if (PRTE_SUCCESS
-        != (rc = prte_state.add_job_state(PRTE_JOB_STATE_DAEMONS_TERMINATED, prte_quit,
-                                          PRTE_SYS_PRI))) {
+    rc = prte_state.add_job_state(PRTE_JOB_STATE_DAEMONS_TERMINATED, prte_quit,
+                                  PRTE_SYS_PRI);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
     if (5 < prte_output_get_verbosity(prte_state_base_framework.framework_output)) {
@@ -123,8 +134,8 @@ static int init(void)
      */
     num_states = sizeof(proc_states) / sizeof(prte_proc_state_t);
     for (i = 0; i < num_states; i++) {
-        if (PRTE_SUCCESS
-            != (rc = prte_state.add_proc_state(proc_states[i], proc_callbacks[i], PRTE_SYS_PRI))) {
+        rc = prte_state.add_proc_state(proc_states[i], proc_callbacks[i], PRTE_SYS_PRI);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
         }
     }
@@ -194,6 +205,13 @@ static void track_jobs(int fd, short argc, void *cbdata)
             if (PMIX_CHECK_NSPACE(child->name.nspace, caddy->jdata->nspace)) {
                 /* pack the child's vpid */
                 rc = PMIx_Data_pack(NULL, alert, &child->name.rank, 1, PMIX_PROC_RANK);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(alert);
+                    goto cleanup;
+                }
+                /* pack the child's pid */
+                rc = PMIx_Data_pack(NULL, alert, &child->pid, 1, PMIX_PID);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(alert);

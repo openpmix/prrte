@@ -92,7 +92,8 @@ static void _query(int sd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(cd);
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s processing query",
+    prte_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s processing query",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     PMIX_CONSTRUCT(&results, pmix_list_t);
@@ -122,19 +123,18 @@ static void _query(int sd, short args, void *cbdata)
                     matched = 0;
                     for (k = 0; k < prte_job_data->size; k++) {
                         jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, k);
-                        if (NULL != jdata
-                            && PMIX_CHECK_NSPACE(q->qualifiers[n].value.data.string,
-                                                 jdata->nspace)) {
-                            matched = 1;
-                            break;
+                        if (NULL != jdata) {
+                            if (PMIX_CHECK_NSPACE(q->qualifiers[n].value.data.string, jdata->nspace)) {
+                                matched = 1;
+                                break;
+                            }
                         }
                     }
                     if (0 == matched) {
-                        prte_output_verbose(
-                            2, prte_pmix_server_globals.output,
-                            "%s qualifier key \"%s\" : value \"%s\" is an unknown namespace",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->qualifiers[n].key,
-                            q->qualifiers[n].value.data.string);
+                        prte_output_verbose(2, prte_pmix_server_globals.output,
+                                            "%s qualifier key \"%s\" : value \"%s\" is an unknown namespace",
+                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->qualifiers[n].key,
+                                            q->qualifiers[n].value.data.string);
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
@@ -152,7 +152,8 @@ static void _query(int sd, short args, void *cbdata)
             }
         }
         for (n = 0; NULL != q->keys[n]; n++) {
-            prte_output_verbose(2, prte_pmix_server_globals.output, "%s processing key %s",
+            prte_output_verbose(2, prte_pmix_server_globals.output,
+                                "%s processing key %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->keys[n]);
             if (0 == strcmp(q->keys[n], PMIX_QUERY_NAMESPACES)) {
                 /* get the current jobids */
@@ -272,9 +273,8 @@ static void _query(int sd, short args, void *cbdata)
                     }
 #else
                     /* get it from the v2 API */
-                    if (0
-                        != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len,
-                                                           HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1)) {
+                    if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len,
+                                                             HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1)) {
                         PMIX_RELEASE(kv);
                         continue;
                     }
