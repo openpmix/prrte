@@ -958,19 +958,33 @@ int prun(int argc, char *argv[])
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     PMIX_INFO_FREE(iptr, 2);
 
-    /* push our stdin to the apps */
-    PMIX_LOAD_PROCID(&pname, spawnednspace, 0); // forward stdin to rank=0
-    PMIX_INFO_CREATE(iptr, 1);
-    PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
-    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    ret = PMIx_IOF_push(&pname, 1, NULL, iptr, 1, opcbfunc, &lock);
-    if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
-        prte_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
-    } else if (PMIX_SUCCESS == ret) {
-        PRTE_PMIX_WAIT_THREAD(&lock);
+    /* check what user wants us to do with stdin */
+    PMIX_LOAD_NSPACE(pname.nspace, spawnednspace);
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_STDIN);
+    if (NULL != opt) {
+        if (0 == strcmp(opt->values[0], "all")) {
+            pname.rank = PMIX_RANK_WILDCARD;
+        } else if (0 == strcmp(opt->values[0], "none")) {
+            pname.rank = PMIX_RANK_INVALID;
+        } else {
+            pname.rank = 0;
+        }
+    } else {
+        pname.rank = 0;
     }
-    PRTE_PMIX_DESTRUCT_LOCK(&lock);
-    PMIX_INFO_FREE(iptr, 1);
+    if (PMIX_RANK_INVALID != pname.rank) {
+        PMIX_INFO_CREATE(iptr, 1);
+        PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
+        PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+        ret = PMIx_IOF_push(&pname, 1, NULL, iptr, 1, opcbfunc, &lock);
+        if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
+            prte_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
+        } else if (PMIX_SUCCESS == ret) {
+            PRTE_PMIX_WAIT_THREAD(&lock);
+        }
+        PRTE_PMIX_DESTRUCT_LOCK(&lock);
+        PMIX_INFO_FREE(iptr, 1);
+    }
 
     /* register to be notified when
      * our job completes */
