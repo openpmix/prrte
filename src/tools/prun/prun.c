@@ -960,7 +960,7 @@ int prun(int argc, char *argv[])
 
     /* check what user wants us to do with stdin */
     PMIX_LOAD_NSPACE(pname.nspace, spawnednspace);
-    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_STDIN);
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_STDIN);
     if (NULL != opt) {
         if (0 == strcmp(opt->values[0], "all")) {
             pname.rank = PMIX_RANK_WILDCARD;

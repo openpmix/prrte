@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -208,7 +208,7 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
 
     /* do we already have this process in our list? */
     proct = NULL;
-    PRTE_LIST_FOREACH(pptr, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, dst_name)) {
             /* did they direct that the data go to this proc? */
@@ -258,7 +258,7 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
                                                                 sz))) {
                     /* if the addressee is unknown, remove the sink from the list */
                     if (PRTE_ERR_ADDRESSEE_UNKNOWN == rc) {
-                        PMIX_RELEASE(proct->stdinev);
+                        PRTE_RELEASE(proct->stdinev);
                     }
                 }
             }
@@ -407,7 +407,7 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s hnp:stdin:write:handler writing %d data to %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (int)pmix_list_get_size(&wev->outputs), wev->fd));
+                         (int)prte_list_get_size(&wev->outputs), wev->fd));
 
     wev->pending = false;
 

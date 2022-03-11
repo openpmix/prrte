@@ -484,7 +484,8 @@ void pmix_server_jobid_return(int status, pmix_proc_t *sender,
     }
 
     /* retrieve the request */
-    prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
+    req = (pmix_server_req_t*)prte_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room);
+    prte_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, room, NULL);
     if (NULL == req) {
         /* we are hosed */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -587,16 +588,7 @@ static void _toolconn(int sd, short args, void *cbdata)
             free(tmp);
             prte_plm_globals.next_jobid++;
         } else {
-            rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, cd, &cd->room_num);
-            if (PRTE_SUCCESS != rc) {
-                prte_show_help("help-prted.txt", "noroom", true, cd->operation,
-                               prte_pmix_server_globals.num_rooms);
-                if (NULL != cd->toolcbfunc) {
-                    cd->toolcbfunc(PMIX_ERR_OUT_OF_RESOURCE, NULL, cd->cbdata);
-                }
-                PRTE_RELEASE(cd);
-                return;
-            }
+            cd->room_num = prte_pointer_array_add(&prte_pmix_server_globals.local_reqs, cd);
             /* we need to send this to the HNP for a jobid */
             PMIX_DATA_BUFFER_CREATE(buf);
             rc = PMIx_Data_pack(NULL, buf, &command, 1, PMIX_UINT8);
@@ -613,8 +605,7 @@ static void _toolconn(int sd, short args, void *cbdata)
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 xrc = prte_pmix_convert_rc(rc);
-                prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs,
-                                                        cd->room_num, (void **) &cd);
+                prte_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, cd->room_num, NULL);
                 PMIX_DATA_BUFFER_RELEASE(buf);
                 if (NULL != cd->toolcbfunc) {
                     cd->toolcbfunc(xrc, NULL, cd->cbdata);

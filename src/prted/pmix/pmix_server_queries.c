@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -389,7 +389,7 @@ static void _query(int sd, short args, void *cbdata)
                 procinfo = (pmix_proc_info_t *) darray->array;
                 p = 0;
                 for (k = 0; k < jdata->procs->size; k++) {
-                    proct = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, k);
+                    proct = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, k);
                     if (NULL == proct) {
                         continue;
                     }
@@ -400,7 +400,7 @@ static void _query(int sd, short args, void *cbdata)
                     app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps,
                                                                              proct->app_idx);
                     if (NULL != app && NULL != app->app) {
-                        if (pmix_path_is_absolute(app->app)) {
+                        if (prte_path_is_absolute(app->app)) {
                             procinfo[p].executable_name = strdup(app->app);
                         } else {
                             procinfo[p].executable_name = prte_os_path(false, app->cwd, app->app, NULL);
@@ -447,7 +447,7 @@ static void _query(int sd, short args, void *cbdata)
                         app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps,
                                                                                  proct->app_idx);
                         if (NULL != app && NULL != app->app) {
-                            if (pmix_path_is_absolute(app->app)) {
+                            if (prte_path_is_absolute(app->app)) {
                                 procinfo[p].executable_name = strdup(app->app);
                             } else {
                                 procinfo[p].executable_name = prte_os_path(false, app->cwd, app->app, NULL);
