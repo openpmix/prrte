@@ -18,7 +18,7 @@
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -365,6 +365,7 @@ typedef struct {
     int output;
     prte_hotel_t reqs;
     int num_rooms;
+    prte_pointer_array_t local_reqs;
     int timeout;
     bool wait_for_server;
     pmix_proc_t server;
