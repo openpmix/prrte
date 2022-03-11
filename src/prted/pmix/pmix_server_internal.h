@@ -365,6 +365,7 @@ typedef struct {
     int output;
     pmix_hotel_t reqs;
     int num_rooms;
+    pmix_pointer_array_t local_reqs;
     int timeout;
     bool wait_for_server;
     pmix_proc_t server;
