@@ -454,7 +454,10 @@ static void eviction_cbfunc(struct pmix_hotel_t *hotel, int room_num, void *occu
                 /* it has - ask our local pmix server for the data */
                 PMIX_VALUE_RELEASE(pval);
                 /* check us back into hotel so the modex_resp function can safely remove us */
-                pmix_hotel_recheck(&prte_pmix_server_globals.reqs, req, req->room_num);
+                prc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
+                if(PMIX_SUCCESS != prc) {
+                  goto error_condition;
+                }
                 prc = PMIx_server_dmodex_request(&req->tproc, modex_resp, req);
                 if (PMIX_SUCCESS != prc) {
                     PMIX_ERROR_LOG(prc);
@@ -470,7 +473,7 @@ static void eviction_cbfunc(struct pmix_hotel_t *hotel, int room_num, void *occu
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->key);
         }
         /* not done yet - check us back in */
-        prc = pmix_hotel_recheck(&prte_pmix_server_globals.reqs, req, req->room_num);
+        prc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
         if (PMIX_SUCCESS == prc) {
             prte_output_verbose(2, prte_pmix_server_globals.output,
                                 "%s server:evict checked back in to room %d",
@@ -481,6 +484,8 @@ static void eviction_cbfunc(struct pmix_hotel_t *hotel, int room_num, void *occu
     } else {
         prte_show_help("help-prted.txt", "timedout", true, req->operation);
     }
+
+    error_condition:
 
     /* don't let the caller hang */
     if (0 <= req->remote_room_num) {
