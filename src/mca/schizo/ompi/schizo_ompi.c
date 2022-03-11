@@ -246,40 +246,42 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
     /* backup the argv */
     pargv = prte_argv_copy(argv);
 
-    /* handle the non-compliant options - i.e., the single-dash
-     * multi-character options mandated by the MPI standard */
-    for (n=0; NULL != pargv[n]; n++) {
-        if (0 == strcmp(pargv[n], "-soft")) {
-            free(pargv[n]);
-            pargv[n] = strdup("--soft");
-        } else if (0 == strcmp(pargv[n], "-host")) {
-            free(pargv[n]);
-            pargv[n] = strdup("--host");
-        } else if (0 == strcmp(pargv[n], "-arch")) {
-            free(pargv[n]);
-            pargv[n] = strdup("--arch");
-        } else if (0 == strcmp(pargv[n], "-wdir")) {
-            free(pargv[n]);
-            pargv[n] = strdup("--wdir");
-        } else if (0 == strcmp(pargv[n], "-path")) {
-            free(pargv[n]);
-            pargv[n] = strdup("--path");
-        } else if (0 == strcmp(pargv[n], "-file")) {
-            free(pargv[n]);
-            pargv[n] = strdup("--file");
-        } else if (0 == strcmp(pargv[n], "-initial-errhandler")) {
-            free(pargv[n]);
-            pargv[n] = strdup("--initial-errhandler");
-        } else if (0 == strcmp(pargv[n], "-np")) {
-            free(pargv[n]);
-            pargv[n] = strdup("--np");
+    char **caught_single_dashes = NULL;
+    int  *caught_positions = NULL;
+    int cur_caught_pos = 0;
+
+    bool warn;
+
+    if (silent) {
+        warn = false;
+    } else {
+        warn = prte_schizo_ompi_component.warn_deprecations;
+    }
+
+    if(warn) {
+      int argc = 0;
+      for(n=1; NULL != pargv[n]; n++) argc++;
+      caught_single_dashes = calloc(argc + 1, sizeof(char *));
+      caught_positions = calloc(argc + 1, sizeof(int));
+    }
+
+    /* Convert single dashes to multi-dashes. */
+    for (n=1; NULL != pargv[n]; n++) {
+        /* check for option */
+        if ('-' != pargv[n][0]) {
+            continue;
         }
-#if PRTE_ENABLE_FT
-        else if (0 == strcmp(pargv[n], "-with-ft")) {
-            free(pargv[n]);
-            pargv[n] = strdup("--with-ft");
+        /* check for single-dash errors */
+        if ('-' != pargv[n][1] && 2 < strlen(pargv[n])) {
+            /* we know this is incorrect */
+            char *p2 = pargv[n];
+            prte_asprintf(&pargv[n], "-%s", p2);
+            if(warn) {
+                caught_single_dashes[cur_caught_pos] = strdup(p2);
+                caught_positions[cur_caught_pos++] = n;
+            }
+            free(p2);
         }
-#endif
     }
 
     const char *tool_version = getenv("OMPI_VERSION");
@@ -295,11 +297,75 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
 
     rc = prte_cmd_line_parse(pargv, ompishorts, ompioptions, NULL,
                              results, "help-schizo-ompi.txt");
-    prte_argv_free(pargv);
-    if (PRTE_SUCCESS != rc) {
-        return rc;
+    if (PMIX_SUCCESS != rc) {
+        prte_argv_free(pargv);
+        if(warn) {
+            for(n = 0; n < cur_caught_pos; n++) {
+                free(caught_single_dashes[n]);
+            }
+            free(caught_single_dashes);
+            free(caught_positions);
+        }
+        return prte_pmix_convert_status(rc);
     }
 
+    /* 
+     * If warning is enabled, list all offending
+     * single dash params are before the last found
+     * argument by the parser (results -> tail).
+     *
+     * The only case where tail should be NULL is
+     * if the user didn't specify an executable on
+     * the command line, and that should have been caught
+     * earlier. Put a bozo check anyway.
+     */
+    if(warn && cur_caught_pos > 0 && results->tail) {
+        char *orig_args = NULL;
+        char *corrected_args = NULL;
+        int tail_pos = 0;
+
+        // Find the position of the tail.
+        for(n = 0; NULL != pargv[n]; n++) {
+            if(0 == strcmp(results->tail[0], pargv[n])) break;
+        }
+        tail_pos = n;
+
+        for(n = 0; n < cur_caught_pos; n++) {
+            // Add all offending arguments before the user executable (tail).
+            if(caught_positions[n] < tail_pos) {
+                // Multiple offending single dashes case. Append and free.
+                if(orig_args && corrected_args) {
+                    char *tmp = orig_args;
+                    prte_asprintf(&orig_args, "%s, %s", tmp, caught_single_dashes[n]);
+                    free(tmp);
+                    tmp = corrected_args;
+                    prte_asprintf(&corrected_args, "%s, -%s", tmp, caught_single_dashes[n]);
+                    free(tmp);
+                }
+                else {
+                    // First case.
+                    prte_asprintf(&orig_args, "%s", caught_single_dashes[n]);
+                    prte_asprintf(&corrected_args, "-%s", caught_single_dashes[n]);
+                }
+            }
+            else {
+                break;
+            }
+        }
+        if(orig_args && corrected_args) {
+            prte_show_help("help-schizo-base.txt", "single-dash-error", true,
+                            orig_args, corrected_args);
+            free(orig_args);
+            free(corrected_args);
+        }
+        for(n = 0; n < cur_caught_pos; n++) {
+            free(caught_single_dashes[n]);
+        }
+        free(caught_single_dashes);
+        free(caught_positions);
+    }
+
+    pmix_argv_free(pargv);
     /* check for deprecated options - warn and convert them */
     rc = convert_deprecated_cli(results, silent);
     if (PRTE_SUCCESS != rc) {
