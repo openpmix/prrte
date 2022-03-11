@@ -152,6 +152,7 @@ static void execute(int sd, short args, void *cbdata)
     int rc;
     pmix_data_buffer_t *xfer;
     pmix_proc_t *target;
+    bool stored = false;
 
     PRTE_ACQUIRE_OBJECT(req);
 
@@ -164,13 +165,9 @@ static void execute(int sd, short args, void *cbdata)
         }
     }
 
-    /* add this request to our tracker hotel */
-    if (PRTE_SUCCESS
-        != (rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num))) {
-        prte_show_help("help-prted.txt", "noroom", true, req->operation,
-                       prte_pmix_server_globals.num_rooms);
-        goto callback;
-    }
+    /* add this request to our tracker array */
+    req->room_num = prte_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+    stored = true;
 
     /* setup the xfer */
     PMIX_DATA_BUFFER_CREATE(xfer);
@@ -220,7 +217,9 @@ callback:
     } else if (NULL != req->lkcbfunc) {
         req->lkcbfunc(rc, NULL, 0, req->cbdata);
     }
-    prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+    if (stored) {
+        prte_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
+    }
     PRTE_RELEASE(req);
 }
 
@@ -574,9 +573,8 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender, pmix_data_buffer
 
 release:
     if (0 <= room_num) {
-        /* retrieve the tracker */
-        prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room_num,
-                                                (void **) &req);
+        req = (pmix_server_req_t*)prte_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room_num);
+        prte_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, room_num, NULL);
     }
 
     if (NULL != req) {

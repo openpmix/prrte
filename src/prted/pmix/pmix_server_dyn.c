@@ -67,12 +67,13 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     }
 
     /* retrieve the request */
-    prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room, (void **) &req);
+    req = (pmix_server_req_t*)prte_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room);
     if (NULL == req) {
         /* we are hosed */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return;
     }
+    prte_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, room, NULL);
 
     /* execute the callback */
     if (NULL != req->spcbfunc) {
@@ -138,18 +139,12 @@ static void spawn(int sd, short args, void *cbdata)
 
     PRTE_ACQUIRE_OBJECT(req);
 
-    /* add this request to our tracker hotel */
-    PRTE_ADJUST_TIMEOUT(req);
-    rc = prte_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
-    if (PRTE_SUCCESS != rc) {
-        prte_show_help("help-prted.txt", "noroom", true, req->operation,
-                       prte_pmix_server_globals.num_rooms);
-        goto callback;
-    }
+    /* add this request to our tracker array */
+    req->room_num = prte_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
 
     /* include the request room number for quick retrieval */
-    prte_set_attribute(&req->jdata->attributes, PRTE_JOB_ROOM_NUM, PRTE_ATTR_GLOBAL, &req->room_num,
-                       PMIX_INT);
+    prte_set_attribute(&req->jdata->attributes, PRTE_JOB_ROOM_NUM,
+                       PRTE_ATTR_GLOBAL, &req->room_num, PMIX_INT);
 
     /* construct a spawn message */
     PMIX_DATA_BUFFER_CREATE(buf);
@@ -159,7 +154,7 @@ static void spawn(int sd, short args, void *cbdata)
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        prte_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
         goto callback;
     }
 
@@ -167,7 +162,7 @@ static void spawn(int sd, short args, void *cbdata)
     rc = prte_job_pack(buf, req->jdata);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        prte_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
@@ -177,7 +172,7 @@ static void spawn(int sd, short args, void *cbdata)
         != (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_PLM,
                                          prte_rml_send_callback, NULL))) {
         PRTE_ERROR_LOG(rc);
-        prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+        prte_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }

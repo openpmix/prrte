@@ -582,6 +582,8 @@ int pmix_server_init(void)
     PRTE_CONSTRUCT(&prte_pmix_server_globals.reqs, prte_hotel_t);
     PRTE_CONSTRUCT(&prte_pmix_server_globals.psets, prte_list_t);
     PRTE_CONSTRUCT(&prte_pmix_server_globals.tools, prte_list_t);
+    PRTE_CONSTRUCT(&prte_pmix_server_globals.local_reqs, prte_pointer_array_t);
+    prte_pointer_array_init(&prte_pmix_server_globals.local_reqs, 128, INT_MAX, 2);
 
     /* by the time we init the server, we should know how many nodes we
      * have in our environment - with the exception of mpirun. If the
@@ -930,6 +932,7 @@ void pmix_server_finalize(void)
     }
 
     PRTE_DESTRUCT(&prte_pmix_server_globals.reqs);
+    PRTE_DESTRUCT(&prte_pmix_server_globals.local_reqs);
     PRTE_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
     PRTE_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
     free(mytopology.source);
@@ -976,8 +979,10 @@ static void _mdxresp(int sd, short args, void *cbdata)
 
     PRTE_ACQUIRE_OBJECT(req);
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s XMITTING DATA FOR PROC %s:%u",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->tproc.nspace, req->tproc.rank);
+    prte_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s XMITTING DATA FOR PROC %s:%u",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        req->tproc.nspace, req->tproc.rank);
 
     /* check us out of the hotel */
     prte_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
@@ -1070,7 +1075,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
         return;
     }
     prte_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s dmdx:recv request from proc %s for proc %s:%u",
+                        "%s dmdx:recv processing request from proc %s for proc %s:%u",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender), pproc.nspace,
                         pproc.rank);
     /* and the remote daemon's tracking room number */
@@ -1257,7 +1262,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
     pmix_status_t prc, pret;
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s dmdx:recv response from proc %s with %d bytes",
+                        "%s dmdx:recv response recvd from proc %s with %d bytes",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender),
                         (int) buffer->bytes_used);
 
@@ -1310,9 +1315,8 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
         }
     }
 
-    /* check the request out of the tracking hotel */
-    prte_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, room_num,
-                                            (void **) &req);
+    /* get the request out of the tracking array */
+    req = (pmix_server_req_t*)prte_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room_num);
     /* return the returned data to the requestor */
     if (NULL != req) {
         if (NULL != req->mdxcbfunc) {
@@ -1321,13 +1325,14 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
         }
         PRTE_RELEASE(req);
     } else {
-        prte_output_verbose(2, prte_pmix_server_globals.output, "REQ WAS NULL IN ROOM %d",
+        prte_output_verbose(2, prte_pmix_server_globals.output,
+                            "REQ WAS NULL IN ROOM %d",
                             room_num);
     }
 
     /* now see if anyone else was waiting for data from this target */
-    for (rnum = 0; rnum < prte_pmix_server_globals.reqs.num_rooms; rnum++) {
-        prte_hotel_knock(&prte_pmix_server_globals.reqs, rnum, (void **) &req);
+    for (rnum = 0; rnum < prte_pmix_server_globals.local_reqs.size; rnum++) {
+        req = (pmix_server_req_t*)prte_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, rnum);
         if (NULL == req) {
             continue;
         }
@@ -1336,7 +1341,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
                 PRTE_RETAIN(d);
                 req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
             }
-            prte_hotel_checkout(&prte_pmix_server_globals.reqs, rnum);
+            prte_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, rnum, NULL);
             PRTE_RELEASE(req);
         }
     }
