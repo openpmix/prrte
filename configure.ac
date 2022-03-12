@@ -82,6 +82,13 @@ PRTE_LOAD_PLATFORM
 
 PRTE_CONFIGURE_SETUP
 
+# compatability for oac_check_package
+m4_copy([PRTE_LOG_COMMAND], [OAC_LOG_COMMAND])
+m4_copy([PRTE_LOG_MSG], [OAC_LOG_MSG])
+AC_DEFUN([OAC_APPEND], [
+  AS_IF([test -z "$$1"], [$1="$2"], [$1="$$1 $2"])
+])
+
 prte_show_title "Configuring PRTE"
 
 #
@@ -1233,12 +1240,6 @@ AS_IF([test ! -z "$PRTE_CFLAGS_cache"], [CFLAGS="$CFLAGS $PRTE_CFLAGS_cache"])
 
 # setup "picky" compiler options if enabled
 PRTE_SETUP_PICKY_COMPILERS
-
-# Cleanup duplicate flags
-PRTE_FLAGS_UNIQ(CFLAGS)
-PRTE_FLAGS_UNIQ(CPPFLAGS)
-PRTE_FLAGS_UNIQ(LDFLAGS)
-PRTE_FLAGS_UNIQ(LIBS)
 
 #
 # Delayed the substitution of CFLAGS and CXXFLAGS until now because
