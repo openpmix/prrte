@@ -582,12 +582,6 @@ static int rte_finalize(void)
 {
     char *contact_path;
 
-    /* shutdown the pmix server */
-    pmix_server_finalize();
-    /* output any lingering stdout/err data */
-    fflush(stdout);
-    fflush(stderr);
-
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
     prte_errmgr.finalize();
@@ -625,6 +619,12 @@ static int rte_finalize(void)
     prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
 
     free(prte_topo_signature);
+
+    /* shutdown the pmix server */
+    pmix_server_finalize();
+    /* output any lingering stdout/err data */
+    fflush(stdout);
+    fflush(stderr);
 
     return PRTE_SUCCESS;
 }
