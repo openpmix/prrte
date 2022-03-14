@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -84,14 +84,16 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz);
  * which operates independently and is in the iof_hnp_receive.c file
  */
 
-prte_iof_base_module_t prte_iof_hnp_module = {.init = init,
-                                              .push = hnp_push,
-                                              .pull = hnp_pull,
-                                              .close = hnp_close,
-                                              .output = hnp_output,
-                                              .complete = hnp_complete,
-                                              .finalize = finalize,
-                                              .push_stdin = push_stdin};
+prte_iof_base_module_t prte_iof_hnp_module = {
+    .init = init,
+    .push = hnp_push,
+    .pull = hnp_pull,
+    .close = hnp_close,
+    .output = hnp_output,
+    .complete = hnp_complete,
+    .finalize = finalize,
+    .push_stdin = push_stdin
+};
 
 /* Initialize the module */
 static int init(void)
@@ -192,7 +194,7 @@ SETUP:
  */
 static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
 {
-    prte_iof_proc_t *proct, *pptr;
+    prte_iof_proc_t *proct;
     int rc;
 
     /* don't do this if the dst vpid is invalid */
@@ -205,66 +207,59 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(dst_name), sz));
 
     /* do we already have this process in our list? */
-    proct = NULL;
-    PRTE_LIST_FOREACH(pptr, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
     {
-        if (PMIX_CHECK_PROCID(&pptr->name, dst_name)) {
-            /* found it */
-            proct = pptr;
-        }
-    }
-    if (NULL == proct) {
-        return PRTE_ERR_NOT_FOUND;
-    }
-
-    /* did they direct that the data go to this proc? */
-    if (NULL == proct->stdinev) {
-        /* nope - ignore it */
-        return PRTE_SUCCESS;
-    }
-
-    /* if the daemon is me, then this is a local sink */
-    if (PMIX_CHECK_PROCID(PRTE_PROC_MY_NAME, &proct->stdinev->daemon)) {
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                             "%s read %d bytes from stdin - writing to %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) sz,
-                             PRTE_NAME_PRINT(&proct->name)));
-        /* send the bytes down the pipe - we even send 0 byte events
-         * down the pipe so it forces out any preceding data before
-         * closing the output stream
-         */
-        if (NULL != proct->stdinev->wev) {
-            if (PRTE_IOF_MAX_INPUT_BUFFERS < prte_iof_base_write_output(&proct->name,
-                                                                        PRTE_IOF_STDIN, data, sz,
-                                                                        proct->stdinev->wev)) {
-                /* getting too backed up - stop the read event for now if it is still active */
-
-                PRTE_OUTPUT_VERBOSE(
-                    (1, prte_iof_base_framework.framework_output, "buffer backed up - holding"));
-                return PRTE_ERR_OUT_OF_RESOURCE;
+        if (PMIX_CHECK_PROCID(&proct->name, dst_name)) {
+            /* did they direct that the data go to this proc? */
+            if (NULL == proct->stdinev) {
+                /* nope - ignore it */
+                continue;
             }
-        }
-    } else {
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                             "%s sending %d bytes from stdinev to daemon %s",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) sz,
-                             PRTE_NAME_PRINT(&proct->stdinev->daemon)));
 
-        /* send the data to the daemon so it can
-         * write it to the proc's fd - in this case,
-         * we pass sink->name to indicate who is to
-         * receive the data. If the connection closed,
-         * numbytes will be zero so zero bytes will be
-         * sent - this will tell the daemon to close
-         * the fd for stdin to that proc
-         */
-        if (PRTE_SUCCESS
-            != (rc = prte_iof_hnp_send_data_to_endpoint(&proct->stdinev->daemon,
-                                                        &proct->stdinev->name, PRTE_IOF_STDIN, data,
-                                                        sz))) {
-            /* if the addressee is unknown, remove the sink from the list */
-            if (PRTE_ERR_ADDRESSEE_UNKNOWN == rc) {
-                PRTE_RELEASE(proct->stdinev);
+            /* if the daemon is me, then this is a local sink */
+            if (PMIX_CHECK_PROCID(PRTE_PROC_MY_NAME, &proct->stdinev->daemon)) {
+                PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                                     "%s read %d bytes from stdin - writing to %s",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) sz,
+                                     PRTE_NAME_PRINT(&proct->name)));
+                /* send the bytes down the pipe - we even send 0 byte events
+                 * down the pipe so it forces out any preceding data before
+                 * closing the output stream
+                 */
+                if (NULL != proct->stdinev->wev) {
+                    if (PRTE_IOF_MAX_INPUT_BUFFERS < prte_iof_base_write_output(&proct->name,
+                                                                                PRTE_IOF_STDIN, data, sz,
+                                                                                proct->stdinev->wev)) {
+                        /* getting too backed up - stop the read event for now if it is still active */
+
+                        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                                             "buffer backed up - holding"));
+                        return PRTE_ERR_OUT_OF_RESOURCE;
+                    }
+                }
+            } else {
+                PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                                     "%s sending %d bytes from stdinev to daemon %s",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) sz,
+                                     PRTE_NAME_PRINT(&proct->stdinev->daemon)));
+
+                /* send the data to the daemon so it can
+                 * write it to the proc's fd - in this case,
+                 * we pass sink->name to indicate who is to
+                 * receive the data. If the connection closed,
+                 * numbytes will be zero so zero bytes will be
+                 * sent - this will tell the daemon to close
+                 * the fd for stdin to that proc
+                 */
+                if (PRTE_SUCCESS
+                    != (rc = prte_iof_hnp_send_data_to_endpoint(&proct->stdinev->daemon,
+                                                                &proct->stdinev->name, PRTE_IOF_STDIN, data,
+                                                                sz))) {
+                    /* if the addressee is unknown, remove the sink from the list */
+                    if (PRTE_ERR_ADDRESSEE_UNKNOWN == rc) {
+                        PRTE_RELEASE(proct->stdinev);
+                    }
+                }
             }
         }
     }
@@ -409,8 +404,9 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
     PRTE_ACQUIRE_OBJECT(sink);
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                         "%s hnp:stdin:write:handler writing data to %d",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
+                         "%s hnp:stdin:write:handler writing %d data to %d",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         (int)prte_list_get_size(&wev->outputs), wev->fd));
 
     wev->pending = false;
 
