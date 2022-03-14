@@ -41,6 +41,7 @@ EXTRA_DIST += \
         examples/client.c \
         examples/client2.c\
         examples/daemon_error_notify.c \
+        examples/debugger/debugger.h \
         examples/debugger/attach.c \
         examples/debugger/daemon.c \
         examples/debugger/direct.c \
