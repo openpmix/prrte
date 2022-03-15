@@ -327,28 +327,28 @@ static void dmodex_req(int sd, short args, void *cbdata)
     PMIX_DATA_BUFFER_CREATE(buf);
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, &req->tproc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(prc);
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, NULL, req->room_num);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
     /* include the request room number for quick retrieval */
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, &req->room_num, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, NULL, req->room_num);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
     /* add any qualifiers */
     if (PRTE_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, &req->ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(prc);
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, NULL, req->room_num);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
     if (0 < req->ninfo) {
         if (PRTE_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, req->info, req->ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(prc);
-            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, NULL, req->room_num);
+            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
             PMIX_DATA_BUFFER_RELEASE(buf);
             goto callback;
         }
@@ -358,7 +358,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     PRTE_RML_SEND(rc, dmn->name.rank, buf, PRTE_RML_TAG_DIRECT_MODEX);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, NULL, req->room_num);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         prc = prte_pmix_convert_rc(rc);
         goto callback;
