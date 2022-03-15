@@ -1187,8 +1187,6 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
             /* adjust the timeout to reflect the size of the job as it can take some
              * amount of time to start the job */
             PRTE_ADJUST_TIMEOUT(req);
-            /* we no longer need the info */
-            PMIX_INFO_FREE(info, ninfo);
             /* check us into the hotel */
             rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
             if (PMIX_SUCCESS != rc) {
@@ -1341,6 +1339,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
             PMIX_RETAIN(d);
             req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
         }
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
         PMIX_RELEASE(req);
     } else {
         prte_output_verbose(2, prte_pmix_server_globals.output,
@@ -1359,7 +1358,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
                 PMIX_RETAIN(d);
                 req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
             }
-            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, NULL, rnum);
+            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, rnum, NULL);
             PMIX_RELEASE(req);
         }
     }

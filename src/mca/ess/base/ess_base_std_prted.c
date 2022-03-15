@@ -567,9 +567,6 @@ int prte_ess_base_prted_finalize(void)
         prte_errmgr.finalize();
     }
 
-    /* shutdown the pmix server */
-    pmix_server_finalize();
-
     /* close frameworks */
     (void) prte_mca_base_framework_close(&prte_filem_base_framework);
     (void) prte_mca_base_framework_close(&prte_grpcomm_base_framework);
@@ -590,6 +587,9 @@ int prte_ess_base_prted_finalize(void)
     prte_session_dir_finalize(PRTE_PROC_MY_NAME);
     /* ensure we scrub the session directory tree */
     prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+
+    /* shutdown the pmix server */
+    pmix_server_finalize();
 
     return PRTE_SUCCESS;
 }
