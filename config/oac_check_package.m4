@@ -186,6 +186,32 @@ AC_DEFUN([OAC_CHECK_PACKAGE],[
 ])
 
 
+dnl Invalidate generic cached results (should rarely be needed)
+dnl
+dnl 1 -> package name
+dnl 2 -> prefix value
+dnl 3 -> headers (space separated list)
+dnl 4 -> function name
+dnl
+dnl Rarely, packages change linking or in some other way make it
+dnl difficult to determine all the correct arguments for
+dnl OAC_CHECK_PACKAGE in one try.  The TM interface is a good example
+dnl of this, which has changed the name of the library (or its
+dnl dependencies) throughtout the years.  Because OAC_CHECK_PACKAGE
+dnl makes heavy use of caching (yay!), it is generally not useful to
+dnl call OAC_CHECK_PACKAGE multiple times with the same package name,
+dnl but different arguments.  This macro may be expanded between calls
+dnl to invalidate the caching for the generic (no pkg-config or
+dnl wrapper config found) case.
+AC_DEFUN([OAC_CHECK_PACKAGE_INVALIDATE_GENERIC_CACHE], [
+    dnl today, all we cache in the generic case is the header and func libs
+    check_package_verify_search_header=`echo "$3" | cut -f1 -d' '`
+    AS_UNSET([ac_cv_header_]AS_TR_SH([${check_package_verify_search_header}]))
+    AS_UNSET([ac_cv_func_$4])
+    AS_UNSET([check_package_verify_search_header])
+])
+
+
 dnl OAC_CHECK_PACKAGE_VERIFY_COMMANDS - macros to expand during
 dnl   verification we have a working package
 dnl
@@ -503,7 +529,7 @@ AC_DEFUN([_OAC_CHECK_PACKAGE_GENERIC_PREFIX], [
     AS_IF([test ${check_package_generic_prefix_happy} -eq 1],
           [check_package_generic_prefix_happy=0
            AS_IF([test -n "${check_package_libdir}"],
-                 [AC_MSG_CHECKING([for $1 library in ${check_package_libdir}])
+                 [AC_MSG_CHECKING([for $1 library (${check_package_generic_search_lib}) in ${check_package_libdir}])
                   ls ${check_package_libdir}/lib${check_package_generic_search_lib}.*  1>&/dev/null 2>&1
                   AS_IF([test $? -eq 0],
                         [check_package_generic_prefix_happy=1
@@ -518,7 +544,7 @@ AC_DEFUN([_OAC_CHECK_PACKAGE_GENERIC_PREFIX], [
                   ls ${check_package_prefix}/lib64/lib${check_package_generic_search_lib}.*  1>&/dev/null 2>&1
                   AS_IF([test $? -eq 0], [check_package_generic_prefix_lib64=1])
 
-                  AC_MSG_CHECKING([for $1 library in ${check_package_prefix}])
+                  AC_MSG_CHECKING([for $1 library (${check_package_generic_search_lib}) in ${check_package_prefix}])
                   AS_IF([test ${check_package_generic_prefix_lib} -eq 1 -a ${check_package_generic_prefix_lib64} -eq 1],
                         [AC_MSG_ERROR([Found library $check_package_generic_search_lib in both ${check_package_prefix}/lib and
 ${check_package_prefix}/lib64.  This has confused configure.  Please add --with-$1-libdir=PATH to configure to help
