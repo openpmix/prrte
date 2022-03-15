@@ -1,5 +1,11 @@
 dnl -*- autoconf -*-
 dnl
+dnl Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
+dnl                         All Rights reserved.
+dnl $COPYRIGHT$
+dnl
+dnl Additional copyrights may follow
+dnl
 dnl The macros in this file depend on 3 helper macros being defined.  These are
 dnl likely similar to existing macros, so are not defined here with the
 dnl expectation the caller will provide them (likely through an m4_copy).  The
@@ -263,62 +269,50 @@ dnl 4 -> action if found flag
 AC_DEFUN([_OAC_CHECK_PACKAGE_PKGCONFIG_INTERNAL], [
     AC_REQUIRE([_OAC_CHECK_PACKAGE_PKGCONFIG_INIT])
 
-    check_package_pkgconfig_internal_happy=1
-
     AC_CACHE_CHECK([if $1 pkg-config module exists],
          [check_package_cv_$1_pkg_config_exists],
-         [check_package_cv_$1_pkg_config_exists=no
-          _OAC_CHECK_PACKAGE_PKGCONFIG_RUN([$3], [--exists], [check_package_pkgconfig_internal_result], [check_package_cv_$1_pkg_config_exists=yes])])
-    AS_IF([test "${check_package_cv_$1_pkg_config_exists}" = "no"],
-          [check_package_pkgconfig_internal_happy=0])
+         [_OAC_CHECK_PACKAGE_PKGCONFIG_RUN([$3], [--exists], [check_package_pkgconfig_internal_result],
+	            [check_package_cv_$1_pkg_config_exists=yes],
+	            [check_package_cv_$1_pkg_config_exists=no])])
 
-    AS_IF([test ${check_package_pkgconfig_internal_happy} -eq 1],
+    # if pkg-config --exists works, but getting one of the standard flags fails, we consider
+    # that a hard failure.  It should not happen, outside of a weird system configuration
+    # issue where we're probably not going to like the results anyway.
+    AS_IF([test "${check_package_cv_$1_pkg_config_exists}" = "yes"],
           [AC_CACHE_CHECK([for $1 pkg-config cflags],
                 [check_package_cv_$1_pkg_config_cppflags],
-                [check_package_pkgconfig_internal_happy=0
-                 _OAC_CHECK_PACKAGE_PKGCONFIG_RUN([$3], [--cflags],
-                      [check_package_cv_$1_pkg_config_cppflags], [check_package_pkgconfig_internal_happy=1])])
-	   AS_IF([test ${check_package_pkgconfig_internal_happy} -eq 1],
-                 [$2_CPPFLAGS="${check_package_cv_$1_pkg_config_cppflags}"],
-                 [AC_MSG_RESULT([error])
-                  AC_MSG_ERROR([An error occurred retrieving $1 cppflags from pkg-config])])])
+                [_OAC_CHECK_PACKAGE_PKGCONFIG_RUN([$3], [--cflags],
+                      [check_package_cv_$1_pkg_config_cppflags], [],
+                      [AC_MSG_RESULT([error])
+                       AC_MSG_ERROR([An error occurred retrieving $1 cppflags from pkg-config])])])
+           $2_CPPFLAGS="${check_package_cv_$1_pkg_config_cppflags}"
 
-    AS_IF([test ${check_package_pkgconfig_internal_happy} -eq 1],
-          [AC_CACHE_CHECK([for $1 pkg-config ldflags],
+           AC_CACHE_CHECK([for $1 pkg-config ldflags],
                 [check_package_cv_$1_pkg_config_ldflags],
-                [check_package_pkgconfig_internal_happy=0
-                _OAC_CHECK_PACKAGE_PKGCONFIG_RUN([$3], [--static --libs-only-L --libs-only-other],
-                     [check_package_cv_$1_pkg_config_ldflags], [check_package_pkgconfig_internal_happy=1])])
-	   AS_IF([test ${check_package_pkgconfig_internal_happy} -eq 1],
-                 [$2_LDFLAGS="${check_package_cv_$1_pkg_config_ldflags}"],
-                 [AC_MSG_RESULT([error])
-                  AC_MSG_ERROR([An error occurred retrieving $1 ldflags from pkg-config])])])
+                [_OAC_CHECK_PACKAGE_PKGCONFIG_RUN([$3], [--static --libs-only-L --libs-only-other],
+                      [check_package_cv_$1_pkg_config_ldflags], [],
+                      [AC_MSG_RESULT([error])
+                       AC_MSG_ERROR([An error occurred retrieving $1 ldflags from pkg-config])])])
+           $2_LDFLAGS="${check_package_cv_$1_pkg_config_ldflags}"
 
-    AS_IF([test ${check_package_pkgconfig_internal_happy} -eq 1],
-          [AC_CACHE_CHECK([for $1 pkg-config libs],
+           AC_CACHE_CHECK([for $1 pkg-config libs],
                 [check_package_cv_$1_pkg_config_libs],
-                [check_package_pkgconfig_internal_happy=0
-                 _OAC_CHECK_PACKAGE_PKGCONFIG_RUN([$3], [--libs-only-l],
-                      [check_package_cv_$1_pkg_config_libs], [check_package_pkgconfig_internal_happy=1])])
-	   AS_IF([test $check_package_pkgconfig_internal_happy -eq 1],
-                 [$2_LIBS="${check_package_cv_$1_pkg_config_libs}"],
-                 [AC_MSG_RESULT([error])
-                  AC_MSG_ERROR([An error occurred retrieving $1 libs from pkg-config])])])
+                [_OAC_CHECK_PACKAGE_PKGCONFIG_RUN([$3], [--libs-only-l],
+                      [check_package_cv_$1_pkg_config_libs], [],
+                      [AC_MSG_RESULT([error])
+                       AC_MSG_ERROR([An error occurred retrieving $1 libs from pkg-config])])])
+           $2_LIBS="${check_package_cv_$1_pkg_config_libs}"
 
-    AS_IF([test ${check_package_pkgconfig_internal_happy} -eq 1],
-          [AC_CACHE_CHECK([for $1 pkg-config static libs],
+           AC_CACHE_CHECK([for $1 pkg-config static libs],
                 [check_package_cv_$1_pkg_config_static_libs],
-                [check_package_pkgconfig_internal_happy=0
-                 _OAC_CHECK_PACKAGE_PKGCONFIG_RUN([$3], [--static --libs-only-l],
-                      [check_package_cv_$1_pkg_config_static_libs], [check_package_pkgconfig_internal_happy=1])])
-	   AS_IF([test ${check_package_pkgconfig_internal_happy} -eq 1],
-                 [$2_STATIC_LIBS="${check_package_cv_$1_pkg_config_static_libs}"],
-                 [AC_MSG_RESULT([error])
-                  AC_MSG_ERROR([An error occurred retrieving $1 libs from pkg-config])])])
+                [_OAC_CHECK_PACKAGE_PKGCONFIG_RUN([$3], [--static --libs-only-l],
+                      [check_package_cv_$1_pkg_config_static_libs], [],
+                      [AC_MSG_RESULT([error])
+                       AC_MSG_ERROR([An error occurred retrieving $1 libs from pkg-config])])])
+           $2_STATIC_LIBS="${check_package_cv_$1_pkg_config_static_libs}"
 
-    AS_IF([test ${check_package_pkgconfig_internal_happy} -eq 1], [$4])
+           $4])
 
-    AS_UNSET([check_package_pkgconfig_internal_happy])
     AS_UNSET([check_package_pkgconfig_internal_result])
 ])
 
@@ -327,11 +321,13 @@ dnl 1 -> pc module/filename
 dnl 2 -> argument string
 dnl 3 -> result assignment string
 dnl 4 -> action if found
+dnl 5 -> action if not found
 AC_DEFUN([_OAC_CHECK_PACKAGE_PKGCONFIG_RUN], [
   AS_IF([test -n "${PKG_CONFIG}"],
         [OAC_LOG_COMMAND([check_package_pkgconfig_run_results=`${PKG_CONFIG} $2 $1 2>&1`],
              [AS_VAR_COPY([$3], [check_package_pkgconfig_run_results])
-              $4])
+              $4],
+             [$5])
          OAC_LOG_MSG([pkg-config output: ${check_package_pkgconfig_run_results}], [1])])
   AS_UNSET([check_package_pkgconfig_run_results])
 ])
@@ -367,74 +363,62 @@ dnl 2 -> prefix
 dnl 2 -> wrapper compiler
 dnl 3 -> action if found flag
 AC_DEFUN([_OAC_CHECK_PACKAGE_WRAPPER_INTERNAL], [
-    check_package_wrapper_internal_happy=1
-
     AC_CACHE_CHECK([if $1 wrapper compiler works],
          [check_package_cv_$1_wrapper_compiler_works],
-         [check_package_cv_$1_wrapper_compiler_works=no
-          _OAC_CHECK_PACKAGE_WRAPPER_RUN([$3], [--showme:version], [check_package_wrapper_internal_result], [check_package_cv_$1_wrapper_compiler_works=yes])])
-    AS_IF([test "${check_package_cv_$1_wrapper_compiler_works}" = "no"],
-          [check_package_wrapper_internal_happy=0])
+         [_OAC_CHECK_PACKAGE_WRAPPER_RUN([$3], [--showme:version], [check_package_wrapper_internal_result],
+	       [check_package_cv_$1_wrapper_compiler_works=yes],
+	       [check_package_cv_$1_wrapper_compiler_works=no])])
 
-    AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
+    # if wrapper --showme:version  works, but getting one of the standard flags fails, we consider
+    # that a hard failure.  It should not happen, outside of a weird system configuration
+    # issue where we're probably not going to like the results anyway.
+    AS_IF([test ${check_package_cv_$1_wrapper_compiler_works} = "yes"],
           [AC_CACHE_CHECK([for $1 wrapper compiler cppflags],
                 [check_package_cv_$1_wrapper_compiler_cppflags],
                 [_OAC_CHECK_PACKAGE_WRAPPER_RUN([$3], [--showme:incdirs],
-                      [check_package_wrapper_internal_result], [check_package_wrapper_internal_happy=1])
-                 AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
-                       [for check_package_wrapper_internal_tmp in ${check_package_wrapper_internal_result} ; do
-                            OAC_APPEND([check_package_cv_$1_wrapper_compiler_cppflags], ["-I${check_package_wrapper_internal_tmp}"])
-                        done])])
-	   AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
-                 [$2_CPPFLAGS="${check_package_cv_$1_wrapper_compiler_cppflags}"],
-                 [AC_MSG_RESULT([error])
-                  AC_MSG_ERROR([An error occurred retrieving $1 cppflags from wrapper compiler])])])
+                      [check_package_wrapper_internal_result],
+		      [for check_package_wrapper_internal_tmp in ${check_package_wrapper_internal_result} ; do
+                           OAC_APPEND([check_package_cv_$1_wrapper_compiler_cppflags], ["-I${check_package_wrapper_internal_tmp}"])
+                       done],
+                      [AC_MSG_RESULT([error])
+                       AC_MSG_ERROR([An error occurred retrieving $1 cppflags from wrapper compiler])])])
+           $2_CPPFLAGS="${check_package_cv_$1_wrapper_compiler_cppflags}"
 
-    AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
-          [AC_CACHE_CHECK([for $1 wrapper compiler ldflags],
+           AC_CACHE_CHECK([for $1 wrapper compiler ldflags],
                 [check_package_cv_$1_wrapper_compiler_ldflags],
                 [_OAC_CHECK_PACKAGE_WRAPPER_RUN([$3], [--showme:libdirs],
-                      [check_package_wrapper_internal_result], [check_package_wrapper_internal_happy=1])
-                 AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
+                      [check_package_wrapper_internal_result],
                        [for check_package_wrapper_internal_tmp in ${check_package_wrapper_internal_result} ; do
                             OAC_APPEND([check_package_cv_$1_wrapper_compiler_ldflags], ["-L${check_package_wrapper_internal_tmp}"])
-                        done])])
-	   AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
-                 [$2_LDFLAGS="${check_package_cv_$1_wrapper_compiler_ldflags}"],
-                 [AC_MSG_RESULT([error])
-                  AC_MSG_ERROR([An error occurred retrieving $1 ldflags from wrapper compiler])])])
+                        done],
+                       [AC_MSG_RESULT([error])
+                        AC_MSG_ERROR([An error occurred retrieving $1 ldflags from wrapper compiler])])])
+           $2_LDFLAGS="${check_package_cv_$1_wrapper_compiler_ldflags}"
 
-    AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
-          [AC_CACHE_CHECK([for $1 wrapper compiler libs],
+           AC_CACHE_CHECK([for $1 wrapper compiler libs],
                 [check_package_cv_$1_wrapper_compiler_libs],
                 [_OAC_CHECK_PACKAGE_WRAPPER_RUN([$3], [--showme:libs],
-                      [check_package_wrapper_internal_result], [check_package_wrapper_internal_happy=1])
-                 AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
-                       [for check_package_wrapper_internal_tmp in ${check_package_wrapper_internal_result} ; do
-                            OAC_APPEND([check_package_cv_$1_wrapper_compiler_libs], ["-l${check_package_wrapper_internal_tmp}"])
-                        done])])
-	   AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
-                 [$2_LIBS="$check_package_cv_$1_wrapper_compiler_libs"],
-                 [AC_MSG_RESULT([error])
-                  AC_MSG_ERROR([An error occurred retrieving $1 libs from wrapper compiler])])])
+                      [check_package_wrapper_internal_result],
+                      [for check_package_wrapper_internal_tmp in ${check_package_wrapper_internal_result} ; do
+                           OAC_APPEND([check_package_cv_$1_wrapper_compiler_libs], ["-l${check_package_wrapper_internal_tmp}"])
+                       done],
+                      [AC_MSG_RESULT([error])
+                       AC_MSG_ERROR([An error occurred retrieving $1 libs from wrapper compiler])])])
+           $2_LIBS="$check_package_cv_$1_wrapper_compiler_libs"
 
-    AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
-          [AC_CACHE_CHECK([for $1 wrapper compiler static libs],
+           AC_CACHE_CHECK([for $1 wrapper compiler static libs],
                 [check_package_cv_$1_wrapper_compiler_static_libs],
                 [_OAC_CHECK_PACKAGE_WRAPPER_RUN([$3], [-static --showme:libs],
-                      [check_package_wrapper_internal_result], [check_package_wrapper_internal_happy=1])
-                 AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
-                       [for check_package_wrapper_internal_tmp in ${check_package_wrapper_internal_result} ; do
-                            OAC_APPEND([check_package_cv_$1_wrapper_compiler_static_libs], ["-l${check_package_wrapper_internal_tmp}"])
-                        done])])
-	   AS_IF([test ${check_package_wrapper_internal_happy} -eq 1],
-                 [$2_STATIC_LIBS="${check_package_cv_$1_wrapper_compiler_static_libs}"],
-                 [AC_MSG_RESULT([error])
-                  AC_MSG_ERROR([An error occurred retrieving $1 static libs from wrapper compiler])])])
+                      [check_package_wrapper_internal_result],
+                      [for check_package_wrapper_internal_tmp in ${check_package_wrapper_internal_result} ; do
+                           OAC_APPEND([check_package_cv_$1_wrapper_compiler_static_libs], ["-l${check_package_wrapper_internal_tmp}"])
+                       done],
+                      [AC_MSG_RESULT([error])
+                       AC_MSG_ERROR([An error occurred retrieving $1 static libs from wrapper compiler])])])
+           $2_STATIC_LIBS="${check_package_cv_$1_wrapper_compiler_static_libs}"
 
-    AS_IF([test $check_package_wrapper_internal_happy -eq 1], [$4])
+           $4])
 
-    AS_UNSET([check_package_wrapper_internal_happy])
     AS_UNSET([check_package_wrapper_internal_result])
     AS_UNSET([check_package_wrapper_internal_tmp])
 ])
@@ -444,10 +428,12 @@ dnl 1 -> wrapper compiler
 dnl 2 -> argument string
 dnl 3 -> result assignment string
 dnl 4 -> action if found
+dnl 5 -> action if failed
 AC_DEFUN([_OAC_CHECK_PACKAGE_WRAPPER_RUN], [
     OAC_LOG_COMMAND([check_package_wrapper_run_results=`$1 $2 2>&1`],
              [AS_VAR_COPY([$3], [check_package_wrapper_run_results])
-              $4])
+              $4],
+             [$5])
          OAC_LOG_MSG([wrapper output: ${check_package_wrapper_run_results}], [1])
     AS_UNSET([check_package_wrapper_run_results])
 ])
