@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,6 +37,8 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/argv.h"
+#include "src/util/os_path.h"
+#include "src/util/path.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -263,16 +265,14 @@ static void _query(int sd, short args, void *cbdata)
                     kv = PRTE_NEW(prte_info_item_t);
 #if HWLOC_API_VERSION < 0x20000
                     /* get this from the v1.x API */
-                    if (0
-                        != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len)) {
+                    if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len)) {
                         PRTE_RELEASE(kv);
                         continue;
                     }
 #else
                     /* get it from the v2 API */
-                    if (0
-                        != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len,
-                                                           HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1)) {
+                    if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len,
+                                                             HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1)) {
                         PRTE_RELEASE(kv);
                         continue;
                     }
@@ -288,9 +288,7 @@ static void _query(int sd, short args, void *cbdata)
                     char *xmlbuffer = NULL;
                     int len;
                     kv = PRTE_NEW(prte_info_item_t);
-                    if (0
-                        != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len,
-                                                           0)) {
+                    if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len, 0)) {
                         PRTE_RELEASE(kv);
                         continue;
                     }
@@ -310,9 +308,7 @@ static void _query(int sd, short args, void *cbdata)
                     /* find the node object */
                     node = NULL;
                     for (k = 0; k < prte_node_pool->size; k++) {
-                        if (NULL
-                            == (ndptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool,
-                                                                                    k))) {
+                        if (NULL == (ndptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, k))) {
                             continue;
                         }
                         if (0 == strcmp(hostname, ndptr->name)) {
@@ -387,8 +383,8 @@ static void _query(int sd, short args, void *cbdata)
                 procinfo = (pmix_proc_info_t *) darray->array;
                 p = 0;
                 for (k = 0; k < jdata->procs->size; k++) {
-                    if (NULL
-                        == (proct = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, k))) {
+                    proct = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, k);
+                    if (NULL == proct) {
                         continue;
                     }
                     PMIX_LOAD_PROCID(&procinfo[p].proc, proct->name.nspace, proct->name.rank);
@@ -398,7 +394,11 @@ static void _query(int sd, short args, void *cbdata)
                     app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps,
                                                                              proct->app_idx);
                     if (NULL != app && NULL != app->app) {
-                        procinfo[p].executable_name = strdup(app->app);
+                        if (prte_path_is_absolute(app->app)) {
+                            procinfo[p].executable_name = strdup(app->app);
+                        } else {
+                            procinfo[p].executable_name = prte_os_path(false, app->cwd, app->app, NULL);
+                        }
                     }
                     procinfo[p].pid = proct->pid;
                     procinfo[p].exit_code = proct->exit_code;
@@ -441,7 +441,11 @@ static void _query(int sd, short args, void *cbdata)
                         app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps,
                                                                                  proct->app_idx);
                         if (NULL != app && NULL != app->app) {
-                            procinfo[p].executable_name = strdup(app->app);
+                            if (prte_path_is_absolute(app->app)) {
+                                procinfo[p].executable_name = strdup(app->app);
+                            } else {
+                                procinfo[p].executable_name = prte_os_path(false, app->cwd, app->app, NULL);
+                            }
                         }
                         procinfo[p].pid = proct->pid;
                         procinfo[p].exit_code = proct->exit_code;
