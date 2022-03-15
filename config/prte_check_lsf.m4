@@ -194,7 +194,7 @@ AC_DEFUN([PRTE_CHECK_LSF],[
 
        ],[prte_check_lsf_happy=no])
 
-       PRTE_SUMMARY_ADD([[Resource Managers]],[[LSF]],[$1],[$prte_check_lsf_happy])
+       PRTE_SUMMARY_ADD([Resource Managers], [LSF], [], [$prte_check_lsf_happy])
     ])
 
     AS_IF([test "$prte_check_lsf_happy" = "yes"],
