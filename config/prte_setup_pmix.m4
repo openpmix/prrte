@@ -18,7 +18,7 @@
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
-# Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
+# Copyright (c) 2021-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
 #
@@ -112,7 +112,7 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     AM_CONDITIONAL([PRTE_HAVE_PMIXCC], [test $found_pmixcc -eq 1])
     AC_SUBST([PMIXCC_PATH])
 
-    PRTE_SUMMARY_ADD([[Required Packages]],[[PMIx]],[pmix],[$prte_pmix_SUMMARY])
+    PRTE_SUMMARY_ADD([Required Packages], [PMIx], [], [$prte_pmix_SUMMARY])
 
     PRTE_VAR_SCOPE_POP
 ])

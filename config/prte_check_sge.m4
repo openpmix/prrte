@@ -52,7 +52,7 @@ AC_DEFUN([PRTE_CHECK_GRIDENGINE],[
                                     prte_gridengine_build=yes],
 				   [AC_MSG_RESULT([not found])])])])])
 
-	PRTE_SUMMARY_ADD([[Resource Managers]],[[Grid Engine]],[$1],[$prte_gridengine_build])
+	PRTE_SUMMARY_ADD([Resource Managers], [Grid Engine], [], [$prte_gridengine_build])
     fi
 
     AS_IF([test "$prte_gridengine_build" = "yes"],

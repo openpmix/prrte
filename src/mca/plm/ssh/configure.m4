@@ -15,6 +15,8 @@
 # Copyright (c) 2010-2021 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -29,6 +31,6 @@ AC_DEFUN([MCA_prte_plm_ssh_CONFIG],[
 
     AC_CHECK_FUNC([fork], [plm_ssh_happy="yes"], [plm_ssh_happy="no"])
 
-    PRTE_SUMMARY_ADD([[Resource Managers]],[[ssh/rsh]],[$1],[$plm_ssh_happy])
+    PRTE_SUMMARY_ADD([Resource Managers], [ssh/rsh], [], [$plm_ssh_happy])
     AS_IF([test "$plm_ssh_happy" = "yes"], [$1], [$2])
 ])dnl

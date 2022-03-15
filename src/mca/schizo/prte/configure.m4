@@ -15,6 +15,8 @@
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -30,6 +32,6 @@ AC_DEFUN([MCA_prte_schizo_prte_CONFIG],[
     AS_IF([test "yes" = "yes"],
           [$1], [$2])
 
-    PRTE_SUMMARY_ADD([[Personalities]],[[PRTE]],[$1],[yes])
+    PRTE_SUMMARY_ADD([Personalities], [PRTE], [], [yes])
 
 ])dnl

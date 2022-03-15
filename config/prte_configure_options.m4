@@ -19,6 +19,8 @@ dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 dnl
 dnl Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
+dnl                         All Rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -383,11 +385,11 @@ AC_ARG_ENABLE([prte-ft],
 if test "$enable_prte_ft" = "yes"; then
     AC_MSG_RESULT([yes])
     prte_enable_ft=1
-    PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance]], [prte_ft], [yes])
+    PRTE_SUMMARY_ADD([Options], [Fault tolerance], [], [yes])
 else
     AC_MSG_RESULT([no])
     prte_enable_ft=0
-    PRTE_SUMMARY_ADD([[Options]],[[Fault tolerance]], [prte_ft], [no])
+    PRTE_SUMMARY_ADD([Options], [Fault tolerance], [], [no])
 fi
 AC_DEFINE_UNQUOTED([PRTE_ENABLE_FT], [$prte_enable_ft],
                    [Enable PRRTE fault tolerance support (default: disabled)])
