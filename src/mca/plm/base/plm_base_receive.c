@@ -407,8 +407,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                 }
 
                 PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                     "%s plm:base:receive got update_proc_state for vpid %u state %s exit_code %d",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), vpid, prte_proc_state_to_str(state),
+                                     "%s plm:base:receive got update_proc_state for vpid %u pid %d state %s exit_code %d",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), vpid, (int)pid, prte_proc_state_to_str(state),
                                      (int) exit_code));
 
                 if (NULL != jdata) {
@@ -592,6 +592,14 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FORCED_EXIT);
                 goto CLEANUP;
             }
+            /* unpack the pid */
+            count = 1;
+            rc = PMIx_Data_unpack(NULL, buffer, &pid, &count, PMIX_PID);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                goto CLEANUP;
+            }
+            proc->pid = pid;
             /* unpack the state */
             count = 1;
             rc = PMIx_Data_unpack(NULL, buffer, &state, &count, PMIX_UINT32);
