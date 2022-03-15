@@ -61,7 +61,11 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
            prte_check_libevent_save_LIBS="$LIBS"
 
            AS_IF([test "$enable_libevent_lib_checks" != "no"],
-                 [OAC_CHECK_PACKAGE([libevent],
+                 [dnl Do not use pkg-config for libevent, because we need the pthreads interface
+                  dnl and the libevent_pthreads module will always pull in libevent instead of
+                  dnl libevent_core.
+                  libevent_USE_PKG_CONFIG=0
+                  OAC_CHECK_PACKAGE([libevent],
                                     [prte_libevent],
                                     [event.h],
                                     [event_core event_pthreads $with_libevent_extra_libs],
