@@ -28,14 +28,10 @@ AC_DEFUN([MCA_prte_ess_tm_CONFIG],[
 
     PRTE_CHECK_TM([ess_tm], [ess_tm_good=1], [ess_tm_good=0])
 
-    # if check worked, set wrapper flags if so.
-    # Evaluate succeed / fail
     AS_IF([test "$ess_tm_good" = "1"],
           [$1],
           [$2])
 
-    # set build flags to use in makefile
-    AC_SUBST([ess_tm_CPPFLAGS])
-    AC_SUBST([ess_tm_LDFLAGS])
-    AC_SUBST([ess_tm_LIBS])
+    # Note that the TM ESS component doesn't actually call into (or link against) the TM
+    # library, so there's no need to add the various compiler flags here.
 ])dnl
