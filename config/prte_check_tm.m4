@@ -17,6 +17,8 @@ dnl Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 dnl                         reserved.
 dnl Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
+dnl                         All Rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -165,7 +167,7 @@ AC_DEFUN([PRTE_CHECK_TM],[
             prte_check_tm_happy=no
         fi
 
-        PRTE_SUMMARY_ADD([[Resource Managers]],[[Torque]],[$1],[$prte_check_tm_happy (launcher)])
+        PRTE_SUMMARY_ADD([Resource Managers], [Torque], [], [$prte_check_tm_happy (launcher)])
 
         PRTE_VAR_SCOPE_POP
     fi

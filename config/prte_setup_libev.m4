@@ -7,7 +7,7 @@
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
 # Copyright (c) 2021      Nanook Consulting.  All rights reserved.
-# Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
+# Copyright (c) 2021-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
 #
@@ -85,7 +85,7 @@ AC_DEFUN([PRTE_LIBEV_CONFIG],[
     if test $prte_libev_support -eq 1; then
         AC_MSG_RESULT([yes])
         $1
-        PRTE_SUMMARY_ADD([[Required Packages]], [[Libev]], [prte_libev], [$prte_libev_SUMMARY])
+        PRTE_SUMMARY_ADD([Required Packages], [Libev], [], [$prte_libev_SUMMARY])
     else
         AC_MSG_RESULT([no])
         # if they asked us to use it, then this is an error

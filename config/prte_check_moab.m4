@@ -72,7 +72,7 @@ AC_DEFUN([PRTE_CHECK_MOAB],[
         LDFLAGS=$prte_check_moab_$1_save_LDFLAGS
         LIBS=$prte_check_moab_$1_save_LIBS
 
-        PRTE_SUMMARY_ADD([[Resource Managers]],[[Moab]],[$1],[$prte_check_moab_happy])
+        PRTE_SUMMARY_ADD([Resource Managers], [Moab], [], [$prte_check_moab_happy])
         PRTE_VAR_SCOPE_POP
     fi
 

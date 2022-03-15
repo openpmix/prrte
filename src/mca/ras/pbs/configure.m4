@@ -17,6 +17,8 @@
 # Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # Copyright (c) 2022      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
+# Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -58,7 +60,7 @@ AC_DEFUN([MCA_prte_ras_pbs_CONFIG],[
         prte_check_pbs_happy="yes"
     fi
 
-    PRTE_SUMMARY_ADD([[Resource Managers]],[[PBS]],[$1],[$prte_check_pbs_happy (scheduler)])
+    PRTE_SUMMARY_ADD([Resource Managers], [PBS], [], [$prte_check_pbs_happy (scheduler)])
 
     AS_IF([test "$prte_check_pbs_happy" = "yes"],
           [$1],
