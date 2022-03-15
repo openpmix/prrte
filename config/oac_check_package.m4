@@ -159,13 +159,13 @@ AC_DEFUN([OAC_CHECK_PACKAGE],[
                  [$2_SUMMARY="yes (${check_package_type}default search paths)"],
                  [$2_SUMMARY="yes (${check_package_type}${check_package_prefix})"])
            $6],
-	  [AS_IF([test "${with_$1}" = "no"],
+          [AS_IF([test "${with_$1}" = "no"],
                  [$2_SUMMARY="no (explicitly disabled)"],
                  [$2_SUMMARY="no (not found)"])
-	   AS_UNSET([$2_CPPFLAGS])
-	   AS_UNSET([$2_LDFLAGS])
-	   AS_UNSET([$2_STATIC_LIBS])
-	   AS_UNSET([$2_LIBS])
+           AS_UNSET([$2_CPPFLAGS])
+           AS_UNSET([$2_LDFLAGS])
+           AS_UNSET([$2_STATIC_LIBS])
+           AS_UNSET([$2_LIBS])
            $7])
 
     CPPFLAGS="${check_package_$2_save_CPPFLAGS}"
@@ -272,8 +272,8 @@ AC_DEFUN([_OAC_CHECK_PACKAGE_PKGCONFIG_INTERNAL], [
     AC_CACHE_CHECK([if $1 pkg-config module exists],
          [check_package_cv_$1_pkg_config_exists],
          [_OAC_CHECK_PACKAGE_PKGCONFIG_RUN([$3], [--exists], [check_package_pkgconfig_internal_result],
-	            [check_package_cv_$1_pkg_config_exists=yes],
-	            [check_package_cv_$1_pkg_config_exists=no])])
+                    [check_package_cv_$1_pkg_config_exists=yes],
+                    [check_package_cv_$1_pkg_config_exists=no])])
 
     # if pkg-config --exists works, but getting one of the standard flags fails, we consider
     # that a hard failure.  It should not happen, outside of a weird system configuration
@@ -366,8 +366,8 @@ AC_DEFUN([_OAC_CHECK_PACKAGE_WRAPPER_INTERNAL], [
     AC_CACHE_CHECK([if $1 wrapper compiler works],
          [check_package_cv_$1_wrapper_compiler_works],
          [_OAC_CHECK_PACKAGE_WRAPPER_RUN([$3], [--showme:version], [check_package_wrapper_internal_result],
-	       [check_package_cv_$1_wrapper_compiler_works=yes],
-	       [check_package_cv_$1_wrapper_compiler_works=no])])
+               [check_package_cv_$1_wrapper_compiler_works=yes],
+               [check_package_cv_$1_wrapper_compiler_works=no])])
 
     # if wrapper --showme:version  works, but getting one of the standard flags fails, we consider
     # that a hard failure.  It should not happen, outside of a weird system configuration
@@ -377,7 +377,7 @@ AC_DEFUN([_OAC_CHECK_PACKAGE_WRAPPER_INTERNAL], [
                 [check_package_cv_$1_wrapper_compiler_cppflags],
                 [_OAC_CHECK_PACKAGE_WRAPPER_RUN([$3], [--showme:incdirs],
                       [check_package_wrapper_internal_result],
-		      [for check_package_wrapper_internal_tmp in ${check_package_wrapper_internal_result} ; do
+                      [for check_package_wrapper_internal_tmp in ${check_package_wrapper_internal_result} ; do
                            OAC_APPEND([check_package_cv_$1_wrapper_compiler_cppflags], ["-I${check_package_wrapper_internal_tmp}"])
                        done],
                       [AC_MSG_RESULT([error])
