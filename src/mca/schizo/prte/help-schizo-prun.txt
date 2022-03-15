@@ -9,6 +9,11 @@
 #
 #
 #
+[version]
+%s (%s) %s
+
+%s
+#
 [usage]
 %s (%s) %s
 

@@ -53,6 +53,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/runtime/prte_globals.h"
+#include "src/runtime/pmix_init_util.h"
 
 #include "schizo_prte.h"
 #include "src/mca/schizo/base/base.h"
@@ -459,6 +460,8 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         shorts = pinfoshorts;
         helpfile = "help-schizo-pinfo.txt";
     }
+    pmix_tool_msg = "Report bugs to: https://github.com/openpmix/prrte";
+
     rc = pmix_cmd_line_parse(argv, shorts, myoptions, NULL,
                              results, helpfile);
     if (PMIX_SUCCESS != rc) {
