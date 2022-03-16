@@ -47,6 +47,7 @@
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/prte_cmd_line.h"
+#include "src/runtime/pmix_init_util.h"
 #include "src/util/session_dir.h"
 #include "src/util/show_help.h"
 
@@ -280,6 +281,17 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
             pargv[n] = strdup("--with-ft");
         }
 #endif
+    }
+
+    const char *tool_version = getenv("OMPI_VERSION");
+    const char *tool_name    = getenv("OMPI_TOOL_NAME");
+    // If the user is using prterun --personality ompi, these
+    // won't be set, and thus this is not mpirun/mpiexec.
+    if(tool_version && tool_name) {
+        pmix_tool_version  = tool_version;
+        pmix_tool_basename = tool_name;
+        pmix_tool_org      = "Open MPI";
+        pmix_tool_msg      = "Report bugs to https://www.open-mpi.org/community/help/";
     }
 
     rc = pmix_cmd_line_parse(pargv, ompishorts, ompioptions, NULL,
