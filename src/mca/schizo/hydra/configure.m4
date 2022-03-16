@@ -15,6 +15,8 @@
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
+#                         All Rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -36,6 +38,6 @@ AC_DEFUN([MCA_prte_schizo_hydra_CONFIG],[
     AS_IF([test "$enable_mpich_support" = "yes"],
           [$1], [$2])
 
-    PRTE_SUMMARY_ADD([[Personalities]],[[MPICH]],[$1],[$enable_mpich_support])
+    PRTE_SUMMARY_ADD([Personalities], [MPICH], [], [$enable_mpich_support])
 
 ])dnl

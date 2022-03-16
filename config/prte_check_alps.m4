@@ -181,7 +181,7 @@ AC_DEFUN([PRTE_CHECK_ALPS],[
                CRAY_ALPSUTIL_LIBS = $CRAY_ALPSUTIL_STATIC_LIBS],
               [])
 
-	PRTE_SUMMARY_ADD([[Resource Managers]],[[Cray Alps]],[$1],[$prte_check_cray_alps_happy])
+	PRTE_SUMMARY_ADD([Resource Managers], [Cray Alps], [], [$prte_check_cray_alps_happy])
     fi
 
     AS_IF([test "$prte_check_cray_alps_happy" = "yes"],

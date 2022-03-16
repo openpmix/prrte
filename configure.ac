@@ -23,7 +23,7 @@
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
-# Copyright (c) 2018-2021 Amazon.com, Inc. or its affiliates.
+# Copyright (c) 2018-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
@@ -85,9 +85,7 @@ PRTE_CONFIGURE_SETUP
 # compatability for oac_check_package
 m4_copy([PRTE_LOG_COMMAND], [OAC_LOG_COMMAND])
 m4_copy([PRTE_LOG_MSG], [OAC_LOG_MSG])
-AC_DEFUN([OAC_APPEND], [
-  AS_IF([test -z "$$1"], [$1="$2"], [$1="$$1 $2"])
-])
+m4_copy([PRTE_APPEND], [OAC_APPEND])
 
 prte_show_title "Configuring PRTE"
 
@@ -1314,8 +1312,6 @@ AC_CONFIG_FILES([
 ])
 
 PRTE_CONFIG_FILES
-
-PRTE_CHECK_LIBNL_SUMMARY
 
 AC_OUTPUT
 

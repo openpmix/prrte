@@ -4,7 +4,7 @@
 # Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
 # Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
-# Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
+# Copyright (c) 2021-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
 #
@@ -117,7 +117,7 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
     AC_DEFINE_UNQUOTED([PRTE_HAVE_HWLOC_TOPOLOGY_DUP], [$prte_have_topology_dup],
                        [Whether or not hwloc_topology_dup is available])
 
-    PRTE_SUMMARY_ADD([[Required Packages]],[[HWLOC]], [prte_hwloc], [$prte_hwloc_SUMMARY])
+    PRTE_SUMMARY_ADD([Required Packages], [HWLOC], [], [$prte_hwloc_SUMMARY])
 
     PRTE_VAR_SCOPE_POP
 ])

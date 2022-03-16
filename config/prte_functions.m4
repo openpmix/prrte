@@ -18,6 +18,8 @@ dnl Copyright (c) 2017      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl
 dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
+dnl                         All Rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -117,9 +119,6 @@ AC_DEFINE_UNQUOTED([PRTE_CONFIGURE_HOST], "$PRTE_CONFIGURE_HOST",
 AC_SUBST(PRTE_CONFIGURE_DATE)
 AC_DEFINE_UNQUOTED([PRTE_CONFIGURE_DATE], "$PRTE_CONFIGURE_DATE",
                    [Date when PMIx was built])
-
-PRTE_LIBNL_SANITY_INIT
-
 ])dnl
 
 dnl #######################################################################
@@ -338,6 +337,18 @@ dnl #######################################################################
 dnl #######################################################################
 dnl #######################################################################
 
+# PRTE_APPEND(variable, new_argument)
+# ----------------------------------------
+# Append new_argument to variable, assuming a space separated list.
+#
+AC_DEFUN([PRTE_APPEND], [
+  AS_IF([test -z "${$1}"], [$1="$2"], [$1="${$1} $2"])
+])
+
+dnl #######################################################################
+dnl #######################################################################
+dnl #######################################################################
+
 # PRTE_APPEND_UNIQ(variable, new_argument)
 # ----------------------------------------
 # Append new_argument to variable if not already in variable.  This assumes a
@@ -354,11 +365,7 @@ for arg in $2; do
         fi
     done
     if test "$prte_found" = "0" ; then
-        if test -z "$$1"; then
-            $1="$arg"
-        else
-            $1="$$1 $arg"
-        fi
+        PRTE_APPEND([$1], [$arg])
     fi
 done
 unset prte_found
@@ -387,7 +394,7 @@ AC_DEFUN([PRTE_FLAGS_APPEND_UNIQ], [
                    AS_IF([test "x$val" = "x$arg"], [prte_append=0])
                done])
         AS_IF([test "$prte_append" = "1"],
-              [AS_IF([test -z "$$1"], [$1=$arg], [$1="$$1 $arg"])])
+              [PRTE_APPEND([$1], [$arg])])
     done
 
     PRTE_VAR_SCOPE_POP
@@ -416,7 +423,7 @@ AC_DEFUN([PRTE_FLAGS_PREPEND_UNIQ], [
                    AS_IF([test "x$val" = "x$arg"], [prte_prepend=0])
                done])
         AS_IF([test "$prte_prepend" = "1"],
-              [AS_IF([test -z "$$1"], [$1=$arg], [$1="$arg $$1"])])
+              [PRTE_APPEND([$1], [$arg])])
     done
 
     PRTE_VAR_SCOPE_POP

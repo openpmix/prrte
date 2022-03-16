@@ -7,7 +7,7 @@
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
 # Copyright (c) 2021      Nanook Consulting.  All rights reserved.
-# Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
+# Copyright (c) 2021-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
 #
@@ -161,7 +161,7 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
         PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$prte_libevent_LIBS])
 
         # Set output variables
-        PRTE_SUMMARY_ADD([[Required Packages]],[[Libevent]], [prte_libevent], [$prte_libevent_SUMMARY])
+        PRTE_SUMMARY_ADD([Required Packages], [Libevent], [], [$prte_libevent_SUMMARY])
 
         $1
     else
