@@ -50,8 +50,8 @@ This may result in unexpected behavior.
 WARNING: All multi-character command line options must be prefixed with double
 dashes, not a single dash:
 
-  Deprecated option:   %s
-  Corrected option:    %s
+  Deprecated option(s):   %s
+  Corrected  option(s):   %s
 
 We have updated this for you and will proceed. However, this will be treated
 as an error in a future release. Please update your command line.
