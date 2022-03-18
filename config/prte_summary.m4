@@ -116,7 +116,7 @@ EOF
         AS_VAR_COPY([prte_summary_section_value], [prte_summary_section_${prte_summary_section}_value])
         echo "${prte_summary_section_name}" >&2
         echo "-----------------------" >&2
-        echo "${prte_summary_section_value}" | sort -f
+        echo "${prte_summary_section_value}" | sort -f >&2
         echo " " >&2
     done
 
