@@ -392,8 +392,10 @@ void prte_info_do_config(bool want_all)
         prte_info_out_int("C float size", "compiler:c:sizeof:float", sizeof(float));
         prte_info_out_int("C double size", "compiler:c:sizeof:double", sizeof(double));
         prte_info_out_int("C pointer size", "compiler:c:sizeof:pointer", sizeof(void *));
+        prte_info_out_int("C char align", "compiler:c:align:char", ALIGNOF_CHAR);
         prte_info_out("C bool align", "compiler:c:align:bool", "skipped");
         prte_info_out_int("C int align", "compiler:c:align:int", ALIGNOF_INT);
+        prte_info_out_int("C float align", "compiler:c:align:float", ALIGNOF_FLOAT);
         prte_info_out_int("C double align", "compiler:c:align:double", ALIGNOF_DOUBLE);
     }
 
