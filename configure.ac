@@ -161,11 +161,10 @@ AC_DEFUN([PRTE_CHECK_DIR_FOR_SPACES],[
 AC_DEFUN([PRTE_CANONICALIZE_PATH],[
     case $host_os in
     darwin*)
-        # MacOS does not have "readlink -f" or realpath (at least as
-        # of MacOS Cataline / 10.15).  Instead, use Python, because we
-        # know MacOS comes with a /usr/bin/python that has
-        # os.path.realpath.
-        $2=`/usr/bin/python -c 'import os; print os.path.realpath("'$1'")'`
+        # MacOS pre-Mojave does not have "readlink -f" or realpath.
+        # Instead, use Python, because we know MacOS comes with a
+        # python that has os.path.realpath.
+        $2=`python -c 'import os, __future__ ; print(os.path.realpath("'$1'"))'`
         ;;
     *)
         $2=`readlink -f $1`
