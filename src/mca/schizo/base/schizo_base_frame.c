@@ -94,7 +94,7 @@ void prte_schizo_base_expose(char *param, char *prefix)
     value = strchr(param, '=');
     *value = '\0';
     ++value;
-    pmix_asprintf(&pm, "%s_%s", prefix, param);
+    pmix_asprintf(&pm, "%s%s", prefix, param);
     setenv(pm, value, true);
     free(pm);
     --value;
