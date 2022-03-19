@@ -420,6 +420,17 @@ int main(int argc, char *argv[])
         prte_setenv("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
     }
 
+    /* check for debug options */
+    if (prte_cmd_line_is_taken(&results, PRTE_CLI_DEBUG)) {
+        prte_debug_flag = true;
+    }
+    if (prte_cmd_line_is_taken(&results, PRTE_CLI_DEBUG_DAEMONS)) {
+        prte_debug_daemons_flag = true;
+    }
+    if (prte_cmd_line_is_taken(&results, PRTE_CLI_LEAVE_SESSION_ATTACHED)) {
+        prte_leave_session_attached = true;
+    }
+
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
