@@ -279,7 +279,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * SLURM allocation.  Instead, set the env var SLURM_CPU_BIND to
      * "none", which should do the same thing as --cpu*bind=none.
      */
-    setenv("SLURM_CPU_BIND", "none", true);
+    setenv("SLURM_CPU_BIND_TYPE", "none", true);
 
     /* protect against launchers that forward the entire environment */
     if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {

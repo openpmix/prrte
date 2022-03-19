@@ -300,6 +300,17 @@ int main(int argc, char *argv[])
         schizo->allow_run_as_root(&results); // will exit us if not allowed
     }
 
+    /* check for debug options */
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG)) {
+        prte_debug_flag = true;
+    }
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG_DAEMONS)) {
+        prte_debug_daemons_flag = true;
+    }
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_LEAVE_SESSION_ATTACHED)) {
+        prte_leave_session_attached = true;
+    }
+
     /* if prte_daemon_debug is set, let someone know we are alive right
      * away just in case we have a problem along the way
      */
@@ -311,7 +322,7 @@ int main(int argc, char *argv[])
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
-    if (!prte_debug_flag && !pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
+    if (!prte_debug_flag || pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         pipe(wait_pipe);
         prte_state_base_parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);

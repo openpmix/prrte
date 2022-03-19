@@ -414,10 +414,21 @@ int main(int argc, char *argv[])
         pmix_setenv("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
     }
 
+    /* check for debug options */
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG)) {
+        prte_debug_flag = true;
+    }
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG_DAEMONS)) {
+        prte_debug_daemons_flag = true;
+    }
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_LEAVE_SESSION_ATTACHED)) {
+        prte_leave_session_attached = true;
+    }
+
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
-    if (!prte_debug_flag && pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
+    if (!prte_debug_flag || pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         pipe(wait_pipe);
         prte_state_base_parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
