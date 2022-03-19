@@ -306,6 +306,17 @@ int main(int argc, char *argv[])
         schizo->allow_run_as_root(&results); // will exit us if not allowed
     }
 
+    /* check for debug options */
+    if (prte_cmd_line_is_taken(&results, PRTE_CLI_DEBUG)) {
+        prte_debug_flag = true;
+    }
+    if (prte_cmd_line_is_taken(&results, PRTE_CLI_DEBUG_DAEMONS)) {
+        prte_debug_daemons_flag = true;
+    }
+    if (prte_cmd_line_is_taken(&results, PRTE_CLI_LEAVE_SESSION_ATTACHED)) {
+        prte_leave_session_attached = true;
+    }
+
     /* if prte_daemon_debug is set, let someone know we are alive right
      * away just in case we have a problem along the way
      */

@@ -135,6 +135,7 @@ PRTE_CLASS_DECLARATION(prte_cli_result_t);
 #define PRTE_CLI_KEEPALIVE              "keepalive"                 // required
 #define PRTE_CLI_LAUNCH_AGENT           "launch-agent"              // required
 #define PRTE_CLI_MAX_VM_SIZE            "max-vm-size"               // required
+#define PRTE_CLI_DEBUG                  "debug"                     // none
 #define PRTE_CLI_DEBUG_DAEMONS          "debug-daemons"             // none
 #define PRTE_CLI_DEBUG_DAEMONS_FILE     "debug-daemons-file"        // none
 #define PRTE_CLI_LEAVE_SESSION_ATTACHED "leave-session-attached"    // none
