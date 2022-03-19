@@ -589,6 +589,9 @@ static int rte_finalize(void)
     (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
 #endif
 
+    /* shutdown the pmix server */
+    pmix_server_finalize();
+
     /* remove my contact info file, if we have session directories */
     if (NULL != prte_process_info.jobfam_session_dir) {
         contact_path = prte_os_path(false, prte_process_info.jobfam_session_dir, "contact.txt",
@@ -620,8 +623,6 @@ static int rte_finalize(void)
 
     free(prte_topo_signature);
 
-    /* shutdown the pmix server */
-    pmix_server_finalize();
     /* output any lingering stdout/err data */
     fflush(stdout);
     fflush(stderr);
