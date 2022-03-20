@@ -420,7 +420,7 @@ int main(int argc, char *argv[])
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
-    if (!prte_debug_flag && prte_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         pipe(wait_pipe);
         prte_state_base_parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
@@ -1246,27 +1246,30 @@ static void surekill(void)
     int n;
     pid_t pid;
 
-    for (n=0; n < prte_local_children->size; n++) {
-        child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, n);
-        if (NULL != child && 0 < child->pid) {
-            pid = child->pid;
+    /* we don't know how far we got, so be careful here */
+    if (NULL != prte_local_children) {
+        for (n=0; n < prte_local_children->size; n++) {
+            child = (prte_proc_t*)pmix_pointer_array_get_item(prte_local_children, n);
+            if (NULL != child && 0 < child->pid) {
+                pid = child->pid;
 #if HAVE_SETPGID
-            {
-                pid_t pgrp;
-                pgrp = getpgid(pid);
-                if (-1 != pgrp) {
-                    /* target the lead process of the process
-                     * group so we ensure that the signal is
-                     * seen by all members of that group. This
-                     * ensures that the signal is seen by any
-                     * child processes our child may have
-                     * started
-                     */
-                    pid = -pgrp;
+                {
+                    pid_t pgrp;
+                    pgrp = getpgid(pid);
+                    if (-1 != pgrp) {
+                        /* target the lead process of the process
+                         * group so we ensure that the signal is
+                         * seen by all members of that group. This
+                         * ensures that the signal is seen by any
+                         * child processes our child may have
+                         * started
+                         */
+                        pid = -pgrp;
+                    }
                 }
-            }
 #endif
-            kill(pid, SIGKILL);
+                kill(pid, SIGKILL);
+            }
         }
     }
 }

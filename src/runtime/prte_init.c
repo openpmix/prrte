@@ -255,18 +255,9 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
         goto error;
     }
 
-    /* ensure we know the type of proc for when we finalize */
-    prte_process_info.proc_type = flags;
-
     /* setup the locks */
     if (PRTE_SUCCESS != (ret = prte_locks_init())) {
         error = "prte_locks_init";
-        goto error;
-    }
-
-    /* setup the prte_show_help system */
-    if (PRTE_SUCCESS != (ret = prte_show_help_init())) {
-        error = "prte_output_init";
         goto error;
     }
 
@@ -275,7 +266,6 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
         error = "prte_proc_info";
         goto error;
     }
-    prte_process_info.proc_type = flags;
 
     if (PRTE_SUCCESS != (ret = prte_hwloc_base_register())) {
         error = "prte_hwloc_base_register";
