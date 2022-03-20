@@ -1323,6 +1323,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
             PRTE_RETAIN(d);
             req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
         }
+        prte_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, room_num, NULL);
         PRTE_RELEASE(req);
     } else {
         prte_output_verbose(2, prte_pmix_server_globals.output,
