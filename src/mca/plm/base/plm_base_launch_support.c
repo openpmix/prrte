@@ -1989,7 +1989,6 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     for (i=0; NULL != environ[i]; i++) {
         if (0 == strncmp(environ[i], "PMIX_MCA_", offset) ||
             0 == strncmp(environ[i], "PRTE_MCA_", offset)) {
-            prte_output(0, "ENV: %s", environ[i]);
             tmpv = pmix_argv_split(environ[i], '=');
             /* check for duplicate */
             ignore = false;
