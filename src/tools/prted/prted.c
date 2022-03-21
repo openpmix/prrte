@@ -322,7 +322,7 @@ int main(int argc, char *argv[])
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
+    if (!prte_leave_session_attached && !prte_debug_daemons_flag) {
         pipe(wait_pipe);
         prte_state_base_parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
