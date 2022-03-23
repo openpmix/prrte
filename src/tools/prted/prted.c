@@ -20,6 +20,8 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -507,22 +509,24 @@ int main(int argc, char *argv[])
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_PRTED_CALLBACK,
                   PRTE_RML_PERSISTENT, rollup, NULL);
 
-    /* since we will be waiting for any children to send us
-     * their rollup info before sending to our parent, save
-     * a little time in the launch phase by "warming up" the
-     * connection to our parent while we wait for our children */
-    PMIX_DATA_BUFFER_CONSTRUCT(&pbuf); // zero-byte message
-    PRTE_RML_RECV(PRTE_PROC_MY_PARENT, PRTE_RML_TAG_NODE_REGEX_REPORT,
-                  PRTE_RML_PERSISTENT, node_regex_report, &node_regex_waiting);
-    node_regex_waiting = true;
-    PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT->rank, &pbuf,
-                  PRTE_RML_TAG_WARMUP_CONNECTION);
-    if (PRTE_SUCCESS != ret) {
-        PRTE_ERROR_LOG(ret);
+    if (prte_static_ports || NULL != prte_parent_uri) {
+        /* since we will be waiting for any children to send us
+         * their rollup info before sending to our parent, save
+         * a little time in the launch phase by "warming up" the
+         * connection to our parent while we wait for our children */
+        PMIX_DATA_BUFFER_CONSTRUCT(&pbuf); // zero-byte message
+        PRTE_RML_RECV(PRTE_PROC_MY_PARENT, PRTE_RML_TAG_NODE_REGEX_REPORT,
+                      PRTE_RML_PERSISTENT, node_regex_report, &node_regex_waiting);
+        node_regex_waiting = true;
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT->rank, &pbuf,
+                      PRTE_RML_TAG_WARMUP_CONNECTION);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+            goto DONE;
+        }
         PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-        goto DONE;
     }
-    PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
 
     /* send the information to the orted report-back point - this function
      * will process the data, but also counts the number of
