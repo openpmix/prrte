@@ -396,15 +396,19 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
                 if (0 == strcmp("yes", p1) || 0 == strcmp("true", p1) || 0 == strcmp("1", p1)
                     || 0 == strcmp("ulfm", p1) || 0 == strcmp("mpi", p1)) {
                         /* push it into our environment */
-                    prte_schizo_base_expose("prte_enable_ft=1", "PRTE_MCA_");
+                    char *tmp = strdup("prte_enable_ft=1");
+                    prte_schizo_base_expose(tmp, "PRTE_MCA_");
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:ompi:parse_cli pushing PRTE_MCA_prte_enable_ft=1 into environment",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                     prte_enable_recovery = true;
+                    free(tmp);
+                    tmp = strdup("mpi_ft_enable=1");
                     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:ompi:parse_cli pushing OMPI_MCA_mpi_ft_enable into environment",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-                    prte_schizo_base_expose("mpi_ft_enable=1", "OMPI_MCA_");
+                    prte_schizo_base_expose(tmp, "OMPI_MCA_");
+                    free(tmp);
                 }
                 else {
                     prte_output(0, "UNRECOGNIZED OPTION: --with-ft %s", p1);
