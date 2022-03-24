@@ -57,7 +57,8 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
                                      option redirects output from application processes into filename.rank. In
                                      both cases, the provided name will be converted to an absolute path.
                                      Supported qualifiers include NOCOPY (do not copy the output to the
-                                     stdout/err streams).
+                                     stdout/err streams), and RAW (do not buffer the output into complete
+                                     lines, but instead output it as it is received).
    --report-child-jobs-separately    Return the exit status of the primary job only
    --xterm <arg0>                    Create a new xterm window and display output from the specified ranks
                                      there
