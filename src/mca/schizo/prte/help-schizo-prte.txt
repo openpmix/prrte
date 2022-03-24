@@ -39,6 +39,19 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --display                         Comma-delimited list of options for displaying information
 
 
+/*****      Output Options       *****/
+
+   --output <arg0>                   Comma-delimited list of options that control how output is
+                                     generated.Allowed values: tag, timestamp, xml, merge-stderr-to-stdout,
+                                     dir=DIRNAME, file=filename. The dir option redirects output from
+                                     application processes into DIRNAME/job/rank/std[out,err,diag]. The file
+                                     option redirects output from application processes into filename.rank. In
+                                     both cases, the provided name will be converted to an absolute path.
+                                     Supported qualifiers include NOCOPY (do not copy the output to the
+                                     stdout/err streams), and RAW (do not buffer the output into complete
+                                     lines, but instead output it as it is received).
+
+
 /*****      Launch Options       *****/
 
    --default-hostfile <arg0>         Provide a default hostfile
