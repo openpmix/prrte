@@ -71,6 +71,10 @@ PRTE_EXPORT extern bool prte_event_base_active;    /* instantiated in src/runtim
 PRTE_EXPORT extern bool prte_proc_is_bound;        /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern int prte_progress_thread_debug; /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern char *prte_tool_basename;       // argv[0] of prun or one of its symlinks
+PRTE_EXPORT extern char *prte_tool_org;
+PRTE_EXPORT extern char *prte_tool_version;
+PRTE_EXPORT extern char *prte_tool_msg;
+
 PRTE_EXPORT extern char *prte_progress_thread_cpus;
 PRTE_EXPORT extern bool prte_bind_progress_thread_reqd;
 PRTE_EXPORT extern char *prte_tool_actual;         // actual tool executable
