@@ -257,6 +257,12 @@ int main(int argc, char *argv[])
     pmix_cli_result_t results;
     pmix_cli_item_t *opt;
 
+    // in mpi or slurm environments, make
+    // sure schizo_proxy is not set, otherwise
+    // it could use the wrong schizo to parse
+    // the command line.
+    unsetenv("PRTE_MCA_schizo_proxy");
+
     /* init the globals */
     PMIX_CONSTRUCT(&apps, pmix_list_t);
     if (NULL == (param = getenv("PRTE_BASENAME"))) {
