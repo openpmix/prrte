@@ -174,7 +174,10 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                     }
                     // check for standard options
                     if (0 == strcmp(ptr, "version") || 0 == strcmp(ptr, "V")) {
-                        str = prte_show_help_string("help-cli.txt", "version", false);
+                        str = prte_show_help_string("help-cli.txt", "version", false,
+                                                     prte_tool_basename, prte_tool_org,
+                                                     prte_tool_version,
+                                                     prte_tool_msg);
                         if (NULL != str) {
                             printf("%s", str);
                             free(str);
@@ -235,7 +238,7 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                 } else if (NULL == optarg) {
                     // high-level help request
                     str = prte_show_help_string(helpfile, "usage", false,
-                                                prte_tool_basename, "PRRTE",
+                                                prte_tool_basename, prte_tool_org,
                                                 PRTE_PROXY_VERSION_STRING,
                                                 prte_tool_basename,
                                                 PRTE_PROXY_BUGREPORT);
@@ -258,9 +261,9 @@ int prte_cmd_line_parse(char **pargv, char *shorts,
                 break;
             case 'V':
                 str = prte_show_help_string(helpfile, "version", false,
-                                            prte_tool_basename, "PRRTE",
-                                            PRTE_PROXY_VERSION_STRING,
-                                            PRTE_PROXY_BUGREPORT);
+                                            prte_tool_basename, prte_tool_org,
+                                            prte_tool_version,
+                                            prte_tool_msg);
                 if (NULL != str) {
                     printf("%s", str);
                     free(str);

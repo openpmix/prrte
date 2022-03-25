@@ -282,6 +282,17 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
 #endif
     }
 
+    const char *tool_version = getenv("OMPI_VERSION");
+    const char *tool_name    = getenv("OMPI_TOOL_NAME");
+    // If the user is using prterun --personality ompi, these
+    // won't be set, and thus this is not mpirun/mpiexec.
+    if(tool_version && tool_name) {
+        prte_tool_version  = tool_version;
+        prte_tool_basename = tool_name;
+        prte_tool_org      = "Open MPI";
+        prte_tool_msg      = "Report bugs to https://www.open-mpi.org/community/help/";
+    }
+
     rc = prte_cmd_line_parse(pargv, ompishorts, ompioptions, NULL,
                              results, "help-schizo-ompi.txt");
     prte_argv_free(pargv);
