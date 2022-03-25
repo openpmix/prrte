@@ -391,6 +391,9 @@ int main(int argc, char *argv[])
     if (NULL == personality) {
         personality = schizo->name;
     }
+    /* ensure we don't confuse any downstream PRRTE tools on
+     * choice of proxy since some environments forward their envars */
+    unsetenv("PRTE_MCA_schizo_proxy");
 
     /* parse the input argv to get values, including everyone's MCA params */
     PRTE_CONSTRUCT(&results, prte_cli_result_t);
