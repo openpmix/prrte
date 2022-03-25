@@ -217,6 +217,10 @@ int main(int argc, char *argv[])
         }
     }
 
+    /* ensure we aren't misdirected on choice of proxy since
+     * some environments forward their envars */
+    unsetenv("PRTE_MCA_schizo_proxy");
+
     /* initialize the globals */
     PMIX_DATA_BUFFER_CREATE(bucket);
     prte_tool_basename = prte_basename(argv[0]);
