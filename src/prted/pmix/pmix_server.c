@@ -763,7 +763,7 @@ int pmix_server_init(void)
 
     /* if we were launched by a debugger, then we need to have
      * notification of our termination sent */
-    if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
+    if (PRTE_PROC_IS_MASTER && NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_EVENT_SILENT_TERMINATION, &flag, PMIX_BOOL);
         if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
