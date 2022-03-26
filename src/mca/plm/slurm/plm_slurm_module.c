@@ -588,6 +588,8 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
 {
     int fd;
     int srun_pid;
+    int n;
+    char **tmp = NULL, *p;
     char *exec_argv = pmix_path_findv(argv[0], 0, environ, NULL);
     prte_proc_t *dummy;
 
@@ -620,6 +622,26 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
 
     if (0 == srun_pid) { /* child */
         char *bin_base = NULL, *lib_base = NULL;
+
+        /* Slurm forwards the entire environment, which we
+         * REALLY don't want them to do as it might contain
+         * envars pertaining to tool connections. So purge
+         * the environment of anything PMIx/PRRTE related -
+         * we will have put anything we need on the cmd line */
+        for (n=0; NULL != environ[n]; n++) {
+            if (0 == strncmp(environ[n], "PMIX_", 5) ||
+                0 == strncmp(environ[n], "PRTE_", 5)) {
+                pmix_argv_append_nosize(&tmp, environ[n]);
+            }
+        }
+        if (NULL != tmp) {
+            for (n=0; NULL != tmp[n]; n++) {
+                p = strchr(tmp[n], '=');
+                *p = '\0';
+                unsetenv(tmp[n]);
+            }
+            pmix_argv_free(tmp);
+        }
 
         /* Figure out the basenames for the libdir and bindir.  There
            is a lengthy comment about this in plm_rsh_module.c
