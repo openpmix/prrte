@@ -269,17 +269,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * This will *not* release the orteds from any cpu-set
      * constraint, but will ensure it doesn't get
      * bound to only one processor
-     *
-     * NOTE: We used to pass --cpu_bind=none on the command line.  But
-     * SLURM 19 changed this to --cpu-bind.  There is no easy way to
-     * test at run time which of these two parameters is used (see
-     * https://github.com/open-mpi/ompi/pull/6654).  There was
-     * discussion of using --test-only to see which one works, but
-     * --test-only is only effective if you're not already inside a
-     * SLURM allocation.  Instead, set the env var SLURM_CPU_BIND to
-     * "none", which should do the same thing as --cpu*bind=none.
      */
-    setenv("SLURM_CPU_BIND_TYPE", "none", true);
+    pmix_argv_append(&argc, &argv, "--cpu-bind=none");
 
     /* protect against launchers that forward the entire environment */
     if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
