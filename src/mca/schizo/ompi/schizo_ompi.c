@@ -318,6 +318,11 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
                 p1 = opt->values[n];
                 prte_schizo_base_expose(p1, "PMIX_MCA_");
             }
+        } else if(0 == strcmp(opt->key, "mca") || 0 == strcmp(opt->key, "omca")) {
+            for (n=0; NULL != opt->values[n]; n++) {
+                p1 = opt->values[n];
+                prte_schizo_base_expose(p1, "OMPI_MCA_");
+            }
 #if PRTE_ENABLE_FT
         } else if (0 == strcmp(opt->key, "with-ft")) {
             if (NULL == opt->values || NULL == opt->values[0]) {
