@@ -1920,7 +1920,9 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     if (prte_leave_session_attached) {
         prte_argv_append(argc, argv, "--leave-session-attached");
     }
-
+    if (prte_allow_run_as_root) {
+        prte_argv_append(argc, argv, "--allow-run-as-root");
+    }
     if (prte_map_stddiag_to_stderr) {
         prte_argv_append(argc, argv, "--prtemca");
         prte_argv_append(argc, argv, "prte_map_stddiag_to_stderr");
