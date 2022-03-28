@@ -1920,12 +1920,14 @@ static void allow_run_as_root(pmix_cli_result_t *results)
     char *r1, *r2;
 
     if (pmix_cmd_line_is_taken(results, "allow-run-as-root")) {
+        prte_allow_run_as_root = true;
         return;
     }
 
     if (NULL != (r1 = getenv("OMPI_ALLOW_RUN_AS_ROOT"))
         && NULL != (r2 = getenv("OMPI_ALLOW_RUN_AS_ROOT_CONFIRM"))) {
         if (0 == strcmp(r1, "1") && 0 == strcmp(r2, "1")) {
+            prte_allow_run_as_root = true;
             return;
         }
     }
