@@ -1112,12 +1112,14 @@ static void allow_run_as_root(prte_cli_result_t *cli)
     char *r1, *r2;
 
     if (prte_cmd_line_is_taken(cli, "allow-run-as-root")) {
+        prte_allow_run_as_root = true;
         return;
     }
 
     if (NULL != (r1 = getenv("PRTE_ALLOW_RUN_AS_ROOT"))
         && NULL != (r2 = getenv("PRTE_ALLOW_RUN_AS_ROOT_CONFIRM"))) {
         if (0 == strcmp(r1, "1") && 0 == strcmp(r2, "1")) {
+            prte_allow_run_as_root = true;
             return;
         }
     }
