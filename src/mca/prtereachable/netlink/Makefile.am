@@ -44,5 +44,5 @@ mca_prtereachable_netlink_la_LIBADD = $(top_builddir)/src/libprrte.la \
 
 noinst_LTLIBRARIES = $(component_noinst)
 libmca_prtereachable_netlink_la_SOURCES =$(sources)
-libmca_prtereachable_netlink_la_LDFLAGS = -module -avoid-version
+libmca_prtereachable_netlink_la_LDFLAGS = -module -avoid-version $(prte_reachable_netlink_LDFLAGS)
 libmca_prtereachable_netlink_la_LIBADD = $(prte_reachable_netlink_LIBS)
