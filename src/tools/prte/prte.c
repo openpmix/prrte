@@ -22,6 +22,8 @@
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
+ * Copyright (c) 2022      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -728,6 +730,13 @@ int main(int argc, char *argv[])
     while (prte_event_base_active && !prte_dvm_ready) {
         prte_event_loop(prte_event_base, PRTE_EVLOOP_ONCE);
     }
+
+    /* check if something went wrong with setting up the dvm, bail out */
+    if (!prte_dvm_ready) {
+        PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+        goto DONE;
+    }
+
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_REPORT_PID);
     if (NULL != opt) {
         /* if the string is a "-", then output to stdout */
