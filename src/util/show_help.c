@@ -773,10 +773,6 @@ static int show_help(const char *filename, const char *topic, const char *output
     }
     /* Not already displayed */
     else if (PRTE_ERR_NOT_FOUND == rc) {
-        if (NULL != prte_iof.output) {
-            /* send it to any connected tools */
-            prte_iof.output(sender, PRTE_IOF_STDDIAG, output);
-        }
         prte_output(output_stream, "%s", output);
         if (!show_help_timer_set) {
             show_help_time_last_displayed = now;
