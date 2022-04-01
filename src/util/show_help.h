@@ -136,13 +136,6 @@ PRTE_EXPORT void prte_show_help_finalize(void);
 PRTE_EXPORT int prte_show_help(const char *filename, const char *topic, int want_error_header, ...);
 
 /**
- * This function does the same thing as prte_show_help(), but accepts
- * a va_list form of varargs.
- */
-PRTE_EXPORT int prte_show_vhelp(const char *filename, const char *topic, int want_error_header,
-                                va_list ap);
-
-/**
  * This function does the same thing as prte_show_help(), but returns
  * its output in a string (that must be freed by the caller).
  */
@@ -177,15 +170,6 @@ PRTE_EXPORT int prte_show_help_norender(const char *filename, const char *topic,
  * interfering with the linked PRTE libs when they need to do show_help.
  */
 PRTE_EXPORT int prte_show_help_add_dir(const char *directory);
-
-/**
- * Pretend that this message has already been shown.
- *
- * Sends a control message to the HNP that will effectively suppress
- * this message from being shown.  Primitive *-wildcarding is
- * possible.
- */
-PRTE_EXPORT int prte_show_help_suppress(const char *filename, const char *topic);
 
 PRTE_EXPORT void prte_show_help_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                                      prte_rml_tag_t tag, void *cbdata);

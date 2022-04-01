@@ -70,8 +70,6 @@ static int hnp_pull(const pmix_proc_t *src_name, prte_iof_tag_t src_tag, int fd)
 
 static int hnp_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag);
 
-static int hnp_output(const pmix_proc_t *peer, prte_iof_tag_t source_tag, const char *msg);
-
 static void hnp_complete(const prte_job_t *jdata);
 
 static int finalize(void);
@@ -89,7 +87,6 @@ prte_iof_base_module_t prte_iof_hnp_module = {
     .push = hnp_push,
     .pull = hnp_pull,
     .close = hnp_close,
-    .output = hnp_output,
     .complete = hnp_complete,
     .finalize = finalize,
     .push_stdin = push_stdin
@@ -486,53 +483,4 @@ finish:
     PRTE_RELEASE(wev);
     sink->wev = NULL;
     return;
-}
-
-static void lkcbfunc(pmix_status_t status, void *cbdata)
-{
-    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
-
-    PRTE_POST_OBJECT(lk);
-    lk->status = prte_pmix_convert_status(status);
-    PRTE_PMIX_WAKEUP_THREAD(lk);
-}
-
-static int hnp_output(const pmix_proc_t *peer, prte_iof_tag_t source_tag, const char *msg)
-{
-    pmix_iof_channel_t pchan;
-    pmix_byte_object_t bo;
-    prte_pmix_lock_t lock;
-    pmix_status_t rc;
-    int ret;
-
-    pchan = 0;
-    if (PRTE_IOF_STDIN & source_tag) {
-        pchan |= PMIX_FWD_STDIN_CHANNEL;
-    }
-    if (PRTE_IOF_STDOUT & source_tag) {
-        pchan |= PMIX_FWD_STDOUT_CHANNEL;
-    }
-    if (PRTE_IOF_STDERR & source_tag) {
-        pchan |= PMIX_FWD_STDERR_CHANNEL;
-    }
-    if (PRTE_IOF_STDDIAG & source_tag) {
-        pchan |= PMIX_FWD_STDDIAG_CHANNEL;
-    }
-    /* setup the byte object */
-    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-    if (NULL != msg) {
-        bo.bytes = (char *) msg;
-        bo.size = strlen(msg) + 1;
-    }
-    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    rc = PMIx_server_IOF_deliver(peer, pchan, &bo, NULL, 0, lkcbfunc, (void *) &lock);
-    if (PMIX_SUCCESS != rc) {
-        ret = prte_pmix_convert_status(rc);
-    } else {
-        /* wait for completion */
-        PRTE_PMIX_WAIT_THREAD(&lock);
-        ret = lock.status;
-    }
-    PRTE_PMIX_DESTRUCT_LOCK(&lock);
-    return ret;
 }

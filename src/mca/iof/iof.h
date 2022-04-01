@@ -14,7 +14,7 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -156,12 +156,6 @@ typedef int (*prte_iof_base_pull_fn_t)(const pmix_proc_t *peer, prte_iof_tag_t s
  */
 typedef int (*prte_iof_base_close_fn_t)(const pmix_proc_t *peer, prte_iof_tag_t source_tag);
 
-/**
- * Output something via the IOF subsystem
- */
-typedef int (*prte_iof_base_output_fn_t)(const pmix_proc_t *peer, prte_iof_tag_t source_tag,
-                                         const char *msg);
-
 typedef int (*prte_iof_base_push_stdin_fn_t)(const pmix_proc_t *dst_name, uint8_t *data, size_t sz);
 
 /* Flag that a job is complete */
@@ -178,7 +172,6 @@ struct prte_iof_base_module_2_0_0_t {
     prte_iof_base_push_fn_t push;
     prte_iof_base_pull_fn_t pull;
     prte_iof_base_close_fn_t close;
-    prte_iof_base_output_fn_t output;
     prte_iof_base_complete_fn_t complete;
     prte_iof_base_finalize_fn_t finalize;
     prte_iof_base_push_stdin_fn_t push_stdin;
