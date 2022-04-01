@@ -1163,7 +1163,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
 
     PRTE_ACQUIRE_OBJECT(caddy);
 
-    prte_output_verbose(5, prte_odls_base_framework.framework_output, "%s local:launch",
+    prte_output_verbose(5, prte_odls_base_framework.framework_output,
+                        "%s local:launch",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     PMIX_LOAD_NSPACE(job, caddy->job);
@@ -1189,7 +1190,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     if (0 == jobdat->num_local_procs) {
         /* indicate that we are done trying to launch them */
         prte_output_verbose(5, prte_odls_base_framework.framework_output,
-                            "%s local:launch no local procs", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+                            "%s local:launch no local procs",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         goto GETOUT;
     }
 
@@ -1239,9 +1241,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             if (2 < caddy->retries) {
                 /* tried enough - give up */
                 for (idx = 0; idx < prte_local_children->size; idx++) {
-                    if (NULL
-                        == (child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children,
-                                                                                idx))) {
+                    child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
+                    if (NULL == child) {
                         continue;
                     }
                     if (PMIX_CHECK_NSPACE(job, child->name.nspace)) {
@@ -1258,7 +1259,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     }
 
     for (j = 0; j < jobdat->apps->size; j++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jobdat->apps, j))) {
+        app = (prte_app_context_t *) prte_pointer_array_get_item(jobdat->apps, j);
+        if (NULL == app) {
             continue;
         }
 
@@ -1342,40 +1344,10 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             goto GETOUT;
         }
 
-        /* Search for the OMPI_exec_path and PATH settings in the environment. */
-        for (argvptr = app->env; *argvptr != NULL; argvptr++) {
-            if (0 == strncmp("OMPI_exec_path=", *argvptr, 15)) {
-                mpiexec_pathenv = *argvptr + 15;
-            }
-            if (0 == strncmp("PATH=", *argvptr, 5)) {
-                pathenv = *argvptr + 5;
-            }
-        }
-
-        /* If OMPI_exec_path is set (meaning --path was used), then create a
-           temporary environment to be used in the search for the executable.
-           The PATH setting in this temporary environment is a combination of
-           the OMPI_exec_path and PATH values.  If OMPI_exec_path is not set,
-           then just use existing environment with PATH in it.  */
-        if (NULL != mpiexec_pathenv) {
-            argvptr = NULL;
-            if (pathenv != NULL) {
-                prte_asprintf(&full_search, "%s:%s", mpiexec_pathenv, pathenv);
-            } else {
-                prte_asprintf(&full_search, "%s", mpiexec_pathenv);
-            }
-            prte_setenv("PATH", full_search, true, &argvptr);
-            free(full_search);
-        } else {
-            argvptr = app->env;
-        }
-
-        rc = prte_util_check_context_app(app, argvptr);
+       rc = prte_util_check_context_app(app, app->env);
         /* do not ERROR_LOG - it will be reported elsewhere */
-        if (NULL != mpiexec_pathenv) {
-            prte_argv_free(argvptr);
-        }
-        if (PRTE_SUCCESS != rc) {
+        if (PMIX_SUCCESS != rc) {
+            rc = PRTE_ERR_EXE_NOT_FOUND;
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
                 child = (prte_proc_t *) prte_pointer_array_get_item(prte_local_children, idx);
