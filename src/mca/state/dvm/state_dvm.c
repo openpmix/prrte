@@ -492,6 +492,14 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
     lk->status = prte_pmix_convert_status(status);
     PRTE_PMIX_WAKEUP_THREAD(lk);
 }
+static void lkcbfunc(pmix_status_t status, void *cbdata)
+{
+    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
+
+    PMIX_POST_OBJECT(lk);
+    lk->status = prte_pmix_convert_status(status);
+    PRTE_PMIX_WAKEUP_THREAD(lk);
+}
 static void check_complete(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
@@ -610,7 +618,24 @@ static void check_complete(int fd, short args, void *cbdata)
             char *msg;
             msg = prte_dump_aborted_procs(jdata);
             if (NULL != msg) {
-                prte_output(prte_clean_output, "%s", msg);
+                pmix_byte_object_t bo;
+                PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
+                bo.bytes = (char *) msg;
+                bo.size = strlen(msg) + 1;
+                PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+                rc = PMIx_server_IOF_deliver(&prte_process_info.myproc,
+                                             PMIX_FWD_STDDIAG_CHANNEL,
+                                             &bo, NULL, 0, lkcbfunc, (void *) &lock);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                } else {
+                    /* wait for completion */
+                    PRTE_PMIX_WAIT_THREAD(&lock);
+                    if (PMIX_SUCCESS != lock.status) {
+                        PMIX_ERROR_LOG(lock.status);
+                    }
+                }
+                PRTE_PMIX_DESTRUCT_LOCK(&lock);
                 free(msg);
             }
         }
