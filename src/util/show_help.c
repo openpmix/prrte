@@ -33,7 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "src/mca/iof/iof.h"
+#include "src/mca/iof/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/rml/rml.h"
 #include "src/pmix/pmix-internal.h"
@@ -53,7 +53,6 @@ bool prte_help_want_aggregate = false;
 static const char *default_filename = "help-messages";
 static const char *dash_line
     = "--------------------------------------------------------------------------\n";
-static int output_stream = -1;
 static char **search_dirs = NULL;
 static bool show_help_initialized = false;
 
@@ -108,6 +107,46 @@ static time_t show_help_time_last_displayed = 0;
 static bool show_help_timer_set = false;
 static prte_event_t show_help_timer_event;
 
+/* pass info the PMIx server for handling */
+static void lkcbfunc(pmix_status_t status, void *cbdata)
+{
+    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
+
+    PMIX_POST_OBJECT(lk);
+    lk->status = prte_pmix_convert_status(status);
+    PRTE_PMIX_WAKEUP_THREAD(lk);
+}
+
+static void local_delivery(const char *msg)
+{
+    pmix_byte_object_t bo;
+    prte_pmix_lock_t lock;
+    pmix_status_t rc;
+    int ret;
+
+    /* setup the byte object */
+    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
+    if (NULL != msg) {
+        bo.bytes = (char *) msg;
+        bo.size = strlen(msg) + 1;
+    }
+    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
+    rc = PMIx_server_IOF_deliver(&prte_process_info.myproc,
+                                 PMIX_FWD_STDDIAG_CHANNEL,
+                                 &bo, NULL, 0, lkcbfunc, (void *) &lock);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+    } else {
+        /* wait for completion */
+        PRTE_PMIX_WAIT_THREAD(&lock);
+        if (PMIX_SUCCESS != lock.status) {
+            PMIX_ERROR_LOG(lock.status);
+        }
+    }
+    PRTE_PMIX_DESTRUCT_LOCK(&lock);
+}
+
+
 /*
  * Local functions
  */
@@ -117,16 +156,9 @@ static int show_help(const char *filename, const char *topic, const char *output
 
 int prte_show_help_init(void)
 {
-    prte_output_stream_t lds;
-
     if (show_help_initialized) {
         return PRTE_SUCCESS;
     }
-
-    PMIX_CONSTRUCT(&lds, prte_output_stream_t);
-    lds.lds_want_stderr = true;
-    output_stream = prte_output_open(&lds);
-    PMIX_DESTRUCT(&lds);
 
     PMIX_CONSTRUCT(&abd_tuples, pmix_list_t);
 
@@ -152,8 +184,6 @@ void prte_show_help_finalize(void)
         return;
     }
 
-    prte_output_close(output_stream);
-    output_stream = -1;
     PMIX_LIST_DESTRUCT(&abd_tuples);
 
     /* destruct the search list */
@@ -212,6 +242,50 @@ static int array2string(char **outstring, int want_error_header, char **lines)
     return PRTE_SUCCESS;
 }
 
+static int send_hnp(const char *filename,
+                    const char *topic,
+                    const char *output)
+{
+    pmix_data_buffer_t *buf;
+    int rc;
+
+    /* build the message to the HNP */
+    PMIX_DATA_BUFFER_CREATE(buf);
+    /* pack the filename of the show_help text file */
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &filename, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        rc = prte_pmix_convert_status(rc);
+        return rc;
+    }
+    /* pack the topic tag */
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &topic, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        rc = prte_pmix_convert_status(rc);
+        return rc;
+    }
+    /* pack the string */
+    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &output, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        rc = prte_pmix_convert_status(rc);
+        return rc;
+    }
+
+    /* send it via RML to the HNP */
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_SHOW_HELP);
+    if (PRTE_SUCCESS != rc) {
+        PMIX_DATA_BUFFER_RELEASE(buf);
+    }
+
+    return rc;
+}
+
+
 /*
  * Find the right file to open
  */
@@ -219,8 +293,9 @@ static int open_file(const char *base, const char *topic)
 {
     char *filename;
     char *err_msg = NULL;
+    char *tmp;
     size_t base_len;
-    int i;
+    int i, rc;
 
     /* If no filename was supplied, use the default */
 
@@ -256,10 +331,17 @@ static int open_file(const char *base, const char *topic)
 
     /* If we still couldn't open it, then something is wrong */
     if (NULL == prte_show_help_yyin) {
-        prte_output(output_stream,
-                    "%sSorry!  You were supposed to get help about:\n    %s\nBut I couldn't open "
-                    "the help file:\n    %s.  Sorry!\n%s",
-                    dash_line, topic, err_msg, dash_line);
+        pmix_asprintf(&tmp, "%sSorry!  You were supposed to get help about:\n    %s\nBut I couldn't open "
+                      "the help file:\n    %s.  Sorry!\n%s",
+                      dash_line, topic, err_msg, dash_line);
+        local_delivery(tmp);
+        if (PRTE_PROC_IS_DAEMON) {
+            rc = send_hnp(base, topic, tmp);
+            if (PRTE_SUCCESS != rc) {
+                PRTE_ERROR_LOG(rc);
+            }
+        }
+        free(tmp);
         free(err_msg);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -308,10 +390,17 @@ static int find_topic(const char *base, const char *topic)
             break;
 
         case PRTE_SHOW_HELP_PARSE_DONE:
-            prte_output(output_stream,
-                        "%sSorry!  You were supposed to get help about:\n    %s\nfrom the file:\n  "
-                        "  %s\nBut I couldn't find that topic in the file.  Sorry!\n%s",
-                        dash_line, topic, base, dash_line);
+            pmix_asprintf(&tmp, "%sSorry!  You were supposed to get help about:\n    %s\nfrom the file:\n  "
+                          "  %s\nBut I couldn't find that topic in the file.  Sorry!\n%s",
+                          dash_line, topic, base, dash_line);
+            local_delivery(tmp);
+            if (PRTE_PROC_IS_DAEMON) {
+                ret = send_hnp(base, topic, tmp);
+                if (PRTE_SUCCESS != ret) {
+                    PRTE_ERROR_LOG(ret);
+                }
+            }
+            free(tmp);
             return PRTE_ERR_NOT_FOUND;
 
         default:
@@ -408,22 +497,6 @@ char *prte_show_help_string(const char *filename, const char *topic, int want_er
     return output;
 }
 
-int prte_show_vhelp(const char *filename, const char *topic, int want_error_header, va_list arglist)
-{
-    char *output;
-
-    /* Convert it to a single string */
-    output = prte_show_help_vstring(filename, topic, want_error_header, arglist);
-
-    /* If we got a single string, output it with formatting */
-    if (NULL != output) {
-        prte_output(output_stream, "%s", output);
-        free(output);
-    }
-
-    return (NULL == output) ? PRTE_ERROR : PRTE_SUCCESS;
-}
-
 int prte_show_help(const char *filename, const char *topic, int want_error_header, ...)
 {
     va_list arglist;
@@ -455,7 +528,6 @@ int prte_show_help_norender(const char *filename, const char *topic,
 {
     int rc = PRTE_SUCCESS;
     int8_t have_output = 1;
-    pmix_data_buffer_t *buf;
     bool am_inside = false;
     PRTE_HIDE_UNUSED_PARAMS(want_error_header);
 
@@ -468,132 +540,24 @@ int prte_show_help_norender(const char *filename, const char *topic,
         goto CLEANUP;
     }
 
-    /* otherwise, we relay the output message to
-     * the HNP for processing
-     */
+    /* pass to the PMIx server in case we have a tool
+     * attached to us */
+    local_delivery(output);
+
+    /* relay the output message to the HNP for processing */
 
     /* JMS Note that we *may* have a recursion situation here where
        the RML could call show_help.  Need to think about this
        properly, but put a safeguard in here for sure for the time
        being. */
-    if (am_inside) {
-        rc = show_help(filename, topic, output, PRTE_PROC_MY_NAME);
-    } else {
+    if (!am_inside && PRTE_PROC_IS_DAEMON) {
         am_inside = true;
-
-        /* build the message to the HNP */
-        PMIX_DATA_BUFFER_CREATE(buf);
-        /* pack the filename of the show_help text file */
-        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &filename, 1, PMIX_STRING);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            goto CLEANUP;
-        }
-        /* pack the topic tag */
-        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &topic, 1, PMIX_STRING);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            goto CLEANUP;
-        }
-        /* pack the flag that we have a string */
-        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &have_output, 1, PMIX_INT8);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            goto CLEANUP;
-        }
-        /* pack the resulting string */
-        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &output, 1, PMIX_STRING);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            goto CLEANUP;
-        }
-
-        /* send it via RML to the HNP */
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_SHOW_HELP);
-        if (PRTE_SUCCESS != rc) {
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            /* okay, that didn't work, output locally  */
-            prte_output(output_stream, "%s", output);
-        } else {
-            rc = PRTE_SUCCESS;
-        }
+        rc = send_hnp(filename, topic, output);
         am_inside = false;
     }
 
 CLEANUP:
     return rc;
-}
-
-int prte_show_help_suppress(const char *filename, const char *topic)
-{
-    int rc = PRTE_SUCCESS;
-    int8_t have_output = 0;
-    pmix_data_buffer_t *buf;
-    static bool am_inside = false;
-
-    if (prte_execute_quiet) {
-        return PRTE_SUCCESS;
-    }
-
-    /* If we are the HNP, or the RML has not yet been setup, or ROUTED
-       has not been setup, or we weren't given an HNP, then all we can
-       do is process this locally. */
-    if (PRTE_PROC_IS_MASTER || NULL == prte_process_info.my_hnp_uri) {
-        rc = show_help(filename, topic, NULL, PRTE_PROC_MY_NAME);
-        return rc;
-    }
-
-    /* otherwise, we relay the output message to
-     * the HNP for processing
-     */
-
-    /* JMS Note that we *may* have a recursion situation here where
-       the RML could call show_help.  Need to think about this
-       properly, but put a safeguard in here for sure for the time
-       being. */
-    if (am_inside) {
-        rc = show_help(filename, topic, NULL, PRTE_PROC_MY_NAME);
-    } else {
-        am_inside = true;
-
-        /* build the message to the HNP */
-        PMIX_DATA_BUFFER_CREATE(buf);
-        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &filename, 1, PMIX_STRING);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            return PRTE_SUCCESS;
-        }
-        /* pack the topic tag */
-        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &topic, 1, PMIX_STRING);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            return PRTE_SUCCESS;
-        }
-        /* pack the flag that we DO NOT have a string */
-        rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &have_output, 1, PMIX_INT8);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            return PRTE_SUCCESS;
-        }
-        /* send it to the HNP */
-        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_SHOW_HELP);
-        if (PRTE_SUCCESS != rc) {
-            PRTE_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            /* okay, that didn't work, just process locally error, just ignore return  */
-            show_help(filename, topic, NULL, PRTE_PROC_MY_NAME);
-        }
-        am_inside = false;
-    }
-
-    return PRTE_SUCCESS;
 }
 
 /*
@@ -684,6 +648,7 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
 {
     time_t now = time(NULL);
     tuple_list_item_t *tli;
+    char *tmp;
     PRTE_HIDE_UNUSED_PARAMS(fd, event, context);
 
     /* Loop through all the messages we've displayed and see if any
@@ -693,15 +658,18 @@ static void show_accumulated_duplicates(int fd, short event, void *context)
     {
         if (tli->tli_display && tli->tli_count_since_last_display > 0) {
             static bool first = true;
-            prte_output(0, "%d more process%s sent help message %s / %s",
-                        tli->tli_count_since_last_display,
-                        (tli->tli_count_since_last_display > 1) ? "es have" : " has",
-                        tli->tli_filename, tli->tli_topic);
+            pmix_asprintf(&tmp, "%d more process%s sent help message %s / %s",
+                          tli->tli_count_since_last_display,
+                          (tli->tli_count_since_last_display > 1) ? "es have" : " has",
+                          tli->tli_filename, tli->tli_topic);
+            local_delivery(tmp);
+            free(tmp);
             tli->tli_count_since_last_display = 0;
 
             if (first) {
-                prte_output(0, "Set MCA parameter \"prte_base_help_aggregate\" to 0 to see all "
-                               "help / error messages");
+                tmp = "Set MCA parameter \"prte_base_help_aggregate\" to 0 to see all "
+                      "help / error messages";
+                local_delivery(tmp);
                 first = false;
             }
         }
@@ -773,11 +741,7 @@ static int show_help(const char *filename, const char *topic, const char *output
     }
     /* Not already displayed */
     else if (PRTE_ERR_NOT_FOUND == rc) {
-        if (NULL != prte_iof.output) {
-            /* send it to any connected tools */
-            prte_iof.output(sender, PRTE_IOF_STDDIAG, output);
-        }
-        prte_output(output_stream, "%s", output);
+        local_delivery(output);
         if (!show_help_timer_set) {
             show_help_time_last_displayed = now;
         }
@@ -811,7 +775,6 @@ void prte_show_help_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
     char *output = NULL;
     char *filename = NULL, *topic = NULL;
     int32_t n;
-    int8_t have_output;
     int rc;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
@@ -832,22 +795,12 @@ void prte_show_help_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
         PMIX_ERROR_LOG(rc);
         goto cleanup;
     }
-    /* unpack the flag */
+    /* unpack output string */
     n = 1;
-    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &have_output, &n, PMIX_INT8);
+    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &output, &n, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         goto cleanup;
-    }
-
-    /* If we have an output string, unpack it */
-    if (have_output) {
-        n = 1;
-        rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &output, &n, PMIX_STRING);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            goto cleanup;
-        }
     }
 
     /* Send it to show_help */

@@ -15,6 +15,7 @@
 # Copyright (c) 2018      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2022      Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -34,8 +35,11 @@ address is unknown:
 The message could not be delivered, and we are aborting.
 #
 [failed-daemon-launch]
-PRTE was unable to reliably start one or more daemons.
+%s was unable to reliably start one or more daemons.
 This usually is caused by:
+
+* the inability to resolve specified hostnames - please check
+  above for any output regarding this possibility
 
 * not finding the required libraries and/or binaries on
   one or more nodes. Please check your PATH and LD_LIBRARY_PATH

@@ -250,6 +250,10 @@ PRTE_EXPORT int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag
                                            prte_iof_write_event_t *channel);
 PRTE_EXPORT void prte_iof_base_write_handler(int fd, short event, void *cbdata);
 
+PRTE_EXPORT int prte_iof_base_output(const pmix_proc_t *peer,
+                                     prte_iof_tag_t source_tag,
+                                     const char *msg);
+
 END_C_DECLS
 
 #endif /* MCA_IOF_BASE_H */

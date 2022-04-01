@@ -70,7 +70,6 @@ static int prted_pull(const pmix_proc_t *src_name, prte_iof_tag_t src_tag, int f
 
 static int prted_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag);
 
-static int prted_output(const pmix_proc_t *peer, prte_iof_tag_t source_tag, const char *msg);
 
 static void prted_complete(const prte_job_t *jdata);
 
@@ -89,7 +88,6 @@ prte_iof_base_module_t prte_iof_prted_module = {
     .push = prted_push,
     .pull = prted_pull,
     .close = prted_close,
-    .output = prted_output,
     .complete = prted_complete,
     .finalize = finalize,
 };
@@ -395,54 +393,4 @@ CHECK:
             prte_iof_prted_send_xonxoff(PRTE_IOF_XON);
         }
     }
-}
-
-static int prted_output(const pmix_proc_t *peer, prte_iof_tag_t source_tag, const char *msg)
-{
-    pmix_data_buffer_t *buf;
-    int rc;
-
-    /* prep the buffer */
-    PMIX_DATA_BUFFER_CREATE(buf);
-
-    /* pack the stream first - we do this so that flow control messages can
-     * consist solely of the tag
-     */
-    rc = PMIx_Data_pack(NULL, buf, &source_tag, 1, PMIX_UINT16);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-        return rc;
-    }
-
-    /* pack name of process that gave us this data */
-    rc = PMIx_Data_pack(NULL, buf, (pmix_proc_t *) peer, 1, PMIX_PROC);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-        return rc;
-    }
-
-    /* pack the data - for compatibility, we have to pack this as PRTE_BYTE,
-     * so ensure we include the NULL string terminator */
-    rc = PMIx_Data_pack(NULL, buf, (void *) msg, strlen(msg) + 1, PMIX_BYTE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-        return rc;
-    }
-
-    /* start non-blocking RML call to forward received data */
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                         "%s iof:prted:output sending %d bytes to HNP",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) strlen(msg) + 1));
-
-    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_IOF_HNP);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-        return rc;
-    }
-
-    return PRTE_SUCCESS;
 }
