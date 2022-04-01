@@ -647,7 +647,8 @@ keep_going:
         /* if this was a daemon, report it */
         if (PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
             /* output a message indicating we failed to launch a daemon */
-            prte_show_help("help-errmgr-base.txt", "failed-daemon-launch", true);
+            prte_show_help("help-errmgr-base.txt", "failed-daemon-launch",
+                           true, prte_tool_basename);
         }
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FAILED_TO_START);
         break;
