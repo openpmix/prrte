@@ -311,14 +311,6 @@ static int ppr_mapper(prte_job_t *jdata)
              * that many procs on this node
              */
             if (PRTE_HWLOC_NODE_LEVEL == start) {
-                if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) && rmaps_ppr_global[start] > node->slots_available) {
-                    /* not enough slots available for this request */
-                    prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                                   rmaps_ppr_global[start], app->app);
-                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                    rc = PRTE_ERR_SILENT;
-                    goto error;
-                }
                 obj = hwloc_get_root_obj(node->topology->topo);
                 for (j = 0; j < rmaps_ppr_global[start] && nprocs_mapped < total_procs; j++) {
                     if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, idx))) {
