@@ -8,7 +8,7 @@
  * Copyright (c) 2016      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2016-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2020-2022 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -150,6 +150,9 @@ pmix_status_t prte_pmix_convert_rc(int rc)
 
     case PRTE_ERR_MODEL_DECLARED:
         return PMIX_MODEL_DECLARED;
+
+    case PRTE_ERR_DUPLICATE_KEY:
+        return PMIX_ERR_DUPLICATE_KEY;
 
     case PRTE_ERROR:
         return PMIX_ERROR;

@@ -16,6 +16,7 @@
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -174,6 +175,50 @@ void prte_data_server_finalize(void)
     PMIX_LIST_DESTRUCT(&pending);
 }
 
+
+
+static int find_stored_key(char *key, uint32_t uid, pmix_proc_t *published_by, pmix_data_range_t range, int *where) {
+    prte_data_object_t *data;
+    int n, k;
+
+    /* cycle across the stored data, looking for a match */
+    for (k = 0; k < prte_data_server_store.size; k++) {
+        data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_server_store, k);
+        if (NULL == data) {
+            continue;
+        }
+        /* can only access data posted by the same user id */
+        if (uid != data->uid) {
+            continue;
+        }
+        /* If no publisher constraints, then accept anything */
+        if (NULL != published_by) {
+            /* If exact rank specified, then require exact match */ 
+            /* If just namespace specified, then require that to match */
+            if (0 != strncmp(published_by->nspace, data->owner.nspace, PMIX_MAX_NSLEN)
+                || (PMIX_RANK_WILDCARD != published_by->rank && published_by->rank != data->owner.rank)) {
+                continue;
+            }
+        }
+
+        /* if a range given, it must match exactly */
+        if (PMIX_RANGE_UNDEF != range && range != data->range) {
+            continue;
+        }
+        /* see if we have this key */
+        for (n = 0; n < data->ninfo; n++) {
+            if (0 == strncmp(data->info[n].key, key, PMIX_MAX_KEYLEN)) {
+                /* found it -  return the object and index */
+                *where= k;
+                return n;
+            }
+        }
+    }
+    *where = -1;
+    return PRTE_ERR_NOT_FOUND;
+}
+
+
 void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                       prte_rml_tag_t tag, void *cbdata)
 {
@@ -181,7 +226,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
     int32_t count;
     prte_data_object_t *data;
     pmix_data_buffer_t *answer, *reply;
-    int rc, k;
+    int rc, k, index;
     uint32_t ninfo, i;
     char **keys = NULL, *str;
     bool wait = false;
@@ -307,6 +352,42 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                 }
             }
         }
+        /* Now check each key to see is already published to this range
+         * (We have to wait till we walk to list to make sure we have the
+         *  current publishing range correct)
+         */
+        for (n = 0; n < ninfo; n++) {
+            pmix_proc_t publisher;
+
+            /*  We publish anything that isn't one of these 3 things
+             *  which is wrong.  It might be PMIX_TIMEOUT or some
+             *  option we don't support, but this is the problem of
+             *  having a single list of info's
+             */
+            if ((0 == strcmp(info[n].key, PMIX_RANGE))
+            || (0 == strcmp(info[n].key, PMIX_PERSISTENCE))
+            || (0 == strcmp(info[n].key, PMIX_USERID))) {
+                continue;
+            }
+
+            if (PMIX_RANGE_NAMESPACE == data->range) {
+                strncpy(publisher.nspace, data->owner.nspace, PMIX_MAX_NSLEN);
+                publisher.rank = PMIX_RANK_WILDCARD;
+                index = find_stored_key(info[n].key, data->uid, &publisher, PMIX_RANGE_UNDEF, &k);
+            } else { // PRRTE treats all other ranges the same?  (any publisher);
+                index = find_stored_key(info[n].key, data->uid, NULL, PMIX_RANGE_UNDEF, &k);
+            }
+
+            if (0 <= index) {
+                rc = PRTE_ERR_DUPLICATE_KEY;
+                PMIX_ERROR_LOG(rc);
+                PMIX_RELEASE(data);
+                PMIX_INFO_FREE(info, ninfo);
+                PMIX_INFO_LIST_RELEASE(ilist);
+                goto SEND_ERROR;
+            }
+        }
+
         PMIX_INFO_FREE(info, ninfo); // done with the array
         PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
         data->info = (pmix_info_t *) darray.array;
@@ -335,6 +416,13 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
                     continue;
                 }
             }
+            #if 0
+            if (PMIX_RANGE_LOCAL == data->range) {
+                if (0 != strcmp(req->requestor, data->owner)) {
+                    continue;
+                }
+            }
+            #endif
             for (i = 0; NULL != req->keys[i]; i++) {
                 /* cycle thru the data keys for matches */
                 for (n = 0; n < data->ninfo; n++) {
@@ -539,6 +627,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
         for (i = 0; NULL != keys[i]; i++) {
             prte_output_verbose(10, prte_data_server_output, "%s data server: looking for %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), keys[i]);
+                             //   SOLT:
             /* cycle across the stored data, looking for a match */
             for (k = 0; k < prte_data_server_store.size; k++) {
                 data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_server_store,
@@ -760,41 +849,15 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
 
         /* cycle across the provided keys */
         for (i = 0; NULL != keys[i]; i++) {
-            /* cycle across the stored data, looking for a match */
-            for (k = 0; k < prte_data_server_store.size; k++) {
-                data = (prte_data_object_t *) pmix_pointer_array_get_item(&prte_data_server_store,
-                                                                          k);
-                if (NULL == data) {
-                    continue;
-                }
-                /* can only access data posted by the same user id */
-                if (uid != data->uid) {
-                    continue;
-                }
-                /* can only access data posted by the same process */
-                if (0 != strncmp(requestor.nspace, data->owner.nspace, PMIX_MAX_NSLEN)
-                    || requestor.rank != data->owner.rank) {
-                    continue;
-                }
-                /* can only access data posted for the same range */
-                if (range != data->range) {
-                    continue;
-                }
-                /* see if we have this key */
-                nanswers = 0;
-                for (n = 0; n < data->ninfo; n++) {
-                    if (0 == strlen(data->info[n].key)) {
-                        ++nanswers;
-                        continue;
-                    }
-                    if (0 == strncmp(data->info[n].key, keys[i], PMIX_MAX_KEYLEN)) {
-                        /* found it -  delete the object from the data store */
-                        memset(data->info[n].key, 0, PMIX_MAX_KEYLEN + 1);
-                        ++nanswers;
-                    }
-                }
+
+            prte_data_object_t *data;
+            n = find_stored_key(keys[i], uid, &requestor, range, &k);
+
+            /* found it -  delete the object from the data store */
+            if (0 <= n && 0 <= k) {
                 /* if all the data has been removed, then remove the object */
-                if (nanswers == data->ninfo) {
+                data->info[n] = data->info[data->ninfo-1];
+                if (--(data->ninfo) == 0) {
                     pmix_pointer_array_set_item(&prte_data_server_store, k, NULL);
                     PMIX_RELEASE(data);
                 }

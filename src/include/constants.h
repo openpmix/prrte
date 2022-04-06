@@ -14,6 +14,7 @@
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -111,6 +112,7 @@ enum {
     PRTE_PMIX_LAUNCH_DIRECTIVE = (PRTE_ERR_BASE - 70),
     PRTE_PMIX_LAUNCHER_READY = (PRTE_ERR_BASE - 71),
     PRTE_OPERATION_SUCCEEDED = (PRTE_ERR_BASE - 72),
+    PRTE_ERR_DUPLICATE_KEY = (PRTE_ERR_SPLIT - 73),
 
     /* error codes specific to PRTE - don't forget to update
         src/util/error_strings.c when adding new error codes!!

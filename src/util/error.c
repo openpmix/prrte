@@ -15,7 +15,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
- * Copyright (c) 2017      IBM Corporation. All rights reserved.
+ * Copyright (c) 2017-2022 IBM Corporation. All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
@@ -208,6 +208,9 @@ const char *prte_strerror(int errnum)
         break;
     case PRTE_ERR_PARTIAL_SUCCESS:
         retval = "Partial success";
+        break;
+    case PRTE_ERR_DUPLICATE_KEY:
+        retval = "Key already published";
         break;
     case PRTE_ERR_PROC_ABORTED:
         retval = "Process abnormally terminated";

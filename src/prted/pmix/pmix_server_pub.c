@@ -19,6 +19,7 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2022      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -495,7 +496,11 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender, pmix_data_buffer
         ret = PMIX_ERR_NOT_FOUND;
         goto release;
     } else if (PRTE_ERR_PARTIAL_SUCCESS == status) {
-        rt = PMIX_QUERY_PARTIAL_SUCCESS;
+        ret = PMIX_QUERY_PARTIAL_SUCCESS;
+    } else if (PRTE_ERR_DUPLICATE_KEY == status) {
+        /* This is not actually a return value for lookup, but this seems to be 
+           called in the publish case too */
+        ret = PMIX_ERR_DUPLICATE_KEY;
     } else {
         ret = PMIX_SUCCESS;
     }
