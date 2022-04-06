@@ -1,6 +1,7 @@
 # -*- text -*-
 #
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022      Cisco Systems, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -190,7 +191,7 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --file <arg0>                     This option is unsupported, but mandated by the MPI standard
 
 
-Report bugs to %s
+%s
 #
 [prtemca]
 Syntax: --prtemca <arg0> <arg1>
