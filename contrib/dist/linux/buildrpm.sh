@@ -267,7 +267,7 @@ fi
 # Find where the top RPM-building directory is
 #
 
-rpmtopdir=$HOME/RPMBUILD
+rpmtopdir=${rpmtopdir:-$HOME/RPMBUILD}
 if test "$rpmtopdir" != ""; then
         rpmbuild_options="$rpmbuild_options --define '_topdir $rpmtopdir'"
     if test ! -d "$rpmtopdir"; then
