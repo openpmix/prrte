@@ -331,42 +331,41 @@ process:
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
             }
             proc = prte_rmaps_base_setup_proc(jdata, node, i);
-            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
-                (node->slots < (int) node->num_procs) ||
-                (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
-                if (PRTE_MAPPING_NO_OVERSUBSCRIBE
-                    & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                    prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
-                                   node->num_procs, app->app);
-                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                    rc = PRTE_ERR_SILENT;
-                    goto error;
-                }
-                /* flag the node as oversubscribed so that sched-yield gets
-                 * properly set
-                 */
-                PRTE_FLAG_SET(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
-                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
-                /* check for permission */
-                if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
-                    /* if we weren't given a directive either way, then we will error out
-                     * as the #slots were specifically given, either by the host RM or
-                     * via hostfile/dash-host */
-                    if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN
-                          & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
-                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
-                                       true, app->num_procs, app->app);
+            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
+                /* check if we are oversubscribed */
+                if ((node->slots < (int) node->num_procs) ||
+                    (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
+                    if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
+                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                                       node->num_procs, app->app);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                         rc = PRTE_ERR_SILENT;
                         goto error;
-                    } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE
-                               & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                        /* if we were explicitly told not to oversubscribe, then don't */
-                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
-                                       true, app->num_procs, app->app);
-                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
-                        rc = PRTE_ERR_SILENT;
-                        goto error;
+                    }
+                    /* flag the node as oversubscribed so that sched-yield gets
+                     * properly set
+                     */
+                    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
+                    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+                    /* check for permission */
+                    if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
+                        /* if we weren't given a directive either way, then we will error out
+                         * as the #slots were specifically given, either by the host RM or
+                         * via hostfile/dash-host */
+                        if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
+                            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                                           true, app->num_procs, app->app);
+                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                            rc = PRTE_ERR_SILENT;
+                            goto error;
+                        } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
+                            /* if we were explicitly told not to oversubscribe, then don't */
+                            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                                           true, app->num_procs, app->app);
+                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                            rc = PRTE_ERR_SILENT;
+                            goto error;
+                        }
                     }
                 }
             }
