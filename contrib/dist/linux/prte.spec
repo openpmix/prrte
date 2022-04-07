@@ -14,7 +14,7 @@
 #                         All rights reserved.
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2017-2022 Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -211,7 +211,7 @@ Version: $VERSION
 Release: 1%{?dist}
 License: BSD
 Group: Development/Libraries
-Source: prte-%{version}.tar.$EXTENSION
+Source: %{name}-%{version}.tar.$EXTENSION
 Packager: %{?_packager:%{_packager}}%{!?_packager:%{_vendor}}
 Vendor: %{?_vendorinfo:%{_vendorinfo}}%{!?_vendorinfo:%{_vendor}}
 Distribution: %{?_distribution:%{_distribution}}%{!?_distribution:%{_vendor}}
@@ -355,7 +355,7 @@ This subpackage provides the documentation for Open MPI/OpenSHMEM.
 # there that are not meant to be packaged.
 rm -rf $RPM_BUILD_ROOT
 
-%setup -q -n prte-%{version}
+%setup -q -n %{name}-%{version}
 
 #############################################################################
 #
@@ -678,6 +678,7 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 %{_bindir}/*
 %{_libdir}/*
 %{_datadir}
+%{_includedir}
 %else
 %{_prefix}
 %endif
@@ -727,7 +728,7 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 %if !%{sysconfdir_in_prefix}
 %{_sysconfdir}
 %endif
-# If %{install_in_opt}, then we're instaling OMPI to
+# If %%{install_in_opt}, then we're instaling OMPI to
 # /opt/prte/<version>.  But be sure to also explicitly mention
 # /opt/prte so that it can be removed by RPM when everything under
 # there is also removed.  Also list /opt/prte/<version>/share so
@@ -769,6 +770,10 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 #
 #############################################################################
 %changelog
+* Thu Apr 7 2022 Adam Goldman <adam.goldman@intel.com>
+- Several minor fixes: added _includedir to build_all_in_one_rpm, 
+  escape macro in comment, and use %{name} instead of hard-coded value
+  
 * Tue Mar 28 2017 Jeff Squyres <jsquyres@cisco.com>
 - Reverting a decision from a prior changelog entry: if
   install_in_opt==1, then even put the modulefile under /opt.
