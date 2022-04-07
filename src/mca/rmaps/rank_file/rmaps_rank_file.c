@@ -312,10 +312,10 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                 rc = PRTE_ERR_OUT_OF_RESOURCE;
                 goto error;
             }
-            if ((node->slots < (int) node->num_procs)
-                || (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
-                if (PRTE_MAPPING_NO_OVERSUBSCRIBE
-                    & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
+            /* check if we are oversubscribed */
+            if ((node->slots < (int) node->num_procs) ||
+                (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
+                if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                     prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                                    node->num_procs, app->app);
                     PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
