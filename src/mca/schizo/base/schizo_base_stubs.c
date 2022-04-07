@@ -181,7 +181,7 @@ int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
             // does it already contain a qualifier?
             if (NULL != strchr(opt->values[0], ':')) {
                 // can just add this one to the end
-                pmix_asprintf(&tmp, "%s,%s", opt->values[0], qualifier);
+                pmix_asprintf(&tmp, "%s:%s", opt->values[0], qualifier);
                 free(opt->values[0]);
                 opt->values[0] = tmp;
             } else {
