@@ -159,6 +159,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
             /* construct the absolute path */
             app->app.cwd = pmix_os_path(false, cwd, param, NULL);
         }
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_WDIR_USER_SPECIFIED, NULL, PMIX_BOOL);
     } else if (pmix_cmd_line_is_taken(&results, "set-cwd-to-session-dir")) {
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
     } else {

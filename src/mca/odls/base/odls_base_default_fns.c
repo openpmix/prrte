@@ -888,9 +888,9 @@ static int setup_path(prte_app_context_t *app, char **wdir)
         if (prte_get_attribute(&app->attributes, PRTE_APP_USER_CWD, NULL, PMIX_BOOL)) {
             usercwd = true;
         }
-        if (PMIX_SUCCESS != (rc = pmix_util_check_context_cwd(&app->cwd, true, usercwd))) {
+        rc = pmix_util_check_context_cwd(&app->cwd, true, usercwd);
+        if (PMIX_SUCCESS != rc) {
             /* do not ERROR_LOG - it will be reported elsewhere */
-            rc = prte_pmix_convert_status(rc);
             goto CLEANUP;
         }
 
@@ -1351,7 +1351,6 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         rc = pmix_util_check_context_app(&app->app, app->cwd, app->env);
         /* do not ERROR_LOG - it will be reported elsewhere */
         if (PMIX_SUCCESS != rc) {
-            rc = PRTE_ERR_EXE_NOT_FOUND;
             /* cycle through children to find those for this jobid */
             for (idx = 0; idx < prte_local_children->size; idx++) {
                 child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, idx);
