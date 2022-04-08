@@ -108,6 +108,7 @@ static char *print_aborted_job(prte_job_t *job, prte_app_context_t *approc, prte
     if (PRTE_PROC_STATE_FAILED_TO_START == proc->state
         || PRTE_PROC_STATE_FAILED_TO_LAUNCH == proc->state) {
         switch (proc->exit_code) {
+        case PMIX_ERR_SILENT:
         case PRTE_ERR_SILENT:
             /* say nothing - it was already reported */
             break;
@@ -131,18 +132,23 @@ static char *print_aborted_job(prte_job_t *job, prte_app_context_t *approc, prte
                                            prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
-        case PRTE_ERR_WDIR_NOT_FOUND:
+        case PMIX_ERR_JOB_WDIR_NOT_FOUND:
             output = prte_show_help_string("help-prun.txt", "prun:wdir-not-found", true,
                                            prte_tool_basename, approc->cwd, node->name,
                                            (unsigned long) proc->name.rank);
             break;
-        case PRTE_ERR_EXE_NOT_FOUND:
+        case PMIX_ERR_JOB_WDIR_NOT_ACCESSIBLE:
+             output = prte_show_help_string("help-prun.txt", "prun:wdir-not-accessible", true,
+                                            prte_tool_basename, approc->cwd, node->name,
+                                            (unsigned long) proc->name.rank);
+             break;
+        case PMIX_ERR_JOB_EXE_NOT_FOUND:
             output = prte_show_help_string("help-prun.txt", "prun:exe-not-found", true,
                                            prte_tool_basename, (unsigned long) proc->name.rank,
                                            prte_tool_basename, prte_tool_basename, node->name,
                                            approc->app);
             break;
-        case PRTE_ERR_EXE_NOT_ACCESSIBLE:
+        case PMIX_ERR_EXE_NOT_ACCESSIBLE:
             output = prte_show_help_string("help-prun.txt", "prun:exe-not-accessible", true,
                                            prte_tool_basename, approc->app, node->name,
                                            (unsigned long) proc->name.rank);

@@ -332,8 +332,8 @@ int main(int argc, char *argv[])
 
     /* Set both ends of this pipe to be close-on-exec so that no
      children inherit it */
-    if (pmix_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS
-        || pmix_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
+    if (pmix_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS ||
+        pmix_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
         fprintf(stderr, "unable to set the pipe to CLOEXEC\n");
         prte_progress_thread_finalize(NULL);
         exit(1);

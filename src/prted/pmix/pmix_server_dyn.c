@@ -274,9 +274,15 @@ static void interim(int sd, short args, void *cbdata)
                         /* construct the absolute path */
                         app->cwd = pmix_os_path(false, cwd, info->value.data.string, NULL);
                     }
-                } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_BIN)) {
+#ifdef PMIX_WDIR_USER_SPECIFIED
+                } else if (PMIX_CHECK_KEY(info, PMIX_WDIR_USER_SPECIFIED)) {
                     flag = PMIX_INFO_TRUE(info);
-                    prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, PRTE_ATTR_GLOBAL,
+                    prte_set_attribute(&app->attributes, PRTE_APP_USER_CWD, PRTE_ATTR_GLOBAL,
+                                       &flag, PMIX_BOOL);
+#endif
+                } else if (PMIX_CHECK_KEY(info, PMIX_SET_SESSION_CWD)) {
+                    flag = PMIX_INFO_TRUE(info);
+                    prte_set_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, PRTE_ATTR_GLOBAL,
                                        &flag, PMIX_BOOL);
                 } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_FILES)) {
                     prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, PRTE_ATTR_GLOBAL,
