@@ -105,25 +105,30 @@ static char *print_aborted_job(prte_job_t *job, prte_app_context_t *approc, prte
 {
     char *output = NULL;
 
-    if (PRTE_PROC_STATE_FAILED_TO_START == proc->state
-        || PRTE_PROC_STATE_FAILED_TO_LAUNCH == proc->state) {
+    if (PRTE_PROC_STATE_FAILED_TO_START == proc->state ||
+        PRTE_PROC_STATE_FAILED_TO_LAUNCH == proc->state) {
         switch (proc->exit_code) {
         case PMIX_ERR_SILENT:
         case PRTE_ERR_SILENT:
             /* say nothing - it was already reported */
             break;
-        case PRTE_ERR_SYS_LIMITS_PIPES:
+        case PMIX_ERR_SYS_LIMITS_PIPES:
             output = prte_show_help_string("help-prun.txt", "prun:sys-limit-pipe", true,
                                            prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
-        case PRTE_ERR_PIPE_SETUP_FAILURE:
+        case PMIX_ERR_PIPE_SETUP_FAILURE:
             output = prte_show_help_string("help-prun.txt", "prun:pipe-setup-failure", true,
                                            prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
-        case PRTE_ERR_SYS_LIMITS_CHILDREN:
+        case PMIX_ERR_SYS_LIMITS_CHILDREN:
             output = prte_show_help_string("help-prun.txt", "prun:sys-limit-children", true,
+                                           prte_tool_basename, node->name,
+                                           (unsigned long) proc->name.rank);
+            break;
+        case PMIX_ERR_SYS_LIMITS_FILES:
+            output = prte_show_help_string("help-prun.txt", "prun:sys-limit-files", true,
                                            prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
