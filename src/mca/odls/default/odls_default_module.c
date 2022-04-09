@@ -116,6 +116,7 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/show_help.h"
@@ -614,12 +615,12 @@ static int odls_default_fork_local_proc(void *cdptr)
        then the exec() succeeded.  If the parent reads something from
        the pipe, then the child was letting us know why it failed. */
     if (pipe(p) < 0) {
-        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
+        PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
         if (NULL != child) {
             child->state = PRTE_PROC_STATE_FAILED_TO_START;
-            child->exit_code = PRTE_ERR_SYS_LIMITS_PIPES;
+            child->exit_code = PMIX_ERR_SYS_LIMITS_PIPES;
         }
-        return PRTE_ERR_SYS_LIMITS_PIPES;
+        return PMIX_ERR_SYS_LIMITS_PIPES;
     }
 
     /* Fork off the child */
@@ -629,12 +630,12 @@ static int odls_default_fork_local_proc(void *cdptr)
     }
 
     if (pid < 0) {
-        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_CHILDREN);
+        PRTE_ERROR_LOG(PMIX_ERR_SYS_LIMITS_CHILDREN);
         if (NULL != child) {
             child->state = PRTE_PROC_STATE_FAILED_TO_START;
-            child->exit_code = PRTE_ERR_SYS_LIMITS_CHILDREN;
+            child->exit_code = PMIX_ERR_SYS_LIMITS_CHILDREN;
         }
-        return PRTE_ERR_SYS_LIMITS_CHILDREN;
+        return PMIX_ERR_SYS_LIMITS_CHILDREN;
     }
 
     if (pid == 0) {
@@ -657,11 +658,11 @@ int prte_odls_default_launch_local_procs(pmix_data_buffer_t *data)
     pmix_nspace_t job;
 
     /* construct the list of children we are to launch */
-    if (PRTE_SUCCESS != (rc = prte_odls_base_default_construct_child_list(data, &job))) {
-        PRTE_OUTPUT_VERBOSE(
-            (2, prte_odls_base_framework.framework_output,
-             "%s odls:default:launch:local failed to construct child list on error %s",
-             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
+    rc = prte_odls_base_default_construct_child_list(data, &job);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+                             "%s odls:default:launch:local failed to construct child list on error %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
         return rc;
     }
 
@@ -723,8 +724,8 @@ static int prte_odls_default_signal_local_procs(const pmix_proc_t *proc, int32_t
 {
     int rc;
 
-    if (PRTE_SUCCESS
-        != (rc = prte_odls_base_default_signal_local_procs(proc, signal, send_signal))) {
+    rc = prte_odls_base_default_signal_local_procs(proc, signal, send_signal);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -736,8 +737,8 @@ static int prte_odls_default_restart_proc(prte_proc_t *child)
     int rc;
 
     /* restart the local proc */
-    if (PRTE_SUCCESS
-        != (rc = prte_odls_base_default_restart_proc(child, odls_default_fork_local_proc))) {
+    rc = prte_odls_base_default_restart_proc(child, odls_default_fork_local_proc);
+    if (PRTE_SUCCESS != rc) {
         PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                              "%s odls:default:restart_proc failed to launch on error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));

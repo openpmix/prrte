@@ -1218,6 +1218,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (prte_sys_limits.num_procs < total_num_local_procs) {
             if (2 < caddy->retries) {
                 /* if we have already tried too many times, then just give up */
+                PRTE_ODLS_SET_ERROR(job, PMIX_ERR_SYS_LIMITS_CHILDREN, -1);
                 PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
                 goto ERROR_OUT;
             }
@@ -1244,16 +1245,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (prte_sys_limits.num_files < limit) {
             if (2 < caddy->retries) {
                 /* tried enough - give up */
-                for (idx = 0; idx < prte_local_children->size; idx++) {
-                    child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, idx);
-                    if (NULL == child) {
-                        continue;
-                    }
-                    if (PMIX_CHECK_NSPACE(job, child->name.nspace)) {
-                        child->exit_code = PRTE_PROC_STATE_FAILED_TO_LAUNCH;
-                        PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
-                    }
-                }
+                PRTE_ODLS_SET_ERROR(job, PMIX_ERR_SYS_LIMITS_FILES, -1);
+                PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
                 goto ERROR_OUT;
             }
             /* don't have enough - wait a little time */
@@ -1290,17 +1283,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
              * to flag all the other procs from the app_context as having "not failed"
              * so we can report things out correctly
              */
-            /* cycle through children to find those for this jobid */
-            for (idx = 0; idx < prte_local_children->size; idx++) {
-                child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, idx);
-                if (NULL == child) {
-                    continue;
-                }
-                if (PMIX_CHECK_NSPACE(job, child->name.nspace) && j == (int) child->app_idx) {
-                    child->exit_code = rc;
-                    PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);
-                }
-            }
+            PRTE_ODLS_SET_ERROR(job, PMIX_ERR_SYS_LIMITS_FILES, j);
+            PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
             goto GETOUT;
         }
 
