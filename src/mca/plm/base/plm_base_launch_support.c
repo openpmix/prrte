@@ -1648,6 +1648,13 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                     root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
                 }
                 sum = (prte_hwloc_topo_data_t *) root->userdata;
+                /* If we set sum->available without first calling filter_cpus()
+                 * then any subsequent filter_cpus() call will early-return
+                 * and it won't set up a cached value for sum->num_numas.  I'm
+                 * uncertain if fixing by calling filter_cpus() here is better,
+                 * or if the early-return in filter_cpus() is the problem.
+                 */
+                prte_hwloc_base_filter_cpus(topo);
                 sum->available = prte_hwloc_base_setup_summary(topo);
                 /* cleanup */
                 PMIX_DATA_BUFFER_DESTRUCT(data);

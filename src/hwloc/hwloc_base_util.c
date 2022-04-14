@@ -19,7 +19,7 @@
  * Copyright (C) 2018      Mellanox Technologies, Ltd.
  *                         All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
- * Copyright (c) 2019-2020 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2019-2022 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -223,6 +223,8 @@ int prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
     sum = (prte_hwloc_topo_data_t *) root->userdata;
 
     /* should only ever enter here once, but check anyway */
+    /* (?) but sum->available isn't exclusively set here so */
+    /* this doesn't guarantee filter_cpus has already been called */
     if (NULL != sum->available) {
         return PRTE_SUCCESS;
     }

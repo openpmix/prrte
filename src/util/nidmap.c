@@ -859,6 +859,13 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
                     root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
                 }
                 sum = (prte_hwloc_topo_data_t *) root->userdata;
+                /* I'm concerned about how this sets up sum->available thus if
+                 * a prte_hwloc_base_filter_cpus() happens in the future that
+                 * function will early-return without caching a sum->num_numas.
+                 * But I'm not currently adding a filter_cpus() call here since
+                 * I don't have a testcase that's exercising this codepath to
+                 * be confident adding that call here is a good fix.
+                 */
                 sum->available = prte_hwloc_base_setup_summary(topo);
                 t2->index = pmix_pointer_array_add(prte_node_topologies, t2);
             }
