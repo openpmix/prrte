@@ -6,6 +6,7 @@
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -854,7 +855,9 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
                 t2->topo = topo;
                 /* need to ensure the summary is setup */
                 root = hwloc_get_root_obj(topo);
-                root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
+                if (NULL == root->userdata) {
+                    root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
+                }
                 sum = (prte_hwloc_topo_data_t *) root->userdata;
                 sum->available = prte_hwloc_base_setup_summary(topo);
                 t2->index = pmix_pointer_array_add(prte_node_topologies, t2);

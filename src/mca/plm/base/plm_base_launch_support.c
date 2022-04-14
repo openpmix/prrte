@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2016-2020 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2016-2022 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -1239,7 +1239,13 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     /* setup the summary data for this topology as we will need
      * it when we go to map/bind procs to it */
     root = hwloc_get_root_obj(topo);
-    root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
+    /* I made a PR to add an "if" around several root->userdata = PMIX_NEW()
+     * locations.  But this is the only one I actually saw cause a problem
+     * at runtime where it threw away previously cached data.
+     */
+    if (NULL == root->userdata) {
+        root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
+    }
     sum = (prte_hwloc_topo_data_t *) root->userdata;
     sum->available = prte_hwloc_base_setup_summary(topo);
 
@@ -1638,7 +1644,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 /* setup the summary data for this topology as we will need
                  * it when we go to map/bind procs to it */
                 root = hwloc_get_root_obj(topo);
-                root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
+                if (NULL == root->userdata) {
+                    root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
+                }
                 sum = (prte_hwloc_topo_data_t *) root->userdata;
                 sum->available = prte_hwloc_base_setup_summary(topo);
                 /* cleanup */
