@@ -14,7 +14,7 @@
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
- * Copyright (c) 2021      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021-2022 IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -660,7 +660,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t 
             /* if this is a comm_spawn situation, start with the object
              * where the parent left off and increment */
             if (!PMIX_NSPACE_INVALID(jdata->originator.nspace) && UINT_MAX != jdata->bkmark_obj) {
-                start = (jdata->bkmark_obj + 1) % nobjs;
+                start = node->num_procs % nobjs;
             }
             /* compute the number of procs to go on this node */
             if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
