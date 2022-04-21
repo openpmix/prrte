@@ -289,8 +289,8 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
     // If the user is using prterun --personality ompi, these
     // won't be set, and thus this is not mpirun/mpiexec.
     if(tool_version && tool_name) {
-        prte_tool_version  = tool_version;
-        prte_tool_basename = tool_name;
+        prte_tool_version  = (char*)tool_version;
+        prte_tool_basename = (char*)tool_name;
         prte_tool_org      = "Open MPI";
         prte_tool_msg      = "Report bugs to https://www.open-mpi.org/community/help/";
     }

@@ -423,7 +423,7 @@ int main(int argc, char *argv[])
     /* detach from controlling terminal
      * otherwise, remain attached so output can get to us
      */
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
+    if (prte_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         pipe(wait_pipe);
         prte_state_base_parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
@@ -1252,7 +1252,7 @@ static void surekill(void)
     /* we don't know how far we got, so be careful here */
     if (NULL != prte_local_children) {
         for (n=0; n < prte_local_children->size; n++) {
-            child = (prte_proc_t*)pmix_pointer_array_get_item(prte_local_children, n);
+            child = (prte_proc_t*)prte_pointer_array_get_item(prte_local_children, n);
             if (NULL != child && 0 < child->pid) {
                 pid = child->pid;
 #if HAVE_SETPGID

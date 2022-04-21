@@ -1901,8 +1901,8 @@ int prte_plm_base_setup_prted_cmd(int *argc, char ***argv)
  */
 int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, int *proc_vpid_index)
 {
-    char *param = NULL;
-    int i, j, cnt;
+    char *param = NULL, **tmpv;
+    int i, j, cnt, offset;
     prte_job_t *jdata;
     unsigned long num_procs;
     bool ignore;
@@ -1924,7 +1924,7 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
         prte_argv_append(argc, argv, "--allow-run-as-root");
     }
     if (prte_allow_run_as_root) {
-        pmix_argv_append(argc, argv, "--allow-run-as-root");
+        prte_argv_append(argc, argv, "--allow-run-as-root");
     }
     if (prte_map_stddiag_to_stderr) {
         prte_argv_append(argc, argv, "--prtemca");
@@ -1982,9 +1982,9 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
 
     /* if --xterm was specified, pass that along */
     if (NULL != prte_xterm) {
-        pmix_argv_append(argc, argv, "--prtemca");
-        pmix_argv_append(argc, argv, "prte_xterm");
-        pmix_argv_append(argc, argv, prte_xterm);
+        prte_argv_append(argc, argv, "--prtemca");
+        prte_argv_append(argc, argv, "prte_xterm");
+        prte_argv_append(argc, argv, prte_xterm);
     }
 
     /* look for any envars that relate to us and pass
@@ -1993,7 +1993,7 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
     for (i=0; NULL != environ[i]; i++) {
         if (0 == strncmp(environ[i], "PMIX_MCA_", offset) ||
             0 == strncmp(environ[i], "PRTE_MCA_", offset)) {
-            tmpv = pmix_argv_split(environ[i], '=');
+            tmpv = prte_argv_split(environ[i], '=');
             /* check for duplicate */
             ignore = false;
             for (j = 0; j < *argc; j++) {
@@ -2005,14 +2005,14 @@ int prte_plm_base_prted_append_basic_args(int *argc, char ***argv, char *ess, in
             if (!ignore) {
                 /* pass it along */
                 if (0 == strncmp(tmpv[0], "PRTE_MCA_", offset)) {
-                    pmix_argv_append(argc, argv, "--prtemca");
+                    prte_argv_append(argc, argv, "--prtemca");
                 } else {
-                    pmix_argv_append(argc, argv, "--pmixmca");
+                    prte_argv_append(argc, argv, "--pmixmca");
                 }
-                pmix_argv_append(argc, argv, &tmpv[0][offset]);
-                pmix_argv_append(argc, argv, tmpv[1]);
+                prte_argv_append(argc, argv, &tmpv[0][offset]);
+                prte_argv_append(argc, argv, tmpv[1]);
             }
-            pmix_argv_free(tmpv);
+            prte_argv_free(tmpv);
         }
     }
 
