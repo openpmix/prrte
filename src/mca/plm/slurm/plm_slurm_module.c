@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -270,7 +270,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
      * constraint, but will ensure it doesn't get
      * bound to only one processor
      */
-    pmix_argv_append(&argc, &argv, "--cpu-bind=none");
+    prte_argv_append(&argc, &argv, "--cpu-bind=none");
 
     /* protect against launchers that forward the entire environment */
     if (NULL != getenv("PMIX_LAUNCHER_PAUSE_FOR_TOOL")) {
@@ -581,7 +581,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
     int srun_pid;
     int n;
     char **tmp = NULL, *p;
-    char *exec_argv = pmix_path_findv(argv[0], 0, environ, NULL);
+    char *exec_argv = prte_path_findv(argv[0], 0, environ, NULL);
     prte_proc_t *dummy;
 
     if (NULL == exec_argv) {
