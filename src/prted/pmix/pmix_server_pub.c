@@ -65,8 +65,8 @@ static int init_server(void)
     if (NULL == prte_data_server_uri) {
         prte_pmix_server_globals.server = *PRTE_PROC_MY_HNP;
     } else {
-        if (0 == strncmp(prte_data_server_uri, "file", strlen("file"))
-            || 0 == strncmp(prte_data_server_uri, "FILE", strlen("FILE"))) {
+        if (0 == strncmp(prte_data_server_uri, "file", strlen("file")) ||
+            0 == strncmp(prte_data_server_uri, "FILE", strlen("FILE"))) {
             /* it is a file - get the filename */
             filename = strchr(prte_data_server_uri, ':');
             if (NULL == filename) {
@@ -105,15 +105,16 @@ static int init_server(void)
             server = strdup(prte_data_server_uri);
         }
         /* parse the URI to get the server's name */
-        if (PRTE_SUCCESS
-            != (rc = prte_rml_parse_uris(server, &prte_pmix_server_globals.server, NULL))) {
+        rc = prte_rml_parse_uris(server, &prte_pmix_server_globals.server, NULL);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             free(server);
             return rc;
         }
         /* setup our route to the server */
         PMIX_VALUE_LOAD(&val, server, PMIX_STRING);
-        if (PMIX_SUCCESS != (ret = PMIx_Store_internal(PRTE_PROC_MY_PROCID, PMIX_PROC_URI, &val))) {
+        ret = PMIx_Store_internal(&prte_pmix_server_globals.server, PMIX_PROC_URI, &val);
+        if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             PMIX_VALUE_DESTRUCT(&val);
             return rc;

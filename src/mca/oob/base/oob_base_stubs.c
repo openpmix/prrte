@@ -219,12 +219,11 @@ void prte_oob_base_get_addr(char **uri)
     bool one_added = false;
     prte_mca_base_component_list_item_t *cli;
     prte_oob_base_component_t *component;
-    pmix_value_t val;
     pmix_status_t rc;
 
     /* start with our process name */
-    if (PRTE_SUCCESS
-        != (rc = prte_util_convert_process_name_to_string(&final, PRTE_PROC_MY_NAME))) {
+    rc = prte_util_convert_process_name_to_string(&final, PRTE_PROC_MY_NAME);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         *uri = NULL;
         return;
@@ -277,13 +276,6 @@ void prte_oob_base_get_addr(char **uri)
     }
 
     *uri = final;
-    /* push this into our modex storage */
-    PMIX_VALUE_LOAD(&val, final, PMIX_STRING);
-    if (PMIX_SUCCESS
-        != (rc = PMIx_Store_internal(&prte_process_info.myproc, PMIX_PROC_URI, &val))) {
-        PMIX_ERROR_LOG(rc);
-    }
-    PMIX_VALUE_DESTRUCT(&val);
 }
 
 static void process_uri(char *uri)
