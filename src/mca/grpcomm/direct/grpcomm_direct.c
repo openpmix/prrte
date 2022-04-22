@@ -545,17 +545,21 @@ static void xcast_recv(int status, pmix_proc_t *sender,
                 return;
             }
 
-            /* store it locally */
-            ret = PMIx_Store_internal(&dmn, PMIX_PROC_URI, &val);
-            PMIX_VALUE_DESTRUCT(&val);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-                PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-                PMIX_DESTRUCT(&coll);
-                PMIX_DATA_BUFFER_RELEASE(rly);
-                PMIX_DATA_BUFFER_RELEASE(relay);
-                return;
+            if (!PMIX_CHECK_PROCID(&dmn, PRTE_PROC_MY_HNP) &&
+                !PMIX_CHECK_PROCID(&dmn, PRTE_PROC_MY_NAME) &&
+                !PMIX_CHECK_PROCID(&dmn, PRTE_PROC_MY_PARENT)) {
+                /* store it locally */
+                ret = PMIx_Store_internal(&dmn, PMIX_PROC_URI, &val);
+                PMIX_VALUE_DESTRUCT(&val);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
+                    PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
+                    PMIX_DESTRUCT(&coll);
+                    PMIX_DATA_BUFFER_RELEASE(rly);
+                    PMIX_DATA_BUFFER_RELEASE(relay);
+                    return;
+                }
             }
         }
         if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != ret) {

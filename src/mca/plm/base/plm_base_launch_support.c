@@ -1372,6 +1372,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     bool compressed;
     pmix_data_buffer_t datbuf, *data;
     pmix_topology_t ptopo;
+    pmix_value_t cnctinfo;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     /* get the daemon job, if necessary */
@@ -1412,67 +1413,24 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         daemon->state = PRTE_PROC_STATE_RUNNING;
         /* record that this daemon is alive */
         PRTE_FLAG_SET(daemon, PRTE_PROC_FLAG_ALIVE);
-
-        /* unpack the flag indicating if we have info objects */
+        /* unload its contact info */
+        PMIX_VALUE_CONSTRUCT(&cnctinfo);
         idx = 1;
-        ret = PMIx_Data_unpack(NULL, buffer, &flag, &idx, PMIX_INT32);
+        ret = PMIx_Data_unpack(NULL, buffer, &cnctinfo.data.string, &idx, PMIX_STRING);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             prted_failed_launch = true;
             goto CLEANUP;
         }
-
-        if (0 < flag) {
-            /* unpack the byte object containing the info array */
-            idx = 1;
-            ret = PMIx_Data_unpack(NULL, buffer, &pbo, &idx, PMIX_BYTE_OBJECT);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                prted_failed_launch = true;
-                goto CLEANUP;
-            }
-            /* load the bytes into a PMIx data buffer for unpacking */
-            PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
-            ret = PMIx_Data_load(&pbuf, &pbo);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                prted_failed_launch = true;
-                goto CLEANUP;
-            }
-            PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-            /* unpack the number of info structs */
-            idx = 1;
-            ret = PMIx_Data_unpack(NULL, &pbuf, &ninfo, &idx, PMIX_SIZE);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                prted_failed_launch = true;
-                goto CLEANUP;
-            }
-            PMIX_INFO_CREATE(info, ninfo);
-            idx = ninfo;
-            ret = PMIx_Data_unpack(NULL, &pbuf, info, &idx, PMIX_INFO);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-                PMIX_INFO_FREE(info, ninfo);
-                PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-                prted_failed_launch = true;
-                goto CLEANUP;
-            }
-            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
-
-            for (n = 0; n < ninfo; n++) {
-                /* store this in a daemon wireup buffer for later distribution */
-                ret = PMIx_Store_internal(&dname, info[n].key, &info[n].value);
-                if (PMIX_SUCCESS != ret) {
-                    PMIX_ERROR_LOG(ret);
-                    PMIX_INFO_FREE(info, ninfo);
-                    prted_failed_launch = true;
-                    goto CLEANUP;
-                }
-            }
-            PMIX_INFO_FREE(info, ninfo);
+        /* store this for later distribution */
+        ret = PMIx_Store_internal(&dname, PMIX_PROC_URI, &cnctinfo);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_VALUE_DESTRUCT(&cnctinfo);
+            prted_failed_launch = true;
+            goto CLEANUP;
         }
+        PMIX_VALUE_DESTRUCT(&cnctinfo);
 
         /* unpack the node name */
         idx = 1;
