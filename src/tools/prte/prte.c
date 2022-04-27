@@ -462,8 +462,9 @@ int main(int argc, char *argv[])
     if (NULL != opt) {
         prte_pmix_server_globals.report_uri = strdup(opt->values[0]);
     }
-    /* don't aggregate help messages as that will apply job-to-job */
-    pmix_setenv("PRTE_MCA_prte_base_help_aggregate", "0", true, &environ);
+
+    /* aggregate messages from prte. */
+    pmix_setenv("PRTE_MCA_prte_base_help_aggregate", "1", true, &environ);
 
     /* if we are supporting a singleton, push its ID into the environ
      * so it can get picked up and registered by server init */
