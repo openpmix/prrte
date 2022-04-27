@@ -663,17 +663,18 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
                         const pmix_info_t directives[], size_t ndirs, pmix_op_cbfunc_t cbfunc,
                         void *cbdata)
 {
-    size_t n, cnt;
+    size_t n, cnt, dcnt;
     pmix_data_buffer_t *buf;
     int rc = PRTE_SUCCESS;
-    pmix_data_buffer_t pbuf;
-    pmix_byte_object_t pbo;
+    pmix_data_buffer_t pbuf, dbuf;
+    pmix_byte_object_t pbo, dbo;
     pmix_status_t ret;
-
     prte_output_verbose(2, prte_pmix_server_globals.output, "%s logging info",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
+    PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
     /* if we are the one that passed it down, then we don't pass it back */
+    dcnt = 0;
     for (n = 0; n < ndirs; n++) {
         if (PMIX_CHECK_KEY(&directives[n], "prte.log.noloop")) {
             if (PMIX_INFO_TRUE(&directives[n])) {
@@ -681,39 +682,33 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
                 goto done;
             }
         }
+        else {
+            ret = PMIx_Data_pack(NULL, &dbuf, (pmix_info_t *) &directives[n], 1, PMIX_INFO);
+            if (PMIX_SUCCESS != ret) {
+                PMIX_ERROR_LOG(ret);
+            }
+            dcnt++;
+        }
     }
 
     PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
     cnt = 0;
 
     for (n = 0; n < ndata; n++) {
-        if (0 == strncmp(data[n].key, PRTE_PMIX_SHOW_HELP, PMIX_MAX_KEYLEN)) {
-            /* pull out the blob */
-            if (PMIX_BYTE_OBJECT != data[n].value.type) {
-                continue;
-            }
-            PMIX_DATA_BUFFER_CREATE(buf);
-            /* we don't "own" the data here, so we cannot just point to it
-             * nor can we "adopt" it - we have to actually make a copy of it */
-            rc = PMIx_Data_embed(buf, &data[n].value.data.bo);
-            PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf,
-                          PRTE_RML_TAG_SHOW_HELP);
-            if (PRTE_SUCCESS != rc) {
-                PRTE_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(buf);
-            }
-        } else {
-            /* ship this to our HNP/MASTER for processing, even if that is us */
-            ret = PMIx_Data_pack(NULL, &pbuf, (pmix_info_t *) &data[n], 1, PMIX_INFO);
-            if (PMIX_SUCCESS != ret) {
-                PMIX_ERROR_LOG(ret);
-            }
-            ++cnt;
+        /* ship this to our HNP/MASTER for processing, even if that is us */
+        ret = PMIx_Data_pack(NULL, &pbuf, (pmix_info_t *) &data[n], 1, PMIX_INFO);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
         }
+        ++cnt;
     }
     if (0 < cnt) {
         PMIX_DATA_BUFFER_CREATE(buf);
         rc = PMIx_Data_pack(NULL, buf, &cnt, 1, PMIX_SIZE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+        rc = PMIx_Data_pack(NULL, buf, &dcnt, 1, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
@@ -723,6 +718,13 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
         }
         rc = PMIx_Data_pack(NULL, buf, &pbo, 1, PMIX_BYTE_OBJECT);
         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
+
+        rc = PMIx_Data_unload(&dbuf, &dbo);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+        rc = PMIx_Data_pack(NULL, buf, &dbo, 1, PMIX_BYTE_OBJECT);
+        PMIX_BYTE_OBJECT_DESTRUCT(&dbo);
         PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf,
                       PRTE_RML_TAG_LOGGING);
         if (PRTE_SUCCESS != rc) {

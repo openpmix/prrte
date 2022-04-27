@@ -103,6 +103,13 @@
 
 BEGIN_C_DECLS
 
+typedef struct {
+    pmix_info_t *info;
+    pmix_info_t *dirs;
+    char *msg;
+} prte_log_info_t;
+
+
 /**
  * \internal
  *
@@ -170,9 +177,6 @@ PRTE_EXPORT int prte_show_help_norender(const char *filename, const char *topic,
  * interfering with the linked PRTE libs when they need to do show_help.
  */
 PRTE_EXPORT int prte_show_help_add_dir(const char *directory);
-
-PRTE_EXPORT void prte_show_help_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
-                                     prte_rml_tag_t tag, void *cbdata);
 
 END_C_DECLS
 
