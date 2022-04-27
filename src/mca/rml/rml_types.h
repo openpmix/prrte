@@ -107,9 +107,6 @@ BEGIN_C_DECLS
 #define PRTE_RML_TAG_ALLGATHER_BRUCKS 34
 #define PRTE_RML_TAG_ALLGATHER_RCD    35
 
-/* show help */
-#define PRTE_RML_TAG_SHOW_HELP 36
-
 /* debugger release */
 #define PRTE_RML_TAG_DEBUGGER_RELEASE 37
 
