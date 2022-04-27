@@ -35,7 +35,6 @@
 
 #include "src/mca/iof/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/mca/rml/rml.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/argv.h"
@@ -56,103 +55,52 @@ static const char *dash_line
 static char **search_dirs = NULL;
 static bool show_help_initialized = false;
 
-/* List items for holding (filename, topic) tuples */
-typedef struct {
-    prte_list_item_t super;
-    /* The filename */
-    char *tli_filename;
-    /* The topic */
-    char *tli_topic;
-    /* List of process names that have displayed this (filename, topic) */
-    prte_list_t tli_processes;
-    /* Time this message was displayed */
-    time_t tli_time_displayed;
-    /* Count of processes since last display (i.e., "new" processes
-       that have showed this message that have not yet been output) */
-    int tli_count_since_last_display;
-    /* Do we want to display these? */
-    bool tli_display;
-} tuple_list_item_t;
-static void tuple_list_item_constructor(tuple_list_item_t *obj)
-{
-    obj->tli_filename = NULL;
-    obj->tli_topic = NULL;
-    PRTE_CONSTRUCT(&(obj->tli_processes), prte_list_t);
-    obj->tli_time_displayed = time(NULL);
-    obj->tli_count_since_last_display = 0;
-    obj->tli_display = true;
-}
-
-static void tuple_list_item_destructor(tuple_list_item_t *obj)
-{
-    if (NULL != obj->tli_filename) {
-        free(obj->tli_filename);
-    }
-    if (NULL != obj->tli_topic) {
-        free(obj->tli_topic);
-    }
-    PRTE_LIST_DESTRUCT(&(obj->tli_processes));
-}
-static PRTE_CLASS_INSTANCE(tuple_list_item_t, prte_list_item_t, tuple_list_item_constructor,
-                           tuple_list_item_destructor);
-
-/* List of (filename, topic) tuples that have already been displayed */
-static prte_list_t abd_tuples;
-
-/* How long to wait between displaying duplicate show_help notices */
-static struct timeval show_help_interval = {5, 0};
-
-/* Timer for displaying duplicate help message notices */
-static time_t show_help_time_last_displayed = 0;
-static bool show_help_timer_set = false;
-static prte_event_t show_help_timer_event;
-
-/* pass info the PMIx server for handling */
-static void lkcbfunc(pmix_status_t status, void *cbdata)
-{
-    prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
-
-    PRTE_POST_OBJECT(lk);
-    lk->status = prte_pmix_convert_status(status);
-    PRTE_PMIX_WAKEUP_THREAD(lk);
-}
-
-static void local_delivery(const char *msg)
-{
-    pmix_byte_object_t bo;
-    prte_pmix_lock_t lock;
-    pmix_status_t rc;
-    int ret;
-
-    /* setup the byte object */
-    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-    if (NULL != msg) {
-        bo.bytes = (char *) msg;
-        bo.size = strlen(msg) + 1;
-    }
-    PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    rc = PMIx_server_IOF_deliver(&prte_process_info.myproc,
-                                 PMIX_FWD_STDDIAG_CHANNEL,
-                                 &bo, NULL, 0, lkcbfunc, (void *) &lock);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-    } else {
-        /* wait for completion */
-        PRTE_PMIX_WAIT_THREAD(&lock);
-        if (PMIX_SUCCESS != lock.status) {
-            PMIX_ERROR_LOG(lock.status);
-        }
-    }
-    PRTE_PMIX_DESTRUCT_LOCK(&lock);
-}
-
-
 /*
  * Local functions
  */
-static void show_accumulated_duplicates(int fd, short event, void *context);
-static int show_help(const char *filename, const char *topic, const char *output,
-                     pmix_proc_t *sender);
+static void prte_show_help_cbfunc(pmix_status_t status, void *cbdata)
+{
+    prte_log_info_t *info = (prte_log_info_t *) cbdata;
+    if(PMIX_SUCCESS != status && PMIX_OPERATION_SUCCEEDED != status) {
+        fprintf(stderr, "%s", info -> msg);
+    }
+    PMIX_INFO_DESTRUCT(info -> info);
+    if(info -> dirs) {
+        PMIX_INFO_DESTRUCT(info -> dirs);
+    }
+    free(info -> msg);
+    free(info);
+}
+
+static void local_delivery(const char *file, const char *topic, char *msg) {
+
+    pmix_info_t *info, *dirs;
+    int ninfo = 0, ndirs = 0;
+    PMIX_INFO_CREATE(info, 1);
+    PMIX_INFO_LOAD(&info[ninfo++], PMIX_LOG_STDERR, msg, PMIX_STRING);
+
+    prte_log_info_t *cbdata = calloc(1, sizeof(prte_log_info_t));
+    if(prte_help_want_aggregate) {
+        PMIX_INFO_CREATE(dirs, 3);
+        PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_LOG_AGG, &prte_help_want_aggregate, PMIX_BOOL);
+        PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_LOG_KEY, file, PMIX_STRING);
+        PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_LOG_VAL, topic, PMIX_STRING);
+        cbdata -> dirs = dirs;
+    }
+
+    cbdata -> info = info;
+    cbdata -> msg  = msg;
+
+    prte_status_t rc = PMIx_Log_nb(info, ninfo, dirs, ndirs, prte_show_help_cbfunc, cbdata);
+    if(PMIX_SUCCESS != rc) {
+        PMIX_INFO_DESTRUCT(info);
+        if(prte_help_want_aggregate) {
+            PMIX_INFO_DESTRUCT(dirs);
+        }
+        free(msg);
+        free(cbdata);
+    }
+}
 
 int prte_show_help_init(void)
 {
@@ -160,9 +108,6 @@ int prte_show_help_init(void)
         return PRTE_SUCCESS;
     }
 
-    PRTE_CONSTRUCT(&abd_tuples, prte_list_t);
-
-    prte_argv_append_nosize(&search_dirs, prte_install_dirs.prtedatadir);
     show_help_initialized = true;
     return PRTE_SUCCESS;
 }
@@ -175,16 +120,9 @@ void prte_show_help_finalize(void)
 
     /* Shutdown show_help, showing final messages */
     if (PRTE_PROC_IS_MASTER) {
-        show_accumulated_duplicates(0, 0, NULL);
-        PRTE_LIST_DESTRUCT(&abd_tuples);
-        if (show_help_timer_set) {
-            prte_event_evtimer_del(&show_help_timer_event);
-        }
         show_help_initialized = false;
         return;
     }
-
-    PRTE_LIST_DESTRUCT(&abd_tuples);
 
     /* destruct the search list */
     if (NULL != search_dirs) {
@@ -242,50 +180,6 @@ static int array2string(char **outstring, int want_error_header, char **lines)
     return PRTE_SUCCESS;
 }
 
-static int send_hnp(const char *filename,
-                    const char *topic,
-                    const char *output)
-{
-    pmix_data_buffer_t *buf;
-    int rc;
-
-    /* build the message to the HNP */
-    PMIX_DATA_BUFFER_CREATE(buf);
-    /* pack the filename of the show_help text file */
-    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &filename, 1, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-        rc = prte_pmix_convert_status(rc);
-        return rc;
-    }
-    /* pack the topic tag */
-    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &topic, 1, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-        rc = prte_pmix_convert_status(rc);
-        return rc;
-    }
-    /* pack the string */
-    rc = PMIx_Data_pack(PRTE_PROC_MY_NAME, buf, &output, 1, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(buf);
-        rc = prte_pmix_convert_status(rc);
-        return rc;
-    }
-
-    /* send it via RML to the HNP */
-    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_SHOW_HELP,
-                                          prte_rml_send_callback, NULL))) {
-        PMIX_DATA_BUFFER_RELEASE(buf);
-    }
-
-    return rc;
-}
-
-
 /*
  * Find the right file to open
  */
@@ -334,14 +228,7 @@ static int open_file(const char *base, const char *topic)
         prte_asprintf(&tmp, "%sSorry!  You were supposed to get help about:\n    %s\nBut I couldn't open "
                       "the help file:\n    %s.  Sorry!\n%s",
                       dash_line, topic, err_msg, dash_line);
-        local_delivery(tmp);
-        if (PRTE_PROC_IS_DAEMON) {
-            rc = send_hnp(base, topic, tmp);
-            if (PRTE_SUCCESS != rc) {
-                PRTE_ERROR_LOG(rc);
-            }
-        }
-        free(tmp);
+        local_delivery(topic, err_msg, tmp);
         free(err_msg);
         return PRTE_ERR_NOT_FOUND;
     }
@@ -393,14 +280,7 @@ static int find_topic(const char *base, const char *topic)
             prte_asprintf(&tmp, "%sSorry!  You were supposed to get help about:\n    %s\nfrom the file:\n  "
                           "  %s\nBut I couldn't find that topic in the file.  Sorry!\n%s",
                           dash_line, topic, base, dash_line);
-            local_delivery(tmp);
-            if (PRTE_PROC_IS_DAEMON) {
-                ret = send_hnp(base, topic, tmp);
-                if (PRTE_SUCCESS != ret) {
-                    PRTE_ERROR_LOG(ret);
-                }
-            }
-            free(tmp);
+            local_delivery(topic, base, tmp);
             return PRTE_ERR_NOT_FOUND;
 
         default:
@@ -513,7 +393,6 @@ int prte_show_help(const char *filename, const char *topic, int want_error_heade
     }
 
     rc = prte_show_help_norender(filename, topic, want_error_header, output);
-    free(output);
     return rc;
 }
 
@@ -528,293 +407,16 @@ int prte_show_help_norender(const char *filename, const char *topic,
 {
     int rc = PRTE_SUCCESS;
     int8_t have_output = 1;
-    bool am_inside = false;
     PRTE_HIDE_UNUSED_PARAMS(want_error_header);
-
-    /* if we are the HNP, or the RML has not yet been setup,
-     * or ROUTED has not been setup,
-     * or we weren't given an HNP, then all we can do is process this locally
-     */
-    if (PRTE_PROC_IS_MASTER || NULL == prte_rml.send_buffer_nb || NULL == prte_routed.get_route
-        || NULL == prte_process_info.my_hnp_uri) {
-        rc = show_help(filename, topic, output, PRTE_PROC_MY_NAME);
-        goto CLEANUP;
-    }
 
     /* pass to the PMIx server in case we have a tool
      * attached to us */
-    local_delivery(output);
-
-    /* relay the output message to the HNP for processing */
-
-    /* JMS Note that we *may* have a recursion situation here where
-       the RML could call show_help.  Need to think about this
-       properly, but put a safeguard in here for sure for the time
-       being. */
-    if (!am_inside && PRTE_PROC_IS_DAEMON) {
-        am_inside = true;
-        rc = send_hnp(filename, topic, output);
-        am_inside = false;
+    if(output) {
+        // strdup() it - so show_help owns a copy of this string,
+        // and let the caller do what they want with the original string.
+        local_delivery(filename, topic, strdup(output));
     }
 
 CLEANUP:
     return rc;
-}
-
-/*
- * Returns PRTE_SUCCESS if the strings match; PRTE_ERROR otherwise.
- */
-static int match(const char *a, const char *b)
-{
-    int rc = PRTE_ERROR;
-    char *p1, *p2, *tmp1 = NULL, *tmp2 = NULL;
-    size_t min;
-
-    /* Check straight string match first */
-    if (0 == strcmp(a, b))
-        return PRTE_SUCCESS;
-
-    if (NULL != strchr(a, '*') || NULL != strchr(b, '*')) {
-        tmp1 = strdup(a);
-        if (NULL == tmp1) {
-            return PRTE_ERR_OUT_OF_RESOURCE;
-        }
-        tmp2 = strdup(b);
-        if (NULL == tmp2) {
-            free(tmp1);
-            return PRTE_ERR_OUT_OF_RESOURCE;
-        }
-        p1 = strchr(tmp1, '*');
-        p2 = strchr(tmp2, '*');
-
-        if (NULL != p1) {
-            *p1 = '\0';
-        }
-        if (NULL != p2) {
-            *p2 = '\0';
-        }
-        min = strlen(tmp1);
-        if (strlen(tmp2) < min) {
-            min = strlen(tmp2);
-        }
-        if (0 == min || 0 == strncmp(tmp1, tmp2, min)) {
-            rc = PRTE_SUCCESS;
-        }
-        free(tmp1);
-        free(tmp2);
-        return rc;
-    }
-
-    /* No match */
-    return PRTE_ERROR;
-}
-
-/*
- * Check to see if a given (filename, topic) tuple has been displayed
- * already.  Return PRTE_SUCCESS if so, or PRTE_ERR_NOT_FOUND if not.
- *
- * Always return a tuple_list_item_t representing this (filename,
- * topic) entry in the list of "already been displayed tuples" (if it
- * wasn't in the list already, this function will create a new entry
- * in the list and return it).
- *
- * Note that a list is not an overly-efficient mechanism for this kind
- * of data.  The assupmtion is that there will only be a small numebr
- * of (filename, topic) tuples displayed so the storage required will
- * be fairly small, and linear searches will be fast enough.
- */
-static int get_tli(const char *filename, const char *topic, tuple_list_item_t **tli)
-{
-    /* Search the list for a duplicate. */
-    PRTE_LIST_FOREACH(*tli, &abd_tuples, tuple_list_item_t)
-    {
-        if (PRTE_SUCCESS == match((*tli)->tli_filename, filename)
-            && PRTE_SUCCESS == match((*tli)->tli_topic, topic)) {
-            return PRTE_SUCCESS;
-        }
-    }
-
-    /* Nope, we didn't find it -- make a new one */
-    *tli = PRTE_NEW(tuple_list_item_t);
-    if (NULL == *tli) {
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-    (*tli)->tli_filename = strdup(filename);
-    (*tli)->tli_topic = strdup(topic);
-    prte_list_append(&abd_tuples, &((*tli)->super));
-    return PRTE_ERR_NOT_FOUND;
-}
-
-static void show_accumulated_duplicates(int fd, short event, void *context)
-{
-    time_t now = time(NULL);
-    tuple_list_item_t *tli;
-    char *tmp;
-    PRTE_HIDE_UNUSED_PARAMS(fd, event, context);
-
-    /* Loop through all the messages we've displayed and see if any
-       processes have sent duplicates that have not yet been displayed
-       yet */
-    PRTE_LIST_FOREACH(tli, &abd_tuples, tuple_list_item_t)
-    {
-        if (tli->tli_display && tli->tli_count_since_last_display > 0) {
-            static bool first = true;
-            prte_asprintf(&tmp, "%d more process%s sent help message %s / %s",
-                          tli->tli_count_since_last_display,
-                          (tli->tli_count_since_last_display > 1) ? "es have" : " has",
-                          tli->tli_filename, tli->tli_topic);
-            local_delivery(tmp);
-            free(tmp);
-            tli->tli_count_since_last_display = 0;
-
-            if (first) {
-                tmp = "Set MCA parameter \"prte_base_help_aggregate\" to 0 to see all "
-                      "help / error messages";
-                local_delivery(tmp);
-                first = false;
-            }
-        }
-    }
-
-    show_help_time_last_displayed = now;
-    show_help_timer_set = false;
-}
-
-static int show_help(const char *filename, const char *topic, const char *output,
-                     pmix_proc_t *sender)
-{
-    int rc;
-    tuple_list_item_t *tli = NULL;
-    prte_namelist_t *pnli;
-    time_t now = time(NULL);
-
-    /* If we're aggregating, check for duplicates.  Otherwise, don't
-       track duplicates at all and always display the message. */
-    if (prte_help_want_aggregate) {
-        rc = get_tli(filename, topic, &tli);
-    } else {
-        rc = PRTE_ERR_NOT_FOUND;
-    }
-
-    /* If there's no output string (i.e., this is a control message
-       asking us to suppress), then skip to the end. */
-    if (NULL == output) {
-        tli->tli_display = false;
-        goto after_output;
-    }
-
-    /* Was it already displayed? */
-    if (PRTE_SUCCESS == rc) {
-        /* Yes.  But do we want to print anything?  That's complicated.
-
-           We always show the first message of a given (filename,
-           topic) tuple as soon as it arrives.  But we don't want to
-           show duplicate notices often, because we could get overrun
-           with them.  So we want to gather them up and say "We got N
-           duplicates" every once in a while.
-
-           And keep in mind that at termination, we'll unconditionally
-           show all accumulated duplicate notices.
-
-           A simple scheme is as follows:
-           - when the first of a (filename, topic) tuple arrives
-             - print the message
-             - if a timer is not set, set T=now
-           - when a duplicate (filename, topic) tuple arrives
-             - if now>(T+5) and timer is not set (due to
-               non-pre-emptiveness of our libevent, a timer *could* be
-               set!)
-               - print all accumulated duplicates
-               - reset T=now
-             - else if a timer was not set, set the timer for T+5
-             - else if a timer was set, do nothing (just wait)
-           - set T=now when the timer expires
-        */
-        ++tli->tli_count_since_last_display;
-        if (now > show_help_time_last_displayed + 5 && !show_help_timer_set) {
-            show_accumulated_duplicates(0, 0, NULL);
-        } else if (!show_help_timer_set) {
-            prte_event_evtimer_set(prte_event_base, &show_help_timer_event,
-                                   show_accumulated_duplicates, NULL);
-            prte_event_evtimer_add(&show_help_timer_event, &show_help_interval);
-            show_help_timer_set = true;
-        }
-    }
-    /* Not already displayed */
-    else if (PRTE_ERR_NOT_FOUND == rc) {
-        local_delivery(output);
-        if (!show_help_timer_set) {
-            show_help_time_last_displayed = now;
-        }
-    }
-    /* Some other error occurred */
-    else {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
-
-after_output:
-    /* If we're aggregating, add this process name to the list */
-    if (prte_help_want_aggregate) {
-        pnli = PRTE_NEW(prte_namelist_t);
-        if (NULL == pnli) {
-            rc = PRTE_ERR_OUT_OF_RESOURCE;
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        pnli->name = *sender;
-        prte_list_append(&(tli->tli_processes), &(pnli->super));
-    }
-    return PRTE_SUCCESS;
-}
-
-/* Note that this function is called from ess/hnp, so don't make it
-   static */
-void prte_show_help_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
-                         prte_rml_tag_t tag, void *cbdata)
-{
-    char *output = NULL;
-    char *filename = NULL, *topic = NULL;
-    int32_t n;
-    int rc;
-    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
-
-    PRTE_OUTPUT_VERBOSE((5, prte_debug_output, "%s got show_help from %s",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender)));
-
-    /* unpack the filename of the show_help text file */
-    n = 1;
-    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &filename, &n, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        goto cleanup;
-    }
-    /* unpack the topic tag */
-    n = 1;
-    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &topic, &n, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        goto cleanup;
-    }
-    /* unpack output string */
-    n = 1;
-    rc = PMIx_Data_unpack(PRTE_PROC_MY_NAME, buffer, &output, &n, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        goto cleanup;
-    }
-
-    /* Send it to show_help */
-    rc = show_help(filename, topic, output, sender);
-
-cleanup:
-    if (NULL != output) {
-        free(output);
-    }
-    if (NULL != filename) {
-        free(filename);
-    }
-    if (NULL != topic) {
-        free(topic);
-    }
 }
