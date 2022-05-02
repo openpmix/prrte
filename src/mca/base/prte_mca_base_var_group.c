@@ -44,7 +44,7 @@
 #include "src/runtime/runtime.h"
 #include "src/util/output.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 static pmix_pointer_array_t mca_base_var_groups;
 static pmix_hash_table_t mca_base_var_group_index_hash;

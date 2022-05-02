@@ -43,7 +43,6 @@
 #include "src/runtime/runtime.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
 
 int prte_finalize(void)
 {

@@ -62,7 +62,6 @@ BEGIN_C_DECLS
 
 PRTE_EXPORT extern int prte_debug_verbosity;           /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern char *prte_prohibited_session_dirs; /* instantiated in src/runtime/prte_init.c */
-PRTE_EXPORT extern bool prte_help_want_aggregate;      /* instantiated in src/util/show_help.c */
 PRTE_EXPORT extern char *prte_job_ident;           /* instantiated in src/runtime/prte_globals.c */
 PRTE_EXPORT extern bool prte_create_session_dirs;  /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern bool prte_execute_quiet;        /* instantiated in src/runtime/prte_globals.c */

@@ -37,7 +37,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "plm_slurm.h"
 #include "src/mca/plm/base/plm_private.h"

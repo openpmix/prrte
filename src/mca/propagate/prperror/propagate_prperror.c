@@ -44,7 +44,7 @@
 #include "src/util/error_strings.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"

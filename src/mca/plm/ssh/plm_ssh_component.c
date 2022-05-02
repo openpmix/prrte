@@ -53,7 +53,7 @@
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
@@ -233,7 +233,7 @@ static int ssh_component_open(void)
 
     /* lookup parameters */
     if (prte_plm_ssh_component.num_concurrent <= 0) {
-        prte_show_help("help-plm-ssh.txt", "concurrency-less-than-zero", true,
+        pmix_show_help("help-plm-ssh.txt", "concurrency-less-than-zero", true,
                        prte_plm_ssh_component.num_concurrent);
         prte_plm_ssh_component.num_concurrent = 1;
     }
@@ -316,7 +316,7 @@ lookup:
         /* if the user specified an agent and we couldn't find it,
          * then we want to error out and not continue */
         if (NULL != prte_plm_ssh_component.agent) {
-            prte_show_help("help-plm-ssh.txt", "agent-not-found", true,
+            pmix_show_help("help-plm-ssh.txt", "agent-not-found", true,
                            prte_plm_ssh_component.agent);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_NEVER_LAUNCHED);
             return PRTE_ERR_FATAL;

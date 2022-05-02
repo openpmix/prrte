@@ -78,7 +78,7 @@
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -281,7 +281,7 @@ int main(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
 
@@ -299,7 +299,7 @@ int main(int argc, char *argv[])
     // we do NOT accept arguments other than our own
     if (NULL != results.tail) {
         param = pmix_argv_join(results.tail, ' ');
-        ptr = prte_show_help_string("help-pterm.txt", "no-args", false,
+        ptr = pmix_show_help_string("help-pterm.txt", "no-args", false,
                                     prte_tool_basename, param, prte_tool_basename);
         if (NULL != ptr) {
             printf("%s", ptr);
@@ -348,14 +348,14 @@ int main(int argc, char *argv[])
             param = strchr(opt->values[0], ':');
             if (NULL == param) {
                 /* malformed input */
-                prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+                pmix_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
                                "--pid", opt->values[0], "file:path");
                 return PRTE_ERR_BAD_PARAM;
             }
             ++param;
             fp = fopen(param, "r");
             if (NULL == fp) {
-                prte_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
+                pmix_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
                                "--pid", opt->values[0], param);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -363,7 +363,7 @@ int main(int argc, char *argv[])
             if (1 != rc) {
                 /* if we were unable to obtain the single conversion we
                  * require, then error out */
-                prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
+                pmix_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
                                "--pid", opt->values[0], param);
                 return PRTE_ERR_BAD_PARAM;
             }

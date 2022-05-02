@@ -33,7 +33,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "rmaps_rr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -61,7 +61,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t
     /* check to see if we can map all the procs */
     if (num_slots < (int) app->num_procs) {
         if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
@@ -238,14 +238,14 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t
                  * via hostfile/dash-host */
                 if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN
                       & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
-                    prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                                    app->num_procs, app->app, prte_process_info.nodename);
                     PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                     return PRTE_ERR_SILENT;
                 } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE
                            & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                     /* if we were explicitly told not to oversubscribe, then don't */
-                    prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                                    app->num_procs, app->app, prte_process_info.nodename);
                     PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                     return PRTE_ERR_SILENT;
@@ -262,7 +262,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t
      * then all of the nodes are full.
      */
     if (!made_progress) {
-        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                        true, app->num_procs, app->app, prte_process_info.nodename);
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
         return PRTE_ERR_SILENT;
@@ -303,7 +303,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t
     /* quick check to see if we can map all the procs */
     if (num_slots < (int) app->num_procs) {
         if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
@@ -477,14 +477,14 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t
                      * via hostfile/dash-host */
                     if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN
                           & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
-                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                        true, app->num_procs, app->app, prte_process_info.nodename);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                         return PRTE_ERR_SILENT;
                     } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE
                                & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                         /* if we were explicitly told not to oversubscribe, then don't */
-                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                        true, app->num_procs, app->app, prte_process_info.nodename);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                         return PRTE_ERR_SILENT;
@@ -544,7 +544,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t
             }
         }
         if (!made_progress) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                            true, app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
@@ -606,7 +606,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t 
     /* quick check to see if we can map all the procs */
     if (num_slots < app->num_procs) {
         if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
@@ -644,7 +644,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t 
         PMIX_LIST_FOREACH(node, node_list, prte_node_t)
         {
             if (NULL == node->topology || NULL == node->topology->topo) {
-                prte_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
+                pmix_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
                 return PRTE_ERR_SILENT;
             }
             start = 0;
@@ -753,7 +753,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t 
                     }
                     found_obj = true;
                     if (cpus_per_rank > npus) {
-                        prte_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
+                        pmix_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
                                        cpus_per_rank, npus,
                                        prte_rmaps_base_print_mapping(prte_rmaps_base.mapping));
                         hwloc_bitmap_free(available);
@@ -780,7 +780,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t 
             if (!found_obj) {
                 char *err;
                 hwloc_bitmap_list_asprintf(&err, available);
-                prte_show_help("help-prte-rmaps-base.txt", "insufficient-cpus", true,
+                pmix_show_help("help-prte-rmaps-base.txt", "insufficient-cpus", true,
                                prte_rmaps_base_print_mapping(prte_rmaps_base.mapping),
                                (NULL == prte_hwloc_default_cpu_list) ? "N/A"
                                                                      : prte_hwloc_default_cpu_list,
@@ -811,7 +811,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t 
                      * via hostfile/dash-host */
                     if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN
                           & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
-                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                        true, app->num_procs, app->app, prte_process_info.nodename);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                         if (NULL != job_cpuset) {
@@ -821,7 +821,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t 
                     } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE
                                & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                         /* if we were explicitly told not to oversubscribe, then don't */
-                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                        true, app->num_procs, app->app, prte_process_info.nodename);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                         if (NULL != job_cpuset) {
@@ -875,7 +875,7 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *n
     /* quick check to see if we can map all the procs */
     if (num_slots < (int) app->num_procs) {
         if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
@@ -889,7 +889,7 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *n
     PMIX_LIST_FOREACH(node, node_list, prte_node_t)
     {
         if (NULL == node->topology || NULL == node->topology->topo) {
-            prte_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
+            pmix_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
             return PRTE_ERR_SILENT;
         }
         /* get the number of objects of this type on this node */
@@ -984,7 +984,7 @@ static int byobj_span(prte_job_t *jdata, prte_app_context_t *app, pmix_list_t *n
             }
             npus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus, available, obj);
             if (cpus_per_rank > npus) {
-                prte_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true, cpus_per_rank,
+                pmix_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true, cpus_per_rank,
                                npus, prte_rmaps_base_print_mapping(prte_rmaps_base.mapping));
                 hwloc_bitmap_free(available);
                 if (NULL != job_cpuset) {

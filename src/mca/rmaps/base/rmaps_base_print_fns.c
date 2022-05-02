@@ -41,7 +41,7 @@
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 #include "types.h"
 
 #include "src/mca/rmaps/base/base.h"

@@ -53,7 +53,7 @@
 #include "src/util/error_strings.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
@@ -320,7 +320,7 @@ static void job_errors(int fd, short args, void *cbdata)
          * likely already output an error message */
         if (PRTE_JOB_STATE_ABORTED == jobstate && jdata->num_procs != jdata->num_reported) {
             prte_routing_is_enabled = false;
-            prte_show_help("help-errmgr-base.txt", "failed-daemon", true);
+            pmix_show_help("help-errmgr-base.txt", "failed-daemon", true);
         }
         /* there really isn't much else we can do since the problem
          * is in the DVM itself, so best just to terminate */
@@ -467,7 +467,7 @@ static void proc_errors(int fd, short args, void *cbdata)
         /* record the first one to fail */
         if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
             /* output an error message so the user knows what happened */
-            prte_show_help("help-errmgr-base.txt", "node-died", true,
+            pmix_show_help("help-errmgr-base.txt", "node-died", true,
                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_process_info.nodename,
                            PRTE_NAME_PRINT(proc), pptr->node->name);
             /* mark the daemon job as failed */
@@ -647,7 +647,7 @@ keep_going:
         /* if this was a daemon, report it */
         if (PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
             /* output a message indicating we failed to launch a daemon */
-            prte_show_help("help-errmgr-base.txt", "failed-daemon-launch",
+            pmix_show_help("help-errmgr-base.txt", "failed-daemon-launch",
                            true, prte_tool_basename);
         }
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FAILED_TO_START);

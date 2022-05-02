@@ -33,9 +33,6 @@ dist_prtedata_DATA = help-prte-util.txt \
                      hostfile/help-hostfile.txt \
                      dash_host/help-dash-host.txt
 
-AM_LFLAGS = -Pprte_show_help_yy
-LEX_OUTPUT_ROOT = lex.prte_show_help_yy
-
 noinst_LTLIBRARIES = libprrteutil.la
 
 AM_CPPFLAGS = $(LTDLINCL)
@@ -61,8 +58,6 @@ headers = \
         output.h \
         proc_info.h \
         session_dir.h \
-        show_help_lex.h \
-        show_help.h \
         stacktrace.h \
         sys_limits.h \
         uri.h
@@ -84,8 +79,6 @@ libprrteutil_la_SOURCES = \
         output.c \
         proc_info.c \
         session_dir.c \
-        show_help.c \
-        show_help_lex.l \
         stacktrace.c \
         sys_limits.c \
         uri.c
@@ -101,6 +94,3 @@ if WANT_INSTALL_HEADERS
 prtedir = $(prteincludedir)/$(subdir)
 prte_HEADERS = $(headers)
 endif
-
-maintainer-clean-local:
-	rm -f show_help_lex.c

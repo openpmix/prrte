@@ -80,7 +80,7 @@
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -404,7 +404,7 @@ int prun(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
     if (NULL == personality) {
@@ -511,14 +511,14 @@ int prun(int argc, char *argv[])
             param = strchr(opt->values[0], ':');
             if (NULL == param) {
                 /* malformed input */
-                prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+                pmix_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
                                "--pid", opt->values[0], "file:path");
                 return PRTE_ERR_BAD_PARAM;
             }
             ++param;
             fp = fopen(param, "r");
             if (NULL == fp) {
-                prte_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
+                pmix_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
                                "--pid", opt->values[0], param);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -526,7 +526,7 @@ int prun(int argc, char *argv[])
             if (1 != rc) {
                 /* if we were unable to obtain the single conversion we
                  * require, then error out */
-                prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
+                pmix_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
                                "--pid", opt->values[0], param);
                 fclose(fp);
                 return PRTE_ERR_BAD_PARAM;
@@ -534,7 +534,7 @@ int prun(int argc, char *argv[])
             fclose(fp);
             PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_SERVER_PIDINFO, &pid, PMIX_PID);
         } else { /* a string that's neither an integer nor starts with 'file:' */
-                prte_show_help("help-prun.txt", "bad-option-input", true,
+                pmix_show_help("help-prun.txt", "bad-option-input", true,
                                prte_tool_basename, "--pid",
                                opt->values[0], "file:path");
                 return PRTE_ERR_BAD_PARAM;
@@ -698,11 +698,11 @@ int prun(int argc, char *argv[])
                 }
                 if (0 == strncasecmp(targv[idx], "directory", strlen(targv[idx]))) {
                     if (NULL != outfile) {
-                        prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                        pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
                         return PRTE_ERR_FATAL;
                     }
                     if (NULL == ptr) {
-                        prte_show_help("help-prte-rmaps-base.txt",
+                        pmix_show_help("help-prte-rmaps-base.txt",
                                        "missing-qualifier", true,
                                        "output", "directory", "directory");
                         return PRTE_ERR_FATAL;
@@ -725,11 +725,11 @@ int prun(int argc, char *argv[])
                 }
                 if (0 == strncasecmp(targv[idx], "file", strlen(targv[idx]))) {
                     if (NULL != outdir) {
-                        prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                        pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
                         return PRTE_ERR_FATAL;
                     }
                     if (NULL == ptr) {
-                        prte_show_help("help-prte-rmaps-base.txt",
+                        pmix_show_help("help-prte-rmaps-base.txt",
                                        "missing-qualifier", true,
                                        "output", "filename", "filename");
                         return PRTE_ERR_FATAL;
@@ -846,6 +846,13 @@ int prun(int argc, char *argv[])
     if (NULL != opt) {
         i = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_SPAWN_TIMEOUT, &i, PMIX_INT);
+    }
+#endif
+#ifdef PMIX_LOG_AGG
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DO_NOT_AGG_HELP);
+    if (NULL != opt) {
+        flag = false;
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_LOG_AGG, &flag, PMIX_BOOL);
     }
 #endif
 

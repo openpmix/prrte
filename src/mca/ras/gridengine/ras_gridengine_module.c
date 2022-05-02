@@ -39,7 +39,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 /*
  * Local functions
@@ -78,7 +78,7 @@ static int prte_ras_gridengine_allocate(prte_job_t *jdata, pmix_list_t *nodelist
 
     /* check the PE_HOSTFILE before continuing on */
     if (!(fp = fopen(pe_hostfile, "r"))) {
-        prte_show_help("help-ras-gridengine.txt", "cannot-read-pe-hostfile", true, pe_hostfile,
+        pmix_show_help("help-ras-gridengine.txt", "cannot-read-pe-hostfile", true, pe_hostfile,
                        strerror(errno));
         rc = PRTE_ERROR;
         PRTE_ERROR_LOG(rc);
@@ -134,7 +134,7 @@ cleanup:
      * is considered an unrecoverable error and we need to report it
      */
     if (pmix_list_is_empty(nodelist)) {
-        prte_show_help("help-ras-gridengine.txt", "no-nodes-found", true);
+        pmix_show_help("help-ras-gridengine.txt", "no-nodes-found", true);
         return PRTE_ERR_NOT_FOUND;
     }
 
@@ -155,7 +155,7 @@ static int get_slot_count(char* node_name, int* slot_cnt)
 
     /* check the PE_HOSTFILE before continuing on */
     if (!(fp = fopen(pe_hostfile, "r"))) {
-        prte_show_help("help-ras-gridengine.txt", "cannot-read-pe-hostfile",
+        pmix_show_help("help-ras-gridengine.txt", "cannot-read-pe-hostfile",
             true, pe_hostfile, strerror(errno));
         PRTE_ERROR_LOG(PRTE_ERROR);
         return(PRTE_ERROR);

@@ -53,7 +53,7 @@
 #include "src/runtime/prte_locks.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
@@ -669,7 +669,9 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
     pmix_data_buffer_t pbuf, dbuf;
     pmix_byte_object_t pbo, dbo;
     pmix_status_t ret;
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s logging info",
+
+    prte_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s logging info",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
@@ -704,27 +706,36 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
     }
     if (0 < cnt) {
         PMIX_DATA_BUFFER_CREATE(buf);
+        /* pack the source of this log request */
+        rc = PMIx_Data_pack(NULL, buf, (void*)client, 1, PMIX_PROC);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+        /* pack number of info provided */
         rc = PMIx_Data_pack(NULL, buf, &cnt, 1, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
+        /* pack number of directives given */
         rc = PMIx_Data_pack(NULL, buf, &dcnt, 1, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
+        /* bring over the packed info blob */
         rc = PMIx_Data_unload(&pbuf, &pbo);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
         rc = PMIx_Data_pack(NULL, buf, &pbo, 1, PMIX_BYTE_OBJECT);
         PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-
+        /* pack the directives blob */
         rc = PMIx_Data_unload(&dbuf, &dbo);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
         rc = PMIx_Data_pack(NULL, buf, &dbo, 1, PMIX_BYTE_OBJECT);
         PMIX_BYTE_OBJECT_DESTRUCT(&dbo);
+        /* send the result to the HNP */
         PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf,
                       PRTE_RML_TAG_LOGGING);
         if (PRTE_SUCCESS != rc) {

@@ -39,7 +39,7 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "ras_lsf.h"
 #include "src/mca/ras/base/base.h"
@@ -68,7 +68,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     /* get the list of allocated nodes */
     if ((num_nodes = lsb_getalloc(&nodelist)) < 0) {
-        prte_show_help("help-ras-lsf.txt", "nodelist-failed", true);
+        pmix_show_help("help-ras-lsf.txt", "nodelist-failed", true);
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
@@ -124,7 +124,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         /* check to see if the file is empty - if it is,
          * then affinity wasn't actually set for this job */
         if (0 != stat(affinity_file, &buf)) {
-            prte_show_help("help-ras-lsf.txt", "affinity-file-not-found", true, affinity_file);
+            pmix_show_help("help-ras-lsf.txt", "affinity-file-not-found", true, affinity_file);
             return PRTE_ERR_SILENT;
         }
         if (0 == buf.st_size) {
@@ -137,7 +137,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         // Until that is resolved throw an error if we detect that the user is
         // trying to use LSF level affinity options.
         if (NULL != affinity_file) { // Always true
-            prte_show_help("help-ras-lsf.txt", "affinity-file-found-not-used", true, affinity_file,
+            pmix_show_help("help-ras-lsf.txt", "affinity-file-found-not-used", true, affinity_file,
                            "Physical CPU ID mapping is not supported");
             return PRTE_ERR_SILENT;
         }

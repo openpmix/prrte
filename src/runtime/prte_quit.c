@@ -59,7 +59,7 @@
 #include "src/threads/pmix_threads.h"
 #include "src/util/output.h"
 #include "src/util/session_dir.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_globals.h"
@@ -113,134 +113,134 @@ static char *print_aborted_job(prte_job_t *job, prte_app_context_t *approc, prte
             /* say nothing - it was already reported */
             break;
         case PMIX_ERR_SYS_LIMITS_PIPES:
-            output = prte_show_help_string("help-prun.txt", "prun:sys-limit-pipe", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:sys-limit-pipe", true,
                                            prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
         case PMIX_ERR_PIPE_SETUP_FAILURE:
-            output = prte_show_help_string("help-prun.txt", "prun:pipe-setup-failure", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:pipe-setup-failure", true,
                                            prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
         case PMIX_ERR_SYS_LIMITS_CHILDREN:
-            output = prte_show_help_string("help-prun.txt", "prun:sys-limit-children", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:sys-limit-children", true,
                                            prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
         case PMIX_ERR_SYS_LIMITS_FILES:
-            output = prte_show_help_string("help-prun.txt", "prun:sys-limit-files", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:sys-limit-files", true,
                                            prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
         case PRTE_ERR_FAILED_GET_TERM_ATTRS:
-            output = prte_show_help_string("help-prun.txt", "prun:failed-term-attrs", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:failed-term-attrs", true,
                                            prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
         case PMIX_ERR_JOB_WDIR_NOT_FOUND:
-            output = prte_show_help_string("help-prun.txt", "prun:wdir-not-found", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:wdir-not-found", true,
                                            prte_tool_basename, approc->cwd, node->name,
                                            (unsigned long) proc->name.rank);
             break;
         case PMIX_ERR_JOB_WDIR_NOT_ACCESSIBLE:
-             output = prte_show_help_string("help-prun.txt", "prun:wdir-not-accessible", true,
+             output = pmix_show_help_string("help-prun.txt", "prun:wdir-not-accessible", true,
                                             prte_tool_basename, approc->cwd, node->name,
                                             (unsigned long) proc->name.rank);
              break;
         case PMIX_ERR_JOB_EXE_NOT_FOUND:
-            output = prte_show_help_string("help-prun.txt", "prun:exe-not-found", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:exe-not-found", true,
                                            prte_tool_basename, (unsigned long) proc->name.rank,
                                            prte_tool_basename, prte_tool_basename, node->name,
                                            approc->app);
             break;
         case PMIX_ERR_EXE_NOT_ACCESSIBLE:
-            output = prte_show_help_string("help-prun.txt", "prun:exe-not-accessible", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:exe-not-accessible", true,
                                            prte_tool_basename, approc->app, node->name,
                                            (unsigned long) proc->name.rank);
             break;
         case PRTE_ERR_MULTIPLE_AFFINITIES:
-            output = prte_show_help_string("help-prun.txt", "prun:multiple-paffinity-schemes", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:multiple-paffinity-schemes", true,
                                            NULL);
             break;
         case PRTE_ERR_TOPO_SLOT_LIST_NOT_SUPPORTED:
-            output = prte_show_help_string("help-prun.txt", "prun:topo-not-supported", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:topo-not-supported", true,
                                            prte_process_info.nodename,
                                            "rankfile containing a slot_list of ", NULL,
                                            approc->app);
             break;
         case PRTE_ERR_INVALID_NODE_RANK:
-            output = prte_show_help_string("help-prun.txt", "prun:invalid-node-rank", true);
+            output = pmix_show_help_string("help-prun.txt", "prun:invalid-node-rank", true);
             break;
         case PRTE_ERR_INVALID_LOCAL_RANK:
-            output = prte_show_help_string("help-prun.txt", "prun:invalid-local-rank", true);
+            output = pmix_show_help_string("help-prun.txt", "prun:invalid-local-rank", true);
             break;
         case PRTE_ERR_NOT_ENOUGH_CORES:
-            output = prte_show_help_string("help-prun.txt", "prun:not-enough-resources", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:not-enough-resources", true,
                                            "sockets", node->name, "bind-to-core", approc->app);
             break;
         case PRTE_ERR_TOPO_CORE_NOT_SUPPORTED:
-            output = prte_show_help_string("help-prun.txt", "prun:topo-not-supported", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:topo-not-supported", true,
                                            node->name, "bind-to-core", "", approc->app);
             break;
         case PRTE_ERR_INVALID_PHYS_CPU:
-            output = prte_show_help_string("help-prun.txt", "prun:invalid-phys-cpu", true);
+            output = pmix_show_help_string("help-prun.txt", "prun:invalid-phys-cpu", true);
             break;
         case PRTE_ERR_NOT_ENOUGH_SOCKETS:
-            output = prte_show_help_string("help-prun.txt", "prun:not-enough-resources", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:not-enough-resources", true,
                                            "sockets", node->name, "bind-to-socket", approc->app);
             break;
         case PRTE_ERR_TOPO_SOCKET_NOT_SUPPORTED:
-            output = prte_show_help_string("help-prun.txt", "prun:topo-not-supported", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:topo-not-supported", true,
                                            node->name, "bind-to-socket", "", approc->app);
             break;
         case PRTE_ERR_MODULE_NOT_FOUND:
-            output = prte_show_help_string("help-prun.txt", "prun:paffinity-missing-module", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:paffinity-missing-module", true,
                                            node->name);
             break;
         case PRTE_ERR_SLOT_LIST_RANGE:
-            output = prte_show_help_string("help-prun.txt", "prun:invalid-slot-list-range", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:invalid-slot-list-range", true,
                                            node->name, NULL);
             break;
         case PRTE_ERR_PIPE_READ_FAILURE:
-            output = prte_show_help_string("help-prun.txt", "prun:pipe-read-failure", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:pipe-read-failure", true,
                                            prte_tool_basename, node->name,
                                            (unsigned long) proc->name.rank);
             break;
         case PRTE_ERR_SOCKET_NOT_AVAILABLE:
-            output = prte_show_help_string("help-prun.txt", "prun:proc-socket-not-avail", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:proc-socket-not-avail", true,
                                            prte_tool_basename, PRTE_ERROR_NAME(proc->exit_code),
                                            node->name, (unsigned long) proc->name.rank);
             break;
 
         default:
             if (0 != proc->exit_code) {
-                output = prte_show_help_string("help-prun.txt", "prun:proc-failed-to-start", true,
+                output = pmix_show_help_string("help-prun.txt", "prun:proc-failed-to-start", true,
                                                prte_tool_basename, proc->exit_code,
                                                PRTE_ERROR_NAME(proc->exit_code), node->name,
                                                (unsigned long) proc->name.rank);
             } else {
-                output = prte_show_help_string("help-prun.txt",
+                output = pmix_show_help_string("help-prun.txt",
                                                "prun:proc-failed-to-start-no-status", true,
                                                prte_tool_basename, node->name);
             }
         }
         return output;
     } else if (PRTE_PROC_STATE_ABORTED == proc->state) {
-        output = prte_show_help_string("help-prun.txt", "prun:proc-ordered-abort", true,
+        output = pmix_show_help_string("help-prun.txt", "prun:proc-ordered-abort", true,
                                        prte_tool_basename, (unsigned long) proc->name.rank,
                                        (unsigned long) proc->pid, node->name, prte_tool_basename);
         return output;
     } else if (PRTE_PROC_STATE_ABORTED_BY_SIG == job->state) { /* aborted by signal */
 #ifdef HAVE_STRSIGNAL
         if (NULL != strsignal(WTERMSIG(proc->exit_code))) {
-            output = prte_show_help_string("help-prun.txt", "prun:proc-aborted-strsignal", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:proc-aborted-strsignal", true,
                                            prte_tool_basename, (unsigned long) proc->name.rank,
                                            (unsigned long) proc->pid, node->name,
                                            WTERMSIG(proc->exit_code),
                                            strsignal(WTERMSIG(proc->exit_code)));
         } else {
 #endif
-            output = prte_show_help_string("help-prun.txt", "prun:proc-aborted", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:proc-aborted", true,
                                            prte_tool_basename, (unsigned long) proc->name.rank,
                                            (unsigned long) proc->pid, node->name,
                                            WTERMSIG(proc->exit_code));
@@ -249,37 +249,37 @@ static char *print_aborted_job(prte_job_t *job, prte_app_context_t *approc, prte
 #endif
         return output;
     } else if (PRTE_PROC_STATE_TERM_WO_SYNC == proc->state) { /* proc exited w/o finalize */
-        output = prte_show_help_string("help-prun.txt", "prun:proc-exit-no-sync", true,
+        output = pmix_show_help_string("help-prun.txt", "prun:proc-exit-no-sync", true,
                                        prte_tool_basename, (unsigned long) proc->name.rank,
                                        (unsigned long) proc->pid, node->name, prte_tool_basename,
                                        prte_tool_basename);
         return output;
     } else if (PRTE_PROC_STATE_COMM_FAILED == proc->state) {
-        output = prte_show_help_string("help-prun.txt", "prun:proc-comm-failed", true,
+        output = pmix_show_help_string("help-prun.txt", "prun:proc-comm-failed", true,
                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                        PRTE_NAME_PRINT(&proc->name), node->name);
         return output;
     } else if (PRTE_PROC_STATE_SENSOR_BOUND_EXCEEDED == proc->state) {
         switch (proc->exit_code) {
         case PRTE_ERR_MEM_LIMIT_EXCEEDED:
-            output = prte_show_help_string("help-prun.txt", "prun:proc-mem-exceeded", true,
+            output = pmix_show_help_string("help-prun.txt", "prun:proc-mem-exceeded", true,
                                            PRTE_NAME_PRINT(&proc->name), node->name);
             break;
         case PRTE_ERR_PROC_STALLED:
-            output = prte_show_help_string("help-prun.txt", "prun:proc-stalled", true);
+            output = pmix_show_help_string("help-prun.txt", "prun:proc-stalled", true);
             break;
 
         default:
-            output = prte_show_help_string("help-prun.txt", "prun:proc-sensor-exceeded", true);
+            output = pmix_show_help_string("help-prun.txt", "prun:proc-sensor-exceeded", true);
         }
         return output;
     } else if (PRTE_PROC_STATE_HEARTBEAT_FAILED == proc->state) {
-        output = prte_show_help_string("help-prun.txt", "prun:proc-heartbeat-failed", true,
+        output = pmix_show_help_string("help-prun.txt", "prun:proc-heartbeat-failed", true,
                                        prte_tool_basename, PRTE_NAME_PRINT(&proc->name),
                                        node->name);
         return output;
     } else if (prte_abort_non_zero_exit && PRTE_PROC_STATE_TERM_NON_ZERO == proc->state) {
-        output = prte_show_help_string("help-prun.txt", "prun:non-zero-exit", true,
+        output = pmix_show_help_string("help-prun.txt", "prun:non-zero-exit", true,
                                        prte_tool_basename, PRTE_NAME_PRINT(&proc->name),
                                        proc->exit_code);
         return output;

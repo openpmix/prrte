@@ -26,7 +26,7 @@
 #include "src/util/output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/util/uri.h"
 
@@ -38,7 +38,7 @@ char *prte_uri_get_scheme(const char *uri)
     char *ptr;
 
     if (NULL == (ptr = strchr(turi, ':'))) {
-        prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
+        pmix_show_help("help-prte-util.txt", "malformed-uri", true, uri);
         free(turi);
         return NULL;
     }
@@ -53,7 +53,7 @@ char *prte_filename_to_uri(const char *filename, const char *hostname)
 
     /* filename must be an absolute path */
     if (!pmix_path_is_absolute(filename)) {
-        prte_show_help("help-prte-util.txt", "relative-path", true, filename);
+        pmix_show_help("help-prte-util.txt", "relative-path", true, filename);
         return NULL;
     }
 
@@ -119,7 +119,7 @@ char *prte_filename_from_uri(const char *uri, char **hostname)
 
     /* extract the scheme */
     if (NULL == (ptr = strchr(turi, ':'))) {
-        prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
+        pmix_show_help("help-prte-util.txt", "malformed-uri", true, uri);
         free(turi);
         return NULL;
     }
@@ -138,12 +138,12 @@ char *prte_filename_from_uri(const char *uri, char **hostname)
         fn = strdup(ptr);
     } else if (0 != strncmp(ptr, "//", 2)) {
         /* error */
-        prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
+        pmix_show_help("help-prte-util.txt", "malformed-uri", true, uri);
     } else {
         ptr += 2; /* step to the hostname */
         /* find the separator to the filename */
         if (NULL == (sp = strchr(ptr, '/'))) {
-            prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
+            pmix_show_help("help-prte-util.txt", "malformed-uri", true, uri);
         } else {
             *sp = '\0';
             if (NULL != hostname) {

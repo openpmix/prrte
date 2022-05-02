@@ -42,7 +42,7 @@
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
@@ -78,7 +78,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     jdata = caddy->jdata;
     schizo = (prte_schizo_base_module_t*)jdata->schizo;
     if (NULL == schizo) {
-        prte_show_help("help-prte-rmaps-base.txt", "missing-personality", true,
+        pmix_show_help("help-prte-rmaps-base.txt", "missing-personality", true,
                        PRTE_JOBID_PRINT(jdata->nspace));
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
         goto cleanup;
@@ -629,7 +629,7 @@ ranking:
         /* the map was done but nothing could be mapped
          * for launch as all the resources were busy
          */
-        prte_show_help("help-prte-rmaps-base.txt", "cannot-launch", true);
+        pmix_show_help("help-prte-rmaps-base.txt", "cannot-launch", true);
         jdata->exit_code = rc;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
         goto cleanup;
@@ -639,7 +639,7 @@ ranking:
      * the map, then that's an error
      */
     if (!did_map || 0 == jdata->num_procs || 0 == jdata->map->num_nodes) {
-        prte_show_help("help-prte-rmaps-base.txt", "failed-map", true,
+        pmix_show_help("help-prte-rmaps-base.txt", "failed-map", true,
                        did_map ? "mapped" : "unmapped", jdata->num_procs, jdata->map->num_nodes);
         jdata->exit_code = -PRTE_JOB_STATE_MAP_FAILED;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);

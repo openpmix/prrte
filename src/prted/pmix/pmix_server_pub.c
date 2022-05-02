@@ -44,7 +44,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
@@ -71,7 +71,7 @@ static int init_server(void)
             filename = strchr(prte_data_server_uri, ':');
             if (NULL == filename) {
                 /* filename is not correctly formatted */
-                prte_show_help("help-prun.txt", "prun:ompi-server-filename-bad", true,
+                pmix_show_help("help-prun.txt", "prun:ompi-server-filename-bad", true,
                                prte_tool_basename, prte_data_server_uri);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -79,7 +79,7 @@ static int init_server(void)
 
             if (0 >= strlen(filename)) {
                 /* they forgot to give us the name! */
-                prte_show_help("help-prun.txt", "prun:ompi-server-filename-missing", true,
+                pmix_show_help("help-prun.txt", "prun:ompi-server-filename-missing", true,
                                prte_tool_basename, prte_data_server_uri);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -87,14 +87,14 @@ static int init_server(void)
             /* open the file and extract the uri */
             fp = fopen(filename, "r");
             if (NULL == fp) { /* can't find or read file! */
-                prte_show_help("help-prun.txt", "prun:ompi-server-filename-access", true,
+                pmix_show_help("help-prun.txt", "prun:ompi-server-filename-access", true,
                                prte_tool_basename, prte_data_server_uri);
                 return PRTE_ERR_BAD_PARAM;
             }
             if (NULL == fgets(input, 1024, fp)) {
                 /* something malformed about file */
                 fclose(fp);
-                prte_show_help("help-prun.txt", "prun:ompi-server-file-bad", true,
+                pmix_show_help("help-prun.txt", "prun:ompi-server-file-bad", true,
                                prte_tool_basename, prte_data_server_uri, prte_tool_basename);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -149,7 +149,7 @@ static void execute(int sd, short args, void *cbdata)
     if (!prte_pmix_server_globals.pubsub_init) {
         /* we need to initialize our connection to the server */
         if (PRTE_SUCCESS != (rc = init_server())) {
-            prte_show_help("help-prted.txt", "noserver", true,
+            pmix_show_help("help-prted.txt", "noserver", true,
                            (NULL == prte_data_server_uri) ? "NULL" : prte_data_server_uri);
             goto callback;
         }

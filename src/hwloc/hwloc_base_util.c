@@ -57,7 +57,7 @@
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/hwloc/hwloc-internal.h"
 
@@ -539,7 +539,7 @@ int prte_hwloc_base_report_bind_failure(const char *file, int line, const char *
 
     if (!already_reported && PRTE_HWLOC_BASE_MBFA_SILENT != prte_hwloc_base_mbfa) {
 
-        prte_show_help(
+        pmix_show_help(
             "help-prte-hwloc-base.txt", "mbind failure", true, prte_process_info.nodename, getpid(),
             file, line, msg,
             (PRTE_HWLOC_BASE_MBFA_WARN == prte_hwloc_base_mbfa)
@@ -665,7 +665,7 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj)
         }
     }
     /* if we get here, it wasn't found */
-    prte_show_help("help-prte-hwloc-base.txt", "obj-idx-failed", true,
+    pmix_show_help("help-prte-hwloc-base.txt", "obj-idx-failed", true,
                    hwloc_obj_type_string(obj->type), cache_level);
     return UINT_MAX;
 }

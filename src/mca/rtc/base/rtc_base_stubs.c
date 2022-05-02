@@ -12,7 +12,7 @@
 #include "prte_config.h"
 
 #include "src/util/pmix_fd.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/odls/odls_types.h"
@@ -68,7 +68,7 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
         return PRTE_ERR_BAD_PARAM;
     }
 
-    str = prte_show_help_vstring(file, topic, true, ap);
+    str = pmix_show_help_vstring(file, topic, true, ap);
 
     msg->file_str_len = (int) strlen(file);
     if (msg->file_str_len > PRTE_ODLS_MAX_FILE_LEN) {

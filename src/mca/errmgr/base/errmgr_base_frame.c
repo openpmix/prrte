@@ -44,7 +44,7 @@
 
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/errmgr/base/errmgr_private.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/base/static-components.h"
 

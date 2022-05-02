@@ -84,7 +84,7 @@
 #include "src/util/pmix_parse_options.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -280,7 +280,7 @@ int main(int argc, char *argv[])
     /* get our schizo module */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
 
@@ -369,7 +369,7 @@ int main(int argc, char *argv[])
                 core = strtoul(cores[i], NULL, 10);
                 if (NULL == (pu = prte_hwloc_base_get_pu(prte_hwloc_topology, false, core))) {
                     /* the message will now come out locally */
-                    prte_show_help("help-prted.txt", "orted:cannot-bind", true,
+                    pmix_show_help("help-prted.txt", "orted:cannot-bind", true,
                                    prte_process_info.nodename, prte_daemon_cores);
                     ret = PRTE_ERR_NOT_SUPPORTED;
                     hwloc_bitmap_free(ours);

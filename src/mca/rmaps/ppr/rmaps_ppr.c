@@ -27,7 +27,7 @@
 #include "src/util/pmix_argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "rmaps_ppr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -142,7 +142,7 @@ static int ppr_mapper(prte_job_t *jdata)
         ck = pmix_argv_split(ppr_req[j], ':');
         if (2 != pmix_argv_count(ck)) {
             /* must provide a specification */
-            prte_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, jobppr);
+            pmix_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, jobppr);
             pmix_argv_free(ppr_req);
             pmix_argv_free(ck);
             free(jobppr);
@@ -231,7 +231,7 @@ static int ppr_mapper(prte_job_t *jdata)
             n++;
         } else {
             /* unknown spec */
-            prte_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true, ck[1],
+            pmix_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true, ck[1],
                            jobppr);
             pmix_argv_free(ppr_req);
             pmix_argv_free(ck);
@@ -296,7 +296,7 @@ static int ppr_mapper(prte_job_t *jdata)
             node = (prte_node_t *) item;
             /* bozo check */
             if (NULL == node->topology || NULL == node->topology->topo) {
-                prte_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
+                pmix_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
@@ -371,7 +371,7 @@ static int ppr_mapper(prte_job_t *jdata)
                 if ((node->slots < (int) node->num_procs) ||
                     (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
                     if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                        true, node->num_procs, app->app);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                         rc = PRTE_ERR_SILENT;
@@ -388,7 +388,7 @@ static int ppr_mapper(prte_job_t *jdata)
                          * as the #slots were specifically given, either by the host RM or
                          * via hostfile/dash-host */
                         if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
-                            prte_show_help("help-prte-rmaps-base.txt",
+                            pmix_show_help("help-prte-rmaps-base.txt",
                                            "prte-rmaps-base:alloc-error", true, app->num_procs,
                                            app->app);
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
@@ -396,7 +396,7 @@ static int ppr_mapper(prte_job_t *jdata)
                             goto error;
                         } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                             /* if we were explicitly told not to oversubscribe, then don't */
-                            prte_show_help("help-prte-rmaps-base.txt",
+                            pmix_show_help("help-prte-rmaps-base.txt",
                                            "prte-rmaps-base:alloc-error", true, app->num_procs,
                                            app->app);
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
@@ -419,7 +419,7 @@ static int ppr_mapper(prte_job_t *jdata)
         }
         if (PMIX_RANK_VALID != total_procs && nprocs_mapped < total_procs) {
             /* couldn't map them all */
-            prte_show_help("help-prte-rmaps-ppr.txt", "ppr-too-many-procs", true, app->app,
+            pmix_show_help("help-prte-rmaps-ppr.txt", "ppr-too-many-procs", true, app->app,
                            app->num_procs, nprocs_mapped, total_procs, jobppr);
             rc = PRTE_ERR_SILENT;
             goto error;
@@ -714,7 +714,7 @@ static int assign_locations(prte_job_t *jdata)
                 continue;
             }
             if (NULL == node->topology || NULL == node->topology->topo) {
-                prte_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
+                pmix_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
                 return PRTE_ERR_SILENT;
             }
             if (HWLOC_OBJ_MACHINE == level) {

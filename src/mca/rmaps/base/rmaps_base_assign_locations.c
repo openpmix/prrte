@@ -34,7 +34,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
@@ -75,7 +75,7 @@ int prte_rmaps_base_assign_locations(prte_job_t *jdata)
     }
 
     /* if we get here without doing the assignments, then that's an error */
-    prte_show_help("help-prte-rmaps-base.txt", "failed-assignments", true,
+    pmix_show_help("help-prte-rmaps-base.txt", "failed-assignments", true,
                    prte_process_info.nodename, prte_rmaps_base_print_mapping(jdata->map->mapping));
     return PRTE_ERROR;
 }

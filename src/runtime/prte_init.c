@@ -45,7 +45,7 @@
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 #include "src/util/stacktrace.h"
 #include "src/util/sys_limits.h"
 
@@ -131,7 +131,12 @@ int prte_init_util(prte_proc_type_t flags)
         return ret;
     }
 
-    if (PMIX_SUCCESS != (ret = pmix_init_util(NULL, 0, prte_install_dirs.prtedatadir))) {
+    ret = pmix_init_util(NULL, 0, prte_install_dirs.prtedatadir);
+    if (PMIX_SUCCESS != ret) {
+        return prte_pmix_convert_status(ret);
+    }
+    ret = pmix_show_help_add_dir(prte_install_dirs.prtedatadir);
+    if (PMIX_SUCCESS != ret) {
         return prte_pmix_convert_status(ret);
     }
 
@@ -143,9 +148,6 @@ int prte_init_util(prte_proc_type_t flags)
 
     /* initialize the output system */
     prte_output_init();
-
-    /* initialize the help system */
-    prte_show_help_init();
 
     /* keyval lex-based parser */
     /* Setup the parameter system */
@@ -171,7 +173,7 @@ int prte_init_util(prte_proc_type_t flags)
      * doing so twice in cases where the launch agent did it for us
      */
     if (PRTE_SUCCESS != (ret = prte_util_init_sys_limits(&error))) {
-        prte_show_help("help-prte-runtime.txt", "prte_init:syslimit", false, error);
+        pmix_show_help("help-prte-runtime.txt", "prte_init:syslimit", false, error);
         return PRTE_ERR_SILENT;
     }
 
@@ -198,7 +200,7 @@ int prte_init_util(prte_proc_type_t flags)
 
 error:
     if (PRTE_ERR_SILENT != ret) {
-        prte_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true, error,
+        pmix_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true, error,
                        PRTE_ERROR_NAME(ret), ret);
     }
 
@@ -339,7 +341,7 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
 
 error:
     if (PRTE_ERR_SILENT != ret) {
-        prte_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true, error,
+        pmix_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true, error,
                        PRTE_ERROR_NAME(ret), ret);
     }
 

@@ -43,7 +43,7 @@
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 #include "src/mca/errmgr/errmgr.h"
 
 #include "src/runtime/prte_globals.h"
@@ -204,7 +204,7 @@ int prte_register_params(void)
     if (NULL != prte_if_include && NULL != prte_if_exclude) {
         /* Return ERR_NOT_AVAILABLE so that a warning message about
          "open" failing is not printed */
-        prte_show_help("help-oob-tcp.txt", "include-exclude", true,
+        pmix_show_help("help-oob-tcp.txt", "include-exclude", true,
                        prte_if_include, prte_if_exclude);
         return PRTE_ERR_NOT_AVAILABLE;
     }
@@ -228,16 +228,6 @@ int prte_register_params(void)
     lds.lds_want_stdout = true;
     prte_clean_output = prte_output_open(&lds);
     PMIX_DESTRUCT(&lds);
-
-    prte_help_want_aggregate = true;
-    (void) prte_mca_base_var_register(
-        "prte", "prte", "base", "help_aggregate",
-        "If prte_base_help_aggregate is true, duplicate help messages will be aggregated rather "
-        "than displayed individually.  This can be helpful for parallel jobs that experience "
-        "multiple identical failures; rather than print out the same help/failure message N times, "
-        "display it once with a count of how many processes sent the same message.",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ, &prte_help_want_aggregate);
 
     /* LOOK FOR A TMP DIRECTORY BASE */
     /* Several options are provided to cover a range of possibilities:

@@ -31,7 +31,7 @@
 #include "src/mca/mca.h"
 #include "src/util/output.h"
 
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/oob/base/base.h"
 #include "src/mca/oob/oob.h"
@@ -142,7 +142,7 @@ int prte_oob_base_select(void)
         /* no support available means we really cannot run */
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "mca:oob:select: Init failed to return any available transports");
-        prte_show_help("help-oob-base.txt", "no-interfaces-avail", true);
+        pmix_show_help("help-oob-base.txt", "no-interfaces-avail", true);
         return PRTE_ERR_SILENT;
     }
 

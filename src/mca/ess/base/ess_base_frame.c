@@ -32,7 +32,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/ess/base/base.h"
 
@@ -263,7 +263,7 @@ int prte_ess_base_setup_signals(char *mysignals)
                 errno = 0;
                 sval = strtoul(signals[i], &tmp, 10);
                 if (0 != errno || '\0' != *tmp) {
-                    prte_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
+                    pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
                                    forwarded_signals);
                     pmix_argv_free(signals);
                     return PRTE_ERR_SILENT;
@@ -291,7 +291,7 @@ int prte_ess_base_setup_signals(char *mysignals)
                 if (0 == strcasecmp(signals[i], known_signals[j].signame)
                     || sval == known_signals[j].signal) {
                     if (!known_signals[j].can_forward) {
-                        prte_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
+                        pmix_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
                                        known_signals[j].signame, forwarded_signals);
                         pmix_argv_free(signals);
                         return PRTE_ERR_SILENT;
@@ -304,7 +304,7 @@ int prte_ess_base_setup_signals(char *mysignals)
 
             if (!found) {
                 if (0 == strncmp(signals[i], "SIG", 3)) {
-                    prte_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
+                    pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
                                    forwarded_signals);
                     pmix_argv_free(signals);
                     return PRTE_ERR_SILENT;

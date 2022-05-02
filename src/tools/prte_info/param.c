@@ -48,7 +48,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/tools/prte_info/pinfo.h"
 
@@ -84,7 +84,6 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
     bool found;
     int i, j;
     bool want_all = false;
-    prte_value_t *pval;
     pmix_cli_item_t *opt;
 
     prte_info_components_open();
@@ -132,7 +131,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
                     }
 
                     if (!found) {
-                        prte_show_help("help-pinfo.txt", "not-found", true, type);
+                        pmix_show_help("help-pinfo.txt", "not-found", true, type);
                         exit(1);
                     }
 
@@ -231,7 +230,6 @@ void prte_info_do_path(bool want_all)
 {
     int i, count;
     char *scope;
-    prte_value_t *pval;
     pmix_cli_item_t *opt;
 
     /* Check bozo case */
@@ -306,7 +304,7 @@ void prte_info_do_path(bool want_all)
                 } else if (0 == strcmp(prte_info_path_pkgincludedir, scope)) {
                     prte_info_show_path(prte_info_path_pkgincludedir, prte_install_dirs.prteincludedir);
                 } else {
-                    prte_show_help("help-pinfo.txt", "usage", true, "USAGE");
+                    pmix_show_help("help-pinfo.txt", "usage", true, "USAGE");
                     exit(1);
                 }
             }

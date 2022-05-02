@@ -35,7 +35,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/ess/ess.h"
 #include "src/mca/iof/base/base.h"
@@ -155,7 +155,7 @@ static void prted_abort(int error_code, char *fmt, ...)
     va_end(arglist);
 
     /* use the show-help system to get the message out */
-    prte_show_help("help-errmgr-base.txt", "simple-message", true, outmsg);
+    pmix_show_help("help-errmgr-base.txt", "simple-message", true, outmsg);
 
     /* tell the HNP we are in distress */
     PMIX_DATA_BUFFER_CREATE(alert);

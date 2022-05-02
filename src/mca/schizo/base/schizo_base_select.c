@@ -19,7 +19,7 @@
 #include "src/mca/mca.h"
 #include "src/util/output.h"
 
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/schizo/schizo.h"

@@ -33,7 +33,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/mca/base/base.h"
 
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"

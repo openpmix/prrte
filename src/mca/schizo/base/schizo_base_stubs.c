@@ -24,7 +24,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 prte_schizo_base_module_t *prte_schizo_base_detect_proxy(char *cmdpath)
 {
@@ -97,7 +97,7 @@ int prte_schizo_base_add_directive(pmix_cli_result_t *results,
             pmix_argv_append_nosize(&opt->values, directive);
         } else if (1 < pmix_argv_count(opt->values)) {
             // cannot use this function
-            ptr = prte_show_help_string("help-schizo-base.txt", "too-many-values",
+            ptr = pmix_show_help_string("help-schizo-base.txt", "too-many-values",
                                         true, target);
             fprintf(stderr, "%s\n", ptr);
             return PRTE_ERR_SILENT;
@@ -112,7 +112,7 @@ int prte_schizo_base_add_directive(pmix_cli_result_t *results,
                 // do we allow multiple directives?
                 if (!check_multi(target)) {
                     // report the error
-                    ptr = prte_show_help_string("help-schizo-base.txt", "too-many-directives",
+                    ptr = pmix_show_help_string("help-schizo-base.txt", "too-many-directives",
                                                 true, target, opt->values, deprecated, directive);
                     fprintf(stderr, "%s\n", ptr);
                     return PRTE_ERR_SILENT;
@@ -145,7 +145,7 @@ int prte_schizo_base_add_directive(pmix_cli_result_t *results,
     if (report) {
         pmix_asprintf(&tmp, "--%s %s", target, directive);
         /* can't just call show_help as we want every instance to be reported */
-        ptr = prte_show_help_string("help-schizo-base.txt", "deprecated-converted",
+        ptr = pmix_show_help_string("help-schizo-base.txt", "deprecated-converted",
                                     true, deprecated, tmp);
         fprintf(stderr, "%s\n", ptr);
         free(tmp);
@@ -173,7 +173,7 @@ int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
             free(tmp);
         } else if (1 < pmix_argv_count(opt->values)) {
             // cannot use this function
-            ptr = prte_show_help_string("help-schizo-base.txt", "too-many-values",
+            ptr = pmix_show_help_string("help-schizo-base.txt", "too-many-values",
                                         true, target);
             fprintf(stderr, "%s\n", ptr);
             return PRTE_ERR_SILENT;
@@ -204,7 +204,7 @@ int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
     if (report) {
         pmix_asprintf(&tmp, "--%s :%s", target, qualifier);
         /* can't just call show_help as we want every instance to be reported */
-        ptr = prte_show_help_string("help-schizo-base.txt", "deprecated-converted",
+        ptr = pmix_show_help_string("help-schizo-base.txt", "deprecated-converted",
                                     true, deprecated, tmp);
         fprintf(stderr, "%s\n", ptr);
         free(tmp);

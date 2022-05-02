@@ -59,7 +59,7 @@
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #if PRTE_HAVE_DL_SUPPORT
 /*
@@ -351,7 +351,7 @@ static int component_find_check(prte_mca_base_framework_t *framework,
         }
 
         if (!found) {
-            prte_show_help("help-prte-mca-base.txt", "find-available:not-valid", true,
+            pmix_show_help("help-prte-mca-base.txt", "find-available:not-valid", true,
                            prte_process_info.nodename, framework->framework_name,
                            requested_component_names[i]);
             return PRTE_ERR_NOT_FOUND;
@@ -385,7 +385,7 @@ int prte_mca_base_component_parse_requested(const char *requested, bool *include
     /* Double check to ensure that the user did not specify the negate
        character anywhere else in the value. */
     if (NULL != strstr(requested, negate)) {
-        prte_show_help("help-prte-mca-base.txt", "framework-param:too-many-negates", true,
+        pmix_show_help("help-prte-mca-base.txt", "framework-param:too-many-negates", true,
                        requested_orig);
         return PRTE_ERROR;
     }

@@ -47,7 +47,7 @@
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_parse_options.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/base/odls_private.h"
@@ -296,7 +296,7 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
                 nm->name.rank = PMIX_RANK_WILDCARD;
             } else if (rank < 0) {
                 /* error out on bozo case */
-                prte_show_help("help-prte-odls-base.txt", "prte-odls-base:xterm-neg-rank", true,
+                pmix_show_help("help-prte-odls-base.txt", "prte-odls-base:xterm-neg-rank", true,
                                rank);
                 return PRTE_ERROR;
             } else {

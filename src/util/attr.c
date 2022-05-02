@@ -468,6 +468,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "DO-NOT-BUFFER-OUTPUT";
         case PRTE_JOB_EXEC_AGENT:
             return "EXEC-AGENT";
+        case PRTE_JOB_NOAGG_HELP:
+            return "DO-NOT-AGGREGATE-HELP";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

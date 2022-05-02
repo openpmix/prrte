@@ -46,7 +46,7 @@
 #include "src/util/pmix_environ.h"
 #include "src/util/prte_cmd_line.h"
 #include "src/util/session_dir.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
@@ -111,6 +111,9 @@ static struct option prteoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_NOPREFIX, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_FWD_SIGNALS, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_RUN_AS_ROOT, PMIX_ARG_NONE),
+#ifdef PMIX_LOG_AGG
+    PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PMIX_ARG_NONE),
+#endif
 
     // Launch options
     PMIX_OPTION_DEFINE(PRTE_CLI_TIMEOUT, PMIX_ARG_REQD),
@@ -206,6 +209,9 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_HOST, PMIX_ARG_REQD, 'H'),
     PMIX_OPTION_DEFINE(PRTE_CLI_PRELOAD_FILES, PMIX_ARG_REQD),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PRELOAD_BIN, PMIX_ARG_NONE, 's'),
+#ifdef PMIX_LOG_AGG
+    PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PMIX_ARG_NONE),
+#endif
 
     // output options
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
@@ -308,6 +314,9 @@ static struct option prunoptions[] = {
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_HOST, PMIX_ARG_REQD, 'H'),
     PMIX_OPTION_DEFINE(PRTE_CLI_PRELOAD_FILES, PMIX_ARG_REQD),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PRELOAD_BIN, PMIX_ARG_NONE, 's'),
+#ifdef PMIX_LOG_AGG
+    PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PMIX_ARG_NONE),
+#endif
 
     // output options
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
@@ -630,7 +639,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         else if (0 == strcmp(option, "ppr")) {
             /* if they didn't specify a complete pattern, then this is an error */
             if (NULL == strchr(opt->values[0], ':')) {
-                prte_show_help("help-schizo-base.txt", "bad-ppr", true, opt->values[0], true);
+                pmix_show_help("help-schizo-base.txt", "bad-ppr", true, opt->values[0], true);
                 return PRTE_ERR_SILENT;
             }
             pmix_asprintf(&p2, "ppr:%s", opt->values[0]);
@@ -741,7 +750,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
          */
         else if (0 == strcmp(option, "debug")) {
             if (warn) {
-                prte_show_help("help-schizo-base.txt", "deprecated-inform", true, option,
+                pmix_show_help("help-schizo-base.txt", "deprecated-inform", true, option,
                                "This CLI option will be deprecated starting in Open MPI v5");
             }
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
@@ -764,7 +773,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                     pmix_asprintf(&p2, "%s %s", option, p1);
                     pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
-                    output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                    output = pmix_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
                     fprintf(stderr, "%s\n", output);
                     free(output);
@@ -794,7 +803,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                     pmix_asprintf(&p2, "%s %s", option, p1);
                     pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
-                    output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                    output = pmix_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
                     fprintf(stderr, "%s\n", output);
                     free(output);
@@ -824,7 +833,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                     pmix_asprintf(&p2, "%s %s", option, p1);
                     pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
-                    output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                    output = pmix_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
                     fprintf(stderr, "%s\n", output);
                     free(output);
@@ -875,7 +884,7 @@ static int parse_env(char **srcenv, char ***dstenv,
             } else {
                 p2 = getenv(p1);
                 if (NULL == p2) {
-                    prte_show_help("help-schizo-base.txt", "missing-envar-param", true, p1);
+                    pmix_show_help("help-schizo-base.txt", "missing-envar-param", true, p1);
                     continue;
                 }
             }
@@ -891,7 +900,7 @@ static int parse_env(char **srcenv, char ***dstenv,
                     /* we do have it - check for same value */
                     if (0 != strcmp(value, p2)) {
                         /* this is an error - different values */
-                        prte_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
+                        pmix_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
                                        value);
                         free(param);
                         pmix_argv_free(xparams);
@@ -907,7 +916,7 @@ static int parse_env(char **srcenv, char ***dstenv,
                 for (i = 0; NULL != xparams[i]; i++) {
                     if (0 == strncmp("PRTE_MCA_", p1, strlen("PRTE_MCA_"))) {
                         /* this is an error - different values */
-                        prte_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
+                        pmix_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
                                        xvals[i]);
                         pmix_argv_free(xparams);
                         pmix_argv_free(xvals);

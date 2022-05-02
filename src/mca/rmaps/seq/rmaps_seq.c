@@ -46,7 +46,7 @@
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "rmaps_seq.h"
 #include "src/mca/rmaps/base/base.h"
@@ -251,7 +251,7 @@ process:
             hosts = strdup(prte_default_hostfile);
         } else {
             /* can't do anything - no nodes available! */
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
                            true);
             rc = PRTE_ERR_SILENT;
             goto error;
@@ -276,7 +276,7 @@ process:
         }
 
         if (NULL == seq_list || 0 == (num_nodes = (int32_t) pmix_list_get_size(seq_list))) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
                            true);
             rc = PRTE_ERR_SILENT;
             goto error;
@@ -289,7 +289,7 @@ process:
                                 "mca:rmaps:seq: setting num procs to %s for app %s",
                                 PRTE_VPID_PRINT(app->num_procs), app->app);
         } else if (num_nodes < app->num_procs) {
-            prte_show_help("help-prte-rmaps-seq.txt", "seq:not-enough-resources", true,
+            pmix_show_help("help-prte-rmaps-seq.txt", "seq:not-enough-resources", true,
                            app->num_procs, num_nodes);
             rc = PRTE_ERR_SILENT;
             goto error;
@@ -318,7 +318,7 @@ process:
             }
             if (!match) {
                 /* wasn't found - that is an error */
-                prte_show_help("help-prte-rmaps-seq.txt", "prte-rmaps-seq:resource-not-found", true,
+                pmix_show_help("help-prte-rmaps-seq.txt", "prte-rmaps-seq:resource-not-found", true,
                                sq->hostname);
                 rc = PRTE_ERR_SILENT;
                 goto error;
@@ -336,7 +336,7 @@ process:
                 if ((node->slots < (int) node->num_procs) ||
                     (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
                     if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                                        node->num_procs, app->app);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                         rc = PRTE_ERR_SILENT;
@@ -353,14 +353,14 @@ process:
                          * as the #slots were specifically given, either by the host RM or
                          * via hostfile/dash-host */
                         if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
-                            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                            true, app->num_procs, app->app);
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                             rc = PRTE_ERR_SILENT;
                             goto error;
                         } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                             /* if we were explicitly told not to oversubscribe, then don't */
-                            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                            true, app->num_procs, app->app);
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                             rc = PRTE_ERR_SILENT;
@@ -383,7 +383,7 @@ process:
                     /* not allowed - for sequential cpusets, we must have
                      * the topology info
                      */
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
                                    node->name);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -401,11 +401,11 @@ process:
                     if (PRTE_ERR_NOT_FOUND == rc) {
                         char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
                                                              false, node->topology->topo);
-                        prte_show_help("help-rmaps-seq.txt", "missing-cpu", true,
+                        pmix_show_help("help-rmaps-seq.txt", "missing-cpu", true,
                                        prte_tool_basename, sq->cpuset, tmp);
                         free(tmp);
                     } else if (PRTE_ERROR == rc) {
-                        prte_show_help("help-rmaps-seq.txt", "bad-syntax", true, hosts);
+                        pmix_show_help("help-rmaps-seq.txt", "bad-syntax", true, hosts);
                         rc = PRTE_ERR_SILENT;
                         hwloc_bitmap_free(bitmap);
                         goto error;

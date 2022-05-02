@@ -49,7 +49,7 @@
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
 #include "src/util/prte_cmd_line.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -126,7 +126,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
 
     /* get the cwd - we may need it in several places */
     if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
-        prte_show_help("help-prun.txt", "prun:init-failure", true, "get the cwd", rc);
+        pmix_show_help("help-prun.txt", "prun:init-failure", true, "get the cwd", rc);
         goto cleanup;
     }
 
@@ -205,7 +205,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     if (NULL != opt) {
         count = strtol(opt->values[0], NULL, 10);
         if (0 > count) {
-            prte_show_help("help-prun.txt", "prun:negative-nprocs", true,
+            pmix_show_help("help-prun.txt", "prun:negative-nprocs", true,
                            prte_tool_basename,
                            app->app.argv[0], count, NULL);
             return PRTE_ERR_FATAL;
@@ -241,7 +241,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
 
     app->app.cmd = strdup(app->app.argv[0]);
     if (NULL == app->app.cmd) {
-        prte_show_help("help-prun.txt", "prun:call-failed", true, "prun", "library",
+        pmix_show_help("help-prun.txt", "prun:call-failed", true, "prun", "library",
                        "strdup returned NULL", errno);
         rc = PRTE_ERR_NOT_FOUND;
         goto cleanup;

@@ -49,7 +49,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -267,7 +267,7 @@ static void interim(int sd, short args, void *cbdata)
                     } else {
                         /* get the cwd */
                         if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
-                            prte_show_help("help-prted.txt", "cwd", true, "spawn", rc);
+                            pmix_show_help("help-prted.txt", "cwd", true, "spawn", rc);
                             PMIX_RELEASE(jdata);
                             goto complete;
                         }
@@ -324,7 +324,7 @@ static void interim(int sd, short args, void *cbdata)
                 } else {
                     /* unrecognized key */
                     if (9 < prte_output_get_verbosity(prte_pmix_server_globals.output)) {
-                        prte_show_help("help-prted.txt", "bad-key", true, "spawn", "application",
+                        pmix_show_help("help-prted.txt", "bad-key", true, "spawn", "application",
                                        info->key);
                     }
                 }
@@ -355,7 +355,7 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_PPR)) {
             if (PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
                 /* not allowed to provide multiple mapping policies */
-                prte_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "mapping",
+                pmix_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "mapping",
                                info->value.data.string,
                                prte_rmaps_base_print_mapping(prte_rmaps_base.mapping));
                 rc = PRTE_ERR_BAD_PARAM;
@@ -710,6 +710,14 @@ static void interim(int sd, short args, void *cbdata)
                 prte_add_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, PRTE_ATTR_GLOBAL,
                                    &flag, PMIX_BOOL);
             }
+#ifdef PMIX_LOG_AGG
+        } else if (PMIX_CHECK_KEY(info, PMIX_LOG_AGG)) {
+            flag = PMIX_INFO_TRUE(info);
+            if (!flag) {
+                prte_add_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
+                                   &flag, PMIX_BOOL);
+            }
+#endif
             /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {
             pmix_server_cache_job_info(jdata, info);

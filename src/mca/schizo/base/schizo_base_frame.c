@@ -21,7 +21,7 @@
 #include "src/util/output.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/prte_cmd_line.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
@@ -117,7 +117,7 @@ bool prte_schizo_base_check_qualifiers(char *directive,
         }
     }
     v = pmix_argv_join(valid, ',');
-    prte_show_help("help-prte-rmaps-base.txt",
+    pmix_show_help("help-prte-rmaps-base.txt",
                    "unrecognized-qualifier", true,
                    directive, qual, v);
     free(v);
@@ -188,7 +188,7 @@ bool prte_schizo_base_check_directives(char *directive,
                     if (NULL != v && 0 < strlen(v)) {
                         /* the first entry had to be a pure number */
                         pmix_asprintf(&v, "ppr:[Number of procs/object]:%s", args[2]);
-                        prte_show_help("help-prte-rmaps-base.txt",
+                        pmix_show_help("help-prte-rmaps-base.txt",
                                        "unrecognized-qualifier", true,
                                        directive, dir, v);
                         free(v);
@@ -206,7 +206,7 @@ bool prte_schizo_base_check_directives(char *directive,
                         v = pmix_argv_join(pproptions, ',');
                         pmix_asprintf(&q, "ppr:%s:[%s]", args[1], v);
                         free(v);
-                        prte_show_help("help-prte-rmaps-base.txt",
+                        pmix_show_help("help-prte-rmaps-base.txt",
                                        "unrecognized-qualifier", true,
                                        directive, dir, q);
                         free(q);
@@ -238,7 +238,7 @@ bool prte_schizo_base_check_directives(char *directive,
         }
     }
     v = pmix_argv_join(valid, ',');
-    prte_show_help("help-prte-rmaps-base.txt",
+    pmix_show_help("help-prte-rmaps-base.txt",
                    "unrecognized-directive", true,
                    directive, dir, v);
     pmix_argv_free(args);
@@ -287,7 +287,7 @@ static int check_ndirs(pmix_cli_item_t *opt)
             count = pmix_argv_count(opt->values);
             if (1 > count) {
                 param = pmix_argv_join(opt->values, ' ');
-                prte_show_help("help-schizo-base.txt", "too-many-instances", true,
+                pmix_show_help("help-schizo-base.txt", "too-many-instances", true,
                                param, opt->key, count, 1);
                 return PRTE_ERR_SILENT;
             }
@@ -401,15 +401,15 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     bool hwtcpus = false;
 
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_MAPBY)) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_MAPBY);
+        pmix_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_MAPBY);
         return PRTE_ERR_SILENT;
     }
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_RANKBY)) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_RANKBY);
+        pmix_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_RANKBY);
         return PRTE_ERR_SILENT;
     }
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_BINDTO)) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_BINDTO);
+        pmix_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_BINDTO);
         return PRTE_ERR_SILENT;
     }
 
@@ -461,7 +461,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         if (0 == strncasecmp(opt->values[0], PRTE_CLI_HWT, strlen(PRTE_CLI_HWT)) && !hwtcpus) {
             /* if we are told to bind-to hwt, then we have to be treating
              * hwt's as the allocatable unit */
-            prte_show_help("help-prte-rmaps-base.txt", "invalid-combination", true);
+            pmix_show_help("help-prte-rmaps-base.txt", "invalid-combination", true);
             return PRTE_ERR_SILENT;
         }
     }
