@@ -35,7 +35,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/util/error_strings.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "rmaps_rr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -109,7 +109,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
          * all available slots. We'll double-check the single app_context rule first
          */
         if (0 == app->num_procs && 1 < jdata->num_apps) {
-            prte_show_help("help-prte-rmaps-rr.txt", "prte-rmaps-rr:multi-apps-and-zero-np", true,
+            pmix_show_help("help-prte-rmaps-rr.txt", "prte-rmaps-rr:multi-apps-and-zero-np", true,
                            jdata->num_apps, NULL);
             rc = PRTE_ERR_SILENT;
             goto error;
@@ -231,7 +231,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata)
             }
         } else {
             /* unrecognized mapping directive */
-            prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "mapping",
+            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "mapping",
                            prte_rmaps_base_print_mapping(jdata->map->mapping));
             rc = PRTE_ERR_SILENT;
             goto error;
@@ -370,7 +370,7 @@ static int prte_rmaps_rr_assign_locations(prte_job_t *jdata)
         }
     } else {
         /* unrecognized mapping directive */
-        prte_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "mapping",
+        pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true, "mapping",
                        prte_rmaps_base_print_mapping(jdata->map->mapping));
         rc = PRTE_ERR_SILENT;
     }

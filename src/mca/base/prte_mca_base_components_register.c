@@ -36,7 +36,7 @@
 #include "src/mca/mca.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 /*
  * Local functions

@@ -19,7 +19,7 @@
 
 #include "src/mca/base/base.h"
 
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "rmaps_ppr.h"
 #include "src/mca/rmaps/base/base.h"

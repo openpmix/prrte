@@ -70,7 +70,7 @@
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "plm_alps.h"
 #include "src/mca/plm/base/base.h"
@@ -314,7 +314,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             pmix_argv_append(&nodelist_argc, &nodelist_argv, node->name);
         }
         if (0 == pmix_argv_count(nodelist_argv)) {
-            prte_show_help("help-plm-alps.txt", "no-hosts-in-list", true);
+            pmix_show_help("help-plm-alps.txt", "no-hosts-in-list", true);
             rc = PRTE_ERR_FAILED_TO_START;
             goto cleanup;
         }
@@ -377,7 +377,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
            complain */
         if (NULL != app_prefix_dir) {
             if (NULL != cur_prefix && 0 != strcmp(cur_prefix, app_prefix_dir)) {
-                prte_show_help("help-plm-alps.txt", "multiple-prefixes", true, cur_prefix,
+                pmix_show_help("help-plm-alps.txt", "multiple-prefixes", true, cur_prefix,
                                app_prefix_dir);
                 goto cleanup;
             }

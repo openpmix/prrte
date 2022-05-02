@@ -53,7 +53,7 @@
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -61,7 +61,7 @@
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_parse_options.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/oob/tcp/oob_tcp.h"
 #include "src/mca/oob/tcp/oob_tcp_common.h"

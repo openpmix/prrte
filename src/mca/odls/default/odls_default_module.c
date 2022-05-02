@@ -119,7 +119,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 #include "src/util/sys_limits.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -132,7 +132,7 @@
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/odls/base/base.h"
 #include "src/mca/odls/base/odls_private.h"
@@ -236,7 +236,7 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
         return PRTE_ERR_BAD_PARAM;
     }
 
-    str = prte_show_help_vstring(file, topic, true, ap);
+    str = pmix_show_help_vstring(file, topic, true, ap);
 
     msg->file_str_len = (int) strlen(file);
     if (msg->file_str_len > PRTE_ODLS_MAX_FILE_LEN) {
@@ -521,7 +521,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         if (msg.file_str_len > 0) {
             rc = pmix_fd_read(read_fd, msg.file_str_len, file);
             if (PMIX_SUCCESS != rc) {
-                prte_show_help("help-prte-odls-default.txt", "syscall fail", true,
+                pmix_show_help("help-prte-odls-default.txt", "syscall fail", true,
                                prte_process_info.nodename, cd->app->app, "pmix_fd_read", __FILE__,
                                __LINE__);
                 if (NULL != cd->child) {
@@ -535,7 +535,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         if (msg.topic_str_len > 0) {
             rc = pmix_fd_read(read_fd, msg.topic_str_len, topic);
             if (PMIX_SUCCESS != rc) {
-                prte_show_help("help-prte-odls-default.txt", "syscall fail", true,
+                pmix_show_help("help-prte-odls-default.txt", "syscall fail", true,
                                prte_process_info.nodename, cd->app->app, "pmix_fd_read", __FILE__,
                                __LINE__);
                 if (NULL != cd->child) {
@@ -549,7 +549,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         if (msg.msg_str_len > 0) {
             str = calloc(1, msg.msg_str_len + 1);
             if (NULL == str) {
-                prte_show_help("help-prte-odls-default.txt", "syscall fail", true,
+                pmix_show_help("help-prte-odls-default.txt", "syscall fail", true,
                                prte_process_info.nodename, cd->app->app, "pmix_fd_read", __FILE__,
                                __LINE__);
                 if (NULL != cd->child) {
@@ -562,9 +562,9 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         }
 
         /* Print out what we got.  We already have a rendered string,
-           so use prte_show_help_norender(). */
+           so use pmix_show_help_norender(). */
         if (msg.msg_str_len > 0) {
-            prte_show_help_norender(file, topic, false, str);
+            pmix_show_help_norender(file, topic, str);
             free(str);
             str = NULL;
         }

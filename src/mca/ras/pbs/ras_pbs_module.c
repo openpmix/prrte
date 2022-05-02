@@ -31,7 +31,7 @@
 
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
@@ -88,7 +88,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
      * is an unrecoverable error - report it
      */
     if (pmix_list_is_empty(nodes)) {
-        prte_show_help("help-ras-pbs.txt", "no-nodes-found", true, filename);
+        pmix_show_help("help-ras-pbs.txt", "no-nodes-found", true, filename);
         return PRTE_ERR_NOT_FOUND;
     }
 
@@ -143,7 +143,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
      */
     if (prte_ras_pbs_component.smp_mode) {
         if (NULL == (cppn = getenv("PBS_PPN"))) {
-            prte_show_help("help-ras-pbs.txt", "smp-error", true);
+            pmix_show_help("help-ras-pbs.txt", "smp-error", true);
             return PRTE_ERR_NOT_FOUND;
         }
         ppn = strtol(cppn, NULL, 10);
@@ -154,7 +154,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
     /* setup the full path to the PBS file */
     filename = getenv("PBS_NODEFILE");
     if (NULL == filename) {
-        prte_show_help("help-ras-pbs.txt", "no-nodefile", true);
+        pmix_show_help("help-ras-pbs.txt", "no-nodefile", true);
         return PRTE_ERR_NOT_FOUND;
     }
     fp = fopen(filename, "r");
@@ -182,7 +182,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
             if (0 == strcmp(node->name, hostname)) {
                 if (prte_ras_pbs_component.smp_mode) {
                     /* this cannot happen in smp mode */
-                    prte_show_help("help-ras-pbs.txt", "smp-multi", true);
+                    pmix_show_help("help-ras-pbs.txt", "smp-multi", true);
                     return PRTE_ERR_BAD_PARAM;
                 }
                 ++node->slots;

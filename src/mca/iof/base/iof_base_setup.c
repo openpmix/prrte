@@ -74,7 +74,7 @@
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_pty.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/iof/base/base.h"
 #include "src/mca/iof/base/iof_base_setup.h"

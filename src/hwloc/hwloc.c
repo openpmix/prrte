@@ -23,7 +23,7 @@
 #include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 /*
  * Globals
@@ -233,7 +233,7 @@ int prte_hwloc_base_register(void)
             } else if (0 == strcasecmp(ptr, "CORECPUS")) {
                 prte_hwloc_default_use_hwthread_cpus = false;
             } else {
-                prte_show_help("help-prte-hwloc-base.txt", "bad-processor-type", true,
+                pmix_show_help("help-prte-hwloc-base.txt", "bad-processor-type", true,
                                default_cpu_list, ptr);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -651,7 +651,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 tmp |= PRTE_BIND_ORDERED;
             } else if (0 == strcasecmp(quals[i], "REPORT")) {
                 if (NULL == jdata) {
-                    prte_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                    "binding policy", quals[i]);
                     free(myspec);
                     return PRTE_ERR_SILENT;
@@ -660,7 +660,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                                    NULL, PMIX_BOOL);
             } else {
                 /* unknown option */
-                prte_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
+                pmix_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
                 pmix_argv_free(quals);
                 free(myspec);
                 return PRTE_ERR_BAD_PARAM;
@@ -688,7 +688,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
         } else if (0 == strncasecmp(myspec, "package", len)) {
             PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
         } else {
-            prte_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true, "binding",
+            pmix_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true, "binding",
                            spec);
             free(myspec);
             return PRTE_ERR_BAD_PARAM;

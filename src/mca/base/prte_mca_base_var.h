@@ -623,14 +623,14 @@ PRTE_EXPORT int prte_mca_base_var_find_by_name(const char *full_name, int *vari)
  * This function is useful for checking that the user did not set both
  * of 2 mutually-exclusive MCA variables.
  *
- * This function will print an prte_show_help() message and return
+ * This function will print an pmix_show_help() message and return
  * PRTE_ERR_BAD_VAR if it finds that the two variables both have
  * value sources that are not MCA_BASE_VAR_SOURCE_DEFAULT.  This
  * means that both variables have been set by the user (i.e., they're
  * not default values).
  *
- * Note that prte_show_help() allows itself to be hooked, so if this
- * happens after the aggregated prte_show_help() system is
+ * Note that pmix_show_help() allows itself to be hooked, so if this
+ * happens after the aggregated pmix_show_help() system is
  * initialized, the messages will be aggregated (w00t).
  *
  * @returns PRTE_ERR_BAD_VAR if the two variables have sources that

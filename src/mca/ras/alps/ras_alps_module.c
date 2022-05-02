@@ -33,7 +33,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/ras/base/ras_private.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -306,7 +306,7 @@ static int prte_ras_alps_allocate(prte_job_t *jdata, pmix_list_t *nodes)
     char *appinfo_path = NULL;
 
     if (0 == prte_ras_alps_res_id) {
-        prte_show_help("help-ras-alps.txt", "alps-env-var-not-found", 1);
+        pmix_show_help("help-ras-alps.txt", "alps-env-var-not-found", 1);
         return PRTE_ERR_NOT_FOUND;
     }
     if (NULL == (appinfo_path = prte_ras_get_appinfo_path())) {

@@ -72,7 +72,7 @@
 #include "src/runtime/prte_wait.h"
 #include "src/util/name_fns.h"
 #include "src/util/session_dir.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/ess/base/base.h"
 
@@ -291,7 +291,7 @@ int prte_ess_base_prted_setup(void)
     /* set the schizo personality to "prte" by default */
     jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy("prte");
     if (NULL == jdata->schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
         error = "select personality";
         ret = PRTE_ERR_SILENT;
         goto error;
@@ -521,7 +521,7 @@ int prte_ess_base_prted_setup(void)
     return PRTE_SUCCESS;
 
 error:
-    prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+    pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
                    PRTE_ERROR_NAME(ret), ret);
     /* remove our use of the session directory tree */
     prte_session_dir_finalize(PRTE_PROC_MY_NAME);

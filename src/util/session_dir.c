@@ -60,7 +60,7 @@
 
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ras/base/base.h"
@@ -289,7 +289,7 @@ int prte_session_setup_base(pmix_proc_t *proc)
             /* check if prefix matches */
             if (0 == strncmp(prte_process_info.tmpdir_base, list[i], strlen(list[i]))) {
                 /* this is a prohibited location */
-                prte_show_help("help-prte-runtime.txt", "prte:session:dir:prohibited", true,
+                pmix_show_help("help-prte-runtime.txt", "prte:session:dir:prohibited", true,
                                prte_process_info.tmpdir_base, prte_prohibited_session_dirs);
                 pmix_argv_free(list);
                 return PRTE_ERR_FATAL;

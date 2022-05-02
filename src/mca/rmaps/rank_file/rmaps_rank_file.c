@@ -51,7 +51,7 @@
 #include "src/mca/rmaps/rank_file/rmaps_rank_file.h"
 #include "src/mca/rmaps/rank_file/rmaps_rank_file_lex.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 static int prte_rmaps_rf_map(prte_job_t *jdata);
 
@@ -157,7 +157,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
      * all available slots.
      */
     if (0 == app->num_procs && 1 < jdata->num_apps) {
-        prte_show_help("help-rmaps_rank_file.txt", "prte-rmaps-rf:multi-apps-and-zero-np", true,
+        pmix_show_help("help-rmaps_rank_file.txt", "prte-rmaps-rf:multi-apps-and-zero-np", true,
                        jdata->num_apps, NULL);
         rc = PRTE_ERR_SILENT;
         goto error;
@@ -204,7 +204,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
             app->num_procs = num_ranks;
         }
         if (0 == app->num_procs) {
-            prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+            pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
             rc = PRTE_ERR_SILENT;
             goto error;
         }
@@ -222,7 +222,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                     slots = prte_hwloc_default_cpu_list;
                 } else {
                     /* all ranks must be specified */
-                    prte_show_help("help-rmaps_rank_file.txt", "missing-rank", true, rank,
+                    pmix_show_help("help-rmaps_rank_file.txt", "missing-rank", true, rank,
                                    rankfile);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -260,7 +260,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
             } else {
                 if (0 == strlen(rfmap->slot_list)) {
                     /* rank was specified but no slot list given - that's an error */
-                    prte_show_help("help-rmaps_rank_file.txt", "no-slot-list", true, rank,
+                    pmix_show_help("help-rmaps_rank_file.txt", "no-slot-list", true, rank,
                                    rfmap->node_name);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -281,7 +281,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                         relative_index = atoi(strtok(rfmap->node_name, "+n"));
                         if (relative_index >= (int) pmix_list_get_size(&node_list)
                             || (0 > relative_index)) {
-                            prte_show_help("help-rmaps_rank_file.txt", "bad-index", true,
+                            pmix_show_help("help-rmaps_rank_file.txt", "bad-index", true,
                                            rfmap->node_name);
                             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                             return PRTE_ERR_BAD_PARAM;
@@ -296,7 +296,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                 }
             }
             if (NULL == node) {
-                prte_show_help("help-rmaps_rank_file.txt", "bad-host", true, rfmap->node_name);
+                pmix_show_help("help-rmaps_rank_file.txt", "bad-host", true, rfmap->node_name);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
@@ -316,7 +316,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
             if ((node->slots < (int) node->num_procs) ||
                 (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
                 if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                    prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                                    node->num_procs, app->app);
                     PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                     rc = PRTE_ERR_SILENT;
@@ -339,7 +339,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                     /* not allowed - for rank-file, we must have
                      * the topology info
                      */
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
                                    node->name);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -350,14 +350,14 @@ static int prte_rmaps_rf_map(prte_job_t *jdata)
                 if (PRTE_ERR_NOT_FOUND == rc) {
                     char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
                                                          false, node->topology->topo);
-                    prte_show_help("help-rmaps_rank_file.txt", "missing-cpu", true,
+                    pmix_show_help("help-rmaps_rank_file.txt", "missing-cpu", true,
                                    prte_tool_basename, slots, tmp);
                     free(tmp);
                     rc = PRTE_ERR_SILENT;
                     hwloc_bitmap_free(bitmap);
                     goto error;
                 } else if (PRTE_ERROR == rc) {
-                    prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                    pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
                     rc = PRTE_ERR_SILENT;
                     hwloc_bitmap_free(bitmap);
                     goto error;
@@ -451,7 +451,7 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
     prte_rmaps_rank_file_in = fopen(rankfile, "r");
 
     if (NULL == prte_rmaps_rank_file_in) {
-        prte_show_help("help-rmaps_rank_file.txt", "no-rankfile", true,
+        pmix_show_help("help-rmaps_rank_file.txt", "no-rankfile", true,
                        prte_tool_basename, rankfile, prte_tool_basename);
         rc = PRTE_ERR_NOT_FOUND;
         goto unlock;
@@ -462,12 +462,12 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
 
         switch (token) {
         case PRTE_RANKFILE_ERROR:
-            prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+            pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
             rc = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(rc);
             goto unlock;
         case PRTE_RANKFILE_QUOTED_STRING:
-            prte_show_help("help-rmaps_rank_file.txt", "not-supported-rankfile", true,
+            pmix_show_help("help-rmaps_rank_file.txt", "not-supported-rankfile", true,
                            "QUOTED_STRING", rankfile);
             rc = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(rc);
@@ -488,21 +488,21 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                 pmix_pointer_array_set_item(&rankmap, rank, rfmap);
                 num_ranks++; // keep track of number of provided ranks
             } else {
-                prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
                 rc = PRTE_ERR_BAD_PARAM;
                 PRTE_ERROR_LOG(rc);
                 goto unlock;
             }
             break;
         case PRTE_RANKFILE_USERNAME:
-            prte_show_help("help-rmaps_rank_file.txt", "not-supported-rankfile", true, "USERNAME",
+            pmix_show_help("help-rmaps_rank_file.txt", "not-supported-rankfile", true, "USERNAME",
                            rankfile);
             rc = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(rc);
             goto unlock;
         case PRTE_RANKFILE_EQUAL:
             if (rank < 0) {
-                prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
                 rc = PRTE_ERR_BAD_PARAM;
                 PRTE_ERROR_LOG(rc);
                 goto unlock;
@@ -531,7 +531,7 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                 } else if (2 == cnt) {
                     node_name = strdup(argv[1]);
                 } else {
-                    prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                    pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
                     rc = PRTE_ERR_BAD_PARAM;
                     PRTE_ERROR_LOG(rc);
                     pmix_argv_free(argv);
@@ -550,7 +550,7 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
 
                 /* check the rank item */
                 if (NULL == rfmap) {
-                    prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                    pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
                     rc = PRTE_ERR_BAD_PARAM;
                     PRTE_ERROR_LOG(rc);
                     goto unlock;
@@ -566,7 +566,7 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
         case PRTE_RANKFILE_SLOT:
             if (NULL == node_name || rank < 0
                 || NULL == (value = prte_rmaps_rank_file_parse_string_or_int())) {
-                prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
                 rc = PRTE_ERR_BAD_PARAM;
                 PRTE_ERROR_LOG(rc);
                 goto unlock;
@@ -574,7 +574,7 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
 
             /* check for a duplicate rank assignment */
             if (NULL != pmix_pointer_array_get_item(assigned_ranks_array, rank)) {
-                prte_show_help("help-rmaps_rank_file.txt", "bad-assign", true, rank,
+                pmix_show_help("help-rmaps_rank_file.txt", "bad-assign", true, rank,
                                pmix_pointer_array_get_item(assigned_ranks_array, rank), rankfile);
                 rc = PRTE_ERR_BAD_PARAM;
                 free(value);
@@ -587,7 +587,7 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
 
             /* check the rank item */
             if (NULL == rfmap) {
-                prte_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
+                pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
                 rc = PRTE_ERR_BAD_PARAM;
                 PRTE_ERROR_LOG(rc);
                 free(value);

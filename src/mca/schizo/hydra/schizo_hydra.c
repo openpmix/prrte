@@ -48,7 +48,7 @@
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/session_dir.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
@@ -830,23 +830,23 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
     bool hwtcpus = false;
 
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, "map-by")) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, "map-by");
+        pmix_show_help("help-schizo-base.txt", "multi-instances", true, "map-by");
         return PRTE_ERR_SILENT;
     }
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, "rank-by")) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, "rank-by");
+        pmix_show_help("help-schizo-base.txt", "multi-instances", true, "rank-by");
         return PRTE_ERR_SILENT;
     }
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, "bind-to")) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, "bind-to");
+        pmix_show_help("help-schizo-base.txt", "multi-instances", true, "bind-to");
         return PRTE_ERR_SILENT;
     }
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, "output")) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, "output");
+        pmix_show_help("help-schizo-base.txt", "multi-instances", true, "output");
         return PRTE_ERR_SILENT;
     }
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, "display")) {
-        prte_show_help("help-schizo-base.txt", "multi-instances", true, "display");
+        pmix_show_help("help-schizo-base.txt", "multi-instances", true, "display");
         return PRTE_ERR_SILENT;
     }
 
@@ -873,7 +873,7 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
         if (0 == strncasecmp(pval->value.data.string, "HWTHREAD", strlen("HWTHREAD")) && !hwtcpus) {
             /* if we are told to bind-to hwt, then we have to be treating
              * hwt's as the allocatable unit */
-            prte_show_help("help-prte-rmaps-base.txt", "invalid-combination", true);
+            pmix_show_help("help-prte-rmaps-base.txt", "invalid-combination", true);
             return PRTE_ERR_SILENT;
         }
     }

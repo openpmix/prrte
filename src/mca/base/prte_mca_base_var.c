@@ -57,7 +57,7 @@
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 /*
  * local variables
@@ -512,11 +512,11 @@ static int var_set_from_string(prte_mca_base_var_t *var, char *src)
             if (var->mbv_enumerator) {
                 char *valid_values;
                 (void) var->mbv_enumerator->dump(var->mbv_enumerator, &valid_values);
-                prte_show_help("help-prte-mca-var.txt", "invalid-value-enum", true,
+                pmix_show_help("help-prte-mca-var.txt", "invalid-value-enum", true,
                                var->mbv_full_name, src, valid_values);
                 free(valid_values);
             } else {
-                prte_show_help("help-prte-mca-var.txt", "invalid-value", true, var->mbv_full_name,
+                pmix_show_help("help-prte-mca-var.txt", "invalid-value", true, var->mbv_full_name,
                                src);
             }
 
@@ -1062,7 +1062,7 @@ static int register_variable(const char *project_name, const char *framework_nam
             || (flags & PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY)) {
             if ((flags & PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY)
                 && (flags & PRTE_MCA_BASE_VAR_FLAG_SETTABLE)) {
-                prte_show_help("help-prte-mca-var.txt", "invalid-flag-combination", true,
+                pmix_show_help("help-prte-mca-var.txt", "invalid-flag-combination", true,
                                "PRTE_MCA_BASE_VAR_FLAG_DEFAULT_ONLY",
                                "PRTE_MCA_BASE_VAR_FLAG_SETTABLE");
                 return PRTE_ERROR;
@@ -1151,7 +1151,7 @@ static int register_variable(const char *project_name, const char *framework_nam
         if (0 != compare_strings(framework_name, group->group_framework)
             || 0 != compare_strings(component_name, group->group_component)
             || 0 != compare_strings(variable_name, var->mbv_variable_name)) {
-            prte_show_help("help-prte-mca-var.txt", "var-name-conflict", true, var->mbv_full_name,
+            pmix_show_help("help-prte-mca-var.txt", "var-name-conflict", true, var->mbv_full_name,
                            framework_name, component_name, variable_name, group->group_framework,
                            group->group_component, var->mbv_variable_name);
             /* This is developer error. abort! */
@@ -1161,7 +1161,7 @@ static int register_variable(const char *project_name, const char *framework_nam
 
         if (var->mbv_type != type) {
 #if PRTE_ENABLE_DEBUG
-            prte_show_help("help-prte-mca-var.txt", "re-register-with-different-type", true,
+            pmix_show_help("help-prte-mca-var.txt", "re-register-with-different-type", true,
                            var->mbv_full_name);
 #endif
             return PRTE_ERR_VALUE_OUT_OF_BOUNDS;
@@ -1356,14 +1356,14 @@ static int var_set_from_env(prte_mca_base_var_t *var, prte_mca_base_var_t *origi
     /* we found an environment variable but this variable is default-only. print
        a warning. */
     if (PRTE_VAR_IS_DEFAULT_ONLY(original[0])) {
-        prte_show_help("help-prte-mca-var.txt", "default-only-param-set", true, var_full_name);
+        pmix_show_help("help-prte-mca-var.txt", "default-only-param-set", true, var_full_name);
 
         return PRTE_ERR_NOT_FOUND;
     }
 
     if (PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE == original->mbv_source) {
         if (!prte_mca_base_var_suppress_override_warning) {
-            prte_show_help("help-prte-mca-var.txt", "overridden-param-set", true, var_full_name);
+            pmix_show_help("help-prte-mca-var.txt", "overridden-param-set", true, var_full_name);
         }
 
         return PRTE_ERR_NOT_FOUND;
@@ -1389,16 +1389,16 @@ static int var_set_from_env(prte_mca_base_var_t *var, prte_mca_base_var_t *origi
 
         switch (var->mbv_source) {
         case PRTE_MCA_BASE_VAR_SOURCE_ENV:
-            prte_show_help("help-prte-mca-var.txt", "deprecated-mca-env", true, var_full_name,
+            pmix_show_help("help-prte-mca-var.txt", "deprecated-mca-env", true, var_full_name,
                            new_variable);
             break;
         case PRTE_MCA_BASE_VAR_SOURCE_COMMAND_LINE:
-            prte_show_help("help-prte-mca-var.txt", "deprecated-mca-cli", true, var_full_name,
+            pmix_show_help("help-prte-mca-var.txt", "deprecated-mca-cli", true, var_full_name,
                            new_variable);
             break;
         case PRTE_MCA_BASE_VAR_SOURCE_FILE:
         case PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE:
-            prte_show_help("help-prte-mca-var.txt", "deprecated-mca-file", true, var_full_name,
+            pmix_show_help("help-prte-mca-var.txt", "deprecated-mca-file", true, var_full_name,
                            prte_mca_base_var_source_file(var), new_variable);
             break;
 
@@ -1438,13 +1438,13 @@ static int var_set_from_file(prte_mca_base_var_t *var, prte_mca_base_var_t *orig
 
         /* found it */
         if (PRTE_VAR_IS_DEFAULT_ONLY(var[0])) {
-            prte_show_help("help-prte-mca-var.txt", "default-only-param-set", true, var_full_name);
+            pmix_show_help("help-prte-mca-var.txt", "default-only-param-set", true, var_full_name);
 
             return PRTE_ERR_NOT_FOUND;
         }
 
         if (PRTE_MCA_BASE_VAR_FLAG_ENVIRONMENT_ONLY & original->mbv_flags) {
-            prte_show_help("help-prte-mca-var.txt", "environment-only-param", true, var_full_name,
+            pmix_show_help("help-prte-mca-var.txt", "environment-only-param", true, var_full_name,
                            fv->mbvfv_value, fv->mbvfv_file);
 
             return PRTE_ERR_NOT_FOUND;
@@ -1452,7 +1452,7 @@ static int var_set_from_file(prte_mca_base_var_t *var, prte_mca_base_var_t *orig
 
         if (PRTE_MCA_BASE_VAR_SOURCE_OVERRIDE == original->mbv_source) {
             if (!prte_mca_base_var_suppress_override_warning) {
-                prte_show_help("help-prte-mca-var.txt", "overridden-param-set", true,
+                pmix_show_help("help-prte-mca-var.txt", "overridden-param-set", true,
                                var_full_name);
             }
 
@@ -1466,7 +1466,7 @@ static int var_set_from_file(prte_mca_base_var_t *var, prte_mca_base_var_t *orig
                 new_variable = original->mbv_full_name;
             }
 
-            prte_show_help("help-prte-mca-var.txt", "deprecated-mca-file", true, var_full_name,
+            pmix_show_help("help-prte-mca-var.txt", "deprecated-mca-file", true, var_full_name,
                            fv->mbvfv_file, new_variable);
         }
 
@@ -1732,7 +1732,7 @@ int prte_mca_base_var_check_exclusive(const char *project, const char *type_a,
         str_b = source_name(var_b);
 
         /* Print it all out */
-        prte_show_help("help-prte-mca-var.txt", "mutually-exclusive-vars", true,
+        pmix_show_help("help-prte-mca-var.txt", "mutually-exclusive-vars", true,
                        var_a->mbv_full_name, str_a, var_b->mbv_full_name, str_b);
 
         /* Free the temp strings */

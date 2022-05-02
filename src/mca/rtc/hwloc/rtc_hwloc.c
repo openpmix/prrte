@@ -51,7 +51,7 @@
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/error_strings.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "rtc_hwloc.h"
 #include "src/mca/rtc/base/base.h"

@@ -45,7 +45,7 @@
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 #include "types.h"
 
 #include "src/mca/rmaps/base/base.h"
@@ -70,7 +70,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
         }
         /** check that anything is here */
         if (0 == pmix_list_get_size(nodes)) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
                            app->app, "-hostfile", hosts);
             free(hosts);
             return PRTE_ERR_SILENT;
@@ -91,7 +91,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
         }
         /** check that anything is here */
         if (0 == pmix_list_get_size(nodes)) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
                            app->app, "-add-hostfile", hosts);
             free(hosts);
             return PRTE_ERR_SILENT;
@@ -109,7 +109,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
         }
         /** check that anything is left! */
         if (0 == pmix_list_get_size(nodes)) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
                            app->app, "-host", hosts);
             free(hosts);
             return PRTE_ERR_SILENT;
@@ -127,7 +127,7 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
         }
         /** check that anything is left! */
         if (0 == pmix_list_get_size(nodes)) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
                            app->app, "-add-host", hosts);
             free(hosts);
             return PRTE_ERR_SILENT;
@@ -213,7 +213,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes, int32_t *tota
         /** if we still don't have anything */
         if (0 == pmix_list_get_size(&nodes)) {
             if (!silent) {
-                prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
+                pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
                                true);
             }
             PMIX_DESTRUCT(&nodes);
@@ -399,7 +399,7 @@ addknown:
     /** check that anything is here */
     if (0 == pmix_list_get_size(allocated_nodes)) {
         if (!silent) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
                            true);
         }
         return PRTE_ERR_SILENT;
@@ -510,7 +510,7 @@ complete:
              */
             return PRTE_ERR_RESOURCE_BUSY;
         } else {
-            prte_show_help("help-prte-rmaps-base.txt",
+            pmix_show_help("help-prte-rmaps-base.txt",
                            "prte-rmaps-base:all-available-resources-used", true);
             return PRTE_ERR_SILENT;
         }

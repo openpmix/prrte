@@ -44,7 +44,7 @@
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/session_dir.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/base/state_private.h"
@@ -803,7 +803,7 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
         }
 
         /* warn user */
-        prte_show_help("help-state-base.txt", "normal-termination-but", true,
+        pmix_show_help("help-state-base.txt", "normal-termination-but", true,
                        (1 == PRTE_LOCAL_JOBID(jdata->nspace)) ? "the primary" : "child",
                        (1 == PRTE_LOCAL_JOBID(jdata->nspace))
                            ? ""

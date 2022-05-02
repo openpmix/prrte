@@ -26,7 +26,7 @@
 #include "constants.h"
 
 #include "src/util/pmix_argv.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/base/base.h"
 #include "src/runtime/prte_globals.h"

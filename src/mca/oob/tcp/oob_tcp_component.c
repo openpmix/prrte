@@ -66,7 +66,7 @@
 #include "src/util/error.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -78,7 +78,7 @@
 #include "src/util/attr.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_parse_options.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "oob_tcp_peer.h"
 #include "src/mca/oob/tcp/oob_tcp.h"
@@ -285,7 +285,7 @@ static int tcp_component_register(void)
         /* can't have both static and dynamic ports! */
         if (prte_static_ports) {
             char *err = pmix_argv_join(prte_oob_tcp_component.tcp_static_ports, ',');
-            prte_show_help("help-oob-tcp.txt", "static-and-dynamic", true, err, dyn_port_string);
+            pmix_show_help("help-oob-tcp.txt", "static-and-dynamic", true, err, dyn_port_string);
             free(err);
             return PRTE_ERROR;
         }
@@ -316,7 +316,7 @@ static int tcp_component_register(void)
             if (NULL != prte_oob_tcp_component.tcp6_static_ports) {
                 err6 = pmix_argv_join(prte_oob_tcp_component.tcp6_static_ports, ',');
             }
-            prte_show_help("help-oob-tcp.txt", "static-and-dynamic-ipv6", true,
+            pmix_show_help("help-oob-tcp.txt", "static-and-dynamic-ipv6", true,
                            (NULL == err4) ? "N/A" : err4, (NULL == err6) ? "N/A" : err6,
                            dyn_port_string6);
             if (NULL != err4) {

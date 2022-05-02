@@ -37,7 +37,7 @@
 
 #include "src/tools/prte_info/pinfo.h"
 
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #define PRTE_max(a, b) (((a) > (b)) ? (a) : (b))
 
@@ -110,7 +110,7 @@ void prte_info_out(const char *pretty_message, const char *plain_message, const 
             spaces = strdup("");
 #if PRTE_ENABLE_DEBUG
             if (centerpoint < (int) strlen(pretty_message)) {
-                prte_show_help("help-pinfo.txt", "developer warning: field too long", false,
+                pmix_show_help("help-pinfo.txt", "developer warning: field too long", false,
                                pretty_message, centerpoint);
             }
 #endif

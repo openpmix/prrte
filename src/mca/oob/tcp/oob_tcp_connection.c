@@ -64,7 +64,7 @@
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 #include "types.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -75,7 +75,7 @@
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "oob_tcp.h"
 #include "oob_tcp_common.h"
@@ -977,7 +977,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
     }
     offset += cnt + 1;
     if (0 != strcmp(version, prte_version_string)) {
-        prte_show_help("help-oob-tcp.txt", "version mismatch", true, prte_process_info.nodename,
+        pmix_show_help("help-oob-tcp.txt", "version mismatch", true, prte_process_info.nodename,
                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_version_string,
                        pmix_fd_get_peer_name(peer->sd), PRTE_NAME_PRINT(&(peer->name)), version);
 

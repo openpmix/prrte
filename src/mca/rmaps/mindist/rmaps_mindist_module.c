@@ -39,7 +39,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/util/error_strings.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
@@ -181,7 +181,7 @@ static int mindist_map(prte_job_t *jdata)
          * all available slots. We'll double-check the single app_context rule first
          */
         if (0 == app->num_procs && 1 < jdata->num_apps) {
-            prte_show_help("help-prte-rmaps-md.txt", "multi-apps-and-zero-np", true,
+            pmix_show_help("help-prte-rmaps-md.txt", "multi-apps-and-zero-np", true,
                            jdata->num_apps, NULL);
             rc = PRTE_ERR_SILENT;
             goto error;
@@ -201,7 +201,7 @@ static int mindist_map(prte_job_t *jdata)
         /* quick check to see if we can map all the procs */
         if (num_slots < (int) app->num_procs) {
             if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                                app->num_procs, app->app, prte_process_info.nodename);
                 PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                 return PRTE_ERR_SILENT;
@@ -263,7 +263,7 @@ static int mindist_map(prte_job_t *jdata)
                 node = (prte_node_t *) item;
 
                 if (NULL == node->topology || NULL == node->topology->topo) {
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
                                    node->name);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -273,7 +273,7 @@ static int mindist_map(prte_job_t *jdata)
                  */
                 obj = hwloc_get_root_obj(node->topology->topo);
                 if (NULL == obj) {
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
                                    node->name);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -361,7 +361,7 @@ static int mindist_map(prte_job_t *jdata)
                         /* check if oversubscribing is allowed */
                         if (PRTE_MAPPING_NO_OVERSUBSCRIBE
                             & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                            prte_show_help("help-prte-rmaps-base.txt",
+                            pmix_show_help("help-prte-rmaps-base.txt",
                                            "prte-rmaps-base:alloc-error", true, app->num_procs,
                                            app->app);
                             rc = PRTE_ERR_SILENT;
@@ -380,13 +380,13 @@ static int mindist_map(prte_job_t *jdata)
                 ret = prte_hwloc_get_sorted_numa_list(node->topology->topo, prte_rmaps_base.device,
                                                       &numa_list);
                 if (ret > 1) {
-                    prte_show_help("help-prte-rmaps-md.txt", "prte-rmaps-mindist:several-devices",
+                    pmix_show_help("help-prte-rmaps-md.txt", "prte-rmaps-mindist:several-devices",
                                    true, prte_rmaps_base.device, ret, node->name);
                     PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
                     rc = PRTE_ERR_TAKE_NEXT_OPTION;
                     goto error;
                 } else if (ret < 0) {
-                    prte_show_help("help-prte-rmaps-md.txt", "prte-rmaps-mindist:device-not-found",
+                    pmix_show_help("help-prte-rmaps-md.txt", "prte-rmaps-mindist:device-not-found",
                                    true, prte_rmaps_base.device, node->name);
                     PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
                     rc = PRTE_ERR_TAKE_NEXT_OPTION;
@@ -443,7 +443,7 @@ static int mindist_map(prte_job_t *jdata)
                 } else {
                     if (hwloc_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE) > 1) {
                         /* don't have info about pci locality */
-                        prte_show_help("help-prte-rmaps-md.txt",
+                        pmix_show_help("help-prte-rmaps-md.txt",
                                        "prte-rmaps-mindist:no-pci-locality-info", true, node->name);
                     }
                     /* else silently switch to byslot mapper since distance info is irrelevant for
@@ -544,7 +544,7 @@ static int assign_locations(prte_job_t *jdata)
                 continue;
             }
             if (NULL == node->topology || NULL == node->topology->topo) {
-                prte_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
+                pmix_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
                 return PRTE_ERR_SILENT;
             }
 
@@ -565,13 +565,13 @@ static int assign_locations(prte_job_t *jdata)
             rc = prte_hwloc_get_sorted_numa_list(node->topology->topo, prte_rmaps_base.device,
                                                  &numa_list);
             if (rc > 1) {
-                prte_show_help("help-prte-rmaps-md.txt", "prte-rmaps-mindist:several-devices", true,
+                pmix_show_help("help-prte-rmaps-md.txt", "prte-rmaps-mindist:several-devices", true,
                                prte_rmaps_base.device, rc, node->name);
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
                 PMIX_LIST_DESTRUCT(&numa_list);
                 return PRTE_ERR_TAKE_NEXT_OPTION;
             } else if (rc < 0) {
-                prte_show_help("help-prte-rmaps-md.txt", "prte-rmaps-mindist:device-not-found",
+                pmix_show_help("help-prte-rmaps-md.txt", "prte-rmaps-mindist:device-not-found",
                                true, prte_rmaps_base.device, node->name);
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
                 PMIX_LIST_DESTRUCT(&numa_list);

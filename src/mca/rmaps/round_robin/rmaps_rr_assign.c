@@ -32,7 +32,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "rmaps_rr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -135,7 +135,7 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target, unsig
                 continue;
             }
             if (NULL == node->topology || NULL == node->topology->topo) {
-                prte_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
+                pmix_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
                 return PRTE_ERR_SILENT;
             }
             /* get the number of objects of this type on this node */
@@ -219,7 +219,7 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target, unsig
                 } while (k != start);
                 /* Fail if loop exits without finding an adequate resource */
                 if (cpus_per_rank > npus) {
-                    prte_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
                                    cpus_per_rank, npus,
                                    prte_rmaps_base_print_mapping(prte_rmaps_base.mapping));
                     hwloc_bitmap_free(available);

@@ -36,7 +36,7 @@
 #include "constants.h"
 
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/ess/ess.h"
 #include "src/mca/ess/hnp/ess_hnp.h"

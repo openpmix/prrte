@@ -39,7 +39,7 @@
 #include "src/util/error.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/include/frameworks.h"
 
@@ -134,7 +134,7 @@ static int register_framework_params(pmix_pointer_array_t *component_map)
 
     /* Register mca/base parameters */
     if (PRTE_SUCCESS != prte_mca_base_open()) {
-        prte_show_help("help-prte_info.txt", "lib-call-fail", true, "mca_base_open", __FILE__,
+        pmix_show_help("help-prte_info.txt", "lib-call-fail", true, "mca_base_open", __FILE__,
                        __LINE__);
         return PRTE_ERROR;
     }

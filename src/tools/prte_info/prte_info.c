@@ -53,7 +53,7 @@
 #include "src/util/error.h"
 #include "src/util/pmix_path.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "constants.h"
 #include "src/include/frameworks.h"
@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
 
     /* Initialize the argv parsing stuff */
     if (PRTE_SUCCESS != (ret = prte_init_util(PRTE_PROC_MASTER))) {
-        prte_show_help("help-prte-info.txt", "lib-call-fail", true, "prte_init_util", __FILE__,
+        pmix_show_help("help-prte-info.txt", "lib-call-fail", true, "prte_init_util", __FILE__,
                        __LINE__, NULL);
         exit(ret);
     }
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
     if (NULL == personality) {
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
     // we do NOT accept arguments other than our own
     if (NULL != prte_info_cmd_line.tail) {
         str = pmix_argv_join(prte_info_cmd_line.tail, ' ');
-        ptr = prte_show_help_string("help-pterm.txt", "no-args", false,
+        ptr = pmix_show_help_string("help-pterm.txt", "no-args", false,
                                     prte_tool_basename, str, prte_tool_basename);
         free(str);
         if (NULL != ptr) {

@@ -64,7 +64,7 @@
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
@@ -381,13 +381,13 @@ static void launch_daemons(int fd, short args, void *cbdata)
         launchid = 0;
         if (!prte_get_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, (void **) &ldptr,
                                 PMIX_INT32)) {
-            prte_show_help("help-plm-tm.txt", "tm-spawn-failed", true, argv[0], node->name, 0);
+            pmix_show_help("help-plm-tm.txt", "tm-spawn-failed", true, argv[0], node->name, 0);
             rc = PRTE_ERROR;
             goto cleanup;
         }
         rc = tm_spawn(argc, argv, env, launchid, tm_task_ids + launched, tm_events + launched);
         if (TM_SUCCESS != rc) {
-            prte_show_help("help-plm-tm.txt", "tm-spawn-failed", true, argv[0], node->name,
+            pmix_show_help("help-plm-tm.txt", "tm-spawn-failed", true, argv[0], node->name,
                            launchid);
             rc = PRTE_ERROR;
             goto cleanup;

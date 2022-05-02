@@ -51,7 +51,7 @@
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/ras/base/ras_private.h"
 
@@ -252,7 +252,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                 if (prte_allocation_required) {
                     /* an allocation is required, so this is fatal */
                     PMIX_DESTRUCT(&nodes);
-                    prte_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
+                    pmix_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
                     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
                     PMIX_RELEASE(caddy);
                     return;
@@ -312,7 +312,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
          * required, then error out
          */
         PMIX_DESTRUCT(&nodes);
-        prte_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
+        pmix_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
         PMIX_RELEASE(caddy);
         return;

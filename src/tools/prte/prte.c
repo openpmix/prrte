@@ -84,7 +84,7 @@
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -373,7 +373,7 @@ int main(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
     if (0 != strcmp(schizo->name, "prte")) {
@@ -492,7 +492,7 @@ int main(int argc, char *argv[])
         /* did they provide an app? */
         if (PMIX_SUCCESS != rc || 0 == pmix_list_get_size(&apps)) {
             if (proxyrun) {
-                prte_show_help("help-prun.txt", "prun:executable-not-specified", true,
+                pmix_show_help("help-prun.txt", "prun:executable-not-specified", true,
                                prte_tool_basename, prte_tool_basename);
                 PRTE_UPDATE_EXIT_STATUS(rc);
                 goto DONE;
@@ -502,7 +502,7 @@ int main(int argc, char *argv[])
             /* they did provide an app - this is only allowed
              * when running as a proxy! */
             if (!proxyrun) {
-                prte_show_help("help-prun.txt", "prun:executable-incorrectly-given", true,
+                pmix_show_help("help-prun.txt", "prun:executable-incorrectly-given", true,
                                prte_tool_basename, prte_tool_basename);
                 PRTE_UPDATE_EXIT_STATUS(rc);
                 goto DONE;
@@ -592,13 +592,13 @@ int main(int argc, char *argv[])
 
     /* get the daemon job object - was created by ess/hnp component */
     if (NULL == (jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace))) {
-        prte_show_help("help-prun.txt", "bad-job-object", true, prte_tool_basename);
+        pmix_show_help("help-prun.txt", "bad-job-object", true, prte_tool_basename);
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     }
     /* ess/hnp also should have created a daemon "app" */
     if (NULL == (dapp = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, 0))) {
-        prte_show_help("help-prun.txt", "bad-app-object", true, prte_tool_basename);
+        pmix_show_help("help-prun.txt", "bad-app-object", true, prte_tool_basename);
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     }
@@ -626,7 +626,7 @@ int main(int argc, char *argv[])
             param[param_len - 1] = '\0';
             param_len--;
             if (0 == param_len) {
-                prte_show_help("help-prun.txt", "prun:empty-prefix", true, prte_tool_basename,
+                pmix_show_help("help-prun.txt", "prun:empty-prefix", true, prte_tool_basename,
                                prte_tool_basename);
                 PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
                 goto DONE;
@@ -877,11 +877,11 @@ int main(int argc, char *argv[])
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
                 } else if (0 == strncasecmp(targv[idx], PRTE_CLI_DIR, strlen(targv[idx]))) {
                     if (NULL != outfile) {
-                        prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                        pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
                         return PRTE_ERR_FATAL;
                     }
                     if (NULL == ptr) {
-                        prte_show_help("help-prte-rmaps-base.txt",
+                        pmix_show_help("help-prte-rmaps-base.txt",
                                        "missing-qualifier", true,
                                        "output", "directory", "directory");
                         return PRTE_ERR_FATAL;
@@ -903,11 +903,11 @@ int main(int argc, char *argv[])
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
                 } else if (0 == strncasecmp(targv[idx], PRTE_CLI_FILE, strlen(targv[idx]))) {
                     if (NULL != outdir) {
-                        prte_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
+                        pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
                         return PRTE_ERR_FATAL;
                     }
                     if (NULL == ptr) {
-                        prte_show_help("help-prte-rmaps-base.txt",
+                        pmix_show_help("help-prte-rmaps-base.txt",
                                        "missing-qualifier", true,
                                        "output", "filename", "filename");
                         return PRTE_ERR_FATAL;
@@ -1004,7 +1004,7 @@ int main(int argc, char *argv[])
             if (NULL != opt) {
                 n = strtol(opt->values[0], NULL, 10);
                 if (i != n) {
-                    prte_show_help("help-prun.txt", "prun:timeoutconflict", false,
+                    pmix_show_help("help-prun.txt", "prun:timeoutconflict", false,
                                    prte_tool_basename, n, timeoutenv);
                     PRTE_UPDATE_EXIT_STATUS(1);
                     goto DONE;
@@ -1030,6 +1030,13 @@ int main(int argc, char *argv[])
     if (NULL != opt) {
         i = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_SPAWN_TIMEOUT, &i, PMIX_INT);
+    }
+#endif
+#ifdef PMIX_LOG_AGG
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DO_NOT_AGG_HELP);
+    if (NULL != opt) {
+        flag = false;
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_LOG_AGG, &flag, PMIX_BOOL);
     }
 #endif
 

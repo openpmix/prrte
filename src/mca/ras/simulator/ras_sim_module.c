@@ -26,7 +26,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "ras_sim.h"
 
