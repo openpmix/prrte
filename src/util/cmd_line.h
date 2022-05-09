@@ -185,6 +185,7 @@ PRTE_CLASS_DECLARATION(prte_cli_result_t);
 #define PRTE_CLI_STOP_ON_EXEC           "stop-on-exec"              // none
 #define PRTE_CLI_STOP_IN_INIT           "stop-in-init"              // required
 #define PRTE_CLI_STOP_IN_APP            "stop-in-app"               // required
+#define PRTE_CLI_DO_NOT_AGG_HELP        "no-aggregate-help"         // none
 
 // Tool connection options
 #define PRTE_CLI_SYS_SERVER_FIRST       "system-server-first"       // none

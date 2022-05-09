@@ -228,16 +228,6 @@ int prte_register_params(void)
     prte_clean_output = prte_output_open(&lds);
     PRTE_DESTRUCT(&lds);
 
-    prte_help_want_aggregate = true;
-    (void) prte_mca_base_var_register(
-        "prte", "prte", "base", "help_aggregate",
-        "If prte_base_help_aggregate is true, duplicate help messages will be aggregated rather "
-        "than displayed individually.  This can be helpful for parallel jobs that experience "
-        "multiple identical failures; rather than print out the same help/failure message N times, "
-        "display it once with a count of how many processes sent the same message.",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ, &prte_help_want_aggregate);
-
     /* LOOK FOR A TMP DIRECTORY BASE */
     /* Several options are provided to cover a range of possibilities:
      *

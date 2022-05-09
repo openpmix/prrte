@@ -119,6 +119,9 @@ static struct option ompioptions[] = {
 #ifdef PMIX_SPAWN_TIMEOUT
     PRTE_OPTION_DEFINE(PRTE_CLI_SPAWN_TIMEOUT, PRTE_ARG_REQD),
 #endif
+#ifdef PMIX_LOG_AGG
+    PRTE_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PRTE_ARG_NONE),
+#endif
 
     /* Conventional options - for historical compatibility, support
      * both single and multi dash versions */
