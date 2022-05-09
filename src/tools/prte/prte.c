@@ -464,9 +464,6 @@ int main(int argc, char *argv[])
         prte_pmix_server_globals.report_uri = strdup(opt->values[0]);
     }
 
-    /* aggregate messages from prte. */
-    prte_setenv("PRTE_MCA_prte_base_help_aggregate", "1", true, &environ);
-
     /* if we are supporting a singleton, push its ID into the environ
      * so it can get picked up and registered by server init */
     opt = prte_cmd_line_get_param(&results, PRTE_CLI_SINGLETON);
