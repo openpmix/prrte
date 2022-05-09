@@ -1499,7 +1499,7 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
     PMIX_INFO_LOAD(&scd->directives[ndirs], PMIX_LOG_ONCE, NULL, PMIX_BOOL);
     /* protect against infinite loop should the PMIx server push
      * this back up to us */
-    PMIX_INFO_LOAD(&scd->directives[ndirs+1], PMIX_LOG_AGG, NULL, PMIX_BOOL);
+    PMIX_INFO_LOAD(&scd->directives[ndirs+1], "prte.log.noloop", NULL, PMIX_BOOL);
 #ifdef PMIX_LOG_AGG
     if (noagg) {
         flag = false;
