@@ -200,6 +200,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_SPAWN_TIMEOUT                  (PRTE_JOB_START_KEY + 93) // int32 - number of seconds to spawn before terminating it as timed out
 #define PRTE_JOB_RAW_OUTPUT                 (PRTE_JOB_START_KEY + 94) // bool - do not buffer output
 #define PRTE_JOB_EXEC_AGENT                 (PRTE_JOB_START_KEY + 95) // char* - string specifying the cmd to use when exec'ing the local proc
+#define PRTE_JOB_NOAGG_HELP                 (PRTE_JOB_START_KEY + 96) // bool - do not aggregate show_help messages
 
 
 #define PRTE_JOB_MAX_KEY 300

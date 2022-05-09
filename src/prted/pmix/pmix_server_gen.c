@@ -703,14 +703,22 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
     }
     if (0 < cnt) {
         PMIX_DATA_BUFFER_CREATE(buf);
+        /* pack the source of this log request */
+        rc = PMIx_Data_pack(NULL, buf, (void*)client, 1, PMIX_PROC);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+        /* pack number of info provided */
         rc = PMIx_Data_pack(NULL, buf, &cnt, 1, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
+        /* pack number of directives given */
         rc = PMIx_Data_pack(NULL, buf, &dcnt, 1, PMIX_SIZE);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
+        /* bring over the packed info blob */
         rc = PMIx_Data_unload(&pbuf, &pbo);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
@@ -722,9 +730,11 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
         }
+        /* pack the directives blob */
         rc = PMIx_Data_pack(NULL, buf, &dbo, 1, PMIX_BYTE_OBJECT);
         PMIX_BYTE_OBJECT_DESTRUCT(&dbo);
 
+        /* send the result to the HNP */
         rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_LOGGING,
                                      prte_rml_send_callback, NULL);
 

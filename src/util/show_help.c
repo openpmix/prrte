@@ -44,8 +44,6 @@
 #include "src/util/show_help.h"
 #include "src/util/show_help_lex.h"
 
-bool prte_help_want_aggregate = false;
-
 /*
  * Private variables
  */
@@ -64,9 +62,11 @@ static void prte_show_help_cbfunc(pmix_status_t status, void *cbdata)
     if(PMIX_SUCCESS != status && PMIX_OPERATION_SUCCEEDED != status) {
         fprintf(stderr, "%s", info -> msg);
     }
-    PMIX_INFO_DESTRUCT(info -> info);
+    if(info->info) {
+        PMIX_INFO_DESTRUCT(info->info);
+    }
     if(info -> dirs) {
-        PMIX_INFO_DESTRUCT(info -> dirs);
+        PMIX_INFO_DESTRUCT(info->dirs);
     }
     free(info -> msg);
     free(info);
@@ -76,27 +76,24 @@ static void local_delivery(const char *file, const char *topic, char *msg) {
 
     pmix_info_t *info, *dirs;
     int ninfo = 0, ndirs = 0;
+
     PMIX_INFO_CREATE(info, 1);
     PMIX_INFO_LOAD(&info[ninfo++], PMIX_LOG_STDERR, msg, PMIX_STRING);
 
-    prte_log_info_t *cbdata = calloc(1, sizeof(prte_log_info_t));
-    if(prte_help_want_aggregate) {
-        PMIX_INFO_CREATE(dirs, 3);
-        PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_LOG_AGG, &prte_help_want_aggregate, PMIX_BOOL);
-        PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_LOG_KEY, file, PMIX_STRING);
-        PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_LOG_VAL, topic, PMIX_STRING);
-        cbdata -> dirs = dirs;
-    }
+    PMIX_INFO_CREATE(dirs, 2);
+    PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_LOG_KEY, file, PMIX_STRING);
+    PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_LOG_VAL, topic, PMIX_STRING);
 
-    cbdata -> info = info;
-    cbdata -> msg  = msg;
+    prte_log_info_t *cbdata = calloc(1, sizeof(prte_log_info_t));
+    cbdata->dirs = dirs;
+
+    cbdata->info = info;
+    cbdata->msg  = msg;
 
     prte_status_t rc = PMIx_Log_nb(info, ninfo, dirs, ndirs, prte_show_help_cbfunc, cbdata);
     if(PMIX_SUCCESS != rc) {
         PMIX_INFO_DESTRUCT(info);
-        if(prte_help_want_aggregate) {
-            PMIX_INFO_DESTRUCT(dirs);
-        }
+        PMIX_INFO_DESTRUCT(dirs);
         free(msg);
         free(cbdata);
     }

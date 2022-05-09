@@ -1352,16 +1352,18 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
 
 static void log_cbfunc(pmix_status_t status, void *cbdata)
 {
-    prte_log_info_t *info = (prte_log_info_t *) cbdata;
-    if(PMIX_SUCCESS != status && PMIX_OPERATION_SUCCEEDED != status) {
-        prte_output(prte_pmix_server_globals.output, "%s", info->msg);
+    prte_pmix_server_op_caddy_t *scd = (prte_pmix_server_op_caddy_t *) cbdata;
+
+    if (PMIX_SUCCESS != status && PMIX_OPERATION_SUCCEEDED != status) {
+        prte_output(prte_pmix_server_globals.output, "LOG FAILED");
     }
-    PMIX_INFO_DESTRUCT(info->info);
-    if(info->dirs) {
-        PMIX_INFO_DESTRUCT(info->dirs);
+    if (NULL != scd->info) {
+        PMIX_INFO_FREE(scd->info, scd->ninfo);
     }
-    free(info->msg);
-    free(info);
+    if (NULL != scd->directives) {
+        PMIX_INFO_FREE(scd->directives, scd->ndirs);
+    }
+    PRTE_RELEASE(scd);
 }
 
 
@@ -1371,10 +1373,33 @@ static void pmix_server_log(int status, pmix_proc_t *sender, pmix_data_buffer_t 
     int rc;
     int32_t cnt;
     size_t n, ninfo, ndirs;
-    pmix_info_t *info, *directives, *directives_new;
+    pmix_info_t *info;
     pmix_status_t ret;
     pmix_byte_object_t boptr;
     pmix_data_buffer_t pbkt;
+    prte_pmix_server_op_caddy_t *scd;
+    pmix_proc_t source;
+    prte_job_t *jdata;
+    bool noagg;
+#ifdef PMIX_LOG_AGG
+    bool flag;
+#endif
+
+    /* unpack the source of the request */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &source, &cnt, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    /* look up the job for this source */
+    jdata = prte_get_job_data_object(source.nspace);
+    if (NULL == jdata) {
+        /* should never happen */
+        PMIX_ERROR_LOG(PMIX_ERR_NOT_FOUND);
+        return;
+    }
+    noagg = prte_get_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, NULL, PMIX_BOOL);
 
     /* unpack the number of info */
     cnt = 1;
@@ -1428,15 +1453,23 @@ static void pmix_server_log(int status, pmix_proc_t *sender, pmix_data_buffer_t 
         return;
     }
 
-    PMIX_INFO_CREATE(directives, ndirs);
+    scd = PRTE_NEW(prte_pmix_server_op_caddy_t);
+    /* if we are not going to aggregate, then indicate so */
+    if (noagg) {
+        scd->ndirs = ndirs + 3;
+    } else {
+        scd->ndirs = ndirs + 2;  // need to locally add two directives
+    }
+    PMIX_INFO_CREATE(scd->directives, scd->ndirs);
+
     PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
     rc = PMIx_Data_load(&pbkt, &boptr);
     for (n = 0; n < ndirs; n++) {
         cnt = 1;
-        ret = PMIx_Data_unpack(NULL, &pbkt, (void *) &directives[n], &cnt, PMIX_INFO);
+        ret = PMIx_Data_unpack(NULL, &pbkt, (void *) &scd->directives[n], &cnt, PMIX_INFO);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
-            PMIX_INFO_FREE(directives, ndirs);
+            PMIX_INFO_FREE(scd->directives, ndirs);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             PMIX_BYTE_OBJECT_CONSTRUCT(&boptr);
             return;
@@ -1445,29 +1478,31 @@ static void pmix_server_log(int status, pmix_proc_t *sender, pmix_data_buffer_t 
     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
     PMIX_BYTE_OBJECT_CONSTRUCT(&boptr);
 
-    /* Transfer directives, and mark that we only want it logged once */
-    PMIX_INFO_CREATE(directives_new, ndirs + 2);
-    for (n = 0; n < ndirs; n++) {
-        PMIX_INFO_XFER(&directives_new[n], &directives[n]);
-    }
-
-    bool no_loop = true;
-    PMIX_INFO_LOAD(&directives_new[n++], PMIX_LOG_ONCE, &no_loop, PMIX_BOOL);
+    PMIX_INFO_LOAD(&scd->directives[ndirs], PMIX_LOG_ONCE, NULL, PMIX_BOOL);
     /* protect against infinite loop should the PMIx server push
      * this back up to us */
-    PMIX_INFO_LOAD(&directives_new[n++], "prte.log.noloop", &no_loop, PMIX_BOOL);
-
-    prte_log_info_t *data = calloc(1, sizeof(prte_log_info_t));
-    data->info = info;
-    data->dirs = directives_new;
-    /* pass the array down to be logged */
-    rc = PMIx_Log_nb(info, ninfo, directives_new, n, log_cbfunc, data);
-    if(PMIX_SUCCESS != rc) {
-        PMIX_INFO_FREE(info, ninfo);
-        PMIX_INFO_FREE(directives_new, n);
-        PMIX_INFO_FREE(directives, ndirs);
-        free(data);
+    PMIX_INFO_LOAD(&scd->directives[ndirs+1], PMIX_LOG_AGG, NULL, PMIX_BOOL);
+#ifdef PMIX_LOG_AGG
+    if (noagg) {
+        flag = false;
+        PMIX_INFO_LOAD(&scd->directives[ndirs+2], PMIX_LOG_AGG, &flag, PMIX_BOOL);
     }
+#endif
+
+    scd->info = info;
+    scd->ninfo = ninfo;
+    /* pass the array down to be logged */
+    rc = PMIx_Log_nb(scd->info, scd->ninfo, scd->directives, scd->ndirs, log_cbfunc, scd);
+    if (PMIX_SUCCESS != rc) {
+        if (NULL != scd->info) {
+            PMIX_INFO_FREE(scd->info, scd->ninfo);
+        }
+        if (NULL != scd->directives) {
+            PMIX_INFO_FREE(scd->directives, scd->ndirs);
+        }
+        PRTE_RELEASE(scd);
+    }
+
 }
 
 /****    INSTANTIATE LOCAL OBJECTS    ****/

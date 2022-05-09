@@ -706,6 +706,14 @@ static void interim(int sd, short args, void *cbdata)
                                    &flag, PMIX_BOOL);
             }
             /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
+#ifdef PMIX_LOG_AGG
+        } else if (PMIX_CHECK_KEY(info, PMIX_LOG_AGG)) {
+            flag = PMIX_INFO_TRUE(info);
+            if (!flag) {
+                prte_add_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
+                                   &flag, PMIX_BOOL);
+            }
+#endif
         } else {
             pmix_server_cache_job_info(jdata, info);
         }

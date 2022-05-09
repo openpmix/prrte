@@ -848,6 +848,13 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_SPAWN_TIMEOUT, &i, PMIX_INT);
     }
 #endif
+#ifdef PMIX_LOG_AGG
+    opt = prte_cmd_line_get_param(&results, PRTE_CLI_DO_NOT_AGG_HELP);
+    if (NULL != opt) {
+        flag = false;
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_LOG_AGG, &flag, PMIX_BOOL);
+    }
+#endif
 
     /* give the schizo components a chance to add to the job info */
     schizo->job_info(&results, jinfo);
