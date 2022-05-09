@@ -74,15 +74,17 @@ static void prte_show_help_cbfunc(pmix_status_t status, void *cbdata)
 
 static void local_delivery(const char *file, const char *topic, char *msg) {
 
-    pmix_info_t *info, *dirs;
+    pmix_info_t *info, *dirs = NULL;
     int ninfo = 0, ndirs = 0;
 
     PMIX_INFO_CREATE(info, 1);
     PMIX_INFO_LOAD(&info[ninfo++], PMIX_LOG_STDERR, msg, PMIX_STRING);
 
+#ifdef PMIX_LOG_AGG
     PMIX_INFO_CREATE(dirs, 2);
     PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_LOG_KEY, file, PMIX_STRING);
     PMIX_INFO_LOAD(&dirs[ndirs++], PMIX_LOG_VAL, topic, PMIX_STRING);
+#endif
 
     prte_log_info_t *cbdata = calloc(1, sizeof(prte_log_info_t));
     cbdata->dirs = dirs;
@@ -93,7 +95,9 @@ static void local_delivery(const char *file, const char *topic, char *msg) {
     prte_status_t rc = PMIx_Log_nb(info, ninfo, dirs, ndirs, prte_show_help_cbfunc, cbdata);
     if(PMIX_SUCCESS != rc) {
         PMIX_INFO_DESTRUCT(info);
-        PMIX_INFO_DESTRUCT(dirs);
+        if(dirs) {
+            PMIX_INFO_DESTRUCT(dirs);
+        }
         free(msg);
         free(cbdata);
     }
