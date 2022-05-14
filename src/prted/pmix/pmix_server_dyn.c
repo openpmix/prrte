@@ -371,6 +371,27 @@ static void interim(int sd, short args, void *cbdata)
             if (PRTE_SUCCESS != rc) {
                 goto complete;
             }
+
+            /*** colocation directives ***/
+#ifdef PMIX_COLOCATE_PROCS
+            /***   PROCS WHERE NEW PROCS ARE TO BE COLOCATED   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_COLOCATE_PROCS)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_PROCS,
+                               PRTE_ATTR_GLOBAL, info->value.data.darray, PMIX_DATA_ARRAY);
+#endif
+#ifdef PMIX_COLOCATE_NPERPROC
+            /***   NUMBER OF PROCS TO SPAWN AT EACH COLOCATION  ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_COLOCATE_NPERPROC)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_NPERPROC,
+                               PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
+#endif
+#ifdef PMIX_COLOCATE_NPERNODE
+            /***   NUMBER OF PROCS TO SPAWN AT EACH COLOCATION  ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_COLOCATE_NPERNODE)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_NPERNODE,
+                               PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
+#endif
+
             /***   RANK-BY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_RANKBY)) {
             rc = prte_rmaps_base_set_ranking_policy(jdata, info->value.data.string);
@@ -639,7 +660,6 @@ static void interim(int sd, short args, void *cbdata)
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC,
                                PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
 
-            /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
             /* there can be multiple of these, so we add them to the attribute list */
         } else if (PMIX_CHECK_KEY(info, PMIX_ENVARS_HARVESTED)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_ENVARS_HARVESTED,

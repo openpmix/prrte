@@ -64,4 +64,5 @@ EXTRA_DIST += \
         examples/server.c \
         examples/showkeys.c \
         examples/target.c \
-        examples/tool.c
+        examples/tool.c \
+	examples/colocate.c

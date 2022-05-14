@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -132,10 +132,8 @@ int main(int argc, char **argv)
     fprintf(stderr, "Client %lu: Running\n", (unsigned long) pid);
 
     /* init us - note that the call to "init" includes the return of
-     * any job-related info provided by the RM. This includes any
-     * debugger flag instructing us to stop-in-init. If such a directive
-     * is included, then the process will be stopped in this call until
-     * the "debugger release" notification arrives */
+     * any job-related info provided by the RM. This includes the
+     * location of all procs in our job */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %d\n", myproc.nspace, myproc.rank,
                 rc);
