@@ -47,6 +47,11 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
 
+static int map_colocate(prte_job_t *jdata,
+                        bool daemons, bool pernode,
+                        pmix_data_array_t *darray,
+                        uint16_t procs_per_target);
+
 void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
@@ -54,6 +59,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_node_t *node;
     prte_job_map_t *app_map, *daemon_map;
     prte_proc_t *proc;
+    pmix_proc_t *pptr;
     int rc = PRTE_SUCCESS;
     bool did_map, pernode = false, perpackage = false, pernuma = false;
     prte_rmaps_base_selected_module_t *mod;
@@ -63,14 +69,17 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     bool inherit = false;
     pmix_proc_t *nptr, *target_proc;
     char *tmp, *p;
-    uint16_t u16 = 0, daemons_per_node = 0, daemons_per_proc = 0;
+    uint16_t u16 = 0, procs_per_target = 0;
     uint16_t *u16ptr = &u16, cpus_per_rank;
     bool use_hwthreads = false, colocate_daemons = false;
+    bool colocate = false;
+    size_t ncolocated;
     bool sequential = false;
     int32_t slots;
     hwloc_obj_t obj = NULL;
     prte_schizo_base_module_t *schizo;
     prte_schizo_options_t options;
+    pmix_data_array_t *darray = NULL;
 
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -93,19 +102,19 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
      * Check for Colaunch
      */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_NODE, (void **) &u16ptr, PMIX_UINT16)) {
-        daemons_per_node = u16;
-        if (daemons_per_node <= 0) {
-            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_NODE value %u <= 0\n",
-                        daemons_per_node);
+        procs_per_target = u16;
+        if (procs_per_target == 0) {
+            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_NODE value %u == 0\n", procs_per_target);
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
+        pernode = true;
         colocate_daemons = true;
     }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC, (void **) &u16ptr, PMIX_UINT16)) {
-        if (daemons_per_node > 0) {
+        if (procs_per_target > 0) {
             prte_output(0, "Error: Both PRTE_JOB_DEBUG_DAEMONS_PER_PROC and "
                            "PRTE_JOB_DEBUG_DAEMONS_PER_NODE provided.");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
@@ -113,15 +122,15 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
-        daemons_per_proc = u16;
-        if (daemons_per_proc <= 0) {
-            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC value %u <= 0\n",
-                        daemons_per_proc);
+        procs_per_target = u16;
+        if (procs_per_target == 0) {
+            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC value %u == 0\n", procs_per_target);
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
+        pernode = false;
         colocate_daemons = true;
     }
     if (colocate_daemons) {
@@ -132,123 +141,76 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
+        /* store the target as a pmix_data_array_t */
+        PMIX_DATA_ARRAY_CREATE(darray, 1, PMIX_PROC);
+        pptr = (pmix_proc_t*)darray->array;
+        PMIX_XFER_PROCID(&pptr[0], target_proc);
+    }
 
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps: mapping job %s: Colocate with %s",
-                            PRTE_JOBID_PRINT(jdata->nspace), PRTE_NAME_PRINT(target_proc));
-
-        target_jdata = prte_get_job_data_object(target_proc->nspace);
-        if (NULL == target_jdata) {
-            prte_output(0, "Unable to find app job %s\n", target_proc->nspace);
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_PROCS, (void**)&darray, PMIX_DATA_ARRAY)) {
+        if (colocate_daemons) {
+            prte_output(0, "Error: Both colocate daemons and colocate procs were provided\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
-
-        // Note: The debugger tool is responsible for waiting for the
-        // processes to be ready to be debugged, if necessary.
-        // This is tracked on the job data structure as:
-        // target_jdata->num_ready_for_debug
-
-        app_map = target_jdata->map;
-
-        if (NULL == jdata->map) { // Just in case
-            jdata->map = PMIX_NEW(prte_job_map_t);
+        if (NULL == darray) {
+            prte_output(0, "Error: Colocate failed to provide procs\n");
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(jdata->exit_code);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
         }
-
-        daemon_map = jdata->map;
-        daemon_map->req_mapper = NULL;
-        daemon_map->last_mapper = NULL;
-        daemon_map->num_new_daemons = 0;
-        daemon_map->daemon_vpid_start = 0;
-        daemon_map->num_nodes = 0;
-
-        daemon_map->mapping = 0;
-
-        daemon_map->binding = 0;
-        PRTE_SET_BINDING_POLICY(daemon_map->binding, PRTE_BIND_TO_NONE);
-
-        daemon_map->ranking = 0;
-        PRTE_SET_RANKING_POLICY(daemon_map->ranking, PRTE_RANK_BY_SLOT);
-
-        jdata->num_procs = 0;
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-
-        daemon_app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, 0);
-
-        // Foreach node assigned to the target application
-        for (int i = 0; i < app_map->num_nodes; i++) {
-            node = (prte_node_t *) pmix_pointer_array_get_item(app_map->nodes, i);
-            if (daemons_per_proc > 0) {
-                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps: mapping job %s: Assign %d daemons each process on node %s",
-                                    PRTE_JOBID_PRINT(jdata->nspace), daemons_per_proc, node->name);
-            } else if (daemons_per_node > 0) {
-                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps: mapping job %s: Assign %d daemons to node %s",
-                                    PRTE_JOBID_PRINT(jdata->nspace), daemons_per_node, node->name);
-            }
-
-            // Map the node to this job
-            PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
-            PMIX_RETAIN(node);
-            pmix_pointer_array_add(daemon_map->nodes, node);
-            daemon_map->num_nodes += 1;
-            obj = hwloc_get_root_obj(node->topology->topo);
-
-            // Assign N daemons per node
-            if (daemons_per_node > 0) {
-                for (int pr = 0; pr < daemons_per_node; ++pr) {
-                    // Note: Assume only 1 app context for the daemons (0 == app->idx)
-                    if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, 0))) {
-                        jdata->exit_code = PRTE_ERR_OUT_OF_RESOURCE;
-                        PRTE_ERROR_LOG(jdata->exit_code);
-                        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-                        goto cleanup;
-                    }
-                    // add it to the job's proc array
-                    pmix_pointer_array_add(jdata->procs, (void *) proc);
-                    jdata->num_procs += 1;
-                    // we are REQUIRED to set the locale
-                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
-                                       PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
-                }
-            }
-            // Assign N daemons per process on this node
-            if (daemons_per_proc > 0) {
-                // Foreach application process associated with this job on this node
-                for (int npr = 0; npr < node->procs->size; ++npr) {
-                    proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, npr);
-                    if (NULL == proc) {
-                        continue;
-                    }
-                    if (proc->job != target_jdata) {
-                        continue;
-                    }
-                    for (int pr = 0; pr < daemons_per_proc; ++pr) {
-                        // Note: Assume only 1 app context for the daemons (0 == app->idx)
-                        if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, node, 0))) {
-                            jdata->exit_code = PRTE_ERR_OUT_OF_RESOURCE;
-                            PRTE_ERROR_LOG(jdata->exit_code);
-                            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-                            goto cleanup;
-                        }
-                        // add it to the job's proc array
-                        pmix_pointer_array_add(jdata->procs, (void *) proc);
-                        jdata->num_procs += 1;
-                        // we are REQUIRED to set the locale
-                        prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
-                                           PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
-                    }
-                }
-            }
-
-            // tool procs do NOT count against subscription limits, so no
-            // need to check that here
+        colocate = true;
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_NPERNODE, (void **) &u16ptr, PMIX_UINT16)) {
+        procs_per_target = u16;
+        if (procs_per_target == 0) {
+            prte_output(0, "Error: PRTE_JOB_COLOCATE_NUM_PROC WITH ZERO PROCS/TARGET\n");
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(jdata->exit_code);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
         }
-        nprocs = jdata->num_procs;
-        daemon_app->num_procs = jdata->num_procs;
+        pernode = true;
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_NPERPROC, (void **) &u16ptr, PMIX_UINT16)) {
+        if (procs_per_target > 0) {
+            prte_output(0, "Error: Both PRTE_JOB_COLOCATE_NUM_PROC and "
+                        "PRTE_JOB_COLOCATE_NUM_NODE provided.");
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(jdata->exit_code);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+        procs_per_target = u16;
+        if (procs_per_target == 0) {
+            prte_output(0, "Error: PRTE_JOB_COLOCATE_NUM_PROC WITH ZERO PROCS/TARGET\n");
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(jdata->exit_code);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+        pernode = false;
+    }
+
+    if (colocate || colocate_daemons) {
+        if (procs_per_target == 0) {
+            prte_output(0, "Error: COLOCATION REQUESTED WITH ZERO PROCS/TARGET\n");
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(jdata->exit_code);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+        rc = map_colocate(jdata, colocate_daemons, pernode, darray, procs_per_target);
+        PMIX_DATA_ARRAY_FREE(darray);
+        if (PRTE_SUCCESS != rc) {
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ERROR_LOG(jdata->exit_code);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
         goto ranking;
     }
 
@@ -592,10 +554,11 @@ ranking:
         }
     }
 
-    if (colocate_daemons) {
+    if (colocate_daemons || colocate) {
         /* This is a mapping request for a tool daemon which is handled above
          * so don't run any mapping modules */
         did_map = true;
+        rc = PMIX_SUCCESS;
     } else {
         /* cycle thru the available mappers until one agrees to map
          * the job
@@ -665,32 +628,17 @@ ranking:
         goto cleanup;
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
-        /* compute and save local ranks */
+moveon:
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {        /* compute and save local ranks */
         if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_local_ranks(jdata))) {
             PRTE_ERROR_LOG(rc);
             jdata->exit_code = rc;
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
-        /* compute and save bindings */
-        if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_bindings(jdata))) {
-            PRTE_ERROR_LOG(rc);
-            jdata->exit_code = rc;
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-            goto cleanup;
-        }
-    } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED, NULL, PMIX_BOOL)) {
-        /* compute and save local ranks */
-        if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_local_ranks(jdata))) {
-            PRTE_ERROR_LOG(rc);
-            jdata->exit_code = rc;
-            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-            goto cleanup;
-        }
-
         /* compute and save bindings */
         if (PRTE_SUCCESS != (rc = prte_rmaps_base_compute_bindings(jdata))) {
             PRTE_ERROR_LOG(rc);
@@ -714,8 +662,8 @@ ranking:
         }
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL)
-        || prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
         /* display the map */
         prte_rmaps_base_display_map(jdata);
     }
@@ -748,4 +696,211 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
     prte_map_print(&output, jdata);
     prte_output(prte_clean_output, "%s\n", output);
     free(output);
+}
+
+static int map_colocate(prte_job_t *jdata,
+                        bool daemons, bool pernode,
+                        pmix_data_array_t *darray,
+                        uint16_t procs_per_target)
+{
+    char *tmp;
+    pmix_status_t rc;
+    size_t n, nprocs;
+    pmix_proc_t *procs, pproc;
+    prte_job_t *target_jdata;
+    prte_job_map_t *target_map, *map;
+    prte_app_context_t *target_app, *app;
+    int i, j, ret, cnt;
+    pmix_list_t targets;
+    hwloc_obj_t obj = NULL;
+    prte_proc_t *proc;
+    prte_node_t *node, *nptr;
+
+    if (4 < prte_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
+        rc = PMIx_Data_print(&tmp, NULL, darray, PMIX_DATA_ARRAY);
+        if (PMIX_SUCCESS != rc) {
+            pmix_output(0, "%s rmaps: mapping job %s: Colocate with UNPRINTABLE (%s)",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_JOBID_PRINT(jdata->nspace),
+                        PMIx_Error_string(rc));
+        } else {
+            pmix_output(0, "%s rmaps: mapping job %s: Colocate with\n  %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        PRTE_JOBID_PRINT(jdata->nspace), tmp);
+        }
+        free(tmp);
+    }
+    procs = (pmix_proc_t*)darray->array;
+    nprocs = darray->size;
+
+    if (NULL == jdata->map) { // Just in case
+        jdata->map = PMIX_NEW(prte_job_map_t);
+    }
+    map = jdata->map;
+    if (daemons) {
+        /* daemons are never bound and always rank by-slot */
+        PRTE_SET_BINDING_POLICY(map->binding, PRTE_BIND_TO_NONE);
+        PRTE_SET_RANKING_POLICY(map->ranking, PRTE_RANK_BY_SLOT);
+    }
+    jdata->num_procs = 0;
+    /* mark that this job is to be fully
+     * described in the launch msg */
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_FULLY_DESCRIBED,
+                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+
+    /* create a list of the target nodes */
+    PMIX_CONSTRUCT(&targets, pmix_list_t);
+    /* need to ensure each node only appears _once_ on the list */
+    for (n=0; n < nprocs; n++) {
+        if (PMIX_RANK_WILDCARD == procs[n].rank) {
+            target_jdata = prte_get_job_data_object(procs[n].nspace);
+            if (NULL == target_jdata) {
+                prte_output(0, "Unable to find app job %s\n", procs[n].nspace);
+                ret = PRTE_ERR_BAD_PARAM;
+                goto done;
+            }
+            target_map = target_jdata->map;
+            for (i = 0; i < target_map->nodes->size; i++) {
+                node = (prte_node_t*)pmix_pointer_array_get_item(target_map->nodes, i);
+                if (NULL == node) {
+                    continue;
+                }
+                if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
+                    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
+                    PMIX_RETAIN(node);
+                    pmix_list_append(&targets, &node->super);
+                }
+            }
+            continue;
+        }
+        /* not a wildcard rank */
+        proc = prte_get_proc_object(&procs[n]);
+        if (NULL == proc) {
+            prte_output(0, "Unable to find target process %s\n", PMIX_NAME_PRINT(&procs[n]));
+            ret = PRTE_ERR_BAD_PARAM;
+            goto done;
+        }
+        if (NULL == proc->node) {
+            prte_output(0, "Target process %s has not been mapped to a node\n", PMIX_NAME_PRINT(&procs[n]));
+            ret = PRTE_ERR_BAD_PARAM;
+            goto done;
+        }
+        node = proc->node;
+        if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
+            /* add this node to the list */
+            PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
+            PMIX_RETAIN(node);
+            pmix_list_append(&targets, &node->super);
+        }
+   }
+
+    if (pernode) {
+        /* cycle across the target nodes and place the specified
+         * number of procs on each one */
+        PMIX_LIST_FOREACH(nptr, &targets, prte_node_t) {
+            // Map the node to this job - note we already set the "mapped" flag
+            PMIX_RETAIN(nptr);
+            pmix_pointer_array_add(map->nodes, nptr);
+            map->num_nodes += 1;
+            obj = hwloc_get_root_obj(nptr->topology->topo);
+            // Assign N procs per node for each app_context
+            for (i=0; i < jdata->apps->size; i++) {
+                app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
+                if (NULL == app) {
+                    continue;
+                }
+                // is there room on this node? daemons don't count
+                if (!daemons && nptr->slots < (nptr->slots_inuse + procs_per_target)) {
+                    if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
+                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                                       app->num_procs, app->app, prte_process_info.nodename);
+                        PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                        ret = PRTE_ERR_SILENT;
+                        goto done;
+                    }
+                    PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_OVERSUBSCRIBED);
+                    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+                }
+                for (j = 0; j < procs_per_target; ++j) {
+                    if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, nptr, app->idx))) {
+                        ret = PRTE_ERR_OUT_OF_RESOURCE;
+                        goto done;
+                    }
+                    jdata->num_procs += 1;
+                    app->num_procs += 1;
+                    // we are REQUIRED to set the locale
+                    prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
+                                       PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
+                }
+            }
+        }
+        ret = PRTE_SUCCESS;
+        goto done;
+    }
+
+    /* handle the case of colocate by process */
+    PMIX_LIST_FOREACH(nptr, &targets, prte_node_t) {
+        // count the number of target procs on this node
+        cnt = 0;
+        for (i=0; i < nptr->procs->size; i++) {
+            proc = (prte_proc_t*)pmix_pointer_array_get_item(nptr->procs, i);
+            if (NULL == proc) {
+                continue;
+            }
+            for (n=0; n < nprocs; n++) {
+                if (PMIX_CHECK_PROCID(&procs[n], &proc->name)) {
+                    ++cnt;
+                    break;
+                }
+            }
+        }
+        if (0 == cnt) {
+            // should not happen
+            continue;
+        }
+        // Map the node to this job - note we already set the "mapped" flag
+        PMIX_RETAIN(nptr);
+        pmix_pointer_array_add(map->nodes, nptr);
+        map->num_nodes += 1;
+        obj = hwloc_get_root_obj(nptr->topology->topo);
+        cnt = cnt * procs_per_target; // total number of procs to place on this node
+        // Assign cnt procs for each app_context
+        for (i=0; i < jdata->apps->size; i++) {
+            app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
+            // is there room on this node? daemons don't count
+            if (!daemons && nptr->slots < (nptr->slots_inuse + cnt)) {
+                if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(map->mapping)) {
+                    pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                                   app->num_procs, app->app, prte_process_info.nodename);
+                    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+                    ret = PRTE_ERR_SILENT;
+                    goto done;
+                }
+                PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_OVERSUBSCRIBED);
+                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+            }
+            for (j = 0; j < cnt; ++j) {
+                if (NULL == (proc = prte_rmaps_base_setup_proc(jdata, nptr, i))) {
+                    ret = PRTE_ERR_OUT_OF_RESOURCE;
+                    goto done;
+                }
+                jdata->num_procs += 1;
+                app->num_procs += 1;
+                // we are REQUIRED to set the locale
+                prte_set_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE,
+                                   PRTE_ATTR_LOCAL, obj, PMIX_POINTER);
+            }
+        }
+    }
+
+done:
+    // ensure all the nodes are marked as not mapped
+    for (i=0; i < map->nodes->size; i++) {
+        node = (prte_node_t*)pmix_pointer_array_get_item(map->nodes, i);
+        if (NULL != node) {
+            PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
+        }
+    }
+    PMIX_LIST_DESTRUCT(&targets);
+    return ret;
 }
