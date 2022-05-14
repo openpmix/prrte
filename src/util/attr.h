@@ -201,6 +201,9 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_RAW_OUTPUT                 (PRTE_JOB_START_KEY + 94) // bool - do not buffer output
 #define PRTE_JOB_EXEC_AGENT                 (PRTE_JOB_START_KEY + 95) // char* - string specifying the cmd to use when exec'ing the local proc
 #define PRTE_JOB_NOAGG_HELP                 (PRTE_JOB_START_KEY + 96) // bool - do not aggregate show_help messages
+#define PRTE_JOB_COLOCATE_PROCS             (PRTE_JOB_START_KEY + 97) // pmix_data_array_t - colocate this job's procs with the given ones
+#define PRTE_JOB_COLOCATE_NPERPROC          (PRTE_JOB_START_KEY + 98) // uint16_t - number of procs to colocate at each proc
+#define PRTE_JOB_COLOCATE_NPERNODE          (PRTE_JOB_START_KEY + 99) // uint16_t - number of procs to colocate on node of each proc
 
 #define PRTE_JOB_MAX_KEY 300
 
