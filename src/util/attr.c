@@ -52,6 +52,7 @@ bool prte_get_attribute(pmix_list_t *attributes, prte_attribute_key_t key, void 
         if (key == kv->key) {
             if (kv->data.type != type) {
                 PRTE_ERROR_LOG(PRTE_ERR_TYPE_MISMATCH);
+                prte_output(0, "KV %s TYPE %s", PMIx_Data_type_string(kv->data.type), PMIx_Data_type_string(type));
                 return false;
             }
             if (NULL != data) {
@@ -470,6 +471,12 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "EXEC-AGENT";
         case PRTE_JOB_NOAGG_HELP:
             return "DO-NOT-AGGREGATE-HELP";
+        case PRTE_JOB_COLOCATE_PROCS:
+            return "COLOCATE PROCS";
+        case PRTE_JOB_COLOCATE_NPERPROC:
+            return "NUM PROCS TO COLOCATE PER PROC";
+        case PRTE_JOB_COLOCATE_NPERNODE:
+            return "NUM PROCS TO COLOCATE PER NODE";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
@@ -545,6 +552,7 @@ int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
     pmix_byte_object_t *boptr;
     struct timeval *tv;
     pmix_envar_t *envar;
+    pmix_status_t rc;
 
     kv->data.type = type;
     if (NULL == data) {
@@ -683,6 +691,11 @@ int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type)
         }
         break;
 
+    case PMIX_DATA_ARRAY:
+        rc = PMIx_Data_copy((void**)&kv->data.data.darray, data, PMIX_DATA_ARRAY);
+        return rc;
+        break;
+
     default:
         PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
         return PRTE_ERR_NOT_SUPPORTED;
@@ -694,6 +707,8 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
 {
     pmix_byte_object_t *boptr;
     pmix_envar_t *envar;
+    pmix_data_array_t *darray;
+    pmix_status_t rc;
     pmix_data_type_t pointers[] = {
         PMIX_STRING,
         PMIX_BYTE_OBJECT,
@@ -701,6 +716,7 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
         PMIX_PROC_NSPACE,
         PMIX_PROC,
         PMIX_ENVAR,
+        PMIX_DATA_ARRAY,
         PMIX_UNDEF};
     int n;
     bool found = false;
@@ -840,6 +856,15 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
         }
         envar->separator = kv->data.data.envar.separator;
         *data = envar;
+        break;
+
+    case PMIX_DATA_ARRAY:
+        rc = PMIx_Data_copy((void**)&darray, kv->data.data.darray, PMIX_DATA_ARRAY);
+        if (PMIX_SUCCESS != rc) {
+            *data = NULL;
+            return prte_pmix_convert_status(rc);
+        }
+        *data = darray;
         break;
 
     default:
