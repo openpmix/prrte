@@ -377,6 +377,12 @@ int main(int argc, char *argv[])
         prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
+
+    /* add search dirs early on (used by prte_show_help) */
+    if (NULL != prte_install_dirs.prtedatadir) {
+        prte_show_help_add_dir(prte_install_dirs.prtedatadir);
+    }
+
     if (0 != strcmp(schizo->name, "prte")) {
         proxyrun = true;
     } else {
