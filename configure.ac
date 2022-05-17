@@ -20,7 +20,7 @@
 # Copyright (c) 2013      Mellanox Technologies, Inc.
 #                         All rights reserved.
 # Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2014-2019 Research Organization for Information Science
+# Copyright (c) 2014-2022 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
 # Copyright (c) 2018-2022 Amazon.com, Inc. or its affiliates.
@@ -54,6 +54,7 @@ AC_INIT([prte],
 AC_PREREQ(2.69)
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
+
 # autotools expects to perform tests without interference
 # from user-provided CFLAGS, particularly -Werror flags.
 # Search for them here and cache any we find
@@ -94,6 +95,8 @@ prte_show_title "Configuring PRTE"
 #
 
 prte_show_subtitle "Startup tests"
+
+AC_PROG_SED
 
 AC_CHECK_PROG([PERL],[perl],[perl],[no])
 AS_IF([test "X$PERL" = "Xno"],
