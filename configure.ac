@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2006-2021 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2006-2022 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2006-2008 Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2006-2017 Los Alamos National Security, LLC.  All rights
 #                         reserved.
@@ -158,29 +158,11 @@ AC_DEFUN([PRTE_CHECK_DIR_FOR_SPACES],[
            AC_MSG_ERROR([Cannot continue.])])
 ])
 
-AC_DEFUN([PRTE_CANONICALIZE_PATH],[
-    case $host_os in
-    darwin*)
-        # MacOS pre-Mojave does not have "readlink -f" or realpath.
-        # Instead, use Python, because we know MacOS comes with a
-        # python that has os.path.realpath.
-        $2=`python -c 'import os, __future__ ; print(os.path.realpath("'$1'"))'`
-        ;;
-    *)
-        $2=`readlink -f $1`
-        ;;
-    esac
-])
-
 PRTE_VAR_SCOPE_PUSH(prte_checkdir)
-PRTE_CHECK_DIR_FOR_SPACES([$srcdir], [a], [source tree])
-PRTE_CANONICALIZE_PATH([$srcdir], [prte_checkdir])
-PRTE_CHECK_DIR_FOR_SPACES([$prte_checkdir], [an], [absolute source tree])
-PRTE_CANONICALIZE_PATH([.], [prte_checkdir])
+prte_checkdir=`pwd`
 PRTE_CHECK_DIR_FOR_SPACES([$prte_checkdir], [a], [build tree])
 PRTE_CHECK_DIR_FOR_SPACES([$prefix], [a], [prefix])
-PRTE_CANONICALIZE_PATH([$prefix], [prte_checkdir])
-PRTE_CHECK_DIR_FOR_SPACES([$prte_checkdir], [an], [absolute prefix])
+PRTE_CHECK_DIR_FOR_SPACES([$srcdir], [a], [source tree])
 PRTE_VAR_SCOPE_POP
 
 prte_show_subtitle "Checking versions"
