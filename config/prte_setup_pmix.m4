@@ -77,19 +77,19 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
     # if the version file exists, then we need to parse it to find
     # the actual release series
-    AC_MSG_CHECKING([version 5x])
+    AC_MSG_CHECKING([version at or above v4.1.3])
     AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
                                         #include <pmix_version.h>
-                                        #if (PMIX_VERSION_MAJOR < 5L)
-                                        #error "not version 5 or above"
+                                        #if (PMIX_NUMERIC_VERSION < 0x00040103)
+                                        #error "not version 4.1.3 or above"
                                         #endif
                                        ], [])],
-                      [AC_MSG_RESULT([found])],
-                      [AC_MSG_RESULT([not found])
+                      [AC_MSG_RESULT([yes])],
+                      [AC_MSG_RESULT(no)
                        AC_MSG_WARN([PRTE does not support PMIx versions])
-                       AC_MSG_WARN([less than v5.0 as it requires access])
-                       AC_MSG_WARN([to the internal PMIx library headers.])
-                       AC_MSG_ERROR([Please select a newer version and configure again])])
+                       AC_MSG_WARN([that do not expose the internal PMIx library headers.])
+                       AC_MSG_WARN([This requires PMIx v4.1.3 or above.])
+                       AC_MSG_ERROR([Please select a supported version and configure again])])
 
     AC_CHECK_HEADER([src/util/pmix_argv.h], [],
                     [AC_MSG_ERROR([Could not find PMIx devel headers.  Can not continue.])])
