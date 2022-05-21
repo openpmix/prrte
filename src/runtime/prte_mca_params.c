@@ -37,12 +37,13 @@
 
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/argv.h"
+#include "src/rml/rml.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
-#include "src/util/prte_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_show_help.h"
 #include "src/mca/errmgr/errmgr.h"
 
 #include "src/runtime/prte_globals.h"
@@ -103,10 +104,10 @@ int prte_register_params(void)
             -1};
         for (j = 0; signals[j] != -1; ++j) {
             if (j == 0) {
-                prte_asprintf(&string, "%d", signals[j]);
+                pmix_asprintf(&string, "%d", signals[j]);
             } else {
                 char *tmp;
-                prte_asprintf(&tmp, "%s,%d", string, signals[j]);
+                pmix_asprintf(&tmp, "%s,%d", string, signals[j]);
                 free(string);
                 string = tmp;
             }
@@ -203,7 +204,7 @@ int prte_register_params(void)
     if (NULL != prte_if_include && NULL != prte_if_exclude) {
         /* Return ERR_NOT_AVAILABLE so that a warning message about
          "open" failing is not printed */
-        prte_show_help("help-oob-tcp.txt", "include-exclude", true,
+        pmix_show_help("help-oob-tcp.txt", "include-exclude", true,
                        prte_if_include, prte_if_exclude);
         return PRTE_ERR_NOT_AVAILABLE;
     }
@@ -223,10 +224,10 @@ int prte_register_params(void)
      * we use it below, and prun and some other tools call this
      * function prior to calling prte_init
      */
-    PRTE_CONSTRUCT(&lds, prte_output_stream_t);
+    PMIX_CONSTRUCT(&lds, prte_output_stream_t);
     lds.lds_want_stdout = true;
     prte_clean_output = prte_output_open(&lds);
-    PRTE_DESTRUCT(&lds);
+    PMIX_DESTRUCT(&lds);
 
     /* LOOK FOR A TMP DIRECTORY BASE */
     /* Several options are provided to cover a range of possibilities:
@@ -404,7 +405,7 @@ int prte_register_params(void)
 
     if (NULL == prte_default_hostfile) {
         /* nothing was given, so define the default */
-        prte_asprintf(&prte_default_hostfile, "%s/prte-default-hostfile",
+        pmix_asprintf(&prte_default_hostfile, "%s/prte-default-hostfile",
                       prte_install_dirs.sysconfdir);
         /* flag that nothing was given */
         prte_default_hostfile_given = false;

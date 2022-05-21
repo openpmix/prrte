@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,21 +48,20 @@
 
 #include "src/include/prte_socket_errno.h"
 #include "src/runtime/prte_progress_threads.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/error.h"
-#include "src/util/if.h"
-#include "src/util/net.h"
+#include "src/util/pmix_if.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/mca/routed/routed.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
-#include "src/util/parse_options.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_parse_options.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/oob/tcp/oob_tcp.h"
 #include "src/mca/oob/tcp/oob_tcp_common.h"
@@ -94,7 +93,7 @@ static void accept_connection(const int accepted_fd, const struct sockaddr *addr
 {
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s accept_connection: %s:%d\n", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                        prte_net_get_hostname(addr), prte_net_get_port(addr));
+                        pmix_net_get_hostname(addr), pmix_net_get_port(addr));
 
     /* setup socket options */
     prte_oob_tcp_set_socket_options(accepted_fd);
@@ -157,7 +156,8 @@ static void send_nb(prte_rml_send_t *msg)
     pmix_proc_t hop;
 
     /* do we have a route to this peer (could be direct)? */
-    hop = prte_routed.get_route(&msg->dst);
+    PMIX_LOAD_NSPACE(hop.nspace, PRTE_PROC_MY_NAME->nspace);
+    hop.rank = prte_rml_get_route(msg->dst.rank);
     /* do we know this hop? */
     if (NULL == (peer = prte_oob_tcp_peer_lookup(&hop))) {
         /* push this back to the component so it can try
@@ -222,7 +222,7 @@ static void recv_handler(int sd, short flg, void *cbdata)
     prte_oob_tcp_hdr_t hdr;
     prte_oob_tcp_peer_t *peer;
 
-    PRTE_ACQUIRE_OBJECT(op);
+    PMIX_ACQUIRE_OBJECT(op);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s:tcp:recv:handler called", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -268,5 +268,5 @@ static void recv_handler(int sd, short flg, void *cbdata)
     }
 
 cleanup:
-    PRTE_RELEASE(op);
+    PMIX_RELEASE(op);
 }

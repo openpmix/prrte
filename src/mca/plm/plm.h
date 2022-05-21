@@ -16,7 +16,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,7 +41,7 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/mca/mca.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
@@ -94,7 +94,7 @@ typedef int (*prte_plm_base_module_terminate_orteds_fn_t)(void);
 /**
  * Terminate an array of specific procs
  */
-typedef int (*prte_plm_base_module_terminate_procs_fn_t)(prte_pointer_array_t *procs);
+typedef int (*prte_plm_base_module_terminate_procs_fn_t)(pmix_pointer_array_t *procs);
 
 /**
  * Signal any processes launched for the respective jobid by

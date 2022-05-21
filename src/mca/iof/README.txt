@@ -63,9 +63,9 @@ omitted it in the drawings.  However, it is worth pointing out the structure
 as I am not clear on why we have the table.
 
 struct prte_iof_svc_fwd_t {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     prte_iof_svc_pub_t* fwd_pub;
-    prte_hash_table_t fwd_seq_hash;
+    pmix_hash_table_t fwd_seq_hash;
 };
 
 

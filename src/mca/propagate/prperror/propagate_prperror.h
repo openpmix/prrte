@@ -3,6 +3,7 @@
  *                          of Tennessee Research Foundation.  All rights
  *                          reserved.
  *
+ * Copyright (c) 2022      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +33,7 @@ PRTE_MODULE_EXPORT extern prte_propagate_base_component_t prte_propagate_prperro
 
 PRTE_EXPORT extern prte_propagate_base_module_t prte_propagate_prperror_module;
 
-PRTE_EXPORT extern prte_list_t prte_error_procs;
+PRTE_EXPORT extern pmix_list_t prte_error_procs;
 
 END_C_DECLS
 

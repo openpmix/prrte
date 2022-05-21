@@ -12,7 +12,7 @@
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +32,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 
 /*
@@ -56,13 +56,13 @@ int prte_plm_base_set_hnp_name(void)
     }
 
     if (NULL == prte_plm_globals.base_nspace) {
-        /* use basename-hostname-pid as our base nspace */
-        prte_asprintf(&prte_plm_globals.base_nspace, "%s-%s-%u", prte_tool_basename,
+        /* use pmix_basename.hostname-pid as our base nspace */
+        pmix_asprintf(&prte_plm_globals.base_nspace, "%s-%s-%u", prte_tool_basename,
                       prte_process_info.nodename, (uint32_t) prte_process_info.pid);
     }
 
     /* create the DVM nspace */
-    prte_asprintf(&evar, "%s@0", prte_plm_globals.base_nspace);
+    pmix_asprintf(&evar, "%s@0", prte_plm_globals.base_nspace);
     PMIX_LOAD_PROCID(PRTE_PROC_MY_NAME, evar, 0);
     /* copy it to the HNP field */
     memcpy(PRTE_PROC_MY_HNP, PRTE_PROC_MY_NAME, sizeof(pmix_proc_t));
@@ -115,7 +115,7 @@ int prte_plm_base_create_jobid(prte_job_t *jdata)
     }
 
     /* the new nspace is our base nspace with an "@N" extension */
-    prte_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
+    pmix_asprintf(&tmp, "%s@%u", prte_plm_globals.base_nspace, prte_plm_globals.next_jobid);
     PMIX_LOAD_NSPACE(jdata->nspace, tmp);
     free(tmp);
 

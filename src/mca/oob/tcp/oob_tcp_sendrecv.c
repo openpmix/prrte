@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,17 +59,16 @@
 #include "src/event/event-internal.h"
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/util/error.h"
-#include "src/util/net.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 #include "types.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 
 #include "oob_tcp.h"
@@ -85,7 +84,7 @@ void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata)
     prte_oob_tcp_send_t *snd = (prte_oob_tcp_send_t *) cbdata;
     prte_oob_tcp_peer_t *peer;
 
-    PRTE_ACQUIRE_OBJECT(snd);
+    PMIX_ACQUIRE_OBJECT(snd);
     peer = (prte_oob_tcp_peer_t *) snd->peer;
 
     /* if there is no message on-deck, put this one there */
@@ -93,7 +92,7 @@ void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata)
         peer->send_msg = snd;
     } else {
         /* add it to the queue */
-        prte_list_append(&peer->send_queue, &snd->super);
+        pmix_list_append(&peer->send_queue, &snd->super);
     }
     if (snd->activate) {
         /* if we aren't connected, then start connecting */
@@ -104,7 +103,7 @@ void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata)
             /* ensure the send event is active */
             if (!peer->send_ev_active) {
                 peer->send_ev_active = true;
-                PRTE_POST_OBJECT(peer);
+                PMIX_POST_OBJECT(peer);
                 prte_event_add(&peer->send_event, 0);
             }
         }
@@ -136,7 +135,7 @@ static int send_msg(prte_oob_tcp_peer_t *peer, prte_oob_tcp_send_t *msg)
 
 retry:
     rc = writev(peer->sd, iov, iov_count);
-    if (PRTE_LIKELY(rc == remain)) {
+    if (PMIX_LIKELY(rc == remain)) {
         /* we successfully sent the header and the msg data if any */
         msg->hdr_sent = true;
         msg->sdbytes = 0;
@@ -201,7 +200,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
     prte_oob_tcp_send_t *msg;
     int rc;
 
-    PRTE_ACQUIRE_OBJECT(peer);
+    PMIX_ACQUIRE_OBJECT(peer);
     msg = peer->send_msg;
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
@@ -239,7 +238,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&(peer->name)),
                                         (int) ntohl(msg->hdr.nbytes), peer->sd);
-                    PRTE_RELEASE(msg);
+                    PMIX_RELEASE(msg);
                     peer->send_msg = NULL;
                 } else {
                     /* we are done - notify the RML */
@@ -250,7 +249,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                                         (int) ntohl(msg->hdr.nbytes), peer->sd);
                     msg->msg->status = PRTE_SUCCESS;
                     PRTE_RML_SEND_COMPLETE(msg->msg);
-                    PRTE_RELEASE(msg);
+                    PMIX_RELEASE(msg);
                     peer->send_msg = NULL;
                 }
                 /* fall thru to queue the next message */
@@ -265,7 +264,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                 prte_event_del(&peer->send_event);
                 msg->msg->status = rc;
                 PRTE_RML_SEND_COMPLETE(msg->msg);
-                PRTE_RELEASE(msg);
+                PMIX_RELEASE(msg);
                 peer->send_msg = NULL;
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_COMM_FAILED);
                 return;
@@ -277,7 +276,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
              * wait for another send_event to fire before doing so. This gives
              * us a chance to service any pending recvs.
              */
-            peer->send_msg = (prte_oob_tcp_send_t *) prte_list_remove_first(&peer->send_queue);
+            peer->send_msg = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue);
         }
 
         /* if nothing else to do unregister for send event notifications */
@@ -356,7 +355,7 @@ static int read_bytes(prte_oob_tcp_peer_t *peer)
                 peer->send_ev_active = false;
             }
             if (NULL != peer->recv_msg) {
-                PRTE_RELEASE(peer->recv_msg);
+                PMIX_RELEASE(peer->recv_msg);
                 peer->recv_msg = NULL;
             }
             prte_oob_tcp_peer_close(peer);
@@ -386,7 +385,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
     prte_rml_send_t *snd;
     pmix_byte_object_t bo;
 
-    PRTE_ACQUIRE_OBJECT(peer);
+    PMIX_ACQUIRE_OBJECT(peer);
 
     prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s:tcp:recv:handler called for peer %s",
@@ -401,7 +400,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             /* we connected! Start the send/recv events */
             if (!peer->recv_ev_active) {
                 peer->recv_ev_active = true;
-                PRTE_POST_OBJECT(peer);
+                PMIX_POST_OBJECT(peer);
                 prte_event_add(&peer->recv_event, 0);
             }
             if (peer->timer_ev_active) {
@@ -410,11 +409,11 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             }
             /* if there is a message waiting to be sent, queue it */
             if (NULL == peer->send_msg) {
-                peer->send_msg = (prte_oob_tcp_send_t *) prte_list_remove_first(&peer->send_queue);
+                peer->send_msg = (prte_oob_tcp_send_t *) pmix_list_remove_first(&peer->send_queue);
             }
             if (NULL != peer->send_msg && !peer->send_ev_active) {
                 peer->send_ev_active = true;
-                PRTE_POST_OBJECT(peer);
+                PMIX_POST_OBJECT(peer);
                 prte_event_add(&peer->send_event, 0);
             }
             /* update our state */
@@ -439,7 +438,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                 "%s:tcp:recv:handler allocate new recv msg",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-            peer->recv_msg = PRTE_NEW(prte_oob_tcp_recv_t);
+            peer->recv_msg = PMIX_NEW(prte_oob_tcp_recv_t);
             if (NULL == peer->recv_msg) {
                 prte_output(
                     0, "%s-%s prte_oob_tcp_peer_recv_handler: unable to allocate recv message\n",
@@ -518,7 +517,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                     PRTE_RML_POST_MESSAGE(&peer->recv_msg->hdr.origin, peer->recv_msg->hdr.tag,
                                           peer->recv_msg->hdr.seq_num, peer->recv_msg->data,
                                           peer->recv_msg->hdr.nbytes);
-                    PRTE_RELEASE(peer->recv_msg);
+                    PMIX_RELEASE(peer->recv_msg);
                 } else {
                     /* promote this to the OOB as some other transport might
                      * be the next best hop */
@@ -527,7 +526,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                                         "%s TCP PROMOTING ROUTED MESSAGE FOR %s TO OOB",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&peer->recv_msg->hdr.dst));
-                    snd = PRTE_NEW(prte_rml_send_t);
+                    snd = PMIX_NEW(prte_rml_send_t);
                     snd->dst = peer->recv_msg->hdr.dst;
                     PMIX_XFER_PROCID(&snd->origin, &peer->recv_msg->hdr.origin);
                     snd->tag = peer->recv_msg->hdr.tag;
@@ -543,7 +542,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                     /* activate the OOB send state */
                     PRTE_OOB_SEND(snd);
                     /* cleanup */
-                    PRTE_RELEASE(peer->recv_msg);
+                    PMIX_RELEASE(peer->recv_msg);
                 }
                 peer->recv_msg = NULL;
                 return;
@@ -592,7 +591,7 @@ static void snd_des(prte_oob_tcp_send_t *ptr)
         free(ptr->data);
     }
 }
-PRTE_CLASS_INSTANCE(prte_oob_tcp_send_t, prte_list_item_t, snd_cons, snd_des);
+PMIX_CLASS_INSTANCE(prte_oob_tcp_send_t, pmix_list_item_t, snd_cons, snd_des);
 
 static void rcv_cons(prte_oob_tcp_recv_t *ptr)
 {
@@ -601,11 +600,11 @@ static void rcv_cons(prte_oob_tcp_recv_t *ptr)
     ptr->rdptr = NULL;
     ptr->rdbytes = 0;
 }
-PRTE_CLASS_INSTANCE(prte_oob_tcp_recv_t, prte_list_item_t, rcv_cons, NULL);
+PMIX_CLASS_INSTANCE(prte_oob_tcp_recv_t, pmix_list_item_t, rcv_cons, NULL);
 
 static void err_cons(prte_oob_tcp_msg_error_t *ptr)
 {
     ptr->rmsg = NULL;
     ptr->snd = NULL;
 }
-PRTE_CLASS_INSTANCE(prte_oob_tcp_msg_error_t, prte_object_t, err_cons, NULL);
+PMIX_CLASS_INSTANCE(prte_oob_tcp_msg_error_t, pmix_object_t, err_cons, NULL);

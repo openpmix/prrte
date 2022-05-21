@@ -17,7 +17,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,7 +33,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/ras/base/ras_private.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -58,13 +58,13 @@ typedef struct prte_ras_alps_sysconfig_t {
 } prte_ras_alps_sysconfig_t;
 
 /* /// Local Functions /// */
-static int prte_ras_alps_allocate(prte_job_t *jdata, prte_list_t *nodes);
+static int prte_ras_alps_allocate(prte_job_t *jdata, pmix_list_t *nodes);
 
 static int prte_ras_alps_finalize(void);
 
 static char *ras_alps_getline(FILE *fp);
 
-static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, unsigned int *uMe);
+static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, unsigned int *uMe);
 
 static char *prte_ras_get_appinfo_path(void);
 
@@ -142,7 +142,7 @@ static int parser_ini(char **val_if_found, FILE *fp, const char *var_name)
             return PRTE_ERR_FILE_OPEN_FAILURE;
         }
         /* Success! */
-        prte_asprintf(val_if_found, "%s/appinfo", cpq);
+        pmix_asprintf(val_if_found, "%s/appinfo", cpq);
         if (NULL == val_if_found) {
             free(alps_config_str);
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
@@ -209,7 +209,7 @@ static int parser_separated_columns(char **val_if_found, FILE *fp, const char *v
             return PRTE_ERR_FILE_OPEN_FAILURE;
         }
         /* Success! */
-        prte_asprintf(val_if_found, "%s/appinfo", cpq);
+        pmix_asprintf(val_if_found, "%s/appinfo", cpq);
         if (NULL == val_if_found) {
             free(alps_config_str);
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
@@ -300,13 +300,13 @@ static char *prte_ras_get_appinfo_path(void)
  * Discover available (pre-allocated) nodes.  Allocate the
  * requested number of nodes/process slots to the job.
  */
-static int prte_ras_alps_allocate(prte_job_t *jdata, prte_list_t *nodes)
+static int prte_ras_alps_allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     int ret;
     char *appinfo_path = NULL;
 
     if (0 == prte_ras_alps_res_id) {
-        prte_show_help("help-ras-alps.txt", "alps-env-var-not-found", 1);
+        pmix_show_help("help-ras-alps.txt", "alps-env-var-not-found", 1);
         return PRTE_ERR_NOT_FOUND;
     }
     if (NULL == (appinfo_path = prte_ras_get_appinfo_path())) {
@@ -321,7 +321,7 @@ static int prte_ras_alps_allocate(prte_job_t *jdata, prte_list_t *nodes)
     }
 
     /* Record the number of allocated nodes */
-    prte_num_allocated_nodes = prte_list_get_size(nodes);
+    prte_num_allocated_nodes = pmix_list_get_size(nodes);
 
 cleanup:
     /* All done */
@@ -367,7 +367,7 @@ typedef placeNodeList_t prte_ras_alps_placeNodeList_t;
 typedef placeNodeList_ver3_t prte_ras_alps_placeNodeList_t;
 #endif
 
-static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, unsigned int *uMe)
+static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, unsigned int *uMe)
 {
     int iq;
     int ix;
@@ -505,7 +505,7 @@ static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, u
             prte_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "ras:alps:read_appinfo: got NID %d", apSlots[ix].nid);
 
-            prte_asprintf(&hostname, "nid%05d", apSlots[ix].nid);
+            pmix_asprintf(&hostname, "nid%05d", apSlots[ix].nid);
             if (NULL == hostname) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 return PRTE_ERR_OUT_OF_RESOURCE;
@@ -521,7 +521,7 @@ static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, u
                 prte_output_verbose(1, prte_ras_base_framework.framework_output,
                                     "ras:alps:read_appinfo: added NID %d to list", apSlots[ix].nid);
 
-                node = PRTE_NEW(prte_node_t);
+                node = PMIX_NEW(prte_node_t);
                 node->name = hostname;
                 prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL,
                                    &apSlots[ix].nid, PMIX_INT32);
@@ -533,7 +533,7 @@ static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, u
                  * can properly function
                  */
                 /* add it to the end */
-                prte_list_append(nodes, &node->super);
+                pmix_list_append(nodes, &node->super);
                 sNodes++; /* Increment the node count       */
             }
         }
@@ -554,13 +554,13 @@ static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, u
             prte_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "ras:alps:read_appinfo(modern): processing NID %d with %d slots",
                                 apNodes[ix].nid, apNodes[ix].numPEs);
-            prte_asprintf(&hostname, "nid%05d", apNodes[ix].nid);
+            pmix_asprintf(&hostname, "nid%05d", apNodes[ix].nid);
             if (NULL == hostname) {
                 PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
                 return PRTE_ERR_OUT_OF_RESOURCE;
             }
 
-            node = PRTE_NEW(prte_node_t);
+            node = PMIX_NEW(prte_node_t);
             node->name = hostname;
             prte_set_attribute(&node->attributes, PRTE_NODE_LAUNCH_ID, PRTE_ATTR_LOCAL,
                                &apNodes[ix].nid, PMIX_INT32);
@@ -576,7 +576,7 @@ static int prte_ras_alps_read_appinfo_file(prte_list_t *nodes, char *filename, u
              * can properly function
              */
             /* add it to the end */
-            prte_list_append(nodes, &node->super);
+            pmix_list_append(nodes, &node->super);
             sNodes++; /* Increment the node count       */
         }
 #endif

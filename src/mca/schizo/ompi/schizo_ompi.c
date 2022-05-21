@@ -40,15 +40,16 @@
 #    include <sys/utsname.h>
 #endif
 
-#include "src/util/argv.h"
-#include "src/util/keyval_parse.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
-#include "src/util/os_dirpath.h"
-#include "src/util/os_path.h"
-#include "src/util/path.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_os_dirpath.h"
+#include "src/util/pmix_os_path.h"
+#include "src/util/pmix_path.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/prte_cmd_line.h"
+#include "src/runtime/pmix_init_util.h"
 #include "src/util/session_dir.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/base/prte_mca_base_vari.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -59,14 +60,14 @@
 #include "schizo_ompi.h"
 #include "src/mca/schizo/base/base.h"
 
-static int parse_cli(char **argv, prte_cli_result_t *results, bool silent);
+static int parse_cli(char **argv, pmix_cli_result_t *results, bool silent);
 static int detect_proxy(char *argv);
-static int parse_env(char **srcenv, char ***dstenv, prte_cli_result_t *cli);
-static void allow_run_as_root(prte_cli_result_t *results);
+static int parse_env(char **srcenv, char ***dstenv, pmix_cli_result_t *cli);
+static void allow_run_as_root(pmix_cli_result_t *results);
 static int set_default_ranking(prte_job_t *jdata,
                                prte_schizo_options_t *options);
 static int setup_fork(prte_job_t *jdata, prte_app_context_t *context);
-static void job_info(prte_cli_result_t *results,
+static void job_info(pmix_cli_result_t *results,
                      void *jobinfo);
 
 prte_schizo_base_module_t prte_schizo_ompi_module = {
@@ -82,172 +83,172 @@ prte_schizo_base_module_t prte_schizo_ompi_module = {
 
 static struct option ompioptions[] = {
     /* basic options */
-    PRTE_OPTION_SHORT_DEFINE(PRTE_CLI_HELP, PRTE_ARG_OPTIONAL, 'h'),
-    PRTE_OPTION_SHORT_DEFINE(PRTE_CLI_VERSION, PRTE_ARG_NONE, 'V'),
-    PRTE_OPTION_SHORT_DEFINE(PRTE_CLI_VERBOSE, PRTE_ARG_NONE, 'v'),
-    PRTE_OPTION_SHORT_DEFINE(PRTE_CLI_PARSEABLE, PRTE_ARG_NONE, 'p'),
-    PRTE_OPTION_SHORT_DEFINE(PRTE_CLI_PARSABLE, PRTE_ARG_NONE, 'p'), // synonym for parseable
-    PRTE_OPTION_DEFINE(PRTE_CLI_PERSONALITY, PRTE_ARG_REQD),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_HELP, PMIX_ARG_OPTIONAL, 'h'),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_VERSION, PMIX_ARG_NONE, 'V'),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_VERBOSE, PMIX_ARG_NONE, 'v'),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PARSEABLE, PMIX_ARG_NONE, 'p'),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PARSABLE, PMIX_ARG_NONE, 'p'), // synonym for parseable
+    PMIX_OPTION_DEFINE(PRTE_CLI_PERSONALITY, PMIX_ARG_REQD),
 
     // MCA parameters
-    PRTE_OPTION_DEFINE(PRTE_CLI_PRTEMCA, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_PMIXMCA, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("omca", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("gomca", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_TUNE, PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PRTEMCA, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PMIXMCA, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("omca", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("gomca", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_TUNE, PMIX_ARG_REQD),
 
-    PRTE_OPTION_DEFINE(PRTE_CLI_LAUNCH_AGENT, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_MAX_VM_SIZE, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS, PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS_FILE, PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE(PRTE_CLI_LEAVE_SESSION_ATTACHED, PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE(PRTE_CLI_TMPDIR, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_PREFIX, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_NOPREFIX, PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE(PRTE_CLI_FWD_SIGNALS, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_RUN_AS_ROOT, PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PRTE_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_LAUNCH_AGENT, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_MAX_VM_SIZE, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS_FILE, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_LEAVE_SESSION_ATTACHED, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_TMPDIR, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PREFIX, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_NOPREFIX, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_FWD_SIGNALS, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_RUN_AS_ROOT, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PMIX_ARG_NONE),
 
     /* debug options */
-    PRTE_OPTION_DEFINE(PRTE_CLI_XTERM, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_STOP_ON_EXEC, PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE(PRTE_CLI_STOP_IN_INIT, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_STOP_IN_APP, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_TIMEOUT, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_REPORT_STATE, PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE(PRTE_CLI_STACK_TRACES, PRTE_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_XTERM, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_STOP_ON_EXEC, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_INIT, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_APP, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_TIMEOUT, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_STATE, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_STACK_TRACES, PMIX_ARG_NONE),
 #ifdef PMIX_SPAWN_TIMEOUT
-    PRTE_OPTION_DEFINE(PRTE_CLI_SPAWN_TIMEOUT, PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_SPAWN_TIMEOUT, PMIX_ARG_REQD),
 #endif
 #ifdef PMIX_LOG_AGG
-    PRTE_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PRTE_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PMIX_ARG_NONE),
 #endif
 
     /* Conventional options - for historical compatibility, support
      * both single and multi dash versions */
     /* Number of processes; -c, -n, --n, -np, and --np are all
      synonyms */
-    PRTE_OPTION_SHORT_DEFINE(PRTE_CLI_NP, PRTE_ARG_REQD, 'n'),
-    PRTE_OPTION_SHORT_DEFINE(PRTE_CLI_NP, PRTE_ARG_REQD, 'c'),
-    PRTE_OPTION_DEFINE("n", PRTE_ARG_REQD),  // will be converted to "np" after parsing
-    PRTE_OPTION_SHORT_DEFINE("N", PRTE_ARG_REQD, 'N'),
-    PRTE_OPTION_DEFINE(PRTE_CLI_APPFILE, PRTE_ARG_REQD),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_NP, PMIX_ARG_REQD, 'n'),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_NP, PMIX_ARG_REQD, 'c'),
+    PMIX_OPTION_DEFINE("n", PMIX_ARG_REQD),  // will be converted to "np" after parsing
+    PMIX_OPTION_SHORT_DEFINE("N", PMIX_ARG_REQD, 'N'),
+    PMIX_OPTION_DEFINE(PRTE_CLI_APPFILE, PMIX_ARG_REQD),
 
     /* output options */
-    PRTE_OPTION_DEFINE(PRTE_CLI_OUTPUT, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_STREAM_BUF, PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_STREAM_BUF, PMIX_ARG_REQD),
 
     /* input options */
-    PRTE_OPTION_DEFINE(PRTE_CLI_STDIN, PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_STDIN, PMIX_ARG_REQD),
 
 
     /* launch options */
-    PRTE_OPTION_DEFINE(PRTE_CLI_PRELOAD_FILES, PRTE_ARG_REQD),
-    PRTE_OPTION_SHORT_DEFINE(PRTE_CLI_PRELOAD_BIN, PRTE_ARG_NONE, 's'),
-    PRTE_OPTION_SHORT_DEFINE(PRTE_CLI_FWD_ENVAR, PRTE_ARG_REQD, 'x'),
-    PRTE_OPTION_DEFINE(PRTE_CLI_WDIR, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("wd", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_PATH, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_SHOW_PROGRESS, PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE(PRTE_CLI_PSET, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_HOSTFILE, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("machinefile", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_DEFAULT_HOSTFILE, PRTE_ARG_REQD),
-    PRTE_OPTION_SHORT_DEFINE(PRTE_CLI_HOST, PRTE_ARG_REQD, 'H'),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PRELOAD_FILES, PMIX_ARG_REQD),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PRELOAD_BIN, PMIX_ARG_NONE, 's'),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_FWD_ENVAR, PMIX_ARG_REQD, 'x'),
+    PMIX_OPTION_DEFINE(PRTE_CLI_WDIR, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("wd", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PATH, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_SHOW_PROGRESS, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PSET, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_HOSTFILE, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("machinefile", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DEFAULT_HOSTFILE, PMIX_ARG_REQD),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_HOST, PMIX_ARG_REQD, 'H'),
 
     /* placement options */
     /* Mapping options */
-    PRTE_OPTION_DEFINE(PRTE_CLI_MAPBY, PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_MAPBY, PMIX_ARG_REQD),
 
     /* Ranking options */
-    PRTE_OPTION_DEFINE(PRTE_CLI_RANKBY, PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_RANKBY, PMIX_ARG_REQD),
 
     /* Binding options */
-    PRTE_OPTION_DEFINE(PRTE_CLI_BINDTO, PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_BINDTO, PMIX_ARG_REQD),
 
     /* display options */
-    PRTE_OPTION_DEFINE(PRTE_CLI_DISPLAY, PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DISPLAY, PMIX_ARG_REQD),
 
     /* developer options */
-    PRTE_OPTION_DEFINE(PRTE_CLI_DO_NOT_LAUNCH, PRTE_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_LAUNCH, PMIX_ARG_NONE),
 
 
 #if PRTE_ENABLE_FT
-    PRTE_OPTION_DEFINE(PRTE_CLI_ENABLE_RECOVERY, PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE(PRTE_CLI_MAX_RESTARTS, PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE(PRTE_CLI_DISABLE_RECOVERY, PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE(PRTE_CLI_CONTINUOUS, PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("with-ft", PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_ENABLE_RECOVERY, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_MAX_RESTARTS, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DISABLE_RECOVERY, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_CONTINUOUS, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("with-ft", PMIX_ARG_REQD),
 #endif
 
     /* mpiexec mandated form launch key parameters */
-    PRTE_OPTION_DEFINE("initial-errhandler", PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE("initial-errhandler", PMIX_ARG_REQD),
 
     /* Display Commumication Protocol : MPI_Init */
-    PRTE_OPTION_DEFINE("display-comm", PRTE_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-comm", PMIX_ARG_NONE),
 
     /* Display Commumication Protocol : MPI_Finalize */
-    PRTE_OPTION_DEFINE("display-comm-finalize", PRTE_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-comm-finalize", PMIX_ARG_NONE),
 
     // unsupported, but mandated options
-    PRTE_OPTION_DEFINE("soft", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("arch", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("file", PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE("soft", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("arch", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("file", PMIX_ARG_REQD),
 
     // deprecated options
-    PRTE_OPTION_DEFINE("mca", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("gmca", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("xml", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("tag-output", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("timestamp-output", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("output-directory", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("output-filename", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("merge-stderr-to-stdout", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("display-devel-map", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("display-topo", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("report-bindings", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("display-devel-allocation", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("display-map", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("display-allocation", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("nolocal", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("oversubscribe", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("nooversubscribe", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("use-hwthread-cpus", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("cpu-set", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("cpu-list", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("--bind-to-core", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("bynode", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("bycore", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("byslot", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("cpus-per-proc", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("cpus-per-rank", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("npernode", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("pernode", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("npersocket", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("ppr", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("amca", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("am", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("rankfile", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("output-proctable", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("debug", PRTE_ARG_NONE),
+    PMIX_OPTION_DEFINE("mca", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("gmca", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("xml", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("tag-output", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("timestamp-output", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("output-directory", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("output-filename", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("merge-stderr-to-stdout", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-devel-map", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-topo", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("report-bindings", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-devel-allocation", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-map", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-allocation", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("nolocal", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("oversubscribe", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("nooversubscribe", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("use-hwthread-cpus", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("cpu-set", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("cpu-list", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("--bind-to-core", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("bynode", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("bycore", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("byslot", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("cpus-per-proc", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("cpus-per-rank", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("npernode", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("pernode", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("npersocket", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("ppr", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("amca", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("am", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("rankfile", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("output-proctable", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
 
-    PRTE_OPTION_END
+    PMIX_OPTION_END
 };
 static char *ompishorts = "h::vVpn:c:N:sH:x:";
 
-static int convert_deprecated_cli(prte_cli_result_t *results,
+static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent);
 
-static int parse_cli(char **argv, prte_cli_result_t *results,
+static int parse_cli(char **argv, pmix_cli_result_t *results,
                      bool silent)
 {
     int rc, n;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
     char *p1;
     char **pargv;
 
     /* backup the argv */
-    pargv = prte_argv_copy(argv);
+    pargv = pmix_argv_copy(argv);
 
     char **caught_single_dashes = NULL;
     int  *caught_positions = NULL;
@@ -278,7 +279,7 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
         if ('-' != pargv[n][1] && 2 < strlen(pargv[n])) {
             /* we know this is incorrect */
             char *p2 = pargv[n];
-            prte_asprintf(&pargv[n], "-%s", p2);
+            pmix_asprintf(&pargv[n], "-%s", p2);
             if(warn) {
                 caught_single_dashes[cur_caught_pos] = strdup(p2);
                 caught_positions[cur_caught_pos++] = n;
@@ -292,16 +293,16 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
     // If the user is using prterun --personality ompi, these
     // won't be set, and thus this is not mpirun/mpiexec.
     if(tool_version && tool_name) {
-        prte_tool_version  = (char*)tool_version;
-        prte_tool_basename = (char*)tool_name;
-        prte_tool_org      = "Open MPI";
-        prte_tool_msg      = "Report bugs to https://www.open-mpi.org/community/help/";
+        pmix_tool_version  = tool_version;
+        pmix_tool_basename = tool_name;
+        pmix_tool_org      = "Open MPI";
+        pmix_tool_msg      = "Report bugs to https://www.open-mpi.org/community/help/";
     }
 
-    rc = prte_cmd_line_parse(pargv, ompishorts, ompioptions, NULL,
+    rc = pmix_cmd_line_parse(pargv, ompishorts, ompioptions, NULL,
                              results, "help-schizo-ompi.txt");
     if (PMIX_SUCCESS != rc) {
-        prte_argv_free(pargv);
+        pmix_argv_free(pargv);
         if(warn) {
             for(n = 0; n < cur_caught_pos; n++) {
                 free(caught_single_dashes[n]);
@@ -339,16 +340,16 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
                 // Multiple offending single dashes case. Append and free.
                 if(orig_args && corrected_args) {
                     char *tmp = orig_args;
-                    prte_asprintf(&orig_args, "%s, %s", tmp, caught_single_dashes[n]);
+                    pmix_asprintf(&orig_args, "%s, %s", tmp, caught_single_dashes[n]);
                     free(tmp);
                     tmp = corrected_args;
-                    prte_asprintf(&corrected_args, "%s, -%s", tmp, caught_single_dashes[n]);
+                    pmix_asprintf(&corrected_args, "%s, -%s", tmp, caught_single_dashes[n]);
                     free(tmp);
                 }
                 else {
                     // First case.
-                    prte_asprintf(&orig_args, "%s", caught_single_dashes[n]);
-                    prte_asprintf(&corrected_args, "-%s", caught_single_dashes[n]);
+                    pmix_asprintf(&orig_args, "%s", caught_single_dashes[n]);
+                    pmix_asprintf(&corrected_args, "-%s", caught_single_dashes[n]);
                 }
             }
             else {
@@ -356,7 +357,7 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
             }
         }
         if(orig_args && corrected_args) {
-            prte_show_help("help-schizo-base.txt", "single-dash-error", true,
+            pmix_show_help("help-schizo-base.txt", "single-dash-error", true,
                             orig_args, corrected_args);
             free(orig_args);
             free(corrected_args);
@@ -376,7 +377,7 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
     }
 
     // handle relevant MCA params
-    PRTE_LIST_FOREACH(opt, &results->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH(opt, &results->instances, pmix_cli_item_t) {
         if (0 == strcmp(opt->key, PRTE_CLI_PRTEMCA)) {
             for (n=0; NULL != opt->values[n]; n++) {
                 p1 = opt->values[n];
@@ -432,8 +433,8 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
             if (0 == strcmp(results->tail[0], argv[n])) {
                 /* this starts the tail - replace the rest of the
                  * tail with the original argv */
-                prte_argv_free(results->tail);
-                results->tail = prte_argv_copy(&argv[n]);
+                pmix_argv_free(results->tail);
+                results->tail = pmix_argv_copy(&argv[n]);
                 break;
             }
         }
@@ -442,12 +443,12 @@ static int parse_cli(char **argv, prte_cli_result_t *results,
     return PRTE_SUCCESS;
 };
 
-static int convert_deprecated_cli(prte_cli_result_t *results,
+static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent)
 {
     char *option, *p1, *p2, *tmp, *tmp2, *output, *modifier;
     int rc = PRTE_SUCCESS;
-    prte_cli_item_t *opt, *nxt;
+    pmix_cli_item_t *opt, *nxt;
     prte_value_t *pval, val;
     bool warn;
 
@@ -457,241 +458,241 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
         warn = prte_schizo_ompi_component.warn_deprecations;
     }
 
-    PRTE_LIST_FOREACH_SAFE(opt, nxt, &results->instances, prte_cli_item_t) {
+    PMIX_LIST_FOREACH_SAFE(opt, nxt, &results->instances, pmix_cli_item_t) {
         option = opt->key;
         if (0 == strcmp(option, "n")) {
             /* if they passed a "--n" option, we need to convert it
              * back to the "--np" one without a deprecation warning */
             rc = prte_schizo_base_add_directive(results, option, PRTE_CLI_NP, opt->values[0], false);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --nolocal -> --map-by :nolocal */
         else if (0 == strcmp(option, "nolocal")) {
             rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_NOLOCAL,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --oversubscribe -> --map-by :OVERSUBSCRIBE */
         else if (0 == strcmp(option, "oversubscribe")) {
             rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_OVERSUB,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --nooversubscribe -> --map-by :NOOVERSUBSCRIBE */
         else if (0 == strcmp(option, "nooversubscribe")) {
             rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_NOOVER,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --use-hwthread-cpus -> --bind-to hwthread */
         else if (0 == strcmp(option, "use-hwthread-cpus")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_BINDTO, PRTE_CLI_HWT,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --cpu-set and --cpu-list -> --map-by pe-list:X
          */
         else if (0 == strcmp(option, "cpu-set") || 0 == strcmp(option, "cpu-list")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_PELIST, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_PELIST, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
             free(p2);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --bind-to-core and --bind-to-socket -> --bind-to X */
         else if (0 == strcmp(option, "bind-to-core")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_BINDTO, PRTE_CLI_CORE,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         } else if (0 == strcmp(option, "bind-to-socket")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_BINDTO, PRTE_CLI_PACKAGE,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --bynode -> "--map-by X --rank-by X" */
         else if (0 == strcmp(option, "bynode")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_NODE,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --bycore -> "--map-by X --rank-by X" */
         else if (0 == strcmp(option, "bycore")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_CORE,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --byslot -> "--map-by X --rank-by X" */
         else if (0 == strcmp(option, "byslot")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_SLOT,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --cpus-per-proc/rank X -> --map-by :pe=X */
         else if (0 == strcmp(option, "cpus-per-proc") || 0 == strcmp(option, "cpus-per-rank")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_PE, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_PE, opt->values[0]);
             rc = prte_schizo_base_add_qualifier(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
             free(p2);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* -N ->   map-by ppr:N:node */
         else if (0 == strcmp(option, "N")) {
-            prte_asprintf(&p2, "ppr:%s:node", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s:node", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
             free(p2);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --npernode X and --npersocket X -> --map-by ppr:X:node/socket */
         else if (0 == strcmp(option, "npernode")) {
-            prte_asprintf(&p2, "ppr:%s:node", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s:node", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
             free(p2);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         } else if (0 == strcmp(option, "pernode")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, "ppr:1:node",
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         } else if (0 == strcmp(option, "npersocket")) {
-            prte_asprintf(&p2, "ppr:%s:package", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s:package", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
             free(p2);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --ppr X -> --map-by ppr:X */
         else if (0 == strcmp(option, "ppr")) {
             /* if they didn't specify a complete pattern, then this is an error */
             if (NULL == strchr(opt->values[0], ':')) {
-                prte_show_help("help-schizo-base.txt", "bad-ppr", true, opt->values[0], true);
+                pmix_show_help("help-schizo-base.txt", "bad-ppr", true, opt->values[0], true);
                 return PRTE_ERR_SILENT;
             }
-            prte_asprintf(&p2, "ppr:%s", opt->values[0]);
+            pmix_asprintf(&p2, "ppr:%s", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_MAPBY, p2,
                                                 warn);
             free(p2);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --am[ca] X -> --tune X */
         else if (0 == strcmp(option, "amca") || 0 == strcmp(option, "am")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_TUNE, opt->values[0],
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --rankfile X -> map-by rankfile:file=X */
         else if (0 == strcmp(option, "rankfile")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option, PRTE_CLI_MAPBY, p2, true);
             free(p2);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --tag-output  ->  "--output tag */
         else if (0 == strcmp(option, "tag-output")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, PRTE_CLI_TAG,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --timestamp-output  ->  --output timestamp */
         else if (0 == strcmp(option, "timestamp-output")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, PRTE_CLI_TIMESTAMP,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --output-directory DIR  ->  --output dir=DIR */
         else if (0 == strcmp(option, "output-directory")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_QDIR, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_QDIR, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, p2,
                                                 warn);
             free(p2);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --output-filename DIR  ->  --output file=file */
         else if (0 == strcmp(option, "output-filename")) {
-            prte_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
+            pmix_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, p2,
                                                 warn);
             free(p2);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --xml  ->  --output xml */
         else if (0 == strcmp(option, "xml")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_OUTPUT, PRTE_CLI_XML,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --display-devel-map  -> --display allocation-devel */
         else if (0 == strcmp(option, "display-devel-map")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_MAPDEV,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --output-proctable  ->  --display map-devel */
         else if (0 == strcmp(option, "output-proctable")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_MAPDEV,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --display-map  ->  --display map */
         else if (0 == strcmp(option, "display-map")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_MAP,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --display-topo  ->  --display topo */
         else if (0 == strcmp(option, "display-topo")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_TOPO,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --report-bindings  ->  --display bind */
         else if (0 == strcmp(option, "report-bindings")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_BIND,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --display-allocation  ->  --display allocation */
         else if (0 == strcmp(option, "display-allocation")) {
             rc = prte_schizo_base_add_directive(results, option,
                                                 PRTE_CLI_DISPLAY, PRTE_CLI_ALLOC,
                                                 warn);
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --debug will be deprecated starting with open mpi v5
          */
         else if (0 == strcmp(option, "debug")) {
             if (warn) {
-                prte_show_help("help-schizo-base.txt", "deprecated-inform", true, option,
+                pmix_show_help("help-schizo-base.txt", "deprecated-inform", true, option,
                                "This CLI option will be deprecated starting in Open MPI v5");
             }
-            PRTE_CLI_REMOVE_DEPRECATED(results, opt);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
        }
         /* --map-by socket ->  --map-by package */
         else if (0 == strcmp(option, PRTE_CLI_MAPBY)) {
@@ -705,13 +706,13 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                 } else {
                     *p2 = '\0';
                     ++p2;
-                    prte_asprintf(&tmp, "%s:%s", PRTE_CLI_PACKAGE, p2);
+                    pmix_asprintf(&tmp, "%s:%s", PRTE_CLI_PACKAGE, p2);
                 }
                 if (warn) {
-                    prte_asprintf(&p2, "%s %s", option, p1);
-                    prte_asprintf(&tmp2, "%s %s", option, tmp);
+                    pmix_asprintf(&p2, "%s %s", option, p1);
+                    pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
-                    output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                    output = pmix_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
                     fprintf(stderr, "%s\n", output);
                     free(output);
@@ -735,13 +736,13 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                 } else {
                     *p2 = '\0';
                     ++p2;
-                    prte_asprintf(&tmp, "package:%s", p2);
+                    pmix_asprintf(&tmp, "package:%s", p2);
                 }
                 if (warn) {
-                    prte_asprintf(&p2, "%s %s", option, p1);
-                    prte_asprintf(&tmp2, "%s %s", option, tmp);
+                    pmix_asprintf(&p2, "%s %s", option, p1);
+                    pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
-                    output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                    output = pmix_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
                     fprintf(stderr, "%s\n", output);
                     free(output);
@@ -765,13 +766,13 @@ static int convert_deprecated_cli(prte_cli_result_t *results,
                 } else {
                     *p2 = '\0';
                     ++p2;
-                    prte_asprintf(&tmp, "%s:%s", PRTE_CLI_PACKAGE, p2);
+                    pmix_asprintf(&tmp, "%s:%s", PRTE_CLI_PACKAGE, p2);
                 }
                 if (warn) {
-                    prte_asprintf(&p2, "%s %s", option, p1);
-                    prte_asprintf(&tmp2, "%s %s", option, tmp);
+                    pmix_asprintf(&p2, "%s %s", option, p1);
+                    pmix_asprintf(&tmp2, "%s %s", option, tmp);
                     /* can't just call show_help as we want every instance to be reported */
-                    output = prte_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
+                    output = pmix_show_help_string("help-schizo-base.txt", "deprecated-converted", true, p2,
                                                    tmp2);
                     fprintf(stderr, "%s\n", output);
                     free(output);
@@ -808,7 +809,7 @@ static int check_cache_noadd(char ***c1, char ***c2, char *p1, char *p2)
                 /* we do have it - check for same value */
                 if (0 != strcmp(cachevals[k], p2)) {
                     /* this is an error */
-                    prte_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
+                    pmix_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
                                    cachevals[k]);
                     return PRTE_ERR_BAD_PARAM;
                 }
@@ -826,8 +827,8 @@ static int check_cache(char ***c1, char ***c2, char *p1, char *p2)
 
     if (PRTE_SUCCESS == rc) {
         /* add them to the cache */
-        prte_argv_append_nosize(c1, p1);
-        prte_argv_append_nosize(c2, p2);
+        pmix_argv_append_nosize(c1, p1);
+        pmix_argv_append_nosize(c2, p2);
     }
     return rc;
 }
@@ -887,7 +888,7 @@ static int process_envar(const char *p, char ***cache, char ***cachevals)
                     }
                 }
                 if (!found) {
-                    prte_show_help("help-schizo-base.txt", "env-not-found", true, p1);
+                    pmix_show_help("help-schizo-base.txt", "env-not-found", true, p1);
                     rc = PRTE_ERR_NOT_FOUND;
                 }
             }
@@ -937,7 +938,7 @@ static int process_env_list(const char *env_list, char ***xparams, char ***xvals
     char **tokens;
     int rc = PRTE_SUCCESS;
 
-    tokens = prte_argv_split(env_list, (int) sep);
+    tokens = pmix_argv_split(env_list, (int) sep);
     if (NULL == tokens) {
         return PRTE_SUCCESS;
     }
@@ -946,14 +947,14 @@ static int process_env_list(const char *env_list, char ***xparams, char ***xvals
         rc = process_token(tokens[i], xparams, xvals);
         if (PRTE_SUCCESS != rc) {
             if (PRTE_ERR_NOT_FOUND == rc) {
-                prte_show_help("help-schizo-base.txt", "incorrect-env-list-param", true, tokens[i],
+                pmix_show_help("help-schizo-base.txt", "incorrect-env-list-param", true, tokens[i],
                                env_list);
             }
             break;
         }
     }
 
-    prte_argv_free(tokens);
+    pmix_argv_free(tokens);
     return rc;
 }
 
@@ -965,7 +966,7 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
     char **cache = NULL, **cachevals = NULL;
     char **xparams = NULL, **xvals = NULL;
 
-    tmp = prte_argv_split(filename, sep);
+    tmp = pmix_argv_split(filename, sep);
     if (NULL == tmp) {
         return PRTE_SUCCESS;
     }
@@ -977,27 +978,27 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         fp = fopen(tmp[i], "r");
         if (NULL == fp) {
             /* if the file given wasn't absolute, check in the default location */
-            if (!prte_path_is_absolute(tmp[i])) {
-                p1 = prte_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
+            if (!pmix_path_is_absolute(tmp[i])) {
+                p1 = pmix_os_path(false, DEFAULT_PARAM_FILE_PATH, tmp[i], NULL);
                 fp = fopen(p1, "r");
                 if (NULL == fp) {
-                    prte_show_help("help-schizo-base.txt", "missing-param-file-def", true, tmp[i], p1);;
-                    prte_argv_free(tmp);
-                    prte_argv_free(cache);
-                    prte_argv_free(cachevals);
-                    prte_argv_free(xparams);
-                    prte_argv_free(xvals);
+                    pmix_show_help("help-schizo-base.txt", "missing-param-file-def", true, tmp[i], p1);;
+                    pmix_argv_free(tmp);
+                    pmix_argv_free(cache);
+                    pmix_argv_free(cachevals);
+                    pmix_argv_free(xparams);
+                    pmix_argv_free(xvals);
                     free(p1);
                     return PRTE_ERR_NOT_FOUND;
                 }
                 free(p1);
             } else {
-                prte_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);;
-                prte_argv_free(tmp);
-                prte_argv_free(cache);
-                prte_argv_free(cachevals);
-                prte_argv_free(xparams);
-                prte_argv_free(xvals);
+                pmix_show_help("help-schizo-base.txt", "missing-param-file", true, tmp[i]);;
+                pmix_argv_free(tmp);
+                pmix_argv_free(cache);
+                pmix_argv_free(cachevals);
+                pmix_argv_free(xparams);
+                pmix_argv_free(xvals);
                 return PRTE_ERR_NOT_FOUND;
             }
         }
@@ -1005,15 +1006,15 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
             if ('\0' == line[0]) {
                 continue; /* skip empty lines */
             }
-            opts = prte_argv_split_with_empty(line, ' ');
+            opts = pmix_argv_split_with_empty(line, ' ');
             if (NULL == opts) {
-                prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
+                pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i], line);
                 free(line);
-                prte_argv_free(tmp);
-                prte_argv_free(cache);
-                prte_argv_free(cachevals);
-                prte_argv_free(xparams);
-                prte_argv_free(xvals);
+                pmix_argv_free(tmp);
+                pmix_argv_free(cache);
+                pmix_argv_free(cachevals);
+                pmix_argv_free(xparams);
+                pmix_argv_free(xvals);
                 fclose(fp);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -1025,15 +1026,15 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                 if (0 == strcmp(opts[n], "-x")) {
                     /* the next value must be the envar */
                     if (NULL == opts[n + 1]) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                        pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         free(line);
-                        prte_argv_free(tmp);
-                        prte_argv_free(opts);
-                        prte_argv_free(cache);
-                        prte_argv_free(cachevals);
-                        prte_argv_free(xparams);
-                        prte_argv_free(xvals);
+                        pmix_argv_free(tmp);
+                        pmix_argv_free(opts);
+                        pmix_argv_free(cache);
+                        pmix_argv_free(cachevals);
+                        pmix_argv_free(xparams);
+                        pmix_argv_free(xvals);
                         fclose(fp);
                         return PRTE_ERR_BAD_PARAM;
                     }
@@ -1043,20 +1044,20 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                      * the battle to correct their error, try to accommodate it here */
                     if (NULL != opts[n + 2] && 0 == strcmp(opts[n + 2], "=")) {
                         if (NULL == opts[n + 3]) {
-                            prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                            pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                            line);
                             free(line);
-                            prte_argv_free(tmp);
-                            prte_argv_free(opts);
-                            prte_argv_free(cache);
-                            prte_argv_free(cachevals);
-                            prte_argv_free(xparams);
-                            prte_argv_free(xvals);
+                            pmix_argv_free(tmp);
+                            pmix_argv_free(opts);
+                            pmix_argv_free(cache);
+                            pmix_argv_free(cachevals);
+                            pmix_argv_free(xparams);
+                            pmix_argv_free(xvals);
                             fclose(fp);
                             return PRTE_ERR_BAD_PARAM;
                         }
                         p2 = prte_schizo_base_strip_quotes(opts[n + 3]);
-                        prte_asprintf(&param, "%s=%s", p1, p2);
+                        pmix_asprintf(&param, "%s=%s", p1, p2);
                         free(p1);
                         free(p2);
                         p1 = param;
@@ -1066,27 +1067,27 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     free(p1);
                     if (PRTE_SUCCESS != rc) {
                         fclose(fp);
-                        prte_argv_free(tmp);
-                        prte_argv_free(opts);
-                        prte_argv_free(cache);
-                        prte_argv_free(cachevals);
-                        prte_argv_free(xparams);
-                        prte_argv_free(xvals);
+                        pmix_argv_free(tmp);
+                        pmix_argv_free(opts);
+                        pmix_argv_free(cache);
+                        pmix_argv_free(cachevals);
+                        pmix_argv_free(xparams);
+                        pmix_argv_free(xvals);
                         free(line);
                         return rc;
                     }
                     ++n; // skip over the envar option
                 } else if (0 == strcmp(opts[n], "--mca")) {
                     if (NULL == opts[n + 1] || NULL == opts[n + 2]) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                        pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         free(line);
-                        prte_argv_free(tmp);
-                        prte_argv_free(opts);
-                        prte_argv_free(cache);
-                        prte_argv_free(cachevals);
-                        prte_argv_free(xparams);
-                        prte_argv_free(xvals);
+                        pmix_argv_free(tmp);
+                        pmix_argv_free(opts);
+                        pmix_argv_free(cache);
+                        pmix_argv_free(cachevals);
+                        pmix_argv_free(xparams);
+                        pmix_argv_free(xvals);
                         fclose(fp);
                         return PRTE_ERR_BAD_PARAM;
                     }
@@ -1103,12 +1104,12 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     free(p2);
                     if (PRTE_SUCCESS != rc) {
                         fclose(fp);
-                        prte_argv_free(tmp);
-                        prte_argv_free(opts);
-                        prte_argv_free(cache);
-                        prte_argv_free(cachevals);
-                        prte_argv_free(xparams);
-                        prte_argv_free(xvals);
+                        pmix_argv_free(tmp);
+                        pmix_argv_free(opts);
+                        pmix_argv_free(cache);
+                        pmix_argv_free(cachevals);
+                        pmix_argv_free(xparams);
+                        pmix_argv_free(xvals);
                         free(line);
                         return rc;
                     }
@@ -1117,15 +1118,15 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     /* find the equal sign */
                     p1 = strchr(opts[n], '=');
                     if (NULL == p1) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                        pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         free(line);
-                        prte_argv_free(tmp);
-                        prte_argv_free(opts);
-                        prte_argv_free(cache);
-                        prte_argv_free(cachevals);
-                        prte_argv_free(xparams);
-                        prte_argv_free(xvals);
+                        pmix_argv_free(tmp);
+                        pmix_argv_free(opts);
+                        pmix_argv_free(cache);
+                        pmix_argv_free(cachevals);
+                        pmix_argv_free(xparams);
+                        pmix_argv_free(xvals);
                         fclose(fp);
                         return PRTE_ERR_BAD_PARAM;
                     }
@@ -1133,27 +1134,27 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
                     rc = process_env_list(p1, &xparams, &xvals, ';');
                     if (PRTE_SUCCESS != rc) {
                         fclose(fp);
-                        prte_argv_free(tmp);
-                        prte_argv_free(opts);
-                        prte_argv_free(cache);
-                        prte_argv_free(cachevals);
-                        prte_argv_free(xparams);
-                        prte_argv_free(xvals);
+                        pmix_argv_free(tmp);
+                        pmix_argv_free(opts);
+                        pmix_argv_free(cache);
+                        pmix_argv_free(cachevals);
+                        pmix_argv_free(xparams);
+                        pmix_argv_free(xvals);
                         free(line);
                         return rc;
                     }
                 } else {
                     rc = process_token(opts[n], &cache, &cachevals);
                     if (PRTE_SUCCESS != rc) {
-                        prte_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
+                        pmix_show_help("help-schizo-base.txt", "bad-param-line", true, tmp[i],
                                        line);
                         fclose(fp);
-                        prte_argv_free(tmp);
-                        prte_argv_free(opts);
-                        prte_argv_free(cache);
-                        prte_argv_free(cachevals);
-                        prte_argv_free(xparams);
-                        prte_argv_free(xvals);
+                        pmix_argv_free(tmp);
+                        pmix_argv_free(opts);
+                        pmix_argv_free(cache);
+                        pmix_argv_free(cachevals);
+                        pmix_argv_free(xparams);
+                        pmix_argv_free(xvals);
                         free(line);
                         return rc;
                     }
@@ -1164,30 +1165,30 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
         fclose(fp);
     }
 
-    prte_argv_free(tmp);
+    pmix_argv_free(tmp);
 
     if (NULL != cache) {
         /* add the results into dstenv */
         for (i = 0; NULL != cache[i]; i++) {
             if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
-                prte_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
-                prte_setenv(p1, cachevals[i], true, dstenv);
+                pmix_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
+                pmix_setenv(p1, cachevals[i], true, dstenv);
                 free(p1);
             } else {
-                prte_setenv(cache[i], cachevals[i], true, dstenv);
+                pmix_setenv(cache[i], cachevals[i], true, dstenv);
             }
         }
-        prte_argv_free(cache);
-        prte_argv_free(cachevals);
+        pmix_argv_free(cache);
+        pmix_argv_free(cachevals);
     }
 
     /* add the -x values */
     if (NULL != xparams) {
         for (i = 0; NULL != xparams[i]; i++) {
-            prte_setenv(xparams[i], xvals[i], true, dstenv);
+            pmix_setenv(xparams[i], xvals[i], true, dstenv);
         }
-        prte_argv_free(xparams);
-        prte_argv_free(xvals);
+        pmix_argv_free(xparams);
+        pmix_argv_free(xvals);
     }
 
     return PRTE_SUCCESS;
@@ -1265,14 +1266,14 @@ static bool check_generic(char *p1)
 }
 
 static int parse_env(char **srcenv, char ***dstenv,
-                     prte_cli_result_t *results)
+                     pmix_cli_result_t *results)
 {
     char *p1, *p2, *p3;
     char *env_set_flag;
     char **cache = NULL, **cachevals = NULL;
     char **xparams = NULL, **xvals = NULL;
     char **envlist = NULL, **envtgt = NULL;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
     int i, j, rc;
 
     prte_output_verbose(1, prte_schizo_base_framework.framework_output,
@@ -1289,26 +1290,26 @@ static int parse_env(char **srcenv, char ***dstenv,
     if (NULL != env_set_flag) {
         rc = process_env_list(env_set_flag, &xparams, &xvals, ';');
         if (PRTE_SUCCESS != rc) {
-            prte_argv_free(xparams);
-            prte_argv_free(xvals);
+            pmix_argv_free(xparams);
+            pmix_argv_free(xvals);
             return rc;
         }
     }
     /* process the resulting cache into the dstenv */
     if (NULL != xparams) {
         for (i = 0; NULL != xparams[i]; i++) {
-            prte_setenv(xparams[i], xvals[i], true, dstenv);
+            pmix_setenv(xparams[i], xvals[i], true, dstenv);
         }
-        prte_argv_free(xparams);
+        pmix_argv_free(xparams);
         xparams = NULL;
-        prte_argv_free(xvals);
+        pmix_argv_free(xvals);
         xvals = NULL;
     }
 
     /* now process any tune file specification - the tune file processor
      * will police itself for duplicate values */
-    if (NULL != (opt = prte_cmd_line_get_param(results, "tune"))) {
-        p1 = prte_argv_join(opt->values, ',');
+    if (NULL != (opt = pmix_cmd_line_get_param(results, "tune"))) {
+        p1 = pmix_argv_join(opt->values, ',');
         rc = process_tune_files(p1, dstenv, ',');
         free(p1);
         if (PRTE_SUCCESS != rc) {
@@ -1316,28 +1317,28 @@ static int parse_env(char **srcenv, char ***dstenv,
         }
     }
 
-    if (NULL != (opt = prte_cmd_line_get_param(results, "initial-errhandler"))) {
+    if (NULL != (opt = pmix_cmd_line_get_param(results, "initial-errhandler"))) {
         rc = check_cache(&cache, &cachevals, "mpi_initial_errhandler", opt->values[0]);
         if (PRTE_SUCCESS != rc) {
-            prte_argv_free(cache);
-            prte_argv_free(cachevals);
+            pmix_argv_free(cache);
+            pmix_argv_free(cachevals);
             return rc;
         }
     }
 
-    if (prte_cmd_line_is_taken(results, "display-comm") &&
-        prte_cmd_line_is_taken(results, "display-comm-finalize")) {
-        prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_init,mpi_finalize", true, dstenv);
-    } else if (prte_cmd_line_is_taken(results, "display-comm")) {
-        prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_init", true, dstenv);
-    } else if (prte_cmd_line_is_taken(results, "display-comm-finalize")) {
-        prte_setenv("OMPI_MCA_ompi_display_comm", "mpi_finalize", true, dstenv);
+    if (pmix_cmd_line_is_taken(results, "display-comm") &&
+        pmix_cmd_line_is_taken(results, "display-comm-finalize")) {
+        pmix_setenv("OMPI_MCA_ompi_display_comm", "mpi_init,mpi_finalize", true, dstenv);
+    } else if (pmix_cmd_line_is_taken(results, "display-comm")) {
+        pmix_setenv("OMPI_MCA_ompi_display_comm", "mpi_init", true, dstenv);
+    } else if (pmix_cmd_line_is_taken(results, "display-comm-finalize")) {
+        pmix_setenv("OMPI_MCA_ompi_display_comm", "mpi_finalize", true, dstenv);
     }
 
     /* now look for any "--mca" options - note that it is an error
      * for the same MCA param to be given more than once if the
      * values differ */
-    if (NULL != (opt = prte_cmd_line_get_param(results, "omca"))) {
+    if (NULL != (opt = pmix_cmd_line_get_param(results, "omca"))) {
         for (i = 0; NULL != opt->values[i]; ++i) {
             /* the value is provided in "param=value" format, so
              * we need to split it here - it is okay to change
@@ -1348,18 +1349,18 @@ static int parse_env(char **srcenv, char ***dstenv,
             p1 = opt->values[i];
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
-                prte_argv_append_nosize(&envlist, p3);
+                pmix_argv_append_nosize(&envlist, p3);
                 continue;
             }
             rc = check_cache(&cache, &cachevals, p1, p3);
             if (PRTE_SUCCESS != rc) {
-                prte_argv_free(cache);
-                prte_argv_free(cachevals);
+                pmix_argv_free(cache);
+                pmix_argv_free(cachevals);
                 return rc;
             }
         }
     }
-    if (NULL != (opt = prte_cmd_line_get_param(results, "gomca"))) {
+    if (NULL != (opt = pmix_cmd_line_get_param(results, "gomca"))) {
         for (i = 0; NULL != opt->values[i]; ++i) {
             /* the value is provided in "param=value" format, so
              * we need to split it here - it is okay to change
@@ -1370,18 +1371,18 @@ static int parse_env(char **srcenv, char ***dstenv,
             p1 = opt->values[i];
             /* treat mca_base_env_list as a special case */
             if (0 == strcmp(p1, "mca_base_env_list")) {
-                prte_argv_append_nosize(&envlist, p3);
+                pmix_argv_append_nosize(&envlist, p3);
                 continue;
             }
             rc = check_cache(&cache, &cachevals, p1, p3);
             if (PRTE_SUCCESS != rc) {
-                prte_argv_free(cache);
-                prte_argv_free(cachevals);
+                pmix_argv_free(cache);
+                pmix_argv_free(cachevals);
                 return rc;
             }
         }
     }
-    if (NULL != (opt = prte_cmd_line_get_param(results, "mca"))) {
+    if (NULL != (opt = pmix_cmd_line_get_param(results, "mca"))) {
         for (i = 0; NULL != opt->values[i]; ++i) {
             /* the value is provided in "param=value" format, so
              * we need to split it here - it is okay to change
@@ -1394,20 +1395,20 @@ static int parse_env(char **srcenv, char ***dstenv,
             if (check_generic(p1)) {
                 /* treat mca_base_env_list as a special case */
                 if (0 == strcmp(p1, "mca_base_env_list")) {
-                    prte_argv_append_nosize(&envlist, p3);
+                    pmix_argv_append_nosize(&envlist, p3);
                     continue;
                 }
                 rc = check_cache(&cache, &cachevals, p1, p3);
                 if (PRTE_SUCCESS != rc) {
-                    prte_argv_free(cache);
-                    prte_argv_free(cachevals);
-                    prte_argv_free(envlist);
+                    pmix_argv_free(cache);
+                    pmix_argv_free(cachevals);
+                    pmix_argv_free(envlist);
                     return rc;
                 }
             }
         }
     }
-    if (NULL != (opt = prte_cmd_line_get_param(results, "gmca"))) {
+    if (NULL != (opt = pmix_cmd_line_get_param(results, "gmca"))) {
         for (i = 0; NULL != opt->values[i]; ++i) {
             /* the value is provided in "param=value" format, so
              * we need to split it here - it is okay to change
@@ -1420,14 +1421,14 @@ static int parse_env(char **srcenv, char ***dstenv,
             if (check_generic(p1)) {
                 /* treat mca_base_env_list as a special case */
                 if (0 == strcmp(p1, "mca_base_env_list")) {
-                    prte_argv_append_nosize(&envlist, p3);
+                    pmix_argv_append_nosize(&envlist, p3);
                     continue;
                 }
                 rc = check_cache(&cache, &cachevals, p1, p3);
                 if (PRTE_SUCCESS != rc) {
-                    prte_argv_free(cache);
-                    prte_argv_free(cachevals);
-                    prte_argv_free(envlist);
+                    pmix_argv_free(cache);
+                    pmix_argv_free(cachevals);
+                    pmix_argv_free(envlist);
                     return rc;
                 }
             }
@@ -1437,7 +1438,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     /* if we got any env lists, process them here */
     if (NULL != envlist) {
         for (i = 0; NULL != envlist[i]; i++) {
-            envtgt = prte_argv_split(envlist[i], ';');
+            envtgt = pmix_argv_split(envlist[i], ';');
             for (j = 0; NULL != envtgt[j]; j++) {
                 if (NULL == (p2 = strchr(envtgt[j], '='))) {
                     p1 = getenv(envtgt[j]);
@@ -1453,31 +1454,31 @@ static int parse_env(char **srcenv, char ***dstenv,
                     }
                     free(p1);
                     if (PRTE_SUCCESS != rc) {
-                        prte_argv_free(cache);
-                        prte_argv_free(cachevals);
-                        prte_argv_free(envtgt);
-                        prte_argv_free(envlist);
+                        pmix_argv_free(cache);
+                        pmix_argv_free(cachevals);
+                        pmix_argv_free(envtgt);
+                        pmix_argv_free(envlist);
                         return rc;
                     }
                 } else {
                     *p2 = '\0';
                     rc = check_cache(&xparams, &xvals, envtgt[j], p2 + 1);
                     if (PRTE_SUCCESS != rc) {
-                        prte_argv_free(cache);
-                        prte_argv_free(cachevals);
-                        prte_argv_free(envtgt);
-                        prte_argv_free(envlist);
+                        pmix_argv_free(cache);
+                        pmix_argv_free(cachevals);
+                        pmix_argv_free(envtgt);
+                        pmix_argv_free(envlist);
                         return rc;
                     }
                 }
             }
-            prte_argv_free(envtgt);
+            pmix_argv_free(envtgt);
         }
     }
-    prte_argv_free(envlist);
+    pmix_argv_free(envlist);
 
     /* now look for -x options - not allowed to conflict with a -mca option */
-    if (NULL != (opt = prte_cmd_line_get_param(results, "x"))) {
+    if (NULL != (opt = pmix_cmd_line_get_param(results, "x"))) {
         for (i = 0; NULL != opt->values[i]; ++i) {
             /* the value is the envar */
             p1 = opt->values[i];
@@ -1494,15 +1495,15 @@ static int parse_env(char **srcenv, char ***dstenv,
             /* not allowed to duplicate anything from an MCA param on the cmd line */
             rc = check_cache_noadd(&cache, &cachevals, p1, p2);
             if (PRTE_SUCCESS != rc) {
-                prte_argv_free(cache);
-                prte_argv_free(cachevals);
-                prte_argv_free(xparams);
-                prte_argv_free(xvals);
+                pmix_argv_free(cache);
+                pmix_argv_free(cachevals);
+                pmix_argv_free(xparams);
+                pmix_argv_free(xvals);
                 return rc;
             }
             /* cache this for later inclusion */
-            prte_argv_append_nosize(&xparams, p1);
-            prte_argv_append_nosize(&xvals, p2);
+            pmix_argv_append_nosize(&xparams, p1);
+            pmix_argv_append_nosize(&xvals, p2);
         }
     }
 
@@ -1510,24 +1511,24 @@ static int parse_env(char **srcenv, char ***dstenv,
     if (NULL != cache) {
         for (i = 0; NULL != cache[i]; i++) {
             if (0 != strncmp(cache[i], "OMPI_MCA_", strlen("OMPI_MCA_"))) {
-                prte_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
-                prte_setenv(p1, cachevals[i], true, dstenv);
+                pmix_asprintf(&p1, "OMPI_MCA_%s", cache[i]);
+                pmix_setenv(p1, cachevals[i], true, dstenv);
                 free(p1);
             } else {
-                prte_setenv(cache[i], cachevals[i], true, dstenv);
+                pmix_setenv(cache[i], cachevals[i], true, dstenv);
             }
         }
     }
-    prte_argv_free(cache);
-    prte_argv_free(cachevals);
+    pmix_argv_free(cache);
+    pmix_argv_free(cachevals);
 
     /* add the -x values */
     if (NULL != xparams) {
         for (i = 0; NULL != xparams[i]; i++) {
-            prte_setenv(xparams[i], xvals[i], true, dstenv);
+            pmix_setenv(xparams[i], xvals[i], true, dstenv);
         }
-        prte_argv_free(xparams);
-        prte_argv_free(xvals);
+        pmix_argv_free(xparams);
+        pmix_argv_free(xvals);
     }
 
     return PRTE_SUCCESS;
@@ -1538,21 +1539,21 @@ static bool check_prte_overlap(char *var, char *value)
     char *tmp;
 
     if (0 == strncmp(var, "dl_", 3)) {
-        prte_asprintf(&tmp, "PRTE_MCA_prtedl_%s", &var[3]);
+        pmix_asprintf(&tmp, "PRTE_MCA_prtedl_%s", &var[3]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "oob_", 4)) {
-        prte_asprintf(&tmp, "PRTE_MCA_%s", var);
+        pmix_asprintf(&tmp, "PRTE_MCA_%s", var);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "hwloc_", 6)) {
-        prte_asprintf(&tmp, "PRTE_MCA_%s", var);
+        pmix_asprintf(&tmp, "PRTE_MCA_%s", var);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1560,7 +1561,7 @@ static bool check_prte_overlap(char *var, char *value)
         return true;
     } else if (0 == strncmp(var, "if_", 3)) {
         // need to convert if to prteif
-        prte_asprintf(&tmp, "PRTE_MCA_prteif_%s", &var[3]);
+        pmix_asprintf(&tmp, "PRTE_MCA_prteif_%s", &var[3]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1568,7 +1569,7 @@ static bool check_prte_overlap(char *var, char *value)
         return true;
     } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
         // need to convert reachable to prtereachable
-        prte_asprintf(&tmp, "PRTE_MCA_prtereachable_%s", &var[strlen("reachable")]);
+        pmix_asprintf(&tmp, "PRTE_MCA_prtereachable_%s", &var[strlen("reachable")]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1584,21 +1585,21 @@ static bool check_pmix_overlap(char *var, char *value)
     char *tmp;
 
     if (0 == strncmp(var, "dl_", 3)) {
-        prte_asprintf(&tmp, "PMIX_MCA_pdl_%s", &var[3]);
+        pmix_asprintf(&tmp, "PMIX_MCA_pdl_%s", &var[3]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "oob_", 4)) {
-        prte_asprintf(&tmp, "PMIX_MCA_ptl_%s", &var[4]);
+        pmix_asprintf(&tmp, "PMIX_MCA_ptl_%s", &var[4]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
         free(tmp);
         return true;
     } else if (0 == strncmp(var, "hwloc_", 6)) {
-        prte_asprintf(&tmp, "PMIX_MCA_%s", var);
+        pmix_asprintf(&tmp, "PMIX_MCA_%s", var);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1606,7 +1607,7 @@ static bool check_pmix_overlap(char *var, char *value)
         return true;
     } else if (0 == strncmp(var, "if_", 3)) {
         // need to convert if to pif
-        prte_asprintf(&tmp, "PMIX_MCA_pif_%s", &var[3]);
+        pmix_asprintf(&tmp, "PMIX_MCA_pif_%s", &var[3]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1614,7 +1615,7 @@ static bool check_pmix_overlap(char *var, char *value)
         return true;
     } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
         // need to convert reachable to preachable
-        prte_asprintf(&tmp, "PMIX_MCA_preachable_%s", &var[strlen("reachable")]);
+        pmix_asprintf(&tmp, "PMIX_MCA_preachable_%s", &var[strlen("reachable")]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
@@ -1632,20 +1633,20 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     int i;
 
     /* flag that we started this job */
-    prte_setenv("PRTE_LAUNCHED", "1", true, &app->env);
+    pmix_setenv("PRTE_LAUNCHED", "1", true, &app->env);
 
     /* now process any envar attributes - we begin with the job-level
      * ones as the app-specific ones can override them. We have to
      * process them in the order they were given to ensure we wind
      * up in the desired final state */
-    PRTE_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t)
+    PMIX_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t)
     {
         if (PRTE_JOB_SET_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
         } else if (PRTE_JOB_ADD_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
         } else if (PRTE_JOB_UNSET_ENVAR == attr->key) {
-            prte_unsetenv(attr->data.data.string, &app->env);
+            pmix_unsetenv(attr->data.data.string, &app->env);
         } else if (PRTE_JOB_PREPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
             exists = false;
@@ -1656,10 +1657,10 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
+                    pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1669,7 +1670,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         } else if (PRTE_JOB_APPEND_ENVAR == attr->key) {
@@ -1682,10 +1683,10 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
+                    pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1695,21 +1696,21 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         }
     }
 
     /* now do the same thing for any app-level attributes */
-    PRTE_LIST_FOREACH(attr, &app->attributes, prte_attribute_t)
+    PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t)
     {
         if (PRTE_APP_SET_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
         } else if (PRTE_APP_ADD_ENVAR == attr->key) {
-            prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
+            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
         } else if (PRTE_APP_UNSET_ENVAR == attr->key) {
-            prte_unsetenv(attr->data.data.string, &app->env);
+            pmix_unsetenv(attr->data.data.string, &app->env);
         } else if (PRTE_APP_PREPEND_ENVAR == attr->key) {
             /* see if the envar already exists */
             exists = false;
@@ -1720,10 +1721,10 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
+                    pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1733,7 +1734,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         } else if (PRTE_APP_APPEND_ENVAR == attr->key) {
@@ -1746,10 +1747,10 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     /* we have the var - prepend it */
                     param = saveptr;
                     ++param; // move past where the '=' sign was
-                    prte_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
+                    pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
-                    prte_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1759,7 +1760,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                prte_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         }
@@ -1774,7 +1775,7 @@ static int detect_proxy(char *personalities)
     char *evar, *tmp, *e2;
     char *file;
     const char *home;
-    prte_list_t params;
+    pmix_list_t params;
     prte_mca_base_var_file_value_t *fv;
     uid_t uid;
     int n, len;
@@ -1839,7 +1840,7 @@ weareit:
                 // check for pmix overlap
                 check_pmix_overlap(&e2[len], evar);
             } else if (prte_schizo_base_check_prte_param(&e2[len])) {
-                    prte_asprintf(&tmp, "PRTE_MCA_%s", &e2[len]);
+                    pmix_asprintf(&tmp, "PRTE_MCA_%s", &e2[len]);
                     // set it, but don't overwrite if they already
                     // have a value in our environment
                     setenv(tmp, evar, false);
@@ -1847,7 +1848,7 @@ weareit:
                     // check for pmix overlap
                     check_pmix_overlap(&e2[len], evar);
             } else if (prte_schizo_base_check_pmix_param(&e2[len])) {
-                prte_asprintf(&tmp, "PMIX_MCA_%s", &e2[len]);
+                pmix_asprintf(&tmp, "PMIX_MCA_%s", &e2[len]);
                 // set it, but don't overwrite if they already
                 // have a value in our environment
                 setenv(tmp, evar, false);
@@ -1861,18 +1862,18 @@ weareit:
     uid = geteuid();
 
     /* try to get their home directory */
-    home = prte_home_directory(uid);
+    home = pmix_home_directory(uid);
     if (NULL != home) {
-        file = prte_os_path(false, home, ".openmpi", "mca-params.conf", NULL);
-        PRTE_CONSTRUCT(&params, prte_list_t);
+        file = pmix_os_path(false, home, ".openmpi", "mca-params.conf", NULL);
+        PMIX_CONSTRUCT(&params, pmix_list_t);
         prte_mca_base_parse_paramfile(file, &params);
         free(file);
-        PRTE_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+        PMIX_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
             // see if this param relates to PRRTE
             if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
             } else if (prte_schizo_base_check_prte_param(fv->mbvfv_var)) {
-                prte_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+                pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
                 // set it, but don't overwrite if they already
                 // have a value in our environment
                 setenv(tmp, fv->mbvfv_value, false);
@@ -1882,29 +1883,29 @@ weareit:
                 // the equivalent PMIx value
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
             } else if (prte_schizo_base_check_pmix_param(fv->mbvfv_var)) {
-                prte_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
+                pmix_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
                 // set it, but don't overwrite if they already
                 // have a value in our environment
                 setenv(tmp, fv->mbvfv_value, false);
                 free(tmp);
             }
         }
-        PRTE_LIST_DESTRUCT(&params);
+        PMIX_LIST_DESTRUCT(&params);
     }
 
     /* check if the user has set OMPIHOME in their environment */
     if (NULL != (evar = getenv("OMPIHOME"))) {
         /* look for the default MCA param file */
-        file = prte_os_path(false, evar, "etc", "openmpi-mca-params.conf", NULL);
-        PRTE_CONSTRUCT(&params, prte_list_t);
+        file = pmix_os_path(false, evar, "etc", "openmpi-mca-params.conf", NULL);
+        PMIX_CONSTRUCT(&params, pmix_list_t);
         prte_mca_base_parse_paramfile(file, &params);
         free(file);
-        PRTE_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+        PMIX_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
             // see if this param relates to PRRTE
             if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
             } else if (prte_schizo_base_check_prte_param(fv->mbvfv_var)) {
-                prte_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+                pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
                 // set it, but don't overwrite if they already
                 // have a value in our environment
                 setenv(tmp, fv->mbvfv_value, false);
@@ -1915,18 +1916,18 @@ weareit:
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
             }
         }
-        PRTE_LIST_DESTRUCT(&params);
+        PMIX_LIST_DESTRUCT(&params);
     }
 
     return 100;
 }
 
-static void allow_run_as_root(prte_cli_result_t *results)
+static void allow_run_as_root(pmix_cli_result_t *results)
 {
     /* we always run last */
     char *r1, *r2;
 
-    if (prte_cmd_line_is_taken(results, "allow-run-as-root")) {
+    if (pmix_cmd_line_is_taken(results, "allow-run-as-root")) {
         prte_allow_run_as_root = true;
         return;
     }
@@ -1965,18 +1966,18 @@ static int set_default_ranking(prte_job_t *jdata,
     return PRTE_SUCCESS;
 }
 
-static void job_info(prte_cli_result_t *results,
+static void job_info(pmix_cli_result_t *results,
                      void *jobinfo)
 {
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
     uint16_t u16;
     pmix_status_t rc;
 
-    if (NULL != (opt = prte_cmd_line_get_param(results, "stream-buffering"))) {
+    if (NULL != (opt = pmix_cmd_line_get_param(results, "stream-buffering"))) {
         u16 = strtol(opt->values[0], NULL, 10);
         if (0 != u16 && 1 != u16 && 2 != u16) {
             /* bad value */
-            prte_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, u16);
+            pmix_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, u16);
             return;
         }
         PMIX_INFO_LIST_ADD(rc, jobinfo, "OMPI_STREAM_BUFFERING", &u16, PMIX_UINT16);

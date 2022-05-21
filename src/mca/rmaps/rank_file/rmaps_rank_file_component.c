@@ -17,7 +17,7 @@
  *                         reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,7 +33,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/mca/base/base.h"
 
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
@@ -56,7 +56,7 @@ prte_rmaps_rf_component_t prte_rmaps_rank_file_component = {
 
             .mca_component_name = "rank_file",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
             .mca_query_component = prte_rmaps_rank_file_query,
         },
         .base_data = {
@@ -83,4 +83,4 @@ static void rf_map_destruct(prte_rmaps_rank_file_map_t *ptr)
     if (NULL != ptr->node_name)
         free(ptr->node_name);
 }
-PRTE_CLASS_INSTANCE(prte_rmaps_rank_file_map_t, prte_object_t, rf_map_construct, rf_map_destruct);
+PMIX_CLASS_INSTANCE(prte_rmaps_rank_file_map_t, pmix_object_t, rf_map_construct, rf_map_destruct);

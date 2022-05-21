@@ -13,7 +13,7 @@
 # Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -198,6 +198,19 @@ increasing your limit descriptor setting (using limit or ulimit commands),
 asking the system administrator for that node to increase the system limit, or
 by rearranging your processes to place fewer of them on that node.
 #
+[prun:sys-limit-files]
+%s was unable to launch the specified application as it encountered an error:
+
+Error: system limit exceeded on number of files that can be open
+Node: %s
+
+when attempting to start process rank %lu.
+
+This can be resolved by setting the mca parameter opal_set_max_sys_limits to 1,
+increasing your limit descriptor setting (using limit or ulimit commands),
+asking the system administrator for that node to increase the system limit, or
+by rearranging your processes to place fewer of them on that node.
+#
 [prun:sys-limit-sockets]
 Error: system limit exceeded on number of network connections that can be open
 
@@ -236,7 +249,16 @@ while attempting to start process rank %lu.
 #
 [prun:wdir-not-found]
 %s was unable to launch the specified application as it could not
-change to the specified working directory:
+find the specified working directory:
+
+Working directory: %s
+Node: %s
+
+while attempting to start process rank %lu.
+#
+[prun:wdir-not-accessible]
+%s was unable to launch the specified application as it lacks
+permissions to change to the specified working directory:
 
 Working directory: %s
 Node: %s
@@ -256,8 +278,8 @@ Node:       %s
 Executable: %s
 #
 [prun:exe-not-accessible]
-%s was unable to launch the specified application as it could not access
-or execute an executable:
+%s was unable to launch the specified application as it lacked
+permissions to execute an executable:
 
 Executable: %s
 Node: %s

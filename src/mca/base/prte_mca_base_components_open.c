@@ -15,7 +15,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014      Hochschule Esslingen.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,10 +30,10 @@
 #include <string.h>
 
 #include "constants.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 
 /*
@@ -42,7 +42,7 @@
 static int open_components(prte_mca_base_framework_t *framework);
 
 struct prte_mca_base_dummy_framework_list_item_t {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     prte_mca_base_framework_t framework;
 };
 
@@ -76,7 +76,7 @@ int prte_mca_base_framework_components_open(prte_mca_base_framework_t *framework
  */
 static int open_components(prte_mca_base_framework_t *framework)
 {
-    prte_list_t *components = &framework->framework_components;
+    pmix_list_t *components = &framework->framework_components;
     uint32_t open_only_flags = PRTE_MCA_BASE_METADATA_PARAM_NONE;
     int output_id = framework->framework_output;
     prte_mca_base_component_list_item_t *cli, *next;
@@ -95,7 +95,7 @@ static int open_components(prte_mca_base_framework_t *framework)
                         framework->framework_name);
 
     /* Traverse the list of components */
-    PRTE_LIST_FOREACH_SAFE(cli, next, components, prte_mca_base_component_list_item_t)
+    PMIX_LIST_FOREACH_SAFE(cli, next, components, prte_mca_base_component_list_item_t)
     {
         const prte_mca_base_component_t *component = cli->cli_component;
 
@@ -140,8 +140,8 @@ static int open_components(prte_mca_base_framework_t *framework)
 
                 prte_mca_base_component_close(component, output_id);
 
-                prte_list_remove_item(components, &cli->super);
-                PRTE_RELEASE(cli);
+                pmix_list_remove_item(components, &cli->super);
+                PMIX_RELEASE(cli);
             }
         }
     }

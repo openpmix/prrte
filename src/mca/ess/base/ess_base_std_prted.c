@@ -44,9 +44,8 @@
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/arch.h"
-#include "src/util/os_path.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_os_path.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/errmgr/errmgr.h"
@@ -59,21 +58,21 @@
 #include "src/mca/plm/base/base.h"
 #include "src/mca/prtereachable/base/base.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/mca/rml/base/base.h"
-#include "src/mca/rml/base/rml_contact.h"
-#include "src/mca/routed/base/base.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/rtc/base/base.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
+
 #include "src/prted/pmix/pmix_server.h"
+#include "src/rml/rml.h"
+#include "src/rml/rml_contact.h"
+
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"
 #include "src/runtime/prte_wait.h"
 #include "src/util/name_fns.h"
 #include "src/util/session_dir.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/ess/base/base.h"
 
@@ -122,7 +121,7 @@ int prte_ess_base_prted_setup(void)
     setup_sighandler(SIGTERM, &term_handler, shutdown_signal);
     setup_sighandler(SIGINT, &int_handler, shutdown_signal);
     /** setup callbacks for signals we should forward */
-    if (0 < (idx = prte_list_get_size(&prte_ess_base_signals))) {
+    if (0 < (idx = pmix_list_get_size(&prte_ess_base_signals))) {
         forward_signals_events = (prte_event_t *) malloc(sizeof(prte_event_t) * idx);
         if (NULL == forward_signals_events) {
             ret = PRTE_ERR_OUT_OF_RESOURCE;
@@ -130,7 +129,7 @@ int prte_ess_base_prted_setup(void)
             goto error;
         }
         idx = 0;
-        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+        PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
         {
             setup_sighandler(sig->signal, forward_signals_events + idx, signal_forward_callback);
             ++idx;
@@ -267,7 +266,7 @@ int prte_ess_base_prted_setup(void)
             /* define a log file name in the session directory */
             snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log", prte_process_info.myproc.nspace,
                      prte_process_info.nodename);
-            log_path = prte_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
+            log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
 
             fd = open(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
             if (fd < 0) {
@@ -286,31 +285,31 @@ int prte_ess_base_prted_setup(void)
     }
     /* Setup the job data object for the daemons */
     /* create and store the job data object */
-    jdata = PRTE_NEW(prte_job_t);
+    jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
     prte_set_job_data_object(jdata);
     /* set the schizo personality to "prte" by default */
     jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy("prte");
     if (NULL == jdata->schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
         error = "select personality";
         ret = PRTE_ERR_SILENT;
         goto error;
     }
 
     /* every job requires at least one app */
-    app = PRTE_NEW(prte_app_context_t);
-    prte_pointer_array_set_item(jdata->apps, 0, app);
+    app = PMIX_NEW(prte_app_context_t);
+    pmix_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps++;
 
     /* create and store a proc object for us */
-    proc = PRTE_NEW(prte_proc_t);
+    proc = PMIX_NEW(prte_proc_t);
     PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
     proc->job = jdata;
     proc->rank = proc->name.rank;
     proc->pid = prte_process_info.pid;
     proc->state = PRTE_PROC_STATE_RUNNING;
-    prte_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+    pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
     jdata->state = PRTE_JOB_STATE_RUNNING;
@@ -328,19 +327,6 @@ int prte_ess_base_prted_setup(void)
     }
 
     /* Setup the communication infrastructure */
-    /* Routed system */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_routed_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_routed_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_routed_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_routed_base_select";
-        goto error;
-    }
     if (PRTE_SUCCESS
         != (ret = prte_mca_base_framework_open(&prte_prtereachable_base_framework,
                                                PRTE_MCA_BASE_OPEN_DEFAULT))) {
@@ -365,18 +351,7 @@ int prte_ess_base_prted_setup(void)
         error = "prte_oob_base_select";
         goto error;
     }
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rml_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_rml_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_rml_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_rml_base_select";
-        goto error;
-    }
+    prte_rml_open();
 
     /* it is now safe to start the pmix server */
     pmix_server_start();
@@ -385,9 +360,10 @@ int prte_ess_base_prted_setup(void)
         pmix_value_t val;
 
         /* extract the HNP's name so we can update the routing table */
-        if (PRTE_SUCCESS
-            != (ret = prte_rml_base_parse_uris(prte_process_info.my_hnp_uri, PRTE_PROC_MY_HNP,
-                                               NULL))) {
+        ret = prte_rml_parse_uris(prte_process_info.my_hnp_uri,
+                                  PRTE_PROC_MY_HNP,
+                                  NULL);
+        if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             error = "prte_rml_parse_HNP";
             goto error;
@@ -478,13 +454,13 @@ int prte_ess_base_prted_setup(void)
      * will have reset our topology. Ensure we always get the right
      * one by setting our node topology afterwards
      */
-    t = PRTE_NEW(prte_topology_t);
+    t = PMIX_NEW(prte_topology_t);
     t->topo = prte_hwloc_topology;
     /* save the signature */
     t->sig = strdup(prte_topo_signature);
     /* save the topology - note that this may have to be moved later
      * to ensure a common array position with the DVM master */
-    prte_pointer_array_add(prte_node_topologies, t);
+    pmix_pointer_array_add(prte_node_topologies, t);
     if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         char *output = NULL;
         pmix_topology_t topo;
@@ -545,7 +521,7 @@ int prte_ess_base_prted_setup(void)
     return PRTE_SUCCESS;
 
 error:
-    prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+    pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
                    PRTE_ERROR_NAME(ret), ret);
     /* remove our use of the session directory tree */
     prte_session_dir_finalize(PRTE_PROC_MY_NAME);
@@ -565,7 +541,7 @@ int prte_ess_base_prted_finalize(void)
         prte_event_del(&int_handler);
         /** Remove the USR signal handlers */
         i = 0;
-        PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+        PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
         {
             prte_event_signal_del(forward_signals_events + i);
             ++i;
@@ -591,9 +567,6 @@ int prte_ess_base_prted_finalize(void)
         prte_errmgr.finalize();
     }
 
-    /* shutdown the pmix server */
-    pmix_server_finalize();
-
     /* close frameworks */
     (void) prte_mca_base_framework_close(&prte_filem_base_framework);
     (void) prte_mca_base_framework_close(&prte_grpcomm_base_framework);
@@ -605,9 +578,8 @@ int prte_ess_base_prted_finalize(void)
     prte_odls.kill_local_procs(NULL);
     (void) prte_mca_base_framework_close(&prte_rtc_base_framework);
     (void) prte_mca_base_framework_close(&prte_odls_base_framework);
-    (void) prte_mca_base_framework_close(&prte_routed_base_framework);
     (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);
-    (void) prte_mca_base_framework_close(&prte_rml_base_framework);
+    prte_rml_close();
     (void) prte_mca_base_framework_close(&prte_oob_base_framework);
     (void) prte_mca_base_framework_close(&prte_prtereachable_base_framework);
     (void) prte_mca_base_framework_close(&prte_state_base_framework);
@@ -615,6 +587,9 @@ int prte_ess_base_prted_finalize(void)
     prte_session_dir_finalize(PRTE_PROC_MY_NAME);
     /* ensure we scrub the session directory tree */
     prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+
+    /* shutdown the pmix server */
+    pmix_server_finalize();
 
     return PRTE_SUCCESS;
 }
@@ -681,8 +656,8 @@ static void signal_forward_callback(int fd, short event, void *arg)
     }
 
     /* send it to ourselves */
-    if (0
-        > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_NAME, cmd, PRTE_RML_TAG_DAEMON, NULL, NULL))) {
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, cmd, PRTE_RML_TAG_DAEMON);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(cmd);
     }

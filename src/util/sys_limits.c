@@ -17,7 +17,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      NVIDIA Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,9 +46,9 @@
 #include "constants.h"
 #include "src/runtime/prte_globals.h"
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 #include "src/util/sys_limits.h"
 
 /*
@@ -118,15 +118,15 @@ int prte_util_init_sys_limits(char **errmsg)
     }
 
     /* parse the requested limits to set */
-    lims = prte_argv_split(prte_set_max_sys_limits, ',');
+    lims = pmix_argv_split(prte_set_max_sys_limits, ',');
     if (NULL == lims) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     /* each limit is expressed as a "param:value" pair */
     for (i = 0; NULL != lims[i]; i++) {
-        lim = prte_argv_split(lims[i], ':');
-        if (1 == prte_argv_count(lim)) {
+        lim = pmix_argv_split(lims[i], ':');
+        if (1 == pmix_argv_count(lim)) {
             setlim = "max";
         } else {
             setlim = lim[1];
@@ -139,7 +139,7 @@ int prte_util_init_sys_limits(char **errmsg)
         if (0 == strcmp(lim[0], "1")) {
 #if HAVE_DECL_RLIMIT_NOFILE
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_NOFILE, "max", &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                *errmsg = pmix_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
                                                 "openfiles", "max");
                 goto out;
             }
@@ -147,7 +147,7 @@ int prte_util_init_sys_limits(char **errmsg)
 #endif
 #if HAVE_DECL_RLIMIT_NPROC
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_NPROC, "max", &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                *errmsg = pmix_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
                                                 "maxchildren", "max");
                 goto out;
             }
@@ -155,7 +155,7 @@ int prte_util_init_sys_limits(char **errmsg)
 #endif
 #if HAVE_DECL_RLIMIT_FSIZE
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_FSIZE, "max", &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                *errmsg = pmix_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
                                                 "filesize", "max");
                 goto out;
             }
@@ -171,7 +171,7 @@ int prte_util_init_sys_limits(char **errmsg)
         if (0 == strcmp(lim[0], "core")) {
 #if HAVE_DECL_RLIMIT_CORE
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_CORE, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                *errmsg = pmix_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
                                                 "openfiles", setlim);
                 goto out;
             }
@@ -179,7 +179,7 @@ int prte_util_init_sys_limits(char **errmsg)
         } else if (0 == strcmp(lim[0], "filesize")) {
 #if HAVE_DECL_RLIMIT_FSIZE
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_FSIZE, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                *errmsg = pmix_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
                                                 "filesize", setlim);
                 goto out;
             }
@@ -188,7 +188,7 @@ int prte_util_init_sys_limits(char **errmsg)
         } else if (0 == strcmp(lim[0], "maxmem")) {
 #if HAVE_DECL_RLIMIT_AS
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_AS, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                *errmsg = pmix_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
                                                 "maxmem", setlim);
                 goto out;
             }
@@ -196,7 +196,7 @@ int prte_util_init_sys_limits(char **errmsg)
         } else if (0 == strcmp(lim[0], "openfiles")) {
 #if HAVE_DECL_RLIMIT_NOFILE
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_NOFILE, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                *errmsg = pmix_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
                                                 "openfiles", setlim);
                 goto out;
             }
@@ -205,7 +205,7 @@ int prte_util_init_sys_limits(char **errmsg)
         } else if (0 == strcmp(lim[0], "stacksize")) {
 #if HAVE_DECL_RLIMIT_STACK
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_STACK, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                *errmsg = pmix_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
                                                 "stacksize", setlim);
                 goto out;
             }
@@ -213,18 +213,18 @@ int prte_util_init_sys_limits(char **errmsg)
         } else if (0 == strcmp(lim[0], "maxchildren")) {
 #if HAVE_DECL_RLIMIT_NPROC
             if (PRTE_SUCCESS != prte_setlimit(RLIMIT_NPROC, setlim, &value)) {
-                *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
+                *errmsg = pmix_show_help_string("help-prte-util.txt", "sys-limit-failed", true,
                                                 "maxchildren", setlim);
                 goto out;
             }
             prte_sys_limits.num_procs = value;
 #endif
         } else {
-            *errmsg = prte_show_help_string("help-prte-util.txt", "sys-limit-unrecognized", true,
+            *errmsg = pmix_show_help_string("help-prte-util.txt", "sys-limit-unrecognized", true,
                                             lim[0], setlim);
             goto out;
         }
-        prte_argv_free(lim);
+        pmix_argv_free(lim);
         lim = NULL;
     }
 
@@ -234,9 +234,9 @@ int prte_util_init_sys_limits(char **errmsg)
     rc = PRTE_SUCCESS;
 
 out:
-    prte_argv_free(lims);
+    pmix_argv_free(lims);
     if (NULL != lim) {
-        prte_argv_free(lim);
+        pmix_argv_free(lim);
     }
 
     return rc;

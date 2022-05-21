@@ -6,7 +6,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,7 +42,7 @@ static int prte_prteinstalldirs_base_open(prte_mca_base_open_flag_t flags)
         return ret;
     }
 
-    PRTE_LIST_FOREACH(component_item, &prte_prteinstalldirs_base_framework.framework_components,
+    PMIX_LIST_FOREACH(component_item, &prte_prteinstalldirs_base_framework.framework_components,
                       prte_mca_base_component_list_item_t)
     {
         const prte_prteinstalldirs_base_component_t *component

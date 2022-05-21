@@ -18,7 +18,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,17 +36,17 @@
 #include "src/mca/base/prte_mca_base_var_enum.h"
 #include "src/mca/base/prte_mca_base_vari.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_printf.h"
 
 static void mca_base_var_enum_constructor(prte_mca_base_var_enum_t *enumerator);
 static void mca_base_var_enum_destructor(prte_mca_base_var_enum_t *enumerator);
-PRTE_CLASS_INSTANCE(prte_mca_base_var_enum_t, prte_object_t, mca_base_var_enum_constructor,
+PMIX_CLASS_INSTANCE(prte_mca_base_var_enum_t, pmix_object_t, mca_base_var_enum_constructor,
                     mca_base_var_enum_destructor);
 
 static void mca_base_var_enum_flag_constructor(prte_mca_base_var_enum_flag_t *enumerator);
 static void mca_base_var_enum_flag_destructor(prte_mca_base_var_enum_flag_t *enumerator);
-static PRTE_CLASS_INSTANCE(prte_mca_base_var_enum_flag_t, prte_object_t,
+static PMIX_CLASS_INSTANCE(prte_mca_base_var_enum_flag_t, pmix_object_t,
                            mca_base_var_enum_flag_constructor, mca_base_var_enum_flag_destructor);
 
 static int enum_dump(prte_mca_base_var_enum_t *self, char **out);
@@ -126,7 +126,7 @@ static int mca_base_var_enum_bool_dump(prte_mca_base_var_enum_t *self, char **ou
 }
 
 prte_mca_base_var_enum_t prte_mca_base_var_enum_bool
-    = {.super = PRTE_OBJ_STATIC_INIT(prte_object_t),
+    = {.super = PMIX_OBJ_STATIC_INIT(pmix_object_t),
        .enum_is_static = true,
        .enum_name = "boolean",
        .get_count = mca_base_var_enum_bool_get_count,
@@ -223,7 +223,7 @@ static int mca_base_var_enum_auto_bool_dump(prte_mca_base_var_enum_t *self, char
 }
 
 prte_mca_base_var_enum_t prte_mca_base_var_enum_auto_bool
-    = {.super = PRTE_OBJ_STATIC_INIT(prte_object_t),
+    = {.super = PMIX_OBJ_STATIC_INIT(pmix_object_t),
        .enum_is_static = true,
        .enum_name = "auto_boolean",
        .get_count = mca_base_var_enum_auto_bool_get_count,
@@ -295,7 +295,7 @@ static int mca_base_var_enum_verbose_sfv(prte_mca_base_var_enum_t *self, const i
     }
 
     if (string_value) {
-        ret = prte_asprintf(string_value, "%d", value);
+        ret = pmix_asprintf(string_value, "%d", value);
         if (0 > ret) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
@@ -315,7 +315,7 @@ static int mca_base_var_enum_verbose_dump(prte_mca_base_var_enum_t *self, char *
         return ret;
     }
 
-    ret = prte_asprintf(&tmp, "%s, 0 - 100", *out);
+    ret = pmix_asprintf(&tmp, "%s, 0 - 100", *out);
     free(*out);
     if (0 > ret) {
         *out = NULL;
@@ -328,7 +328,7 @@ static int mca_base_var_enum_verbose_dump(prte_mca_base_var_enum_t *self, char *
 }
 
 prte_mca_base_var_enum_t prte_mca_base_var_enum_verbose = {
-    .super = PRTE_OBJ_STATIC_INIT(prte_object_t),
+    .super = PMIX_OBJ_STATIC_INIT(pmix_object_t),
     .enum_is_static = true,
     .enum_name = "verbosity",
     .get_count = enum_get_count,
@@ -348,7 +348,7 @@ int prte_mca_base_var_enum_create(const char *name, const prte_mca_base_var_enum
 
     *enumerator = NULL;
 
-    new_enum = PRTE_NEW(prte_mca_base_var_enum_t);
+    new_enum = PMIX_NEW(prte_mca_base_var_enum_t);
     if (NULL == new_enum) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
@@ -365,7 +365,7 @@ int prte_mca_base_var_enum_create(const char *name, const prte_mca_base_var_enum
     /* make a copy of the values */
     new_enum->enum_values = calloc(new_enum->enum_value_count + 1, sizeof(*new_enum->enum_values));
     if (NULL == new_enum->enum_values) {
-        PRTE_RELEASE(new_enum);
+        PMIX_RELEASE(new_enum);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
@@ -388,7 +388,7 @@ int prte_mca_base_var_enum_create_flag(const char *name,
 
     *enumerator = NULL;
 
-    new_enum = PRTE_NEW(prte_mca_base_var_enum_flag_t);
+    new_enum = PMIX_NEW(prte_mca_base_var_enum_flag_t);
     if (NULL == new_enum) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
@@ -406,7 +406,7 @@ int prte_mca_base_var_enum_create_flag(const char *name,
     new_enum->enum_flags = calloc(new_enum->super.enum_value_count + 1,
                                   sizeof(*new_enum->enum_flags));
     if (NULL == new_enum->enum_flags) {
-        PRTE_RELEASE(new_enum);
+        PMIX_RELEASE(new_enum);
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
@@ -443,7 +443,7 @@ static int enum_dump(prte_mca_base_var_enum_t *self, char **out)
 
     tmp = NULL;
     for (i = 0; i < self->enum_value_count && self->enum_values[i].string; ++i) {
-        ret = prte_asprintf(out, "%s%s%d:\"%s\"", tmp ? tmp : "", tmp ? ", " : "",
+        ret = pmix_asprintf(out, "%s%s%d:\"%s\"", tmp ? tmp : "", tmp ? ", " : "",
                             self->enum_values[i].value, self->enum_values[i].string);
         if (tmp)
             free(tmp);
@@ -615,7 +615,7 @@ static int enum_value_from_string_flag(prte_mca_base_var_enum_t *self, const cha
         return ret;
     }
 
-    flags = prte_argv_split(string_value, ',');
+    flags = pmix_argv_split(string_value, ',');
     if (NULL == flags) {
         return PRTE_ERR_BAD_PARAM;
     }
@@ -650,12 +650,12 @@ static int enum_value_from_string_flag(prte_mca_base_var_enum_t *self, const cha
         }
 
         if (!found || conflict || (is_int && value)) {
-            prte_argv_free(flags);
+            pmix_argv_free(flags);
             return !found ? PRTE_ERR_VALUE_OUT_OF_BOUNDS : PRTE_ERR_BAD_PARAM;
         }
     }
 
-    prte_argv_free(flags);
+    pmix_argv_free(flags);
 
     *value_out = flag;
 
@@ -682,7 +682,7 @@ static int enum_string_from_value_flag(prte_mca_base_var_enum_t *self, const int
 
         tmp = out;
 
-        ret = prte_asprintf(&out, "%s%s%s", tmp ? tmp : "", tmp ? "," : "",
+        ret = pmix_asprintf(&out, "%s%s%s", tmp ? tmp : "", tmp ? "," : "",
                             flag_enum->enum_flags[i].string);
         free(tmp);
 
@@ -732,7 +732,7 @@ static int enum_dump_flag(prte_mca_base_var_enum_t *self, char **out)
     for (int i = 0; i < self->enum_value_count; ++i) {
         tmp = *out;
 
-        ret = prte_asprintf(out, "%s%s0x%x:\"%s\"", tmp, i ? ", " : " ",
+        ret = pmix_asprintf(out, "%s%s0x%x:\"%s\"", tmp, i ? ", " : " ",
                             flag_enum->enum_flags[i].flag, flag_enum->enum_flags[i].string);
         free(tmp);
         if (0 > ret) {

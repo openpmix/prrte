@@ -33,11 +33,11 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/mca.h"
 #include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/schizo/schizo.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -61,7 +61,7 @@ PRTE_EXPORT int prte_rmaps_base_select(void);
  */
 typedef struct {
     /* list of selected modules */
-    prte_list_t selected_modules;
+    pmix_list_t selected_modules;
     /* default mapping/ranking directives */
     prte_mapping_policy_t mapping;
     prte_ranking_policy_t ranking;
@@ -86,12 +86,12 @@ PRTE_EXPORT extern prte_rmaps_base_t prte_rmaps_base;
  * Select an rmaps component / module
  */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     int pri;
     prte_rmaps_base_module_t *module;
     prte_mca_base_component_t *component;
 } prte_rmaps_base_selected_module_t;
-PRTE_CLASS_DECLARATION(prte_rmaps_base_selected_module_t);
+PMIX_CLASS_DECLARATION(prte_rmaps_base_selected_module_t);
 
 /*
  * Map a job
@@ -114,7 +114,7 @@ PRTE_EXPORT char *prte_rmaps_base_print_ranking(prte_ranking_policy_t ranking);
 
 PRTE_EXPORT int prte_rmaps_base_prep_topology(hwloc_topology_t topo);
 
-PRTE_EXPORT int prte_rmaps_base_filter_nodes(prte_app_context_t *app, prte_list_t *nodes,
+PRTE_EXPORT int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes,
                                              bool remove);
 
 PRTE_EXPORT int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,

@@ -3,7 +3,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,7 +16,7 @@
 
 #include <string.h>
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 
@@ -38,18 +38,18 @@ prte_rtc_API_module_t prte_rtc = {
     .get_available_values = prte_rtc_base_get_avail_vals
 };
 prte_rtc_base_t prte_rtc_base = {
-    .actives = PRTE_LIST_STATIC_INIT
+    .actives = PMIX_LIST_STATIC_INIT
 };
 
 static int prte_rtc_base_close(void)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
 
     /* cleanup globals */
-    while (NULL != (item = prte_list_remove_first(&prte_rtc_base.actives))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&prte_rtc_base.actives))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&prte_rtc_base.actives);
+    PMIX_DESTRUCT(&prte_rtc_base.actives);
 
     return prte_mca_base_framework_components_close(&prte_rtc_base_framework, NULL);
 }
@@ -61,7 +61,7 @@ static int prte_rtc_base_close(void)
 static int prte_rtc_base_open(prte_mca_base_open_flag_t flags)
 {
     /* init the globals */
-    PRTE_CONSTRUCT(&prte_rtc_base.actives, prte_list_t);
+    PMIX_CONSTRUCT(&prte_rtc_base.actives, pmix_list_t);
 
     /* Open up all available components */
     return prte_mca_base_framework_components_open(&prte_rtc_base_framework, flags);
@@ -77,13 +77,13 @@ static void mdes(prte_rtc_base_selected_module_t *active)
         active->module->finalize();
     }
 }
-PRTE_CLASS_INSTANCE(prte_rtc_base_selected_module_t, prte_list_item_t, NULL, mdes);
+PMIX_CLASS_INSTANCE(prte_rtc_base_selected_module_t, pmix_list_item_t, NULL, mdes);
 
 static void rcon(prte_rtc_resource_t *p)
 {
     p->component = NULL;
     p->category = NULL;
-    PRTE_CONSTRUCT(&p->control, prte_value_t);
+    PMIX_CONSTRUCT(&p->control, prte_value_t);
 }
 static void rdes(prte_rtc_resource_t *p)
 {
@@ -93,6 +93,6 @@ static void rdes(prte_rtc_resource_t *p)
     if (NULL != p->category) {
         free(p->category);
     }
-    PRTE_DESTRUCT(&p->control);
+    PMIX_DESTRUCT(&p->control);
 }
-PRTE_CLASS_INSTANCE(prte_rtc_resource_t, prte_list_item_t, rcon, rdes);
+PMIX_CLASS_INSTANCE(prte_rtc_resource_t, pmix_list_item_t, rcon, rdes);

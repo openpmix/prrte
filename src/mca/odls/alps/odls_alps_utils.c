@@ -15,7 +15,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,7 +41,7 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/odls/alps/odls_alps.h"
 #include "src/mca/odls/base/base.h"
@@ -180,11 +180,12 @@ int prte_odls_alps_get_rdma_creds(void)
         ptr += len;
     }
     sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].ptag);
-    ret = prte_setenv("PMI_GNI_PTAG", env_buffer, false, &prte_launch_environ);
-    if (ret != PRTE_SUCCESS) {
+    ret = pmix_setenv("PMI_GNI_PTAG", env_buffer, false, &prte_launch_environ);
+    if (ret != PMIX_SUCCESS) {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
-                             "%s odls:alps: prte_setenv for PMI_GNI_TAG failed - returned %d",
+                             "%s odls:alps: pmix_setenv for PMI_GNI_TAG failed - returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
+        ret = prte_pmix_convert_status(ret);
         goto fn_exit;
 
     } else {
@@ -204,11 +205,12 @@ int prte_odls_alps_get_rdma_creds(void)
         ptr += len;
     }
     sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].cookie);
-    ret = prte_setenv("PMI_GNI_COOKIE", env_buffer, false, &prte_launch_environ);
-    if (ret != PRTE_SUCCESS) {
+    ret = pmix_setenv("PMI_GNI_COOKIE", env_buffer, false, &prte_launch_environ);
+    if (ret != PMIX_SUCCESS) {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
-                             "%s odls:alps: prte_setenv for PMI_GNI_COOKIE returned %d",
+                             "%s odls:alps: pmix_setenv for PMI_GNI_COOKIE returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
+        ret = prte_pmix_convert_status(ret);
         goto fn_exit;
 
     } else {
@@ -228,11 +230,12 @@ int prte_odls_alps_get_rdma_creds(void)
         ptr += len;
     }
     sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].local_addr);
-    ret = prte_setenv("PMI_GNI_LOC_ADDR", env_buffer, false, &prte_launch_environ);
-    if (ret != PRTE_SUCCESS) {
+    ret = pmix_setenv("PMI_GNI_LOC_ADDR", env_buffer, false, &prte_launch_environ);
+    if (ret != PMIX_SUCCESS) {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
-                             "%s odls:alps: prte_setenv for PMI_GNI_LOC_ADDR returned %d",
+                             "%s odls:alps: pmix_setenv for PMI_GNI_LOC_ADDR returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
+        ret = prte_pmix_convert_status(ret);
         goto fn_exit;
 
     } else {
@@ -252,11 +255,12 @@ int prte_odls_alps_get_rdma_creds(void)
         ptr += len;
     }
     sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].device_id);
-    ret = prte_setenv("PMI_GNI_DEV_ID", env_buffer, false, &prte_launch_environ);
-    if (ret != PRTE_SUCCESS) {
+    ret = pmix_setenv("PMI_GNI_DEV_ID", env_buffer, false, &prte_launch_environ);
+    if (ret != PMIX_SUCCESS) {
         PRTE_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
-                             "%s odls:alps: prte_setenv for PMI_GNI_DEV_ID returned %d",
+                             "%s odls:alps: pmix_setenv for PMI_GNI_DEV_ID returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
+        ret = prte_pmix_convert_status(ret);
         goto fn_exit;
 
     } else {

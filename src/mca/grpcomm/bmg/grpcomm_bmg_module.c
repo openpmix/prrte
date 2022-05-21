@@ -5,7 +5,7 @@
  *                         reserved.
  *
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,17 +20,14 @@
 #include <math.h>
 #include <string.h>
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/pmix/pmix-internal.h"
 
 #include "grpcomm_bmg.h"
 #include "src/mca/errmgr/detector/errmgr_detector.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/base/base.h"
-#include "src/mca/rml/base/base.h"
-#include "src/mca/rml/base/rml_contact.h"
-#include "src/mca/routed/base/base.h"
-#include "src/mca/routed/routed.h"
+#include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/util/name_fns.h"
 #include "src/util/nidmap.h"
@@ -58,7 +55,7 @@ prte_grpcomm_base_module_t prte_grpcomm_bmg_module = {
 static void rbcast_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                         prte_rml_tag_t tag, void *cbdata);
 /* internal variables */
-static prte_list_t tracker;
+static pmix_list_t tracker;
 
 /*
  * registration of callbacks
@@ -93,10 +90,10 @@ static int unregister_cb_type(int type)
  */
 static int bmg_init(void)
 {
-    PRTE_CONSTRUCT(&tracker, prte_list_t);
+    PMIX_CONSTRUCT(&tracker, pmix_list_t);
 
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST, PRTE_RML_PERSISTENT,
-                            rbcast_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST,
+                  PRTE_RML_PERSISTENT, rbcast_recv, NULL);
     return PRTE_SUCCESS;
 }
 
@@ -106,8 +103,8 @@ static int bmg_init(void)
 static void bmg_finalize(void)
 {
     /* cancel the rbcast recv */
-    prte_rml.recv_cancel(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST);
-    PRTE_LIST_DESTRUCT(&tracker);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_RBCAST);
+    PMIX_LIST_DESTRUCT(&tracker);
     return;
 }
 
@@ -156,8 +153,8 @@ static int rbcast(pmix_data_buffer_t *buf)
                 PRTE_ERROR_LOG(rc);
                 return rc;
             }
-            if (0 > (rc = prte_rml.send_buffer_nb(&daemon, buf, PRTE_RML_TAG_RBCAST,
-                                                  prte_rml_send_callback, NULL))) {
+            PRTE_RML_SEND(rc, daemon.rank, buf, PRTE_RML_TAG_RBCAST);
+            if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
             }
         }

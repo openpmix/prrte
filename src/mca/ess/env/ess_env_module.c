@@ -13,7 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,10 +40,10 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/malloc.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/ess/base/base.h"
@@ -52,10 +52,7 @@
 #include "src/mca/iof/base/base.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/ras/base/base.h"
-#include "src/mca/rml/base/base.h"
-#include "src/mca/rml/rml_types.h"
-#include "src/mca/routed/base/base.h"
-#include "src/mca/routed/routed.h"
+#include "src/rml/rml.h"
 
 #include "src/mca/filem/base/base.h"
 #include "src/mca/rmaps/base/base.h"
@@ -106,7 +103,7 @@ static int rte_init(int argc, char **argv)
 
 error:
     if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
-        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+        pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
                        PRTE_ERROR_NAME(ret), ret);
     }
 

@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,10 +34,10 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/odls/odls_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 
 #include "src/mca/iof/base/base.h"
@@ -54,7 +54,7 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
     if (PMIX_SUCCESS != status) {
         PMIX_ERROR_LOG(status);
     }
-    PRTE_RELEASE(p);
+    PMIX_RELEASE(p);
 }
 
 void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
@@ -69,7 +69,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     pmix_iof_channel_t pchan;
     pmix_status_t prc;
 
-    PRTE_ACQUIRE_OBJECT(rev);
+    PMIX_ACQUIRE_OBJECT(rev);
 
     /* As we may use timer events, fd can be bogus (-1)
      * use the right one here
@@ -117,7 +117,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
         pchan |= PMIX_FWD_STDDIAG_CHANNEL;
     }
     /* setup the byte object */
-    p = PRTE_NEW(prte_iof_deliver_t);
+    p = PMIX_NEW(prte_iof_deliver_t);
     PMIX_XFER_PROCID(&p->source, &proct->name);
     p->bo.bytes = (char*)malloc(numbytes);
     memcpy(p->bo.bytes, data, numbytes);
@@ -125,7 +125,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     prc = PMIx_server_IOF_deliver(&p->source, pchan, &p->bo, NULL, 0, lkcbfunc, (void*)p);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-        PRTE_RELEASE(p);
+        PMIX_RELEASE(p);
     }
 
     /* prep the buffer */
@@ -166,11 +166,11 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
                          "%s iof:prted:read handler sending %d bytes to HNP",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes));
 
-    prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf,
-                            PRTE_RML_TAG_IOF_HNP,
-                            prte_rml_send_callback,
-                            NULL);
-
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_IOF_HNP);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+    }
     /* re-add the event */
     PRTE_IOF_READ_ACTIVATE(rev);
 
@@ -183,11 +183,11 @@ CLEAN_RETURN:
      * the file descriptor */
     if (rev->tag & PRTE_IOF_STDOUT) {
         if (NULL != proct->revstdout) {
-            PRTE_RELEASE(proct->revstdout);
+            PMIX_RELEASE(proct->revstdout);
         }
     } else if (rev->tag & PRTE_IOF_STDERR) {
         if (NULL != proct->revstderr) {
-            PRTE_RELEASE(proct->revstderr);
+            PMIX_RELEASE(proct->revstderr);
         }
     }
     /* check to see if they are all done */

@@ -17,7 +17,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -66,8 +66,8 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
-#include "src/class/prte_value_array.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_value_array.h"
 #include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/base/prte_mca_base_var_enum.h"
 #include "src/mca/base/prte_mca_base_var_group.h"
@@ -249,7 +249,7 @@ typedef union {
  */
 struct prte_mca_base_var_t {
     /** Allow this to be an PRTE OBJ */
-    prte_object_t super;
+    pmix_object_t super;
 
     /** Variable index. This will remain constant until mca_base_var_finalize()
         is called. */
@@ -273,13 +273,13 @@ struct prte_mca_base_var_t {
     char *mbv_long_name;
 
     /** List of synonym names for this variable.  This *must* be a
-        pointer (vs. a plain prte_list_t) because we copy this whole
+        pointer (vs. a plain pmix_list_t) because we copy this whole
         struct into a new var for permanent storage
         (prte_vale_array_append_item()), and the internal pointers in
-        the prte_list_t will be invalid when that happens.  Hence, we
-        simply keep a pointer to an external prte_list_t.  Synonyms
+        the pmix_list_t will be invalid when that happens.  Hence, we
+        simply keep a pointer to an external pmix_list_t.  Synonyms
         are uncommon enough that this is not a big performance hit. */
-    prte_value_array_t mbv_synonyms;
+    pmix_value_array_t mbv_synonyms;
 
     /** Variable flags */
     prte_mca_base_var_flag_t mbv_flags;
@@ -325,7 +325,7 @@ BEGIN_C_DECLS
 /**
  * Object declarayion for mca_base_var_t
  */
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_var_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_mca_base_var_t);
 
 /**
  * Initialize the MCA variable system.
@@ -623,14 +623,14 @@ PRTE_EXPORT int prte_mca_base_var_find_by_name(const char *full_name, int *vari)
  * This function is useful for checking that the user did not set both
  * of 2 mutually-exclusive MCA variables.
  *
- * This function will print an prte_show_help() message and return
+ * This function will print an pmix_show_help() message and return
  * PRTE_ERR_BAD_VAR if it finds that the two variables both have
  * value sources that are not MCA_BASE_VAR_SOURCE_DEFAULT.  This
  * means that both variables have been set by the user (i.e., they're
  * not default values).
  *
- * Note that prte_show_help() allows itself to be hooked, so if this
- * happens after the aggregated prte_show_help() system is
+ * Note that pmix_show_help() allows itself to be hooked, so if this
+ * happens after the aggregated pmix_show_help() system is
  * initialized, the messages will be aggregated (w00t).
  *
  * @returns PRTE_ERR_BAD_VAR if the two variables have sources that

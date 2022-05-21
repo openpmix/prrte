@@ -15,7 +15,7 @@
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,11 +49,11 @@
 #include "constants.h"
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 #include "src/util/stacktrace.h"
 
 #ifndef _NSIG
@@ -680,7 +680,7 @@ int prte_util_register_stackhandlers(void)
          *  Similarly for any number which is not in the signal-number range
          */
         if (((0 == sig) && (tmp == next)) || (0 > sig) || (_NSIG <= sig)) {
-            prte_show_help("help-prte-util.txt", "stacktrace bad signal", true, prte_signal_string,
+            pmix_show_help("help-prte-util.txt", "stacktrace bad signal", true, prte_signal_string,
                            tmp);
             return PRTE_ERR_SILENT;
         } else if (next == NULL) {
@@ -703,7 +703,7 @@ int prte_util_register_stackhandlers(void)
                 /* JMS This is icky; there is no error message
                    aggregation here so this message may be repeated for
                    every single MPI process... */
-                prte_show_help("help-prte-util.txt", "stacktrace signal override", true, sig, sig,
+                pmix_show_help("help-prte-util.txt", "stacktrace signal override", true, sig, sig,
                                sig, prte_signal_string);
                 showed_help = true;
             }

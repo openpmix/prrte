@@ -1,7 +1,7 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
  * Copyright (c) 2020      Google, LLC. All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -12,21 +12,21 @@
 #include "prte_config.h"
 #include <string.h>
 
-#include "src/class/prte_hash_table.h"
+#include "src/class/pmix_hash_table.h"
 #include "src/include/constants.h"
 #include "src/mca/base/prte_mca_base_alias.h"
 
 static void prte_mca_base_alias_init(prte_mca_base_alias_t *alias)
 {
-    PRTE_CONSTRUCT(&alias->component_aliases, prte_list_t);
+    PMIX_CONSTRUCT(&alias->component_aliases, pmix_list_t);
 }
 
 static void prte_mca_base_alias_fini(prte_mca_base_alias_t *alias)
 {
-    PRTE_LIST_DESTRUCT(&alias->component_aliases);
+    PMIX_LIST_DESTRUCT(&alias->component_aliases);
 }
 
-PRTE_CLASS_INSTANCE(prte_mca_base_alias_t, prte_object_t, prte_mca_base_alias_init,
+PMIX_CLASS_INSTANCE(prte_mca_base_alias_t, pmix_object_t, prte_mca_base_alias_init,
                     prte_mca_base_alias_fini);
 
 static void prte_mca_base_alias_item_init(prte_mca_base_alias_item_t *alias_item)
@@ -39,13 +39,13 @@ static void prte_mca_base_alias_item_fini(prte_mca_base_alias_item_t *alias_item
     free(alias_item->component_alias);
 }
 
-PRTE_CLASS_INSTANCE(prte_mca_base_alias_item_t, prte_list_item_t, prte_mca_base_alias_item_init,
+PMIX_CLASS_INSTANCE(prte_mca_base_alias_item_t, pmix_list_item_t, prte_mca_base_alias_item_init,
                     prte_mca_base_alias_item_fini);
 
 /*
  * local variables
  */
-static prte_hash_table_t *alias_hash_table;
+static pmix_hash_table_t *alias_hash_table;
 
 void prte_mca_base_alias_cleanup(void)
 {
@@ -54,10 +54,10 @@ void prte_mca_base_alias_cleanup(void)
     }
 
     void *key;
-    prte_object_t *value;
-    PRTE_HASH_TABLE_FOREACH_PTR(key, value, alias_hash_table, { PRTE_RELEASE(value); });
+    pmix_object_t *value;
+    PMIX_HASH_TABLE_FOREACH_PTR(key, value, alias_hash_table, { PMIX_RELEASE(value); });
 
-    PRTE_RELEASE(alias_hash_table);
+    PMIX_RELEASE(alias_hash_table);
     alias_hash_table = NULL;
 }
 
@@ -67,14 +67,14 @@ static int prte_mca_base_alias_setup(void)
         return PRTE_SUCCESS;
     }
 
-    alias_hash_table = PRTE_NEW(prte_hash_table_t);
+    alias_hash_table = PMIX_NEW(pmix_hash_table_t);
     if (NULL == alias_hash_table) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    int ret = prte_hash_table_init(alias_hash_table, 32);
+    int ret = pmix_hash_table_init(alias_hash_table, 32);
     if (PRTE_SUCCESS != ret) {
-        PRTE_RELEASE(alias_hash_table);
+        PMIX_RELEASE(alias_hash_table);
         alias_hash_table = NULL;
         return ret;
     }
@@ -128,7 +128,7 @@ static prte_mca_base_alias_t *prte_mca_base_alias_lookup_internal(const char *na
         return NULL;
     }
 
-    (void) prte_hash_table_get_value_ptr(alias_hash_table, name, strlen(name), (void **) &alias);
+    (void) pmix_hash_table_get_value_ptr(alias_hash_table, name, strlen(name), (void **) &alias);
     return alias;
 }
 
@@ -150,17 +150,17 @@ int prte_mca_base_alias_register(const char *project, const char *framework,
 
     prte_mca_base_alias_t *alias = prte_mca_base_alias_lookup_internal(name);
     if (NULL == alias) {
-        alias = PRTE_NEW(prte_mca_base_alias_t);
+        alias = PMIX_NEW(prte_mca_base_alias_t);
         if (NULL == alias) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
 
-        prte_hash_table_set_value_ptr(alias_hash_table, name, strlen(name), alias);
+        pmix_hash_table_set_value_ptr(alias_hash_table, name, strlen(name), alias);
         free(name);
         name = NULL;
     }
 
-    prte_mca_base_alias_item_t *alias_item = PRTE_NEW(prte_mca_base_alias_item_t);
+    prte_mca_base_alias_item_t *alias_item = PMIX_NEW(prte_mca_base_alias_item_t);
     if (NULL == alias_item) {
         if (NULL != name)
             free(name);
@@ -170,7 +170,7 @@ int prte_mca_base_alias_register(const char *project, const char *framework,
     alias_item->component_alias = strdup(component_alias);
     alias_item->alias_flags = alias_flags;
 
-    prte_list_append(&alias->component_aliases, &alias_item->super);
+    pmix_list_append(&alias->component_aliases, &alias_item->super);
 
     return PRTE_SUCCESS;
 }

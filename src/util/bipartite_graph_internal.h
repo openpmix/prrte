@@ -3,7 +3,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,10 +21,10 @@
 #define BIPARTITE_GRAPH_INTERNAL 1
 
 struct prte_bp_graph_edge_t {
-    prte_object_t super;
+    pmix_object_t super;
 
-    prte_list_item_t outbound_li;
-    prte_list_item_t inbound_li;
+    pmix_list_item_t outbound_li;
+    pmix_list_item_t inbound_li;
 
     /** source of this edge */
     int source;
@@ -53,10 +53,10 @@ struct prte_bp_graph_vertex_t {
     void *v_data;
 
     /** linked list of edges for which this vertex is a source */
-    prte_list_t out_edges;
+    pmix_list_t out_edges;
 
     /** linked list of edges for which this vertex is a target */
-    prte_list_t in_edges;
+    pmix_list_t in_edges;
 };
 
 struct prte_bp_graph_t {
@@ -64,7 +64,7 @@ struct prte_bp_graph_t {
     int num_vertices;
 
     /** vertices in this graph (with number of set elements == num_vertices) */
-    prte_pointer_array_t vertices;
+    pmix_pointer_array_t vertices;
 
     /** index of the source vertex, or -1 if not present */
     int source_idx;
@@ -80,16 +80,16 @@ struct prte_bp_graph_t {
 };
 
 #define LIST_FOREACH_CONTAINED(item, list, type, member)                                   \
-    for (item = container_of((list)->prte_list_sentinel.prte_list_next, type, member);     \
-         &item->member != &(list)->prte_list_sentinel;                                     \
-         item = container_of(((prte_list_item_t *) (&item->member))->prte_list_next, type, \
+    for (item = container_of((list)->pmix_list_sentinel.pmix_list_next, type, member);     \
+         &item->member != &(list)->pmix_list_sentinel;                                     \
+         item = container_of(((pmix_list_item_t *) (&item->member))->pmix_list_next, type, \
                              member))
 
 #define LIST_FOREACH_SAFE_CONTAINED(item, next, list, type, member)                                \
-    for (item = container_of((list)->prte_list_sentinel.prte_list_next, type, member),             \
-        next = container_of(((prte_list_item_t *) (&item->member))->prte_list_next, type, member); \
-         &item->member != &(list)->prte_list_sentinel; item = next,                                \
-        next = container_of(((prte_list_item_t *) (&item->member))->prte_list_next, type, member))
+    for (item = container_of((list)->pmix_list_sentinel.pmix_list_next, type, member),             \
+        next = container_of(((pmix_list_item_t *) (&item->member))->pmix_list_next, type, member); \
+         &item->member != &(list)->pmix_list_sentinel; item = next,                                \
+        next = container_of(((pmix_list_item_t *) (&item->member))->pmix_list_next, type, member))
 
 #define NUM_VERTICES(g) (g->num_vertices)
 
@@ -100,10 +100,10 @@ struct prte_bp_graph_t {
         }                                        \
     } while (0)
 
-/* cast away any constness of &g->vertices b/c the prte_pointer_array API is
+/* cast away any constness of &g->vertices b/c the pmix_pointer_array API is
  * not const-correct */
 #define V_ID_TO_PTR(g, v_id)                                                                       \
-    ((prte_bp_graph_vertex_t *) prte_pointer_array_get_item((prte_pointer_array_t *) &g->vertices, \
+    ((prte_bp_graph_vertex_t *) pmix_pointer_array_get_item((pmix_pointer_array_t *) &g->vertices, \
                                                             v_id))
 
 #define FOREACH_OUT_EDGE(g, v_id, e_ptr, _err)                                              \

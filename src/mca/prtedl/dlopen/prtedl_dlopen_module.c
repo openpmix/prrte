@@ -8,7 +8,7 @@
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -27,8 +27,8 @@
 
 #include "constants.h"
 #include "src/mca/prtedl/prtedl.h"
-#include "src/util/argv.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_printf.h"
 
 #include "prtedl_dlopen.h"
 
@@ -76,7 +76,7 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
              ext = prte_prtedl_dlopen_component.filename_suffixes[++i]) {
             char *name;
 
-            prte_asprintf(&name, "%s%s", fname, ext);
+            pmix_asprintf(&name, "%s%s", fname, ext);
             if (NULL == name) {
                 return PRTE_ERR_IN_ERRNO;
             }
@@ -169,7 +169,7 @@ static int dlopen_foreachfile(const char *search_path,
     char **dirs = NULL;
     char **good_files = NULL;
 
-    dirs = prte_argv_split(search_path, PRTE_ENV_SEP);
+    dirs = pmix_argv_split(search_path, PRTE_ENV_SEP);
     for (int i = 0; NULL != dirs && NULL != dirs[i]; ++i) {
 
         dp = opendir(dirs[i]);
@@ -183,7 +183,7 @@ static int dlopen_foreachfile(const char *search_path,
 
             /* Make the absolute path name */
             char *abs_name = NULL;
-            prte_asprintf(&abs_name, "%s/%s", dirs[i], de->d_name);
+            pmix_asprintf(&abs_name, "%s/%s", dirs[i], de->d_name);
             if (NULL == abs_name) {
                 ret = PRTE_ERR_IN_ERRNO;
                 goto error;
@@ -227,7 +227,7 @@ static int dlopen_foreachfile(const char *search_path,
             }
 
             if (!found) {
-                prte_argv_append_nosize(&good_files, abs_name);
+                pmix_argv_append_nosize(&good_files, abs_name);
             }
             free(abs_name);
         }
@@ -252,10 +252,10 @@ error:
         closedir(dp);
     }
     if (NULL != dirs) {
-        prte_argv_free(dirs);
+        pmix_argv_free(dirs);
     }
     if (NULL != good_files) {
-        prte_argv_free(good_files);
+        pmix_argv_free(good_files);
     }
 
     return ret;

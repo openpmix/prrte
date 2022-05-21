@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,18 +48,18 @@
 #endif
 
 #include "constants.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_alias.h"
 #include "src/mca/base/prte_mca_base_component_repository.h"
 #include "src/mca/mca.h"
 #include "src/mca/prtedl/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/proc_info.h"
-#include "src/util/prte_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_show_help.h"
 
 #if PRTE_HAVE_DL_SUPPORT
 /*
@@ -120,13 +120,13 @@ int prte_mca_base_component_find(const char *directory, prte_mca_base_framework_
         for (int i = 0; NULL != static_components[i]; ++i) {
             if (use_component(framework, include_mode, (const char **) requested_component_names,
                               static_components[i]->mca_component_name)) {
-                cli = PRTE_NEW(prte_mca_base_component_list_item_t);
+                cli = PMIX_NEW(prte_mca_base_component_list_item_t);
                 if (NULL == cli) {
                     ret = PRTE_ERR_OUT_OF_RESOURCE;
                     goto component_find_out;
                 }
                 cli->cli_component = static_components[i];
-                prte_list_append(&framework->framework_components, (prte_list_item_t *) cli);
+                pmix_list_append(&framework->framework_components, (pmix_list_item_t *) cli);
             }
         }
     }
@@ -152,7 +152,7 @@ int prte_mca_base_component_find(const char *directory, prte_mca_base_framework_
 component_find_out:
 
     if (NULL != requested_component_names) {
-        prte_argv_free(requested_component_names);
+        pmix_argv_free(requested_component_names);
     }
 
     /* All done */
@@ -167,7 +167,7 @@ int prte_mca_base_component_find_finalize(void)
 
 int prte_mca_base_components_filter(prte_mca_base_framework_t *framework, uint32_t filter_flags)
 {
-    prte_list_t *components = &framework->framework_components;
+    pmix_list_t *components = &framework->framework_components;
     int output_id = framework->framework_output;
     prte_mca_base_component_list_item_t *cli, *next;
     char **requested_component_names = NULL;
@@ -186,7 +186,7 @@ int prte_mca_base_components_filter(prte_mca_base_framework_t *framework, uint32
         return ret;
     }
 
-    PRTE_LIST_FOREACH_SAFE(cli, next, components, prte_mca_base_component_list_item_t)
+    PMIX_LIST_FOREACH_SAFE(cli, next, components, prte_mca_base_component_list_item_t)
     {
         const prte_mca_base_component_t *component = cli->cli_component;
         prte_mca_base_open_only_dummy_component_t *dummy
@@ -204,11 +204,11 @@ int prte_mca_base_components_filter(prte_mca_base_framework_t *framework, uint32
                                     component->reserved, component->mca_component_name);
             }
 
-            prte_list_remove_item(components, &cli->super);
+            pmix_list_remove_item(components, &cli->super);
 
             prte_mca_base_component_unload(component, output_id);
 
-            PRTE_RELEASE(cli);
+            PMIX_RELEASE(cli);
         } else if (filter_flags & PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT) {
             prte_output_verbose(PRTE_MCA_BASE_VERBOSE_COMPONENT, output_id,
                                 "mca: base: components_filter: "
@@ -224,7 +224,7 @@ int prte_mca_base_components_filter(prte_mca_base_framework_t *framework, uint32
     }
 
     if (NULL != requested_component_names) {
-        prte_argv_free(requested_component_names);
+        pmix_argv_free(requested_component_names);
     }
 
     return ret;
@@ -244,7 +244,7 @@ static void find_dyn_components(const char *path, prte_mca_base_framework_t *fra
                                 const char **names, bool include_mode)
 {
     prte_mca_base_component_repository_item_t *ri;
-    prte_list_t *dy_components;
+    pmix_list_t *dy_components;
     int ret;
 
     if (NULL != path) {
@@ -260,7 +260,7 @@ static void find_dyn_components(const char *path, prte_mca_base_framework_t *fra
     }
 
     /* Iterate through the repository and find components that can be included */
-    PRTE_LIST_FOREACH(ri, dy_components, prte_mca_base_component_repository_item_t)
+    PMIX_LIST_FOREACH(ri, dy_components, prte_mca_base_component_repository_item_t)
     {
         if (use_component(framework, include_mode, names, ri->ri_name)) {
             prte_mca_base_component_repository_open(framework, ri);
@@ -300,7 +300,7 @@ static bool use_component(const prte_mca_base_framework_t *framework, const bool
                                                                         framework->framework_name,
                                                                         component_name);
         if (alias) {
-            PRTE_LIST_FOREACH_DECL(alias_item, &alias->component_aliases,
+            PMIX_LIST_FOREACH_DECL(alias_item, &alias->component_aliases,
                                    prte_mca_base_alias_item_t)
             {
                 found = component_in_list(requested_component_names, alias_item->component_alias);
@@ -332,7 +332,7 @@ static bool use_component(const prte_mca_base_framework_t *framework, const bool
 static int component_find_check(prte_mca_base_framework_t *framework,
                                 char **requested_component_names)
 {
-    prte_list_t *components = &framework->framework_components;
+    pmix_list_t *components = &framework->framework_components;
     prte_mca_base_component_list_item_t *cli;
 
     if (NULL == requested_component_names) {
@@ -342,7 +342,7 @@ static int component_find_check(prte_mca_base_framework_t *framework,
     for (int i = 0; NULL != requested_component_names[i]; ++i) {
         bool found = false;
 
-        PRTE_LIST_FOREACH(cli, components, prte_mca_base_component_list_item_t)
+        PMIX_LIST_FOREACH(cli, components, prte_mca_base_component_list_item_t)
         {
             if (0 == strcmp(requested_component_names[i], cli->cli_component->mca_component_name)) {
                 found = true;
@@ -351,7 +351,7 @@ static int component_find_check(prte_mca_base_framework_t *framework,
         }
 
         if (!found) {
-            prte_show_help("help-prte-mca-base.txt", "find-available:not-valid", true,
+            pmix_show_help("help-prte-mca-base.txt", "find-available:not-valid", true,
                            prte_process_info.nodename, framework->framework_name,
                            requested_component_names[i]);
             return PRTE_ERR_NOT_FOUND;
@@ -385,13 +385,13 @@ int prte_mca_base_component_parse_requested(const char *requested, bool *include
     /* Double check to ensure that the user did not specify the negate
        character anywhere else in the value. */
     if (NULL != strstr(requested, negate)) {
-        prte_show_help("help-prte-mca-base.txt", "framework-param:too-many-negates", true,
+        pmix_show_help("help-prte-mca-base.txt", "framework-param:too-many-negates", true,
                        requested_orig);
         return PRTE_ERROR;
     }
 
     /* Split up the value into individual component names */
-    *requested_component_names = prte_argv_split(requested, ',');
+    *requested_component_names = pmix_argv_split(requested, ',');
 
     /* All done */
     return PRTE_SUCCESS;

@@ -8,7 +8,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  *
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,7 +33,7 @@
 #    include <event2/thread.h>
 #endif
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/util/output.h"
 
 typedef event_callback_fn prte_event_cbfunc_t;
@@ -158,10 +158,19 @@ PRTE_EXPORT prte_event_t *prte_event_new(prte_event_base_t *b, int fd, short fg,
 #define prte_event_loop(b, fg) event_base_loop((b), (fg))
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     prte_event_t ev;
 } prte_event_list_item_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_event_list_item_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_event_list_item_t);
+
+/* define a threadshift macro */
+#define PMIX_THREADSHIFT(x, eb, f, p)                                  \
+    do {                                                               \
+        prte_event_set((eb), &((x)->ev), -1, PRTE_EV_WRITE, (f), (x)); \
+        prte_event_set_priority(&((x)->ev), (p));                      \
+        PMIX_POST_OBJECT((x));                                         \
+        prte_event_active(&((x)->ev), PRTE_EV_WRITE, 1);               \
+    } while (0)
 
 END_C_DECLS
 

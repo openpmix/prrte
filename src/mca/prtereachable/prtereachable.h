@@ -6,7 +6,7 @@
  * Copyright (c) 2017-2019 Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,11 +18,10 @@
 #define PRTE_REACHABLE_H
 
 #include "prte_config.h"
-#include "src/class/prte_object.h"
+#include "src/class/pmix_list.h"
 #include "src/include/types.h"
 
 #include "src/mca/mca.h"
-#include "src/mca/prteif/prteif.h"
 
 BEGIN_C_DECLS
 
@@ -37,7 +36,7 @@ BEGIN_C_DECLS
  * representing a relative connectivity.
  */
 struct prte_reachable_t {
-    prte_object_t super;
+    pmix_object_t super;
     /** number of local interfaces passed to reachable() */
     int num_local;
     /** number of remote interfaces passed to reachable() */
@@ -48,7 +47,7 @@ struct prte_reachable_t {
     void *memory;
 };
 typedef struct prte_reachable_t prte_reachable_t;
-PRTE_CLASS_DECLARATION(prte_reachable_t);
+PMIX_CLASS_DECLARATION(prte_reachable_t);
 
 /* Init */
 typedef int (*prte_reachable_base_module_init_fn_t)(void);
@@ -59,10 +58,10 @@ typedef int (*prte_reachable_base_module_fini_fn_t)(void);
 /* Build reachability matrix between local and remote ethernet
  * interfaces
  *
- * @param local_ifs (IN)     Local list of prte_if_t objects
- *                           The prte_if_t objects must be fully populated
- * @param remote_ifs (IN)    Remote list of prte_if_t objects
- *                           The prte_if_t objects must have the following fields populated:
+ * @param local_ifs (IN)     Local list of pmix_pif_t objects
+ *                           The pmix_pif_t objects must be fully populated
+ * @param remote_ifs (IN)    Remote list of pmix_pif_t objects
+ *                           The pmix_pif_t objects must have the following fields populated:
  *                              uint16_t                 af_family;
  *                              struct sockaddr_storage  if_addr;
  *                              uint32_t                 if_mask;
@@ -78,8 +77,8 @@ typedef int (*prte_reachable_base_module_fini_fn_t)(void);
  *
  *
  */
-typedef prte_reachable_t *(*prte_reachable_base_module_reachable_fn_t)(prte_list_t *local_ifs,
-                                                                       prte_list_t *remote_ifs);
+typedef prte_reachable_t *(*prte_reachable_base_module_reachable_fn_t)(pmix_list_t *local_ifs,
+                                                                       pmix_list_t *remote_ifs);
 
 /*
  * the standard public API data structure

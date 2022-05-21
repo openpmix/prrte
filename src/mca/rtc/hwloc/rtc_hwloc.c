@@ -4,7 +4,7 @@
  * Copyright (c) 2017      Inria.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,23 +35,23 @@
 #    include <fcntl.h>
 #endif
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/hwloc/hwloc-internal.h"
 #if HWLOC_API_VERSION >= 0x20000
 #    include "hwloc/shmem.h"
 #endif
 #include "src/pmix/pmix-internal.h"
-#include "src/util/argv.h"
-#include "src/util/fd.h"
-#include "src/util/path.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_fd.h"
+#include "src/util/pmix_path.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/odls/base/odls_private.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/error_strings.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "rtc_hwloc.h"
 #include "src/mca/rtc/base/base.h"
@@ -132,7 +132,7 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
                 } else {
                     char *tmp;
                     (void) hwloc_bitmap_list_asprintf(&tmp, sum->available);
-                    prte_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
+                    pmix_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
                                   prte_strerror(rc), tmp);
                     free(tmp);
                 }
@@ -170,7 +170,7 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
         cpuset = hwloc_bitmap_alloc();
         if (0 != (rc = hwloc_bitmap_list_sscanf(cpuset, cpu_bitmap))) {
             /* See comment above about "This may be a small memory leak" */
-            prte_asprintf(&msg, "hwloc_bitmap_sscanf returned \"%s\" for the string \"%s\"",
+            pmix_asprintf(&msg, "hwloc_bitmap_sscanf returned \"%s\" for the string \"%s\"",
                           prte_strerror(rc), cpu_bitmap);
             if (NULL == msg) {
                 msg = "failed to convert bitmap list to hwloc bitmap";
@@ -203,7 +203,7 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
             } else if (errno == EXDEV) {
                 msg = "hwloc indicates cpu binding cannot be enforced";
             } else {
-                prte_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
+                pmix_asprintf(&msg, "hwloc_set_cpubind returned \"%s\" for bitmap \"%s\"",
                               prte_strerror(rc), cpu_bitmap);
             }
             if (PRTE_BINDING_REQUIRED(jobdat->map->binding)) {

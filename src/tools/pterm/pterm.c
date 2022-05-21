@@ -69,21 +69,21 @@
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/threads/mutex.h"
-#include "src/util/argv.h"
-#include "src/util/basename.h"
-#include "src/util/cmd_line.h"
-#include "src/util/fd.h"
+#include "src/threads/pmix_mutex.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_basename.h"
+#include "src/util/prte_cmd_line.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
-#include "src/util/prte_environ.h"
-#include "src/util/prte_getcwd.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_printf.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_getcwd.h"
+#include "src/util/pmix_show_help.h"
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
-#include "src/util/os_path.h"
-#include "src/util/path.h"
+#include "src/util/pmix_os_path.h"
+#include "src/util/pmix_path.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/schizo/base/base.h"
@@ -97,14 +97,14 @@ typedef struct {
     size_t ninfo;
 } mylock_t;
 
-static prte_list_t job_info;
+static pmix_list_t job_info;
 static pmix_nspace_t myjobid = {0};
 
 static pmix_proc_t myproc;
 static bool forcibly_die = false;
 static prte_event_t term_handler;
 static int term_pipe[2];
-static prte_mutex_t prun_abort_inprogress_lock = PRTE_MUTEX_STATIC_INIT;
+static pmix_mutex_t prun_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static prte_event_base_t *myevbase = NULL;
 static bool proxyrun = false;
 static bool verbose = false;
@@ -112,20 +112,20 @@ static bool verbose = false;
 /* prun-specific options */
 static struct option myoptions[] = {
     /* basic options */
-    PRTE_OPTION_SHORT_DEFINE("help", PRTE_ARG_OPTIONAL, 'h'),
-    PRTE_OPTION_SHORT_DEFINE("version", PRTE_ARG_NONE, 'V'),
-    PRTE_OPTION_SHORT_DEFINE("verbose", PRTE_ARG_NONE, 'v'),
+    PMIX_OPTION_SHORT_DEFINE("help", PMIX_ARG_OPTIONAL, 'h'),
+    PMIX_OPTION_SHORT_DEFINE("version", PMIX_ARG_NONE, 'V'),
+    PMIX_OPTION_SHORT_DEFINE("verbose", PMIX_ARG_NONE, 'v'),
 
     // DVM options
-    PRTE_OPTION_DEFINE("system-server-first", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("system-server-only", PRTE_ARG_NONE),
-    PRTE_OPTION_DEFINE("wait-to-connect", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("num-connect-retries", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("pid", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("namespace", PRTE_ARG_REQD),
-    PRTE_OPTION_DEFINE("dvm-uri", PRTE_ARG_REQD),
+    PMIX_OPTION_DEFINE("system-server-first", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("system-server-only", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("wait-to-connect", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("num-connect-retries", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("pid", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("namespace", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("dvm-uri", PMIX_ARG_REQD),
 
-    PRTE_OPTION_END
+    PMIX_OPTION_END
 };
 
 static char *shorts = "hvVp";
@@ -144,7 +144,7 @@ static void infocb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *
         return;
     }
 #endif
-    PRTE_ACQUIRE_OBJECT(lock);
+    PMIX_ACQUIRE_OBJECT(lock);
 
     if (verbose) {
         prte_output(0, "PTERM: INFOCB");
@@ -159,7 +159,7 @@ static void infocb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
-    PRTE_ACQUIRE_OBJECT(lock);
+    PMIX_ACQUIRE_OBJECT(lock);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
@@ -229,12 +229,12 @@ int main(int argc, char *argv[])
     char hostname[PRTE_PATH_MAX];
     char *personality;
     pmix_rank_t rank;
-    prte_cli_result_t results;
-    prte_cli_item_t *opt;
+    pmix_cli_result_t results;
+    pmix_cli_item_t *opt;
     prte_schizo_base_module_t *schizo;
 
     /* init the globals */
-    PRTE_CONSTRUCT(&job_info, prte_list_t);
+    PMIX_CONSTRUCT(&job_info, pmix_list_t);
 
     /* we always need the prrte and pmix params */
     rc = prte_schizo_base_parse_prte(argc, 0, argv, NULL);
@@ -250,10 +250,10 @@ int main(int argc, char *argv[])
     /* init the tiny part of PRTE we use */
     prte_init_util(PRTE_PROC_MASTER);
 
-    prte_tool_basename = prte_basename(argv[0]);
+    prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "pterm";
     gethostname(hostname, sizeof(hostname));
-    PRTE_CONSTRUCT(&results, prte_cli_result_t);
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
 
     /* open the SCHIZO framework */
     rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
@@ -281,13 +281,13 @@ int main(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
 
-    rc = schizo->parse_cli(argv, &results, PRTE_CLI_WARN);
+    rc = schizo->parse_cli(argv, &results, PMIX_CLI_WARN);
     if (PRTE_SUCCESS != rc) {
-        PRTE_DESTRUCT(&results);
+        PMIX_DESTRUCT(&results);
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         } else {
@@ -298,8 +298,8 @@ int main(int argc, char *argv[])
 
     // we do NOT accept arguments other than our own
     if (NULL != results.tail) {
-        param = prte_argv_join(results.tail, ' ');
-        ptr = prte_show_help_string("help-pterm.txt", "no-args", false,
+        param = pmix_argv_join(results.tail, ' ');
+        ptr = pmix_show_help_string("help-pterm.txt", "no-args", false,
                                     prte_tool_basename, param, prte_tool_basename);
         if (NULL != ptr) {
             printf("%s", ptr);
@@ -312,28 +312,28 @@ int main(int argc, char *argv[])
     PMIX_INFO_LIST_START(tinfo);
 
     /* tell PMIx what our name should be */
-    prte_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, (unsigned long)getpid());
+    pmix_asprintf(&param, "%s.%s.%lu", prte_tool_basename, hostname, (unsigned long)getpid());
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_TOOL_NSPACE, param, PMIX_STRING);
     free(param);
     rank = 0;
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_TOOL_RANK, &rank, PMIX_PROC_RANK);
 
-    if (prte_cmd_line_is_taken(&results, "system-server-first")) {
+    if (pmix_cmd_line_is_taken(&results, "system-server-first")) {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
-    } else if (prte_cmd_line_is_taken(&results, "system-server-only")) {
+    } else if (pmix_cmd_line_is_taken(&results, "system-server-only")) {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
     }
-    opt = prte_cmd_line_get_param(&results, "wait-to-connect");
+    opt = pmix_cmd_line_get_param(&results, "wait-to-connect");
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
-    opt = prte_cmd_line_get_param(&results, "num-connect-retries");
+    opt = pmix_cmd_line_get_param(&results, "num-connect-retries");
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
     }
-    opt = prte_cmd_line_get_param(&results, "pid");
+    opt = pmix_cmd_line_get_param(&results, "pid");
     if (NULL != opt) {
         /* see if it is an integer value */
         char *leftover;
@@ -348,14 +348,14 @@ int main(int argc, char *argv[])
             param = strchr(opt->values[0], ':');
             if (NULL == param) {
                 /* malformed input */
-                prte_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
+                pmix_show_help("help-prun.txt", "bad-option-input", true, prte_tool_basename,
                                "--pid", opt->values[0], "file:path");
                 return PRTE_ERR_BAD_PARAM;
             }
             ++param;
             fp = fopen(param, "r");
             if (NULL == fp) {
-                prte_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
+                pmix_show_help("help-prun.txt", "file-open-error", true, prte_tool_basename,
                                "--pid", opt->values[0], param);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -363,7 +363,7 @@ int main(int argc, char *argv[])
             if (1 != rc) {
                 /* if we were unable to obtain the single conversion we
                  * require, then error out */
-                prte_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
+                pmix_show_help("help-prun.txt", "bad-file", true, prte_tool_basename,
                                "--pid", opt->values[0], param);
                 return PRTE_ERR_BAD_PARAM;
             }
@@ -373,7 +373,7 @@ int main(int argc, char *argv[])
     }
 
     /* if they specified the URI, then pass it along */
-    opt = prte_cmd_line_get_param(&results, "dvm-uri");
+    opt = pmix_cmd_line_get_param(&results, "dvm-uri");
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_SERVER_URI, opt->values[0], PMIX_STRING);
     }
@@ -408,8 +408,8 @@ int main(int argc, char *argv[])
 
     /* Set both ends of this pipe to be close-on-exec so that no
        children inherit it */
-    if (prte_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS
-        || prte_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
+    if (pmix_fd_set_cloexec(term_pipe[0]) != PRTE_SUCCESS
+        || pmix_fd_set_cloexec(term_pipe[1]) != PRTE_SUCCESS) {
         fprintf(stderr, "unable to set the pipe to CLOEXEC\n");
         prte_progress_thread_finalize(NULL);
         exit(1);
@@ -482,7 +482,7 @@ static void clean_abort(int fd, short flags, void *arg)
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
      */
-    if (prte_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
+    if (pmix_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
         if (forcibly_die) {
             /* exit with a non-zero status */
             exit(1);

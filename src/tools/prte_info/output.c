@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +37,7 @@
 
 #include "src/tools/prte_info/pinfo.h"
 
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #define PRTE_max(a, b) (((a) > (b)) ? (a) : (b))
 
@@ -105,21 +105,21 @@ void prte_info_out(const char *pretty_message, const char *plain_message, const 
 
     if (prte_info_pretty && NULL != pretty_message) {
         if (centerpoint > (int) strlen(pretty_message)) {
-            prte_asprintf(&spaces, "%*s", centerpoint - (int) strlen(pretty_message), " ");
+            pmix_asprintf(&spaces, "%*s", centerpoint - (int) strlen(pretty_message), " ");
         } else {
             spaces = strdup("");
 #if PRTE_ENABLE_DEBUG
             if (centerpoint < (int) strlen(pretty_message)) {
-                prte_show_help("help-pinfo.txt", "developer warning: field too long", false,
+                pmix_show_help("help-pinfo.txt", "developer warning: field too long", false,
                                pretty_message, centerpoint);
             }
 #endif
         }
         max_value_width = screen_width - strlen(spaces) - strlen(pretty_message) - 2;
         if (0 < strlen(pretty_message)) {
-            prte_asprintf(&filler, "%s%s: ", spaces, pretty_message);
+            pmix_asprintf(&filler, "%s%s: ", spaces, pretty_message);
         } else {
-            prte_asprintf(&filler, "%s  ", spaces);
+            pmix_asprintf(&filler, "%s  ", spaces);
         }
         free(spaces);
         spaces = NULL;
@@ -129,7 +129,7 @@ void prte_info_out(const char *pretty_message, const char *plain_message, const 
                 printf("%s%s\n", filler, v);
                 break;
             } else {
-                prte_asprintf(&spaces, "%*s", centerpoint + 2, " ");
+                pmix_asprintf(&spaces, "%*s", centerpoint + 2, " ");
 
                 /* Work backwards to find the first space before
                  * max_value_width
@@ -190,7 +190,7 @@ void prte_info_out_int(const char *pretty_message, const char *plain_message, in
 {
     char *valstr;
 
-    prte_asprintf(&valstr, "%d", (int) value);
+    pmix_asprintf(&valstr, "%d", (int) value);
     prte_info_out(pretty_message, plain_message, valstr);
     free(valstr);
 }

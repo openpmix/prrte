@@ -14,7 +14,7 @@
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,9 +30,9 @@
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/ess/base/base.h"
 
@@ -53,7 +53,7 @@ int prte_ess_base_std_buffering = -1;
 int prte_ess_base_num_procs = -1;
 char *prte_ess_base_nspace = NULL;
 char *prte_ess_base_vpid = NULL;
-prte_list_t prte_ess_base_signals = PRTE_LIST_STATIC_INIT;
+pmix_list_t prte_ess_base_signals = PMIX_LIST_STATIC_INIT;
 
 static prte_mca_base_var_enum_value_t stream_buffering_values[] = {
     {-1, "default"},
@@ -81,7 +81,7 @@ static int prte_ess_base_register(prte_mca_base_register_flag_t flags)
         "(Default: -1)",
         PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_std_buffering);
-    PRTE_RELEASE(new_enum);
+    PMIX_RELEASE(new_enum);
 
     prte_ess_base_nspace = NULL;
     ret = prte_mca_base_var_register("prte", "ess", "base", "nspace", "Process nspace",
@@ -124,7 +124,7 @@ static int prte_ess_base_register(prte_mca_base_register_flag_t flags)
 
 static int prte_ess_base_close(void)
 {
-    PRTE_LIST_DESTRUCT(&prte_ess_base_signals);
+    PMIX_LIST_DESTRUCT(&prte_ess_base_signals);
 
     return prte_mca_base_framework_components_close(&prte_ess_base_framework, NULL);
 }
@@ -133,7 +133,7 @@ static int prte_ess_base_open(prte_mca_base_open_flag_t flags)
 {
     int rc;
 
-    PRTE_CONSTRUCT(&prte_ess_base_signals, prte_list_t);
+    PMIX_CONSTRUCT(&prte_ess_base_signals, pmix_list_t);
 
     if (PRTE_SUCCESS != (rc = prte_ess_base_setup_signals(forwarded_signals))) {
         return rc;
@@ -219,10 +219,10 @@ static struct known_signal known_signals[] = {
 #define ESS_ADDSIGNAL(x, s)                                     \
     do {                                                        \
         prte_ess_base_signal_t *_sig;                           \
-        _sig = PRTE_NEW(prte_ess_base_signal_t);                \
+        _sig = PMIX_NEW(prte_ess_base_signal_t);                \
         _sig->signal = (x);                                     \
         _sig->signame = strdup((s));                            \
-        prte_list_append(&prte_ess_base_signals, &_sig->super); \
+        pmix_list_append(&prte_ess_base_signals, &_sig->super); \
     } while (0)
 
 static bool signals_added = false;
@@ -255,7 +255,7 @@ int prte_ess_base_setup_signals(char *mysignals)
      * have asked for some we already cover, and so we ignore any duplicates */
     if (NULL != mysignals) {
         /* if they told us "none", then dump the list */
-        signals = prte_argv_split(mysignals, ',');
+        signals = pmix_argv_split(mysignals, ',');
         for (i = 0; NULL != signals[i]; i++) {
             sval = 0;
             if (0 != strncmp(signals[i], "SIG", 3)) {
@@ -263,16 +263,16 @@ int prte_ess_base_setup_signals(char *mysignals)
                 errno = 0;
                 sval = strtoul(signals[i], &tmp, 10);
                 if (0 != errno || '\0' != *tmp) {
-                    prte_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
+                    pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
                                    forwarded_signals);
-                    prte_argv_free(signals);
+                    pmix_argv_free(signals);
                     return PRTE_ERR_SILENT;
                 }
             }
 
             /* see if it is one we already covered */
             ignore = false;
-            PRTE_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+            PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
             {
                 if (0 == strcasecmp(signals[i], sig->signame) || sval == sig->signal) {
                     /* got it - we will ignore */
@@ -291,9 +291,9 @@ int prte_ess_base_setup_signals(char *mysignals)
                 if (0 == strcasecmp(signals[i], known_signals[j].signame)
                     || sval == known_signals[j].signal) {
                     if (!known_signals[j].can_forward) {
-                        prte_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
+                        pmix_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
                                        known_signals[j].signame, forwarded_signals);
-                        prte_argv_free(signals);
+                        pmix_argv_free(signals);
                         return PRTE_ERR_SILENT;
                     }
                     found = true;
@@ -304,16 +304,16 @@ int prte_ess_base_setup_signals(char *mysignals)
 
             if (!found) {
                 if (0 == strncmp(signals[i], "SIG", 3)) {
-                    prte_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
+                    pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
                                    forwarded_signals);
-                    prte_argv_free(signals);
+                    pmix_argv_free(signals);
                     return PRTE_ERR_SILENT;
                 }
 
                 ESS_ADDSIGNAL(sval, signals[i]);
             }
         }
-        prte_argv_free(signals);
+        pmix_argv_free(signals);
     }
     return PRTE_SUCCESS;
 }
@@ -329,4 +329,4 @@ static void sdes(prte_ess_base_signal_t *t)
         free(t->signame);
     }
 }
-PRTE_CLASS_INSTANCE(prte_ess_base_signal_t, prte_list_item_t, scon, sdes);
+PMIX_CLASS_INSTANCE(prte_ess_base_signal_t, pmix_list_item_t, scon, sdes);

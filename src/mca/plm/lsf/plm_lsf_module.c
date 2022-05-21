@@ -18,7 +18,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,9 +60,9 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
@@ -70,8 +70,8 @@
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
-#include "src/threads/threads.h"
-#include "src/util/show_help.h"
+#include "src/threads/pmix_threads.h"
+#include "src/util/pmix_show_help.h"
 
 #include "plm_lsf.h"
 #include "src/mca/plm/base/base.h"
@@ -179,7 +179,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
 
-    PRTE_ACQUIRE_OBJECT(state);
+    PMIX_ACQUIRE_OBJECT(state);
     jdata = state->jdata;
 
     /* start by setting up the virtual machine */
@@ -200,7 +200,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          */
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -225,7 +225,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
         PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
-        PRTE_RELEASE(state);
+        PMIX_RELEASE(state);
         return;
     }
 
@@ -234,7 +234,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     nodelist_argc = 0;
 
     for (nnode = 0; nnode < map->nodes->size; nnode++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, nnode))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, nnode))) {
             continue;
         }
         /* if the daemon already exists on this node, then
@@ -247,7 +247,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         /* otherwise, add it to the list of nodes upon which
          * we need to launch a daemon
          */
-        prte_argv_append(&nodelist_argc, &nodelist_argv, node->name);
+        pmix_argv_append(&nodelist_argc, &nodelist_argv, node->name);
     }
 
     /*
@@ -290,7 +290,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_base_wrap_args(argv);
 
     if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-        param = prte_argv_join(argv, ' ');
+        param = pmix_argv_join(argv, ' ');
         if (NULL != param) {
             prte_output(0, "plm:lsf: final top-level argv:");
             prte_output(0, "plm:lsf:     %s", param);
@@ -307,7 +307,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     cur_prefix = NULL;
     for (i = 0; i < jdata->apps->size; i++) {
         char *app_prefix_dir = NULL;
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
         if (prte_get_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, (void **) &app_prefix_dir,
@@ -316,7 +316,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             /* Check for already set cur_prefix_dir -- if different,
                complain */
             if (NULL != cur_prefix && 0 != strcmp(cur_prefix, app_prefix_dir)) {
-                prte_show_help("help-plm-lsf.txt", "multiple-prefixes", true, cur_prefix,
+                pmix_show_help("help-plm-lsf.txt", "multiple-prefixes", true, cur_prefix,
                                app_prefix_dir);
                 rc = PRTE_ERR_FAILED_TO_START;
                 goto cleanup;
@@ -341,7 +341,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* setup environment */
-    env = prte_argv_copy(prte_launch_environ);
+    env = pmix_argv_copy(prte_launch_environ);
 
     /* lsb_launch tampers with SIGCHLD.
      * After the call to lsb_launch, the signal handler for SIGCHLD is NULL.
@@ -359,9 +359,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
     if ((rc = lsb_launch(nodelist_argv, argv, LSF_DJOB_REPLACE_ENV | LSF_DJOB_NOWAIT, env)) < 0) {
         PRTE_ERROR_LOG(PRTE_ERR_FAILED_TO_START);
         char *flattened_nodelist = NULL;
-        flattened_nodelist = prte_argv_join(nodelist_argv, '\n');
-        prte_show_help("help-plm-lsf.txt", "lsb_launch-failed", true, rc, lsberrno, lsb_sysmsg(),
-                       prte_argv_count(nodelist_argv), flattened_nodelist);
+        flattened_nodelist = pmix_argv_join(nodelist_argv, '\n');
+        pmix_show_help("help-plm-lsf.txt", "lsb_launch-failed", true, rc, lsberrno, lsb_sysmsg(),
+                       pmix_argv_count(nodelist_argv), flattened_nodelist);
         free(flattened_nodelist);
         rc = PRTE_ERR_FAILED_TO_START;
         prte_wait_enable(); /* re-enable our SIGCHLD handler */
@@ -378,10 +378,10 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
 cleanup:
     if (NULL != argv) {
-        prte_argv_free(argv);
+        pmix_argv_free(argv);
     }
     if (NULL != env) {
-        prte_argv_free(env);
+        pmix_argv_free(env);
     }
 
     /* check for failed launch - if so, force terminate */
@@ -390,7 +390,7 @@ cleanup:
     }
 
     /* cleanup the caddy */
-    PRTE_RELEASE(state);
+    PMIX_RELEASE(state);
 }
 
 /**

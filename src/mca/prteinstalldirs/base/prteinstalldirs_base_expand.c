@@ -6,7 +6,7 @@
  * Copyright (c) 2010      Sandia National Laboratories. All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,8 +21,8 @@
 
 #include "src/mca/prteinstalldirs/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/os_path.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_os_path.h"
+#include "src/util/pmix_printf.h"
 
 /* Support both ${name} and @{name} forms.  The latter allows us to
    pass values through AC_SUBST without being munged by m4 (e.g., if
@@ -36,7 +36,7 @@
             tmp = retval;                                                                      \
             *start_pos = '\0';                                                                 \
             end_pos = start_pos + strlen("${" #fieldname "}");                                 \
-            prte_asprintf(&retval, "%s%s%s", tmp, prte_install_dirs.prtename + destdir_offset, \
+            pmix_asprintf(&retval, "%s%s%s", tmp, prte_install_dirs.prtename + destdir_offset, \
                           end_pos);                                                            \
             free(tmp);                                                                         \
             changed = true;                                                                    \
@@ -44,7 +44,7 @@
             tmp = retval;                                                                      \
             *start_pos = '\0';                                                                 \
             end_pos = start_pos + strlen("@{" #fieldname "}");                                 \
-            prte_asprintf(&retval, "%s%s%s", tmp, prte_install_dirs.prtename + destdir_offset, \
+            pmix_asprintf(&retval, "%s%s%s", tmp, prte_install_dirs.prtename + destdir_offset, \
                           end_pos);                                                            \
             free(tmp);                                                                         \
             changed = true;                                                                    \
@@ -150,7 +150,7 @@ static char *prte_install_dirs_expand_internal(const char *input, bool is_setup)
 
     if (NULL != destdir) {
         char *tmp = retval;
-        retval = prte_os_path(false, destdir, tmp, NULL);
+        retval = pmix_os_path(false, destdir, tmp, NULL);
         free(tmp);
     }
 

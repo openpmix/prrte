@@ -5,7 +5,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -22,17 +22,17 @@
 #endif
 #include <ctype.h>
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/mca/routed/routed.h"
+#include "src/rml/rml.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
 #include "src/util/nidmap.h"
 
-int prte_util_nidmap_create(prte_pointer_array_t *pool, pmix_data_buffer_t *buffer)
+int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buffer)
 {
     char *raw = NULL;
     pmix_rank_t *vpids = NULL;
@@ -83,22 +83,22 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool, pmix_data_buffer_t *buff
 
     ndaemons = 0;
     for (n = 0; n < pool->size; n++) {
-        if (NULL == (nptr = (prte_node_t *) prte_pointer_array_get_item(pool, n))) {
+        if (NULL == (nptr = (prte_node_t *) pmix_pointer_array_get_item(pool, n))) {
             continue;
         }
         /* add the hostname to the argv */
-        prte_argv_append_nosize(&names, nptr->name);
+        pmix_argv_append_nosize(&names, nptr->name);
         als = NULL;
         if (NULL != nptr->aliases) {
             for (m=0; NULL != nptr->aliases[m]; m++) {
-                prte_argv_append_nosize(&als, nptr->aliases[m]);
+                pmix_argv_append_nosize(&als, nptr->aliases[m]);
             }
-            raw = prte_argv_join(als, ',');
-            prte_argv_free(als);
-            prte_argv_append_nosize(&aliases, raw);
+            raw = pmix_argv_join(als, ',');
+            pmix_argv_free(als);
+            pmix_argv_append_nosize(&aliases, raw);
             free(raw);
         } else {
-            prte_argv_append_nosize(&aliases, "PRTENONE");
+            pmix_argv_append_nosize(&aliases, "PRTENONE");
         }
         /* store the vpid */
         if (NULL == nptr->daemon) {
@@ -117,8 +117,8 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool, pmix_data_buffer_t *buff
     }
 
     /* construct the string of node names for compression */
-    raw = prte_argv_join(names, ',');
-    prte_argv_free(names);
+    raw = pmix_argv_join(names, ',');
+    pmix_argv_free(names);
     if (PMIx_Data_compress((uint8_t *) raw, strlen(raw) + 1, (uint8_t **) &bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
@@ -149,8 +149,8 @@ int prte_util_nidmap_create(prte_pointer_array_t *pool, pmix_data_buffer_t *buff
     free(bo.bytes);
 
     /* construct the string of aliases for compression */
-    raw = prte_argv_join(aliases, ';');
-    prte_argv_free(aliases);
+    raw = pmix_argv_join(aliases, ';');
+    pmix_argv_free(aliases);
     if (PMIx_Data_compress((uint8_t *) raw, strlen(raw) + 1, (uint8_t **) &bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
@@ -282,7 +282,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         pbo.size = 0;
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-    names = prte_argv_split(raw, ',');
+    names = pmix_argv_split(raw, ',');
     free(raw);
 
     /* unpack compression flag for node aliases */
@@ -315,7 +315,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         pbo.size = 0;
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-    aliases = prte_argv_split(raw, ';');
+    aliases = pmix_argv_split(raw, ';');
     free(raw);
 
     /* unpack compression flag for daemon vpids */
@@ -360,7 +360,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
     /* get our topology */
-    t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, 0);
+    t = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, 0);
     if (NULL == t) {
         /* should never happen */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -371,7 +371,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
      * _all_ nodes known to the allocation */
     for (n = 0; NULL != names[n]; n++) {
         /* do we already have this node? */
-        nd = (prte_node_t*)prte_pointer_array_get_item(prte_node_pool, n);
+        nd = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, n);
         if (NULL != nd) {
             /* check the name */
             if (0 != strcmp(nd->name, names[n])) {
@@ -380,38 +380,38 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
             }
             if (0 != strcmp(aliases[n], "PRTENONE")) {
                 if (NULL != nd->aliases) {
-                    prte_argv_free(nd->aliases);
+                    pmix_argv_free(nd->aliases);
                 }
-                nd->aliases = prte_argv_split(aliases[n], ',');
+                nd->aliases = pmix_argv_split(aliases[n], ',');
             }
             continue;
         }
         /* add this name to the pool */
-        nd = PRTE_NEW(prte_node_t);
+        nd = PMIX_NEW(prte_node_t);
         nd->name = strdup(names[n]);
         nd->index = n;
-        prte_pointer_array_set_item(prte_node_pool, n, nd);
+        pmix_pointer_array_set_item(prte_node_pool, n, nd);
         /* add any aliases */
         if (0 != strcmp(aliases[n], "PRTENONE")) {
-            nd->aliases = prte_argv_split(aliases[n], ',');
+            nd->aliases = pmix_argv_split(aliases[n], ',');
         }
         /* set the topology - always default to homogeneous
          * as that is the most common scenario */
         nd->topology = t;
         /* see if it has a daemon on it */
         if (PMIX_RANK_INVALID != vpid[n]) {
-            proc = (prte_proc_t *) prte_pointer_array_get_item(daemons->procs, vpid[n]);
+            proc = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, vpid[n]);
             if (NULL == proc) {
-                proc = PRTE_NEW(prte_proc_t);
+                proc = PMIX_NEW(prte_proc_t);
                 PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, vpid[n]);
                 proc->state = PRTE_PROC_STATE_RUNNING;
                 PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_ALIVE);
                 daemons->num_procs++;
-                prte_pointer_array_set_item(daemons->procs, proc->name.rank, proc);
+                pmix_pointer_array_set_item(daemons->procs, proc->name.rank, proc);
             }
-            PRTE_RETAIN(nd);
+            PMIX_RETAIN(nd);
             proc->node = nd;
-            PRTE_RETAIN(proc);
+            PMIX_RETAIN(proc);
             nd->daemon = proc;
         }
     }
@@ -419,16 +419,15 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
     /* update num procs */
     if (prte_process_info.num_daemons != daemons->num_procs) {
         prte_process_info.num_daemons = daemons->num_procs;
+        prte_rml_compute_routing_tree();
     }
-    /* need to update the routing plan */
-    prte_routed.update_routing_plan();
 
 cleanup:
     if (NULL != vpid) {
         free(vpid);
     }
     if (NULL != names) {
-        prte_argv_free(names);
+        pmix_argv_free(names);
     }
     return rc;
 }
@@ -475,7 +474,7 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
         pt.source = strdup("hwloc");
         ntopos = 0;
         for (n = 0; n < prte_node_topologies->size; n++) {
-            t = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, n);
+            t = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, n);
             if (NULL == t) {
                 continue;
             }
@@ -488,7 +487,7 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
                 goto cleanup;
             }
             /* track it */
-            prte_argv_append_nosize(&topos, t->sig);
+            pmix_argv_append_nosize(&topos, t->sig);
             /* pack the topology itself */
             pt.topology = t->topo;
             rc = PMIx_Data_pack(NULL, &bucket, &pt, 1, PMIX_TOPO);
@@ -549,7 +548,7 @@ int prte_util_pass_node_info(pmix_data_buffer_t *buffer)
     /* construct the per-node info */
     PMIX_DATA_BUFFER_CONSTRUCT(&bucket);
     for (n = 0; n < prte_node_pool->size; n++) {
-        if (NULL == (nptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, n))) {
+        if (NULL == (nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n))) {
             continue;
         }
         /* track the topology, if required */
@@ -729,7 +728,7 @@ cleanup:
         free(flags);
     }
     if (NULL != topos) {
-        prte_argv_free(topos);
+        pmix_argv_free(topos);
     }
     return rc;
 }
@@ -821,7 +820,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
                 goto cleanup;
             }
             /* cache it */
-            prte_argv_append_nosize(&topos, sig);
+            pmix_argv_append_nosize(&topos, sig);
             /* unpack the topology */
             cnt = 1;
             rc = PMIx_Data_unpack(NULL, &bucket, &ptopo, &cnt, PMIX_TOPO);
@@ -836,7 +835,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
              * in a cluster, so this won't take long */
             found = false;
             for (m = 0; m < prte_node_topologies->size; m++) {
-                t3 = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, m);
+                t3 = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, m);
                 if (NULL == t3) {
                     continue;
                 }
@@ -850,15 +849,15 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
                 free(sig);
             } else {
                 /* record it */
-                t2 = PRTE_NEW(prte_topology_t);
+                t2 = PMIX_NEW(prte_topology_t);
                 t2->sig = sig;
                 t2->topo = topo;
                 /* need to ensure the summary is setup */
                 root = hwloc_get_root_obj(topo);
-                root->userdata = (void *) PRTE_NEW(prte_hwloc_topo_data_t);
+                root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
                 sum = (prte_hwloc_topo_data_t *) root->userdata;
                 sum->available = prte_hwloc_base_setup_summary(topo);
-                t2->index = prte_pointer_array_add(prte_node_topologies, t2);
+                t2->index = pmix_pointer_array_add(prte_node_topologies, t2);
             }
         }
         PMIX_DATA_BUFFER_DESTRUCT(&bucket);
@@ -903,7 +902,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
         cnt = 1;
         rc = PMIx_Data_unpack(NULL, &bucket, &drk, &cnt, PMIX_PROC_RANK);
         while (PMIX_SUCCESS == rc) {
-            nptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, drk);
+            nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, drk);
             if (NULL == nptr) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 PMIX_DATA_BUFFER_DESTRUCT(&bucket);
@@ -922,7 +921,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
             /* find that signature in our topologies - might be at a
              * different location */
             for (m = 0; m < prte_node_topologies->size; m++) {
-                t3 = (prte_topology_t *) prte_pointer_array_get_item(prte_node_topologies, m);
+                t3 = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, m);
                 if (NULL == t3) {
                     continue;
                 }
@@ -953,7 +952,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
     if (0 > i16) {
         i16 = -1 * i16;
         for (n = 0; n < prte_node_pool->size; n++) {
-            if (NULL != (nptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, n))) {
+            if (NULL != (nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n))) {
                 nptr->slots = i16;
             }
         }
@@ -982,7 +981,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
 
         /* cycle across the node pool and assign the values */
         for (n = 0, m = 0; n < prte_node_pool->size; n++) {
-            if (NULL != (nptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, n))) {
+            if (NULL != (nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n))) {
                 nptr->slots = slots[m];
                 ++m;
             }
@@ -1001,7 +1000,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
     if (0 > i8) {
         i8 += 2;
         for (n = 0; n < prte_node_pool->size; n++) {
-            if (NULL != (nptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, n))) {
+            if (NULL != (nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n))) {
                 if (i8) {
                     PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 } else {
@@ -1034,7 +1033,7 @@ int prte_util_parse_node_info(pmix_data_buffer_t *buf)
 
         /* cycle across the node pool and assign the values */
         for (n = 0, m = 0; n < prte_node_pool->size; n++) {
-            if (NULL != (nptr = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, n))) {
+            if (NULL != (nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n))) {
                 if (flags[m]) {
                     PRTE_FLAG_SET(nptr, PRTE_NODE_FLAG_SLOTS_GIVEN);
                 } else {
@@ -1053,7 +1052,7 @@ cleanup:
         free(flags);
     }
     if (NULL != topos) {
-        prte_argv_free(topos);
+        pmix_argv_free(topos);
     }
     return rc;
 }
@@ -1075,10 +1074,10 @@ int prte_util_generate_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf)
     for (i = 0; i < jdata->num_apps; i++) {
         PMIX_DATA_BUFFER_CONSTRUCT(&bucket);
         /* for each app_context */
-        if (NULL != (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL != (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             for (j = 0; j < jdata->map->num_nodes; j++) {
                 if (NULL
-                    == (nptr = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, j))) {
+                    == (nptr = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, j))) {
                     continue;
                 }
                 if (NULL == nptr->daemon) {
@@ -1087,7 +1086,7 @@ int prte_util_generate_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf)
                 ppn = 0;
                 for (k = 0; k < nptr->procs->size; k++) {
                     if (NULL
-                        != (proc = (prte_proc_t *) prte_pointer_array_get_item(nptr->procs, k))) {
+                        != (proc = (prte_proc_t *) pmix_pointer_array_get_item(nptr->procs, k))) {
                         if (PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)
                             && proc->app_idx == app->idx) {
                             ++ppn;
@@ -1166,7 +1165,7 @@ int prte_util_decode_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf)
 
     /* reset any flags */
     for (m = 0; m < jdata->map->nodes->size; m++) {
-        if (NULL != (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m))) {
+        if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m))) {
             PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
         }
     }
@@ -1219,15 +1218,15 @@ int prte_util_decode_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf)
         while (PMIX_SUCCESS == (rc = PMIx_Data_unpack(NULL, &bucket, &index, &cnt, PMIX_INT32))) {
             /* get the corresponding node object */
             if (NULL
-                == (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, index))) {
+                == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, index))) {
                 rc = PRTE_ERR_NOT_FOUND;
                 PRTE_ERROR_LOG(rc);
                 goto error;
             }
             /* add the node to the job map if not already assigned */
             if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
-                PRTE_RETAIN(node);
-                prte_pointer_array_add(jdata->map->nodes, node);
+                PMIX_RETAIN(node);
+                pmix_pointer_array_add(jdata->map->nodes, node);
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
             }
             /* get the ppn */
@@ -1239,17 +1238,17 @@ int prte_util_decode_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf)
             }
             /* create a proc object for each one */
             for (k = 0; k < ppn; k++) {
-                proc = PRTE_NEW(prte_proc_t);
+                proc = PMIX_NEW(prte_proc_t);
                 PMIX_LOAD_NSPACE(proc->name.nspace, jdata->nspace);
                 /* leave the vpid undefined as this will be determined
                  * later when we do the overall ranking */
                 proc->app_idx = n;
                 proc->parent = node->daemon->name.rank;
-                PRTE_RETAIN(node);
+                PMIX_RETAIN(node);
                 proc->node = node;
                 /* flag the proc as ready for launch */
                 proc->state = PRTE_PROC_STATE_INIT;
-                prte_pointer_array_add(node->procs, proc);
+                pmix_pointer_array_add(node->procs, proc);
                 node->num_procs++;
                 /* we will add the proc to the jdata array when we
                  * compute its rank */
@@ -1264,7 +1263,7 @@ int prte_util_decode_ppn(prte_job_t *jdata, pmix_data_buffer_t *buf)
 
     /* reset any flags */
     for (m = 0; m < jdata->map->nodes->size; m++) {
-        node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+        node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m);
         if (NULL != node) {
             PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
         }
@@ -1275,7 +1274,7 @@ error:
     PMIX_DATA_BUFFER_DESTRUCT(&bucket);
     /* reset any flags */
     for (m = 0; m < jdata->map->nodes->size; m++) {
-        node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m);
+        node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m);
         if (NULL != node) {
             PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
         }

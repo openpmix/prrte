@@ -16,7 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,8 +36,8 @@
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/prte_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_show_help.h"
 
 #include "plm_slurm.h"
 #include "src/mca/plm/base/plm_private.h"
@@ -74,7 +74,7 @@ prte_plm_slurm_component_t prte_plm_slurm_component = {
             /* Component name and version */
             .mca_component_name = "slurm",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
 
             /* Component open and close functions */
             .mca_open_component = plm_slurm_open,

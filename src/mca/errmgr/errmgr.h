@@ -16,7 +16,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      NVIDIA Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -54,8 +54,8 @@
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
 
-#include "src/class/prte_object.h"
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_object.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/util/error.h"
 #include "src/util/output.h"
 

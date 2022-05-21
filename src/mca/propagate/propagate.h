@@ -2,7 +2,7 @@
  * Copyright (c) 2017-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,10 +28,10 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/class/prte_bitmap.h"
-#include "src/class/prte_object.h"
+#include "src/class/pmix_bitmap.h"
+#include "src/class/pmix_object.h"
 #include "src/mca/mca.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"
 

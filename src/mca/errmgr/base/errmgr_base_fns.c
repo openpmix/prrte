@@ -17,7 +17,7 @@
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -51,12 +51,12 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
-#include "src/util/argv.h"
-#include "src/util/basename.h"
-#include "src/util/os_dirpath.h"
-#include "src/util/output.h"
-#include "src/util/printf.h"
 
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_basename.h"
+#include "src/util/pmix_os_dirpath.h"
+#include "src/util/output.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
@@ -69,9 +69,6 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/odls/odls.h"
 #include "src/mca/plm/plm.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/state/state.h"
 
 #include "src/mca/errmgr/base/base.h"
@@ -104,7 +101,7 @@ void prte_errmgr_base_abort(int error_code, char *fmt, ...)
     va_start(arglist, fmt);
     if (NULL != fmt) {
         char *buffer = NULL;
-        prte_vasprintf(&buffer, fmt, arglist);
+        pmix_vasprintf(&buffer, fmt, arglist);
         prte_output(0, "%s", buffer);
         free(buffer);
     }
