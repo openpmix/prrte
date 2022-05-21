@@ -13,7 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +32,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "rmaps_rr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -50,7 +50,7 @@ int prte_rmaps_rr_assign_root_level(prte_job_t *jdata)
                         PRTE_JOBID_PRINT(jdata->nspace));
 
     for (m = 0; m < jdata->map->nodes->size; m++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m))) {
             continue;
         }
         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
@@ -63,7 +63,7 @@ int prte_rmaps_rr_assign_root_level(prte_job_t *jdata)
         }
         obj = hwloc_get_root_obj(node->topology->topo);
         for (i = 0; i < node->procs->size; i++) {
-            if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, i))) {
+            if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, i))) {
                 continue;
             }
             /* ignore procs from other jobs */
@@ -126,16 +126,16 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target, unsig
      * then loop thru the list again to handle the oversubscription
      */
     for (n = 0; n < jdata->apps->size; n++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, n))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n))) {
             continue;
         }
         for (m = 0; m < jdata->map->nodes->size; m++) {
             if (NULL
-                == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, m))) {
+                == (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, m))) {
                 continue;
             }
             if (NULL == node->topology || NULL == node->topology->topo) {
-                prte_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
+                pmix_show_help("help-prte-rmaps-ppr.txt", "ppr-topo-missing", true, node->name);
                 return PRTE_ERR_SILENT;
             }
             /* get the number of objects of this type on this node */
@@ -180,7 +180,7 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target, unsig
             }
             /* loop over the procs on this node */
             for (j = 0; j < node->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+                if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
                     continue;
                 }
                 /* ignore procs from other jobs */
@@ -219,7 +219,7 @@ int prte_rmaps_rr_assign_byobj(prte_job_t *jdata, hwloc_obj_type_t target, unsig
                 } while (k != start);
                 /* Fail if loop exits without finding an adequate resource */
                 if (cpus_per_rank > npus) {
-                    prte_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
                                    cpus_per_rank, npus,
                                    prte_rmaps_base_print_mapping(prte_rmaps_base.mapping));
                     hwloc_bitmap_free(available);

@@ -14,7 +14,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,9 +28,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "src/threads/tsd.h"
-#include "src/util/printf.h"
-#include "src/util/string_copy.h"
+#include "src/threads/pmix_tsd.h"
+#include "src/util/pmix_printf.h"
+#include "src/util/pmix_string_copy.h"
 #include "src/mca/errmgr/errmgr.h"
 
 #include "src/util/name_fns.h"
@@ -45,14 +45,14 @@ static void prte_namelist_construct(prte_namelist_t *list)
 }
 
 /* define instance of prte_class_t */
-PRTE_CLASS_INSTANCE(prte_namelist_t,           /* type name */
-                    prte_list_item_t,          /* parent "class" name */
+PMIX_CLASS_INSTANCE(prte_namelist_t,           /* type name */
+                    pmix_list_item_t,          /* parent "class" name */
                     prte_namelist_construct,   /* constructor */
                     NULL); /* destructor */
 
 static bool fns_init = false;
 
-static prte_tsd_key_t print_args_tsd_key;
+static pmix_tsd_key_t print_args_tsd_key;
 char *prte_print_args_null = "NULL";
 typedef struct {
     char *buffers[PRTE_PRINT_NAME_ARG_NUM_BUFS];
@@ -80,14 +80,14 @@ static prte_print_args_buffers_t *get_print_name_buffer(void)
 
     if (!fns_init) {
         /* setup the print_args function */
-        if (PRTE_SUCCESS != (ret = prte_tsd_key_create(&print_args_tsd_key, buffer_cleanup))) {
+        if (PRTE_SUCCESS != (ret = pmix_tsd_key_create(&print_args_tsd_key, buffer_cleanup))) {
             PRTE_ERROR_LOG(ret);
             return NULL;
         }
         fns_init = true;
     }
 
-    ret = prte_tsd_getspecific(print_args_tsd_key, (void **) &ptr);
+    ret = pmix_tsd_getspecific(print_args_tsd_key, (void **) &ptr);
     if (PRTE_SUCCESS != ret)
         return NULL;
 
@@ -97,7 +97,7 @@ static prte_print_args_buffers_t *get_print_name_buffer(void)
             ptr->buffers[i] = (char *) malloc((PRTE_PRINT_NAME_ARGS_MAX_SIZE + 1) * sizeof(char));
         }
         ptr->cntr = 0;
-        ret = prte_tsd_setspecific(print_args_tsd_key, (void *) ptr);
+        ret = pmix_tsd_setspecific(print_args_tsd_key, (void *) ptr);
     }
 
     return (prte_print_args_buffers_t *) ptr;
@@ -290,7 +290,7 @@ int prte_util_convert_vpid_to_string(char **vpid_string, const pmix_rank_t vpid)
     } else if (PMIX_RANK_UNDEF == vpid) {
         *vpid_string = strdup("UNDEFINED");
     } else {
-        if (0 > prte_asprintf(vpid_string, "%u", vpid)) {
+        if (0 > pmix_asprintf(vpid_string, "%u", vpid)) {
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
@@ -335,7 +335,7 @@ int prte_util_convert_process_name_to_string(char **name_string, const pmix_proc
 
     job = prte_util_print_jobids(name->nspace);
     rank = prte_util_print_vpids(name->rank);
-    prte_asprintf(name_string, "%s.%s", job, rank);
+    pmix_asprintf(name_string, "%s.%s", job, rank);
 
     return PRTE_SUCCESS;
 }
@@ -409,9 +409,9 @@ char *prte_pretty_print_timing(int64_t secs, int64_t usecs)
     seconds = seconds % 60l;
     if (0 == minutes && 0 == seconds) {
         fsecs = ((float) (secs) *1000000.0 + (float) usecs) / 1000.0;
-        prte_asprintf(&timestring, "%8.2f millisecs", fsecs);
+        pmix_asprintf(&timestring, "%8.2f millisecs", fsecs);
     } else {
-        prte_asprintf(&timestring, "%3lu:%02lu min:sec", minutes, seconds);
+        pmix_asprintf(&timestring, "%3lu:%02lu min:sec", minutes, seconds);
     }
 
     return timestring;

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,10 +21,10 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/mca.h"
 #include "src/mca/odls/base/odls_private.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "src/mca/rtc/rtc.h"
 
@@ -46,7 +46,7 @@ PRTE_EXPORT int prte_rtc_base_select(void);
  */
 typedef struct {
     /* list of selected modules */
-    prte_list_t actives;
+    pmix_list_t actives;
 } prte_rtc_base_t;
 
 /**
@@ -58,16 +58,16 @@ PRTE_EXPORT extern prte_rtc_base_t prte_rtc_base;
  * Select an rtc component / module
  */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     int pri;
     prte_rtc_base_module_t *module;
     prte_mca_base_component_t *component;
 } prte_rtc_base_selected_module_t;
-PRTE_CLASS_DECLARATION(prte_rtc_base_selected_module_t);
+PMIX_CLASS_DECLARATION(prte_rtc_base_selected_module_t);
 
 PRTE_EXPORT void prte_rtc_base_assign(prte_job_t *jdata);
 PRTE_EXPORT void prte_rtc_base_set(prte_odls_spawn_caddy_t *cd, int error_fd);
-PRTE_EXPORT void prte_rtc_base_get_avail_vals(prte_list_t *vals);
+PRTE_EXPORT void prte_rtc_base_get_avail_vals(pmix_list_t *vals);
 
 /* Called from the child to send a warning show_help message up the
    pipe to the waiting parent. */

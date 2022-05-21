@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,9 +28,9 @@
 #include "prte_config.h"
 
 #include "src/mca/filem/filem.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 BEGIN_C_DECLS
 
@@ -72,7 +72,7 @@ PRTE_EXPORT int prte_filem_base_none_get_nb(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_rm(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_rm_nb(prte_filem_base_request_t *request);
 PRTE_EXPORT int prte_filem_base_none_wait(prte_filem_base_request_t *request);
-PRTE_EXPORT int prte_filem_base_none_wait_all(prte_list_t *request_list);
+PRTE_EXPORT int prte_filem_base_none_wait_all(pmix_list_t *request_list);
 int prte_filem_base_none_preposition_files(prte_job_t *jdata, prte_filem_completion_cbfunc_t cbfunc,
                                            void *cbdata);
 int prte_filem_base_none_link_local_files(prte_job_t *jdata, prte_app_context_t *app);

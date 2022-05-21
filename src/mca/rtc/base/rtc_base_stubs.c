@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -11,8 +11,8 @@
 
 #include "prte_config.h"
 
-#include "src/util/fd.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_fd.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/odls/odls_types.h"
@@ -23,7 +23,7 @@ void prte_rtc_base_assign(prte_job_t *jdata)
 {
     prte_rtc_base_selected_module_t *active;
 
-    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
+    PMIX_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
     {
         if (NULL != active->module->assign) {
             /* give this module a chance to operate on it */
@@ -36,7 +36,7 @@ void prte_rtc_base_set(prte_odls_spawn_caddy_t *cd, int error_fd)
 {
     prte_rtc_base_selected_module_t *active;
 
-    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
+    PMIX_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
     {
         if (NULL != active->module->set) {
             /* give this module a chance to operate on it */
@@ -45,11 +45,11 @@ void prte_rtc_base_set(prte_odls_spawn_caddy_t *cd, int error_fd)
     }
 }
 
-void prte_rtc_base_get_avail_vals(prte_list_t *vals)
+void prte_rtc_base_get_avail_vals(pmix_list_t *vals)
 {
     prte_rtc_base_selected_module_t *active;
 
-    PRTE_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
+    PMIX_LIST_FOREACH(active, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
     {
         if (NULL != active->module->get_available_values) {
             /* give this module a chance to operate on it */
@@ -68,7 +68,7 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
         return PRTE_ERR_BAD_PARAM;
     }
 
-    str = prte_show_help_vstring(file, topic, true, ap);
+    str = pmix_show_help_vstring(file, topic, true, ap);
 
     msg->file_str_len = (int) strlen(file);
     if (msg->file_str_len > PRTE_ODLS_MAX_FILE_LEN) {
@@ -83,18 +83,18 @@ static int write_help_msg(int fd, prte_odls_pipe_err_msg_t *msg, const char *fil
     msg->msg_str_len = (int) strlen(str);
 
     /* Only keep writing if each write() succeeds */
-    if (PRTE_SUCCESS != (ret = prte_fd_write(fd, sizeof(*msg), msg))) {
+    if (PRTE_SUCCESS != (ret = pmix_fd_write(fd, sizeof(*msg), msg))) {
         goto out;
     }
     if (msg->file_str_len > 0
-        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->file_str_len, file))) {
+        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->file_str_len, file))) {
         goto out;
     }
     if (msg->topic_str_len > 0
-        && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->topic_str_len, topic))) {
+        && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->topic_str_len, topic))) {
         goto out;
     }
-    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = prte_fd_write(fd, msg->msg_str_len, str))) {
+    if (msg->msg_str_len > 0 && PRTE_SUCCESS != (ret = pmix_fd_write(fd, msg->msg_str_len, str))) {
         goto out;
     }
 

@@ -17,7 +17,7 @@
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,20 +41,20 @@
 #    include <sys/time.h>
 #endif
 
-#include "src/class/prte_hash_table.h"
-#include "src/class/prte_pointer_array.h"
-#include "src/class/prte_ring_buffer.h"
-#include "src/class/prte_value_array.h"
+#include "src/class/pmix_hash_table.h"
+#include "src/class/pmix_pointer_array.h"
+#include "src/class/pmix_ring_buffer.h"
+#include "src/class/pmix_value_array.h"
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 #include "src/mca/plm/plm_types.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/runtime/runtime.h"
 #include "src/util/attr.h"
-#include "src/util/cmd_line.h"
+#include "src/util/pmix_cmd_line.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 
@@ -70,13 +70,9 @@ PRTE_EXPORT extern bool prte_event_base_active;    /* instantiated in src/runtim
 PRTE_EXPORT extern bool prte_proc_is_bound;        /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern int prte_progress_thread_debug; /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern char *prte_tool_basename;       // argv[0] of prun or one of its symlinks
-PRTE_EXPORT extern char *prte_tool_org;
-PRTE_EXPORT extern char *prte_tool_version;
-PRTE_EXPORT extern char *prte_tool_msg;
-
+PRTE_EXPORT extern char *prte_tool_actual;         // actual tool executable
 PRTE_EXPORT extern char *prte_progress_thread_cpus;
 PRTE_EXPORT extern bool prte_bind_progress_thread_reqd;
-PRTE_EXPORT extern char *prte_tool_actual;         // actual tool executable
 
 /**
  * Global indicating where this process was bound to at launch (will
@@ -119,12 +115,12 @@ typedef void (*prte_err_cb_fn_t)(pmix_proc_t *proc, prte_proc_state_t state, voi
 
 /* define an object for timer events */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     struct timeval tv;
     prte_event_t *ev;
     void *payload;
 } prte_timer_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_timer_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_timer_t);
 
 PRTE_EXPORT extern int prte_exit_status;
 
@@ -144,8 +140,8 @@ PRTE_EXPORT extern int prte_exit_status;
 #define PRTE_DB_DAEMON_VPID "prte.daemon.vpid"
 
 /* State Machine lists */
-PRTE_EXPORT extern prte_list_t prte_job_states;
-PRTE_EXPORT extern prte_list_t prte_proc_states;
+PRTE_EXPORT extern pmix_list_t prte_job_states;
+PRTE_EXPORT extern pmix_list_t prte_proc_states;
 
 /* a clean output channel without prefix */
 PRTE_EXPORT extern int prte_clean_output;
@@ -212,19 +208,19 @@ struct prte_schizo_base_module_t;
 
 /* define an object for storing node topologies */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     int index;
     hwloc_topology_t topo;
     char *sig;
 } prte_topology_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_topology_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_topology_t);
 
 /**
  * Information about a specific application to be launched in the RTE.
  */
 typedef struct {
     /** Parent object */
-    prte_object_t super;
+    pmix_object_t super;
     /** Unique index when multiple apps per job */
     prte_app_idx_t idx;
     /** Absolute pathname of argv[0] */
@@ -234,7 +230,7 @@ typedef struct {
     /** Array of pointers to the proc objects for procs of this app_context
      * NOTE - not always used
      */
-    prte_pointer_array_t procs;
+    pmix_pointer_array_t procs;
     /** State of the app_context */
     prte_app_state_t state;
     /** First MPI rank of this app_context in the job */
@@ -253,16 +249,16 @@ typedef struct {
      * flexibility without constantly expanding the memory footprint
      * every time we want some new (rarely used) option
      */
-    prte_list_t attributes;
+    pmix_list_t attributes;
     // store the result of parsing this app's cmd line
-    prte_cli_result_t cli;
+    pmix_cli_result_t cli;
 } prte_app_context_t;
 
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_app_context_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_app_context_t);
 
 typedef struct {
     /** Base object so this can be put on a list */
-    prte_list_item_t super;
+    pmix_list_item_t super;
     /* index of this node object in global array */
     int32_t index;
     /** String node name */
@@ -275,7 +271,7 @@ typedef struct {
     /** number of procs on this node */
     prte_node_rank_t num_procs;
     /* array of pointers to procs on this node */
-    prte_pointer_array_t *procs;
+    pmix_pointer_array_t *procs;
     /* next node rank on this node */
     prte_node_rank_t next_node_rank;
     /** State of this node */
@@ -308,13 +304,13 @@ typedef struct {
     /* flags */
     prte_node_flags_t flags;
     /* list of prte_attribute_t */
-    prte_list_t attributes;
+    pmix_list_t attributes;
 } prte_node_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_node_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_node_t);
 
 typedef struct {
     /** Base object so this can be put on a list */
-    prte_list_item_t super;
+    pmix_list_item_t super;
     /* record the exit status for this job */
     int exit_code;
     /* personality for this job */
@@ -327,7 +323,7 @@ typedef struct {
      * components can potentially connect to any spawned jobs*/
     pmix_rank_t offset;
     /* app_context array for this job */
-    prte_pointer_array_t *apps;
+    pmix_pointer_array_t *apps;
     /* number of app_contexts in the array */
     prte_app_idx_t num_apps;
     /* rank desiring stdin - for now, either one rank, all ranks
@@ -339,7 +335,7 @@ typedef struct {
     /* number of procs in this job */
     pmix_rank_t num_procs;
     /* array of pointers to procs in this job */
-    prte_pointer_array_t *procs;
+    pmix_pointer_array_t *procs;
     /* map of the job */
     struct prte_job_map_t *map;
     /* bookmark for where we are in mapping - this
@@ -370,24 +366,24 @@ typedef struct {
     /* flags */
     prte_job_flags_t flags;
     /* attributes */
-    prte_list_t attributes;
+    pmix_list_t attributes;
     /* launch msg buffer */
     pmix_data_buffer_t launch_msg;
     /* track children of this job */
-    prte_list_t children;
+    pmix_list_t children;
     /* track the launcher of these jobs */
     pmix_nspace_t launcher;
     /* track the number of stack traces recv'd */
     uint32_t ntraces;
     char **traces;
     // store the result of parsing this app's cmd line
-    prte_cli_result_t cli;
+    pmix_cli_result_t cli;
 } prte_job_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_job_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_job_t);
 
 struct prte_proc_t {
     /** Base object so this can be put on a list */
-    prte_list_item_t super;
+    pmix_list_item_t super;
     /* process name */
     pmix_proc_t name;
     prte_job_t *job;
@@ -434,10 +430,10 @@ struct prte_proc_t {
     /* some boolean flags */
     prte_proc_flags_t flags;
     /* list of prte_value_t attributes */
-    prte_list_t attributes;
+    pmix_list_t attributes;
 };
 typedef struct prte_proc_t prte_proc_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_proc_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_proc_t);
 
 /**
  * Get a job data object
@@ -501,7 +497,7 @@ PRTE_EXPORT char *prte_get_proc_hostname(const pmix_proc_t *proc);
 PRTE_EXPORT prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc);
 
 /* check to see if two nodes match */
-PRTE_EXPORT prte_node_t* prte_node_match(prte_list_t *nodes, const char *name);
+PRTE_EXPORT prte_node_t* prte_node_match(pmix_list_t *nodes, const char *name);
 PRTE_EXPORT bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2);
 
 /* global variables used by RTE - instanced in prte_globals.c */
@@ -509,11 +505,11 @@ PRTE_EXPORT extern bool prte_debug_daemons_flag;
 PRTE_EXPORT extern bool prte_debug_daemons_file_flag;
 PRTE_EXPORT extern bool prte_leave_session_attached;
 PRTE_EXPORT extern bool prte_coprocessors_detected;
-PRTE_EXPORT extern prte_hash_table_t *prte_coprocessors;
+PRTE_EXPORT extern pmix_hash_table_t *prte_coprocessors;
 PRTE_EXPORT extern char *prte_topo_signature;
 PRTE_EXPORT extern char *prte_data_server_uri;
 PRTE_EXPORT extern bool prte_dvm_ready;
-PRTE_EXPORT extern prte_pointer_array_t *prte_cache;
+PRTE_EXPORT extern pmix_pointer_array_t *prte_cache;
 PRTE_EXPORT extern bool prte_persistent;
 PRTE_EXPORT extern bool prte_add_pid_to_session_dirname;
 PRTE_EXPORT extern bool prte_allow_run_as_root;
@@ -564,10 +560,10 @@ PRTE_EXPORT extern float prte_max_timeout;
 PRTE_EXPORT extern prte_timer_t *prte_mpiexec_timeout;
 
 /* global arrays for data storage */
-PRTE_EXPORT extern prte_pointer_array_t *prte_job_data;
-PRTE_EXPORT extern prte_pointer_array_t *prte_node_pool;
-PRTE_EXPORT extern prte_pointer_array_t *prte_node_topologies;
-PRTE_EXPORT extern prte_pointer_array_t *prte_local_children;
+PRTE_EXPORT extern pmix_pointer_array_t *prte_job_data;
+PRTE_EXPORT extern pmix_pointer_array_t *prte_node_pool;
+PRTE_EXPORT extern pmix_pointer_array_t *prte_node_topologies;
+PRTE_EXPORT extern pmix_pointer_array_t *prte_local_children;
 PRTE_EXPORT extern pmix_rank_t prte_total_procs;
 PRTE_EXPORT extern char *prte_base_compute_node_sig;
 PRTE_EXPORT extern bool prte_hetero_nodes;

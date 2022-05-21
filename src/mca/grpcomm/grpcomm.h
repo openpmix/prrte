@@ -16,7 +16,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,10 +45,10 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/class/prte_bitmap.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_bitmap.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/mca.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
@@ -62,16 +62,16 @@ typedef int (*prte_grpcomm_rbcast_cb_t)(pmix_data_buffer_t *buffer);
 /* Define a collective signature so we don't need to
  * track global collective id's */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     pmix_proc_t *signature;
     size_t sz;
 } prte_grpcomm_signature_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_grpcomm_signature_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_signature_t);
 
 /* Internal component object for tracking ongoing
  * allgather operations */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     /* collective's signature */
     prte_grpcomm_signature_t *sig;
     pmix_status_t status;
@@ -88,7 +88,7 @@ typedef struct {
     /* number reported in */
     size_t nreported;
     /* distance masks for receive */
-    prte_bitmap_t distance_mask_recv;
+    pmix_bitmap_t distance_mask_recv;
     /* received buckets */
     pmix_data_buffer_t **buffers;
     /* callback function */
@@ -96,7 +96,7 @@ typedef struct {
     /* user-provided callback data */
     void *cbdata;
 } prte_grpcomm_coll_t;
-PRTE_CLASS_DECLARATION(prte_grpcomm_coll_t);
+PMIX_CLASS_DECLARATION(prte_grpcomm_coll_t);
 
 /*
  * Component functions - all MUST be provided!

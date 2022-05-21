@@ -12,6 +12,7 @@
  * Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2022      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +31,7 @@
 
 BEGIN_C_DECLS
 
-PRTE_EXPORT void prte_util_parse_range_options(char *input, char ***output);
+PRTE_EXPORT void pmix_util_parse_range_options(char *input, char ***output);
 
 PRTE_EXPORT void prte_util_get_ranges(char *inp, char ***startpts, char ***endpts);
 

@@ -5,7 +5,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +18,7 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_object.h"
+#include "src/class/pmix_object.h"
 #include "src/event/event-internal.h"
 #include "src/mca/mca.h"
 
@@ -35,16 +35,16 @@ extern bool prte_filem_raw_flatten_trees;
 
 /* local classes */
 typedef struct {
-    prte_list_item_t super;
-    prte_list_t xfers;
+    pmix_list_item_t super;
+    pmix_list_t xfers;
     int32_t status;
     prte_filem_completion_cbfunc_t cbfunc;
     void *cbdata;
 } prte_filem_raw_outbound_t;
-PRTE_CLASS_DECLARATION(prte_filem_raw_outbound_t);
+PMIX_CLASS_DECLARATION(prte_filem_raw_outbound_t);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     prte_event_t ev;
     int fd;
     prte_filem_raw_outbound_t *outbound;
@@ -57,10 +57,10 @@ typedef struct {
     int status;
     pmix_rank_t nrecvd;
 } prte_filem_raw_xfer_t;
-PRTE_CLASS_DECLARATION(prte_filem_raw_xfer_t);
+PMIX_CLASS_DECLARATION(prte_filem_raw_xfer_t);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     prte_app_idx_t app_idx;
     prte_event_t ev;
     bool pending;
@@ -70,16 +70,16 @@ typedef struct {
     char *fullpath;
     int32_t type;
     char **link_pts;
-    prte_list_t outputs;
+    pmix_list_t outputs;
 } prte_filem_raw_incoming_t;
-PRTE_CLASS_DECLARATION(prte_filem_raw_incoming_t);
+PMIX_CLASS_DECLARATION(prte_filem_raw_incoming_t);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     int numbytes;
     unsigned char data[PRTE_FILEM_RAW_CHUNK_MAX];
 } prte_filem_raw_output_t;
-PRTE_CLASS_DECLARATION(prte_filem_raw_output_t);
+PMIX_CLASS_DECLARATION(prte_filem_raw_output_t);
 
 END_C_DECLS
 

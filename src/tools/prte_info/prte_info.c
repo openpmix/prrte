@@ -41,19 +41,19 @@
 #include <errno.h>
 #include <signal.h>
 
-#include "src/class/prte_object.h"
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_object.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/prted/pmix/pmix_server.h"
-#include "src/util/argv.h"
-#include "src/util/basename.h"
-#include "src/util/cmd_line.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_basename.h"
+#include "src/util/pmix_cmd_line.h"
 #include "src/util/error.h"
-#include "src/util/path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "constants.h"
 #include "src/include/frameworks.h"
@@ -67,13 +67,13 @@
  */
 
 bool prte_info_pretty = true;
-prte_cli_result_t prte_info_cmd_line = PRTE_CLI_RESULT_STATIC_INIT;
+pmix_cli_result_t prte_info_cmd_line = PMIX_CLI_RESULT_STATIC_INIT;
 
 const char *prte_info_type_all = "all";
 const char *prte_info_type_prte = "prte";
 const char *prte_info_type_base = "base";
 
-prte_pointer_array_t mca_types = {{0}};
+pmix_pointer_array_t mca_types = {{0}};
 
 int main(int argc, char *argv[])
 {
@@ -91,18 +91,18 @@ int main(int argc, char *argv[])
     prte_info_item_t *instance;
     char *personality;
     prte_schizo_base_module_t *schizo;
-    prte_cli_result_t results;
+    pmix_cli_result_t results;
 
     /* protect against problems if someone passes us thru a pipe
      * and then abnormally terminates the pipe early */
     signal(SIGPIPE, SIG_IGN);
 
-    prte_tool_basename = prte_basename(argv[0]);
+    prte_tool_basename = pmix_basename(argv[0]);
     prte_tool_actual = "prte_info";
 
     /* Initialize the argv parsing stuff */
     if (PRTE_SUCCESS != (ret = prte_init_util(PRTE_PROC_MASTER))) {
-        prte_show_help("help-prte-info.txt", "lib-call-fail", true, "prte_init_util", __FILE__,
+        pmix_show_help("help-prte-info.txt", "lib-call-fail", true, "prte_init_util", __FILE__,
                        __LINE__, NULL);
         exit(ret);
     }
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
      * schizo module for this tool */
     schizo = prte_schizo_base_detect_proxy(personality);
     if (NULL == schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, personality);
         return 1;
     }
     if (NULL == personality) {
@@ -141,10 +141,10 @@ int main(int argc, char *argv[])
     }
 
     /* parse the input argv to get values, including everyone's MCA params */
-    PRTE_CONSTRUCT(&prte_info_cmd_line, prte_cli_result_t);
-    ret = schizo->parse_cli(argv, &prte_info_cmd_line, PRTE_CLI_SILENT);
+    PMIX_CONSTRUCT(&prte_info_cmd_line, pmix_cli_result_t);
+    ret = schizo->parse_cli(argv, &prte_info_cmd_line, PMIX_CLI_SILENT);
     if (PRTE_SUCCESS != ret) {
-        PRTE_DESTRUCT(&prte_info_cmd_line);
+        PMIX_DESTRUCT(&prte_info_cmd_line);
         if (PRTE_ERR_SILENT != ret) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         }
@@ -152,8 +152,8 @@ int main(int argc, char *argv[])
     }
     // we do NOT accept arguments other than our own
     if (NULL != prte_info_cmd_line.tail) {
-        str = prte_argv_join(prte_info_cmd_line.tail, ' ');
-        ptr = prte_show_help_string("help-pterm.txt", "no-args", false,
+        str = pmix_argv_join(prte_info_cmd_line.tail, ' ');
+        ptr = pmix_show_help_string("help-pterm.txt", "no-args", false,
                                     prte_tool_basename, str, prte_tool_basename);
         free(str);
         if (NULL != ptr) {
@@ -164,53 +164,53 @@ int main(int argc, char *argv[])
     }
 
     /* setup the mca_types array */
-    PRTE_CONSTRUCT(&mca_types, prte_pointer_array_t);
-    prte_pointer_array_init(&mca_types, 256, INT_MAX, 128);
+    PMIX_CONSTRUCT(&mca_types, pmix_pointer_array_t);
+    pmix_pointer_array_init(&mca_types, 256, INT_MAX, 128);
 
     /* add a type for prte itself */
-    prte_pointer_array_add(&mca_types, "mca");
-    prte_pointer_array_add(&mca_types, "prte");
+    pmix_pointer_array_add(&mca_types, "mca");
+    pmix_pointer_array_add(&mca_types, "prte");
 
     /* add a type for hwloc */
-    prte_pointer_array_add(&mca_types, "hwloc");
+    pmix_pointer_array_add(&mca_types, "hwloc");
 
     /* let the pmix server register params */
     pmix_server_register_params();
     /* add those in */
-    prte_pointer_array_add(&mca_types, "pmix");
+    pmix_pointer_array_add(&mca_types, "pmix");
 
     /* push all the types found by autogen */
     for (i = 0; NULL != prte_frameworks[i]; i++) {
-        prte_pointer_array_add(&mca_types, prte_frameworks[i]->framework_name);
+        pmix_pointer_array_add(&mca_types, prte_frameworks[i]->framework_name);
     }
 
     /* Execute the desired action(s) */
-    want_all = prte_cmd_line_is_taken(&prte_info_cmd_line, "all");
+    want_all = pmix_cmd_line_is_taken(&prte_info_cmd_line, "all");
     if (want_all) {
         prte_info_do_version(want_all);
         acted = true;
-    } else if (prte_cmd_line_is_taken(&prte_info_cmd_line, "show-version")) {
+    } else if (pmix_cmd_line_is_taken(&prte_info_cmd_line, "show-version")) {
         prte_info_do_version(false);
         acted = true;
     }
-    if (want_all || prte_cmd_line_is_taken(&prte_info_cmd_line, "path")) {
+    if (want_all || pmix_cmd_line_is_taken(&prte_info_cmd_line, "path")) {
         prte_info_do_path(want_all);
         acted = true;
     }
-    if (want_all || prte_cmd_line_is_taken(&prte_info_cmd_line, "arch")) {
+    if (want_all || pmix_cmd_line_is_taken(&prte_info_cmd_line, "arch")) {
         prte_info_do_arch();
         acted = true;
     }
-    if (want_all || prte_cmd_line_is_taken(&prte_info_cmd_line, "hostname")) {
+    if (want_all || pmix_cmd_line_is_taken(&prte_info_cmd_line, "hostname")) {
         prte_info_do_hostname();
         acted = true;
     }
-    if (want_all || prte_cmd_line_is_taken(&prte_info_cmd_line, "config")) {
+    if (want_all || pmix_cmd_line_is_taken(&prte_info_cmd_line, "config")) {
         prte_info_do_config(true);
         acted = true;
     }
-    if (want_all || prte_cmd_line_is_taken(&prte_info_cmd_line, "param")) {
-        prte_info_do_params(want_all, prte_cmd_line_is_taken(&prte_info_cmd_line, "internal"));
+    if (want_all || pmix_cmd_line_is_taken(&prte_info_cmd_line, "param")) {
+        prte_info_do_params(want_all, pmix_cmd_line_is_taken(&prte_info_cmd_line, "internal"));
         acted = true;
     }
 
@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
         prte_info_do_config(false);
         prte_info_components_open();
         for (i = 0; i < mca_types.size; ++i) {
-            if (NULL == (str = (char *) prte_pointer_array_get_item(&mca_types, i))) {
+            if (NULL == (str = (char *) pmix_pointer_array_get_item(&mca_types, i))) {
                 continue;
             }
             prte_info_show_component_version(str, prte_info_component_all, prte_info_ver_full,
@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
 
     /* All done */
     prte_info_components_close();
-    PRTE_DESTRUCT(&mca_types);
+    PMIX_DESTRUCT(&mca_types);
     prte_mca_base_close();
 
     return 0;

@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,14 +42,14 @@
 #    include <net/uio.h>
 #endif
 
-#include "src/class/prte_bitmap.h"
-#include "src/class/prte_hash_table.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_bitmap.h"
+#include "src/class/pmix_hash_table.h"
+#include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "src/mca/mca.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 #include "src/mca/oob/oob.h"
 
@@ -61,20 +61,20 @@ BEGIN_C_DECLS
 typedef struct {
     char *include;
     char *exclude;
-    prte_list_t components;
-    prte_list_t actives;
+    pmix_list_t components;
+    pmix_list_t actives;
     int max_uri_length;
-    prte_list_t peers;
+    pmix_list_t peers;
 } prte_oob_base_t;
 PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     pmix_proc_t name;
     prte_oob_base_component_t *component;
-    prte_bitmap_t addressable;
+    pmix_bitmap_t addressable;
 } prte_oob_base_peer_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_oob_base_peer_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_oob_base_peer_t);
 
 /* MCA framework */
 PRTE_EXPORT extern prte_mca_base_framework_t prte_oob_base_framework;
@@ -90,11 +90,11 @@ PRTE_EXPORT int prte_oob_base_select(void);
  * is available, etc.
  */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_event_t ev;
     prte_rml_send_t *msg;
 } prte_oob_send_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_oob_send_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_oob_send_t);
 
 /* All OOB sends are based on iovec's and are async as the RML
  * acts as the initial interface to prepare all communications.
@@ -114,9 +114,9 @@ PRTE_EXPORT void prte_oob_base_send_nb(int fd, short args, void *cbdata);
         prte_oob_send_t *prte_oob_send_cd;                                                        \
         prte_output_verbose(1, prte_oob_base_framework.framework_output, "%s OOB_SEND: %s:%d",    \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__);              \
-        prte_oob_send_cd = PRTE_NEW(prte_oob_send_t);                                             \
+        prte_oob_send_cd = PMIX_NEW(prte_oob_send_t);                                             \
         prte_oob_send_cd->msg = (m);                                                              \
-        PRTE_THREADSHIFT(prte_oob_send_cd, prte_event_base, prte_oob_base_send_nb, PRTE_MSG_PRI); \
+        PMIX_THREADSHIFT(prte_oob_send_cd, prte_event_base, prte_oob_base_send_nb, PRTE_MSG_PRI); \
     } while (0)
 
 PRTE_EXPORT prte_oob_base_peer_t *prte_oob_base_get_peer(const pmix_proc_t *pr);

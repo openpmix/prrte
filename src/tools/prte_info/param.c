@@ -41,14 +41,14 @@
 #    include <netdb.h>
 #endif
 
-#include "src/class/prte_pointer_array.h"
-#include "src/class/prte_value_array.h"
+#include "src/class/pmix_pointer_array.h"
+#include "src/class/pmix_value_array.h"
 #include "src/include/prte_portable_platform.h"
 #include "src/include/version.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/util/argv.h"
-#include "src/util/printf.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_printf.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/tools/prte_info/pinfo.h"
 
@@ -84,11 +84,10 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
     bool found;
     int i, j;
     bool want_all = false;
-    prte_value_t *pval;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     prte_info_components_open();
-    opt = prte_cmd_line_get_param(&prte_info_cmd_line, "param");
+    opt = pmix_cmd_line_get_param(&prte_info_cmd_line, "param");
 
     if (want_all_in) {
         want_all = true;
@@ -98,7 +97,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
          */
         if (NULL != opt) {
             /* split the arguments at the colon */
-            args = prte_argv_split(opt->values[0], ':');
+            args = pmix_argv_split(opt->values[0], ':');
             if (0 == strcmp(args[0], "all")) {
                 want_all = true;
             }
@@ -108,7 +107,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
     /* Show the params */
     if (want_all) {
         for (i = 0; i < mca_types.size; ++i) {
-            if (NULL == (type = (char *) prte_pointer_array_get_item(&mca_types, i))) {
+            if (NULL == (type = (char *) pmix_pointer_array_get_item(&mca_types, i))) {
                 continue;
             }
             prte_info_show_mca_params(type, prte_info_component_all, want_internal);
@@ -117,11 +116,11 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
         if (NULL != opt && NULL != args) {
             type = args[0];
             if (NULL != args[1]) {
-                tmp = prte_argv_split(args[1], ',');
+                tmp = pmix_argv_split(args[1], ',');
 
                 for (j=0; NULL != tmp[j]; j++) {
                     for (found = false, i = 0; i < mca_types.size; ++i) {
-                        str = (char *) prte_pointer_array_get_item(&mca_types, i);
+                        str = (char *) pmix_pointer_array_get_item(&mca_types, i);
                         if (NULL == str) {
                             continue;
                         }
@@ -132,20 +131,20 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
                     }
 
                     if (!found) {
-                        prte_show_help("help-pinfo.txt", "not-found", true, type);
+                        pmix_show_help("help-pinfo.txt", "not-found", true, type);
                         exit(1);
                     }
 
                     prte_info_show_mca_params(type, tmp[j], want_internal);
                 }
-                prte_argv_free(tmp);
+                pmix_argv_free(tmp);
             } else {
                 prte_info_show_mca_params(type, "*", want_internal);
             }
         }
     }
     if (NULL != args) {
-        prte_argv_free(args);
+        pmix_argv_free(args);
     }
 }
 
@@ -158,8 +157,8 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
     const int *groups;
     char **strings;
 
-    variables = PRTE_VALUE_ARRAY_GET_BASE(&group->group_vars, const int);
-    count = prte_value_array_get_size((prte_value_array_t *) &group->group_vars);
+    variables = PMIX_VALUE_ARRAY_GET_BASE(&group->group_vars, const int);
+    count = pmix_value_array_get_size((pmix_value_array_t *) &group->group_vars);
 
     for (i = 0; i < count; ++i) {
         ret = prte_mca_base_var_get(variables[i], &var);
@@ -179,7 +178,7 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
             if (0 == j && prte_info_pretty) {
                 char *message;
 
-                prte_asprintf(&message, "MCA %s", group->group_framework);
+                pmix_asprintf(&message, "MCA %s", group->group_framework);
                 prte_info_out(message, message, strings[j]);
                 free(message);
             } else {
@@ -190,8 +189,8 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
         free(strings);
     }
 
-    groups = PRTE_VALUE_ARRAY_GET_BASE(&group->group_subgroups, const int);
-    count = prte_value_array_get_size((prte_value_array_t *) &group->group_subgroups);
+    groups = PMIX_VALUE_ARRAY_GET_BASE(&group->group_subgroups, const int);
+    count = pmix_value_array_get_size((pmix_value_array_t *) &group->group_subgroups);
 
     for (i = 0; i < count; ++i) {
         ret = prte_mca_base_var_group_get(groups[i], &group);
@@ -231,11 +230,10 @@ void prte_info_do_path(bool want_all)
 {
     int i, count;
     char *scope;
-    prte_value_t *pval;
-    prte_cli_item_t *opt;
+    pmix_cli_item_t *opt;
 
     /* Check bozo case */
-    opt = prte_cmd_line_get_param(&prte_info_cmd_line, "path");
+    opt = pmix_cmd_line_get_param(&prte_info_cmd_line, "path");
     if (NULL != opt) {
         for (i=0; NULL != opt->values[i]; i++) {
             scope = opt->values[i];
@@ -306,7 +304,7 @@ void prte_info_do_path(bool want_all)
                 } else if (0 == strcmp(prte_info_path_pkgincludedir, scope)) {
                     prte_info_show_path(prte_info_path_pkgincludedir, prte_install_dirs.prteincludedir);
                 } else {
-                    prte_show_help("help-pinfo.txt", "usage", true, "USAGE");
+                    pmix_show_help("help-pinfo.txt", "usage", true, "USAGE");
                     exit(1);
                 }
             }
@@ -321,7 +319,7 @@ void prte_info_show_path(const char *type, const char *value)
     pretty = strdup(type);
     pretty[0] = toupper(pretty[0]);
 
-    prte_asprintf(&path, "path:%s", type);
+    pmix_asprintf(&path, "path:%s", type);
     prte_info_out(pretty, path, value);
     free(pretty);
     free(path);
@@ -392,10 +390,8 @@ void prte_info_do_config(bool want_all)
         prte_info_out_int("C float size", "compiler:c:sizeof:float", sizeof(float));
         prte_info_out_int("C double size", "compiler:c:sizeof:double", sizeof(double));
         prte_info_out_int("C pointer size", "compiler:c:sizeof:pointer", sizeof(void *));
-        prte_info_out_int("C char align", "compiler:c:align:char", ALIGNOF_CHAR);
         prte_info_out("C bool align", "compiler:c:align:bool", "skipped");
         prte_info_out_int("C int align", "compiler:c:align:int", ALIGNOF_INT);
-        prte_info_out_int("C float align", "compiler:c:align:float", ALIGNOF_FLOAT);
         prte_info_out_int("C double align", "compiler:c:align:double", ALIGNOF_DOUBLE);
     }
 

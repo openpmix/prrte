@@ -4,7 +4,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,7 +23,7 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/mca.h"
 #include "src/mca/odls/base/odls_private.h"
 #include "src/runtime/prte_globals.h"
@@ -31,12 +31,12 @@
 BEGIN_C_DECLS
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     char *component;
     char *category;
     prte_value_t control;
 } prte_rtc_resource_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_rtc_resource_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rtc_resource_t);
 
 /* Assign run-time controls for a given job. This provides each component with
  * an opportunity to insert attributes into the prte_job_t and/or its
@@ -63,7 +63,7 @@ typedef void (*prte_rtc_base_module_set_fn_t)(prte_odls_spawn_caddy_t *cd,
  * Each module is responsible for adding its control values
  * to a list of prte_value_t objects.
  */
-typedef void (*prte_rtc_base_module_get_avail_vals_fn_t)(prte_list_t *vals);
+typedef void (*prte_rtc_base_module_get_avail_vals_fn_t)(pmix_list_t *vals);
 
 /* provide a way for the module to init during selection */
 typedef int (*prte_rtc_base_module_init_fn_t)(void);

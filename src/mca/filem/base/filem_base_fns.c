@@ -11,7 +11,7 @@
  *                         All rights reserved
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,7 +61,7 @@ static void process_set_destruct(prte_filem_base_process_set_t *req)
     req->sink = *PRTE_NAME_INVALID;
 }
 
-PRTE_CLASS_INSTANCE(prte_filem_base_process_set_t, prte_list_item_t, process_set_construct,
+PMIX_CLASS_INSTANCE(prte_filem_base_process_set_t, pmix_list_item_t, process_set_construct,
                     process_set_destruct);
 
 static void file_set_construct(prte_filem_base_file_set_t *req)
@@ -92,13 +92,13 @@ static void file_set_destruct(prte_filem_base_file_set_t *req)
     req->target_flag = PRTE_FILEM_TYPE_UNKNOWN;
 }
 
-PRTE_CLASS_INSTANCE(prte_filem_base_file_set_t, prte_list_item_t, file_set_construct,
+PMIX_CLASS_INSTANCE(prte_filem_base_file_set_t, pmix_list_item_t, file_set_construct,
                     file_set_destruct);
 
 static void req_construct(prte_filem_base_request_t *req)
 {
-    PRTE_CONSTRUCT(&req->process_sets, prte_list_t);
-    PRTE_CONSTRUCT(&req->file_sets, prte_list_t);
+    PMIX_CONSTRUCT(&req->process_sets, pmix_list_t);
+    PMIX_CONSTRUCT(&req->file_sets, pmix_list_t);
 
     req->num_mv = 0;
 
@@ -112,17 +112,17 @@ static void req_construct(prte_filem_base_request_t *req)
 
 static void req_destruct(prte_filem_base_request_t *req)
 {
-    prte_list_item_t *item = NULL;
+    pmix_list_item_t *item = NULL;
 
-    while (NULL != (item = prte_list_remove_first(&req->process_sets))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&req->process_sets))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&req->process_sets);
+    PMIX_DESTRUCT(&req->process_sets);
 
-    while (NULL != (item = prte_list_remove_first(&req->file_sets))) {
-        PRTE_RELEASE(item);
+    while (NULL != (item = pmix_list_remove_first(&req->file_sets))) {
+        PMIX_RELEASE(item);
     }
-    PRTE_DESTRUCT(&req->file_sets);
+    PMIX_DESTRUCT(&req->file_sets);
 
     req->num_mv = 0;
 
@@ -144,7 +144,7 @@ static void req_destruct(prte_filem_base_request_t *req)
     req->movement_type = PRTE_FILEM_MOVE_TYPE_UNKNOWN;
 }
 
-PRTE_CLASS_INSTANCE(prte_filem_base_request_t, prte_list_item_t, req_construct, req_destruct);
+PMIX_CLASS_INSTANCE(prte_filem_base_request_t, pmix_list_item_t, req_construct, req_destruct);
 
 /***********************
  * None component stuff
@@ -201,7 +201,7 @@ int prte_filem_base_none_wait(prte_filem_base_request_t *request)
     return PRTE_SUCCESS;
 }
 
-int prte_filem_base_none_wait_all(prte_list_t *request_list)
+int prte_filem_base_none_wait_all(pmix_list_t *request_list)
 {
     PRTE_HIDE_UNUSED_PARAMS(request_list);
     return PRTE_SUCCESS;

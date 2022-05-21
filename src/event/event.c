@@ -3,7 +3,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -80,4 +80,4 @@ int prte_event_assign(struct event *ev, prte_event_base_t *evbase, int fd, short
     return 0;
 }
 
-PRTE_CLASS_INSTANCE(prte_event_list_item_t, prte_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_event_list_item_t, pmix_list_item_t, NULL, NULL);

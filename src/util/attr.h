@@ -155,7 +155,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_MULTI_DAEMON_SIM           (PRTE_JOB_START_KEY + 49) // bool - multiple daemons/node to simulate large cluster
 #define PRTE_JOB_NOTIFY_COMPLETION          (PRTE_JOB_START_KEY + 50) // bool - notify parent proc when spawned job terminates
 #define PRTE_JOB_TRANSPORT_KEY              (PRTE_JOB_START_KEY + 51) // string - transport keys assigned to this job
-#define PRTE_JOB_INFO_CACHE                 (PRTE_JOB_START_KEY + 52) // prte_list_t - list of prte_value_t to be included in job_info
+#define PRTE_JOB_INFO_CACHE                 (PRTE_JOB_START_KEY + 52) // pmix_list_t - list of prte_value_t to be included in job_info
 #define PRTE_JOB_FULLY_DESCRIBED            (PRTE_JOB_START_KEY + 53) // bool - job is fully described in launch msg
 #define PRTE_JOB_SILENT_TERMINATION         (PRTE_JOB_START_KEY + 54) // bool - do not generate an event notification when job
                                                                       //        normally terminates
@@ -201,7 +201,6 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_RAW_OUTPUT                 (PRTE_JOB_START_KEY + 94) // bool - do not buffer output
 #define PRTE_JOB_EXEC_AGENT                 (PRTE_JOB_START_KEY + 95) // char* - string specifying the cmd to use when exec'ing the local proc
 #define PRTE_JOB_NOAGG_HELP                 (PRTE_JOB_START_KEY + 96) // bool - do not aggregate show_help messages
-
 
 #define PRTE_JOB_MAX_KEY 300
 
@@ -266,30 +265,30 @@ typedef uint16_t prte_proc_flags_t;
 PRTE_EXPORT const char *prte_attr_key_to_str(prte_attribute_key_t key);
 
 /* Retrieve the named attribute from a list */
-PRTE_EXPORT bool prte_get_attribute(prte_list_t *attributes, prte_attribute_key_t key, void **data,
+PRTE_EXPORT bool prte_get_attribute(pmix_list_t *attributes, prte_attribute_key_t key, void **data,
                                     pmix_data_type_t type);
 
 /* Set the named attribute in a list, overwriting any prior entry */
-PRTE_EXPORT int prte_set_attribute(prte_list_t *attributes, prte_attribute_key_t key, bool local,
+PRTE_EXPORT int prte_set_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local,
                                    void *data, pmix_data_type_t type);
 
 /* Remove the named attribute from a list */
-PRTE_EXPORT void prte_remove_attribute(prte_list_t *attributes, prte_attribute_key_t key);
+PRTE_EXPORT void prte_remove_attribute(pmix_list_t *attributes, prte_attribute_key_t key);
 
-PRTE_EXPORT prte_attribute_t *prte_fetch_attribute(prte_list_t *attributes, prte_attribute_t *prev,
+PRTE_EXPORT prte_attribute_t *prte_fetch_attribute(pmix_list_t *attributes, prte_attribute_t *prev,
                                                    prte_attribute_key_t key);
 
-PRTE_EXPORT int prte_add_attribute(prte_list_t *attributes, prte_attribute_key_t key, bool local,
+PRTE_EXPORT int prte_add_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local,
                                    void *data, pmix_data_type_t type);
 
-PRTE_EXPORT int prte_prepend_attribute(prte_list_t *attributes, prte_attribute_key_t key,
+PRTE_EXPORT int prte_prepend_attribute(pmix_list_t *attributes, prte_attribute_key_t key,
                                        bool local, void *data, pmix_data_type_t type);
 
 PRTE_EXPORT int prte_attr_load(prte_attribute_t *kv, void *data, pmix_data_type_t type);
 
 PRTE_EXPORT int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type);
 
-PRTE_EXPORT char *prte_attr_print_list(prte_list_t *attributes);
+PRTE_EXPORT char *prte_attr_print_list(pmix_list_t *attributes);
 
 /*
  * Register a handler for converting attr keys to strings

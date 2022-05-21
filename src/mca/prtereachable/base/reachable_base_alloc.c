@@ -3,7 +3,7 @@
  *                         All Rights reserved.
  * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -13,7 +13,7 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_object.h"
+#include "src/class/pmix_object.h"
 
 #include "src/mca/prtereachable/base/base.h"
 #include "src/mca/prtereachable/prtereachable.h"
@@ -34,7 +34,7 @@ prte_reachable_t *prte_reachable_allocate(unsigned int num_local, unsigned int n
 {
     char *memory;
     unsigned int i;
-    prte_reachable_t *reachable = PRTE_NEW(prte_reachable_t);
+    prte_reachable_t *reachable = PMIX_NEW(prte_reachable_t);
 
     reachable->num_local = num_local;
     reachable->num_remote = num_remote;
@@ -57,5 +57,5 @@ prte_reachable_t *prte_reachable_allocate(unsigned int num_local, unsigned int n
     return reachable;
 }
 
-PRTE_CLASS_INSTANCE(prte_reachable_t, prte_object_t, prte_reachable_construct,
+PMIX_CLASS_INSTANCE(prte_reachable_t, pmix_object_t, prte_reachable_construct,
                     prte_reachable_destruct);

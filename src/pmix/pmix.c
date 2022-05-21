@@ -9,7 +9,7 @@
  *                         All rights reserved.
  * Copyright (c) 2016-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,11 +29,11 @@
 #    include <unistd.h>
 #endif
 
-#include "src/class/prte_hash_table.h"
+#include "src/class/pmix_hash_table.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/proc_info.h"
 
 pmix_status_t prte_pmix_convert_rc(int rc)
@@ -245,6 +245,8 @@ int prte_pmix_convert_status(pmix_status_t status)
 
     case PMIX_ERROR:
         return PRTE_ERROR;
+    case PMIX_ERR_SILENT:
+        return PRTE_ERR_SILENT;
     case PMIX_SUCCESS:
     case PMIX_OPERATION_SUCCEEDED:
         return PRTE_SUCCESS;
@@ -429,7 +431,7 @@ static void cleanup_cbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo
 {
     prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
 
-    PRTE_POST_OBJECT(lk);
+    PMIX_POST_OBJECT(lk);
 
     /* let the library release the data and cleanup from
      * the operation */
@@ -499,7 +501,7 @@ static void ades(prte_pmix_app_t *p)
     PMIX_APP_DESTRUCT(&p->app);
     PMIX_INFO_LIST_RELEASE(p->info);
 }
-PRTE_CLASS_INSTANCE(prte_pmix_app_t, prte_list_item_t, acon, ades);
+PMIX_CLASS_INSTANCE(prte_pmix_app_t, pmix_list_item_t, acon, ades);
 
 static void dsicon(prte_ds_info_t *p)
 {
@@ -507,7 +509,7 @@ static void dsicon(prte_ds_info_t *p)
     p->info = NULL;
     p->persistence = PMIX_PERSIST_INVALID;
 }
-PRTE_EXPORT PRTE_CLASS_INSTANCE(prte_ds_info_t, prte_list_item_t, dsicon, NULL);
+PRTE_EXPORT PMIX_CLASS_INSTANCE(prte_ds_info_t, pmix_list_item_t, dsicon, NULL);
 
 static void infoitmcon(prte_info_item_t *p)
 {
@@ -517,17 +519,17 @@ static void infoitdecon(prte_info_item_t *p)
 {
     PMIX_INFO_DESTRUCT(&p->info);
 }
-PRTE_EXPORT PRTE_CLASS_INSTANCE(prte_info_item_t, prte_list_item_t, infoitmcon, infoitdecon);
+PRTE_EXPORT PMIX_CLASS_INSTANCE(prte_info_item_t, pmix_list_item_t, infoitmcon, infoitdecon);
 
 static void arritmcon(prte_info_array_item_t *p)
 {
-    PRTE_CONSTRUCT(&p->infolist, prte_list_t);
+    PMIX_CONSTRUCT(&p->infolist, pmix_list_t);
 }
 static void arritdecon(prte_info_array_item_t *p)
 {
-    PRTE_LIST_DESTRUCT(&p->infolist);
+    PMIX_LIST_DESTRUCT(&p->infolist);
 }
-PRTE_EXPORT PRTE_CLASS_INSTANCE(prte_info_array_item_t, prte_list_item_t, arritmcon, arritdecon);
+PRTE_EXPORT PMIX_CLASS_INSTANCE(prte_info_array_item_t, pmix_list_item_t, arritmcon, arritdecon);
 
 static void pvcon(prte_value_t *p)
 {
@@ -537,4 +539,4 @@ static void pvdes(prte_value_t *p)
 {
     PMIX_VALUE_DESTRUCT(&p->value);
 }
-PRTE_EXPORT PRTE_CLASS_INSTANCE(prte_value_t, prte_list_item_t, pvcon, pvdes);
+PRTE_EXPORT PMIX_CLASS_INSTANCE(prte_value_t, pmix_list_item_t, pvcon, pvdes);

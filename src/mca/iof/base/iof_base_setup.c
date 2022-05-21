@@ -14,7 +14,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2021 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,16 +64,17 @@
 #endif
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/name_fns.h"
-#include "src/util/os_dirpath.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
-#include "src/util/prte_environ.h"
-#include "src/util/prte_pty.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_printf.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_pty.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/iof/base/base.h"
 #include "src/mca/iof/base/iof_base_setup.h"
@@ -105,7 +106,7 @@ int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts)
             wp = &ws;
         }
 #endif
-        ret = prte_openpty(&(opts->p_stdout[0]), &(opts->p_stdout[1]), (char *) NULL,
+        ret = pmix_openpty(&(opts->p_stdout[0]), &(opts->p_stdout[1]), (char *) NULL,
                            (struct termios *) NULL, wp);
     }
 #else
@@ -115,19 +116,19 @@ int prte_iof_base_setup_prefork(prte_iof_base_io_conf_t *opts)
     if (ret < 0) {
         opts->usepty = 0;
         if (pipe(opts->p_stdout) < 0) {
-            PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
-            return PRTE_ERR_SYS_LIMITS_PIPES;
+            PMIX_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
+            return PMIX_ERR_SYS_LIMITS_PIPES;
         }
     }
     if (opts->connect_stdin) {
         if (pipe(opts->p_stdin) < 0) {
-            PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
-            return PRTE_ERR_SYS_LIMITS_PIPES;
+            PMIX_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
+            return PMIX_ERR_SYS_LIMITS_PIPES;
         }
     }
     if (pipe(opts->p_stderr) < 0) {
-        PRTE_ERROR_LOG(PRTE_ERR_SYS_LIMITS_PIPES);
-        return PRTE_ERR_SYS_LIMITS_PIPES;
+        PMIX_ERROR_LOG(PMIX_ERR_SYS_LIMITS_PIPES);
+        return PMIX_ERR_SYS_LIMITS_PIPES;
     }
     return PRTE_SUCCESS;
 }
@@ -148,7 +149,7 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
         /* disable echo */
         struct termios term_attrs;
         if (tcgetattr(opts->p_stdout[1], &term_attrs) < 0) {
-            return PRTE_ERR_PIPE_SETUP_FAILURE;
+            return PMIX_ERR_PIPE_SETUP_FAILURE;
         }
         term_attrs.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHOCTL | ECHOKE | ECHONL);
         term_attrs.c_iflag &= ~(ICRNL | INLCR | ISTRIP | INPCK | IXON);
@@ -160,18 +161,18 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
 #endif
             ONLCR);
         if (tcsetattr(opts->p_stdout[1], TCSANOW, &term_attrs) == -1) {
-            return PRTE_ERR_PIPE_SETUP_FAILURE;
+            return PMIX_ERR_PIPE_SETUP_FAILURE;
         }
         ret = dup2(opts->p_stdout[1], fileno(stdout));
         if (ret < 0) {
-            return PRTE_ERR_PIPE_SETUP_FAILURE;
+            return PMIX_ERR_PIPE_SETUP_FAILURE;
         }
         close(opts->p_stdout[1]);
     } else {
         if (opts->p_stdout[1] != fileno(stdout)) {
             ret = dup2(opts->p_stdout[1], fileno(stdout));
             if (ret < 0) {
-                return PRTE_ERR_PIPE_SETUP_FAILURE;
+                return PMIX_ERR_PIPE_SETUP_FAILURE;
             }
             close(opts->p_stdout[1]);
         }
@@ -180,7 +181,7 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
         if (opts->p_stdin[0] != fileno(stdin)) {
             ret = dup2(opts->p_stdin[0], fileno(stdin));
             if (ret < 0) {
-                return PRTE_ERR_PIPE_SETUP_FAILURE;
+                return PMIX_ERR_PIPE_SETUP_FAILURE;
             }
             close(opts->p_stdin[0]);
         }
@@ -198,7 +199,7 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
     if (opts->p_stderr[1] != fileno(stderr)) {
         ret = dup2(opts->p_stderr[1], fileno(stderr));
         if (ret < 0) {
-            return PRTE_ERR_PIPE_SETUP_FAILURE;
+            return PMIX_ERR_PIPE_SETUP_FAILURE;
         }
         close(opts->p_stderr[1]);
     }

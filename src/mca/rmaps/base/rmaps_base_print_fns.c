@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,8 +31,8 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
-#include "src/threads/tsd.h"
-#include "src/util/if.h"
+#include "src/threads/pmix_tsd.h"
+#include "src/util/pmix_if.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -41,7 +41,7 @@
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 #include "types.h"
 
 #include "src/mca/rmaps/base/base.h"
@@ -51,7 +51,7 @@
 #define PRTE_RMAPS_PRINT_NUM_BUFS 16
 
 static bool fns_init = false;
-static prte_tsd_key_t print_tsd_key;
+static pmix_tsd_key_t print_tsd_key;
 static char *prte_rmaps_print_null = "NULL";
 typedef struct {
     char *buffers[PRTE_RMAPS_PRINT_NUM_BUFS];
@@ -78,14 +78,14 @@ static prte_rmaps_print_buffers_t *get_print_buffer(void)
 
     if (!fns_init) {
         /* setup the print_args function */
-        if (PRTE_SUCCESS != (ret = prte_tsd_key_create(&print_tsd_key, buffer_cleanup))) {
+        if (PRTE_SUCCESS != (ret = pmix_tsd_key_create(&print_tsd_key, buffer_cleanup))) {
             PRTE_ERROR_LOG(ret);
             return NULL;
         }
         fns_init = true;
     }
 
-    ret = prte_tsd_getspecific(print_tsd_key, (void **) &ptr);
+    ret = pmix_tsd_getspecific(print_tsd_key, (void **) &ptr);
     if (PRTE_SUCCESS != ret)
         return NULL;
 
@@ -95,7 +95,7 @@ static prte_rmaps_print_buffers_t *get_print_buffer(void)
             ptr->buffers[i] = (char *) malloc((PRTE_RMAPS_PRINT_MAX_SIZE + 1) * sizeof(char));
         }
         ptr->cntr = 0;
-        ret = prte_tsd_setspecific(print_tsd_key, (void *) ptr);
+        ret = pmix_tsd_setspecific(print_tsd_key, (void *) ptr);
     }
 
     return (prte_rmaps_print_buffers_t *) ptr;
@@ -165,26 +165,26 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
         }
     }
     if (0 != strcmp(map, "PPR") && (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(mapping))) {
-        prte_asprintf(&mymap, "%s[PPR]:", map);
+        pmix_asprintf(&mymap, "%s[PPR]:", map);
     } else {
-        prte_asprintf(&mymap, "%s:", map);
+        pmix_asprintf(&mymap, "%s:", map);
     }
     if (PRTE_MAPPING_NO_USE_LOCAL & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        prte_asprintf(&tmp, "%sNO_USE_LOCAL,", mymap);
+        pmix_asprintf(&tmp, "%sNO_USE_LOCAL,", mymap);
         free(mymap);
         mymap = tmp;
     }
     if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        prte_asprintf(&tmp, "%sNOOVERSUBSCRIBE,", mymap);
+        pmix_asprintf(&tmp, "%sNOOVERSUBSCRIBE,", mymap);
         free(mymap);
         mymap = tmp;
     } else if (PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        prte_asprintf(&tmp, "%sOVERSUBSCRIBE,", mymap);
+        pmix_asprintf(&tmp, "%sOVERSUBSCRIBE,", mymap);
         free(mymap);
         mymap = tmp;
     }
     if (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        prte_asprintf(&tmp, "%sSPAN,", mymap);
+        pmix_asprintf(&tmp, "%sSPAN,", mymap);
         free(mymap);
         mymap = tmp;
     }

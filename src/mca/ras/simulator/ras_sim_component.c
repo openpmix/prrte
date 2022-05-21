@@ -16,7 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,7 +28,6 @@
 #include "constants.h"
 
 #include "src/mca/base/base.h"
-#include "src/mca/prteif/prteif.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
@@ -53,7 +52,7 @@ prte_ras_sim_component_t prte_ras_simulator_component = {
             /* Component name and version */
             .mca_component_name = "simulator",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
             .mca_query_component = ras_sim_component_query,
             .mca_register_component_params = ras_sim_register,
         },

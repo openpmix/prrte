@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,11 +42,11 @@
 #    include <net/uio.h>
 #endif
 
-#include "src/class/prte_list.h"
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/mca/mca.h"
 
-#include "src/mca/rml/base/base.h"
+#include "src/rml/rml_types.h"
 
 BEGIN_C_DECLS
 

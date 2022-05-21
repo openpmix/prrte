@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Inria.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,8 +36,8 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
-#include "src/threads/tsd.h"
-#include "src/util/if.h"
+#include "src/threads/pmix_tsd.h"
+#include "src/util/pmix_if.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -46,7 +46,7 @@
 #include "src/util/dash_host/dash_host.h"
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 #include "types.h"
 
 #include "src/mca/rmaps/base/base.h"
@@ -87,7 +87,7 @@ static void reset_usage(prte_node_t *node, pmix_nspace_t jobid)
      * their usage in the topology
      */
     for (j = 0; j < node->procs->size; j++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
             continue;
         }
         /* ignore procs from this job */
@@ -111,7 +111,7 @@ static void reset_usage(prte_node_t *node, pmix_nspace_t jobid)
         /* get the userdata struct for this object - create it if necessary */
         data = (prte_hwloc_obj_data_t *) bound->userdata;
         if (NULL == data) {
-            data = PRTE_NEW(prte_hwloc_obj_data_t);
+            data = PMIX_NEW(prte_hwloc_obj_data_t);
             bound->userdata = data;
         }
         /* count that this proc is bound to this object */
@@ -129,7 +129,7 @@ static void unbind_procs(prte_job_t *jdata)
     prte_proc_t *proc;
 
     for (j = 0; j < jdata->procs->size; j++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(jdata->procs, j))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, j))) {
             continue;
         }
         prte_remove_attribute(&proc->attributes, PRTE_PROC_HWLOC_BOUND);
@@ -210,7 +210,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
 
     /* cycle thru the procs */
     for (j = 0; j < node->procs->size; j++) {
-        if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+        if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
             continue;
         }
         /* ignore procs from other jobs */
@@ -239,7 +239,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
                     /* we are not required to bind, so ignore this */
                     continue;
                 }
-                prte_show_help("help-prte-rmaps-base.txt", "rmaps:cpubind-not-supported", true,
+                pmix_show_help("help-prte-rmaps-base.txt", "rmaps:cpubind-not-supported", true,
                                node->name);
                 hwloc_bitmap_free(totalcpuset);
                 hwloc_bitmap_free(available);
@@ -259,11 +259,11 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
             if (!support->membind->set_thisproc_membind && !support->membind->set_thisthread_membind
                 && PRTE_BINDING_POLICY_IS_SET(map->binding)) {
                 if (PRTE_HWLOC_BASE_MBFA_WARN == prte_hwloc_base_mbfa && !membind_warned) {
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported", true,
                                    node->name);
                     membind_warned = true;
                 } else if (PRTE_HWLOC_BASE_MBFA_ERROR == prte_hwloc_base_mbfa) {
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported-fatal",
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported-fatal",
                                    true, node->name);
                     hwloc_bitmap_free(totalcpuset);
                     hwloc_bitmap_free(available);
@@ -279,7 +279,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
         locale = NULL;
         if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void **) &locale, PMIX_POINTER) ||
             NULL == locale) {
-            prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-locale", true,
+            pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-locale", true,
                            PRTE_NAME_PRINT(&proc->name));
             hwloc_bitmap_free(totalcpuset);
             hwloc_bitmap_free(available);
@@ -305,7 +305,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
 
             data = (prte_hwloc_obj_data_t *) tmp_obj->userdata;
             if (NULL == data) {
-                data = PRTE_NEW(prte_hwloc_obj_data_t);
+                data = PMIX_NEW(prte_hwloc_obj_data_t);
                 tmp_obj->userdata = data;
             }
             if (data->num_bound < min_bound) {
@@ -315,7 +315,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
         }
         if (NULL == trg_obj) {
             /* there aren't any such targets under this object */
-            prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
+            pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
             hwloc_bitmap_free(totalcpuset);
             hwloc_bitmap_free(available);
             if (NULL != job_cpuset) {
@@ -334,7 +334,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
         do {
             if (NULL == nxt_obj) {
                 /* could not find enough cpus to meet request */
-                prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true,
+                pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true,
                                node->name);
                 hwloc_bitmap_free(totalcpuset);
                 hwloc_bitmap_free(available);
@@ -349,7 +349,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
                                              trg_obj);
             /* track the number bound */
             if (NULL == (data = (prte_hwloc_obj_data_t *) trg_obj->userdata)) {
-                data = PRTE_NEW(prte_hwloc_obj_data_t);
+                data = PMIX_NEW(prte_hwloc_obj_data_t);
                 trg_obj->userdata = data;
             }
             data->num_bound++;
@@ -362,7 +362,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
                      * it since overload isn't allowed, so error out - have the
                      * message indicate that setting overload allowed will remove
                      * this restriction */
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:binding-overload", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:binding-overload", true,
                                    prte_hwloc_base_print_binding(map->binding), node->name,
                                    data->num_bound, ncpus);
                     hwloc_bitmap_free(totalcpuset);
@@ -375,7 +375,7 @@ static int bind_generic(prte_job_t *jdata, prte_node_t *node, int target_depth)
                     /* if the user specified cpus/proc, then we weren't able
                      * to meet that request - this constitutes an error that
                      * must be reported */
-                    prte_show_help("help-prte-rmaps-base.txt", "insufficient-cpus-per-proc", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "insufficient-cpus-per-proc", true,
                                    prte_hwloc_base_print_binding(map->binding), node->name,
                                    (NULL != job_cpuset) ? job_cpuset
                                    : (NULL == prte_hwloc_default_cpu_list)
@@ -496,7 +496,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
     }
 
     for (i = 0; i < map->nodes->size; i++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, i))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
         if ((int) PRTE_PROC_MY_NAME->rank != node->index && !dobind) {
@@ -520,7 +520,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
                     /* we are not required to bind, so ignore this */
                     continue;
                 }
-                prte_show_help("help-prte-rmaps-base.txt", "rmaps:cpubind-not-supported", true,
+                pmix_show_help("help-prte-rmaps-base.txt", "rmaps:cpubind-not-supported", true,
                                node->name);
                 if (NULL != job_cpuset) {
                     free(job_cpuset);
@@ -538,11 +538,11 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
             if (!support->membind->set_thisproc_membind && !support->membind->set_thisthread_membind
                 && PRTE_BINDING_POLICY_IS_SET(map->binding)) {
                 if (PRTE_HWLOC_BASE_MBFA_WARN == prte_hwloc_base_mbfa && !membind_warned) {
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported", true,
                                    node->name);
                     membind_warned = true;
                 } else if (PRTE_HWLOC_BASE_MBFA_ERROR == prte_hwloc_base_mbfa) {
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported-fatal",
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported-fatal",
                                    true, node->name);
                     if (NULL != job_cpuset) {
                         free(job_cpuset);
@@ -591,7 +591,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
         }
         /* cycle thru the procs */
         for (j = 0; j < node->procs->size; j++) {
-            if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+            if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
                 continue;
             }
             /* ignore procs from other jobs */
@@ -601,7 +601,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
             /* bozo check */
             locale = NULL;
             if (!prte_get_attribute(&proc->attributes, PRTE_PROC_HWLOC_LOCALE, (void **) &locale, PMIX_POINTER)) {
-                prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-locale", true,
+                pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-locale", true,
                                PRTE_NAME_PRINT(&proc->name));
                 hwloc_bitmap_free(available);
                 if (NULL != job_cpuset) {
@@ -621,7 +621,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
             /* get the number of cpus under this location */
             if (0 == (ncpus = prte_hwloc_base_get_npus(node->topology->topo, use_hwthread_cpus,
                                                        available, locale))) {
-                prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true,
+                pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true,
                                node->name);
                 hwloc_bitmap_free(available);
                 if (NULL != job_cpuset) {
@@ -631,7 +631,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
             }
             data = (prte_hwloc_obj_data_t *) locale->userdata;
             if (NULL == data) {
-                data = PRTE_NEW(prte_hwloc_obj_data_t);
+                data = PMIX_NEW(prte_hwloc_obj_data_t);
                 locale->userdata = data;
             }
             /* if we don't have enough cpus to support this additional proc, try
@@ -648,7 +648,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
                                                      available, sib);
                     data = (prte_hwloc_obj_data_t *) sib->userdata;
                     if (NULL == data) {
-                        data = PRTE_NEW(prte_hwloc_obj_data_t);
+                        data = PMIX_NEW(prte_hwloc_obj_data_t);
                         sib->userdata = data;
                     }
                     if ((data->num_bound + cpus_per_rank) <= ncpus) {
@@ -668,7 +668,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
                                                          available, sib);
                         data = (prte_hwloc_obj_data_t *) sib->userdata;
                         if (NULL == data) {
-                            data = PRTE_NEW(prte_hwloc_obj_data_t);
+                            data = PMIX_NEW(prte_hwloc_obj_data_t);
                             sib->userdata = data;
                         }
                         if ((data->num_bound + cpus_per_rank) <= ncpus) {
@@ -686,7 +686,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
                              * it since overload isn't allowed, so error out - have the
                              * message indicate that setting overload allowed will remove
                              * this restriction */
-                            prte_show_help("help-prte-rmaps-base.txt", "rmaps:binding-overload",
+                            pmix_show_help("help-prte-rmaps-base.txt", "rmaps:binding-overload",
                                            true, prte_hwloc_base_print_binding(map->binding),
                                            node->name, data->num_bound, ncpus);
                             hwloc_bitmap_free(available);
@@ -698,7 +698,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
                             /* if the user specified cpus/proc, then we weren't able
                              * to meet that request - this constitutes an error that
                              * must be reported */
-                            prte_show_help("help-prte-rmaps-base.txt", "insufficient-cpus-per-proc",
+                            pmix_show_help("help-prte-rmaps-base.txt", "insufficient-cpus-per-proc",
                                            true, prte_hwloc_base_print_binding(map->binding),
                                            node->name,
                                            (NULL != job_cpuset) ? job_cpuset
@@ -730,7 +730,7 @@ static int bind_in_place(prte_job_t *jdata, hwloc_obj_type_t target, unsigned ca
             /* track the number bound */
             data = (prte_hwloc_obj_data_t *) locale->userdata; // just in case it changed
             if (NULL == data) {
-                data = PRTE_NEW(prte_hwloc_obj_data_t);
+                data = PMIX_NEW(prte_hwloc_obj_data_t);
                 locale->userdata = data;
             }
             data->num_bound++;
@@ -819,7 +819,7 @@ static int bind_to_cpuset(prte_job_t *jdata)
     }
 
     for (i = 0; i < map->nodes->size; i++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(map->nodes, i))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, i))) {
             continue;
         }
         if ((int) PRTE_PROC_MY_NAME->rank != node->index && !dobind) {
@@ -842,7 +842,7 @@ static int bind_to_cpuset(prte_job_t *jdata)
                     /* we are not required to bind, so ignore this */
                     continue;
                 }
-                prte_show_help("help-prte-rmaps-base.txt", "rmaps:cpubind-not-supported", true,
+                pmix_show_help("help-prte-rmaps-base.txt", "rmaps:cpubind-not-supported", true,
                                node->name);
                 free(job_cpuset);
                 hwloc_bitmap_free(mycpuset);
@@ -858,11 +858,11 @@ static int bind_to_cpuset(prte_job_t *jdata)
             if (!support->membind->set_thisproc_membind
                 && !support->membind->set_thisthread_membind) {
                 if (PRTE_HWLOC_BASE_MBFA_WARN == prte_hwloc_base_mbfa && !membind_warned) {
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported", true,
                                    node->name);
                     membind_warned = true;
                 } else if (PRTE_HWLOC_BASE_MBFA_ERROR == prte_hwloc_base_mbfa) {
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported-fatal",
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported-fatal",
                                    true, node->name);
                     free(job_cpuset);
                     hwloc_bitmap_free(mycpuset);
@@ -895,7 +895,7 @@ static int bind_to_cpuset(prte_job_t *jdata)
         hwloc_bitmap_and(mycpus, mycpus, sum->available);
 
         for (j = 0; j < node->procs->size; j++) {
-            if (NULL == (proc = (prte_proc_t *) prte_pointer_array_get_item(node->procs, j))) {
+            if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
                 continue;
             }
             /* ignore procs from other jobs */
@@ -922,7 +922,7 @@ static int bind_to_cpuset(prte_job_t *jdata)
                 }
                 if ((unsigned) -1 == id) {
                     /* ran out of cpus - that's an error */
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:insufficient-cpus", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:insufficient-cpus", true,
                                    node->name, (int) proc->local_rank, job_cpuset);
                     free(job_cpuset);
                     hwloc_bitmap_free(mycpuset);
@@ -1061,7 +1061,7 @@ execute:
     }
 
     for (i = 0; i < jdata->map->nodes->size; i++) {
-        if (NULL == (node = (prte_node_t *) prte_pointer_array_get_item(jdata->map->nodes, i))) {
+        if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, i))) {
             continue;
         }
         if ((int) PRTE_PROC_MY_NAME->rank != node->index && !dobind) {
@@ -1085,7 +1085,7 @@ execute:
                     /* we are not required to bind, so ignore this */
                     continue;
                 }
-                prte_show_help("help-prte-rmaps-base.txt", "rmaps:cpubind-not-supported", true,
+                pmix_show_help("help-prte-rmaps-base.txt", "rmaps:cpubind-not-supported", true,
                                node->name);
                 return PRTE_ERR_SILENT;
             }
@@ -1100,11 +1100,11 @@ execute:
             if (!support->membind->set_thisproc_membind && !support->membind->set_thisthread_membind
                 && PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
                 if (PRTE_HWLOC_BASE_MBFA_WARN == prte_hwloc_base_mbfa && !membind_warned) {
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported", true,
                                    node->name);
                     membind_warned = true;
                 } else if (PRTE_HWLOC_BASE_MBFA_ERROR == prte_hwloc_base_mbfa) {
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported-fatal",
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:membind-not-supported-fatal",
                                    true, node->name);
                     return PRTE_ERR_SILENT;
                 }
@@ -1143,7 +1143,7 @@ execute:
 #endif
         {
             /* didn't find such an object */
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-objects", true,
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-objects", true,
                            hwloc_obj_type_string(hwb), node->name);
             return PRTE_ERR_SILENT;
         }

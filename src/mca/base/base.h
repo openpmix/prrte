@@ -19,7 +19,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,8 +32,8 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
-#include "src/class/prte_object.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_object.h"
 
 /*
  * These units are large enough to warrant their own .h files
@@ -41,7 +41,6 @@
 #include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/base/prte_mca_base_var.h"
 #include "src/mca/mca.h"
-#include "src/util/cmd_line.h"
 #include "src/util/output.h"
 
 BEGIN_C_DECLS
@@ -50,11 +49,11 @@ BEGIN_C_DECLS
  * Structure for making plain lists of components
  */
 struct prte_mca_base_component_list_item_t {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     const prte_mca_base_component_t *cli_component;
 };
 typedef struct prte_mca_base_component_list_item_t prte_mca_base_component_list_item_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_component_list_item_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_mca_base_component_list_item_t);
 
 /*
  * Structure for making priority lists of components
@@ -66,7 +65,7 @@ struct prte_mca_base_component_priority_list_item_t {
 typedef struct prte_mca_base_component_priority_list_item_t
     prte_mca_base_component_priority_list_item_t;
 
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_component_priority_list_item_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_mca_base_component_priority_list_item_t);
 
 /*
  * Public variables
@@ -141,7 +140,7 @@ PRTE_EXPORT void prte_mca_base_close(void);
  *
  */
 PRTE_EXPORT int prte_mca_base_select(const char *type_name, int output_id,
-                                     prte_list_t *components_available,
+                                     pmix_list_t *components_available,
                                      prte_mca_base_module_t **best_module,
                                      prte_mca_base_component_t **best_component, int *priority_out);
 
@@ -153,7 +152,7 @@ PRTE_EXPORT int prte_mca_base_select(const char *type_name, int output_id,
  *            available for selection.
  *
  */
-PRTE_EXPORT int prte_mca_base_is_component_required(prte_list_t *components_available,
+PRTE_EXPORT int prte_mca_base_is_component_required(pmix_list_t *components_available,
                                                     prte_mca_base_component_t *component,
                                                     bool exclusive, bool *is_required);
 
@@ -175,7 +174,7 @@ PRTE_EXPORT int prte_mca_base_component_find(const char *directory,
                                              bool ignore_requested, bool open_dso_components);
 
 /**
- * Parse the requested component string and return an prte_argv of the requested
+ * Parse the requested component string and return an pmix_argv of the requested
  * (or not requested) components.
  */
 int prte_mca_base_component_parse_requested(const char *requested, bool *include_mode,
@@ -218,7 +217,7 @@ PRTE_EXPORT int prte_mca_base_framework_components_open(struct prte_mca_base_fra
 
 PRTE_EXPORT int prte_mca_base_components_open(const char *type_name, int output_id,
                                               const prte_mca_base_component_t **static_components,
-                                              prte_list_t *components_available,
+                                              pmix_list_t *components_available,
                                               bool open_dso_components);
 
 /* prte_mca_base_components_close.c */
@@ -242,7 +241,7 @@ PRTE_EXPORT void prte_mca_base_component_close(const prte_mca_base_component_t *
  */
 void prte_mca_base_component_unload(const prte_mca_base_component_t *component, int output_id);
 
-PRTE_EXPORT int prte_mca_base_components_close(int output_id, prte_list_t *components_available,
+PRTE_EXPORT int prte_mca_base_components_close(int output_id, pmix_list_t *components_available,
                                                const prte_mca_base_component_t *skip);
 
 PRTE_EXPORT int

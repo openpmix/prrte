@@ -13,7 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,15 +31,15 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "src/util/argv.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
@@ -82,7 +82,7 @@ static int rte_init(int argc, char **argv)
 
 error:
     if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
-        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+        pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
                        PRTE_ERROR_NAME(ret), ret);
     }
 

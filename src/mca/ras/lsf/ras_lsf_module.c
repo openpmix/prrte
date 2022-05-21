@@ -12,7 +12,7 @@
  * Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,14 +32,14 @@
 #include <lsf/lsbatch.h>
 
 #include "src/hwloc/hwloc-internal.h"
-#include "src/util/argv.h"
-#include "src/util/net.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_net.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "ras_lsf.h"
 #include "src/mca/ras/base/base.h"
@@ -48,7 +48,7 @@
 /*
  * Local functions
  */
-static int allocate(prte_job_t *jdata, prte_list_t *nodes);
+static int allocate(prte_job_t *jdata, pmix_list_t *nodes);
 static int finalize(void);
 
 /*
@@ -56,7 +56,7 @@ static int finalize(void);
  */
 prte_ras_base_module_t prte_ras_lsf_module = {NULL, allocate, NULL, finalize};
 
-static int allocate(prte_job_t *jdata, prte_list_t *nodes)
+static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     char **nodelist;
     prte_node_t *node;
@@ -68,7 +68,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 
     /* get the list of allocated nodes */
     if ((num_nodes = lsb_getalloc(&nodelist)) < 0) {
-        prte_show_help("help-ras-lsf.txt", "nodelist-failed", true);
+        pmix_show_help("help-ras-lsf.txt", "nodelist-failed", true);
         return PRTE_ERR_NOT_AVAILABLE;
     }
 
@@ -76,7 +76,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
 
     /* step through the list */
     for (i = 0; i < num_nodes; i++) {
-        if (!prte_keep_fqdn_hostnames && !prte_net_isaddr(nodelist[i])) {
+        if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(nodelist[i])) {
             if (NULL != (ptr = strchr(nodelist[i], '.'))) {
                 *ptr = '\0';
             }
@@ -92,20 +92,20 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         }
 
         /* not a repeat - create a node entry for it */
-        node = PRTE_NEW(prte_node_t);
+        node = PMIX_NEW(prte_node_t);
         node->name = strdup(nodelist[i]);
         node->slots_inuse = 0;
         node->slots_max = 0;
         node->slots = 1;
         node->state = PRTE_NODE_STATE_UP;
-        prte_list_append(nodes, &node->super);
+        pmix_list_append(nodes, &node->super);
 
         prte_output_verbose(10, prte_ras_base_framework.framework_output,
                             "ras/lsf: New Node (%s) [slots=%d]", node->name, node->slots);
     }
 
     /* release the nodelist from lsf */
-    prte_argv_free(nodelist);
+    pmix_argv_free(nodelist);
 
     /* check to see if any mapping or binding directives were given */
     if (NULL != jdata && NULL != jdata->map) {
@@ -124,7 +124,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         /* check to see if the file is empty - if it is,
          * then affinity wasn't actually set for this job */
         if (0 != stat(affinity_file, &buf)) {
-            prte_show_help("help-ras-lsf.txt", "affinity-file-not-found", true, affinity_file);
+            pmix_show_help("help-ras-lsf.txt", "affinity-file-not-found", true, affinity_file);
             return PRTE_ERR_SILENT;
         }
         if (0 == buf.st_size) {
@@ -137,7 +137,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
         // Until that is resolved throw an error if we detect that the user is
         // trying to use LSF level affinity options.
         if (NULL != affinity_file) { // Always true
-            prte_show_help("help-ras-lsf.txt", "affinity-file-found-not-used", true, affinity_file,
+            pmix_show_help("help-ras-lsf.txt", "affinity-file-found-not-used", true, affinity_file,
                            "Physical CPU ID mapping is not supported");
             return PRTE_ERR_SILENT;
         }
@@ -146,7 +146,7 @@ static int allocate(prte_job_t *jdata, prte_list_t *nodes)
          * cpusets given as physical cpu-ids. Setup the job object
          * so it knows to process this accordingly */
         if (NULL == jdata->map) {
-            jdata->map = PRTE_NEW(prte_job_map_t);
+            jdata->map = PMIX_NEW(prte_job_map_t);
         }
         PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_SEQ);
         jdata->map->req_mapper = strdup("seq"); // need sequential mapper

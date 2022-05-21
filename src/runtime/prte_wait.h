@@ -17,7 +17,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -49,9 +49,9 @@
 #include "src/event/event-internal.h"
 #include "src/util/output.h"
 
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "types.h"
 
 BEGIN_C_DECLS
@@ -61,14 +61,14 @@ typedef void (*prte_wait_cbfunc_t)(int fd, short args, void *cb);
 
 /* define a tracker */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     prte_event_t ev;
     prte_event_base_t *evb;
     prte_proc_t *child;
     prte_wait_cbfunc_t cbfunc;
     void *cbdata;
 } prte_wait_tracker_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_wait_tracker_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_wait_tracker_t);
 
 /**
  * Disable / re-Enable SIGCHLD handler
@@ -110,7 +110,7 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
             struct timespec tp = {0, 100000};                                        \
             nanosleep(&tp, NULL);                                                    \
         }                                                                            \
-        PRTE_ACQUIRE_OBJECT(flg);                                                    \
+        PMIX_ACQUIRE_OBJECT(flg);                                                    \
     } while (0);
 
 /**
@@ -136,7 +136,7 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
     do {                                                                                          \
         prte_timer_t *tmp;                                                                        \
         int timeout;                                                                              \
-        tmp = PRTE_NEW(prte_timer_t);                                                             \
+        tmp = PMIX_NEW(prte_timer_t);                                                             \
         tmp->payload = (cbd);                                                                     \
         prte_event_evtimer_set(prte_event_base, tmp->ev, (cbfunc), tmp);                          \
         prte_event_set_priority(tmp->ev, PRTE_ERROR_PRI);                                         \
@@ -148,7 +148,7 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
         tmp->tv.tv_usec = timeout % 1000000;                                                      \
         PRTE_OUTPUT_VERBOSE((1, prte_debug_output, "defining timeout: %ld sec %ld usec at %s:%d", \
                              (long) tmp->tv.tv_sec, (long) tmp->tv.tv_usec, __FILE__, __LINE__)); \
-        PRTE_POST_OBJECT(tmp);                                                                    \
+        PMIX_POST_OBJECT(tmp);                                                                    \
         prte_event_evtimer_add(tmp->ev, &tmp->tv);                                                \
     } while (0);
 
@@ -164,7 +164,7 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
 #define PRTE_TIMER_EVENT(sec, usec, cbfunc, pri)                                                \
     do {                                                                                        \
         prte_timer_t *tm;                                                                       \
-        tm = PRTE_NEW(prte_timer_t);                                                            \
+        tm = PMIX_NEW(prte_timer_t);                                                            \
         prte_event_evtimer_set(prte_event_base, tm->ev, (cbfunc), tm);                          \
         prte_event_set_priority(tm->ev, (pri));                                                 \
         tm->tv.tv_sec = (sec) + (usec) / 1000000;                                               \
@@ -172,7 +172,7 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
         PRTE_OUTPUT_VERBOSE((1, prte_debug_output,                                              \
                              "defining timer event: %ld sec %ld usec at %s:%d",                 \
                              (long) tm->tv.tv_sec, (long) tm->tv.tv_usec, __FILE__, __LINE__)); \
-        PRTE_POST_OBJECT(tm);                                                                   \
+        PMIX_POST_OBJECT(tm);                                                                   \
         prte_event_evtimer_add(tm->ev, &tm->tv);                                                \
     } while (0);
 

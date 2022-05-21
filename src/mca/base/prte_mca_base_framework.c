@@ -8,7 +8,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,8 +19,9 @@
 #include "src/include/prte_config.h"
 
 #include "src/include/constants.h"
+#include "src/include/pmix_prefetch.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 
 #include "prte_mca_base_framework.h"
 #include "prte_mca_base_var.h"
@@ -71,8 +72,8 @@ int prte_mca_base_framework_register(struct prte_mca_base_framework_t *framework
         return PRTE_SUCCESS;
     }
 
-    PRTE_CONSTRUCT(&framework->framework_components, prte_list_t);
-    PRTE_CONSTRUCT(&framework->framework_failed_components, prte_list_t);
+    PMIX_CONSTRUCT(&framework->framework_components, pmix_list_t);
+    PMIX_CONSTRUCT(&framework->framework_failed_components, pmix_list_t);
 
     if (framework->framework_flags & PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO) {
         flags |= PRTE_MCA_BASE_REGISTER_STATIC_ONLY;
@@ -87,7 +88,7 @@ int prte_mca_base_framework_register(struct prte_mca_base_framework_t *framework
             return ret;
         }
 
-        prte_asprintf(&desc,
+        pmix_asprintf(&desc,
                       "Default selection set of components for the %s framework (<none>"
                       " means use all components that can be found)",
                       framework->framework_name);
@@ -102,7 +103,7 @@ int prte_mca_base_framework_register(struct prte_mca_base_framework_t *framework
         }
 
         /* register a verbosity variable for this framework */
-        ret = prte_asprintf(&desc, "Verbosity level for the %s framework (default: 0)",
+        ret = pmix_asprintf(&desc, "Verbosity level for the %s framework (default: 0)",
                             framework->framework_name);
         if (0 > ret) {
             return PRTE_ERR_OUT_OF_RESOURCE;
@@ -154,7 +155,7 @@ int prte_mca_base_framework_register_list(prte_mca_base_framework_t **frameworks
 
     for (int i = 0; frameworks[i]; ++i) {
         int ret = prte_mca_base_framework_register(frameworks[i], flags);
-        if (PRTE_UNLIKELY(PRTE_SUCCESS != ret && PRTE_ERR_NOT_AVAILABLE != ret)) {
+        if (PMIX_UNLIKELY(PRTE_SUCCESS != ret && PRTE_ERR_NOT_AVAILABLE != ret)) {
             return ret;
         }
     }
@@ -220,7 +221,7 @@ int prte_mca_base_framework_open_list(prte_mca_base_framework_t **frameworks,
 
     for (int i = 0; frameworks[i]; ++i) {
         int ret = prte_mca_base_framework_open(frameworks[i], flags);
-        if (PRTE_UNLIKELY(PRTE_SUCCESS != ret && PRTE_ERR_NOT_AVAILABLE != ret)) {
+        if (PMIX_UNLIKELY(PRTE_SUCCESS != ret && PRTE_ERR_NOT_AVAILABLE != ret)) {
             return ret;
         }
     }
@@ -264,15 +265,15 @@ int prte_mca_base_framework_close(struct prte_mca_base_framework_t *framework)
             return ret;
         }
     } else {
-        prte_list_item_t *item;
-        while (NULL != (item = prte_list_remove_first(&framework->framework_components))) {
+        pmix_list_item_t *item;
+        while (NULL != (item = pmix_list_remove_first(&framework->framework_components))) {
             prte_mca_base_component_list_item_t *cli;
             cli = (prte_mca_base_component_list_item_t *) item;
             prte_mca_base_component_unload(cli->cli_component, framework->framework_output);
-            PRTE_RELEASE(item);
+            PMIX_RELEASE(item);
         }
-        while (NULL != (item = prte_list_remove_first(&framework->framework_failed_components))) {
-            PRTE_RELEASE(item);
+        while (NULL != (item = pmix_list_remove_first(&framework->framework_failed_components))) {
+            PMIX_RELEASE(item);
         }
         ret = PRTE_SUCCESS;
     }
@@ -280,8 +281,8 @@ int prte_mca_base_framework_close(struct prte_mca_base_framework_t *framework)
     framework->framework_flags &= ~(PRTE_MCA_BASE_FRAMEWORK_FLAG_REGISTERED
                                     | PRTE_MCA_BASE_FRAMEWORK_FLAG_OPEN);
 
-    PRTE_DESTRUCT(&framework->framework_components);
-    PRTE_DESTRUCT(&framework->framework_failed_components);
+    PMIX_DESTRUCT(&framework->framework_components);
+    PMIX_DESTRUCT(&framework->framework_failed_components);
 
     framework_close_output(framework);
 
@@ -296,7 +297,7 @@ int prte_mca_base_framework_close_list(prte_mca_base_framework_t **frameworks)
 
     for (int i = 0; frameworks[i]; ++i) {
         int ret = prte_mca_base_framework_close(frameworks[i]);
-        if (PRTE_UNLIKELY(PRTE_SUCCESS != ret)) {
+        if (PMIX_UNLIKELY(PRTE_SUCCESS != ret)) {
             return ret;
         }
     }

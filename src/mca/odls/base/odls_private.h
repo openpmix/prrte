@@ -16,7 +16,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,15 +35,15 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prte_bitmap.h"
-#include "src/class/prte_list.h"
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_bitmap.h"
+#include "src/class/pmix_list.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/odls/odls_types.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 
 BEGIN_C_DECLS
 
@@ -57,7 +57,7 @@ typedef struct {
     /** Time to allow process to forcibly die */
     int timeout_before_sigkill;
     /* list of ranks to be displayed on separate xterms */
-    prte_list_t xterm_ranks;
+    pmix_list_t xterm_ranks;
     /* the xterm cmd to be used */
     char **xtermcmd;
     /* thread pool */
@@ -68,7 +68,7 @@ typedef struct {
     char **ev_threads;            // event progress thread names
     int next_base;                // counter to load-level thread use
     bool signal_direct_children_only;
-    prte_lock_t lock;
+    pmix_lock_t lock;
 } prte_odls_globals_t;
 
 PRTE_EXPORT extern prte_odls_globals_t prte_odls_globals;
@@ -91,7 +91,7 @@ typedef int (*prte_odls_base_fork_local_proc_fn_t)(void *cd);
 
 /* define an object for fork/exec the local proc */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     prte_event_t ev;
     char *cmd;
     char *wdir;
@@ -104,22 +104,22 @@ typedef struct {
     prte_iof_base_io_conf_t opts;
     prte_odls_base_fork_local_proc_fn_t fork_local;
 } prte_odls_spawn_caddy_t;
-PRTE_CLASS_DECLARATION(prte_odls_spawn_caddy_t);
+PMIX_CLASS_DECLARATION(prte_odls_spawn_caddy_t);
 
 /* define an object for starting local launch */
 typedef struct {
-    prte_object_t object;
+    pmix_object_t object;
     prte_event_t *ev;
     pmix_nspace_t job;
     prte_odls_base_fork_local_proc_fn_t fork_local;
     int retries;
 } prte_odls_launch_local_t;
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_odls_launch_local_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_odls_launch_local_t);
 
 #define PRTE_ACTIVATE_LOCAL_LAUNCH(j, f)                           \
     do {                                                           \
         prte_odls_launch_local_t *ll;                              \
-        ll = PRTE_NEW(prte_odls_launch_local_t);                   \
+        ll = PMIX_NEW(prte_odls_launch_local_t);                   \
         PMIX_LOAD_NSPACE(ll->job, (j));                            \
         ll->fork_local = (f);                                      \
         prte_event_set(prte_event_base, ll->ev, -1, PRTE_EV_WRITE, \
@@ -145,7 +145,7 @@ typedef int (*prte_odls_base_kill_local_fn_t)(pid_t pid, int signum);
 /* define a function type to detect that a child died */
 typedef bool (*prte_odls_base_child_died_fn_t)(prte_proc_t *child);
 
-PRTE_EXPORT int prte_odls_base_default_kill_local_procs(prte_pointer_array_t *procs,
+PRTE_EXPORT int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
                                                         prte_odls_base_kill_local_fn_t kill_local);
 
 PRTE_EXPORT int prte_odls_base_default_restart_proc(prte_proc_t *child,

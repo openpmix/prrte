@@ -36,8 +36,8 @@
 #include <string.h>
 
 #include "src/hwloc/hwloc-internal.h"
-#include "src/util/if.h"
-#include "src/util/net.h"
+#include "src/util/pmix_if.h"
+#include "src/util/pmix_net.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -46,7 +46,7 @@
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "rmaps_seq.h"
 #include "src/mca/rmaps/base/base.h"
@@ -59,7 +59,7 @@ prte_rmaps_base_module_t prte_rmaps_seq_module = {.map_job = prte_rmaps_seq_map}
 
 /* local object for tracking rank locations */
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     char *hostname;
     char *cpuset;
 } seq_node_t;
@@ -79,10 +79,10 @@ static void sn_des(seq_node_t *p)
         p->cpuset = NULL;
     }
 }
-PRTE_CLASS_INSTANCE(seq_node_t, prte_list_item_t, sn_con, sn_des);
+PMIX_CLASS_INSTANCE(seq_node_t, pmix_list_item_t, sn_con, sn_des);
 
 static char *prte_getline(FILE *fp);
-static int process_file(char *path, prte_list_t *list);
+static int process_file(char *path, pmix_list_t *list);
 
 /*
  * Sequentially map the ranks according to the placement in the
@@ -94,14 +94,14 @@ static int prte_rmaps_seq_map(prte_job_t *jdata)
     prte_app_context_t *app;
     int i, n;
     int32_t j;
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_node_t *node, *nd;
     seq_node_t *sq, *save = NULL, *seq;
     pmix_rank_t vpid;
     int32_t num_nodes;
     int rc;
-    prte_list_t default_seq_list;
-    prte_list_t node_list, *seq_list, sq_list;
+    pmix_list_t default_seq_list;
+    pmix_list_t node_list, *seq_list, sq_list;
     prte_proc_t *proc;
     prte_mca_base_component_t *c = &prte_rmaps_seq_component.base_version;
     char *hosts = NULL;
@@ -154,11 +154,11 @@ process:
     map = jdata->map;
 
     /* if there is a default hostfile, go and get its ordered list of nodes */
-    PRTE_CONSTRUCT(&default_seq_list, prte_list_t);
+    PMIX_CONSTRUCT(&default_seq_list, pmix_list_t);
     if (NULL != prte_default_hostfile) {
         rc = process_file(prte_default_hostfile, &default_seq_list);
         if (PRTE_SUCCESS != rc) {
-            PRTE_LIST_DESTRUCT(&default_seq_list);
+            PMIX_LIST_DESTRUCT(&default_seq_list);
             return rc;
         }
     }
@@ -174,20 +174,20 @@ process:
     /* start at the beginning... */
     vpid = 0;
     jdata->num_procs = 0;
-    if (0 < prte_list_get_size(&default_seq_list)) {
-        save = (seq_node_t *) prte_list_get_first(&default_seq_list);
+    if (0 < pmix_list_get_size(&default_seq_list)) {
+        save = (seq_node_t *) pmix_list_get_first(&default_seq_list);
     }
 
     /* initialize all the nodes as not included in this job map */
     for (j = 0; j < prte_node_pool->size; j++) {
-        if (NULL != (node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, j))) {
+        if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, j))) {
             PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
         }
     }
 
     /* cycle through the app_contexts, mapping them sequentially */
     for (i = 0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
 
@@ -200,10 +200,10 @@ process:
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts,
                                 app->app);
-            PRTE_CONSTRUCT(&sq_list, prte_list_t);
+            PMIX_CONSTRUCT(&sq_list, pmix_list_t);
             rc = process_file(hosts, &sq_list);
             if (PRTE_SUCCESS != rc) {
-                PRTE_LIST_DESTRUCT(&sq_list);
+                PMIX_LIST_DESTRUCT(&sq_list);
                 goto error;
             }
             seq_list = &sq_list;
@@ -211,7 +211,7 @@ process:
                                       PMIX_STRING)) {
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using dash-host nodes on app %s", app->app);
-            PRTE_CONSTRUCT(&node_list, prte_list_t);
+            PMIX_CONSTRUCT(&node_list, pmix_list_t);
             /* dash host entries cannot specify cpusets, so used the std function to retrieve the
              * list */
             if (PRTE_SUCCESS != (rc = prte_util_get_ordered_dash_host_list(&node_list, hosts))) {
@@ -219,14 +219,14 @@ process:
                 goto error;
             }
             /* transfer the list to a seq_node_t list */
-            PRTE_CONSTRUCT(&sq_list, prte_list_t);
-            while (NULL != (nd = (prte_node_t *) prte_list_remove_first(&node_list))) {
-                sq = PRTE_NEW(seq_node_t);
+            PMIX_CONSTRUCT(&sq_list, pmix_list_t);
+            while (NULL != (nd = (prte_node_t *) pmix_list_remove_first(&node_list))) {
+                sq = PMIX_NEW(seq_node_t);
                 sq->hostname = strdup(nd->name);
-                prte_list_append(&sq_list, &sq->super);
-                PRTE_RELEASE(nd);
+                pmix_list_append(&sq_list, &sq->super);
+                PMIX_RELEASE(nd);
             }
-            PRTE_DESTRUCT(&node_list);
+            PMIX_DESTRUCT(&node_list);
             seq_list = &sq_list;
         } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts,
                                       PMIX_STRING)) {
@@ -237,21 +237,21 @@ process:
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts,
                                 app->app);
-            PRTE_CONSTRUCT(&sq_list, prte_list_t);
+            PMIX_CONSTRUCT(&sq_list, pmix_list_t);
             rc = process_file(hosts, &sq_list);
             if (PRTE_SUCCESS != rc) {
-                PRTE_LIST_DESTRUCT(&sq_list);
+                PMIX_LIST_DESTRUCT(&sq_list);
                 goto error;
             }
             seq_list = &sq_list;
-        } else if (0 < prte_list_get_size(&default_seq_list)) {
+        } else if (0 < pmix_list_get_size(&default_seq_list)) {
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using default hostfile nodes on app %s", app->app);
             seq_list = &default_seq_list;
             hosts = strdup(prte_default_hostfile);
         } else {
             /* can't do anything - no nodes available! */
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
                            true);
             rc = PRTE_ERR_SILENT;
             goto error;
@@ -259,8 +259,8 @@ process:
 
         /* check for nolocal and remove the head node, if required */
         if (PRTE_GET_MAPPING_DIRECTIVE(map->mapping) & PRTE_MAPPING_NO_USE_LOCAL) {
-            for (item = prte_list_get_first(seq_list); item != prte_list_get_end(seq_list);
-                 item = prte_list_get_next(item)) {
+            for (item = pmix_list_get_first(seq_list); item != pmix_list_get_end(seq_list);
+                 item = pmix_list_get_next(item)) {
                 seq = (seq_node_t *) item;
                 /* need to check ifislocal because the name in the
                  * hostfile may not have been FQDN, while name returned
@@ -269,14 +269,14 @@ process:
                 if (prte_check_host_is_local(seq->hostname)) {
                     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:seq: removing head node %s", seq->hostname);
-                    prte_list_remove_item(seq_list, item);
-                    PRTE_RELEASE(item); /* "un-retain" it */
+                    pmix_list_remove_item(seq_list, item);
+                    PMIX_RELEASE(item); /* "un-retain" it */
                 }
             }
         }
 
-        if (NULL == seq_list || 0 == (num_nodes = (int32_t) prte_list_get_size(seq_list))) {
-            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
+        if (NULL == seq_list || 0 == (num_nodes = (int32_t) pmix_list_get_size(seq_list))) {
+            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-available-resources",
                            true);
             rc = PRTE_ERR_SILENT;
             goto error;
@@ -289,7 +289,7 @@ process:
                                 "mca:rmaps:seq: setting num procs to %s for app %s",
                                 PRTE_VPID_PRINT(app->num_procs), app->app);
         } else if (num_nodes < app->num_procs) {
-            prte_show_help("help-prte-rmaps-seq.txt", "seq:not-enough-resources", true,
+            pmix_show_help("help-prte-rmaps-seq.txt", "seq:not-enough-resources", true,
                            app->num_procs, num_nodes);
             rc = PRTE_ERR_SILENT;
             goto error;
@@ -298,7 +298,7 @@ process:
         if (seq_list == &default_seq_list) {
             sq = save;
         } else {
-            sq = (seq_node_t *) prte_list_get_first(seq_list);
+            sq = (seq_node_t *) pmix_list_get_first(seq_list);
         }
         for (n = 0; n < app->num_procs; n++) {
             /* find this node on the global array - this is necessary so
@@ -307,7 +307,7 @@ process:
              */
             match = false;
             for (j = 0; j < prte_node_pool->size; j++) {
-                node = (prte_node_t *) prte_pointer_array_get_item(prte_node_pool, j);
+                node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, j);
                 if (NULL == node) {
                     continue;
                 }
@@ -318,15 +318,15 @@ process:
             }
             if (!match) {
                 /* wasn't found - that is an error */
-                prte_show_help("help-prte-rmaps-seq.txt", "prte-rmaps-seq:resource-not-found", true,
+                pmix_show_help("help-prte-rmaps-seq.txt", "prte-rmaps-seq:resource-not-found", true,
                                sq->hostname);
                 rc = PRTE_ERR_SILENT;
                 goto error;
             }
             /* ensure the node is in the map */
             if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
-                PRTE_RETAIN(node);
-                prte_pointer_array_add(map->nodes, node);
+                PMIX_RETAIN(node);
+                pmix_pointer_array_add(map->nodes, node);
                 jdata->map->num_nodes++;
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_MAPPED);
             }
@@ -336,7 +336,7 @@ process:
                 if ((node->slots < (int) node->num_procs) ||
                     (0 < node->slots_max && node->slots_max < (int) node->num_procs)) {
                     if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
-                        prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
+                        pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error", true,
                                        node->num_procs, app->app);
                         PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                         rc = PRTE_ERR_SILENT;
@@ -353,14 +353,14 @@ process:
                          * as the #slots were specifically given, either by the host RM or
                          * via hostfile/dash-host */
                         if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
-                            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                            true, app->num_procs, app->app);
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                             rc = PRTE_ERR_SILENT;
                             goto error;
                         } else if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
                             /* if we were explicitly told not to oversubscribe, then don't */
-                            prte_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
+                            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:alloc-error",
                                            true, app->num_procs, app->app);
                             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
                             rc = PRTE_ERR_SILENT;
@@ -383,7 +383,7 @@ process:
                     /* not allowed - for sequential cpusets, we must have
                      * the topology info
                      */
-                    prte_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
+                    pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-topology", true,
                                    node->name);
                     rc = PRTE_ERR_SILENT;
                     goto error;
@@ -401,11 +401,11 @@ process:
                     if (PRTE_ERR_NOT_FOUND == rc) {
                         char *tmp = prte_hwloc_base_cset2str(hwloc_topology_get_allowed_cpuset(node->topology->topo),
                                                              false, node->topology->topo);
-                        prte_show_help("help-rmaps-seq.txt", "missing-cpu", true,
+                        pmix_show_help("help-rmaps-seq.txt", "missing-cpu", true,
                                        prte_tool_basename, sq->cpuset, tmp);
                         free(tmp);
                     } else if (PRTE_ERROR == rc) {
-                        prte_show_help("help-rmaps-seq.txt", "bad-syntax", true, hosts);
+                        pmix_show_help("help-rmaps-seq.txt", "bad-syntax", true, hosts);
                         rc = PRTE_ERR_SILENT;
                         hwloc_bitmap_free(bitmap);
                         goto error;
@@ -447,12 +447,12 @@ process:
 
             /* add to the jdata proc array */
             if (PRTE_SUCCESS
-                != (rc = prte_pointer_array_set_item(jdata->procs, proc->name.rank, proc))) {
+                != (rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc))) {
                 PRTE_ERROR_LOG(rc);
                 goto error;
             }
             /* move to next node */
-            sq = (seq_node_t *) prte_list_get_next(&sq->super);
+            sq = (seq_node_t *) pmix_list_get_next(&sq->super);
         }
 
         /** track the total number of processes we mapped */
@@ -460,7 +460,7 @@ process:
 
         /* cleanup the node list if it came from this app_context */
         if (seq_list != &default_seq_list) {
-            PRTE_LIST_DESTRUCT(seq_list);
+            PMIX_LIST_DESTRUCT(seq_list);
         } else {
             save = sq;
         }
@@ -477,7 +477,7 @@ process:
     return PRTE_SUCCESS;
 
 error:
-    PRTE_LIST_DESTRUCT(&default_seq_list);
+    PMIX_LIST_DESTRUCT(&default_seq_list);
     if (NULL != hosts) {
         free(hosts);
     }
@@ -499,7 +499,7 @@ static char *prte_getline(FILE *fp)
     return NULL;
 }
 
-static int process_file(char *path, prte_list_t *list)
+static int process_file(char *path, pmix_list_t *list)
 {
     char *hstname = NULL;
     FILE *fp;
@@ -523,7 +523,7 @@ static int process_file(char *path, prte_list_t *list)
             /* Comment line - ignore */
             continue;
         }
-        sq = PRTE_NEW(seq_node_t);
+        sq = PMIX_NEW(seq_node_t);
         if (NULL != (sep = strchr(hstname, ' '))) {
             *sep = '\0';
             sep++;
@@ -554,7 +554,7 @@ static int process_file(char *path, prte_list_t *list)
         }
 
         sq->hostname = hstname;
-        prte_list_append(list, &sq->super);
+        pmix_list_append(list, &sq->super);
     }
     fclose(fp);
     return PRTE_SUCCESS;

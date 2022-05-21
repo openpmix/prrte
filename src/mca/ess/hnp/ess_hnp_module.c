@@ -40,22 +40,21 @@
 
 #include "src/mca/propagate/base/base.h"
 
-#include "src/class/prte_hash_table.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_hash_table.h"
+#include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
 #include "src/include/hash_string.h"
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/arch.h"
-#include "src/util/argv.h"
-#include "src/util/basename.h"
-#include "src/util/fd.h"
-#include "src/util/if.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_basename.h"
+#include "src/util/pmix_fd.h"
+#include "src/util/pmix_if.h"
 #include "src/util/malloc.h"
-#include "src/util/os_path.h"
+#include "src/util/pmix_os_path.h"
 #include "src/util/output.h"
-#include "src/util/prte_environ.h"
+#include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/filem/base/base.h"
@@ -68,21 +67,18 @@
 #include "src/mca/prtereachable/base/base.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/mca/rml/base/base.h"
-#include "src/mca/rml/rml_types.h"
-#include "src/mca/routed/base/base.h"
-#include "src/mca/routed/routed.h"
 #include "src/mca/rtc/base/base.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
 
 #include "src/prted/pmix/pmix_server.h"
+#include "src/rml/rml.h"
 
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
@@ -222,21 +218,6 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
     /* Setup the communication infrastructure */
-    /*
-     * Routed system
-     */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_routed_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_rml_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_routed_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_routed_base_select";
-        goto error;
-    }
     if (PRTE_SUCCESS
         != (ret = prte_mca_base_framework_open(&prte_prtereachable_base_framework,
                                                PRTE_MCA_BASE_OPEN_DEFAULT))) {
@@ -266,16 +247,7 @@ static int rte_init(int argc, char **argv)
     /*
      * Runtime Messaging Layer
      */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rml_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        error = "prte_rml_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_rml_base_select())) {
-        error = "prte_rml_base_select";
-        goto error;
-    }
+    prte_rml_open();
 
     /* it is now safe to start the pmix server */
     pmix_server_start();
@@ -309,14 +281,14 @@ static int rte_init(int argc, char **argv)
     }
 #endif
     /* get the job data object for the daemons */
-    jdata = PRTE_NEW(prte_job_t);
+    jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
     prte_set_job_data_object(jdata);
 
     /* set the schizo personality to "prte" by default */
     jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy("prte");
     if (NULL == jdata->schizo) {
-        prte_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
         error = "select personality";
         ret = PRTE_ERR_SILENT;
         goto error;
@@ -329,20 +301,20 @@ static int rte_init(int argc, char **argv)
     jdata->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
 
     /* every job requires at least one app */
-    app = PRTE_NEW(prte_app_context_t);
+    app = PMIX_NEW(prte_app_context_t);
     app->app = strdup(argv[0]);
-    app->argv = prte_argv_copy(argv);
-    prte_pointer_array_set_item(jdata->apps, 0, app);
+    app->argv = pmix_argv_copy(argv);
+    pmix_pointer_array_set_item(jdata->apps, 0, app);
     jdata->num_apps++;
     /* create and store a node object where we are */
-    node = PRTE_NEW(prte_node_t);
+    node = PMIX_NEW(prte_node_t);
     node->name = strdup(prte_process_info.nodename);
     node->index = PRTE_PROC_MY_NAME->rank;
     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_LOC_VERIFIED);
-    prte_pointer_array_set_item(prte_node_pool, PRTE_PROC_MY_NAME->rank, node);
+    pmix_pointer_array_set_item(prte_node_pool, PRTE_PROC_MY_NAME->rank, node);
 
     /* create and store a proc object for us */
-    proc = PRTE_NEW(prte_proc_t);
+    proc = PMIX_NEW(prte_proc_t);
     PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
     proc->job = jdata;
     proc->rank = proc->name.rank;
@@ -360,9 +332,9 @@ static int rte_init(int argc, char **argv)
     }
     PMIX_VALUE_DESTRUCT(&pval);
     proc->state = PRTE_PROC_STATE_RUNNING;
-    PRTE_RETAIN(node); /* keep accounting straight */
+    PMIX_RETAIN(node); /* keep accounting straight */
     proc->node = node;
-    prte_pointer_array_set_item(jdata->procs, PRTE_PROC_MY_NAME->rank, proc);
+    pmix_pointer_array_set_item(jdata->procs, PRTE_PROC_MY_NAME->rank, proc);
 
     /* record that the daemon (i.e., us) is on this node
      * NOTE: we do not add the proc object to the node's
@@ -370,12 +342,12 @@ static int rte_init(int argc, char **argv)
      * Instead, we record it in the daemon field of the
      * node object
      */
-    PRTE_RETAIN(proc); /* keep accounting straight */
+    PMIX_RETAIN(proc); /* keep accounting straight */
     node->daemon = proc;
     PRTE_FLAG_SET(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
     node->state = PRTE_NODE_STATE_UP;
     /* get our aliases - will include all the interface aliases captured in prte_init */
-    node->aliases = prte_argv_copy(prte_process_info.aliases);
+    node->aliases = pmix_argv_copy(prte_process_info.aliases);
     /* record that the daemon job is running */
     jdata->num_procs = 1;
     jdata->state = PRTE_JOB_STATE_RUNNING;
@@ -437,12 +409,12 @@ static int rte_init(int argc, char **argv)
      * one by setting our node topology afterwards
      */
     /* add it to the array of known topologies */
-    t = PRTE_NEW(prte_topology_t);
+    t = PMIX_NEW(prte_topology_t);
     t->topo = prte_hwloc_topology;
     /* generate the signature */
     prte_topo_signature = prte_hwloc_base_get_topo_signature(prte_hwloc_topology);
     t->sig = strdup(prte_topo_signature);
-    prte_pointer_array_add(prte_node_topologies, t);
+    pmix_pointer_array_add(prte_node_topologies, t);
     node->topology = t;
     if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         char *output = NULL;
@@ -454,8 +426,8 @@ static int rte_init(int argc, char **argv)
 
     /* init the hash table, if necessary */
     if (NULL == prte_coprocessors) {
-        prte_coprocessors = PRTE_NEW(prte_hash_table_t);
-        prte_hash_table_init(prte_coprocessors, prte_process_info.num_daemons);
+        prte_coprocessors = PMIX_NEW(pmix_hash_table_t);
+        pmix_hash_table_init(prte_coprocessors, prte_process_info.num_daemons);
     }
     /* detect and add any coprocessors */
     coprocessors = prte_hwloc_base_find_coprocessors(prte_hwloc_topology);
@@ -463,15 +435,15 @@ static int rte_init(int argc, char **argv)
         /* separate the serial numbers of the coprocessors
          * on this host
          */
-        sns = prte_argv_split(coprocessors, ',');
+        sns = pmix_argv_split(coprocessors, ',');
         for (idx = 0; NULL != sns[idx]; idx++) {
             /* compute the hash */
             PRTE_HASH_STR(sns[idx], h);
             /* mark that this coprocessor is hosted by this node */
-            prte_hash_table_set_value_uint32(prte_coprocessors, h,
+            pmix_hash_table_set_value_uint32(prte_coprocessors, h,
                                              (void *) &(PRTE_PROC_MY_NAME->rank));
         }
-        prte_argv_free(sns);
+        pmix_argv_free(sns);
         free(coprocessors);
         prte_coprocessors_detected = true;
     }
@@ -481,7 +453,7 @@ static int rte_init(int argc, char **argv)
         /* compute the hash */
         PRTE_HASH_STR(coprocessors, h);
         /* mark that I am on this coprocessor */
-        prte_hash_table_set_value_uint32(prte_coprocessors, h, (void *) &(PRTE_PROC_MY_NAME->rank));
+        pmix_hash_table_set_value_uint32(prte_coprocessors, h, (void *) &(PRTE_PROC_MY_NAME->rank));
         prte_set_attribute(&node->attributes, PRTE_NODE_SERIAL_NUMBER, PRTE_ATTR_LOCAL,
                            coprocessors, PMIX_STRING);
         free(coprocessors);
@@ -558,12 +530,12 @@ static int rte_init(int argc, char **argv)
 
 error:
     if (PRTE_ERR_SILENT != ret && !prte_report_silent_errors) {
-        prte_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
+        pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
                        PRTE_ERROR_NAME(ret), ret);
     }
     /* remove my contact info file, if we have session directories */
     if (NULL != prte_process_info.jobfam_session_dir) {
-        contact_path = prte_os_path(false, prte_process_info.jobfam_session_dir, "contact.txt",
+        contact_path = pmix_os_path(false, prte_process_info.jobfam_session_dir, "contact.txt",
                                     NULL);
         unlink(contact_path);
         free(contact_path);
@@ -586,12 +558,9 @@ static int rte_finalize(void)
     (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
 #endif
 
-    /* shutdown the pmix server */
-    pmix_server_finalize();
-
     /* remove my contact info file, if we have session directories */
     if (NULL != prte_process_info.jobfam_session_dir) {
-        contact_path = prte_os_path(false, prte_process_info.jobfam_session_dir, "contact.txt",
+        contact_path = pmix_os_path(false, prte_process_info.jobfam_session_dir, "contact.txt",
                                     NULL);
         unlink(contact_path);
         free(contact_path);
@@ -606,8 +575,7 @@ static int rte_finalize(void)
     prte_odls.kill_local_procs(NULL);
     (void) prte_mca_base_framework_close(&prte_rtc_base_framework);
     (void) prte_mca_base_framework_close(&prte_odls_base_framework);
-    (void) prte_mca_base_framework_close(&prte_routed_base_framework);
-    (void) prte_mca_base_framework_close(&prte_rml_base_framework);
+    prte_rml_close();
     (void) prte_mca_base_framework_close(&prte_oob_base_framework);
     (void) prte_mca_base_framework_close(&prte_prtereachable_base_framework);
     (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);
@@ -620,6 +588,8 @@ static int rte_finalize(void)
 
     free(prte_topo_signature);
 
+    /* shutdown the pmix server */
+    pmix_server_finalize();
     /* output any lingering stdout/err data */
     fflush(stdout);
     fflush(stderr);

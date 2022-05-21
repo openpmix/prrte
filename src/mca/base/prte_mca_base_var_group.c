@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,18 +43,18 @@
 #include "src/mca/mca.h"
 #include "src/runtime/runtime.h"
 #include "src/util/output.h"
-#include "src/util/prte_environ.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_show_help.h"
 
-static prte_pointer_array_t mca_base_var_groups;
-static prte_hash_table_t mca_base_var_group_index_hash;
+static pmix_pointer_array_t mca_base_var_groups;
+static pmix_hash_table_t mca_base_var_group_index_hash;
 static int mca_base_var_group_count = 0;
 static int mca_base_var_groups_timestamp = 0;
 static bool mca_base_var_group_initialized = false;
 
 static void mca_base_var_group_constructor(prte_mca_base_var_group_t *group);
 static void mca_base_var_group_destructor(prte_mca_base_var_group_t *group);
-PRTE_CLASS_INSTANCE(prte_mca_base_var_group_t, prte_object_t, mca_base_var_group_constructor,
+PMIX_CLASS_INSTANCE(prte_mca_base_var_group_t, pmix_object_t, mca_base_var_group_constructor,
                     mca_base_var_group_destructor);
 
 int prte_mca_base_var_group_init(void)
@@ -62,16 +62,16 @@ int prte_mca_base_var_group_init(void)
     int ret;
 
     if (!mca_base_var_group_initialized) {
-        PRTE_CONSTRUCT(&mca_base_var_groups, prte_pointer_array_t);
+        PMIX_CONSTRUCT(&mca_base_var_groups, pmix_pointer_array_t);
 
         /* These values are arbitrary */
-        ret = prte_pointer_array_init(&mca_base_var_groups, 128, 16384, 128);
+        ret = pmix_pointer_array_init(&mca_base_var_groups, 128, 16384, 128);
         if (PRTE_SUCCESS != ret) {
             return ret;
         }
 
-        PRTE_CONSTRUCT(&mca_base_var_group_index_hash, prte_hash_table_t);
-        ret = prte_hash_table_init(&mca_base_var_group_index_hash, 256);
+        PMIX_CONSTRUCT(&mca_base_var_group_index_hash, pmix_hash_table_t);
+        ret = pmix_hash_table_init(&mca_base_var_group_index_hash, 256);
         if (PRTE_SUCCESS != ret) {
             return ret;
         }
@@ -85,19 +85,19 @@ int prte_mca_base_var_group_init(void)
 
 int prte_mca_base_var_group_finalize(void)
 {
-    prte_object_t *object;
+    pmix_object_t *object;
     int size, i;
 
     if (mca_base_var_group_initialized) {
-        size = prte_pointer_array_get_size(&mca_base_var_groups);
+        size = pmix_pointer_array_get_size(&mca_base_var_groups);
         for (i = 0; i < size; ++i) {
-            object = prte_pointer_array_get_item(&mca_base_var_groups, i);
+            object = pmix_pointer_array_get_item(&mca_base_var_groups, i);
             if (NULL != object) {
-                PRTE_RELEASE(object);
+                PMIX_RELEASE(object);
             }
         }
-        PRTE_DESTRUCT(&mca_base_var_groups);
-        PRTE_DESTRUCT(&mca_base_var_group_index_hash);
+        PMIX_DESTRUCT(&mca_base_var_groups);
+        PMIX_DESTRUCT(&mca_base_var_group_index_hash);
         mca_base_var_group_count = 0;
         mca_base_var_group_initialized = false;
     }
@@ -112,7 +112,7 @@ int prte_mca_base_var_group_get_internal(const int group_index, prte_mca_base_va
         return PRTE_ERR_NOT_FOUND;
     }
 
-    *group = (prte_mca_base_var_group_t *) prte_pointer_array_get_item(&mca_base_var_groups,
+    *group = (prte_mca_base_var_group_t *) pmix_pointer_array_get_item(&mca_base_var_groups,
                                                                        group_index);
     if (NULL == *group || (!invalidok && !(*group)->group_isvalid)) {
         *group = NULL;
@@ -128,7 +128,7 @@ static int group_find_by_name(const char *full_name, int *index, bool invalidok)
     void *tmp;
     int rc;
 
-    rc = prte_hash_table_get_value_ptr(&mca_base_var_group_index_hash, full_name, strlen(full_name),
+    rc = pmix_hash_table_get_value_ptr(&mca_base_var_group_index_hash, full_name, strlen(full_name),
                                        &tmp);
     if (PRTE_SUCCESS != rc) {
         return rc;
@@ -242,35 +242,35 @@ static int group_register(const char *project_name, const char *framework_name,
         return group_id;
     }
 
-    group = PRTE_NEW(prte_mca_base_var_group_t);
+    group = PMIX_NEW(prte_mca_base_var_group_t);
 
     group->group_isvalid = true;
 
     if (NULL != project_name) {
         group->group_project = strdup(project_name);
         if (NULL == group->group_project) {
-            PRTE_RELEASE(group);
+            PMIX_RELEASE(group);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
     if (NULL != framework_name) {
         group->group_framework = strdup(framework_name);
         if (NULL == group->group_framework) {
-            PRTE_RELEASE(group);
+            PMIX_RELEASE(group);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
     if (NULL != component_name) {
         group->group_component = strdup(component_name);
         if (NULL == group->group_component) {
-            PRTE_RELEASE(group);
+            PMIX_RELEASE(group);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
     if (NULL != description) {
         group->group_description = strdup(description);
         if (NULL == group->group_description) {
-            PRTE_RELEASE(group);
+            PMIX_RELEASE(group);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
     }
@@ -287,17 +287,17 @@ static int group_register(const char *project_name, const char *framework_name,
     ret = prte_mca_base_var_generate_full_name4(NULL, project_name, framework_name, component_name,
                                                 &group->group_full_name);
     if (PRTE_SUCCESS != ret) {
-        PRTE_RELEASE(group);
+        PMIX_RELEASE(group);
         return ret;
     }
 
-    group_id = prte_pointer_array_add(&mca_base_var_groups, group);
+    group_id = pmix_pointer_array_add(&mca_base_var_groups, group);
     if (0 > group_id) {
-        PRTE_RELEASE(group);
+        PMIX_RELEASE(group);
         return PRTE_ERROR;
     }
 
-    prte_hash_table_set_value_ptr(&mca_base_var_group_index_hash, group->group_full_name,
+    pmix_hash_table_set_value_ptr(&mca_base_var_group_index_hash, group->group_full_name,
                                   strlen(group->group_full_name), (void *) (uintptr_t) group_id);
 
     mca_base_var_group_count++;
@@ -307,7 +307,7 @@ static int group_register(const char *project_name, const char *framework_name,
         prte_mca_base_var_group_t *parent_group;
 
         (void) prte_mca_base_var_group_get_internal(parent_id, &parent_group, false);
-        prte_value_array_append_item(&parent_group->group_subgroups, &group_id);
+        pmix_value_array_append_item(&parent_group->group_subgroups, &group_id);
     }
 
     return group_id;
@@ -331,7 +331,7 @@ int prte_mca_base_var_group_deregister(int group_index)
     prte_mca_base_var_group_t *group;
     int size, ret;
     int *params, *subgroups;
-    prte_object_t **enums;
+    pmix_object_t **enums;
 
     ret = prte_mca_base_var_group_get_internal(group_index, &group, false);
     if (PRTE_SUCCESS != ret) {
@@ -341,8 +341,8 @@ int prte_mca_base_var_group_deregister(int group_index)
     group->group_isvalid = false;
 
     /* deregister all associated mca parameters */
-    size = prte_value_array_get_size(&group->group_vars);
-    params = PRTE_VALUE_ARRAY_GET_BASE(&group->group_vars, int);
+    size = pmix_value_array_get_size(&group->group_vars);
+    params = PMIX_VALUE_ARRAY_GET_BASE(&group->group_vars, int);
 
     for (int i = 0; i < size; ++i) {
         const prte_mca_base_var_t *var;
@@ -355,14 +355,14 @@ int prte_mca_base_var_group_deregister(int group_index)
         (void) prte_mca_base_var_deregister(params[i]);
     }
 
-    size = prte_value_array_get_size(&group->group_enums);
-    enums = PRTE_VALUE_ARRAY_GET_BASE(&group->group_enums, prte_object_t *);
+    size = pmix_value_array_get_size(&group->group_enums);
+    enums = PMIX_VALUE_ARRAY_GET_BASE(&group->group_enums, pmix_object_t *);
     for (int i = 0; i < size; ++i) {
-        PRTE_RELEASE(enums[i]);
+        PMIX_RELEASE(enums[i]);
     }
 
-    size = prte_value_array_get_size(&group->group_subgroups);
-    subgroups = PRTE_VALUE_ARRAY_GET_BASE(&group->group_subgroups, int);
+    size = pmix_value_array_get_size(&group->group_subgroups);
+    subgroups = PMIX_VALUE_ARRAY_GET_BASE(&group->group_subgroups, int);
     for (int i = 0; i < size; ++i) {
         (void) prte_mca_base_var_group_deregister(subgroups[i]);
     }
@@ -396,22 +396,22 @@ int prte_mca_base_var_group_add_var(const int group_index, const int param_index
         return ret;
     }
 
-    size = prte_value_array_get_size(&group->group_vars);
-    params = PRTE_VALUE_ARRAY_GET_BASE(&group->group_vars, int);
+    size = pmix_value_array_get_size(&group->group_vars);
+    params = PMIX_VALUE_ARRAY_GET_BASE(&group->group_vars, int);
     for (i = 0; i < size; ++i) {
         if (params[i] == param_index) {
             return i;
         }
     }
 
-    if (PRTE_SUCCESS != (ret = prte_value_array_append_item(&group->group_vars, &param_index))) {
+    if (PRTE_SUCCESS != (ret = pmix_value_array_append_item(&group->group_vars, &param_index))) {
         return ret;
     }
 
     mca_base_var_groups_timestamp++;
 
     /* return the group index */
-    return (int) prte_value_array_get_size(&group->group_vars) - 1;
+    return (int) pmix_value_array_get_size(&group->group_vars) - 1;
 }
 
 int prte_mca_base_var_group_add_enum(const int group_index, const void *storage)
@@ -425,20 +425,20 @@ int prte_mca_base_var_group_add_enum(const int group_index, const void *storage)
         return ret;
     }
 
-    size = prte_value_array_get_size(&group->group_enums);
-    params = PRTE_VALUE_ARRAY_GET_BASE(&group->group_enums, void *);
+    size = pmix_value_array_get_size(&group->group_enums);
+    params = PMIX_VALUE_ARRAY_GET_BASE(&group->group_enums, void *);
     for (i = 0; i < size; ++i) {
         if (params[i] == storage) {
             return i;
         }
     }
 
-    if (PRTE_SUCCESS != (ret = prte_value_array_append_item(&group->group_enums, storage))) {
+    if (PRTE_SUCCESS != (ret = pmix_value_array_append_item(&group->group_enums, storage))) {
         return ret;
     }
 
     /* return the group index */
-    return (int) prte_value_array_get_size(&group->group_enums) - 1;
+    return (int) pmix_value_array_get_size(&group->group_enums) - 1;
 }
 
 int prte_mca_base_var_group_get(const int group_index, const prte_mca_base_var_group_t **group)
@@ -459,8 +459,8 @@ int prte_mca_base_var_group_set_var_flag(const int group_index, int flags, bool 
     }
 
     /* set the flag on each valid variable */
-    size = prte_value_array_get_size(&group->group_vars);
-    vars = PRTE_VALUE_ARRAY_GET_BASE(&group->group_vars, int);
+    size = pmix_value_array_get_size(&group->group_vars);
+    vars = PMIX_VALUE_ARRAY_GET_BASE(&group->group_vars, int);
 
     for (i = 0; i < size; ++i) {
         if (0 <= vars[i]) {
@@ -475,14 +475,14 @@ static void mca_base_var_group_constructor(prte_mca_base_var_group_t *group)
 {
     memset((char *) group + sizeof(group->super), 0, sizeof(*group) - sizeof(group->super));
 
-    PRTE_CONSTRUCT(&group->group_subgroups, prte_value_array_t);
-    prte_value_array_init(&group->group_subgroups, sizeof(int));
+    PMIX_CONSTRUCT(&group->group_subgroups, pmix_value_array_t);
+    pmix_value_array_init(&group->group_subgroups, sizeof(int));
 
-    PRTE_CONSTRUCT(&group->group_vars, prte_value_array_t);
-    prte_value_array_init(&group->group_vars, sizeof(int));
+    PMIX_CONSTRUCT(&group->group_vars, pmix_value_array_t);
+    pmix_value_array_init(&group->group_vars, sizeof(int));
 
-    PRTE_CONSTRUCT(&group->group_enums, prte_value_array_t);
-    prte_value_array_init(&group->group_enums, sizeof(void *));
+    PMIX_CONSTRUCT(&group->group_enums, pmix_value_array_t);
+    pmix_value_array_init(&group->group_enums, sizeof(void *));
 }
 
 static void mca_base_var_group_destructor(prte_mca_base_var_group_t *group)
@@ -502,9 +502,9 @@ static void mca_base_var_group_destructor(prte_mca_base_var_group_t *group)
     free(group->group_component);
     group->group_component = NULL;
 
-    PRTE_DESTRUCT(&group->group_subgroups);
-    PRTE_DESTRUCT(&group->group_vars);
-    PRTE_DESTRUCT(&group->group_enums);
+    PMIX_DESTRUCT(&group->group_subgroups);
+    PMIX_DESTRUCT(&group->group_vars);
+    PMIX_DESTRUCT(&group->group_enums);
 }
 
 int prte_mca_base_var_group_get_count(void)

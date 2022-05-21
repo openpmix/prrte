@@ -17,7 +17,7 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -36,7 +36,7 @@ prte_schizo_prte_component_t prte_schizo_prte_component = {
             PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0,
             .mca_component_name = "prte",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
             .mca_query_component = component_query,
             .mca_register_component_params = component_register,
         },

@@ -51,13 +51,13 @@
 #include "src/include/constants.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/tsd.h"
-#include "src/util/argv.h"
-#include "src/util/os_dirpath.h"
+#include "src/threads/pmix_tsd.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/output.h"
-#include "src/util/printf.h"
+#include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/hwloc/hwloc-internal.h"
 
@@ -113,14 +113,14 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo, bool use_h
     hwloc_obj_t pu;
 
     /* find the specified logical cpus */
-    ranges = prte_argv_split(cpulist, ',');
+    ranges = pmix_argv_split(cpulist, ',');
     avail = hwloc_bitmap_alloc();
     hwloc_bitmap_zero(avail);
     res = hwloc_bitmap_alloc();
     pucpus = hwloc_bitmap_alloc();
-    for (idx = 0; idx < prte_argv_count(ranges); idx++) {
-        range = prte_argv_split(ranges[idx], '-');
-        switch (prte_argv_count(range)) {
+    for (idx = 0; idx < pmix_argv_count(ranges); idx++) {
+        range = pmix_argv_split(ranges[idx], '-');
+        switch (pmix_argv_count(range)) {
         case 1:
             /* only one cpu given - get that object */
             cpu = strtoul(range[0], NULL, 10);
@@ -134,7 +134,7 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo, bool use_h
                 hwloc_bitmap_copy(avail, res);
                 data = (prte_hwloc_obj_data_t *) pu->userdata;
                 if (NULL == data) {
-                    pu->userdata = (void *) PRTE_NEW(prte_hwloc_obj_data_t);
+                    pu->userdata = (void *) PMIX_NEW(prte_hwloc_obj_data_t);
                     data = (prte_hwloc_obj_data_t *) pu->userdata;
                 }
                 data->npus++;
@@ -155,7 +155,7 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo, bool use_h
                     hwloc_bitmap_copy(avail, res);
                     data = (prte_hwloc_obj_data_t *) pu->userdata;
                     if (NULL == data) {
-                        pu->userdata = (void *) PRTE_NEW(prte_hwloc_obj_data_t);
+                        pu->userdata = (void *) PMIX_NEW(prte_hwloc_obj_data_t);
                         data = (prte_hwloc_obj_data_t *) pu->userdata;
                     }
                     data->npus++;
@@ -165,10 +165,10 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo, bool use_h
         default:
             break;
         }
-        prte_argv_free(range);
+        pmix_argv_free(range);
     }
     if (NULL != ranges) {
-        prte_argv_free(ranges);
+        pmix_argv_free(ranges);
     }
     hwloc_bitmap_free(res);
     hwloc_bitmap_free(pucpus);
@@ -218,7 +218,7 @@ int prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
     root = hwloc_get_root_obj(topo);
 
     if (NULL == root->userdata) {
-        root->userdata = (void *) PRTE_NEW(prte_hwloc_topo_data_t);
+        root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
     }
     sum = (prte_hwloc_topo_data_t *) root->userdata;
 
@@ -463,7 +463,7 @@ static void free_object(hwloc_obj_t obj)
     /* free any data hanging on this object */
     if (NULL != obj->userdata) {
         data = (prte_hwloc_obj_data_t *) obj->userdata;
-        PRTE_RELEASE(data);
+        PMIX_RELEASE(data);
         obj->userdata = NULL;
     }
 
@@ -484,7 +484,7 @@ void prte_hwloc_base_free_topology(hwloc_topology_t topo)
         /* release the root-level userdata */
         if (NULL != obj->userdata) {
             rdata = (prte_hwloc_topo_data_t *) obj->userdata;
-            PRTE_RELEASE(rdata);
+            PMIX_RELEASE(rdata);
             obj->userdata = NULL;
         }
         /* now recursively descend and release userdata
@@ -539,7 +539,7 @@ int prte_hwloc_base_report_bind_failure(const char *file, int line, const char *
 
     if (!already_reported && PRTE_HWLOC_BASE_MBFA_SILENT != prte_hwloc_base_mbfa) {
 
-        prte_show_help(
+        pmix_show_help(
             "help-prte-hwloc-base.txt", "mbind failure", true, prte_process_info.nodename, getpid(),
             file, line, msg,
             (PRTE_HWLOC_BASE_MBFA_WARN == prte_hwloc_base_mbfa)
@@ -633,7 +633,7 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj)
     data = (prte_hwloc_obj_data_t *) obj->userdata;
 
     if (NULL == data) {
-        data = PRTE_NEW(prte_hwloc_obj_data_t);
+        data = PMIX_NEW(prte_hwloc_obj_data_t);
         obj->userdata = (void *) data;
     }
 
@@ -665,7 +665,7 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj)
         }
     }
     /* if we get here, it wasn't found */
-    prte_show_help("help-prte-hwloc-base.txt", "obj-idx-failed", true,
+    pmix_show_help("help-prte-hwloc-base.txt", "obj-idx-failed", true,
                    hwloc_obj_type_string(obj->type), cache_level);
     return UINT_MAX;
 }
@@ -756,10 +756,10 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
     /* first see if the topology already has this summary */
     data = (prte_hwloc_topo_data_t *) obj->userdata;
     if (NULL == data) {
-        data = PRTE_NEW(prte_hwloc_topo_data_t);
+        data = PMIX_NEW(prte_hwloc_topo_data_t);
         obj->userdata = (void *) data;
     } else {
-        PRTE_LIST_FOREACH(sum, &data->summaries, prte_hwloc_summary_t)
+        PMIX_LIST_FOREACH(sum, &data->summaries, prte_hwloc_summary_t)
         {
             if (target == sum->type && cache_level == sum->cache_level) {
                 /* yep - return the value */
@@ -775,11 +775,11 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
     df_search(topo, obj, target, cache_level, 0, &num_objs);
 
     /* cache the results for later */
-    sum = PRTE_NEW(prte_hwloc_summary_t);
+    sum = PMIX_NEW(prte_hwloc_summary_t);
     sum->type = target;
     sum->cache_level = cache_level;
     sum->num_objs = num_objs;
-    prte_list_append(&data->summaries, &sum->super);
+    pmix_list_append(&data->summaries, &sum->super);
 
     PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:get_nbojbs computed data %u of %s:%u", num_objs,
@@ -890,8 +890,8 @@ static int package_to_cpu_set(char *cpus, hwloc_topology_t topo, hwloc_bitmap_t 
         return PRTE_SUCCESS;
     }
 
-    range = prte_argv_split(cpus, '-');
-    range_cnt = prte_argv_count(range);
+    range = pmix_argv_split(cpus, '-');
+    range_cnt = pmix_argv_count(range);
     switch (range_cnt) {
     case 1: /* no range was present, so just one package given */
         package_id = atoi(range[0]);
@@ -911,10 +911,10 @@ static int package_to_cpu_set(char *cpus, hwloc_topology_t topo, hwloc_bitmap_t 
         }
         break;
     default:
-        prte_argv_free(range);
+        pmix_argv_free(range);
         return PRTE_ERROR;
     }
-    prte_argv_free(range);
+    pmix_argv_free(range);
 
     return PRTE_SUCCESS;
 }
@@ -933,13 +933,13 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
     unsigned int npus;
     bool hwthreadcpus = false;
 
-    package_core = prte_argv_split(package_core_list, ':');
+    package_core = pmix_argv_split(package_core_list, ':');
     package_id = atoi(package_core[0]);
 
     /* get the object for this package id */
     package = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, 0, package_id);
     if (NULL == package) {
-        prte_argv_free(package_core);
+        pmix_argv_free(package_core);
         return PRTE_ERR_NOT_FOUND;
     }
 
@@ -967,12 +967,12 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
             rc = PRTE_SUCCESS;
             break;
         } else {
-            range = prte_argv_split(corestr, '-');
-            range_cnt = prte_argv_count(range);
+            range = pmix_argv_split(corestr, '-');
+            range_cnt = pmix_argv_count(range);
             /* see if a range was set or not */
             switch (range_cnt) {
             case 1: /* only one core, or a list of cores, specified */
-                list = prte_argv_split(range[0], ',');
+                list = pmix_argv_split(range[0], ',');
                 for (j = 0; NULL != list[j]; j++) {
                     /* get the indexed core from this package */
                     core_id = atoi(list[j]) + npus;
@@ -985,7 +985,7 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
                     /* get the cpus */
                     hwloc_bitmap_or(cpumask, cpumask, core->cpuset);
                 }
-                prte_argv_free(list);
+                pmix_argv_free(list);
                 break;
 
             case 2: /* range of core id's was given */
@@ -1008,14 +1008,14 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
                 break;
 
             default:
-                prte_argv_free(range);
-                prte_argv_free(package_core);
+                pmix_argv_free(range);
+                pmix_argv_free(package_core);
                 return PRTE_ERROR;
             }
-            prte_argv_free(range);
+            pmix_argv_free(range);
         }
     }
-    prte_argv_free(package_core);
+    pmix_argv_free(package_core);
 
     return rc;
 }
@@ -1041,7 +1041,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
     prte_output_verbose(5, prte_hwloc_base_output, "slot assignment: slot_list == %s", slot_str);
 
     /* split at ';' */
-    item = prte_argv_split(slot_str, ';');
+    item = pmix_argv_split(slot_str, ';');
 
     /* start with a clean mask */
     hwloc_bitmap_zero(cpumask);
@@ -1061,15 +1061,15 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                  * it could specify multiple packages
                  * Skip the P and look for ranges
                  */
-                rngs = prte_argv_split(&item[i][1], ',');
+                rngs = pmix_argv_split(&item[i][1], ',');
                 for (j = 0; NULL != rngs[j]; j++) {
                     if (PRTE_SUCCESS != (rc = package_to_cpu_set(rngs[j], topo, cpumask))) {
-                        prte_argv_free(rngs);
-                        prte_argv_free(item);
+                        pmix_argv_free(rngs);
+                        pmix_argv_free(item);
                         return rc;
                     }
                 }
-                prte_argv_free(rngs);
+                pmix_argv_free(rngs);
             } else {
                 if ('P' == item[i][0] || 'p' == item[i][0] || 'S' == item[i][0]
                     || 's' == item[i][0]) {
@@ -1078,34 +1078,34 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                     lst = item[i];
                 }
                 if (PRTE_SUCCESS != (rc = package_core_to_cpu_set(lst, topo, cpumask))) {
-                    prte_argv_free(item);
+                    pmix_argv_free(item);
                     return rc;
                 }
             }
         } else {
-            rngs = prte_argv_split(item[i], ',');
+            rngs = pmix_argv_split(item[i], ',');
             for (k = 0; NULL != rngs[k]; k++) {
                 /* just a core specification - see if one or a range was given */
-                range = prte_argv_split(rngs[k], '-');
-                range_cnt = prte_argv_count(range);
+                range = pmix_argv_split(rngs[k], '-');
+                range_cnt = pmix_argv_count(range);
                 /* see if a range was set or not */
                 switch (range_cnt) {
                 case 1: /* only one core, or a list of cores, specified */
-                    list = prte_argv_split(range[0], ',');
+                    list = pmix_argv_split(range[0], ',');
                     for (j = 0; NULL != list[j]; j++) {
                         core_id = atoi(list[j]);
                         /* find the specified available cpu */
                         if (NULL == (pu = prte_hwloc_base_get_pu(topo, false, core_id))) {
-                            prte_argv_free(range);
-                            prte_argv_free(item);
-                            prte_argv_free(rngs);
-                            prte_argv_free(list);
+                            pmix_argv_free(range);
+                            pmix_argv_free(item);
+                            pmix_argv_free(rngs);
+                            pmix_argv_free(list);
                             return PRTE_ERR_NOT_FOUND;
                         }
                         /* get the cpus for that object and set them in the massk*/
                         hwloc_bitmap_or(cpumask, cpumask, pu->cpuset);
                     }
-                    prte_argv_free(list);
+                    pmix_argv_free(list);
                     break;
 
                 case 2: /* range of core id's was given */
@@ -1114,9 +1114,9 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                     for (core_id = lower_range; core_id <= upper_range; core_id++) {
                         /* find the specified logical available cpu */
                         if (NULL == (pu = prte_hwloc_base_get_pu(topo, false, core_id))) {
-                            prte_argv_free(range);
-                            prte_argv_free(item);
-                            prte_argv_free(rngs);
+                            pmix_argv_free(range);
+                            pmix_argv_free(item);
+                            pmix_argv_free(rngs);
                             return PRTE_ERR_NOT_FOUND;
                         }
                         /* get the cpus for that object and set them in the mask*/
@@ -1125,17 +1125,17 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                     break;
 
                 default:
-                    prte_argv_free(range);
-                    prte_argv_free(item);
-                    prte_argv_free(rngs);
+                    pmix_argv_free(range);
+                    pmix_argv_free(item);
+                    pmix_argv_free(rngs);
                     return PRTE_ERROR;
                 }
-                prte_argv_free(range);
+                pmix_argv_free(range);
             }
-            prte_argv_free(rngs);
+            pmix_argv_free(rngs);
         }
     }
-    prte_argv_free(item);
+    pmix_argv_free(item);
     return PRTE_SUCCESS;
 }
 
@@ -1313,15 +1313,15 @@ char *prte_hwloc_base_find_coprocessors(hwloc_topology_t topo)
                     PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                                          "hwloc:base:find_coprocessors: coprocessor %s found",
                                          osdev->infos[i].value));
-                    prte_argv_append_nosize(&cps, osdev->infos[i].value);
+                    pmix_argv_append_nosize(&cps, osdev->infos[i].value);
                 }
             }
         }
         osdev = osdev->next_cousin;
     }
     if (NULL != cps) {
-        cpstring = prte_argv_join(cps, ',');
-        prte_argv_free(cps);
+        cpstring = pmix_argv_join(cps, ',');
+        pmix_argv_free(cps);
     }
     PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:find_coprocessors: hosting coprocessors %s",
@@ -1366,7 +1366,7 @@ char *prte_hwloc_base_check_on_coprocessor(void)
     FILE *fp;
     char *t, *cptr, *e, *cp = NULL;
 
-    if (PRTE_SUCCESS != prte_os_dirpath_access("/proc/elog", S_IRUSR)) {
+    if (PRTE_SUCCESS != pmix_os_dirpath_access("/proc/elog", S_IRUSR)) {
         /* if the file isn't there, or we don't have permission
          * to read it, then we are not on a coprocessor so far
          * as we can tell
@@ -1559,12 +1559,12 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
             hwloc_bitmap_list_snprintf(tmp, 2048, coreset);
             snprintf(ans, 4096, "package[%d][core:%s]", n, tmp);
         }
-        prte_argv_append_nosize(&output, ans);
+        pmix_argv_append_nosize(&output, ans);
     }
 
     if (NULL != output) {
-        result = prte_argv_join(output, ' ');
-        prte_argv_free(output);
+        result = pmix_argv_join(output, ' ');
+        pmix_argv_free(output);
     } else {
         result = NULL;
     }
@@ -1575,7 +1575,7 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
     return result;
 }
 
-static int dist_cmp_fn(prte_list_item_t **a, prte_list_item_t **b)
+static int dist_cmp_fn(pmix_list_item_t **a, pmix_list_item_t **b)
 {
     prte_rmaps_numa_node_t *aitem = *((prte_rmaps_numa_node_t **) a);
     prte_rmaps_numa_node_t *bitem = *((prte_rmaps_numa_node_t **) b);
@@ -1589,7 +1589,7 @@ static int dist_cmp_fn(prte_list_item_t **a, prte_list_item_t **b)
     }
 }
 
-static void sort_by_dist(hwloc_topology_t topo, char *device_name, prte_list_t *sorted_list)
+static void sort_by_dist(hwloc_topology_t topo, char *device_name, pmix_list_t *sorted_list)
 {
     hwloc_obj_t device_obj = NULL;
     hwloc_obj_t obj = NULL;
@@ -1672,10 +1672,10 @@ static void sort_by_dist(hwloc_topology_t topo, char *device_name, prte_list_t *
                 /* fill list of numa nodes */
                 for (j = 0; j < distances->nbobjs; j++) {
                     latency = distances->latency[close_node_index + distances->nbobjs * j];
-                    numa_node = PRTE_NEW(prte_rmaps_numa_node_t);
+                    numa_node = PMIX_NEW(prte_rmaps_numa_node_t);
                     numa_node->index = j;
                     numa_node->dist_from_closed = latency;
-                    prte_list_append(sorted_list, &numa_node->super);
+                    pmix_list_append(sorted_list, &numa_node->super);
                 }
 #else
                 distances_nr = 1;
@@ -1690,15 +1690,15 @@ static void sort_by_dist(hwloc_topology_t topo, char *device_name, prte_list_t *
                 /* fill list of numa nodes */
                 for (j = 0; j < distances->nbobjs; j++) {
                     latency = distances->values[close_node_index + distances->nbobjs * j];
-                    numa_node = PRTE_NEW(prte_rmaps_numa_node_t);
+                    numa_node = PMIX_NEW(prte_rmaps_numa_node_t);
                     numa_node->index = j;
                     numa_node->dist_from_closed = latency;
-                    prte_list_append(sorted_list, &numa_node->super);
+                    pmix_list_append(sorted_list, &numa_node->super);
                 }
                 hwloc_distances_release(topo, distances);
 #endif
                 /* sort numa nodes by distance from the closest one to PCI */
-                prte_list_sort(sorted_list, dist_cmp_fn);
+                pmix_list_sort(sorted_list, dist_cmp_fn);
                 return;
             }
         }
@@ -1721,7 +1721,7 @@ static int find_devices(hwloc_topology_t topo, char **device_name)
 }
 
 int prte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char *device_name,
-                                    prte_list_t *sorted_list)
+                                    pmix_list_t *sorted_list)
 {
     hwloc_obj_t obj;
     prte_hwloc_summary_t *sum;
@@ -1736,16 +1736,16 @@ int prte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char *device_name,
      * exist*/
     data = (prte_hwloc_topo_data_t *) obj->userdata;
     if (NULL != data) {
-        PRTE_LIST_FOREACH(sum, &data->summaries, prte_hwloc_summary_t)
+        PMIX_LIST_FOREACH(sum, &data->summaries, prte_hwloc_summary_t)
         {
             if (HWLOC_OBJ_NUMANODE == sum->type) {
-                if (prte_list_get_size(&sum->sorted_by_dist_list) > 0) {
-                    PRTE_LIST_FOREACH(numa, &(sum->sorted_by_dist_list), prte_rmaps_numa_node_t)
+                if (pmix_list_get_size(&sum->sorted_by_dist_list) > 0) {
+                    PMIX_LIST_FOREACH(numa, &(sum->sorted_by_dist_list), prte_rmaps_numa_node_t)
                     {
-                        copy_numa = PRTE_NEW(prte_rmaps_numa_node_t);
+                        copy_numa = PMIX_NEW(prte_rmaps_numa_node_t);
                         copy_numa->index = numa->index;
                         copy_numa->dist_from_closed = numa->dist_from_closed;
-                        prte_list_append(sorted_list, &copy_numa->super);
+                        pmix_list_append(sorted_list, &copy_numa->super);
                     }
                     return PRTE_SUCCESS;
                 } else {
@@ -1772,12 +1772,12 @@ int prte_hwloc_get_sorted_numa_list(hwloc_topology_t topo, char *device_name,
                         free(device_name);
                     }
                     /* store this info in summary object for later usage */
-                    PRTE_LIST_FOREACH(numa, sorted_list, prte_rmaps_numa_node_t)
+                    PMIX_LIST_FOREACH(numa, sorted_list, prte_rmaps_numa_node_t)
                     {
-                        copy_numa = PRTE_NEW(prte_rmaps_numa_node_t);
+                        copy_numa = PMIX_NEW(prte_rmaps_numa_node_t);
                         copy_numa->index = numa->index;
                         copy_numa->dist_from_closed = numa->dist_from_closed;
-                        prte_list_append(&(sum->sorted_by_dist_list), &copy_numa->super);
+                        pmix_list_append(&(sum->sorted_by_dist_list), &copy_numa->super);
                     }
                     return PRTE_SUCCESS;
                 }
@@ -1848,7 +1848,7 @@ char *prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
             cpus = strdup("unknown");
         }
     }
-    prte_asprintf(&sig, "%dN:%dS:%dL3:%dL2:%dL1:%dC:%dH:%s:%s:%s:%s", nnuma, npackage, nl3, nl2,
+    pmix_asprintf(&sig, "%dN:%dS:%dL3:%dL2:%dL1:%dC:%dH:%s:%s:%s:%s", nnuma, npackage, nl3, nl2,
                   nl1, ncore, nhwt, pus, cpus, arch, endian);
     free(pus);
     free(cpus);
@@ -1935,14 +1935,14 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
             hwloc_bitmap_list_asprintf(&tmp, result);
             switch (type) {
             case HWLOC_OBJ_NUMANODE:
-                prte_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
                 locality = t2;
                 break;
             case HWLOC_OBJ_PACKAGE:
-                prte_asprintf(&t2, "%sSK%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sSK%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
@@ -1952,21 +1952,21 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
             case HWLOC_OBJ_CACHE: {
                 unsigned cachedepth = hwloc_get_obj_by_depth(topo, d, 0)->attr->cache.depth;
                 if (3 == cachedepth) {
-                    prte_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
+                    pmix_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
                     locality = t2;
                     break;
                 } else if (2 == cachedepth) {
-                    prte_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
+                    pmix_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
                     locality = t2;
                     break;
                 } else {
-                    prte_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
+                    pmix_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
                     if (NULL != locality) {
                         free(locality);
                     }
@@ -1976,21 +1976,21 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
             } break;
 #else
             case HWLOC_OBJ_L3CACHE:
-                prte_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sL3%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
                 locality = t2;
                 break;
             case HWLOC_OBJ_L2CACHE:
-                prte_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sL2%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
                 locality = t2;
                 break;
             case HWLOC_OBJ_L1CACHE:
-                prte_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sL1%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
@@ -1998,14 +1998,14 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
                 break;
 #endif
             case HWLOC_OBJ_CORE:
-                prte_asprintf(&t2, "%sCR%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sCR%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
                 locality = t2;
                 break;
             case HWLOC_OBJ_PU:
-                prte_asprintf(&t2, "%sHT%s:", (NULL == locality) ? "" : locality, tmp);
+                pmix_asprintf(&t2, "%sHT%s:", (NULL == locality) ? "" : locality, tmp);
                 if (NULL != locality) {
                     free(locality);
                 }
@@ -2028,7 +2028,7 @@ char *prte_hwloc_base_get_locality_string(hwloc_topology_t topo, char *bitmap)
          * that we came up empty at this depth */
         if (!hwloc_bitmap_iszero(result)) {
             hwloc_bitmap_list_asprintf(&tmp, result);
-            prte_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
+            pmix_asprintf(&t2, "%sNM%s:", (NULL == locality) ? "" : locality, tmp);
             if (NULL != locality) {
                 free(locality);
             }
@@ -2095,14 +2095,14 @@ char *prte_hwloc_base_get_location(char *locality, hwloc_obj_type_t type, unsign
     default:
         return NULL;
     }
-    loc = prte_argv_split(locality, ':');
+    loc = pmix_argv_split(locality, ':');
     for (n = 0; NULL != loc[n]; n++) {
         if (0 == strncmp(loc[n], srch, 2)) {
             ans = strdup(&loc[n][2]);
             break;
         }
     }
-    prte_argv_free(loc);
+    pmix_argv_free(loc);
 
     return ans;
 }
@@ -2125,8 +2125,8 @@ prte_hwloc_locality_t prte_hwloc_compute_relative_locality(char *loc1, char *loc
         return locality;
     }
 
-    set1 = prte_argv_split(loc1, ':');
-    set2 = prte_argv_split(loc2, ':');
+    set1 = pmix_argv_split(loc1, ':');
+    set2 = pmix_argv_split(loc2, ':');
     bit1 = hwloc_bitmap_alloc();
     bit2 = hwloc_bitmap_alloc();
 
@@ -2165,8 +2165,8 @@ prte_hwloc_locality_t prte_hwloc_compute_relative_locality(char *loc1, char *loc
             }
         }
     }
-    prte_argv_free(set1);
-    prte_argv_free(set2);
+    pmix_argv_free(set1);
+    pmix_argv_free(set2);
     hwloc_bitmap_free(bit1);
     hwloc_bitmap_free(bit2);
     return locality;
@@ -2214,13 +2214,13 @@ static void print_hwloc_obj(char **output, char *prefix, hwloc_topology_t topo, 
 
     /* print the object type */
     hwloc_obj_type_snprintf(string, 1024, obj, 1);
-    prte_asprintf(&pfx, "\n%s\t", (NULL == prefix) ? "" : prefix);
-    prte_asprintf(&tmp, "%sType: %s Number of child objects: %u%sName=%s",
+    pmix_asprintf(&pfx, "\n%s\t", (NULL == prefix) ? "" : prefix);
+    pmix_asprintf(&tmp, "%sType: %s Number of child objects: %u%sName=%s",
                   (NULL == prefix) ? "" : prefix, string, obj->arity, pfx,
                   (NULL == obj->name) ? "NULL" : obj->name);
     if (0 < hwloc_obj_attr_snprintf(string, 1024, obj, pfx, 1)) {
         /* print the attributes */
-        prte_asprintf(&tmp2, "%s%s%s", tmp, pfx, string);
+        pmix_asprintf(&tmp2, "%s%s%s", tmp, pfx, string);
         free(tmp);
         tmp = tmp2;
     }
@@ -2229,28 +2229,28 @@ static void print_hwloc_obj(char **output, char *prefix, hwloc_topology_t topo, 
      */
     if (NULL != obj->cpuset) {
         hwloc_bitmap_snprintf(string, PRTE_HWLOC_MAX_STRING, obj->cpuset);
-        prte_asprintf(&tmp2, "%s%sCpuset:  %s", tmp, pfx, string);
+        pmix_asprintf(&tmp2, "%s%sCpuset:  %s", tmp, pfx, string);
         free(tmp);
         tmp = tmp2;
     }
     if (HWLOC_OBJ_MACHINE == obj->type) {
         /* root level object - add support values */
         support = (struct hwloc_topology_support *) hwloc_topology_get_support(topo);
-        prte_asprintf(&tmp2, "%s%sBind CPU proc:   %s%sBind CPU thread: %s", tmp, pfx,
+        pmix_asprintf(&tmp2, "%s%sBind CPU proc:   %s%sBind CPU thread: %s", tmp, pfx,
                       (support->cpubind->set_thisproc_cpubind) ? "TRUE" : "FALSE", pfx,
                       (support->cpubind->set_thisthread_cpubind) ? "TRUE" : "FALSE");
         free(tmp);
         tmp = tmp2;
-        prte_asprintf(&tmp2, "%s%sBind MEM proc:   %s%sBind MEM thread: %s", tmp, pfx,
+        pmix_asprintf(&tmp2, "%s%sBind MEM proc:   %s%sBind MEM thread: %s", tmp, pfx,
                       (support->membind->set_thisproc_membind) ? "TRUE" : "FALSE", pfx,
                       (support->membind->set_thisthread_membind) ? "TRUE" : "FALSE");
         free(tmp);
         tmp = tmp2;
     }
-    prte_asprintf(&tmp2, "%s%s\n", (NULL == *output) ? "" : *output, tmp);
+    pmix_asprintf(&tmp2, "%s%s\n", (NULL == *output) ? "" : *output, tmp);
     free(tmp);
     free(pfx);
-    prte_asprintf(&pfx, "%s\t", (NULL == prefix) ? "" : prefix);
+    pmix_asprintf(&pfx, "%s\t", (NULL == prefix) ? "" : prefix);
     for (i = 0; i < obj->arity; i++) {
         obj2 = obj->children[i];
         /* print the object */

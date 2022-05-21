@@ -13,7 +13,7 @@
  * Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +30,7 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/hwloc/hwloc-internal.h"
 
 #include "src/mca/rmaps/rmaps.h"
@@ -41,14 +41,14 @@ PRTE_MODULE_EXPORT extern prte_rmaps_base_component_t prte_rmaps_round_robin_com
 extern prte_rmaps_base_module_t prte_rmaps_round_robin_module;
 
 PRTE_MODULE_EXPORT int prte_rmaps_rr_bynode(prte_job_t *jdata, prte_app_context_t *app,
-                                            prte_list_t *node_list, int32_t num_slots,
+                                            pmix_list_t *node_list, int32_t num_slots,
                                             pmix_rank_t nprocs);
 PRTE_MODULE_EXPORT int prte_rmaps_rr_byslot(prte_job_t *jdata, prte_app_context_t *app,
-                                            prte_list_t *node_list, int32_t num_slots,
+                                            pmix_list_t *node_list, int32_t num_slots,
                                             pmix_rank_t nprocs);
 
 PRTE_MODULE_EXPORT int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
-                                           prte_list_t *node_list, int32_t num_slots,
+                                           pmix_list_t *node_list, int32_t num_slots,
                                            pmix_rank_t num_procs, hwloc_obj_type_t target,
                                            unsigned cache_level);
 

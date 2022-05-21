@@ -20,7 +20,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,17 +43,17 @@
 #endif
 #include <ctype.h>
 
-#include "src/util/argv.h"
-#include "src/util/basename.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_basename.h"
 #include "src/util/output.h"
-#include "src/util/path.h"
-#include "src/util/prte_environ.h"
-#include "src/util/string_copy.h"
+#include "src/util/pmix_path.h"
+#include "src/util/pmix_environ.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
@@ -91,7 +91,7 @@ prte_plm_ssh_component_t prte_plm_ssh_component = {
             /* Component name and version */
             .mca_component_name = "ssh",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PRTE_RELEASE_VERSION),
+                                        PMIX_RELEASE_VERSION),
 
             /* Component open and close functions */
             .mca_open_component = ssh_component_open,
@@ -233,7 +233,7 @@ static int ssh_component_open(void)
 
     /* lookup parameters */
     if (prte_plm_ssh_component.num_concurrent <= 0) {
-        prte_show_help("help-plm-ssh.txt", "concurrency-less-than-zero", true,
+        pmix_show_help("help-plm-ssh.txt", "concurrency-less-than-zero", true,
                        prte_plm_ssh_component.num_concurrent);
         prte_plm_ssh_component.num_concurrent = 1;
     }
@@ -275,7 +275,7 @@ static int ssh_component_query(prte_mca_base_module_t **module, int *priority)
     if (!prte_plm_ssh_component.disable_qrsh && NULL != getenv("SGE_ROOT") && NULL != getenv("ARC")
         && NULL != getenv("PE_HOSTFILE") && NULL != getenv("JOB_ID")) {
         /* setup the search path for qrsh */
-        prte_asprintf(&tmp, "%s/bin/%s", getenv("SGE_ROOT"), getenv("ARC"));
+        pmix_asprintf(&tmp, "%s/bin/%s", getenv("SGE_ROOT"), getenv("ARC"));
         /* see if the agent is available */
         if (PRTE_SUCCESS != ssh_launch_agent_lookup("qrsh", tmp)) {
             /* can't be SGE */
@@ -316,7 +316,7 @@ lookup:
         /* if the user specified an agent and we couldn't find it,
          * then we want to error out and not continue */
         if (NULL != prte_plm_ssh_component.agent) {
-            prte_show_help("help-plm-ssh.txt", "agent-not-found", true,
+            pmix_show_help("help-plm-ssh.txt", "agent-not-found", true,
                            prte_plm_ssh_component.agent);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_NEVER_LAUNCHED);
             return PRTE_ERR_FATAL;
@@ -361,12 +361,12 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
     if (NULL == path) {
         getcwd(cwd, PRTE_PATH_MAX);
     } else {
-        prte_string_copy(cwd, path, PRTE_PATH_MAX);
+        pmix_string_copy(cwd, path, PRTE_PATH_MAX);
     }
     if (NULL == agent_list) {
-        lines = prte_argv_split(prte_plm_ssh_component.agent, ':');
+        lines = pmix_argv_split(prte_plm_ssh_component.agent, ':');
     } else {
-        lines = prte_argv_split(agent_list, ':');
+        lines = pmix_argv_split(agent_list, ':');
     }
     for (i = 0; NULL != lines[i]; ++i) {
         line = lines[i];
@@ -383,23 +383,23 @@ char **prte_plm_ssh_search(const char *agent_list, const char *path)
         }
 
         /* Split it */
-        tokens = prte_argv_split(line, ' ');
+        tokens = pmix_argv_split(line, ' ');
 
         /* Look for the first token in the PATH */
-        tmp = prte_path_findv(tokens[0], X_OK, environ, cwd);
+        tmp = pmix_path_findv(tokens[0], X_OK, environ, cwd);
         if (NULL != tmp) {
             free(tokens[0]);
             tokens[0] = tmp;
-            prte_argv_free(lines);
+            pmix_argv_free(lines);
             return tokens;
         }
 
         /* Didn't find it */
-        prte_argv_free(tokens);
+        pmix_argv_free(tokens);
     }
 
     /* Doh -- didn't find anything */
-    prte_argv_free(lines);
+    pmix_argv_free(lines);
     return NULL;
 }
 
@@ -427,7 +427,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
     /* if we got here, then one of the given agents could be found - the
      * complete path is in the argv[0] position */
     prte_plm_ssh_component.agent_path = strdup(prte_plm_ssh_component.agent_argv[0]);
-    bname = prte_basename(prte_plm_ssh_component.agent_argv[0]);
+    bname = pmix_basename(prte_plm_ssh_component.agent_argv[0]);
     if (NULL == bname) {
         return PRTE_SUCCESS;
     }
@@ -438,7 +438,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
     if (0 == strcmp(bname, "ssh")) {
         /* if xterm option was given, add '-X', ensuring we don't do it twice */
         if (NULL != prte_xterm) {
-            prte_argv_append_unique_nosize(&prte_plm_ssh_component.agent_argv, "-X");
+            pmix_argv_append_unique_nosize(&prte_plm_ssh_component.agent_argv, "-X");
         } else if (0 >= prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
             /* if debug was not specified, and the user didn't explicitly
              * specify X11 forwarding/non-forwarding, add "-x" if it
@@ -450,7 +450,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
                 }
             }
             if (NULL == prte_plm_ssh_component.agent_argv[i]) {
-                prte_argv_append_nosize(&prte_plm_ssh_component.agent_argv, "-x");
+                pmix_argv_append_nosize(&prte_plm_ssh_component.agent_argv, "-x");
             }
         }
     }

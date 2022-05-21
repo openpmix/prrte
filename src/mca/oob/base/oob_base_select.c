@@ -13,7 +13,7 @@
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,7 +31,7 @@
 #include "src/mca/mca.h"
 #include "src/util/output.h"
 
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/oob/base/base.h"
 #include "src/mca/oob/oob.h"
@@ -51,7 +51,7 @@ int prte_oob_base_select(void)
     int i, rc;
 
     /* Query all available components and ask if their transport is available */
-    PRTE_LIST_FOREACH(cli, &prte_oob_base_framework.framework_components,
+    PMIX_LIST_FOREACH(cli, &prte_oob_base_framework.framework_components,
                       prte_mca_base_component_list_item_t)
     {
         component = (prte_oob_base_component_t *) cli->cli_component;
@@ -98,23 +98,23 @@ int prte_oob_base_select(void)
             /* this component shall be the *only* component allowed
              * for use, so shutdown and remove any prior ones */
             while (NULL
-                   != (cmp = (prte_mca_base_component_list_item_t *) prte_list_remove_first(
+                   != (cmp = (prte_mca_base_component_list_item_t *) pmix_list_remove_first(
                            &prte_oob_base.actives))) {
                 c3 = (prte_oob_base_component_t *) cmp->cli_component;
                 if (NULL != c3->shutdown) {
                     c3->shutdown();
                 }
-                PRTE_RELEASE(cmp);
+                PMIX_RELEASE(cmp);
             }
-            c2 = PRTE_NEW(prte_mca_base_component_list_item_t);
+            c2 = PMIX_NEW(prte_mca_base_component_list_item_t);
             c2->cli_component = (prte_mca_base_component_t *) component;
-            prte_list_append(&prte_oob_base.actives, &c2->super);
+            pmix_list_append(&prte_oob_base.actives, &c2->super);
             break;
         }
 
         /* record it, but maintain priority order */
         added = false;
-        PRTE_LIST_FOREACH(cmp, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+        PMIX_LIST_FOREACH(cmp, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
         {
             c3 = (prte_oob_base_component_t *) cmp->cli_component;
             if (c3->priority > component->priority) {
@@ -122,9 +122,9 @@ int prte_oob_base_select(void)
             }
             prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                 "mca:oob:select: Inserting component");
-            c2 = PRTE_NEW(prte_mca_base_component_list_item_t);
+            c2 = PMIX_NEW(prte_mca_base_component_list_item_t);
             c2->cli_component = (prte_mca_base_component_t *) component;
-            prte_list_insert_pos(&prte_oob_base.actives, &cmp->super, &c2->super);
+            pmix_list_insert_pos(&prte_oob_base.actives, &cmp->super, &c2->super);
             added = true;
             break;
         }
@@ -132,23 +132,23 @@ int prte_oob_base_select(void)
             /* add to end */
             prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                 "mca:oob:select: Adding component to end");
-            c2 = PRTE_NEW(prte_mca_base_component_list_item_t);
+            c2 = PMIX_NEW(prte_mca_base_component_list_item_t);
             c2->cli_component = (prte_mca_base_component_t *) component;
-            prte_list_append(&prte_oob_base.actives, &c2->super);
+            pmix_list_append(&prte_oob_base.actives, &c2->super);
         }
     }
 
-    if (0 == prte_list_get_size(&prte_oob_base.actives)) {
+    if (0 == pmix_list_get_size(&prte_oob_base.actives)) {
         /* no support available means we really cannot run */
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "mca:oob:select: Init failed to return any available transports");
-        prte_show_help("help-oob-base.txt", "no-interfaces-avail", true);
+        pmix_show_help("help-oob-base.txt", "no-interfaces-avail", true);
         return PRTE_ERR_SILENT;
     }
 
     /* provide them an index so we can track their usability in a bitmap */
     i = 0;
-    PRTE_LIST_FOREACH(cmp, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+    PMIX_LIST_FOREACH(cmp, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
     {
         c3 = (prte_oob_base_component_t *) cmp->cli_component;
         c3->idx = i++;
@@ -156,6 +156,6 @@ int prte_oob_base_select(void)
 
     prte_output_verbose(5, prte_oob_base_framework.framework_output,
                         "mca:oob:select: Found %d active transports",
-                        (int) prte_list_get_size(&prte_oob_base.actives));
+                        (int) pmix_list_get_size(&prte_oob_base.actives));
     return PRTE_SUCCESS;
 }

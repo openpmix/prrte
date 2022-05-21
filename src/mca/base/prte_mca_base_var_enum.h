@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +30,7 @@
 #    include "prte_config.h"
 
 #    include "constants.h"
-#    include "src/class/prte_object.h"
+#    include "src/class/pmix_object.h"
 
 typedef struct prte_mca_base_var_enum_t prte_mca_base_var_enum_t;
 
@@ -111,7 +111,7 @@ typedef struct prte_mca_base_var_enum_value_t prte_mca_base_var_enum_value_t;
  * enumerator base class
  */
 struct prte_mca_base_var_enum_t {
-    prte_object_t super;
+    pmix_object_t super;
 
     /** Is the enumerator statically allocated */
     bool enum_is_static;
@@ -174,7 +174,7 @@ typedef struct prte_mca_base_var_enum_flag_t prte_mca_base_var_enum_flag_t;
 /**
  * Object declaration for mca_base_var_enum_t
  */
-PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_var_enum_t);
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_mca_base_var_enum_t);
 
 /**
  * Create a new default enumerator
@@ -188,12 +188,12 @@ PRTE_EXPORT PRTE_CLASS_DECLARATION(prte_mca_base_var_enum_t);
  * @retval prte error code On error
  *
  * This function creates a value enumerator for integer variables. The
- * OUT enumerator value will be a newly PRTE_NEW'ed object that should
- * be released by the caller via PRTE_RELEASE.
+ * OUT enumerator value will be a newly PMIX_NEW'ed object that should
+ * be released by the caller via PMIX_RELEASE.
  *
- * Note that the output enumerator can be PRTE_RELEASE'd after it has
+ * Note that the output enumerator can be PMIX_RELEASE'd after it has
  * been used in a cvar registration, because the variable
- * registration functions will PRTE_RETAIN the enumberator.
+ * registration functions will PMIX_RETAIN the enumberator.
  *
  * Note that all the strings in the values[] array are strdup'ed into
  * internal storage, meaning that the caller can free all of the
@@ -216,12 +216,12 @@ PRTE_EXPORT int prte_mca_base_var_enum_create(const char *name,
  * @retval prte error code On error
  *
  * This function creates a flag enumerator for integer variables. The
- * OUT enumerator value will be a newly PRTE_NEW'ed object that should
- * be released by the caller via PRTE_RELEASE.
+ * OUT enumerator value will be a newly PMIX_NEW'ed object that should
+ * be released by the caller via PMIX_RELEASE.
  *
- * Note that the output enumerator can be PRTE_RELEASE'd after it has
+ * Note that the output enumerator can be PMIX_RELEASE'd after it has
  * been used in a cvar registration, because the variable
- * registration functions will PRTE_RETAIN the enumberator.
+ * registration functions will PMIX_RETAIN the enumberator.
  *
  * Note that all the strings in the values[] array are strdup'ed into
  * internal storage, meaning that the caller can free all of the
@@ -237,7 +237,7 @@ PRTE_EXPORT int prte_mca_base_var_enum_register(const char *project_name,
                                                 const char *framework_name,
                                                 const char *component_name, const char *enum_name,
                                                 void *storage);
-/* standard enumerators. it is invalid to call PRTE_RELEASE on any of these enumerators */
+/* standard enumerators. it is invalid to call PMIX_RELEASE on any of these enumerators */
 /**
  * Boolean enumerator
  *

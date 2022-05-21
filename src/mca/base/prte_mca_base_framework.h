@@ -7,7 +7,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,7 +18,7 @@
 #if !defined(PRTE_MCA_BASE_FRAMEWORK_H)
 #    define PRTE_MCA_BASE_FRAMEWORK_H
 
-#    include "src/class/prte_list.h"
+#    include "src/class/pmix_list.h"
 #    include "src/mca/mca.h"
 
 /*
@@ -158,9 +158,9 @@ typedef struct prte_mca_base_framework_t {
     int framework_output;
     /** List of selected components (filled in by mca_base_framework_register()
         or mca_base_framework_open() */
-    prte_list_t framework_components;
+    pmix_list_t framework_components;
     /** List of components that failed to load */
-    prte_list_t framework_failed_components;
+    pmix_list_t framework_failed_components;
 } prte_mca_base_framework_t;
 
 /**

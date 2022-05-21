@@ -14,7 +14,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,14 +34,14 @@
 #    include <sys/types.h>
 #endif
 
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 
 #include "src/runtime/prte_globals.h"
 
-#include "src/util/parse_options.h"
+#include "src/util/pmix_parse_options.h"
 
-void prte_util_parse_range_options(char *inp, char ***output)
+void pmix_util_parse_range_options(char *inp, char ***output)
 {
     char **r1 = NULL, **r2 = NULL;
     int i, vint;
@@ -65,11 +65,11 @@ void prte_util_parse_range_options(char *inp, char ***output)
     }
 
     /* split on commas */
-    r1 = prte_argv_split(input, ',');
+    r1 = pmix_argv_split(input, ',');
     /* for each resulting element, check for range */
-    for (i = 0; i < prte_argv_count(r1); i++) {
-        r2 = prte_argv_split(r1[i], '-');
-        if (1 < prte_argv_count(r2)) {
+    for (i = 0; i < pmix_argv_count(r1); i++) {
+        r2 = pmix_argv_split(r1[i], '-');
+        if (1 < pmix_argv_count(r2)) {
             /* given range - get start and end */
             start = strtol(r2[0], NULL, 10);
             end = strtol(r2[1], NULL, 10);
@@ -79,10 +79,10 @@ void prte_util_parse_range_options(char *inp, char ***output)
              */
             vint = strtol(r1[i], NULL, 10);
             if (-1 == vint) {
-                prte_argv_free(*output);
+                pmix_argv_free(*output);
                 *output = NULL;
-                prte_argv_append_nosize(output, "-1");
-                prte_argv_free(r2);
+                pmix_argv_append_nosize(output, "-1");
+                pmix_argv_free(r2);
                 goto cleanup;
             }
             start = strtol(r2[0], NULL, 10);
@@ -90,17 +90,17 @@ void prte_util_parse_range_options(char *inp, char ***output)
         }
         for (n = start; n <= end; n++) {
             snprintf(nstr, 32, "%d", n);
-            prte_argv_append_nosize(output, nstr);
+            pmix_argv_append_nosize(output, nstr);
         }
-        prte_argv_free(r2);
+        pmix_argv_free(r2);
     }
 
 cleanup:
     if (bang_option) {
-        prte_argv_append_nosize(output, "BANG");
+        pmix_argv_append_nosize(output, "BANG");
     }
     free(input);
-    prte_argv_free(r1);
+    pmix_argv_free(r1);
 }
 
 void prte_util_get_ranges(char *inp, char ***startpts, char ***endpts)
@@ -118,28 +118,28 @@ void prte_util_get_ranges(char *inp, char ***startpts, char ***endpts)
     input = strdup(inp);
 
     /* split on commas */
-    r1 = prte_argv_split(input, ',');
+    r1 = pmix_argv_split(input, ',');
     /* for each resulting element, check for range */
-    for (i = 0; i < prte_argv_count(r1); i++) {
-        r2 = prte_argv_split(r1[i], '-');
-        if (2 == prte_argv_count(r2)) {
+    for (i = 0; i < pmix_argv_count(r1); i++) {
+        r2 = pmix_argv_split(r1[i], '-');
+        if (2 == pmix_argv_count(r2)) {
             /* given range - get start and end */
-            prte_argv_append_nosize(startpts, r2[0]);
-            prte_argv_append_nosize(endpts, r2[1]);
-        } else if (1 == prte_argv_count(r2)) {
+            pmix_argv_append_nosize(startpts, r2[0]);
+            pmix_argv_append_nosize(endpts, r2[1]);
+        } else if (1 == pmix_argv_count(r2)) {
             /* only one value provided, so it is both the start
              * and the end
              */
-            prte_argv_append_nosize(startpts, r2[0]);
-            prte_argv_append_nosize(endpts, r2[0]);
+            pmix_argv_append_nosize(startpts, r2[0]);
+            pmix_argv_append_nosize(endpts, r2[0]);
         } else {
             /* no idea how to parse this */
             prte_output(0, "%s Unknown parse error on string: %s(%s)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inp, r1[i]);
         }
-        prte_argv_free(r2);
+        pmix_argv_free(r2);
     }
 
     free(input);
-    prte_argv_free(r1);
+    pmix_argv_free(r1);
 }

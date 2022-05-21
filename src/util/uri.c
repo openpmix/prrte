@@ -6,7 +6,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,9 +24,9 @@
 #endif
 
 #include "src/util/output.h"
-#include "src/util/path.h"
-#include "src/util/printf.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_path.h"
+#include "src/util/pmix_printf.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/util/uri.h"
 
@@ -38,7 +38,7 @@ char *prte_uri_get_scheme(const char *uri)
     char *ptr;
 
     if (NULL == (ptr = strchr(turi, ':'))) {
-        prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
+        pmix_show_help("help-prte-util.txt", "malformed-uri", true, uri);
         free(turi);
         return NULL;
     }
@@ -52,8 +52,8 @@ char *prte_filename_to_uri(const char *filename, const char *hostname)
     size_t i, j, k, n;
 
     /* filename must be an absolute path */
-    if (!prte_path_is_absolute(filename)) {
-        prte_show_help("help-prte-util.txt", "relative-path", true, filename);
+    if (!pmix_path_is_absolute(filename)) {
+        pmix_show_help("help-prte-util.txt", "relative-path", true, filename);
         return NULL;
     }
 
@@ -61,7 +61,7 @@ char *prte_filename_to_uri(const char *filename, const char *hostname)
      * the scheme can either be missing or given as "localhost"
      */
     if (NULL == hostname) {
-        prte_asprintf(&uri, "file://%s", filename);
+        pmix_asprintf(&uri, "file://%s", filename);
         return uri;
     }
 
@@ -98,7 +98,7 @@ char *prte_filename_to_uri(const char *filename, const char *hostname)
      * ensure it was absolute, so the required separator should
      * already be present
      */
-    prte_asprintf(&uri, "file://%s%s", hostname, fn);
+    pmix_asprintf(&uri, "file://%s%s", hostname, fn);
     free(fn);
     return uri;
 }
@@ -119,7 +119,7 @@ char *prte_filename_from_uri(const char *uri, char **hostname)
 
     /* extract the scheme */
     if (NULL == (ptr = strchr(turi, ':'))) {
-        prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
+        pmix_show_help("help-prte-util.txt", "malformed-uri", true, uri);
         free(turi);
         return NULL;
     }
@@ -138,12 +138,12 @@ char *prte_filename_from_uri(const char *uri, char **hostname)
         fn = strdup(ptr);
     } else if (0 != strncmp(ptr, "//", 2)) {
         /* error */
-        prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
+        pmix_show_help("help-prte-util.txt", "malformed-uri", true, uri);
     } else {
         ptr += 2; /* step to the hostname */
         /* find the separator to the filename */
         if (NULL == (sp = strchr(ptr, '/'))) {
-            prte_show_help("help-prte-util.txt", "malformed-uri", true, uri);
+            pmix_show_help("help-prte-util.txt", "malformed-uri", true, uri);
         } else {
             *sp = '\0';
             if (NULL != hostname) {

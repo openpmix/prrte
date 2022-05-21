@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,8 +35,7 @@
 #include "src/pmix/pmix-internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/rml/rml.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
 
@@ -44,13 +43,6 @@
 #include "src/mca/iof/iof_types.h"
 
 #include "iof_prted.h"
-
-static void send_cb(int status, pmix_proc_t *peer, pmix_data_buffer_t *buf, prte_rml_tag_t tag,
-                    void *cbdata)
-{
-    /* nothing to do here - just release buffer and return */
-    PRTE_RELEASE(buf);
-}
 
 void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
 {
@@ -74,8 +66,8 @@ void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
                          (PRTE_IOF_XON == tag) ? "xon" : "xoff"));
 
     /* send the buffer to the HNP */
-    if (0 > (rc = prte_rml.send_buffer_nb(PRTE_PROC_MY_HNP, buf, PRTE_RML_TAG_IOF_HNP, send_cb,
-                                          NULL))) {
+    PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_IOF_HNP);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
     }
@@ -135,7 +127,7 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&target)));
 
     /* cycle through our list of procs */
-    PRTE_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t)
     {
         /* is this intended for this jobid? */
         if (PMIX_CHECK_NSPACE(target.nspace, proct->name.nspace)) {

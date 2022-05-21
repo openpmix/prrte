@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,7 +19,7 @@
 #include "src/mca/mca.h"
 #include "src/util/output.h"
 
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/schizo/schizo.h"
@@ -40,13 +40,13 @@ int prte_schizo_base_select(void)
     int rc, priority;
     bool inserted;
 
-    if (0 < prte_list_get_size(&prte_schizo_base.active_modules)) {
+    if (0 < pmix_list_get_size(&prte_schizo_base.active_modules)) {
         /* ensure we don't do this twice */
         return PRTE_SUCCESS;
     }
 
     /* Query all available components and ask if they have a module */
-    PRTE_LIST_FOREACH(cli, &prte_schizo_base_framework.framework_components,
+    PMIX_LIST_FOREACH(cli, &prte_schizo_base_framework.framework_components,
                       prte_mca_base_component_list_item_t)
     {
         component = (prte_mca_base_component_t *) cli->cli_component;
@@ -82,17 +82,17 @@ int prte_schizo_base_select(void)
         /* If we got a module, keep it */
         nmodule = (prte_schizo_base_module_t *) module;
         /* add to the list of active modules */
-        newmodule = PRTE_NEW(prte_schizo_base_active_module_t);
+        newmodule = PMIX_NEW(prte_schizo_base_active_module_t);
         newmodule->pri = priority;
         newmodule->module = nmodule;
         newmodule->component = component;
 
         /* maintain priority order */
         inserted = false;
-        PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+        PMIX_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
         {
             if (priority > mod->pri) {
-                prte_list_insert_pos(&prte_schizo_base.active_modules, (prte_list_item_t *) mod,
+                pmix_list_insert_pos(&prte_schizo_base.active_modules, (pmix_list_item_t *) mod,
                                      &newmodule->super);
                 inserted = true;
                 break;
@@ -100,14 +100,14 @@ int prte_schizo_base_select(void)
         }
         if (!inserted) {
             /* must be lowest priority - add to end */
-            prte_list_append(&prte_schizo_base.active_modules, &newmodule->super);
+            pmix_list_append(&prte_schizo_base.active_modules, &newmodule->super);
         }
     }
 
     if (4 < prte_output_get_verbosity(prte_schizo_base_framework.framework_output)) {
         prte_output(0, "Final schizo priorities");
         /* show the prioritized list */
-        PRTE_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
+        PMIX_LIST_FOREACH(mod, &prte_schizo_base.active_modules, prte_schizo_base_active_module_t)
         {
             prte_output(0, "\tSchizo: %s Priority: %d", mod->component->mca_component_name,
                         mod->pri);

@@ -17,7 +17,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,8 +45,8 @@
 #include <string.h>
 
 #include "src/include/prte_socket_errno.h"
-#include "src/util/argv.h"
-#include "src/util/net.h"
+#include "src/util/pmix_argv.h"
+#include "src/util/pmix_net.h"
 #include "src/util/output.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -54,7 +54,7 @@
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 #include "ras_slurm.h"
 #include "src/mca/ras/base/ras_private.h"
@@ -65,7 +65,7 @@
  * API functions
  */
 static int init(void);
-static int prte_ras_slurm_allocate(prte_job_t *jdata, prte_list_t *nodes);
+static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes);
 static void deallocate(prte_job_t *jdata, prte_app_context_t *app);
 static int prte_ras_slurm_finalize(void);
 
@@ -76,7 +76,7 @@ prte_ras_base_module_t prte_ras_slurm_module = {init, prte_ras_slurm_allocate, d
                                                 prte_ras_slurm_finalize};
 
 /* Local functions */
-static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list_t *nodelist);
+static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list_t *nodelist);
 static int prte_ras_slurm_parse_ranges(char *base, char *ranges, char ***nodelist);
 static int prte_ras_slurm_parse_range(char *base, char *range, char ***nodelist);
 
@@ -90,24 +90,24 @@ static int read_ip_port(char *filename, char **ip, uint16_t *port);
 
 /* define structs for tracking dynamic allocations */
 typedef struct {
-    prte_object_t super;
+    pmix_object_t super;
     int sjob;
 } local_apptracker_t;
-PRTE_CLASS_INSTANCE(local_apptracker_t, prte_object_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(local_apptracker_t, pmix_object_t, NULL, NULL);
 
 typedef struct {
-    prte_list_item_t super;
+    pmix_list_item_t super;
     char *cmd;
     prte_event_t timeout_ev;
     pmix_nspace_t nspace;
-    prte_pointer_array_t apps;
+    pmix_pointer_array_t apps;
     int napps;
 } local_jobtracker_t;
 static void jtrk_cons(local_jobtracker_t *ptr)
 {
     ptr->cmd = NULL;
-    PRTE_CONSTRUCT(&ptr->apps, prte_pointer_array_t);
-    prte_pointer_array_init(&ptr->apps, 1, INT_MAX, 1);
+    PMIX_CONSTRUCT(&ptr->apps, pmix_pointer_array_t);
+    pmix_pointer_array_init(&ptr->apps, 1, INT_MAX, 1);
     ptr->napps = 0;
 }
 static void jtrk_des(local_jobtracker_t *ptr)
@@ -119,17 +119,17 @@ static void jtrk_des(local_jobtracker_t *ptr)
         free(ptr->cmd);
     }
     for (i = 0; i < ptr->apps.size; i++) {
-        if (NULL != (ap = (local_apptracker_t *) prte_pointer_array_get_item(&ptr->apps, i))) {
-            PRTE_RELEASE(ap);
+        if (NULL != (ap = (local_apptracker_t *) pmix_pointer_array_get_item(&ptr->apps, i))) {
+            PMIX_RELEASE(ap);
         }
     }
-    PRTE_DESTRUCT(&ptr->apps);
+    PMIX_DESTRUCT(&ptr->apps);
 }
-PRTE_CLASS_INSTANCE(local_jobtracker_t, prte_list_item_t, jtrk_cons, jtrk_des);
+PMIX_CLASS_INSTANCE(local_jobtracker_t, pmix_list_item_t, jtrk_cons, jtrk_des);
 
 /* local vars */
 static int socket_fd;
-static prte_list_t jobs;
+static pmix_list_t jobs;
 static prte_event_t recv_ev;
 
 /* init the module */
@@ -143,7 +143,7 @@ static int init(void)
 
     if (prte_ras_slurm_component.dyn_alloc_enabled) {
         if (NULL == prte_ras_slurm_component.config_file) {
-            prte_show_help("help-ras-slurm.txt", "dyn-alloc-no-config", true);
+            pmix_show_help("help-ras-slurm.txt", "dyn-alloc-no-config", true);
             return PRTE_ERR_SILENT;
         }
         /* setup the socket */
@@ -168,13 +168,13 @@ static int init(void)
         /* connect to the Slurm dynamic allocation port */
         bzero(&address, sizeof(address));
         address.sin_family = AF_INET;
-        if (!prte_net_isaddr(slurm_host)) {
+        if (!pmix_net_isaddr(slurm_host)) {
             /* if the ControlMachine was not specified as an IP address,
              * we need to resolve it here
              */
             if (NULL == (h = gethostbyname(slurm_host))) {
                 /* could not resolve it */
-                prte_show_help("help-ras-slurm.txt", "host-not-resolved", true, slurm_host);
+                pmix_show_help("help-ras-slurm.txt", "host-not-resolved", true, slurm_host);
                 free(slurm_host);
                 return PRTE_ERR_SILENT;
             }
@@ -184,7 +184,7 @@ static int init(void)
         address.sin_addr.s_addr = inet_addr(slurm_host);
         address.sin_port = htons(port);
         if (connect(socket_fd, (struct sockaddr *) &address, sizeof(address)) < 0) {
-            prte_show_help("help-ras-slurm.txt", "connection-failed", true, slurm_host, (int) port);
+            pmix_show_help("help-ras-slurm.txt", "connection-failed", true, slurm_host, (int) port);
             free(slurm_host);
             return PRTE_ERR_SILENT;
         }
@@ -209,7 +209,7 @@ static int init(void)
         prte_event_add(&recv_ev, 0);
 
         /* initialize the list of jobs for tracking dynamic allocations */
-        PRTE_CONSTRUCT(&jobs, prte_list_t);
+        PMIX_CONSTRUCT(&jobs, pmix_list_t);
     }
     return PRTE_SUCCESS;
 }
@@ -219,7 +219,7 @@ static int init(void)
  * requested number of nodes/process slots to the job.
  *
  */
-static int prte_ras_slurm_allocate(prte_job_t *jdata, prte_list_t *nodes)
+static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     int ret, cpus_per_task;
     char *slurm_node_str, *regexp;
@@ -259,7 +259,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, prte_list_t *nodes)
              */
             return ret;
         }
-        prte_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1, "SLURM_NODELIST");
+        pmix_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1, "SLURM_NODELIST");
         return PRTE_ERR_NOT_FOUND;
     }
     regexp = strdup(slurm_node_str);
@@ -278,7 +278,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, prte_list_t *nodes)
         tasks_per_node = getenv("SLURM_JOB_CPUS_PER_NODE");
         if (NULL == tasks_per_node) {
             /* couldn't find any version - abort */
-            prte_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1,
+            pmix_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1,
                            "SLURM_JOB_CPUS_PER_NODE");
             free(regexp);
             return PRTE_ERR_NOT_FOUND;
@@ -295,7 +295,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, prte_list_t *nodes)
         tasks_per_node = getenv("SLURM_TASKS_PER_NODE");
         if (NULL == tasks_per_node) {
             /* couldn't find any version - abort */
-            prte_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1,
+            pmix_show_help("help-ras-slurm.txt", "slurm-env-var-not-found", 1,
                            "SLURM_TASKS_PER_NODE");
             free(regexp);
             return PRTE_ERR_NOT_FOUND;
@@ -336,7 +336,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, prte_list_t *nodes)
         return ret;
     }
     /* record the number of allocated nodes */
-    prte_num_allocated_nodes = prte_list_get_size(nodes);
+    prte_num_allocated_nodes = pmix_list_get_size(nodes);
 
     /* All done */
 
@@ -351,15 +351,15 @@ static void deallocate(prte_job_t *jdata, prte_app_context_t *app)
 
 static int prte_ras_slurm_finalize(void)
 {
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
 
     if (prte_ras_slurm_component.dyn_alloc_enabled) {
         /* delete the recv event */
         prte_event_del(&recv_ev);
-        while (NULL != (item = prte_list_remove_first(&jobs))) {
-            PRTE_RELEASE(item);
+        while (NULL != (item = pmix_list_remove_first(&jobs))) {
+            PMIX_RELEASE(item);
         }
-        PRTE_DESTRUCT(&jobs);
+        PMIX_DESTRUCT(&jobs);
         /* close the socket */
         shutdown(socket_fd, 2);
         close(socket_fd);
@@ -382,7 +382,7 @@ static int prte_ras_slurm_finalize(void)
  * @param *nodelist A list which has already been constucted to return
  *                  the found nodes in
  */
-static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list_t *nodelist)
+static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list_t *nodelist)
 {
     int i, j, len, ret, count, reps, num_nodes;
     char *base, **names = NULL;
@@ -427,7 +427,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list
         }
         if (i == 0) {
             /* we found a special character at the beginning of the string */
-            prte_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
+            pmix_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
                            tasks_per_node, "SLURM_NODELIST");
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
             free(orig);
@@ -444,7 +444,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list
             }
             if (j >= len) {
                 /* we didn't find the end of the range */
-                prte_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
+                pmix_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
                                tasks_per_node, "SLURM_NODELIST");
                 PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                 free(orig);
@@ -453,7 +453,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list
 
             ret = prte_ras_slurm_parse_ranges(base, base + i + 1, &names);
             if (PRTE_SUCCESS != ret) {
-                prte_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
+                pmix_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
                                tasks_per_node, "SLURM_NODELIST");
                 PRTE_ERROR_LOG(ret);
                 free(orig);
@@ -472,7 +472,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list
                                  "%s ras:slurm:allocate:discover: found node %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), base));
 
-            if (PRTE_SUCCESS != (ret = prte_argv_append_nosize(&names, base))) {
+            if (PRTE_SUCCESS != (ret = pmix_argv_append_nosize(&names, base))) {
                 PRTE_ERROR_LOG(ret);
                 free(orig);
                 return ret;
@@ -484,7 +484,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list
 
     free(orig);
 
-    num_nodes = prte_argv_count(names);
+    num_nodes = pmix_argv_count(names);
 
     /* Find the number of slots per node */
 
@@ -535,7 +535,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list
         } else if (*endptr == '\0' || j >= num_nodes) {
             break;
         } else {
-            prte_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
+            pmix_show_help("help-ras-slurm.txt", "slurm-env-var-bad-value", 1, regexp,
                            tasks_per_node, "SLURM_TASKS_PER_NODE");
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
             free(slots);
@@ -556,7 +556,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), names[i], slots[i],
                              (1 == slots[i]) ? "" : "s"));
 
-        node = PRTE_NEW(prte_node_t);
+        node = PMIX_NEW(prte_node_t);
         if (NULL == node) {
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
             free(slots);
@@ -567,10 +567,10 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, prte_list
         node->slots_inuse = 0;
         node->slots_max = 0;
         node->slots = slots[i];
-        prte_list_append(nodelist, &node->super);
+        pmix_list_append(nodelist, &node->super);
     }
     free(slots);
-    prte_argv_free(names);
+    pmix_argv_free(names);
 
     /* All done */
     return ret;
@@ -716,7 +716,7 @@ static int prte_ras_slurm_parse_range(char *base, char *range, char ***names)
             str[j] = '\0';
         }
         strcat(str, temp1);
-        ret = prte_argv_append_nosize(names, str);
+        ret = pmix_argv_append_nosize(names, str);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
             free(str);
@@ -734,7 +734,7 @@ static void timeout(int fd, short args, void *cbdata)
     local_jobtracker_t *jtrk = (local_jobtracker_t *) cbdata;
     prte_job_t *jdata;
 
-    prte_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-timeout", true);
+    pmix_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-timeout", true);
     prte_output_verbose(2, prte_ras_base_framework.framework_output,
                         "%s Timed out on dynamic allocation", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     /* indicate that we failed to receive an allocation */
@@ -747,8 +747,8 @@ static void recv_data(int fd, short args, void *cbdata)
     bool found;
     int i, rc;
     prte_node_t *nd, *nd2;
-    prte_list_t nds, ndtmp;
-    prte_list_item_t *item, *itm;
+    pmix_list_t nds, ndtmp;
+    pmix_list_item_t *item, *itm;
     char recv_msg[8192];
     int nbytes, idx, sjob;
     char **alloc, *nodelist, *tpn;
@@ -778,14 +778,14 @@ static void recv_data(int fd, short args, void *cbdata)
         /* show an error here - basically, a "nothing was available"
          * message
          */
-        prte_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true,
+        pmix_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true,
                        (0 == strlen(recv_msg)) ? "NO MSG" : recv_msg);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_ALLOC_FAILED);
         return;
     }
 
     /* break the message into its component parts, separated by colons */
-    alloc = prte_argv_split(recv_msg, ':');
+    alloc = pmix_argv_split(recv_msg, ':');
 
     /* the first section contains the PRTE jobid for this allocation */
     tpn = strchr(alloc[0], '=');
@@ -795,8 +795,8 @@ static void recv_data(int fd, short args, void *cbdata)
     PMIX_LOAD_NSPACE(jdata->nspace, jobid);
     jtrk = NULL;
     /* find the associated tracking object */
-    for (item = prte_list_get_first(&jobs); item != prte_list_get_end(&jobs);
-         item = prte_list_get_next(item)) {
+    for (item = pmix_list_get_first(&jobs); item != pmix_list_get_end(&jobs);
+         item = pmix_list_get_next(item)) {
         ptr = (local_jobtracker_t *) item;
         if (PMIX_CHECK_NSPACE(ptr->nspace, jobid)) {
             jtrk = ptr;
@@ -804,9 +804,9 @@ static void recv_data(int fd, short args, void *cbdata)
         }
     }
     if (NULL == jtrk) {
-        prte_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true, "NO JOB TRACKER");
+        pmix_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true, "NO JOB TRACKER");
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_ALLOC_FAILED);
-        prte_argv_free(alloc);
+        pmix_argv_free(alloc);
         return;
     }
 
@@ -816,17 +816,17 @@ static void recv_data(int fd, short args, void *cbdata)
     /* cycle across all the remaining parts - each is the allocation for
      * an app in this job
      */
-    PRTE_CONSTRUCT(&nds, prte_list_t);
-    PRTE_CONSTRUCT(&ndtmp, prte_list_t);
+    PMIX_CONSTRUCT(&nds, pmix_list_t);
+    PMIX_CONSTRUCT(&ndtmp, pmix_list_t);
     idx = -1;
     sjob = -1;
     nodelist = NULL;
     tpn = NULL;
     for (i = 1; NULL != alloc[i]; i++) {
         if (PRTE_SUCCESS != parse_alloc_msg(alloc[i], &idx, &sjob, &nodelist, &tpn)) {
-            prte_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true, jtrk->cmd);
+            pmix_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true, jtrk->cmd);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-            prte_argv_free(alloc);
+            pmix_argv_free(alloc);
             if (NULL != nodelist) {
                 free(nodelist);
             }
@@ -836,17 +836,17 @@ static void recv_data(int fd, short args, void *cbdata)
             return;
         }
         if (idx < 0) {
-            prte_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true, jtrk->cmd);
+            pmix_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true, jtrk->cmd);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-            prte_argv_free(alloc);
+            pmix_argv_free(alloc);
             free(nodelist);
             free(tpn);
             return;
         }
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, idx))) {
-            prte_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true, jtrk->cmd);
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, idx))) {
+            pmix_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true, jtrk->cmd);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-            prte_argv_free(alloc);
+            pmix_argv_free(alloc);
             free(nodelist);
             free(tpn);
             return;
@@ -855,16 +855,16 @@ static void recv_data(int fd, short args, void *cbdata)
         prte_remove_attribute(&app->attributes, PRTE_APP_DASH_HOST);
         /* track the Slurm jobid */
         if (NULL
-            == (aptrk = (local_apptracker_t *) prte_pointer_array_get_item(&jtrk->apps, idx))) {
-            aptrk = PRTE_NEW(local_apptracker_t);
-            prte_pointer_array_set_item(&jtrk->apps, idx, aptrk);
+            == (aptrk = (local_apptracker_t *) pmix_pointer_array_get_item(&jtrk->apps, idx))) {
+            aptrk = PMIX_NEW(local_apptracker_t);
+            pmix_pointer_array_set_item(&jtrk->apps, idx, aptrk);
         }
         aptrk->sjob = sjob;
         /* since the nodelist/tpn may contain regular expressions, parse them */
         if (PRTE_SUCCESS != (rc = prte_ras_slurm_discover(nodelist, tpn, &ndtmp))) {
             PRTE_ERROR_LOG(rc);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-            prte_argv_free(alloc);
+            pmix_argv_free(alloc);
             free(nodelist);
             free(tpn);
             return;
@@ -872,24 +872,24 @@ static void recv_data(int fd, short args, void *cbdata)
         /* transfer the discovered nodes to our node list, and construct
          * the new dash_host entry to match what was allocated
          */
-        while (NULL != (item = prte_list_remove_first(&ndtmp))) {
+        while (NULL != (item = pmix_list_remove_first(&ndtmp))) {
             nd = (prte_node_t *) item;
-            prte_argv_append_nosize(&dash_host, nd->name);
+            pmix_argv_append_nosize(&dash_host, nd->name);
             /* check for duplicates */
             found = false;
-            for (itm = prte_list_get_first(&nds); itm != prte_list_get_end(&nds);
-                 itm = prte_list_get_next(itm)) {
+            for (itm = pmix_list_get_first(&nds); itm != pmix_list_get_end(&nds);
+                 itm = pmix_list_get_next(itm)) {
                 nd2 = (prte_node_t *) itm;
                 if (0 == strcmp(nd->name, nd2->name)) {
                     found = true;
                     nd2->slots += nd->slots;
-                    PRTE_RELEASE(item);
+                    PMIX_RELEASE(item);
                     break;
                 }
             }
             if (!found) {
                 /* append the new node to our list */
-                prte_list_append(&nds, item);
+                pmix_list_append(&nds, item);
             }
         }
         /* cleanup */
@@ -897,27 +897,27 @@ static void recv_data(int fd, short args, void *cbdata)
         free(tpn);
     }
     /* cleanup */
-    prte_argv_free(alloc);
-    PRTE_DESTRUCT(&ndtmp);
+    pmix_argv_free(alloc);
+    PMIX_DESTRUCT(&ndtmp);
     if (NULL != dash_host) {
-        tpn = prte_argv_join(dash_host, ',');
+        tpn = pmix_argv_join(dash_host, ',');
         for (idx = 0; idx < jdata->apps->size; idx++) {
             if (NULL
-                == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, idx))) {
-                prte_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true, jtrk->cmd);
+                == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, idx))) {
+                pmix_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-failed", true, jtrk->cmd);
                 PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
-                prte_argv_free(dash_host);
+                pmix_argv_free(dash_host);
                 free(tpn);
                 return;
             }
             prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_LOCAL, (void *) tpn,
                                PMIX_STRING);
         }
-        prte_argv_free(dash_host);
+        pmix_argv_free(dash_host);
         free(tpn);
     }
 
-    if (prte_list_is_empty(&nds)) {
+    if (pmix_list_is_empty(&nds)) {
         /* if we get here, then we were able to contact slurm,
          * which means we are in an actively managed cluster.
          * However, slurm indicated that nothing is currently
@@ -925,19 +925,19 @@ static void recv_data(int fd, short args, void *cbdata)
          * situation - we do NOT have the option of running on
          * user-specified hosts as the cluster is managed.
          */
-        PRTE_DESTRUCT(&nds);
-        prte_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
+        PMIX_DESTRUCT(&nds);
+        pmix_show_help("help-ras-base.txt", "ras-base:no-allocation", true);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_ALLOC_FAILED);
     }
 
     /* store the found nodes */
     if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nds, jdata))) {
         PRTE_ERROR_LOG(rc);
-        PRTE_DESTRUCT(&nds);
+        PMIX_DESTRUCT(&nds);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_ALLOC_FAILED);
         return;
     }
-    PRTE_DESTRUCT(&nds);
+    PMIX_DESTRUCT(&nds);
 
     /* default to no-oversubscribe-allowed for managed systems */
     if (!(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping))) {
@@ -971,9 +971,9 @@ static int dyn_allocate(prte_job_t *jdata)
     }
 
     /* track this request */
-    jtrk = PRTE_NEW(local_jobtracker_t);
+    jtrk = PMIX_NEW(local_jobtracker_t);
     PMIX_LOAD_NSPACE(jtrk->nspace, jdata->nspace);
-    prte_list_append(&jobs, &jtrk->super);
+    pmix_list_append(&jobs, &jtrk->super);
 
     /* construct the command - note that the jdata structure contains
      * a field for the minimum number of nodes required for the job.
@@ -985,10 +985,10 @@ static int dyn_allocate(prte_job_t *jdata)
      * want to provide a param to adjust the timeout value
      */
     /* construct the cmd string */
-    prte_argv_append_nosize(&cmd, "allocate");
+    pmix_argv_append_nosize(&cmd, "allocate");
     /* add the jobid */
-    prte_asprintf(&tmp, "jobid=%s", jdata->nspace);
-    prte_argv_append_nosize(&cmd, tmp);
+    pmix_asprintf(&tmp, "jobid=%s", jdata->nspace);
+    pmix_argv_append_nosize(&cmd, tmp);
     free(tmp);
     /* if we want the allocation for all apps in one shot,
      * then tell slurm
@@ -998,36 +998,36 @@ static int dyn_allocate(prte_job_t *jdata)
      */
 #if 0
     if (!prte_ras_slurm_component.rolling_alloc) {
-        prte_argv_append_nosize(&cmd, "return=all");
+        pmix_argv_append_nosize(&cmd, "return=all");
     }
 #else
-    prte_argv_append_nosize(&cmd, "return=all");
+    pmix_argv_append_nosize(&cmd, "return=all");
 #endif
 
     /* pass the timeout */
-    prte_asprintf(&tmp, "timeout=%d", prte_ras_slurm_component.timeout);
-    prte_argv_append_nosize(&cmd, tmp);
+    pmix_asprintf(&tmp, "timeout=%d", prte_ras_slurm_component.timeout);
+    pmix_argv_append_nosize(&cmd, tmp);
     free(tmp);
 
     /* for each app, add its allocation request info */
     i64ptr = &i64;
     for (i = 0; i < jdata->apps->size; i++) {
-        if (NULL == (app = (prte_app_context_t *) prte_pointer_array_get_item(jdata->apps, i))) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
             continue;
         }
         /* add the app id, preceded by a colon separator */
-        prte_asprintf(&tmp, ": app=%d", (int) app->idx);
-        prte_argv_append_nosize(&cmd, tmp);
+        pmix_asprintf(&tmp, ": app=%d", (int) app->idx);
+        pmix_argv_append_nosize(&cmd, tmp);
         free(tmp);
         /* add the number of process "slots" we need */
-        prte_asprintf(&tmp, "np=%d", app->num_procs);
-        prte_argv_append_nosize(&cmd, tmp);
+        pmix_asprintf(&tmp, "np=%d", app->num_procs);
+        pmix_argv_append_nosize(&cmd, tmp);
         free(tmp);
         /* if we were given a minimum number of nodes, pass it along */
         if (prte_get_attribute(&app->attributes, PRTE_APP_MIN_NODES, (void **) &i64ptr,
                                PMIX_INT64)) {
-            prte_asprintf(&tmp, "N=%ld", (long int) i64);
-            prte_argv_append_nosize(&cmd, tmp);
+            pmix_asprintf(&tmp, "N=%ld", (long int) i64);
+            pmix_argv_append_nosize(&cmd, tmp);
             free(tmp);
         }
         /* add the list of nodes, if one was given, ensuring
@@ -1035,22 +1035,22 @@ static int dyn_allocate(prte_job_t *jdata)
          */
         node_list = get_node_list(app);
         if (NULL != node_list) {
-            prte_asprintf(&tmp, "node_list=%s", node_list);
-            prte_argv_append_nosize(&cmd, tmp);
+            pmix_asprintf(&tmp, "node_list=%s", node_list);
+            pmix_argv_append_nosize(&cmd, tmp);
             free(node_list);
             free(tmp);
         }
         /* add the mandatory/optional flag */
         if (prte_get_attribute(&app->attributes, PRTE_APP_MANDATORY, NULL, PMIX_BOOL)) {
-            prte_argv_append_nosize(&cmd, "flag=mandatory");
+            pmix_argv_append_nosize(&cmd, "flag=mandatory");
         } else {
-            prte_argv_append_nosize(&cmd, "flag=optional");
+            pmix_argv_append_nosize(&cmd, "flag=optional");
         }
     }
 
     /* assemble it into the final cmd to be sent */
-    cmd_str = prte_argv_join(cmd, ' ');
-    prte_argv_free(cmd);
+    cmd_str = pmix_argv_join(cmd, ' ');
+    pmix_argv_free(cmd);
 
     /* start a timer - if the response to our request doesn't appear
      * in the defined time, then we will error out as Slurm isn't
@@ -1130,18 +1130,18 @@ static char *get_node_list(prte_app_context_t *app)
     if (!prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &dh, PMIX_STRING)) {
         return NULL;
     }
-    dash_host = prte_argv_split(dh, ',');
+    dash_host = pmix_argv_split(dh, ',');
     free(dh);
     for (j = 0; NULL != dash_host[j]; j++) {
-        prte_argv_append_unique_nosize(&total_host, dash_host[j]);
+        pmix_argv_append_unique_nosize(&total_host, dash_host[j]);
     }
-    prte_argv_free(dash_host);
+    pmix_argv_free(dash_host);
     if (NULL == total_host) {
         return NULL;
     }
 
-    nodes = prte_argv_join(total_host, ',');
-    prte_argv_free(total_host);
+    nodes = pmix_argv_join(total_host, ',');
+    pmix_argv_free(total_host);
     return nodes;
 }
 
@@ -1154,7 +1154,7 @@ static int read_ip_port(char *filename, char **ip, uint16_t *port)
     bool found_ip = false;
 
     if (NULL == (fp = fopen(filename, "r"))) {
-        prte_show_help("help-ras-slurm.txt", "config-file-not-found", true, filename);
+        pmix_show_help("help-ras-slurm.txt", "config-file-not-found", true, filename);
         return PRTE_ERR_SILENT;
     }
 

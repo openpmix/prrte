@@ -14,7 +14,7 @@
  * Copyright (c) 2016-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -52,10 +52,10 @@
 
 #include "prte_config.h"
 
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 
 #include "src/mca/iof/iof.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 
 BEGIN_C_DECLS
 
@@ -64,7 +64,7 @@ BEGIN_C_DECLS
  */
 struct prte_iof_prted_component_t {
     prte_iof_base_component_t super;
-    prte_list_t procs;
+    pmix_list_t procs;
     bool xoff;
 };
 typedef struct prte_iof_prted_component_t prte_iof_prted_component_t;

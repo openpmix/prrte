@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,9 +34,9 @@
 #include "prte_config.h"
 #include "types.h"
 
-#include "src/class/prte_pointer_array.h"
+#include "src/class/pmix_pointer_array.h"
 #include "src/mca/mca.h"
-#include "src/mca/rml/rml_types.h"
+#include "src/rml/rml_types.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
@@ -68,7 +68,7 @@ typedef int (*prte_odls_base_module_launch_local_processes_fn_t)(pmix_data_buffe
 /**
  * Kill the local processes on this node
  */
-typedef int (*prte_odls_base_module_kill_local_processes_fn_t)(prte_pointer_array_t *procs);
+typedef int (*prte_odls_base_module_kill_local_processes_fn_t)(pmix_pointer_array_t *procs);
 
 /**
  * Signal local processes

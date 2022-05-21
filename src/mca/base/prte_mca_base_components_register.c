@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -29,14 +29,14 @@
 #include <string.h>
 
 #include "constants.h"
-#include "src/class/prte_list.h"
+#include "src/class/pmix_list.h"
 #include "src/mca/base/base.h"
 #include "src/mca/base/prte_mca_base_component_repository.h"
 #include "src/mca/base/prte_mca_base_framework.h"
 #include "src/mca/mca.h"
-#include "src/util/argv.h"
+#include "src/util/pmix_argv.h"
 #include "src/util/output.h"
-#include "src/util/show_help.h"
+#include "src/util/pmix_show_help.h"
 
 /*
  * Local functions
@@ -84,7 +84,7 @@ static int register_components(prte_mca_base_framework_t *framework)
 
     /* Traverse the list of found components */
 
-    PRTE_LIST_FOREACH_SAFE(cli, next, &framework->framework_components,
+    PMIX_LIST_FOREACH_SAFE(cli, next, &framework->framework_components,
                            prte_mca_base_component_list_item_t)
     {
         component = (prte_mca_base_component_t *) cli->cli_component;
@@ -131,10 +131,10 @@ static int register_components(prte_mca_base_framework_t *framework)
                                     component->mca_component_name);
             }
 
-            prte_list_remove_item(&framework->framework_components, &cli->super);
+            pmix_list_remove_item(&framework->framework_components, &cli->super);
 
             /* Release this list item */
-            PRTE_RELEASE(cli);
+            PMIX_RELEASE(cli);
             continue;
         }
 

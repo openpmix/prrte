@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,7 +50,7 @@ static inline int prte_hibit(int value, int start)
     /* Only look at the part that the caller wanted looking at */
     mask = value & ((1 << start) - 1);
 
-    if (PRTE_UNLIKELY(0 == mask)) {
+    if (PMIX_UNLIKELY(0 == mask)) {
         return -1;
     }
 
@@ -89,7 +89,7 @@ static inline int prte_cube_dim(int value)
     int dim, size;
 
 #if PRTE_C_HAVE_BUILTIN_CLZ
-    if (PRTE_UNLIKELY(1 >= value)) {
+    if (PMIX_UNLIKELY(1 >= value)) {
         return 0;
     }
     size = 8 * sizeof(int);
@@ -119,7 +119,7 @@ static inline int prte_next_poweroftwo(int value)
     int power2;
 
 #if PRTE_C_HAVE_BUILTIN_CLZ
-    if (PRTE_UNLIKELY(0 == value)) {
+    if (PMIX_UNLIKELY(0 == value)) {
         return 1;
     }
     power2 = 1 << (8 * sizeof(int) - __builtin_clz(value));
@@ -149,7 +149,7 @@ static inline int prte_next_poweroftwo_inclusive(int value)
     int power2;
 
 #if PRTE_C_HAVE_BUILTIN_CLZ
-    if (PRTE_UNLIKELY(1 >= value)) {
+    if (PMIX_UNLIKELY(1 >= value)) {
         return 1;
     }
     power2 = 1 << (8 * sizeof(int) - __builtin_clz(value - 1));

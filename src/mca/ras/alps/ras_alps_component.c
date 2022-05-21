@@ -19,7 +19,7 @@
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -59,7 +59,7 @@ prte_ras_base_component_t prte_ras_alps_component = {
         /* Component name and version */
         .mca_component_name = "alps",
         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PRTE_RELEASE_VERSION),
+                                    PMIX_RELEASE_VERSION),
 
         /* Component open and close functions */
         .mca_open_component = ras_alps_open,
@@ -122,7 +122,7 @@ static unsigned long int get_res_id(void)
             return 0;
         }
 
-        ret = prte_asprintf(&apstat_cmd, "%s -r", ras_alps_apstat_cmd);
+        ret = pmix_asprintf(&apstat_cmd, "%s -r", ras_alps_apstat_cmd);
         if (0 > ret) {
             return 0;
         }

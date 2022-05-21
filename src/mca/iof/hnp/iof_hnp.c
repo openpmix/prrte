@@ -49,9 +49,9 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/odls/odls_types.h"
-#include "src/mca/rml/rml.h"
+#include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
-#include "src/threads/threads.h"
+#include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 
 #include "iof_hnp.h"
@@ -98,10 +98,10 @@ static int init(void)
     /* post non-blocking recv to catch forwarded IO from
      * the orteds
      */
-    prte_rml.recv_buffer_nb(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_HNP, PRTE_RML_PERSISTENT,
-                            prte_iof_hnp_recv, NULL);
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_HNP,
+                  PRTE_RML_PERSISTENT, prte_iof_hnp_recv, NULL);
 
-    PRTE_CONSTRUCT(&prte_iof_hnp_component.procs, prte_list_t);
+    PMIX_CONSTRUCT(&prte_iof_hnp_component.procs, pmix_list_t);
     prte_iof_hnp_component.stdinev = NULL;
 
     return PRTE_SUCCESS;
@@ -124,7 +124,7 @@ static int hnp_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int fd)
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fd, PRTE_NAME_PRINT(dst_name)));
 
     /* do we already have this process in our list? */
-    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, dst_name)) {
             /* found it */
@@ -132,9 +132,9 @@ static int hnp_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int fd)
         }
     }
     /* if we get here, then we don't yet have this proc in our list */
-    proct = PRTE_NEW(prte_iof_proc_t);
+    proct = PMIX_NEW(prte_iof_proc_t);
     PMIX_XFER_PROCID(&proct->name, dst_name);
-    prte_list_append(&prte_iof_hnp_component.procs, &proct->super);
+    pmix_list_append(&prte_iof_hnp_component.procs, &proct->super);
 
 SETUP:
     /* if we are pushing stdin, then ignore it - we
@@ -204,7 +204,7 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(dst_name), sz));
 
     /* do we already have this process in our list? */
-    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, dst_name)) {
             /* did they direct that the data go to this proc? */
@@ -254,7 +254,7 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
                                                                 sz))) {
                     /* if the addressee is unknown, remove the sink from the list */
                     if (PRTE_ERR_ADDRESSEE_UNKNOWN == rc) {
-                        PRTE_RELEASE(proct->stdinev);
+                        PMIX_RELEASE(proct->stdinev);
                     }
                 }
             }
@@ -295,7 +295,7 @@ static int hnp_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int fd)
     }
 
     /* do we already have this process in our list? */
-    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, dst_name)) {
             /* found it */
@@ -303,9 +303,9 @@ static int hnp_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int fd)
         }
     }
     /* if we get here, then we don't yet have this proc in our list */
-    proct = PRTE_NEW(prte_iof_proc_t);
+    proct = PMIX_NEW(prte_iof_proc_t);
     PMIX_XFER_PROCID(&proct->name, dst_name);
-    prte_list_append(&prte_iof_hnp_component.procs, &proct->super);
+    pmix_list_append(&prte_iof_hnp_component.procs, &proct->super);
 
 SETUP:
     PRTE_IOF_SINK_DEFINE(&proct->stdinev, dst_name, fd, PRTE_IOF_STDIN, stdin_write_handler);
@@ -327,31 +327,31 @@ static int hnp_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag)
                          "%s iof:hnp closing connection to process %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer)));
 
-    PRTE_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, peer)) {
             if (PRTE_IOF_STDIN & source_tag) {
                 if (NULL != proct->stdinev) {
-                    PRTE_RELEASE(proct->stdinev);
+                    PMIX_RELEASE(proct->stdinev);
                 }
                 proct->stdinev = NULL;
             }
             if ((PRTE_IOF_STDOUT & source_tag) || (PRTE_IOF_STDMERGE & source_tag)) {
                 if (NULL != proct->revstdout) {
-                    PRTE_RELEASE(proct->revstdout);
+                    PMIX_RELEASE(proct->revstdout);
                 }
                 proct->revstdout = NULL;
             }
             if (PRTE_IOF_STDERR & source_tag) {
                 if (NULL != proct->revstderr) {
-                    PRTE_RELEASE(proct->revstderr);
+                    PMIX_RELEASE(proct->revstderr);
                 }
                 proct->revstderr = NULL;
             }
             /* if we closed them all, then remove this proc */
             if (NULL == proct->stdinev && NULL == proct->revstdout && NULL == proct->revstderr) {
-                prte_list_remove_item(&prte_iof_hnp_component.procs, &proct->super);
-                PRTE_RELEASE(proct);
+                pmix_list_remove_item(&prte_iof_hnp_component.procs, &proct->super);
+                PMIX_RELEASE(proct);
             }
             break;
         }
@@ -364,26 +364,26 @@ static void hnp_complete(const prte_job_t *jdata)
     prte_iof_proc_t *proct, *next;
 
     /* cleanout any lingering sinks */
-    PRTE_LIST_FOREACH_SAFE(proct, next, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH_SAFE(proct, next, &prte_iof_hnp_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_NSPACE(jdata->nspace, proct->name.nspace)) {
-            prte_list_remove_item(&prte_iof_hnp_component.procs, &proct->super);
+            pmix_list_remove_item(&prte_iof_hnp_component.procs, &proct->super);
             if (NULL != proct->revstdout) {
-                PRTE_RELEASE(proct->revstdout);
+                PMIX_RELEASE(proct->revstdout);
             }
             proct->revstdout = NULL;
             if (NULL != proct->revstderr) {
-                PRTE_RELEASE(proct->revstderr);
+                PMIX_RELEASE(proct->revstderr);
             }
             proct->revstderr = NULL;
-            PRTE_RELEASE(proct);
+            PMIX_RELEASE(proct);
         }
     }
 }
 
 static int finalize(void)
 {
-    PRTE_DESTRUCT(&prte_iof_hnp_component.procs);
+    PMIX_DESTRUCT(&prte_iof_hnp_component.procs);
     return PRTE_SUCCESS;
 }
 
@@ -394,26 +394,26 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
 {
     prte_iof_sink_t *sink = (prte_iof_sink_t *) cbdata;
     prte_iof_write_event_t *wev = sink->wev;
-    prte_list_item_t *item;
+    pmix_list_item_t *item;
     prte_iof_write_output_t *output;
     int num_written, total_written = 0;
 
-    PRTE_ACQUIRE_OBJECT(sink);
+    PMIX_ACQUIRE_OBJECT(sink);
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s hnp:stdin:write:handler writing %d data to %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (int)prte_list_get_size(&wev->outputs), wev->fd));
+                         (int)pmix_list_get_size(&wev->outputs), wev->fd));
 
     wev->pending = false;
 
-    while (NULL != (item = prte_list_remove_first(&wev->outputs))) {
+    while (NULL != (item = pmix_list_remove_first(&wev->outputs))) {
         output = (prte_iof_write_output_t *) item;
         /* if an abnormal termination has occurred, just dump
          * this data as we are aborting
          */
         if (prte_abnormal_term_ordered) {
-            PRTE_RELEASE(output);
+            PMIX_RELEASE(output);
             continue;
         }
         if (0 == output->numbytes) {
@@ -432,7 +432,7 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
         if (num_written < 0) {
             if (EAGAIN == errno || EINTR == errno) {
                 /* push this item back on the front of the list */
-                prte_list_prepend(&wev->outputs, item);
+                pmix_list_prepend(&wev->outputs, item);
                 /* leave the write event running so it will call us again
                  * when the fd is ready.
                  */
@@ -441,7 +441,7 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
             /* otherwise, something bad happened so all we can do is declare an
              * error and abort
              */
-            PRTE_RELEASE(output);
+            PMIX_RELEASE(output);
             PRTE_OUTPUT_VERBOSE(
                 (20, prte_iof_base_framework.framework_output,
                  "%s iof:hnp closing fd %d on write event due to negative bytes written",
@@ -454,13 +454,13 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
             /* incomplete write - adjust data to avoid duplicate output */
             memmove(output->data, &output->data[num_written], output->numbytes - num_written);
             /* push this item back on the front of the list */
-            prte_list_prepend(&wev->outputs, item);
+            pmix_list_prepend(&wev->outputs, item);
             /* leave the write event running so it will call us again
              * when the fd is ready.
              */
             goto re_enter;
         }
-        PRTE_RELEASE(output);
+        PMIX_RELEASE(output);
 
         total_written += num_written;
         if ((PRTE_IOF_SINK_BLOCKSIZE <= total_written) && wev->always_writable) {
@@ -473,14 +473,14 @@ re_enter:
     PRTE_IOF_SINK_ACTIVATE(wev);
 
 check:
-    if (sink->closed && 0 == prte_list_get_size(&wev->outputs)) {
+    if (sink->closed && 0 == pmix_list_get_size(&wev->outputs)) {
         /* the sink has already been closed and everything was written, time to release it */
-        PRTE_RELEASE(sink);
+        PMIX_RELEASE(sink);
     }
     return;
 
 finish:
-    PRTE_RELEASE(wev);
+    PMIX_RELEASE(wev);
     sink->wev = NULL;
     return;
 }
