@@ -333,6 +333,8 @@ static void stack_trace_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
     prte_pointer_array_t parray;
     int rc;
     pmix_byte_object_t bo;
+
+    PMIX_DATA_BUFFER_CONSTRUCT(&blob);    
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     prte_output_verbose(5, prte_plm_base_framework.framework_output,
