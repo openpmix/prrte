@@ -536,7 +536,7 @@ static int do_parent(prte_odls_spawn_caddy_t *cd, int read_fd)
         /* Print out what we got.  We already have a rendered string,
            so use pmix_show_help_norender(). */
         if (msg.msg_str_len > 0) {
-            pmix_show_help_norender(file, topic, false, str);
+            pmix_show_help_norender(file, topic, str);
             free(str);
             str = NULL;
         }
