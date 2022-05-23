@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2008 The University of Tennessee and The University
+ * Copyright (c) 2004-2022 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -286,7 +286,11 @@ static int close_open_file_descriptors(int write_fd, prte_iof_base_io_conf_t opt
     struct dirent *files;
     int app_alps_filedes[2], alps_app_filedes[2];
 
+#if defined(__OSX__)
+    dir = opendir("/dev/fd");
+#else  /* Linux */
     dir = opendir("/proc/self/fd");
+#endif  /* defined(__OSX__) */
     if (NULL == dir) {
         return PRTE_ERR_FILE_OPEN_FAILURE;
     }
