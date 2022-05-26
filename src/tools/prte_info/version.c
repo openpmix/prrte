@@ -79,7 +79,7 @@ void prte_info_show_prte_version(const char *scope)
     prte_info_out("PRTE repo revision", tmp, PRTE_REPO_REV);
     free(tmp);
     pmix_asprintf(&tmp, "%s:version:release_date", prte_info_type_prte);
-    prte_info_out("PRTE release date", tmp, PMIX_RELEASE_DATE);
+    prte_info_out("PRTE release date", tmp, PRTE_RELEASE_DATE);
     free(tmp);
 
     prte_info_out("PMIx", "pmix:version:full", PMIx_Get_version());

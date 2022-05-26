@@ -39,7 +39,7 @@ AM_CFLAGS = \
             -DPRTE_WRAPPER_EXTRA_LIBS="\"@PRTE_WRAPPER_EXTRA_LIBS@\"" \
             -DPRTE_GREEK_VERSION="\"@PRTE_GREEK_VERSION@\"" \
             -DPRTE_REPO_REV="\"@PRTE_REPO_REV@\"" \
-            -DPMIX_RELEASE_DATE="\"@PMIX_RELEASE_DATE@\""
+            -DPRTE_RELEASE_DATE="\"@PRTE_RELEASE_DATE@\""
 
 AM_LDFLAGS = $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
 
