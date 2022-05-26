@@ -548,7 +548,7 @@ PRTE_SEARCH_LIBS_CORE([sched_yield], [rt])
 # Darwin doesn't need -lm, as it's a symlink to libSystem.dylib
 PRTE_SEARCH_LIBS_CORE([ceil], [m])
 
-AC_CHECK_FUNCS([asprintf snprintf vasprintf vsnprintf fork  setsid strsignal syslog  setpgid])
+AC_CHECK_FUNCS([asprintf snprintf vasprintf vsnprintf fork  setsid strsignal syslog setpgid fileno_unlocked])
 
 # On some hosts, htonl is a define, so the AC_CHECK_FUNC will get
 # confused.  On others, it's in the standard library, but stubbed with
