@@ -37,7 +37,7 @@ AM_CFLAGS = \
             -DPRTE_CC_ABSOLUTE="\"@PRTE_CC_ABSOLUTE@\"" \
             -DPRTE_GREEK_VERSION="\"@PRTE_GREEK_VERSION@\"" \
             -DPRTE_REPO_REV="\"@PRTE_REPO_REV@\"" \
-            -DPMIX_RELEASE_DATE="\"@PMIX_RELEASE_DATE@\""
+            -DPRTE_RELEASE_DATE="\"@PRTE_RELEASE_DATE@\""
 
 bin_PROGRAMS = pterm
 
