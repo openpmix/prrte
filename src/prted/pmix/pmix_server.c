@@ -619,7 +619,7 @@ int pmix_server_init(void)
     /* if PMIx is version 4 or higher, then we can pass our
      * topology object down to the server library for its use
      * and for passing to any local clients */
-    mytopology.source = strdup("hwloc");
+    mytopology.source = "hwloc";
     mytopology.topology = prte_hwloc_topology;
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_TOPOLOGY2, &mytopology, PMIX_TOPO);
     if (PMIX_SUCCESS != prc) {
@@ -907,7 +907,8 @@ void pmix_server_finalize(void)
         return;
     }
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s Finalizing PMIX server",
+    prte_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s Finalizing PMIX server",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* stop receives */
@@ -936,7 +937,6 @@ void pmix_server_finalize(void)
     PMIX_DESTRUCT(&prte_pmix_server_globals.local_reqs);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
-    free(mytopology.source);
 
     /* shutdown the local server */
     PMIx_server_finalize();
