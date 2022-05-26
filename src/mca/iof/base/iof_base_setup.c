@@ -163,14 +163,23 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
         if (tcsetattr(opts->p_stdout[1], TCSANOW, &term_attrs) == -1) {
             return PMIX_ERR_PIPE_SETUP_FAILURE;
         }
+#ifdef HAVE_FILENO_UNLOCKED
+        ret = dup2(opts->p_stdout[1], fileno_unlocked(stdout));
+#else
         ret = dup2(opts->p_stdout[1], fileno(stdout));
+#endif
         if (ret < 0) {
             return PMIX_ERR_PIPE_SETUP_FAILURE;
         }
         close(opts->p_stdout[1]);
     } else {
+#ifdef HAVE_FILENO_UNLOCKED
+        if (opts->p_stdout[1] != fileno_unlocked(stdout)) {
+            ret = dup2(opts->p_stdout[1], fileno_unlocked(stdout));
+#else
         if (opts->p_stdout[1] != fileno(stdout)) {
             ret = dup2(opts->p_stdout[1], fileno(stdout));
+#endif
             if (ret < 0) {
                 return PMIX_ERR_PIPE_SETUP_FAILURE;
             }
@@ -178,8 +187,13 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
         }
     }
     if (opts->connect_stdin) {
+#ifdef HAVE_FILENO_UNLOCKED
+        if (opts->p_stdin[0] != fileno_unlocked(stdin)) {
+            ret = dup2(opts->p_stdin[0], fileno_unlocked(stdin));
+#else
         if (opts->p_stdin[0] != fileno(stdin)) {
             ret = dup2(opts->p_stdin[0], fileno(stdin));
+#endif
             if (ret < 0) {
                 return PMIX_ERR_PIPE_SETUP_FAILURE;
             }
@@ -196,8 +210,13 @@ int prte_iof_base_setup_child(prte_iof_base_io_conf_t *opts,
         close(fd);
     }
 
+#ifdef HAVE_FILENO_UNLOCKED
+    if (opts->p_stderr[1] != fileno_unlocked(stderr)) {
+        ret = dup2(opts->p_stderr[1], fileno_unlocked(stderr));
+#else
     if (opts->p_stderr[1] != fileno(stderr)) {
         ret = dup2(opts->p_stderr[1], fileno(stderr));
+#endif
         if (ret < 0) {
             return PMIX_ERR_PIPE_SETUP_FAILURE;
         }
