@@ -36,6 +36,8 @@
 #include "src/util/output.h"
 
 #include "src/mca/base/prte_mca_base_alias.h"
+#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/base.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
 #include "src/runtime/prte_globals.h"
@@ -136,9 +138,6 @@ int prte_finalize(void)
     }
     PMIX_RELEASE(prte_node_pool);
 
-    free(prte_process_info.nodename);
-    prte_process_info.nodename = NULL;
-
     /* Close the general debug stream */
     prte_output_close(prte_debug_output);
 
@@ -148,6 +147,11 @@ int prte_finalize(void)
     if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {
         return rc;
     }
+    (void) prte_mca_base_framework_close(&prte_ess_base_framework);
+    prte_proc_info_finalize();
+
+    prte_output_finalize();
+    prte_mca_base_close();
 
     return PRTE_SUCCESS;
 }

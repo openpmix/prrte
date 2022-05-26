@@ -147,17 +147,9 @@ static int init(void)
 
 static int finalize(void)
 {
-    pmix_list_item_t *item;
-
     /* cleanup the state machines */
-    while (NULL != (item = pmix_list_remove_first(&prte_job_states))) {
-        PMIX_RELEASE(item);
-    }
-    PMIX_DESTRUCT(&prte_job_states);
-    while (NULL != (item = pmix_list_remove_first(&prte_proc_states))) {
-        PMIX_RELEASE(item);
-    }
-    PMIX_DESTRUCT(&prte_proc_states);
+    PMIX_LIST_DESTRUCT(&prte_proc_states);
+    PMIX_LIST_DESTRUCT(&prte_job_states);
 
     return PRTE_SUCCESS;
 }
