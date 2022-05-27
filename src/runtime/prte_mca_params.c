@@ -673,5 +673,8 @@ int prte_register_params(void)
                                PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_enable_ft);
 #endif
 
+    /* pickup the RML params */
+    prte_rml_register();
+
     return PRTE_SUCCESS;
 }
