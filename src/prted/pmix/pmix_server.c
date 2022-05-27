@@ -567,7 +567,7 @@ int pmix_server_init(void)
     int rc;
     void *ilist;
     pmix_data_array_t darray;
-    pmix_info_t *info;
+    pmix_info_t *info, myinf;
     size_t n, ninfo;
     char *tmp;
     pmix_status_t prc;
@@ -621,7 +621,11 @@ int pmix_server_init(void)
      * and for passing to any local clients */
     mytopology.source = "hwloc";
     mytopology.topology = prte_hwloc_topology;
-    PMIX_INFO_LIST_ADD(prc, ilist, PMIX_TOPOLOGY2, &mytopology, PMIX_TOPO);
+    PMIX_INFO_CONSTRUCT(&myinf);
+    PMIX_LOAD_KEY(myinf.key, PMIX_TOPOLOGY2);
+    myinf.value.type = PMIX_TOPO;
+    myinf.value.data.topo = &mytopology;
+    PMIX_INFO_LIST_INSERT(prc, ilist, &myinf);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
         return rc;
@@ -939,7 +943,6 @@ void pmix_server_finalize(void)
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
 
     /* shutdown the local server */
-    PMIx_server_finalize();
     prte_pmix_server_globals.initialized = false;
 }
 
