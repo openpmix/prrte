@@ -292,8 +292,8 @@ static void vm_ready(int fd, short args, void *cbdata)
                     continue;
                 }
                 val = NULL;
-                if (PMIX_SUCCESS != (ret = PMIx_Get(&dmn->name, PMIX_PROC_URI, NULL, 0, &val))
-                    || NULL == val) {
+                if (PMIX_SUCCESS != (ret = PMIx_Get(&dmn->name, PMIX_PROC_URI, NULL, 0, &val)) ||
+                    NULL == val) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_DATA_BUFFER_DESTRUCT(&buf);
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
@@ -977,33 +977,35 @@ static void dvm_notify(int sd, short args, void *cbdata)
         PMIX_PROC_FREE(sig.signature, 1);
     }
 
-    /* now ensure that _all_ daemons know that this job has terminated so even
-     * those that did not participate in it will know to cleanup the resources
-     * they assigned to the job. This is necessary now that the mapping function
-     * has been moved to the backend daemons - otherwise, non-participating daemons
-     * retain the slot assignments on the participating daemons, and then incorrectly
-     * map subsequent jobs thinking those nodes are still "busy" */
-    PMIX_DATA_BUFFER_CREATE(reply);
-    command = PRTE_DAEMON_DVM_CLEANUP_JOB_CMD;
-    rc = PMIx_Data_pack(NULL, reply, &command, 1, PMIX_UINT8);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    if (prte_persistent) {
+        /* now ensure that _all_ daemons know that this job has terminated so even
+         * those that did not participate in it will know to cleanup the resources
+         * they assigned to the job. This is necessary now that the mapping function
+         * has been moved to the backend daemons - otherwise, non-participating daemons
+         * retain the slot assignments on the participating daemons, and then incorrectly
+         * map subsequent jobs thinking those nodes are still "busy" */
+        PMIX_DATA_BUFFER_CREATE(reply);
+        command = PRTE_DAEMON_DVM_CLEANUP_JOB_CMD;
+        rc = PMIx_Data_pack(NULL, reply, &command, 1, PMIX_UINT8);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            return;
+        }
+        rc = PMIx_Data_pack(NULL, reply, &jdata->nspace, 1, PMIX_PROC_NSPACE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(reply);
+            return;
+        }
+        PMIX_PROC_CREATE(sig.signature, 1);
+        PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
+        sig.sz = 1;
+        prte_grpcomm.xcast(&sig, PRTE_RML_TAG_DAEMON, reply);
         PMIX_DATA_BUFFER_RELEASE(reply);
-        return;
+        PMIX_PROC_FREE(sig.signature, 1);
+        PMIX_RELEASE(caddy);
     }
-    rc = PMIx_Data_pack(NULL, reply, &jdata->nspace, 1, PMIX_PROC_NSPACE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(reply);
-        return;
-    }
-    PMIX_PROC_CREATE(sig.signature, 1);
-    PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    sig.sz = 1;
-    prte_grpcomm.xcast(&sig, PRTE_RML_TAG_DAEMON, reply);
-    PMIX_DATA_BUFFER_RELEASE(reply);
-    PMIX_PROC_FREE(sig.signature, 1);
-    PMIX_RELEASE(caddy);
 
     // We are done with our use of job data and have notified the other daemons
     if (notify) {
