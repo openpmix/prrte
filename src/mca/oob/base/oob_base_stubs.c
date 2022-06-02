@@ -65,8 +65,14 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
     /* check if we have this peer in our list */
     pr = prte_oob_base_get_peer(&msg->dst);
     if (NULL == pr) {
+        /* if we are abnormally terminating, or terminating the DVM, then
+         * don't bother looking for it */
+        if (prte_abnormal_term_ordered || prte_never_launched || prte_job_term_ordered) {
+            return;
+        }
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
-                            "%s oob:base:send unknown peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            "%s oob:base:send unknown peer %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(&msg->dst));
         /* for direct launched procs, the URI might be in the database,
          * so check there next - if it is, the peer object will be added
@@ -113,6 +119,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
                         if (NULL == pr) {
                             pr = PMIX_NEW(prte_oob_base_peer_t);
                             PMIX_XFER_PROCID(&pr->name, &msg->dst);
+                            pmix_list_append(&prte_oob_base.peers, &pr->super);
                         }
                         /* mark that this component can reach the peer */
                         pmix_bitmap_set_bit(&pr->addressable, component->idx);

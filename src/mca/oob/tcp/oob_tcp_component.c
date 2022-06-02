@@ -837,6 +837,7 @@ void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
     if (NULL == bpr) {
         bpr = PMIX_NEW(prte_oob_base_peer_t);
         PMIX_XFER_PROCID(&bpr->name, &pop->peer);
+        pmix_list_append(&prte_oob_base.peers, &bpr->super);
     }
     pmix_bitmap_set_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
     bpr->component = &prte_oob_tcp_component.super;

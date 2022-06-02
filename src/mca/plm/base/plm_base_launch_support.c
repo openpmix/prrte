@@ -1417,6 +1417,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         PRTE_FLAG_SET(daemon, PRTE_PROC_FLAG_ALIVE);
         /* unload its contact info */
         PMIX_VALUE_CONSTRUCT(&cnctinfo);
+        cnctinfo.type = PMIX_STRING;
         idx = 1;
         ret = PMIx_Data_unpack(NULL, buffer, &cnctinfo.data.string, &idx, PMIX_STRING);
         if (PMIX_SUCCESS != ret) {
