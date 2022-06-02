@@ -1247,6 +1247,7 @@ static void clean_abort(int fd, short flags, void *arg)
      * so need to tell them that!
      */
     prte_execute_quiet = true;
+    prte_abnormal_term_ordered = true;
     /* We are in an event handler; the job completed procedure
      will delete the signal handler that is currently running
      (which is a Bad Thing), so we can't call it directly.
