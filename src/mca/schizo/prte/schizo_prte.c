@@ -477,6 +477,12 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     rc = pmix_cmd_line_parse(argv, shorts, myoptions, NULL,
                              results, helpfile);
     if (PMIX_SUCCESS != rc) {
+        if (PMIX_OPERATION_SUCCEEDED == rc) {
+            /* pmix cmd line interpreter output result
+             * successfully - usually means version or
+             * some other stock output was generated */
+            return PRTE_OPERATION_SUCCEEDED;
+        }
         rc = prte_pmix_convert_status(rc);
         return rc;
     }

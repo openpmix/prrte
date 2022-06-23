@@ -288,11 +288,12 @@ int main(int argc, char *argv[])
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
     ret = schizo->parse_cli(pargv, &results, PMIX_CLI_SILENT);
     if (PRTE_SUCCESS != ret) {
+        if (PRTE_OPERATION_SUCCEEDED == ret) {
+            return PRTE_SUCCESS;
+        }
         if (PRTE_ERR_SILENT != ret) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename,
                     prte_strerror(ret));
-        } else {
-            ret = PRTE_SUCCESS;  // printed version or help
         }
         return ret;
     }
