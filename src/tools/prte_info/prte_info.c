@@ -145,6 +145,9 @@ int main(int argc, char *argv[])
     ret = schizo->parse_cli(argv, &prte_info_cmd_line, PMIX_CLI_SILENT);
     if (PRTE_SUCCESS != ret) {
         PMIX_DESTRUCT(&prte_info_cmd_line);
+        if (PRTE_OPERATION_SUCCEEDED == rc) {
+            return PRTE_SUCCESS;
+        }
         if (PRTE_ERR_SILENT != ret) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         }

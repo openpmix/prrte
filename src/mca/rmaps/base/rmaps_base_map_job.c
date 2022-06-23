@@ -892,6 +892,7 @@ static int map_colocate(prte_job_t *jdata,
             }
         }
     }
+    ret = PRTE_SUCCESS;
 
 done:
     // ensure all the nodes are marked as not mapped
