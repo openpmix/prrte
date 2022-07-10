@@ -1009,6 +1009,18 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     PMIX_RELEASE(md);
 }
 
+static int compare_pmix_proc(const void *a, const void *b)
+{
+    const pmix_proc_t *proc_a = (pmix_proc_t *)a;
+    const pmix_proc_t *proc_b = (pmix_proc_t *)b;
+
+    int nspace_dif = strncmp(proc_a->nspace, proc_b->nspace, PMIX_MAX_NSLEN);
+    if (nspace_dif != 0)
+        return nspace_dif;
+
+    return proc_a->rank - proc_b->rank;
+}
+
 static void _cnct(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
@@ -1142,6 +1154,9 @@ static void _cnct(int sd, short args, void *cbdata)
     md->sig->sz = cd->nprocs;
     md->sig->signature = (pmix_proc_t *) malloc(md->sig->sz * sizeof(pmix_proc_t));
     memcpy(md->sig->signature, cd->procs, md->sig->sz * sizeof(pmix_proc_t));
+    /* different process may have the procs in different order, so sort md->sig->signature
+     * by pmix_proc_t to make it consistent accross processes */
+    qsort(md->sig->signature, md->sig->sz, sizeof(pmix_proc_t), compare_pmix_proc);
     md->opcbfunc = cd->cbfunc;
     md->cbdata = cd->cbdata;
 
