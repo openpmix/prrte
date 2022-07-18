@@ -86,7 +86,8 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
                 pr = prte_oob_base_get_peer(&msg->dst);
                 if (NULL == pr) {
                     /* that is just plain wrong */
-                    prte_output_verbose(5, prte_oob_base_framework.framework_output,
+                 //   prte_output_verbose(5, prte_oob_base_framework.framework_output,
+                    prte_output(0,
                                         "%s oob:base:send addressee unknown %s",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&msg->dst));
@@ -295,7 +296,8 @@ static void process_uri(char *uri)
     prte_oob_base_peer_t *pr;
 
     prte_output_verbose(5, prte_oob_base_framework.framework_output,
-                        "%s:set_addr processing uri %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), uri);
+                        "%s:set_addr processing uri %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), uri);
 
     /* find the first semi-colon in the string */
     cptr = strchr(uri, ';');
@@ -317,7 +319,8 @@ static void process_uri(char *uri)
      * know our own contact info
      */
     if (PMIX_CHECK_PROCID(&peer, PRTE_PROC_MY_NAME)) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+       // prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        prte_output(0,
                             "%s:set_addr peer %s is me", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(&peer));
         return;
@@ -377,5 +380,6 @@ prte_oob_base_peer_t *prte_oob_base_get_peer(const pmix_proc_t *pr)
             return peer;
         }
     }
+    prte_output(0, "OOB_BASE_GET_PEER %s NOT FOUND", PRTE_NAME_PRINT(pr));
     return NULL;
 }
