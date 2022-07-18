@@ -85,8 +85,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
                 pr = process_uri(uri);
                 if (NULL == pr) {
                     /* that is just plain wrong */
-                 //   prte_output_verbose(5, prte_oob_base_framework.framework_output,
-                    prte_output(0,
+                    prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                         "%s oob:base:send addressee unknown %s",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&msg->dst));
@@ -95,7 +94,6 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
                     PRTE_RML_SEND_COMPLETE(msg);
                     return;
                 }
-                prte_output(0, "MSGDST %s PRNAME %s", PRTE_NAME_PRINT(&msg->dst), PRTE_NAME_PRINT(&pr->name));
             } else {
                 PRTE_ERROR_LOG(PRTE_ERR_ADDRESSEE_UNKNOWN);
                 msg->status = PRTE_ERR_ADDRESSEE_UNKNOWN;
@@ -295,8 +293,7 @@ static prte_oob_base_peer_t* process_uri(char *uri)
     char **uris = NULL;
     prte_oob_base_peer_t *pr;
 
-  //  prte_output_verbose(5, prte_oob_base_framework.framework_output,
-    prte_output(0,
+    prte_output_verbose(5, prte_oob_base_framework.framework_output,
                         "%s:set_addr processing uri %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), uri);
 
@@ -312,7 +309,6 @@ static prte_oob_base_peer_t* process_uri(char *uri)
     }
     *cptr = '\0';
     cptr++;
-    prte_output(0, "PROC %s URI %s", uri, cptr);
     /* the first field is the process name, so convert it */
     prte_util_convert_string_to_process_name(&peer, uri);
 
@@ -320,8 +316,7 @@ static prte_oob_base_peer_t* process_uri(char *uri)
      * know our own contact info
      */
     if (PMIX_CHECK_PROCID(&peer, PRTE_PROC_MY_NAME)) {
-       // prte_output_verbose(5, prte_oob_base_framework.framework_output,
-        prte_output(0,
+        prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s:set_addr peer %s is me",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(&peer));
@@ -383,6 +378,5 @@ prte_oob_base_peer_t *prte_oob_base_get_peer(const pmix_proc_t *pr)
             return peer;
         }
     }
-    prte_output(0, "OOB_BASE_GET_PEER %s NOT FOUND", PRTE_NAME_PRINT(pr));
     return NULL;
 }
