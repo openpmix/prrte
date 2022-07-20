@@ -1245,5 +1245,5 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client, pmix_alloc_directi
                                    pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
     /* PRTE currently has no way of supporting allocation requests */
-    return PRTE_ERR_NOT_SUPPORTED;
+    return PMIX_ERR_NOT_SUPPORTED;
 }
