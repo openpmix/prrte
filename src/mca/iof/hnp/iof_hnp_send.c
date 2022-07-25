@@ -42,7 +42,9 @@
 
 #include "iof_hnp.h"
 
-int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host, pmix_proc_t *target, prte_iof_tag_t tag,
+int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
+                                       const pmix_proc_t *target,
+                                       prte_iof_tag_t tag,
                                        unsigned char *data, int numbytes)
 {
     pmix_data_buffer_t *buf;
@@ -75,7 +77,7 @@ int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host, pmix_proc_t *target, p
      * recipient (if the tag is stdin and we are sending to a daemon),
      * or the source (if we are sending to anyone else)
      */
-    rc = PMIx_Data_pack(NULL, buf, target, 1, PMIX_PROC);
+    rc = PMIx_Data_pack(NULL, buf, (void*)target, 1, PMIX_PROC);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);

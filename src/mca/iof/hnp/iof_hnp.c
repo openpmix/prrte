@@ -191,6 +191,7 @@ SETUP:
  */
 static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
 {
+    pmix_proc_t p;
     prte_iof_proc_t *proct;
     int rc;
 
@@ -200,8 +201,21 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
     }
 
     PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
-                         "%s iof:hnp pushing stdin for process %s (size %zu)",
+                         "%s iof:hnp pushing stdin to process %s (size %zu)",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(dst_name), sz));
+
+    /* if this is a wildcard name, then we have to broadcast this
+     * to all daemons */
+    if (PMIX_RANK_WILDCARD == dst_name->rank) {
+        PMIX_LOAD_PROCID(&p, PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
+        rc = prte_iof_hnp_send_data_to_endpoint(&p, dst_name,
+                                                PRTE_IOF_STDIN,
+                                                data, sz);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+            return rc;
+        }
+    }
 
     /* do we already have this process in our list? */
     PMIX_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
@@ -214,7 +228,7 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
             }
 
             /* if the daemon is me, then this is a local sink */
-            if (PMIX_CHECK_PROCID(PRTE_PROC_MY_NAME, &proct->stdinev->daemon)) {
+            if (proct->stdinev->daemon.rank == PRTE_PROC_MY_NAME->rank) {
                 PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                      "%s read %d bytes from stdin - writing to %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) sz,
@@ -248,10 +262,11 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
                  * sent - this will tell the daemon to close
                  * the fd for stdin to that proc
                  */
-                if (PRTE_SUCCESS
-                    != (rc = prte_iof_hnp_send_data_to_endpoint(&proct->stdinev->daemon,
-                                                                &proct->stdinev->name, PRTE_IOF_STDIN, data,
-                                                                sz))) {
+                rc = prte_iof_hnp_send_data_to_endpoint(&proct->stdinev->daemon,
+                                                        &proct->stdinev->name,
+                                                        PRTE_IOF_STDIN,
+                                                        data, sz);
+                if (PRTE_SUCCESS != rc) {
                     /* if the addressee is unknown, remove the sink from the list */
                     if (PRTE_ERR_ADDRESSEE_UNKNOWN == rc) {
                         PMIX_RELEASE(proct->stdinev);
