@@ -79,7 +79,9 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata);
 void prte_iof_hnp_stdin_cb(int fd, short event, void *cbdata);
 bool prte_iof_hnp_stdin_check(int fd);
 
-int prte_iof_hnp_send_data_to_endpoint(pmix_proc_t *host, pmix_proc_t *target, prte_iof_tag_t tag,
+int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
+                                       const pmix_proc_t *target,
+                                       prte_iof_tag_t tag,
                                        unsigned char *data, int numbytes);
 
 END_C_DECLS
