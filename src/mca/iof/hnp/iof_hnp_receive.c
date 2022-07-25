@@ -89,22 +89,6 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         goto CLEAN_RETURN;
     }
 
-    if (PRTE_IOF_XON & stream) {
-        /* re-start the stdin read event */
-        if (NULL != prte_iof_hnp_component.stdinev && !prte_job_term_ordered
-            && !prte_iof_hnp_component.stdinev->active) {
-            PRTE_IOF_READ_ACTIVATE(prte_iof_hnp_component.stdinev);
-        }
-        goto CLEAN_RETURN;
-    } else if (PRTE_IOF_XOFF & stream) {
-        /* stop the stdin read event */
-        if (NULL != prte_iof_hnp_component.stdinev && !prte_iof_hnp_component.stdinev->active) {
-            prte_event_del(prte_iof_hnp_component.stdinev->ev);
-            prte_iof_hnp_component.stdinev->active = false;
-        }
-        goto CLEAN_RETURN;
-    }
-
     /* get name of the process whose io we are discussing */
     count = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &origin, &count, PMIX_PROC);

@@ -64,7 +64,6 @@ BEGIN_C_DECLS
 struct prte_iof_hnp_component_t {
     prte_iof_base_component_t super;
     pmix_list_t procs;
-    prte_iof_read_event_t *stdinev;
     prte_event_t stdinsig;
 };
 typedef struct prte_iof_hnp_component_t prte_iof_hnp_component_t;
