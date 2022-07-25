@@ -78,9 +78,7 @@ static int finalize(void);
 /* The API's in this module are solely used to support LOCAL
  * procs - i.e., procs that are co-located to the daemon. Output
  * from local procs is automatically sent to the HNP for output
- * and possible forwarding to other requestors. The HNP automatically
- * determines and wires up the stdin configuration, so we don't
- * have to do anything here.
+ * and possible forwarding to other requestors.
  */
 
 prte_iof_base_module_t prte_iof_prted_module = {

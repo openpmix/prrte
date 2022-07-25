@@ -84,15 +84,12 @@ int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
         return rc;
     }
 
-    /* if data is NULL, then we are done */
-    if (NULL != data) {
-        /* pack the data - if numbytes is zero, we will pack zero bytes */
-        rc = PMIx_Data_pack(NULL, buf, data, numbytes, PMIX_BYTE);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_DATA_BUFFER_RELEASE(buf);
-            return rc;
-        }
+    /* pack the data - if numbytes is zero, we will pack zero bytes */
+    rc = PMIx_Data_pack(NULL, buf, data, numbytes, PMIX_BYTE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return rc;
     }
 
     /* if the target is wildcard, then this needs to go to everyone - xcast it */

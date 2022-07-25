@@ -61,6 +61,10 @@ int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
          PRTE_NAME_PRINT(name), (NULL == channel) ? -1 : channel->fd));
 
+    if (NULL == channel) {
+        return 0;
+    }
+
     /* setup output object */
     output = PMIX_NEW(prte_iof_write_output_t);
 

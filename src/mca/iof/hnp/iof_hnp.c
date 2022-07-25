@@ -102,7 +102,6 @@ static int init(void)
                   PRTE_RML_PERSISTENT, prte_iof_hnp_recv, NULL);
 
     PMIX_CONSTRUCT(&prte_iof_hnp_component.procs, pmix_list_t);
-    prte_iof_hnp_component.stdinev = NULL;
 
     return PRTE_SUCCESS;
 }
@@ -137,12 +136,6 @@ static int hnp_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int fd)
     pmix_list_append(&prte_iof_hnp_component.procs, &proct->super);
 
 SETUP:
-    /* if we are pushing stdin, then ignore it - we
-     * get it from the "pull" */
-    if (PRTE_IOF_STDIN & src_tag) {
-        return PRTE_SUCCESS;
-    }
-
     /* for stdout/stderr, set the file descriptor to non-blocking - do this before we setup
      * and activate the read event in case it fires right away
      */
@@ -204,8 +197,8 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
                          "%s iof:hnp pushing stdin to process %s (size %zu)",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(dst_name), sz));
 
-    /* if this is a wildcard name, then we have to broadcast this
-     * to all daemons */
+    /* if I am the DVM master and this is a wildcard name, then we have to
+     * broadcast this to all daemons */
     if (PMIX_RANK_WILDCARD == dst_name->rank) {
         PMIX_LOAD_PROCID(&p, PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
         rc = prte_iof_hnp_send_data_to_endpoint(&p, dst_name,
