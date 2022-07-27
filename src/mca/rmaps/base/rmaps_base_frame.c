@@ -448,9 +448,17 @@ int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
                                 __LINE__);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
         } else {
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps[%d] mapping not given - using bycore", __LINE__);
-            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
+           if(PRTE_BIND_TO_NONE != PRTE_GET_BINDING_POLICY(jdata->map->binding)) {
+               prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                   "mca:rmaps[%d] mapping not given - using bycore", __LINE__);
+               PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
+           }
+           else {
+               prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                   "mca:rmaps[%d] mapping not given - using byslot (bind = NONE)",
+                                   __LINE__);
+               PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
+           }
         }
     } else {
         /* if NUMA is available, map by that */
