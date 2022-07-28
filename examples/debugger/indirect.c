@@ -101,6 +101,13 @@ static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, voi
     DEBUG_WAKEUP_THREAD(lock);
 }
 
+static void opcbfunc(pmix_status_t status, void *cbdata)
+{
+    mylock_t *lock = (mylock_t *) cbdata;
+    lock->status = status;
+    DEBUG_WAKEUP_THREAD(lock);
+}
+
 static void spawn_cbfunc(size_t evhdlr_registration_id, pmix_status_t status,
                          const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
                          pmix_info_t results[], size_t nresults,
@@ -128,7 +135,7 @@ static void spawn_cbfunc(size_t evhdlr_registration_id, pmix_status_t status,
 int main(int argc, char **argv)
 {
     pmix_status_t rc;
-    pmix_info_t *info;
+    pmix_info_t *info, iofinfo;
     pmix_app_t *app;
     size_t ninfo, napps;
     char *requested_launcher;
@@ -373,6 +380,26 @@ int main(int argc, char **argv)
         goto done;
     }
     printf("APPLICATION HAS LAUNCHED: %s\n", (char *) appnspace);
+
+    /* we want to forward our stdin to the launcher we
+     * started - it will know what to do with its stdin */
+    PMIX_LOAD_PROCID(&proc, (char*)clientspace, PMIX_RANK_WILDCARD);
+    DEBUG_CONSTRUCT_LOCK(&mylock);
+    PMIX_INFO_LOAD(&iofinfo, PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
+    rc = PMIx_IOF_push(&proc, 1, NULL, &iofinfo, 1, opcbfunc, &mylock);
+    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
+        fprintf(stderr, "IOF push of stdin failed: %s\n", PMIx_Error_string(rc));
+        DEBUG_DESTRUCT_LOCK(&mylock);
+        goto done;
+    } else if (PMIX_SUCCESS == rc) {
+        DEBUG_WAIT_THREAD(&mylock);
+        if (PMIX_SUCCESS != mylock.status) {
+            fprintf(stderr, "IOF push of stdin failed: %s\n", PMIx_Error_string(rc));
+            DEBUG_DESTRUCT_LOCK(&mylock);
+            goto done;
+        }
+    }
+    DEBUG_DESTRUCT_LOCK(&mylock);
 
     /* setup the debugger */
     mydata = (myquery_data_t *) malloc(sizeof(myquery_data_t));
