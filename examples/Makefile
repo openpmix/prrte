@@ -43,6 +43,7 @@ EXAMPLES = \
 	debugger/attach \
 	debugger/daemon \
 	debugger/hello \
+	debugger/stdincheck \
 	dmodex \
 	dynamic \
 	fault \
