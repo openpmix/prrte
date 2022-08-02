@@ -57,7 +57,41 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
     pmix_rank_t rank, lrank, apprank;
 
     if (options->userranked) {
-        /* ranking has already been done */
+        /* ranking has already been done, but we still need to
+         * compute the local and app ranks (node rank is computed
+         * on-the-fly during mapping) */
+        apprank = 0;
+        for (n=0; n < jdata->map->nodes->size; n++) {
+            node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
+            if (NULL == node) {
+                continue;
+            }
+            lrank = 0;
+            for (m=0; m < node->procs->size; m++) {
+                proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
+                if (NULL == proc) {
+                    continue;
+                }
+                if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
+                    continue;
+                }
+                if (app->idx != proc->app_idx) {
+                    continue;
+                }
+                proc->name.rank = rank;
+                proc->local_rank = lrank;
+                proc->app_rank = apprank;
+                PMIX_RETAIN(proc);
+                rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_RELEASE(proc);
+                    return rc;
+                }
+                ++rank;
+                ++lrank;
+                ++apprank;
+            }
+        }
         return PRTE_SUCCESS;
     }
 
