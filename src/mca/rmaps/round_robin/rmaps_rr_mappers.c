@@ -46,12 +46,13 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
                          pmix_rank_t num_procs,
                          prte_rmaps_options_t *options)
 {
-    int i, rc, nprocs_mapped;
+    int i, rc, nprocs_mapped, ncpus;
     prte_node_t *node, *nd;
     int extra_procs_to_assign = 0, nxtra_nodes = 0;
     float balance;
     prte_proc_t *proc;
     bool second_pass = false;
+    prte_binding_policy_t savebind = options->bind;
 
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by slot for job %s slots %d num_procs %lu",
@@ -102,8 +103,21 @@ pass:
             }
         }
 
+        /* if the number of procs is greater than the number of CPUs
+         * on this node, but less or equal to the number of slots,
+         * then we are not oversubscribed but we are overloaded. If
+         * the user didn't specify a required binding, then we set
+         * the binding policy to do-not-bind for this node */
+        ncpus = prte_rmaps_base_get_ncpus(node, NULL, options);
+        if (options->nprocs > ncpus &&
+            options->nprocs <= node->slots_available &&
+            !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+            options->bind = PRTE_BIND_TO_NONE;
+        }
+
         if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, NULL, options)) {
             rc = PRTE_ERR_OUT_OF_RESOURCE;
+            options->bind = savebind;
             continue;
         }
 
@@ -132,6 +146,7 @@ pass:
             rc = prte_rmaps_base_compute_vpids(jdata, app, options);
             return rc;
         }
+        options->bind = savebind;
     }
 
     if (second_pass) {
@@ -182,11 +197,12 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
                          pmix_rank_t num_procs,
                          prte_rmaps_options_t *options)
 {
-    int rc, j, nprocs_mapped, nnode;
+    int rc, j, nprocs_mapped, nnode, ncpus;
     prte_node_t *node, *nd;
     float balance;
     bool second_pass = false;
     prte_proc_t *proc;
+    prte_binding_policy_t savebind = options->bind;
 
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by node for job %s app %d slots %d num_procs %lu",
@@ -225,8 +241,21 @@ pass:
     {
         prte_rmaps_base_get_cpuset(jdata, node, options);
 
+        /* if the number of procs is greater than the number of CPUs
+         * on this node, but less or equal to the number of slots,
+         * then we are not oversubscribed but we are overloaded. If
+         * the user didn't specify a required binding, then we set
+         * the binding policy to do-not-bind for this node */
+        ncpus = prte_rmaps_base_get_ncpus(node, NULL, options);
+        if (options->nprocs > ncpus &&
+            options->nprocs <= node->slots_available &&
+            !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+            options->bind = PRTE_BIND_TO_NONE;
+        }
+
         if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, NULL, options)) {
             rc = PRTE_ERR_OUT_OF_RESOURCE;
+            options->bind = savebind;
             continue;
         }
 
@@ -268,6 +297,7 @@ pass:
             rc = prte_rmaps_base_compute_vpids(jdata, app, options);
             return rc;
         }
+        options->bind = savebind;
     }
 
     if (second_pass) {
@@ -301,11 +331,12 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
                         pmix_list_t *node_list, int32_t num_slots,
                         pmix_rank_t num_procs, prte_rmaps_options_t *options)
 {
-    int i, rc, nprocs_mapped;
+    int i, rc, nprocs_mapped, ncpus;
     prte_node_t *node, *nd;
     prte_proc_t *proc;
     char **tmp;
     int ntomap;
+    prte_binding_policy_t savebind = options->bind;
 
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by cpu for job %s slots %d num_procs %lu",
@@ -345,8 +376,21 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
             }
         }
 
+        /* if the number of procs is greater than the number of CPUs
+         * on this node, but less or equal to the number of slots,
+         * then we are not oversubscribed but we are overloaded. If
+         * the user didn't specify a required binding, then we set
+         * the binding policy to do-not-bind for this node */
+        ncpus = prte_rmaps_base_get_ncpus(node, NULL, options);
+        if (options->nprocs > ncpus &&
+            options->nprocs <= node->slots_available &&
+            !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+            options->bind = PRTE_BIND_TO_NONE;
+        }
+
         if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, NULL, options)) {
             rc = PRTE_ERR_OUT_OF_RESOURCE;
+            options->bind = savebind;
             continue;
         }
 
@@ -400,7 +444,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
     int i, rc, nprocs_mapped, nprocs;
     prte_node_t *node, *nd;
     int extra_procs_to_assign = 0, nxtra_nodes = 0;
-    int navg, nxtra_objs = 0;
+    int navg, nxtra_objs = 0, ncpus;
     float balance;
     prte_proc_t *proc;
     bool second_pass = false;
@@ -408,6 +452,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
     bool nodefull;
     hwloc_obj_t obj = NULL;
     unsigned j, total_nobjs, nobjs;
+    prte_binding_policy_t savebind = options->bind;
 
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by %s for job %s slots %d num_procs %lu",
@@ -537,6 +582,18 @@ pass:
         prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: assigning nprocs %d", nprocs);
 
+        /* if the number of procs is greater than the number of CPUs
+         * on this node, but less or equal to the number of slots,
+         * then we are not oversubscribed but we are overloaded. If
+         * the user didn't specify a required binding, then we set
+         * the binding policy to do-not-bind for this node */
+        ncpus = prte_rmaps_base_get_ncpus(node, NULL, options);
+        if (nprocs > ncpus &&
+            nprocs <= node->slots_available &&
+            !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+            options->bind = PRTE_BIND_TO_NONE;
+        }
+
         nodefull = false;
         if (span) {
             /* if we are mapping spanned, then we loop over
@@ -624,6 +681,7 @@ pass:
             rc = prte_rmaps_base_compute_vpids(jdata, app, options);
             return rc;
         }
+        options->bind = savebind;
     }
 
     if (second_pass) {

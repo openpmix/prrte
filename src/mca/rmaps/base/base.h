@@ -127,6 +127,10 @@ PRTE_EXPORT int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec
 
 PRTE_EXPORT void prte_rmaps_base_display_map(prte_job_t *jdata);
 
+PRTE_EXPORT int prte_rmaps_base_get_ncpus(prte_node_t *node,
+                                          hwloc_obj_t obj,
+                                          prte_rmaps_options_t *options);
+
 PRTE_EXPORT bool prte_rmaps_base_check_avail(prte_job_t *jdata,
                                              prte_app_context_t *app,
                                              prte_node_t *node,
