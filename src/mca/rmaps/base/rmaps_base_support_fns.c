@@ -652,6 +652,48 @@ void prte_rmaps_base_get_starting_point(pmix_list_t *node_list, prte_job_t *jdat
     return;
 }
 
+int prte_rmaps_base_get_ncpus(prte_node_t *node,
+                              hwloc_obj_t obj,
+                              prte_rmaps_options_t *options)
+{
+    int ncpus;
+
+#if HWLOC_API_VERSION < 0x20000
+    hwloc_obj_t root;
+    root = hwloc_get_root_obj(node->topology->topo);
+    if (NULL == options->job_cpuset) {
+        hwloc_bitmap_copy(prte_rmaps_base.available, root->allowed_cpuset);
+    } else {
+        hwloc_bitmap_and(prte_rmaps_base.available, root->allowed_cpuset, options->job_cpuset);
+    }
+    if (NULL != obj) {
+        hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, obj->allowed_cpuset);
+    }
+#else
+    if (NULL == options->job_cpuset) {
+        hwloc_bitmap_copy(prte_rmaps_base.available, hwloc_topology_get_allowed_cpuset(node->topology->topo));
+    } else {
+        hwloc_bitmap_and(prte_rmaps_base.available, hwloc_topology_get_allowed_cpuset(node->topology->topo), options->job_cpuset);
+    }
+    if (NULL != obj) {
+        hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, obj->cpuset);
+    }
+#endif
+    if (options->use_hwthreads) {
+        ncpus = hwloc_bitmap_weight(prte_rmaps_base.available);
+    } else {
+        /* if we are treating cores as cpus, then we really
+         * want to know how many cores are in this object.
+         * hwloc sets a bit for each "pu", so we can't just
+         * count bits in this case as there may be more than
+         * one hwthread/core. Instead, find the number of cores
+         * under the object
+         */
+        ncpus = hwloc_get_nbobjs_inside_cpuset_by_type(node->topology->topo, prte_rmaps_base.available, HWLOC_OBJ_CORE);
+    }
+    return ncpus;
+}
+
 bool prte_rmaps_base_check_avail(prte_job_t *jdata,
                                  prte_app_context_t *app,
                                  prte_node_t *node,
@@ -659,8 +701,6 @@ bool prte_rmaps_base_check_avail(prte_job_t *jdata,
                                  hwloc_obj_t obj,
                                  prte_rmaps_options_t *options)
 {
-    hwloc_obj_t root;
-    hwloc_cpuset_t available;
     int nprocs;
     bool avail = false;
 
@@ -695,41 +735,9 @@ bool prte_rmaps_base_check_avail(prte_job_t *jdata,
         goto done;
     }
 
-#if HWLOC_API_VERSION < 0x20000
-    root = hwloc_get_root_obj(node->topology->topo);
-    if (NULL == options->job_cpuset) {
-        available = hwloc_bitmap_dup(root->allowed_cpuset);
-    } else {
-        available = hwloc_bitmap_alloc();
-        hwloc_bitmap_and(available, root->allowed_cpuset, options->job_cpuset);
-    }
-    if (NULL != obj) {
-        hwloc_bitmap_and(available, available, obj->allowed_cpuset);
-    }
-#else
-    if (NULL == options->job_cpuset) {
-        available = hwloc_bitmap_dup(hwloc_topology_get_allowed_cpuset(node->topology->topo));
-    } else {
-        available = hwloc_bitmap_alloc();
-        hwloc_bitmap_and(available, hwloc_topology_get_allowed_cpuset(node->topology->topo), options->job_cpuset);
-    }
-    if (NULL != obj) {
-        hwloc_bitmap_and(available, available, obj->cpuset);
-    }
-#endif
-    if (options->use_hwthreads) {
-        options->ncpus = hwloc_bitmap_weight(available);
-    } else {
-        /* if we are treating cores as cpus, then we really
-         * want to know how many cores are in this object.
-         * hwloc sets a bit for each "pu", so we can't just
-         * count bits in this case as there may be more than
-         * one hwthread/core. Instead, find the number of cores
-         * under the object
-         */
-        options->ncpus = hwloc_get_nbobjs_inside_cpuset_by_type(node->topology->topo, available, HWLOC_OBJ_CORE);
-    }
-    options->target = available;
+    options->ncpus = prte_rmaps_base_get_ncpus(node, obj, options);
+    /* the available cpus are in the scratch location */
+    options->target = hwloc_bitmap_dup(prte_rmaps_base.available);
 
     nprocs = options->ncpus / options->cpus_per_rank;
     if (options->nprocs < nprocs) {
