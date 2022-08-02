@@ -334,6 +334,8 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
             }
             jdata->num_procs++;
         }
+        /* compute local/app ranks */
+        rc = prte_rmaps_base_compute_vpids(jdata, app, options);
         /* update the starting point */
         vpid_start += app->num_procs;
         /* cleanup the node list - it can differ from one app_context

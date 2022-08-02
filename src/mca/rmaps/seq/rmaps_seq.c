@@ -369,6 +369,8 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             /* move to next node */
             sq = (seq_node_t *) pmix_list_get_next(&sq->super);
         }
+        /* compute local/app ranks */
+        rc = prte_rmaps_base_compute_vpids(jdata, app, options);
 
         /** track the total number of processes we mapped */
         jdata->num_procs += app->num_procs;
@@ -381,26 +383,6 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
         }
         if (NULL != hosts) {
             free(hosts);
-        }
-    }
-
-    /* compute local ranks */
-    for (i=0; i < jdata->map->nodes->size; i++) {
-        node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, i);
-        if (NULL == node) {
-            continue;
-        }
-        vpid = 0;
-        for (n=0; n < node->procs->size; n++) {
-            proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, n);
-            if (NULL == proc) {
-                continue;
-            }
-            if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
-                continue;
-            }
-            proc->local_rank = vpid;
-            ++vpid;
         }
     }
 
