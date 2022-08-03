@@ -1606,6 +1606,10 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             }
             /* process any cached daemons */
             while (NULL != (dptr = (prte_proc_t*)pmix_list_remove_first(&prte_plm_globals.daemon_cache))) {
+               PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                                    "%s plm:base:prted_daemon_cback processing cached daemon %s",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                   PRTE_NAME_PRINT(&dptr->name)));
                 if (0 == strcmp(dptr->node->topology->sig, sig)) {
                     dptr->node->available = prte_hwloc_base_filter_cpus(topo);
                     jdatorted->num_reported++;
@@ -1736,15 +1740,27 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         if (!found) {
             /* nope - save the signature */
             PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                 "%s NEW TOPOLOGY - ADDING",
+                                 "%s NEW TOPOLOGY - ADDING SIGNATURE",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             t = PMIX_NEW(prte_topology_t);
             t->sig = sig;
             t->index = pmix_pointer_array_add(prte_node_topologies, t);
             daemon->node->topology = t;
-            /* if daemon1 has not reported, then cache this daemon
-             * for later processing */
-            if (!daemon1_has_reported) {
+           if (NULL != topo) {
+                t->topo = topo;
+                /* update the node's available processors */
+                if (NULL != daemon->node->available) {
+                    hwloc_bitmap_free(daemon->node->available);
+                }
+                daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
+                goto CLEANUP;
+            } else if (!daemon1_has_reported) {
+                /* if daemon1 has not reported, then cache this daemon
+                 * for later processing */
+                PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                                     "%s CACHING DAEMON %s",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                    PRTE_NAME_PRINT(&dname)));
                 pmix_list_append(&prte_plm_globals.daemon_cache, &daemon->super);
             } else {
                 /* request the complete topology from that node */
