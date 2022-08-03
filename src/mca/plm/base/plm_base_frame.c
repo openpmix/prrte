@@ -15,7 +15,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -116,6 +116,8 @@ static int prte_plm_base_close(void)
     if (NULL != prte_plm_globals.base_nspace) {
         free(prte_plm_globals.base_nspace);
     }
+    while (NULL != pmix_list_remove_first(&prte_plm_globals.daemon_cache)); // do not release list items!
+    PMIX_DESTRUCT(&prte_plm_globals.daemon_cache);
 
     return prte_mca_base_framework_components_close(&prte_plm_base_framework, NULL);
 }
@@ -131,6 +133,8 @@ static int prte_plm_base_open(prte_mca_base_open_flag_t flags)
 
     /* default to assigning daemons to nodes at launch */
     prte_plm_globals.daemon_nodes_assigned_at_launch = true;
+
+    PMIX_CONSTRUCT(&prte_plm_globals.daemon_cache, pmix_list_t);
 
     /* Open up all available components */
     return prte_mca_base_framework_components_open(&prte_plm_base_framework, flags);
