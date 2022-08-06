@@ -132,6 +132,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     char **env;
     char *prefix_dir, *tmp;
     pmix_rank_t tgt, *tptr;
+    pmix_value_t pidval = PMIX_VALUE_STATIC_INIT;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
@@ -598,6 +599,13 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                 goto CLEANUP;
             }
             proc->pid = pid;
+            pidval.type = PMIX_PID;
+            pidval.data.pid = pid;
+            /* store the PID for later retrieval */
+            rc = PMIx_Store_internal(&proc->name, PMIX_PROC_PID, &pidval);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+            }
             /* unpack the state */
             count = 1;
             rc = PMIx_Data_unpack(NULL, buffer, &state, &count, PMIX_UINT32);
