@@ -84,7 +84,7 @@ typedef uint8_t prte_node_flags_t;
 #define PRTE_NODE_SERIAL_NUMBER (PRTE_NODE_START_KEY + 5) // string - serial number: used if node is a coprocessor
 #define PRTE_NODE_PORT          (PRTE_NODE_START_KEY + 6) // int32 - Alternate port to be passed to plm
 
-#define PRTE_NODE_MAX_KEY 200
+#define PRTE_NODE_MAX_KEY (PRTE_NODE_START_KEY + 100)
 
 /*** JOB FLAGS - included in prte_job_t transmissions ***/
 typedef uint16_t prte_job_flags_t;
@@ -205,8 +205,10 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_COLOCATE_PROCS             (PRTE_JOB_START_KEY +  97) // pmix_data_array_t - colocate this job's procs with the given ones
 #define PRTE_JOB_COLOCATE_NPERPROC          (PRTE_JOB_START_KEY +  98) // uint16_t - number of procs to colocate at each proc
 #define PRTE_JOB_COLOCATE_NPERNODE          (PRTE_JOB_START_KEY +  99) // uint16_t - number of procs to colocate on node of each proc
+#define PRTE_JOB_TAG_OUTPUT_DETAILED        (PRTE_JOB_START_KEY + 100) // bool - include [hostname:pid] in output stream tag
+#define PRTE_JOB_TAG_OUTPUT_FULLNAME        (PRTE_JOB_START_KEY + 101) // bool - use full namespace in output stream tag
 
-#define PRTE_JOB_MAX_KEY 300
+#define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
 /*** PROC FLAGS - never sent anywhere ***/
 typedef uint16_t prte_proc_flags_t;
@@ -240,7 +242,7 @@ typedef uint16_t prte_proc_flags_t;
 #define PRTE_PROC_CGROUP            (PRTE_PROC_START_KEY + 13) // string - name of cgroup this proc shall be assigned to
 #define PRTE_PROC_NBEATS            (PRTE_PROC_START_KEY + 14) // int32 - number of heartbeats in current window
 
-#define PRTE_PROC_MAX_KEY 400
+#define PRTE_PROC_MAX_KEY (PRTE_PROC_START_KEY + 100)
 
 /*** RML ATTRIBUTE keys ***/
 #define PRTE_RML_START_KEY              PRTE_PROC_MAX_KEY
@@ -256,7 +258,9 @@ typedef uint16_t prte_proc_flags_t;
 #define PRTE_RML_PROTOCOL_ATTRIB        (PRTE_RML_START_KEY + 9) // string - comma delimited list of protocols to be considered (e.g., tcp,udp)
 #define PRTE_RML_ROUTED_ATTRIB          (PRTE_RML_START_KEY + 10) // string - comma delimited list of routed modules to be considered
 
-#define PRTE_ATTR_KEY_MAX 1000
+#define PRTE_RML_MAX_KEY (PRTE_RML_START_KEY + 100)
+
+#define PRTE_ATTR_KEY_MAX PRTE_RML_MAX_KEY
 
 /*** FLAG OPS ***/
 #define PRTE_FLAG_SET(p, f)   ((p)->flags |= (f))

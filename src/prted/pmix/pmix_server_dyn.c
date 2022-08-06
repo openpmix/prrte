@@ -571,6 +571,18 @@ static void interim(int sd, short args, void *cbdata)
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, PRTE_ATTR_GLOBAL, &flag,
                                PMIX_BOOL);
 
+            /*** DETAILED OIUTPUT TAG */
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_TAG_DETAILED_OUTPUT)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT_DETAILED,
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
+
+            /*** FULL NAMESPACE IN OUTPUT TAG */
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_TAG_FULLNAME_OUTPUT)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT_FULLNAME,
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
+
             /***   RANK STDOUT   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_IOF_RANK_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);

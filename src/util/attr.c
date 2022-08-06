@@ -475,6 +475,10 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "NUM PROCS TO COLOCATE PER PROC";
         case PRTE_JOB_COLOCATE_NPERNODE:
             return "NUM PROCS TO COLOCATE PER NODE";
+        case PRTE_JOB_TAG_OUTPUT_DETAILED:
+            return "DETAILED OUTPUT TAG";
+        case PRTE_JOB_TAG_OUTPUT_FULLNAME:
+            return "FULL NSPACE IN OUTPUT TAG";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

@@ -859,6 +859,10 @@ int main(int argc, char *argv[])
                 }
                 if (0 == strncasecmp(targv[idx], PRTE_CLI_TAG, strlen(targv[idx]))) {
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
+                } else if (0 == strncasecmp(targv[idx], PRTE_CLI_TAG_DET, strlen(targv[idx]))) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_DETAILED_OUTPUT, NULL, PMIX_BOOL);
+                } else if (0 == strncasecmp(targv[idx], PRTE_CLI_TAG_FULL, strlen(targv[idx]))) {
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_FULLNAME_OUTPUT, NULL, PMIX_BOOL);
                 } else if (0 == strncasecmp(targv[idx], PRTE_CLI_RANK, strlen(targv[idx]))) {
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_RANK_OUTPUT, NULL, PMIX_BOOL);
                 } else if (0 == strncasecmp(targv[idx], PRTE_CLI_TIMESTAMP, strlen(targv[idx]))) {
