@@ -921,6 +921,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     pmix_proc_t pproc;
     pmix_status_t ret;
     char *ptr;
+    pmix_value_t pidval = PMIX_VALUE_STATIC_INIT;
 
     PRTE_HIDE_UNUSED_PARAMS(fd, sd);
 
@@ -1076,7 +1077,16 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         state = PRTE_PROC_STATE_FAILED_TO_START;
         goto errorout;
     }
-
+    if (PRTE_PROC_IS_MASTER) {
+        /* locally store the pid */
+        pidval.type = PMIX_PID;
+        pidval.data.pid = child->pid;
+        /* store the PID for later retrieval */
+        rc = PMIx_Store_internal(&child->name, PMIX_PROC_PID, &pidval);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
+    }
     PRTE_ACTIVATE_PROC_STATE(&child->name, PRTE_PROC_STATE_RUNNING);
     PMIX_RELEASE(cd);
     return;

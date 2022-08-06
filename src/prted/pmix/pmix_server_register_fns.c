@@ -328,6 +328,12 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_TAG_OUTPUT, &flag, PMIX_BOOL);
     }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT_DETAILED, (void**)&fptr, PMIX_BOOL)) {
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_TAG_DETAILED_OUTPUT, &flag, PMIX_BOOL);
+    }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT_FULLNAME, (void**)&fptr, PMIX_BOOL)) {
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_TAG_FULLNAME_OUTPUT, &flag, PMIX_BOOL);
+    }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_RANK_OUTPUT, (void**)&fptr, PMIX_BOOL)) {
         PMIX_INFO_LIST_ADD(ret, info, PMIX_IOF_RANK_OUTPUT, &flag, PMIX_BOOL);
     }
