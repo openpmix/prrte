@@ -181,6 +181,8 @@ BEGIN_C_DECLS
 
 // Output directives
 #define PRTE_CLI_TAG        "tag"
+#define PRTE_CLI_TAG_DET    "tag-detailed"
+#define PRTE_CLI_TAG_FULL   "tag-fullname"
 #define PRTE_CLI_RANK       "rank"
 #define PRTE_CLI_TIMESTAMP  "timestamp"
 #define PRTE_CLI_XML        "xml"
