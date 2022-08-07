@@ -45,8 +45,9 @@ Submit job to the PMIx Reference RTE
 /*****      Output Options       *****/
 
    --output <arg0>                   Comma-delimited list of options that control how output is
-                                     generated.Allowed values: tag, timestamp, xml, merge-stderr-to-stdout,
-                                     dir=DIRNAME, file=filename. The dir option redirects output from
+                                     generated. Allowed values: tag, tag-detailed, tag-fullname,
+                                     timestamp, xml, merge-stderr-to-stdout, dir=DIRNAME,
+                                     file=filename. The dir option redirects output from
                                      application processes into DIRNAME/job/rank/std[out,err,diag]. The file
                                      option redirects output from application processes into filename.rank. In
                                      both cases, the provided name will be converted to an absolute path.
