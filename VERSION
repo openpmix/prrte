@@ -7,15 +7,15 @@
 # Copyright (c) 2017      Los Alamos National Security, LLC.  All rights
 #                         reserved.
 
-# This is the VERSION file for Open MPI, describing the precise
-# version of Open MPI in this distribution.  The various components of
+# This is the VERSION file for PRRTE, describing the precise
+# version of PRRTE in this distribution.  The various components of
 # the version number below are combined to form a single version
 # number string.
 
 # major, minor, and release are generally combined in the form
 # <major>.<minor>.<release>.
 
-major=3
+major=4
 minor=0
 release=0
 
@@ -49,7 +49,7 @@ tarball_version=gitclone
 
 date="Nov 24, 2018"
 
-# The shared library version of each of PSRVR's public libraries.
+# The shared library version of each of PRRTE's public libraries.
 # These versions are maintained in accordance with the "Library
 # Interface Versions" chapter from the GNU Libtool documentation:
 #
@@ -78,12 +78,12 @@ date="Nov 24, 2018"
 # Version numbers are described in the Libtool current:revision:age
 # format.
 
-libprrte_so_version=2:0:0
+libprrte_so_version=4:0:0
 
 # "Common" components install standalone libraries that are run-time
 # linked by one or more components.  So they need to be versioned as
 # well.  Yuck; this somewhat breaks the
 # components-don't-affect-the-build-system abstraction.
 
-libprrte_common_alps_so_version=2:0:0
+libprrte_common_alps_so_version=4:0:0
 
