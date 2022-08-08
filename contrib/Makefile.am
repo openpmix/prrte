@@ -17,6 +17,7 @@
 # Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -32,12 +33,4 @@ EXTRA_DIST = \
 	dist/make_dist_tarball \
 	dist/make-authors.pl \
 	dist/linux/prte.spec \
-	platform/optimized \
-	platform/intel/bend/linux \
-	platform/intel/bend/linux.conf \
-	platform/intel/bend/mac-optimized \
-	platform/intel/bend/mac-optimized.conf \
-	platform/intel/bend/linux-optimized \
-	platform/intel/bend/linux-optimized.conf
-
-dist_prtedata_DATA = openmpi-valgrind.supp
+	platform/optimized
