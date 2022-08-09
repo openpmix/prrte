@@ -19,6 +19,10 @@
 Usage: %s [OPTION]...
 Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
+The following list of command line options are available. Note that
+more detailed help for any option can be obtained by adding that
+option to the help request as "--help <option>".
+
 /*****      General Options      *****/
 
 -h|--help                            This help message
@@ -33,9 +37,8 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
                                      the DVM controller to reduce clutter
    --debug-daemons-file              Enable debugging of any PRRTE daemons used by this application, storing
                                      their verbose output in files
-   --display <arg0>                  Comma-delimited list of options for displaying information about the
-                                     allocation and job. Allowed values: allocation, bind, map, map-devel,
-                                     topo
+   --display <arg0>                  Options for displaying information about the allocation and job. Allowed
+                                     values: allocation, bind, map, map-devel, topo. No qualifiers.
    --get-stack-traces                Get stack traces of all application procs on timeout
    --leave-session-attached          Do not discard stdout/stderr of remote PRRTE daemons
    --report-state-on-timeout         Report all job and process states upon timeout
@@ -53,13 +56,7 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --output <arg0>                   Comma-delimited list of options that control how output is
                                      generated. Allowed values: tag, tag-detailed, tag-fullname,
                                      timestamp, xml, merge-stderr-to-stdout, dir=DIRNAME,
-                                     file=filename. The dir option redirects output from
-                                     application processes into DIRNAME/job/rank/std[out,err,diag]. The file
-                                     option redirects output from application processes into filename.rank. In
-                                     both cases, the provided name will be converted to an absolute path.
-                                     Supported qualifiers include NOCOPY (do not copy the output to the
-                                     stdout/err streams), and RAW (do not buffer the output into complete
-                                     lines, but instead output it as it is received).
+                                     file=FILENAME. Qualifiers: nocopy, raw
    --report-child-jobs-separately    Return the exit status of the primary job only
    --xterm <arg0>                    Create a new xterm window and display output from the specified ranks
                                      there
@@ -75,10 +72,10 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
 /*****      Mapping Options      *****/
 
-   --map-by <arg0>                   Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache
-                                     | l2cache | l3cache | numa (default:np>2) | package | node | seq | dist |
-                                     ppr | rankfile | PE-LIST=a,b (comma-delimited ranges of cpus to use for
-                                     this job)] with supported colon-delimited qualifiers: PE=y (for
+   --map-by <arg0>                   Mapping Policy for job [slot | hwthread | core | l1cache
+                                     | l2cache | l3cache | numa | package | node | seq
+                                     | ppr | rankfile | PE-LIST=a,b (comma-delimited ranges of cpus to use for
+                                     this job)]. Supported colon-delimited qualifiers include PE=y (for
                                      multiple cpus/proc), SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL,
                                      HWTCPUS, CORECPUS, DEVICE(for dist policy), INHERIT, NOINHERIT, DONOTLAUNCH,
                                      FILE=<path> for seq and rankfile options, ORDERED to indicate that the
@@ -101,9 +98,8 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
    --bind-to <arg0>                  Binding policy for job. Allowed values: none, hwthread, core, l1cache,
                                      l2cache, l3cache, numa, package, ("none" is the default when
-                                     oversubscribed, "core" is the default when np<=2, and "numa" is the
-                                     default when np>2). Allowed colon-delimited qualifiers: overload-allowed,
-                                     if-supported
+                                     oversubscribed, "core" is the default otherwise). Allowed qualifiers
+                                     include: overload-allowed, if-supported
 
 
 
@@ -366,24 +362,7 @@ Preload the binary on the remote machine before starting the
 remote process.
 #
 [output]
-Comma-delimited list of options that control how output is generated.
-Allowed values:
-    tag                         Mark each output line with the [job,rank] of the
-                                process that generated it
-    timestamp                   Prefix each output line with a datetime stamp. Note
-                                that the timestamp will be the time when the line
-                                is output by the DVM - not the time when the source
-                                output it
-    xml                         Format all output in XML
-    merge[-stderr-to-stdout]    Merge stderr into stdout
-    dir=DIRNAME                 Redirect output from application processes into files of
-                                the form DIRNAME/job/rank/std[out,err,diag].
-    file=filename               Redirect output from application processes into files of
-                                the form filename.rank.
-
-In both the "dir" and "file" cases, the provided name will be converted to an absolute path.
-Supported qualifiers include NOCOPY (i.e., output shall go only into the files - do not copy
-the output to the stdout/err streams).
+#include#help-schizo-cli#output
 #
 [stream-buffering]
 Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]
@@ -495,13 +474,7 @@ Any object can include qualifiers by adding a colon (:) and any combination of o
 
 #
 [display]
-Comma-delimited list of options for displaying information about the allocation and job.
-Allowed values:
-    allocation
-    bind
-    map
-    map-devel
-    topo
+#include#help-schizo-cli#display
 #
 [do-not-launch]
 Perform all necessary operations to prepare to launch the application, but do not actually

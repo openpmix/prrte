@@ -171,7 +171,7 @@ int prte_hwloc_base_register(void)
                                      "Default policy for binding processes. Allowed values: none, hwthread, core, l1cache, "
                                      "l2cache, "
                                      "l3cache, numa, package, (\"none\" is the default when oversubscribed, \"core\" is "
-                                     "the default when np<=2, and \"numa\" is the default when np>2). Allowed "
+                                     "the default otherwise). Allowed "
                                      "colon-delimited qualifiers: "
                                      "overload-allowed, if-supported",
                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
@@ -549,14 +549,15 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
         ++ptr;
         quals = pmix_argv_split(ptr, ':');
         for (i = 0; NULL != quals[i]; i++) {
-            if (0 == strcasecmp(quals[i], "if-supported")) {
+            len = strlen(quals[i]);
+            if (0 == strncasecmp(quals[i], "if-supported", len)) {
                 tmp |= PRTE_BIND_IF_SUPPORTED;
-            } else if (0 == strcasecmp(quals[i], "overload-allowed")) {
+            } else if (0 == strncasecmp(quals[i], "overload-allowed", len)) {
                 tmp |= (PRTE_BIND_ALLOW_OVERLOAD | PRTE_BIND_OVERLOAD_GIVEN);
-            } else if (0 == strcasecmp(quals[i], "no-overload")) {
+            } else if (0 == strncasecmp(quals[i], "no-overload", len)) {
                 tmp = (tmp & ~PRTE_BIND_ALLOW_OVERLOAD);
                 tmp |= PRTE_BIND_OVERLOAD_GIVEN;
-            } else if (0 == strcasecmp(quals[i], "REPORT")) {
+            } else if (0 == strncasecmp(quals[i], "REPORT", len)) {
                 if (NULL == jdata) {
                     pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                    "binding policy", quals[i]);
