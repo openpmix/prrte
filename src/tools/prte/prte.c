@@ -803,13 +803,13 @@ int main(int argc, char *argv[])
                 if (0 == strncasecmp(targv[idx], PRTE_CLI_ALLOC, strlen(targv[idx]))) {
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":"PRTE_CLI_DISPALLOC, PMIX_STRING);
                 }
-                if (0 == strcasecmp(targv[idx], PRTE_CLI_MAP)) {
+                if (0 == strncasecmp(targv[idx], PRTE_CLI_MAP, strlen(targv[idx]))) {
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":"PRTE_CLI_DISPLAY, PMIX_STRING);
                 }
                 if (0 == strncasecmp(targv[idx], PRTE_CLI_BIND, strlen(targv[idx]))) {
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":"PRTE_CLI_REPORT, PMIX_STRING);
                 }
-                if (0 == strcasecmp(targv[idx], PRTE_CLI_MAPDEV)) {
+                if (0 == strncasecmp(targv[idx], PRTE_CLI_MAPDEV, strlen(targv[idx]))) {
                     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":"PRTE_CLI_DISPDEV, PMIX_STRING);
                 }
                 if (0 == strncasecmp(targv[idx], PRTE_CLI_TOPO, strlen(targv[idx]))) {
@@ -836,12 +836,12 @@ int main(int argc, char *argv[])
                     /* could be multiple qualifiers, so separate them */
                     options = pmix_argv_split(cptr, ',');
                     for (int m=0; NULL != options[m]; m++) {
-                        if (0 == strcasecmp(options[m], PRTE_CLI_NOCOPY)) {
+                        if (0 == strncasecmp(options[m], PRTE_CLI_NOCOPY, strlen(options[m]))) {
                             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
-                        } else if (0 == strcasecmp(options[m], PRTE_CLI_PATTERN)) {
+                        } else if (0 == strncasecmp(options[m], PRTE_CLI_PATTERN, strlen(options[m]))) {
                             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
 #ifdef PMIX_IOF_OUTPUT_RAW
-                        } else if (0 == strcasecmp(options[m], PRTE_CLI_RAW)) {
+                        } else if (0 == strncasecmp(options[m], PRTE_CLI_RAW, strlen(options[m]))) {
                             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
 #endif
                         }

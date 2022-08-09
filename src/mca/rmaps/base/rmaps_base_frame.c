@@ -78,8 +78,8 @@ static int prte_rmaps_base_register(prte_mca_base_register_flag_t flags)
     rmaps_base_mapping_policy = NULL;
     (void) prte_mca_base_var_register(
         "prte", "rmaps", "default", "mapping_policy",
-        "Default mapping Policy [slot | hwthread | core (default:np<=2) | l1cache | "
-        "l2cache | l3cache | numa (default:np>2) | package | node | seq | dist | ppr | "
+        "Default mapping Policy [slot | hwthread | core | l1cache | "
+        "l2cache | l3cache | numa | package | node | seq | dist | ppr | "
         "rankfile | pe-list=a,b (comma-delimited ranges of cpus to use for this job)],"
         " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
         "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
@@ -172,6 +172,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
 {
     char **ck2, *ptr;
     int i;
+    size_t len;
     uint16_t u16;
     bool inherit_given = false;
     bool noinherit_given = false;
@@ -191,11 +192,12 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
 
     ck2 = pmix_argv_split(ck, ':');
     for (i = 0; NULL != ck2[i]; i++) {
-        if (0 == strcasecmp(ck2[i], "SPAN")) {
+        len = strlen(ck2[i]);
+        if (0 == strncasecmp(ck2[i], "SPAN", len)) {
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_SPAN);
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_GIVEN);
 
-        } else if (0 == strcasecmp(ck2[i], "OVERSUBSCRIBE")) {
+        } else if (0 == strncasecmp(ck2[i], "OVERSUBSCRIBE", len)) {
             if (nooversubscribe_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -207,7 +209,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_SUBSCRIBE_GIVEN);
             oversubscribe_given = true;
 
-        } else if (0 == strcasecmp(ck2[i], "NOOVERSUBSCRIBE")) {
+        } else if (0 == strncasecmp(ck2[i], "NOOVERSUBSCRIBE", len)) {
             if (oversubscribe_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -219,16 +221,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_SUBSCRIBE_GIVEN);
             nooversubscribe_given = true;
 
-        } else if (0 == strcasecmp(ck2[i], "DISPLAY")) {
-            if (NULL == jdata) {
-                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
-                               "mapping policy", ck2[i]);
-                return PRTE_ERR_SILENT;
-            }
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, PRTE_ATTR_GLOBAL,
-                               NULL, PMIX_BOOL);
-
-        } else if (0 == strcasecmp(ck2[i], "DISPLAYDEVEL")) {
+        } else if (0 == strncasecmp(ck2[i], "DISPLAYDEVEL", len)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -237,7 +230,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, PRTE_ATTR_GLOBAL,
                                NULL, PMIX_BOOL);
 
-        } else if (0 == strcasecmp(ck2[i], "DISPLAYTOPO")) {
+        } else if (0 == strncasecmp(ck2[i], "DISPLAYTOPO", len)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -246,7 +239,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO, PRTE_ATTR_GLOBAL, NULL,
                                PMIX_BOOL);
 
-        } else if (0 == strcasecmp(ck2[i], "DISPLAYALLOC")) {
+        } else if (0 == strncasecmp(ck2[i], "DISPLAYALLOC", len)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -255,7 +248,16 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, PRTE_ATTR_GLOBAL, NULL,
                                PMIX_BOOL);
 
-        } else if (0 == strcasecmp(ck2[i], "DONOTLAUNCH")) {
+        } else if (0 == strncasecmp(ck2[i], "DISPLAY", len)) {
+            if (NULL == jdata) {
+                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                               "mapping policy", ck2[i]);
+                return PRTE_ERR_SILENT;
+            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP, PRTE_ATTR_GLOBAL,
+                               NULL, PMIX_BOOL);
+
+        } else if (0 == strncasecmp(ck2[i], "DONOTLAUNCH", len)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -271,10 +273,10 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                                    NULL, PMIX_BOOL);
             }
 
-        } else if (0 == strcasecmp(ck2[i], "NOLOCAL")) {
+        } else if (0 == strncasecmp(ck2[i], "NOLOCAL", len)) {
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_NO_USE_LOCAL);
 
-        } else if (0 == strcasecmp(ck2[i], "TAGOUTPUT")) {
+        } else if (0 == strncasecmp(ck2[i], "TAGOUTPUT", len)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -283,7 +285,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TAG_OUTPUT, PRTE_ATTR_GLOBAL, NULL,
                                PMIX_BOOL);
 
-        } else if (0 == strcasecmp(ck2[i], "TIMESTAMPOUTPUT")) {
+        } else if (0 == strncasecmp(ck2[i], "TIMESTAMPOUTPUT", len)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -292,7 +294,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, PRTE_ATTR_GLOBAL,
                                NULL, PMIX_BOOL);
 
-        } else if (0 == strcasecmp(ck2[i], "XMLOUTPUT")) {
+        } else if (0 == strncasecmp(ck2[i], "XMLOUTPUT", len)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -301,7 +303,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             prte_set_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, PRTE_ATTR_GLOBAL,
                                NULL, PMIX_BOOL);
 
-        } else if (0 == strcasecmp(ck2[i], "ORDERED")) {
+        } else if (0 == strncasecmp(ck2[i], "ORDERED", len)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -327,7 +329,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL,
                                &u16, PMIX_UINT16);
 
-        } else if (0 == strcasecmp(ck2[i], "INHERIT")) {
+        } else if (0 == strncasecmp(ck2[i], "INHERIT", len)) {
             if (noinherit_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -343,7 +345,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             inherit_given = true;
 
-        } else if (0 == strcasecmp(ck2[i], "NOINHERIT")) {
+        } else if (0 == strncasecmp(ck2[i], "NOINHERIT", len)) {
             if (inherit_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -374,7 +376,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                                    &ck2[i][7], PMIX_STRING);
             }
 
-        } else if (0 == strcasecmp(ck2[i], "HWTCPUS")) {
+        } else if (0 == strncasecmp(ck2[i], "HWTCPUS", len)) {
             if (core_cpus_given) {
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "HWTCPUS", "CORECPUS");
@@ -389,7 +391,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             hwthread_cpus_given = true;
 
-        } else if (0 == strcasecmp(ck2[i], "CORECPUS")) {
+        } else if (0 == strncasecmp(ck2[i], "CORECPUS", len)) {
             if (hwthread_cpus_given) {
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "HWTCPUS", "CORECPUS");
