@@ -135,7 +135,9 @@ Printout URI on stdout [-], stderr [+], or a file [anything else]
 Suicide instead of clean abort after delay
 #
 [default-hostfile]
-Provide a default hostfile
+Specify a default hostfile.
+
+#include#help-schizo-cli#dvm-hostfile
 #
 [singleton]
 ID of the singleton process that started us
@@ -188,10 +190,12 @@ processes; "-x foo*" exports all current environmental variables starting with "
 Output a brief periodic report on launch progress
 #
 [hostfile]
-Provide a hostfile
+#include#help-schizo-cli#dvm-hostfile
 #
 [machinefile]
 Provide a hostfile (synonym for "hostfile")
+
+#include#help-schizo-cli#dvm-hostfile
 #
 [host]
 Comma-separated list of hosts to use for the DVM
@@ -202,15 +206,6 @@ Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buf
 [do-not-launch]
 Perform all necessary operations to prepare to launch the DVM, but do not actually
 launch it (usually used to test mapping patterns)
-#
-[display]
-Comma-delimited list of options for displaying information about the allocation and DVM.
-Allowed values:
-    allocation
-    bind
-    map
-    map-devel
-    topo
 #
 #
 #  DEPRECATED OPTIONS
