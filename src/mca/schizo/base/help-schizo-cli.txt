@@ -110,63 +110,71 @@ of a resource manager (RM):
 This changes somewhat in the presence of an RM as that entity specifies the
 initial allocation of nodes. In this case, the default hostfile, hostfile and host
 directives are all used to filter the RM's specification so that a user can utilize different
-portions of the allocation for different jobs. This is done according to the same precedence
+portions of the allocation for different DVMs. This is done according to the same precedence
 order as in the prior table, with the RM providing the initial pool of nodes.
+
+#include#help-schizo-cli#hostfile-syntax
+#
+#  HOSTFILE-SYNTAX
+#
+[hostfile-syntax]
+Hostfile syntax consists of a node name on each line, optionally including a designated number
+of "slots":
+
+node01  slots=10
+node13  slots=5
+...
+
+Blank lines and lines beginning with a '#' are ignored.  A "slot" is the PRRTE term for an
+allocatable unit where we can launch a process. In the absence of the slot parameter, PRRTE
+will assign either the number of slots to be the number of CPUs detected on the node or the
+RM assigned value if operating in the presence of an RM. Note that in the latter case, the
+user-specified number of slots is capped by the RM-assigned value.
 #
 #  LAUNCHER-HOSTFILE
 #
 [launcher-hostfile]
-
-**************************
-    Relative Indexing
-**************************
-PRRTE supports several levels of user-specified host lists based on an established
-precedence order. Users can specify a default hostfile that contains a list of
-nodes to be used by the DVM. Only one default hostfile can be provided for a given
-DVM. In addition, users can specify a hostfile that contains a list of nodes to be
-used for a DVM, or can provide a comma-delimited list of nodes to be used for that
-DVM via the --host command line option.
+PRRTE supports several levels of user-specified hostfiles based on an established
+precedence order. Users can specify a hostfile that contains a list of nodes to be
+used for the job, or can provide a comma-delimited list of nodes to be used for that
+job via the --host command line option.
 
 The precedence order applied to these various options depends to some extent on
 the local environment. The following table illustrates how host and hostfile directives
-work together to define the set of hosts upon which a DVM will execute in the absence
-of a resource manager (RM):
+work together to define the set of hosts upon which a DVM will execute the job in the
+absence of a resource manager (RM):
 
- default
- hostfile      host        hostfile       Result
-----------    ------      ----------      -----------------------------------------
- unset        unset          unset        The DVM will consist solely of the local
-                                          host where the DVM was started.
- unset         set           unset        Host option defines resource list for the DVM
- unset        unset           set         Hostfile defines resource list for the DVM
- unset         set            set         Hostfile defines resource list for the DVM,
-                                          then host filters the list to define the final
-                                          set of nodes to be used by the DVM
-  set         unset          unset        Default hostfile defines resource list for the DVM
-  set          set           unset        Default hostfile defines resource list for the DVM,
-                                          then host filters the list to define the final
-                                          set of nodes to be used by the DVM
-  set          set            set         Default hostfile defines resource list for the DVM,
-                                          then hostfile filters the list, and then host filters
-                                          the list to define the final set of nodes to be
-                                          used by the DVM
+ host        hostfile       Result
+------      ----------      -----------------------------------------
+unset          unset        The DVM will utilize all its available resources
+                            when mapping the job.
+ set           unset        Host option defines resource list for the job
+unset           set         Hostfile defines resource list for the job
+ set            set         Hostfile defines resource list for the job,
+                            then host filters the list to define the final
+                            set of nodes to be used for the job
 
-This changes somewhat in the presence of an RM as that entity specifies the
-initial allocation of nodes. In this case, the default hostfile, hostfile and host
-directives are all used to filter the RM's specification so that a user can utilize different
-portions of the allocation for different jobs. This is done according to the same precedence
-order as in the prior table, with the RM providing the initial pool of nodes.
+#include#help-schizo-cli#hostfile-syntax
 
-Once an initial allocation has been specified (whether by an RM, default hostfile, or hostfile),
-subsequent hostfile and --host specifications can be made using relative indexing. This allows a
+#include#help-schizo-cli#relative-indexing
+
+#
+#  RELATIVE-INDEXING
+#
+[relative-indexing]
+**************************
+    Relative Indexing
+**************************
+
+Hostfile and --host specifications can also be made using relative indexing. This allows a
 user to stipulate which hosts are to be used for a given app_context without specifying the
 particular host name, but rather its relative position in the allocation.
 
 This can probably best be understood through consideration of a few examples. Consider the case
-where an RM has allocated a set of nodes to the user named "foo1, foo2, foo3, foo4". The user
-wants the first app_context to have exclusive use of the first two nodes, and a second app_context
+where a DVM is comprised of a set of nodes named "foo1, foo2, foo3, foo4". The user wants the
+first app_context to have exclusive use of the first two nodes, and a second app_context
 to use the last two nodes. Of course, the user could printout the allocation to find the names
-of the nodes allocated to them and then use -host to specify this layout, but this is cumbersome
+of the nodes allocated to them and then use --host to specify this layout, but this is cumbersome
 and would require hand-manipulation for every invocation.
 
 A simpler method is to utilize PRRTE's relative indexing capability to specify the desired
@@ -175,274 +183,135 @@ layout. In this case, a command line containing:
 --host +n1,+n2 ./app1 : --host +n3,+n4 ./app2
 
 would provide the desired pattern. The "+" syntax indicates that the information is being
-provided as a relative index to the existing allocation. Two methods of relative indexing
+provided as a relative index into the existing allocation. Two methods of relative indexing
 are supported:
-.sp
-.TP
-.B +n<#>
-A relative index into the allocation referencing the <#> node. OpenRTE will substitute
-the <#> node in the allocation
-.
-.
-.TP
-.B +e[:<#>]
-A request for <#> empty nodes - i.e., OpenRTE is to substitute this reference with
-<#> nodes that have not yet been used by any other app_context. If the ":<#>" is not
-provided, OpenRTE will substitute the reference with all empty nodes. Note that OpenRTE
-does track the empty nodes that have been assigned in this manner, so multiple
-uses of this option will result in assignment of unique nodes up to the limit of the
-available empty nodes. Requests for more empty nodes than are available will generate
-an error.
-.sp
-.PP
+
++n#    A relative index into the allocation referencing the "#" node. PRRTE will substitute
+       the "#" node in the allocation
+
++e[:#] A request for "#" empty nodes - i.e., PRRTE is to substitute this reference with
+       nodes that have not yet been used by any other app_context. If the ":#" is not
+       provided, PRRTE will substitute the reference with all empty nodes. Note that PRRTE
+       does track the empty nodes that have been assigned in this manner, so multiple
+       uses of this option will result in assignment of unique nodes up to the limit of the
+       available empty nodes. Requests for more empty nodes than are available will generate
+       an error.
+
 Relative indexing can be combined with absolute naming of hosts in any arbitrary manner,
-and can be used in hostfiles as well as with the -host command line option. In addition,
+and can be used in hostfiles as well as with the --host command line option. In addition,
 any slot specification provided in hostfiles will be respected - thus, a user can specify
 that only a certain number of slots from a relative indexed host are to be used for a
 given app_context.
-.sp
-Another example may help illustrate this point. Consider the case where a user has a default
+
+Another example may help illustrate this point. Consider the case where the user has a
 hostfile containing:
-.sp
-.nf
+
 dummy1 slots=4
 dummy2 slots=4
 dummy3 slots=4
 dummy4 slots=4
 dummy5 slots=4
-.fi
-.sp
-.PP
+
 This may, for example, be a hostfile that describes a set of commonly-used resources that
 the user wishes to execute applications against. For this particular application, the user
 plans to map byslot, and wants the first two ranks to be on the second node of any allocation,
 the next ranks to land on an empty node, have one rank specifically on dummy4, the next rank
 to be on the second node of the allocation again, and finally any remaining ranks to be on
 whatever empty nodes are left. To accomplish this, the user provides a hostfile of:
-.sp
-.nf
+
 +n2 slots=2
 +e:1
 dummy4 slots=1
 +n2
 +e
-.fi
-.sp
-.PP
-The user can now use this information in combination with OpenRTE's sequential mapper to
+
+The user can now use this information in combination with PRRTE's sequential mapper to
 obtain their specific layout:
-.sp
-.nf
-mpirun --default-hostfile dummyhosts -hostfile mylayout -mca rmaps seq ./my_app
-.fi
-.sp
-.PP
+
+<launcher> --hostfile dummyhosts --hostfile mylayout --prtemca rmaps seq ./my_app
+
 which will result in:
-.nf
-.sp
+
 rank0 being mapped to dummy3
-.br
 rank1 to dummy1 as the first empty node
-.br
 rank2 to dummy4
-.br
 rank3 to dummy3
-.br
 rank4 to dummy2 and rank5 to dummy5 as the last remaining unused nodes
-.sp
-.fi
+
 Note that the sequential mapper ignores the number of slots arguments as it only
 maps one rank at a time to each node in the list.
-.sp
+
 If the default round-robin mapper had been used, then the mapping would have resulted in:
-.sp
-.nf
+
 ranks 0 and 1 being mapped to dummy3 since two slots were specified
-.br
 ranks 2-5 on dummy1 as the first empty node, which has four slots
-.br
 rank6 on dummy4 since the hostfile specifies only a single slot from that node is to be used
-.br
 ranks 7 and 8 on dummy3 since only two slots remain available
-.br
 ranks 9-12 on dummy2 since it is the next available empty node and has four slots
-.br
 ranks 13-16 on dummy5 since it is the last remaining unused node and has four slots
-.fi
-.sp
-.PP
+
 Thus, the use of relative indexing can allow for complex mappings to be ported across
 allocations, including those obtained from automated resource managers, without the need
 for manual manipulation of scripts and/or command lines.
-
-PRRTE supports several levels of user-specified host lists based on an established
-precedence order. Users can specify a default hostfile that contains a list of
-nodes available to all app_contexts given on the command line. Only one default
-hostfile can be provided for a given DVM. In addition, users
-can specify a hostfile that contains a list of nodes to be used for a specific
-app_context, or can provide a comma-delimited list of nodes to be used for that
-app_context via the --host command line option.
-
-The precedence order applied to these various options depends to some extent on
-the local environment. The following table illustrates how host and hostfile directives
-work together to define the set of hosts upon which a DVM or job will execute
-in the absence of a resource manager (RM):
-
- default
- hostfile      host        hostfile       Result
-----------    ------      ----------      -----------------------------------------
- unset        unset          unset        The DVM will consist solely of the local
-                                          host where the DVM was started. All jobs
-                                          will be co-located with the DVM master
- unset         set           unset        Host option defines resource list for the DVM
-                                          or job. Note that the option cannot specify
-                                          resources outside of the DVM's
- unset        unset           set         Hostfile defines resource list for the DVM
-                                          or job
- unset         set            set         Hostfile defines resource list for the job,
-                                          then host filters the list to define the final
-                                          set of nodes available to each application
-                                          within the job
-  set         unset          unset        Default hostfile defines resource list for the job
-  set          set           unset        Default hostfile defines resource list for the job,
-                                          then host filters the list to define the final
-                                          set of nodes available to each application
-                                          within the job
-  set          set            set         Default hostfile defines resource list for the job,
-                                          then hostfile filters the list, and then host filters
-                                          the list to define the final set of nodes available
-                                          to each application within the job
-
-This changes somewhat in the presence of an RM as that entity specifies the
-initial allocation of nodes. In this case, the default hostfile, hostfile and host
-directives are all used to filter the RM's specification so that a user can utilize different
-portions of the allocation for different jobs. This is done according to the same precedence
-order as in the prior table, with the RM providing the initial pool of nodes.
-
-
-**************************
-    Relative Indexing
-**************************
-
-Once an initial allocation has been specified (whether by an RM, default hostfile, or hostfile),
-subsequent hostfile and --host specifications can be made using relative indexing. This allows a
-user to stipulate which hosts are to be used for a given app_context without specifying the
-particular host name, but rather its relative position in the allocation.
-
-This can probably best be understood through consideration of a few examples. Consider the case
-where an RM has allocated a set of nodes to the user named "foo1, foo2, foo3, foo4". The user
-wants the first app_context to have exclusive use of the first two nodes, and a second app_context
-to use the last two nodes. Of course, the user could printout the allocation to find the names
-of the nodes allocated to them and then use -host to specify this layout, but this is cumbersome
-and would require hand-manipulation for every invocation.
-
-A simpler method is to utilize PRRTE's relative indexing capability to specify the desired
-layout. In this case, a command line containing:
-
---host +n1,+n2 ./app1 : --host +n3,+n4 ./app2
-
-would provide the desired pattern. The "+" syntax indicates that the information is being
-provided as a relative index to the existing allocation. Two methods of relative indexing
-are supported:
-.sp
-.TP
-.B +n<#>
-A relative index into the allocation referencing the <#> node. OpenRTE will substitute
-the <#> node in the allocation
-.
-.
-.TP
-.B +e[:<#>]
-A request for <#> empty nodes - i.e., OpenRTE is to substitute this reference with
-<#> nodes that have not yet been used by any other app_context. If the ":<#>" is not
-provided, OpenRTE will substitute the reference with all empty nodes. Note that OpenRTE
-does track the empty nodes that have been assigned in this manner, so multiple
-uses of this option will result in assignment of unique nodes up to the limit of the
-available empty nodes. Requests for more empty nodes than are available will generate
-an error.
-.sp
-.PP
-Relative indexing can be combined with absolute naming of hosts in any arbitrary manner,
-and can be used in hostfiles as well as with the -host command line option. In addition,
-any slot specification provided in hostfiles will be respected - thus, a user can specify
-that only a certain number of slots from a relative indexed host are to be used for a
-given app_context.
-.sp
-Another example may help illustrate this point. Consider the case where a user has a default
-hostfile containing:
-.sp
-.nf
-dummy1 slots=4
-dummy2 slots=4
-dummy3 slots=4
-dummy4 slots=4
-dummy5 slots=4
-.fi
-.sp
-.PP
-This may, for example, be a hostfile that describes a set of commonly-used resources that
-the user wishes to execute applications against. For this particular application, the user
-plans to map byslot, and wants the first two ranks to be on the second node of any allocation,
-the next ranks to land on an empty node, have one rank specifically on dummy4, the next rank
-to be on the second node of the allocation again, and finally any remaining ranks to be on
-whatever empty nodes are left. To accomplish this, the user provides a hostfile of:
-.sp
-.nf
-+n2 slots=2
-+e:1
-dummy4 slots=1
-+n2
-+e
-.fi
-.sp
-.PP
-The user can now use this information in combination with OpenRTE's sequential mapper to
-obtain their specific layout:
-.sp
-.nf
-mpirun --default-hostfile dummyhosts -hostfile mylayout -mca rmaps seq ./my_app
-.fi
-.sp
-.PP
-which will result in:
-.nf
-.sp
-rank0 being mapped to dummy3
-.br
-rank1 to dummy1 as the first empty node
-.br
-rank2 to dummy4
-.br
-rank3 to dummy3
-.br
-rank4 to dummy2 and rank5 to dummy5 as the last remaining unused nodes
-.sp
-.fi
-Note that the sequential mapper ignores the number of slots arguments as it only
-maps one rank at a time to each node in the list.
-.sp
-If the default round-robin mapper had been used, then the mapping would have resulted in:
-.sp
-.nf
-ranks 0 and 1 being mapped to dummy3 since two slots were specified
-.br
-ranks 2-5 on dummy1 as the first empty node, which has four slots
-.br
-rank6 on dummy4 since the hostfile specifies only a single slot from that node is to be used
-.br
-ranks 7 and 8 on dummy3 since only two slots remain available
-.br
-ranks 9-12 on dummy2 since it is the next available empty node and has four slots
-.br
-ranks 13-16 on dummy5 since it is the last remaining unused node and has four slots
-.fi
-.sp
-.PP
-Thus, the use of relative indexing can allow for complex mappings to be ported across
-allocations, including those obtained from automated resource managers, without the need
-for manual manipulation of scripts and/or command lines.
+#
+#  DASH-HOST
 #
 [dash-host]
+Host syntax consists of a comma-delimited list of node names, each entry optionally containing
+a ":N" extension indicating the number of slots to assign to that entry:
 
+--host node01:5,node02
+
+In the absence of the slot extension, one slot will be assigned to the node. Duplicate entries
+are aggregated and the number of slots assigned to that node are summed together.
+
+Note: A "slot" is the PRRTE term for an allocatable unit where we can launch a process. Thus,
+the number of slots equates to the maximum number of processes PRRTE may start on that node
+without oversubscribing it.
 #
+#  SESSION-DIR
+#
+[session-dir]
+PRRTE establishes a "session directory" to serve as a top-level location for temporary
+files used by both the local PRRTE daemon and its child processes.
+By default, the session directory is set to
 
+  <system-tmpdir>/prte.<nodename>.<uid>
+
+This can be altered by setting the "prte_top_session_dir" MCA parameter (either in the environment, on the
+cmd line, or in a default parameter file). The session directory name can further be altered to include
+the PID of the daemon process, if desired:
+
+  <system-tmpdir>/prte.<nodename>.<pid>.<uid>
+
+by setting the "prte_add_pid_to_session_dirname" MCA parameter.
+#
+#  TMPDIR
+#
+[tmpdir]
+PRRTE establishes a session directory tree to server as an isolated location for storage
+of temporary files used by both local PRRTE daemons and their child processes. This is
+done to enable quick and easy cleanup in the event that PRRTE is unable to fully cleanup
+after itself. The root of the session directory defaults to the system temporary directory
+as defined in the environment using (in precedence order) the envars TMPDIR, TEMP, and
+finally TMP. In the absence of any of those variables, PRRTE will default to the "/tmp"
+location.
+#
+#  TMPDIR-TOOL
+#
+[tmpdir-tool]
+PRRTE establishes a session directory tree to server as an isolated location for storage
+of temporary files used by both local PRRTE daemons and their child processes. This is
+done to enable quick and easy cleanup in the event that PRRTE is unable to fully cleanup
+after itself.
+
+In the case of tools, the rendezvous files containing connection information for a target
+server are located in the session directory tree. Thus, it may be necessary to point the
+tool at the location where those files can be found if that location is other than the
+expected default.
+
+The root of the session directory defaults to the system temporary directory
+as defined in the environment using (in precedence order) the envars TMPDIR, TEMP, and
+finally TMP. In the absence of any of those variables, PRRTE will default to the "/tmp"
+location.
+#
