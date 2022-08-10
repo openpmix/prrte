@@ -20,6 +20,10 @@
 Usage: %s [OPTION]...
 Submit job to the PMIx Reference RTE
 
+The following list of command line options are available. Note that
+more detailed help for any option can be obtained by adding that
+option to the help request as "--help <option>".
+
 /*****      General Options      *****/
 
 -h|--help                            This help message
@@ -184,8 +188,19 @@ First look for a system server and connect to it if found
 [system-server-only]
 Connect only to a system-level server - abort if one is not found
 #
+[tmpdir]
+Define the root location for the PRRTE session directory tree
+
+#include#help-schizo-cli#tmpdir-tool
+#
 [wait-to-connect]
 Delay specified number of seconds before trying to connect
+#
+[hostfile]
+#include#help-schizo-cli#launcher-hostfile
+#
+[host]
+#include#help-schizo-cli#dash-host
 #
 [parseable]
 Output information (e.g., help messages) in machine-parseable
@@ -218,9 +233,6 @@ Printout URI on stdout [-], stderr [+], or a file [anything else]
 #
 [test-suicide]
 Suicide instead of clean abort after delay
-#
-[default-hostfile]
-Provide a default hostfile
 #
 [singleton]
 ID of the singleton process that started us
@@ -287,13 +299,10 @@ with supported colon-delimited qualifiers:
     if-supported
 #
 [display]
-Comma-delimited list of options for displaying information
-about the allocation and job. Allowed values:
-    allocation
-    bind
-    map
-    map-devel
-    topo
+#include#help-schizo-cli#display
+#
+[output]
+#include#help-schizo-cli#output
 #
 [rankfile]
 Name of file to specify explicit task mapping

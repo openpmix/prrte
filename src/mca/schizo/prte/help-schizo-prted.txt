@@ -19,6 +19,10 @@
 Usage: %s [OPTION]...
 Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
+The following list of command line options are available. Note that
+more detailed help for any option can be obtained by adding that
+option to the help request as "--help <option>".
+
 /*****      General Options      *****/
 
 -h|--help                            This help message

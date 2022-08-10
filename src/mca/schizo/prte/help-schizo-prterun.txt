@@ -112,7 +112,6 @@ option to the help request as "--help <option>".
 
 /*****      Launch Options       *****/
 
-   --default-hostfile <arg0>         Provide a default hostfile
 -H|--host <arg0>                     List of hosts to invoke processes on
    --hostfile <arg0>                 Provide a hostfile
    --initial-errhandler <arg0>       Specify the initial error handler that is attached to predefined
@@ -225,9 +224,6 @@ Printout URI on stdout [-], stderr [+], or a file [anything else]
 [test-suicide]
 Suicide instead of clean abort after delay
 #
-[default-hostfile]
-Provide a default hostfile
-#
 [singleton]
 ID of the singleton process that started us
 #
@@ -250,7 +246,9 @@ Enable debugging of any PRRTE daemons used by this application, storing output i
 Do not discard stdout/stderr of remote PRRTE daemons
 #
 [tmpdir]
-Set the root for the session directory tree
+Define the root location for the PRRTE session directory tree
+
+#include#help-schizo-cli#tmpdir
 #
 [prefix]
 Prefix to be used to look for RTE executables
@@ -338,13 +336,17 @@ Output a brief periodic report on launch progress
 User-specified name assigned to the processes in their given application
 #
 [hostfile]
-Provide a hostfile
+#include#help-schizo-cli#launcher-hostfile
 #
 [machinefile]
 Provide a hostfile (synonym for "hostfile")
+
+#include#help-schizo-cli#launcher-hostfile
 #
 [host]
-Comma-separated list of hosts to invoke processes on
+#include#help-schizo-cli#dash-host
+
+#include#help-schizo-cli#relative-indexing
 #
 [personality]
 Specify the personality to be used
