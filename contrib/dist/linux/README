@@ -10,6 +10,7 @@ Copyright (c) 2004-2006 The Regents of the University of California.
                         All rights reserved.
 Copyright (c) 2006-2016 Cisco Systems, Inc.  All rights reserved.
 Copyright (c) 2016      Intel, Inc.  All rights reserved.
+Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 $COPYRIGHT$
 
 Additional copyrights may follow
@@ -19,25 +20,24 @@ $HEADER$
 ===========================================================================
 
 Note that you probably want to download the latest release of the SRPM
-for any given Open MPI version.  The SRPM release number is the
+for any given PRRTE version.  The SRPM release number is the
 version after the dash in the SRPM filename.  For example,
-"openmpi-1.6.3-2.src.rpm" is the 2nd release of the SRPM for Open MPI
-v1.6.3.  Subsequent releases of SRPMs typically contain bug fixes for
-the RPM packaging, but not Open MPI itself.
+"prrte-3.0.0-2.src.rpm" is the 2nd release of the SRPM for PRRTE
+v3.0.0.  Subsequent releases of SRPMs typically contain bug fixes for
+the RPM packaging, but not PRRTE itself.
 
 The buildrpm.sh script takes a single mandatory argument -- a filename
-pointing to an Open MPI tarball (may be either .gz or .bz2).  It will
+pointing to a PRRTE tarball (may be either .gz or .bz2).  It will
 create one or more RPMs from this tarball:
 
 1. Source RPM
-2. "All in one" RPM, where all of Open MPI is put into a single RPM.
-3. "Multiple" RPM, where Open MPI is split into several sub-package
+2. "All in one" RPM, where all of PRRTE is put into a single RPM.
+3. "Multiple" RPM, where PRRTE is split into several sub-package
    RPMs:
-   - openmpi-runtime
-   - openmpi-devel
-   - openmpi-docs
+   - prrte-runtime
+   - prrte-devel
 
-The folowing arguments could be used to affect script behaviour.
+The following arguments could be used to affect script behaviour.
 Please, do NOT set the same settings with parameters and config vars.
 
 -b
@@ -49,7 +49,7 @@ Please, do NOT set the same settings with parameters and config vars.
 -n name
    This option will change the name of the produced RPM to the "name".
    It is useful to use with "-o" and "-m" options if you want to have
-   multiple Open MPI versions installed simultaneously in the same
+   multiple PRRTE versions installed simultaneously in the same
    enviroment. Requires use of option "-b".
 
 -o
@@ -83,7 +83,7 @@ Please, do NOT set the same settings with parameters and config vars.
    Add custom RPM build parameter.
 
 -s
-   If specified, the script will try to unpack the openmpi.spec
+   If specified, the script will try to unpack the prrte.spec
    file from the tarball specified on the command line. By default,
    the script will look for the specfile in the current directory.
 
@@ -94,7 +94,7 @@ Please, do NOT set the same settings with parameters and config vars.
 Target architecture is currently hard-coded in the beginning
 of the buildrpm.sh script.
 
-Alternatively, you can build directly from the openmpi.spec spec file
+Alternatively, you can build directly from the prrte.spec spec file
 or SRPM directly.  Many options can be passed to the building process
 via rpmbuild's --define option (there are older versions of rpmbuild
 that do not seem to handle --define'd values properly in all cases,

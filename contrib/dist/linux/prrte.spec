@@ -15,6 +15,7 @@
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2017-2022 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -47,7 +48,7 @@
 # Or (a multi-token example):
 #
 # shell$ rpmbuild ... \
-#    --define 'configure_options CFLAGS=-g --with-openib=/usr/local/ofed' ...
+#    --define 'configure_options CFLAGS=-g --with-pmix=/usr/local/pmix' ...
 #
 #############################################################################
 
@@ -152,20 +153,6 @@
 %define _sysconfdir /opt/%{name}/%{version}/etc
 %define _libdir /opt/%{name}/%{version}/lib
 %define _includedir /opt/%{name}/%{version}/include
-%define _mandir /opt/%{name}/%{version}/man
-# Note that the name "prte" is hard-coded in
-# opal/mca/installdirs/config for pkgdatadir; there is currently no
-# easy way to have OMPI change this directory name internally.  So we
-# just hard-code that name here as well (regardless of the value of
-# %{name} or %{_name}).
-%define _pkgdatadir /opt/%{name}/%{version}/share/prte
-# Per advice from Doug Ledford at Red Hat, docdir is supposed to be in
-# a fixed location.  But if you're installing a package in /opt, all
-# bets are off.  So feel free to install it anywhere in your tree.  He
-# suggests $prefix/doc.
-%define _defaultdocdir /opt/%{name}/%{version}/doc
-# Also put the modulefile in /opt.
-%define modulefile_path /opt/%{name}/%{version}/share/prte/modulefiles
 %endif
 
 %if !%{build_debuginfo_rpm}
@@ -183,7 +170,7 @@
 # below.
 %define sysconfdir_in_prefix %(test "`echo %{_sysconfdir} | grep %{_prefix}`" = "" && echo 0 || echo 1)
 
-%{!?_pkgdatadir: %define _pkgdatadir %{_datadir}/prte}
+%{!?_pkgdatadir: %define _pkgdatadir %{_datadir}/prrte}
 
 %if !%{use_check_files}
 %define __check_files %{nil}
@@ -195,18 +182,14 @@
 %define optflags ""
 %endif
 
-%if %{use_mpi_selector}
-%define install_shell_scripts 1
-%endif
-
 #############################################################################
 #
 # Preamble Section
 #
 #############################################################################
 
-Summary: Reference RunTime Environment for PMIx
-Name: %{?_name:%{_name}}%{!?_name:prte}
+Summary: PMIx Reference RunTime Environment (PRRTE)
+Name: %{?_name:%{_name}}%{!?_name:prrte}
 Version: $VERSION
 Release: 1%{?dist}
 License: BSD
@@ -216,8 +199,7 @@ Packager: %{?_packager:%{_packager}}%{!?_packager:%{_vendor}}
 Vendor: %{?_vendorinfo:%{_vendorinfo}}%{!?_vendorinfo:%{_vendor}}
 Distribution: %{?_distribution:%{_distribution}}%{!?_distribution:%{_vendor}}
 Prefix: %{_prefix}
-Provides: mpi
-Provides: prte = %{version}
+Provides: prrte = %{version}
 BuildRoot: /var/tmp/%{name}-%{version}-%{release}-root
 %if %{disable_auto_requires}
 AutoReq: no
@@ -225,24 +207,20 @@ AutoReq: no
 %if %{install_modulefile}
 Requires: %{modules_rpm_name}
 %endif
-%if %{use_mpi_selector}
-Requires: %{mpi_selector_rpm_name}
-%endif
 
 %description
-Open MPI is an open source implementation of the Message Passing
-Interface specification (https://www.mpi-forum.org/) developed and
-maintained by a consortium of research, academic, and industry
-partners.
+PRRTE is the PMIx Reference Run Time Environment.
 
-Open MPI also includes an implementation of the OpenSHMEM parallel
-programming API (http://www.openshmem.org/).  OpenSHMEM is a
-Partitioned Global Address Space (PGAS) abstraction layer, which
-provides fast inter-process communication using one-sided
-communication techniques.
+The project is formally referred to in documentation by "PRRTE", and
+the GitHub repository is "prrte".
+
+However, we have found that most users do not like typing the two
+consecutive "r"s in the name. Hence, all of the internal API symbols,
+environment variables, MCA frameworks, and CLI executables all use the
+abbreviated "prte" (one "r", not two) for convenience.
 
 This RPM contains all the tools necessary to compile, link, and run
-Open MPI and OpenSHMEM jobs.
+the PRRTE system.
 
 %if !%{build_all_in_one_rpm}
 
@@ -253,11 +231,10 @@ Open MPI and OpenSHMEM jobs.
 #############################################################################
 
 %package runtime
-Summary: Tools and plugin modules for running Open MPI/SHMEM jobs
+Summary: Tools and plugin modules for running PRRTE
 Group: Development/Libraries
-Provides: mpi
-Provides: prte = %{version}
-Provides: prte-runtime = %{version}
+Provides: prrte = %{version}
+Provides: prrte-runtime = %{version}
 %if %{disable_auto_requires}
 AutoReq: no
 %endif
@@ -266,20 +243,19 @@ Requires: %{modules_rpm_name}
 %endif
 
 %description runtime
-Open MPI is an open source implementation of the Message Passing
-Interface specification (https://www.mpi-forum.org/) developed and
-maintained by a consortium of research, academic, and industry
-partners.
+PRRTE is the PMIx Reference Run Time Environment.
 
-Open MPI also includes an implementation of the OpenSHMEM parallel
-programming API (http://www.openshmem.org/).  OpenSHMEM is a
-Partitioned Global Address Space (PGAS) abstraction layer, which
-provides fast inter-process communication using one-sided
-communication techniques.
+The project is formally referred to in documentation by "PRRTE", and
+the GitHub repository is "prrte".
 
-This subpackage provides general tools (mpirun, mpiexec, etc.) and the
+However, we have found that most users do not like typing the two
+consecutive "r"s in the name. Hence, all of the internal API symbols,
+environment variables, MCA frameworks, and CLI executables all use the
+abbreviated "prte" (one "r", not two) for convenience.
+
+This subpackage provides general tools (prte, prun, prterun, etc.) and the
 Module Component Architecture (MCA) base and plugins necessary for
-running Open MPI/OpenSHMEM jobs.
+running the PRRTE system.
 
 %endif
 
@@ -290,58 +266,28 @@ running Open MPI/OpenSHMEM jobs.
 #############################################################################
 
 %package devel
-Summary: Development tools and header files for Open MPI/SHMEM
+Summary: Development tools and header files for PRRTE
 Group: Development/Libraries
 %if %{disable_auto_requires}
 AutoReq: no
 %endif
-Provides: prte-devel = %{version}
+Provides: prrte-devel = %{version}
 Requires: %{name}-runtime
 
 %description devel
-Open MPI is an open source implementation of the Message Passing
-Interface specification (https://www.mpi-forum.org/) developed and
-maintained by a consortium of research, academic, and industry
-partners.
+PRRTE is the PMIx Reference Run Time Environment.
 
-Open MPI also includes an implementation of the OpenSHMEM parallel
-programming API (http://www.openshmem.org/).  OpenSHMEM is a
-Partitioned Global Address Space (PGAS) abstraction layer, which
-provides fast inter-process communication using one-sided
-communication techniques.
+The project is formally referred to in documentation by "PRRTE", and
+the GitHub repository is "prrte".
 
-This subpackage provides the development files for Open MPI/OpenSHMEM,
-such as wrapper compilers and header files for MPI/OpenSHMEM
-development.
+However, we have found that most users do not like typing the two
+consecutive "r"s in the name. Hence, all of the internal API symbols,
+environment variables, MCA frameworks, and CLI executables all use the
+abbreviated "prte" (one "r", not two) for convenience.
 
-#############################################################################
-#
-# Preamble Section (docs)
-#
-#############################################################################
-
-%package docs
-Summary: Documentation for Open MPI/SHMEM
-Group: Development/Documentation
-%if %{disable_auto_requires}
-AutoReq: no
-%endif
-Provides: prte-docs = %{version}
-Requires: %{name}-runtime
-
-%description docs
-Open MPI is an open source implementation of the Message Passing
-Interface specification (https://www.mpi-forum.org/) developed and
-maintained by a consortium of research, academic, and industry
-partners.
-
-Open MPI also includes an implementation of the OpenSHMEM parallel
-programming API (http://www.openshmem.org/).  OpenSHMEM is a
-Partitioned Global Address Space (PGAS) abstraction layer, which
-provides fast inter-process communication using one-sided
-communication techniques.
-
-This subpackage provides the documentation for Open MPI/OpenSHMEM.
+This subpackage provides the development files for PRRTE,
+such as wrapper compilers and header files for development
+of PRRTE plugins.
 
 #############################################################################
 #
@@ -438,9 +384,7 @@ if test "$using_gcc" = 0; then
 fi
 
 CFLAGS="%{?cflags:%{cflags}}%{!?cflags:$RPM_OPT_FLAGS}"
-CXXFLAGS="%{?cxxflags:%{cxxflags}}%{!?cxxflags:$RPM_OPT_FLAGS}"
-FCFLAGS="%{?fcflags:%{fcflags}}%{!?fcflags:$RPM_OPT_FLAGS}"
-export CFLAGS CXXFLAGS FCFLAGS
+export CFLAGS
 
 %configure %{configure_options}
 %{__make} %{?mflags}
@@ -467,18 +411,17 @@ cat <<EOF >$RPM_BUILD_ROOT/%{modulefile_path}/%{modulefile_subdir}/%{modulefile_
 #%Module
 
 # NOTE: This is an automatically-generated file!  (generated by the
-# Open MPI/SHMEM RPM).  Any changes made here will be lost a) if the RPM is
+# PRRTE RPM).  Any changes made here will be lost a) if the RPM is
 # uninstalled, or b) if the RPM is upgraded or uninstalled.
 
 proc ModulesHelp { } {
-   puts stderr "This module adds Open MPI/SHMEM v%{version} to various paths"
+   puts stderr "This module adds PRRTE v%{version} to various paths"
 }
 
-module-whatis   "Sets up Open MPI/SHMEM v%{version} in your enviornment"
+module-whatis   "Sets up PRRTE v%{version} in your enviornment"
 
 prepend-path PATH "%{_prefix}/bin/"
 prepend-path LD_LIBRARY_PATH %{_libdir}
-prepend-path MANPATH %{_mandir}
 EOF
 %endif
 # End of modulefile if
@@ -489,7 +432,7 @@ EOF
 %{__mkdir_p} $RPM_BUILD_ROOT/%{shell_scripts_path}
 cat <<EOF > $RPM_BUILD_ROOT/%{shell_scripts_path}/%{shell_scripts_basename}.sh
 # NOTE: This is an automatically-generated file!  (generated by the
-# Open MPI/SHMEM RPM).  Any changes made here will be lost if the RPM is
+# PRRTE RPM).  Any changes made here will be lost if the RPM is
 # uninstalled or upgraded.
 
 # PATH
@@ -504,19 +447,9 @@ if test -z "\`echo \$LD_LIBRARY_PATH | grep %{_libdir}\`"; then
     export LD_LIBRARY_PATH
 fi
 
-# MANPATH
-if test -z "\`echo \$MANPATH | grep %{_mandir}\`"; then
-    MANPATH=%{_mandir}:\${MANPATH}
-    export MANPATH
-fi
-
-# MPI_ROOT
-MPI_ROOT=%{_prefix}
-export MPI_ROOT
-EOF
 cat <<EOF > $RPM_BUILD_ROOT/%{shell_scripts_path}/%{shell_scripts_basename}.csh
 # NOTE: This is an automatically-generated file!  (generated by the
-# Open MPI/SHMEM RPM).  Any changes made here will be lost if the RPM is
+# PRRTE RPM).  Any changes made here will be lost if the RPM is
 # uninstalled or upgraded.
 
 # path
@@ -532,20 +465,8 @@ if ("1" == "\$?LD_LIBRARY_PATH") then
 else
     setenv LD_LIBRARY_PATH %{_libdir}
 endif
-
-# MANPATH
-if ("1" == "\$?MANPATH") then
-    if ("\$MANPATH" !~ *%{_mandir}*) then
-        setenv MANPATH %{_mandir}:\${MANPATH}
-    endif
-else
-    setenv MANPATH %{_mandir}:
-endif
-
-# MPI_ROOT
-setenv MPI_ROOT %{_prefix}
-EOF
 %endif
+
 # End of shell_scripts if
 
 %if !%{build_all_in_one_rpm}
@@ -571,7 +492,7 @@ find $RPM_BUILD_ROOT -type f -o -type l | \
 cat all.files | egrep '/lib/|/lib64/|/lib32/|/bin/|/etc/|/help-' > tmp.files | /bin/true
 # Snip out a bunch of executables (e.g., wrapper compilers, pkgconfig
 # files, .la and .a files)
-egrep -vi 'mpic|mpif|prtec|f77|f90|pkgconfig|\.la$|\.a$' tmp.files > runtime.files | /bin/true
+egrep -vi 'pcc|pkgconfig|\.la$|\.a$' tmp.files > runtime.files | /bin/true
 rm -f tmp.files
 
 # Now take the runtime files out of all.files so that we don't get
@@ -590,8 +511,8 @@ grep -v -f devel.files remaining.files > docs.files
 
 #################################################
 
-# Now that we have a final list of files for each of the runtime,
-# devel, and docs RPMs, snip even a few more files out of those lists
+# Now that we have a final list of files for each of the runtime and
+# devel RPMs, snip even a few more files out of those lists
 # because for directories that are wholly in only one RPM, we just
 # list that directory in the file lists below, and RPM will pick up
 # all files in that tree.  We therefore don't want to list any files
@@ -610,10 +531,6 @@ mv tmp.files runtime.files
 # devel sub package
 grep -v %{_includedir} devel.files > tmp.files
 mv tmp.files devel.files
-
-# docs sub package
-grep -v %{_mandir} docs.files > tmp.files
-mv tmp.files docs.files
 
 %endif
 # End of build_all_in_one_rpm
@@ -638,24 +555,12 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 # Post Install Section
 #
 #############################################################################
-%if %{use_mpi_selector}
-%post
-%{mpi_selector} \
-        --register %{name}-%{version} \
-        --source-dir %{shell_scripts_path} \
-        --yes
-%endif
 
 #############################################################################
 #
 # Pre Uninstall Section
 #
 #############################################################################
-%if %{use_mpi_selector}
-%preun
-%{mpi_selector} --unregister %{name}-%{version} --yes || \
-      /bin/true > /dev/null 2> /dev/null
-%endif
 
 #############################################################################
 #
@@ -686,9 +591,9 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 %if !%{sysconfdir_in_prefix}
 %{_sysconfdir}
 %endif
-# If %%{install_in_opt}, then we're instaling OMPI to
-# /opt/prte/<version>.  But be sure to also explicitly mention
-# /opt/prte so that it can be removed by RPM when everything under
+# If %%{install_in_opt}, then we're instaling PRRTE to
+# /opt/prrte/<version>.  But be sure to also explicitly mention
+# /opt/prrte so that it can be removed by RPM when everything under
 # there is also removed.
 %if %{install_in_opt}
 %dir /opt/%{name}
@@ -728,10 +633,10 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 %if !%{sysconfdir_in_prefix}
 %{_sysconfdir}
 %endif
-# If %%{install_in_opt}, then we're instaling OMPI to
+# If %%{install_in_opt}, then we're instaling PRRTE to
 # /opt/prte/<version>.  But be sure to also explicitly mention
 # /opt/prte so that it can be removed by RPM when everything under
-# there is also removed.  Also list /opt/prte/<version>/share so
+# there is also removed.  Also list /opt/prrte/<version>/share so
 # that it can be removed as well.
 %if %{install_in_opt}
 %dir /opt/%{name}
@@ -753,14 +658,6 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root, -)
 %{_includedir}
 
-# Note that we list the mandir specifically here, because we want all
-# files found in that tree, because rpmbuild may have compressed them
-# (e.g., foo.1.gz or foo.1.bz2) -- and we therefore don't know the
-# exact filenames.
-%files docs -f docs.files
-%defattr(-, root, root, -)
-%{_mandir}
-
 %endif
 
 
@@ -770,6 +667,11 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 #
 #############################################################################
 %changelog
+* Wed Aug 10 2022 Ralph Castain <rhc@pmix.org>
+- Major cleanup of cruft from prior history that does not
+  pertain to PRRTE. Cleanup from bad global search/replace
+  of "prrte" with "prte"
+
 * Thu Apr 7 2022 Adam Goldman <adam.goldman@intel.com>
 - Several minor fixes: added _includedir to build_all_in_one_rpm, 
   escape macro in comment, and use %{name} instead of hard-coded value
