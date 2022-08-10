@@ -14,6 +14,10 @@
 Usage: %s [OPTION]...
 Provide detailed information on your PRRTE installation.
 
+The following list of command line options are available. Note that
+more detailed help for any option can be obtained by adding that
+option to the help request as "--help <option>".
+
 /*****      General Options      *****/
 
 -a|--all                             Show all configuration options and MCA parameters
