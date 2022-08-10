@@ -20,7 +20,7 @@
 # -n name
 #    This option will change the name of the produced RPM to the "name".
 #    It is useful to use with "-o" and "-m" options if you want to have
-#    multiple PRTE versions installed simultaneously in the same
+#    multiple PRRTE versions installed simultaneously in the same
 #    enviroment. Requires use of option "-b".
 #
 # -o
@@ -54,7 +54,7 @@
 #    Add custom RPM build parameter.
 #
 # -s
-#    If specified, the script will try to unpack the prte.spec
+#    If specified, the script will try to unpack the prrte.spec
 #    file from the tarball specified on the command line. By default,
 #    the script will look for the specfile in the current directory.
 #
@@ -67,8 +67,8 @@
 # The following vars can be set from outside and will affect script behave:
 # prefix,rpmbuild_options,configure_options,build_srpm,build_single,build_multiple,rpmtopdir
 #
-specfile="prte.spec"
-prefix=${prefix:-"/opt/prte"}
+specfile="prrte.spec"
+prefix=${prefix:-"/opt/prrte"}
 rpmbuild_options=${rpmbuild_options:-"--define 'mflags -j4' --define '_source_filedigest_algorithm md5'  --define '_binary_filedigest_algorithm md5'"}
 configure_options=${configure_options:-""}
 unpack_spec=0
@@ -115,7 +115,7 @@ usage="Usage: $0 [-b][-o][-m][-d][-u][-s][-h] [-n name][-f lf_location][-t tm_lo
 
   -n name
              name of the resulting RPM package set to name. Requires -b flag.
-             {default: prte}
+             {default: prrte}
 
   -o         install in /opt/_NAME_/_VERSION_. Requires -b flag.
              {default: install in /usr}
@@ -137,8 +137,8 @@ usage="Usage: $0 [-b][-o][-m][-d][-u][-s][-h] [-n name][-f lf_location][-t tm_lo
   -d         build with Debugging support
              {default: without debugging support}
 
-  -s         try to unpack prte.spec file from tarball
-             {default: search for prte.spec in current directory}
+  -s         try to unpack prrte.spec file from tarball
+             {default: search for prrte.spec in current directory}
 
   -c parameter
              add custom configure parameter
@@ -148,7 +148,7 @@ usage="Usage: $0 [-b][-o][-m][-d][-u][-s][-h] [-n name][-f lf_location][-t tm_lo
 
   -h         print this message and exit
 
-  tarball    path to PRTE source tarball
+  tarball    path to PRRTE source tarball
   "
 
 #
@@ -164,7 +164,7 @@ while getopts bn:omif:t:dc:r:sh flag; do
       n) rpmbuild_options="$rpmbuild_options --define '_name $OPTARG'"
          ;;
       o) rpmbuild_options="$rpmbuild_options --define 'install_in_opt 1'"
-         configure_options="$configure_options --enable-mpirun-prefix-by-default"
+         configure_options="$configure_options --enable-prte-prefix-by-default"
          ;;
       m) rpmbuild_options="$rpmbuild_options --define 'install_modulefile 1'"
          ;;
@@ -222,14 +222,14 @@ fi
 first="`basename $tarball | cut -d- -f2`"
 version="`echo $first | sed -e 's/\.tar\.'$extension'//'`"
 unset first
-echo "--> Found PRTE version: $version"
+echo "--> Found PRRTE version: $version"
 
 #
 # Try to unpack spec file from tarball
 #
 
 if test $unpack_spec -eq 1; then
-    tar -xf $tarball --wildcards --no-anchored 'prte.spec' --strip=4
+    tar -xf $tarball --wildcards --no-anchored 'prrte.spec' --strip=4
 fi
 
 #
@@ -241,27 +241,6 @@ if test ! -r $specfile; then
     exit 1
 fi
 echo "--> Found specfile: $specfile"
-
-#
-# try to find Libfabric lib subir
-#
-if test -n $libfabric_path; then
-    # does lib64 exist?
-    if test -d $libfabric_path/lib64; then
-        # yes, so I will use lib64 as include dir
-        configure_options="$configure_options --with-libfabric=$libfabric_path \"LDFLAGS=-Wl,--build-id -Wl,-rpath -Wl,$libfabric_path/lib64 -Wl,--enable-new-dtags\""
-        echo "--> Found Libfabric lib dir: $libfabric_path/lib64"
-    # does lib exist?
-    elif test -d $libfabric_path/lib; then
-        # yes, so I will use lib as include dir
-        configure_options="$configure_options --with-libfabric=$libfabric_path \"LDFLAGS=-Wl,--build-id -Wl,-rpath -Wl,$libfabric_path/lib -Wl,--enable-new-dtags\""
-        echo "--> Found Libfabric lib dir: $libfabric_path/lib"
-    else
-        # I give up, there is no lib64 or lib subdir
-        echo "ERROR: Can't find Libfabric lib64/lib dir in $libfabric_path"
-        exit 1
-    fi
-fi
 
 #
 # Find where the top RPM-building directory is
@@ -356,7 +335,7 @@ fi
 # from the specfile
 #
 
-specdest="$rpmtopdir/SPECS/prte-$version.spec"
+specdest="$rpmtopdir/SPECS/prrte-$version.spec"
 sed -e 's/\$VERSION/'$version'/g' \
     -e 's/\$EXTENSION/'$extension'/g' \
     $specfile > "$specdest"
@@ -385,7 +364,7 @@ fi
 #
 
 if test "$build_srpm" = "yes"; then
-    echo "--> Building the PRTE SRPM"
+    echo "--> Building the PRRTE SRPM"
     rpmbuild_options="$rpmbuild_options --define 'dist %{nil}'"
     cmd="$rpm_cmd $rpmbuild_options -bs $specdest"
     echo "--> $cmd"
@@ -404,7 +383,7 @@ fi
 #
 
 if test "$build_single" = "yes"; then
-    echo "--> Building the single PRTE RPM"
+    echo "--> Building the single PRRTE RPM"
     cmd="$rpm_cmd -bb $rpmbuild_options --define 'build_all_in_one_rpm 1'"
     if test "$configure_options" != ""; then
         cmd="$cmd --define 'configure_options $configure_options'"
@@ -426,7 +405,7 @@ fi
 #
 
 if test "$build_multiple" = "yes"; then
-    echo "--> Building the multiple PRTE RPM"
+    echo "--> Building the multiple PRRTE RPM"
     cmd="$rpm_cmd -bb $rpmbuild_options --define 'build_all_in_one_rpm 0'"
     if test "$configure_options" != ""; then
         cmd="$cmd --define 'configure_options $configure_options'"
@@ -450,7 +429,7 @@ fi
 cat <<EOF
 
 ------------------------------------------------------------------------------
-====                FINISHED BUILDING PRTE RPM                        ====
+====                FINISHED BUILDING PRTRE RPM                        ====
 ------------------------------------------------------------------------------
 A copy of the tarball is located in: $rpmtopdir/SOURCES/
 The completed rpms are located in:   $rpmtopdir/RPMS/i<something>86/
