@@ -19,6 +19,10 @@
 Usage: %s [OPTION]...
 Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
+The following list of command line options are available. Note that
+more detailed help for any option can be obtained by adding that
+option to the help request as "--help <option>".
+
 /*****      General Options      *****/
 
 -h|--help                            This help message
@@ -152,16 +156,31 @@ Name of daemon executable used to start processes on remote nodes (default: prte
 Maximum number of daemons to start
 #
 [debug-daemons]
-Debug daemon output enabled
+Debug daemon output enabled. This is a somewhat limited stream of information. The
+primary use for this option is to ensure that the daemon output streams (e.g., stderr)
+remain open after launch, thus allowing the user to see any daemon-generated error
+messages. Otherwise, the daemon will "daemonize" itself upon launch, thereby closing
+its output streams.
 #
 [debug-daemons-file]
-Enable debugging of any PRTE daemons used by this application, storing output in files
+Debug daemon output is enabled and all output from the daemons is redirected into
+files named
+
+   output-prted-<daemon-nspace>-<nodename>.log
+
+to avoid conflict on shared file systems. The files are located in the top-level
+session directory assigned to the DVM.
+
+#include#help-schizo-cli#session-dir
+
 #
 [leave-session-attached]
 Do not discard stdout/stderr of remote PRTE daemons
 #
 [tmpdir]
-Set the root for the session directory tree
+Define the root location for the PRRTE session directory tree
+
+#include#help-schizo-cli#tmpdir
 #
 [prefix]
 Prefix to be used to look for RTE executables
@@ -198,7 +217,7 @@ Provide a hostfile (synonym for "hostfile")
 #include#help-schizo-cli#dvm-hostfile
 #
 [host]
-Comma-separated list of hosts to use for the DVM
+#include#help-schizo-cli#dash-host
 #
 [stream-buffering]
 Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]
