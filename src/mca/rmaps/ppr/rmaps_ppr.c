@@ -337,7 +337,7 @@ static int ppr_mapper(prte_job_t *jdata,
         if (0 == app->num_procs) {
             app->num_procs = nprocs_mapped;
         }
-        if (nprocs_mapped < options->nprocs) {
+        if (nprocs_mapped < app->num_procs) {
             /* couldn't map them all */
             pmix_show_help("help-prte-rmaps-ppr.txt", "ppr-too-many-procs", true, app->app,
                            app->num_procs, nprocs_mapped, options->nprocs, jobppr);
