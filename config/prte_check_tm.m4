@@ -159,9 +159,9 @@ AC_DEFUN([PRTE_CHECK_TM],[
               [OAC_CHECK_PACKAGE([tm],
                                  [$1],
                                  [tm.h],
-                                 [pbs],
+                                 [pbs crypto z],
                                  [tm_init],
-                                 [prte_cv_check_tm_libs="pbs"
+                                 [prte_cv_check_tm_libs="pbs crypto z"
                                   prte_check_tm_found=1])])
                AS_IF([test ${prte_check_tm_found} -eq 0],
                      [OAC_CHECK_PACKAGE_INVALIDATE_GENERIC_CACHE([tm], [$1], [tm_init])
