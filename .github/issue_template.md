@@ -2,9 +2,9 @@ Thank you for taking the time to submit an issue!
 
 ## Background information
 
-### What version of the PMIx Reference Server are you using? (e.g., v1.0, v2.1, git master @ hash, etc.)
+### What version of the PMIx Reference RTE (PRRTE) are you using? (e.g., v2.0, v3.0, git master @ hash, etc.)
 
-##### What version of PMIx are you using? (e.g., v1.2.5, v2.0.3, v2.1.0, git branch name and hash, etc.)
+##### What version of PMIx are you using? (e.g., v4.2.0, git branch name and hash, etc.)
 
 ### Please describe the system on which you are running
 
