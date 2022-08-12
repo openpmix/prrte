@@ -385,95 +385,28 @@ Specify procs to receive stdin [rank, "all", "none"] (default: 0, indicating ran
 Name of file to specify explicit task mapping
 #
 [placement]
-Process Mapping / Ranking / Binding Options in detail
-
-Processes are mapped to the resources in an allocation according to the
-directive provided by the user via the --map-by command line option. Supported
-directives include:
-
--   SLOT fills each node up to the number of available slots before moving
-    on to the next node in the allocation.
--   NODE places processes in a round-robin fashion across all nodes in the
-    allocation, subject to limitations on the number of available slots on
-    each node.
--   HWTHREAD places one process on each available hwthread on a node before
-    moving on to the next node in the allocation, subject to limitations on
-    the number of available slots on each node.
--   CORE places one process on each available core on a node before
-    moving on to the next node in the allocation, subject to limitations on
-    the number of available slots on each node.
--   L1CACHE places one process on each available L1 cache on a node before
-    moving on to the next node in the allocation, subject to limitations on
-    the number of available slots on each node.
--   L2CACHE places one process on each available L2 cache on a node before
-    moving on to the next node in the allocation, subject to limitations on
-    the number of available slots on each node.
--   L3CACHE places one process on each available L3 cache on a node before
-    moving on to the next node in the allocation, subject to limitations on
-    the number of available slots on each node.
--   NUMA places one process on each available NUMA region on a node before
-    moving on to the next node in the allocation, subject to limitations on
-    the number of available slots on each node.
--   PACKAGE places one process on each available package on a node before
-    moving on to the next node in the allocation, subject to limitations on
-    the number of available slots on each node.
-
---map-by <object>
-    Map to the specified object. See defaults in Quick Summary. Supported options
-    include slot, hwthread, core, l1cache, l2cache, l3cache, numa, package, node,
-    seq, ppr, rankfile, and pe-list
-
-Mapping by slot
-Any directive can include qualifiers by adding a colon (:) and any
-combination of one or more of the following to the --map-by option
-(except where noted):
-
--   PE=n bind n processing elements to each process (can not be
-    used in combination with rankfile or pe-list directives)
--   SPAN load balance the processes across the allocation by treating
-    the allocation as a single "super-node" (can not be
-    used in combination with slot, node, seq, ppr, rankfile, or
-    pe-list directives)
--   OVERSUBSCRIBE allow more processes on a node than processing elements
--   NOOVERSUBSCRIBE means !OVERSUBSCRIBE
--   NOLOCAL do not launch processes on the same node as prun
--   HWTCPUS use hardware threads as CPU slots
--   CORECPUS use cores as CPU slots (default)
--   INHERIT
--   NOINHERIT means !INHERIT
--   FILE=<path> (path to file containing sequential or rankfile entries).
--   ORDERED only applies to the PE-LIST option and indicates that
-    procs are to be bound to each of the specified CPUs in the order
-    in which they are assigned (i.e., the first proc on a node shall
-    be bound to the first CPU in the list, the second proc shall be
-    bound to the second CPU, etc.)
-
-
-ppr policy example: --map-by ppr:N:<object> will launch N times the number
-of objects of the specified type on each node.
-
-By default, process ranks are assigned in accordance with the mapping
-directive - e.g., jobs that are mapped by node will have the process
-ranks assigned on a per-node basis. However, users can override the
-default by specifying any of the following directives using the --rank-by
-command line option:
-
--   SLOT assigns ranks to each process on a node in the order in
-    which the mapper assigned them.
--   NODE assigns ranks
--   FILL
-
-To bind processes to sets of objects:
-
---bind-to <object>
-
-    Bind processes to the specified object. See defaults in Quick Summary. Supported options include none, hwthread, core, l1cache, l2cache, l3cache, numa, and package, cpu-set (bind each proc to the specified set, effectively a "soft" c-group)
-
-Any object can include qualifiers by adding a colon (:) and any combination of one or more of the following to the --bind-to option:
-
--   overload-allowed allows for binding more than one process in relation to a CPU
--   if-supported if that object is supported on this system
-
+#include#help-prte-rmaps-base#placement
+#
+[placement-examples]
+#include#help-prte-rmaps-base#placement-examples
+#
+[placement-all]
+#include#help-prte-rmaps-base#placement-all
+#
+[placement-fundamentals]
+#include#help-prte-rmaps-base#placement-fundamentals
+#
+[placement-limits]
+#include#help-prte-rmaps-base#placement-limits
+#
+[placement-diagnostics]
+#include#help-prte-rmaps-base#placement-diagnostics
+#
+[placement-rankfiles]
+#include#help-prte-rmaps-base#placement-rankfiles
+#
+[placement-deprecated]
+#include#help-prte-rmaps-base#placement-deprecated
 #
 [display]
 #include#help-schizo-cli#display
