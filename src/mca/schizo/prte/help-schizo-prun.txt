@@ -241,62 +241,13 @@ ID of the singleton process that started us
 Pipe to monitor - DVM will terminate upon closure
 #
 [map-by]
-Mapping Policy for job:
-    slot
-    hwthread
-    core (default: np <= 2)
-    l1cache
-    l2cache
-    l3cache
-    numa (default: np > 2)
-    package
-    node
-    seq
-    dist
-    ppr
-    rankfile
-with supported colon-delimited qualifiers:
-    PE=y (for multiple cpus/proc)
-    SPAN
-    OVERSUBSCRIBE
-    NOOVERSUBSCRIBE
-    NOLOCAL
-    HWTCPUS
-    CORECPUS
-    DEVICE(for dist policy)
-    INHERIT
-    NOINHERIT
-    PE-LIST=a,b (comma-delimited ranges of cpus to use for this job)
-    FILE=<path> for seq and rankfile options
+#include#help-prte-rmaps-base#map-by-option
 #
 [rank-by]
-Ranking Policy for job:
-    slot (default: np <= 2)
-    hwthread
-    core
-    l1cache
-    l2cache
-    l3cache
-    numa (default: np > 2)
-    package
-    node
-with supported colon-delimited qualifiers:
-    SPAN
-    FILL
+#include#help-prte-rmaps-base#rank-by-option
 #
 [bind-to]
-Binding Policy for job:
-    none (default: oversubscribed)
-    hwthread
-    core (default: np <= 2)
-    l1cache
-    l2cache
-    l3cache
-    numa (default: np > 2)
-    package
-with supported colon-delimited qualifiers:
-    overload-allowed
-    if-supported
+#include#help-prte-hwloc-base#bind-to-option
 #
 [display]
 #include#help-schizo-cli#display
@@ -306,6 +257,30 @@ with supported colon-delimited qualifiers:
 #
 [rankfile]
 Name of file to specify explicit task mapping
+#
+[placement]
+#include#help-prte-rmaps-base#placement
+#
+[placement-all]
+#include#help-prte-rmaps-base#placement-all
+#
+[placement-examples]
+#include#help-prte-rmaps-base#placement-examples
+#
+[placement-fundamentals]
+#include#help-prte-rmaps-base#placement-fundamentals
+#
+[placement-limits]
+#include#help-prte-rmaps-base#placement-limits
+#
+[placement-diagnostics]
+#include#help-prte-rmaps-base#placement-diagnostics
+#
+[placement-rankfiles]
+#include#help-prte-rmaps-base#placement-rankfiles
+#
+[placement-deprecated]
+#include#help-prte-rmaps-base#placement-deprecated
 #
 [do-not-launch]
 Perform all necessary operations to prepare to launch the
