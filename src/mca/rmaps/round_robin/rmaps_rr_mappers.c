@@ -113,6 +113,7 @@ pass:
             options->nprocs <= node->slots_available &&
             !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
             options->bind = PRTE_BIND_TO_NONE;
+            jdata->map->binding = PRTE_BIND_TO_NONE;
         }
 
         if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, NULL, options)) {
@@ -251,6 +252,7 @@ pass:
             options->nprocs <= node->slots_available &&
             !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
             options->bind = PRTE_BIND_TO_NONE;
+            jdata->map->binding = PRTE_BIND_TO_NONE;
         }
 
         if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, NULL, options)) {
@@ -386,6 +388,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
             options->nprocs <= node->slots_available &&
             !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
             options->bind = PRTE_BIND_TO_NONE;
+            jdata->map->binding = PRTE_BIND_TO_NONE;
         }
 
         if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, NULL, options)) {
@@ -592,6 +595,7 @@ pass:
             nprocs <= node->slots_available &&
             !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
             options->bind = PRTE_BIND_TO_NONE;
+            jdata->map->binding = PRTE_BIND_TO_NONE;
         }
 
         nodefull = false;
