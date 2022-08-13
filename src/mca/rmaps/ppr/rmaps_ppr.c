@@ -257,6 +257,7 @@ static int ppr_mapper(prte_job_t *jdata,
                     options->nprocs <= node->slots_available &&
                     !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
                     options->bind = PRTE_BIND_TO_NONE;
+                    jdata->map->binding = PRTE_BIND_TO_NONE;
                 }
                 /* check availability and set the target cpuset - this
                  * also computes the nprocs to be assigned capped by
@@ -299,6 +300,7 @@ static int ppr_mapper(prte_job_t *jdata,
                     options->nprocs <= node->slots_available &&
                     !PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
                     options->bind = PRTE_BIND_TO_NONE;
+                    jdata->map->binding = PRTE_BIND_TO_NONE;
                 }
                 /* map the specified number of procs to each such resource on this node */
                 for (j = 0; j < nobjs && nprocs_mapped < app->num_procs; j++) {
