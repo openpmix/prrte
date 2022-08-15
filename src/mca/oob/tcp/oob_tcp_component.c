@@ -44,6 +44,9 @@
 #    include <sys/types.h>
 #endif
 #include <fcntl.h>
+#ifdef HAVE_NET_IF_H
+#    include <net/if.h>
+#endif
 #ifdef HAVE_NETINET_IN_H
 #    include <netinet/in.h>
 #endif
@@ -408,13 +411,32 @@ static int component_available(void)
     char string[50];
     int kindex;
     int i;
+    bool keeploopback = false;
 
     prte_output_verbose(5, prte_oob_base_framework.framework_output,
                         "oob:tcp: component_available called");
 
+    /* if we are the master, then check the interfaces for loopbacks
+     * and keep loopbacks only if no non-loopback interface exists */
+    if (PRTE_PROC_IS_MASTER) {
+        keeploopback = true;
+        PMIX_LIST_FOREACH(selected_interface, &pmix_if_list, pmix_pif_t)
+        {
+            if (!(selected_interface->if_flags & IFF_LOOPBACK)) {
+                keeploopback = false;
+                break;
+            }
+        }
+    }
+
     /* look at all available interfaces */
     PMIX_LIST_FOREACH(selected_interface, &pmix_if_list, pmix_pif_t)
     {
+        if ((selected_interface->if_flags & IFF_LOOPBACK) &&
+            !keeploopback) {
+            continue;
+        }
+
         i = selected_interface->if_index;
         kindex = selected_interface->if_kernel_index;
         memcpy((struct sockaddr *) &my_ss, &selected_interface->if_addr,
@@ -565,7 +587,8 @@ static char *component_get_addr(void)
 {
     char *cptr = NULL, *tmp, *tp, *tm;
 
-    if (!prte_oob_tcp_component.disable_ipv4_family && NULL != prte_oob_tcp_component.ipv4conns) {
+    if (!prte_oob_tcp_component.disable_ipv4_family &&
+        NULL != prte_oob_tcp_component.ipv4conns) {
         tmp = pmix_argv_join(prte_oob_tcp_component.ipv4conns, ',');
         tp = pmix_argv_join(prte_oob_tcp_component.ipv4ports, ',');
         tm = pmix_argv_join(prte_oob_tcp_component.if_masks, ',');
