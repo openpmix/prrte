@@ -6,7 +6,7 @@
 # Copyright (c) 2017-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
@@ -28,7 +28,7 @@
 #
 # Adds the following to the wrapper compilers:
 #  * CPPFLAGS: none
-#  * LDLFGAS: add prte_libevent_LDFLAGS
+#  * LDFLAGS: add prte_libevent_LDFLAGS
 #  * LIBS: add prte_libevent_LIBS
 AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
     PRTE_VAR_SCOPE_PUSH([prte_event_dir prte_event_libdir prte_check_libevent_save_CPPFLAGS prte_check_libevent_save_LDFLAGS prte_check_libevent_save_LIBS])
