@@ -69,6 +69,7 @@
 #include "src/event/event-internal.h"
 #include "src/mca/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
+#include "src/mca/pinstalldirs/pinstalldirs_types.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/output.h"
@@ -340,7 +341,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
 {
     int argc;
     char **argv;
-    char *param, *value;
+    char *param, *value, *value2;
     prte_plm_ssh_shell_t remote_shell, local_shell;
     int orted_argc;
     char **orted_argv;
@@ -461,6 +462,7 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
 
     if (NULL != prefix_dir) {
         value = pmix_basename(prte_install_dirs.libdir);
+        value2 = pmix_basename(pmix_pinstall_dirs.libdir);
         if (PRTE_PLM_SSH_SHELL_SH == remote_shell ||
             PRTE_PLM_SSH_SHELL_KSH == remote_shell ||
             PRTE_PLM_SSH_SHELL_ZSH == remote_shell ||
@@ -474,12 +476,22 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
                 pmix_argv_append_nosize(&final_argv, tmp);
                 pmix_argv_append_nosize(&final_argv, "export PMIX_PREFIX");
                 free(tmp);
+                pmix_asprintf(&tmp, "LD_LIBRARY_PATH=%s/%s:%s/%s:$LD_LIBRARY_PATH",
+                              prefix_dir, value, param, value2);
+            } else {
+                pmix_asprintf(&tmp, "LD_LIBRARY_PATH=%s/%s:%s:$LD_LIBRARY_PATH",
+                              prefix_dir, value, pmix_pinstall_dirs.libdir);
             }
-            pmix_asprintf(&tmp, "LD_LIBRARY_PATH=%s/%s:$LD_LIBRARY_PATH", prefix_dir, value);
             pmix_argv_append_nosize(&final_argv, tmp);
             pmix_argv_append_nosize(&final_argv, "export LD_LIBRARY_PATH");
             free(tmp);
-            pmix_asprintf(&tmp, "DYLD_LIBRARY_PATH=%s/%s:$DYLD_LIBRARY_PATH", prefix_dir, value);
+            if (NULL != param) {
+                pmix_asprintf(&tmp, "DYLD_LIBRARY_PATH=%s/%s:%s/%s:$DYLD_LIBRARY_PATH",
+                              prefix_dir, value, param, value2);
+            } else {
+                pmix_asprintf(&tmp, "DYLD_LIBRARY_PATH=%s/%s:%s:$DYLD_LIBRARY_PATH",
+                              prefix_dir, value, pmix_pinstall_dirs.libdir);
+            }
             pmix_argv_append_nosize(&final_argv, tmp);
             pmix_argv_append_nosize(&final_argv, "export DYLD_LIBRARY_PATH");
             free(tmp);
@@ -505,14 +517,27 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
                 free(tmp);
             }
             pmix_argv_append_nosize(&final_argv, "if ( $?LD_LIBRARY_PATH == 1 ) set PRTE_have_llp");
-            pmix_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s/%s", prefix_dir, value);
+            if (NULL != param) {
+                pmix_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s/%s:%s/%s",
+                              prefix_dir, value, param, value2);
+            } else {
+                pmix_asprintf(&tmp, "if ( $?LD_LIBRARY_PATH == 0 ) setenv LD_LIBRARY_PATH %s/%s:%s",
+                              prefix_dir, value, pmix_pinstall_dirs.libdir);
+            }
             pmix_argv_append_nosize(&final_argv, tmp);
             free(tmp);
-            pmix_asprintf(&tmp, "if ( $?PRTE_have_llp == 1 ) setenv LD_LIBRARY_PATH %s/%s:$LD_LIBRARY_PATH", prefix_dir, value);
+            if (NULL != param) {
+                pmix_asprintf(&tmp, "if ( $?PRTE_have_llp == 1 ) setenv LD_LIBRARY_PATH %s/%s:%s/%s:$LD_LIBRARY_PATH",
+                              prefix_dir, value, param, value2);
+            } else {
+                pmix_asprintf(&tmp, "if ( $?PRTE_have_llp == 1 ) setenv LD_LIBRARY_PATH %s/%s:%s:$LD_LIBRARY_PATH",
+                              prefix_dir, value, pmix_pinstall_dirs.libdir);
+            }
             pmix_argv_append_nosize(&final_argv, tmp);
             free(tmp);
         }
         free(value);
+        free(value2);
     }
 
 
