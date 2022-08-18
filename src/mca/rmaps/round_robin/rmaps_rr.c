@@ -196,8 +196,10 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
          */
         PMIX_LIST_DESTRUCT(&node_list);
     }
+    /* calculate the ranks for this job */
+    rc = prte_rmaps_base_compute_vpids(jdata, options);
 
-    return PRTE_SUCCESS;
+    return rc;
 
 error:
     PMIX_LIST_DESTRUCT(&node_list);

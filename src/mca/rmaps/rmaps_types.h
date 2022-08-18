@@ -104,7 +104,6 @@ typedef struct {
     unsigned nnodes;
     unsigned total_nobjs;
     unsigned nobjs;
-    pmix_rank_t last_rank;
 
     /* binding values */
     prte_binding_policy_t bind;

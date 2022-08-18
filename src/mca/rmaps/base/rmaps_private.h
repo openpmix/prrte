@@ -62,7 +62,6 @@ PRTE_EXPORT void prte_rmaps_base_get_starting_point(pmix_list_t *node_list,
 
 
 PRTE_EXPORT int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
-                                              prte_app_context_t *app,
                                               prte_rmaps_options_t *options);
 
 PRTE_EXPORT int prte_rmaps_base_bind_proc(prte_job_t *jdata,
