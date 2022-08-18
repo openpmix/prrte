@@ -143,9 +143,7 @@ pass:
         }
 
         if (nprocs_mapped == app->num_procs) {
-            /* calculate the ranks for this app */
-            rc = prte_rmaps_base_compute_vpids(jdata, app, options);
-            return rc;
+            return PRTE_SUCCESS;
         }
         options->bind = savebind;
     }
@@ -295,9 +293,7 @@ pass:
             }
         }
         if (nprocs_mapped == app->num_procs) {
-            /* calculate the ranks for this app */
-            rc = prte_rmaps_base_compute_vpids(jdata, app, options);
-            return rc;
+            return PRTE_SUCCESS;
         }
         options->bind = savebind;
     }
@@ -417,9 +413,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
             }
         }
         if (nprocs_mapped == app->num_procs) {
-            /* calculate the ranks for this app */
-            rc = prte_rmaps_base_compute_vpids(jdata, app, options);
-            return rc;
+            return PRTE_SUCCESS;
         }
     }
 
@@ -681,9 +675,7 @@ pass:
             }
         }
         if (nprocs_mapped == app->num_procs) {
-            /* calculate the ranks for this app */
-            rc = prte_rmaps_base_compute_vpids(jdata, app, options);
-            return rc;
+            return PRTE_SUCCESS;
         }
         options->bind = savebind;
     }

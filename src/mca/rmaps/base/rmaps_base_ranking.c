@@ -44,8 +44,33 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/rmaps/base/rmaps_private.h"
 
+static void compute_app_rank(prte_job_t *jdata)
+{
+    int i, j, k;
+    prte_app_context_t *app;
+    prte_proc_t *proc;
+
+    for (i=0; i < jdata->apps->size; i++) {
+        app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
+        if (NULL == app) {
+            continue;
+        }
+        k=0;
+        /* loop thru all procs in job to find those from this app_context */
+        for (j=0; j < jdata->procs->size; j++) {
+            proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, j);
+            if (NULL == proc) {
+                continue;
+            }
+            if (proc->app_idx != app->idx) {
+                continue;
+            }
+            proc->app_rank = k++;
+        }
+    }
+}
+
 int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
-                                  prte_app_context_t *app,
                                   prte_rmaps_options_t *options)
 {
     int m, n;
@@ -54,13 +79,12 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
     prte_proc_t *proc;
     int rc;
     hwloc_obj_t obj;
-    pmix_rank_t rank, lrank, apprank;
+    pmix_rank_t rank, lrank;
 
     if (options->userranked) {
         /* ranking has already been done, but we still need to
          * compute the local and app ranks (node rank is computed
          * on-the-fly during mapping) */
-        apprank = 0;
         for (n=0; n < jdata->map->nodes->size; n++) {
             node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
             if (NULL == node) {
@@ -75,23 +99,17 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                 if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
                     continue;
                 }
-                if (app->idx != proc->app_idx) {
-                    continue;
-                }
-                proc->name.rank = rank;
                 proc->local_rank = lrank;
-                proc->app_rank = apprank;
                 PMIX_RETAIN(proc);
                 rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_RELEASE(proc);
                     return rc;
                 }
-                ++rank;
                 ++lrank;
-                ++apprank;
             }
         }
+        compute_app_rank(jdata);
         return PRTE_SUCCESS;
     }
 
@@ -101,8 +119,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
      * proc array - this is the order in which they
      * were assigned */
     if (PRTE_RANK_BY_SLOT == options->rank) {
-        rank = options->last_rank;
-        apprank = 0;
+        rank = 0;
         for (n=0; n < jdata->map->nodes->size; n++) {
             node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
             if (NULL == node) {
@@ -117,12 +134,8 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                 if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
                     continue;
                 }
-                if (app->idx != proc->app_idx) {
-                    continue;
-                }
                 proc->name.rank = rank;
                 proc->local_rank = lrank;
-                proc->app_rank = apprank;
                 PMIX_RETAIN(proc);
                 rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
                 if (PMIX_SUCCESS != rc) {
@@ -131,11 +144,9 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                 }
                 ++rank;
                 ++lrank;
-                ++apprank;
             }
         }
-        /* save the starting place for the next app */
-        options->last_rank = rank;
+        compute_app_rank(jdata);
         return PRTE_SUCCESS;
     }
 
@@ -143,13 +154,12 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
      * used by this app (which is stored in the "options" struct)
      * and increment the rank for each proc on each node by that */
     if (PRTE_RANK_BY_NODE == options->rank) {
-        apprank = 0;
         for (n=0; n < jdata->map->nodes->size; n++) {
             node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
             if (NULL == node) {
                 continue;
             }
-            rank = n + options->last_rank;
+            rank = n;
             lrank = 0;
             for (m=0; m < node->procs->size; m++) {
                 proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
@@ -159,12 +169,8 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                 if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
                     continue;
                 }
-                if (app->idx != proc->app_idx) {
-                    continue;
-                }
                 proc->name.rank = rank;
                 proc->local_rank = lrank;
-                proc->app_rank = apprank;
                 PMIX_RETAIN(proc);
                 rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
                 if (PMIX_SUCCESS != rc) {
@@ -173,11 +179,9 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                 }
                 rank += options->nnodes;
                 ++lrank;
-                ++apprank;
             }
         }
-        /* save the starting place for the next app */
-        options->last_rank = rank;
+        compute_app_rank(jdata);
         return PRTE_SUCCESS;
     }
 
@@ -185,8 +189,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
      * object on each node prior to moving to the next object
      * on that node */
     if (PRTE_RANK_BY_FILL == options->rank) {
-        rank = options->last_rank;
-        apprank = 0;
+        rank = 0;
         for (n=0; n < jdata->map->nodes->size; n++) {
             node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
             if (NULL == node) {
@@ -206,16 +209,12 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                     if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
                         continue;
                     }
-                    if (app->idx != proc->app_idx) {
-                        continue;
-                    }
                     if (obj != proc->obj) {
                         continue;
                     }
                     /* this proc is on this object, so rank it */
                     proc->name.rank = rank;
                     proc->local_rank = lrank;
-                    proc->app_rank = apprank;
                     PMIX_RETAIN(proc);
                     rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
                     if (PMIX_SUCCESS != rc) {
@@ -224,12 +223,10 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                     }
                     rank++;
                     lrank++;
-                    apprank++;
                 }
             }
         }
-        /* save the starting place for the next app */
-        options->last_rank = rank;
+        compute_app_rank(jdata);
         return PRTE_SUCCESS;
     }
 
@@ -242,11 +239,10 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
      * are in the node's proc array in object order. Hence, we have
      * to search for them even though that eats up time */
     if (PRTE_RANK_BY_SPAN == options->rank) {
-        apprank = 0;
-        rank = options->last_rank;
+        rank = 0;
         pass = 0;
-        while (apprank < app->num_procs) {
-            for (n=0; n < jdata->map->nodes->size && apprank < app->num_procs; n++) {
+        while (rank < jdata->num_procs) {
+            for (n=0; n < jdata->map->nodes->size && rank < jdata->num_procs; n++) {
                 node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
                 if (NULL == node) {
                     continue;
@@ -255,12 +251,12 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                                                            options->maptype, options->cmaplvl);
                 lrank = pass * nobjs;
                 /* make a pass across all objects on this node */
-                for (k=0; k < nobjs && apprank < app->num_procs; k++) {
+                for (k=0; k < nobjs && rank < jdata->num_procs; k++) {
                     /* get this object */
                     obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
                                                           options->maptype, options->cmaplvl, k);
                     /* find an unranked proc on this object */
-                    for (m=0; m < node->procs->size && apprank < app->num_procs; m++) {
+                    for (m=0; m < node->procs->size && rank < jdata->num_procs; m++) {
                         proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
                         if (NULL == proc) {
                             continue;
@@ -268,15 +264,11 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                         if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
                             continue;
                         }
-                        if (app->idx != proc->app_idx) {
-                            continue;
-                        }
                         if (obj != proc->obj) {
                             continue;
                         }
                         if (PMIX_RANK_INVALID == proc->name.rank) {
                             proc->name.rank = rank;
-                            proc->app_rank = apprank;
                             proc->local_rank = lrank;
                             PMIX_RETAIN(proc);
                             rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
@@ -285,7 +277,6 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                                 return rc;
                             }
                             ++rank;
-                            ++apprank;
                             ++lrank;
                             break;
                         }
@@ -294,8 +285,7 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
             }
             ++pass;
         }
-        /* save the starting place for the next app */
-        options->last_rank = rank;
+        compute_app_rank(jdata);
         return PRTE_SUCCESS;
     }
 

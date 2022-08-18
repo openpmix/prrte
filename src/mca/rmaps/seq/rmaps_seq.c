@@ -369,8 +369,6 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             /* move to next node */
             sq = (seq_node_t *) pmix_list_get_next(&sq->super);
         }
-        /* compute local/app ranks */
-        rc = prte_rmaps_base_compute_vpids(jdata, app, options);
 
         /** track the total number of processes we mapped */
         jdata->num_procs += app->num_procs;
@@ -385,8 +383,9 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             free(hosts);
         }
     }
-
-    return PRTE_SUCCESS;
+    /* compute local/app ranks */
+    rc = prte_rmaps_base_compute_vpids(jdata, options);
+    return rc;
 
 error:
     PMIX_LIST_DESTRUCT(&default_seq_list);
