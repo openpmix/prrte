@@ -868,18 +868,11 @@ static int map_colocate(prte_job_t *jdata,
                 }
             }
         }
-        for (i=0; i < jdata->apps->size; i++) {
-            app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
-            if (NULL == app) {
-                continue;
-            }
-            /* calculate the ranks for this app */
-            ret = prte_rmaps_base_compute_vpids(jdata, app, options);
-            if (PRTE_SUCCESS != ret) {
-                return ret;
-            }
+        /* calculate the ranks for this job */
+        ret = prte_rmaps_base_compute_vpids(jdata, options);
+        if (PRTE_SUCCESS != ret) {
+            return ret;
         }
-
         ret = PRTE_SUCCESS;
         goto done;
     }
@@ -934,16 +927,9 @@ static int map_colocate(prte_job_t *jdata,
             }
         }
     }
-    for (i=0; i < jdata->apps->size; i++) {
-        app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
-        if (NULL == app) {
-            continue;
-        }
-        /* calculate the ranks for this app */
-        ret = prte_rmaps_base_compute_vpids(jdata, app, options);
-        if (PRTE_SUCCESS != ret) {
-            return ret;
-        }
+    ret = prte_rmaps_base_compute_vpids(jdata, options);
+    if (PRTE_SUCCESS != ret) {
+        return ret;
     }
     ret = PRTE_SUCCESS;
 

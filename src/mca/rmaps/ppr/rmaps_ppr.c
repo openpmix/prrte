@@ -346,18 +346,15 @@ static int ppr_mapper(prte_job_t *jdata,
             rc = PRTE_ERR_SILENT;
             goto error;
         }
-        /* calculate the ranks for this app */
-        rc = prte_rmaps_base_compute_vpids(jdata, app, options);
-        if (PRTE_SUCCESS != rc) {
-            return rc;
-        }
 
         jdata->num_procs += app->num_procs;
 
         PMIX_LIST_DESTRUCT(&node_list);
     }
     free(jobppr);
-    return PRTE_SUCCESS;
+    /* calculate the ranks for this app */
+    rc = prte_rmaps_base_compute_vpids(jdata, options);
+    return rc;
 
 error:
     PMIX_LIST_DESTRUCT(&node_list);
