@@ -33,94 +33,61 @@ option to the help request as "--help <option>".
 
 /*****       Debug Options       *****/
 
-   --debug-daemons                   Debug daemons - if not set, the "verbose" setting will be limited to
-                                     the DVM controller to reduce clutter
+   --debug-daemons                   Debug daemons - if not set, any "verbose" settings will be limited to
+                                     the prterun itself to reduce clutter
    --debug-daemons-file              Enable debugging of any PRRTE daemons used by this application, storing
                                      their verbose output in files
-   --display <arg0>                  Options for displaying information about the allocation and job. Allowed
-                                     values: allocation, bind, map, map-devel, topo. No qualifiers.
+   --display <arg0>                  Options for displaying information about the allocation and job.
+   --spawn-timeout <arg0>            Timeout the job if spawn takes more than the specified number of seconds
+   --timeout <arg0>                  Timeout the job if execution is not complete after the specified
+                                     number of seconds
    --get-stack-traces                Get stack traces of all application procs on timeout
    --leave-session-attached          Do not discard stdout/stderr of remote PRRTE daemons
    --report-state-on-timeout         Report all job and process states upon timeout
-   --spawn-timeout <arg0>            Timeout the job if spawn takes more than the specified number of seconds
    --stop-on-exec                    If supported, stop each specified process at start of execution
    --stop-in-init                    Direct the specified processes to stop in PMIx_Init
    --stop-in-app                     Direct the specified processes to stop at an application-controlled location
-   --test-suicide <arg0>             Suicide instead of clean abort after delay
-   --timeout <arg0>                  Timeout the job after the specified number of seconds
+   --test-suicide <arg0>             Direct that the specified daemon suicide after delay
+   --do-not-launch                   Perform all necessary operations to prepare to launch the application,
+                                     but do not actually launch it (usually used to test mapping patterns)
 
 
 
 /*****      Output Options       *****/
 
    --output <arg0>                   Comma-delimited list of options that control how output is
-                                     generated. Allowed values: tag, tag-detailed, tag-fullname,
-                                     timestamp, xml, merge-stderr-to-stdout, dir=DIRNAME,
-                                     file=FILENAME. Qualifiers: nocopy, raw
+                                     generated.
    --report-child-jobs-separately    Return the exit status of the primary job only
-   --xterm <arg0>                    Create a new xterm window and display output from the specified ranks
-                                     there
+   --xterm <arg0>                    Create a new xterm window for each of the comma-delimited ranges
+                                     of application process ranks
 
 
 
 /*****       Input Options       *****/
 
-   --stdin <arg0>                    Specify procs to receive stdin [rank, all, none] (default: 0, indicating
-                                     rank 0)
+   --stdin <arg0>                    Specify application rank(s) to receive stdin [rank, all, none]
+                                     (default: 0, indicating rank 0)
 
 
 
-/*****      Mapping Options      *****/
+/*****      Placement Options      *****/
 
-   --map-by <arg0>                   Mapping Policy for job [slot | hwthread | core | l1cache
-                                     | l2cache | l3cache | numa | package | node | seq
-                                     | ppr | rankfile | PE-LIST=a,b (comma-delimited ranges of cpus to use for
-                                     this job)]. Supported colon-delimited qualifiers include PE=y (for
-                                     multiple cpus/proc), SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL,
-                                     HWTCPUS, CORECPUS, DEVICE(for dist policy), INHERIT, NOINHERIT, DONOTLAUNCH,
-                                     FILE=<path> for seq and rankfile options, ORDERED to indicate that the
-                                     CPUs specified in PE-LIST should be assigned to individual procs in
-                                     specified order (i.e., the first proc on a node is bound to the first
-                                     CPU in the list, the second proc to the second CPU, etc.). The PE-LIST
-                                     option without the ORDERED qualifier will result in each proc being
-                                     bound to the complete list of CPUs.
-
-
-
-/*****      Ranking Options      *****/
-
-   --rank-by <arg0>                  Ranking Policy for job [slot (default) | node | fill | object | span]
-                                     with no qualifiers
-
-
-
-/*****      Binding Options      *****/
-
-   --bind-to <arg0>                  Binding policy for job. Allowed values: none, hwthread, core, l1cache,
-                                     l2cache, l3cache, numa, package, ("none" is the default when
-                                     oversubscribed, "core" is the default otherwise). Allowed qualifiers
-                                     include: overload-allowed, if-supported
-
-
-
-/*****     Developer Options     *****/
-
-   --do-not-launch                   Perform all necessary operations to prepare to launch the application,
-                                     but do not actually launch it (usually used to test mapping patterns)
+   --map-by <arg0>                   Mapping Policy for job
+   --rank-by <arg0>                  Ranking Policy for job
+   --bind-to <arg0>                  Binding policy for job.
 
 
 
 /*****      Launch Options       *****/
 
+-n|--np <arg0>                       Number of processes to run
+-N|--npernode <arg0>                        Run one process per node
+   --personality <arg0>              Specify the personality to be used
 -H|--host <arg0>                     List of hosts to invoke processes on
    --hostfile <arg0>                 Provide a hostfile
    --initial-errhandler <arg0>       Specify the initial error handler that is attached to predefined
                                      communicators during the first MPI call.
-   --machinefile <arg0>              Provide a hostfile
-   --mca <arg0> <arg1>               Pass context-specific MCA parameters; they are considered global if
-                                     --gmca is not used and only one context is specified (arg0 is the
-                                     parameter name; arg1 is the parameter value)
-   --path <arg0>                     PATH to be used to look for executables to start processes
+   --machinefile <arg0>              Provide a hostfile (synonym for hostfile)
    --pmixmca <arg0> <arg1>           Pass context-specific PMIx MCA parameters; they are considered global if
                                      only one context is specified (arg0 is the parameter name; arg1 is the parameter value)
    --gpmixmca <arg0> <arg1>          Pass global PMIx MCA parameters that are applicable to all contexts (arg0
@@ -129,7 +96,6 @@ option to the help request as "--help <option>".
                                      working directory before starting the remote process.
    --prtemca <arg0> <arg1>           Pass context-specific PRRTE MCA parameters to the DVM
    --pset <arg0>                     User-specified name assigned to the processes in their given application
-   --rankfile <arg0>                 Name of file to specify explicit task mapping
 -s|--preload-binary                  Preload the binary on the remote machine before starting the remote
                                      process.
    --set-cwd-to-session-dir          Set the working directory of the started processes to their session
@@ -139,34 +105,26 @@ option to the help request as "--help <option>".
                                      fully buffered]
    --wd <arg0>                       Synonym for --wdir
    --wdir <arg0>                     Set the working directory of the started processes
--x <arg0>                            Export an environment variable, optionally specifying a value (e.g., "-x
-                                     foo" exports the environment variable foo and takes its value from the
-                                     current environment; "-x foo=bar" exports the environment variable name
-                                     foo and sets its value to "bar" in the started processes; "-x foo*"
-                                     exports all current environmental variables starting with "foo")
-
+-x <arg0>                            Export an environment variable, optionally specifying a value
 
 
 /*****    Specific Options   *****/
 
    --allow-run-as-root               Allow execution as root (STRONGLY DISCOURAGED)
-   --daemonize                       Daemonize the DVM daemons into the background
+   --daemonize                       Daemonize the prterun and its daemons into the background
    --forward-signals <arg0>          Comma-delimited list of additional signals (names or integers) to forward
-                                     to application processes ["none" => forward nothing]. Signals provided by
-                                     default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT
+                                     to application processes ["none" => forward nothing].
    --keepalive <arg0>                Pipe to monitor - DVM will terminate upon closure
    --launch-agent <arg0>             Name of daemon executable used to start processes on remote nodes
                                      (default: prted)
    --max-vm-size <arg0>              Number of daemons to start
    --no-ready-msg                    Do not print a DVM ready message
    --noprefix                        Disable automatic --prefix behavior
-   --personality <arg0>              Specify the personality to be used
    --prefix <arg0>                   Prefix to be used to look for RTE executables
    --report-pid <arg0>               Printout pid on stdout [-], stderr [+], or a file [anything else]
    --report-uri <arg0>               Printout URI on stdout [-], stderr [+], or a file [anything else]
    --set-sid                         Direct the DVM daemons to separate from the current session
    --singleton <arg0>                ID of the singleton process that started us
-   --system-server                   Start the DVM as the system server
    --tmpdir <arg0>                   Set the root for the session directory tree
    --tune <arg0>                     File(s) containing MCA params for tuning DVM operations
 
@@ -174,16 +132,10 @@ option to the help request as "--help <option>".
 Report bugs to %s
 #
 [prtemca]
-Syntax: --prtemca <arg0> <arg1>
-where arg0 is the parameter name and arg1 is the parameter value
-
-Pass a PRRTE MCA parameter
+#include#help-schizo-cli#prtemca
 #
 [pmixmca]
-Syntax: --pmixmca <arg0> <arg1>
-where arg0 is the parameter name and arg1 is the parameter value
-
-Pass a PMIx MCA parameter
+#include#help-schizo-cli#pmixmca
 #
 [gpmixmca]
 Syntax: --gpmixmca <arg0> <arg1>
@@ -192,58 +144,48 @@ indicates that this PMIx parameter is to be applied to _all_ application context
 not just the one in which the directive appears.
 #
 [tune]
-File(s) containing PRRTE and PMIx MCA params for tuning DVM and/or application operations.
-Parameters in the file will be treated as _generic_ parameters and subject to the
-translation rules/uncertainties. See "--help mca" for more information.
-
-Syntax in the file is:
-
-param = value
-
-with one parameter and its associated value per line. Empty lines and lines beginning
-with the '#' character are ignored.
-#
-[no-ready-msg]
-Do not print a DVM ready message
+#include#help-schizo-cli#tune
 #
 [daemonize]
-Daemonize the DVM daemons into the background
+Daemonize the prterun and the DVM daemons into the background
 #
 [system-server]
-Start the DVM as the system server
+Start prterun and its daemons as the system server on their nodes
 #
 [set-sid]
-Direct the DVM daemons to separate from the current session
+Direct the DVM (controller and daemons) to separate from the current session
 #
 [report-pid]
-Printout PID on stdout [-], stderr [+], or a file [anything else]
+Printout prterun's PID on stdout [-], stderr [+], or a file [anything else]
 #
 [report-uri]
-Printout URI on stdout [-], stderr [+], or a file [anything else]
+Printout prterun's URI on stdout [-], stderr [+], or a file [anything else]
 #
 [test-suicide]
-Suicide instead of clean abort after delay
+Test DVM cleanup upon daemon failure by having one daemon suicide after delay
 #
 [singleton]
-ID of the singleton process that started us
+prterun is being started by a singleton process (i.e., one not started by prterun) - the
+argument must be the PMIx ID of the singleton process that started us
 #
 [keepalive]
-Pipe to monitor - DVM will terminate upon closure
+Pipe for prterun to monitor - job will terminate upon closure
 #
 [launch-agent]
-Name of daemon executable used to start processes on remote nodes (default: prted)
+Name of daemon executable used to start processes on remote nodes (default: prted).
+This is the executable prterun shall start on each remote node when establishing the DVM.
 #
 [max-vm-size]
 Maximum number of daemons to start
 #
 [debug-daemons]
-Debug daemon output enabled
+#include#help-schizo-cli#debug-daemons
 #
 [debug-daemons-file]
-Enable debugging of any PRRTE daemons used by this application, storing output in files
+#include#help-schizo-cli#debug-daemons-file
 #
 [leave-session-attached]
-Do not discard stdout/stderr of remote PRRTE daemons
+#include#help-schizo-cli#leave-session-attached
 #
 [tmpdir]
 Define the root location for the PRRTE session directory tree
@@ -251,18 +193,16 @@ Define the root location for the PRRTE session directory tree
 #include#help-schizo-cli#tmpdir
 #
 [prefix]
-Prefix to be used to look for RTE executables
+#include#help-schizo-cli#prefix
 #
 [noprefix]
-Disable automatic --prefix behavior
+#include#help-schizo-cli#no-prefix
 #
 [forward-signals]
-Comma-delimited list of additional signals (names or integers) to forward to application
-processes ["none" => forward nothing]. Signals provided by default include SIGTSTP,
-SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT
+#include#help-schizo-cli#forward-signals
 #
 [allow-run-as-root]
-Allow execution as root (STRONGLY DISCOURAGED)
+#include#help-schizo-cli#allow-run-as-root
 #
 [report-child-jobs-separately]
 Return the exit status of the primary job only
@@ -312,10 +252,7 @@ point pending release. Ranks are specified as a comma-delimited list of
 ranges - e.g., "1,3-6,9", or as "all".
 #
 [x]
-Export an environment variable, optionally specifying a value (e.g., "-x foo" exports the
-environment variable foo and takes its value from the current environment; "-x foo=bar"
-exports the environment variable name foo and sets its value to "bar" in the started
-processes; "-x foo*" exports all current environmental variables starting with "foo")
+#include#help-schizo-cli#x
 #
 [wdir]
 Set the working directory of the started processes
@@ -349,7 +286,7 @@ Provide a hostfile (synonym for "hostfile")
 #include#help-schizo-cli#relative-indexing
 #
 [personality]
-Specify the personality to be used
+#include#help-schizo-cli#personality
 #
 [preload-files]
 Syntax: --preload-files <arg0>
@@ -367,7 +304,7 @@ remote process.
 #include#help-schizo-cli#output
 #
 [stream-buffering]
-Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]
+#include#help-schizo-cli#stream-buffering
 #
 [stdin]
 Specify procs to receive stdin [rank, "all", "none"] (default: 0, indicating rank 0)
@@ -415,115 +352,48 @@ Name of file to specify explicit task mapping
 Perform all necessary operations to prepare to launch the application, but do not actually
 launch it (usually used to test mapping patterns)
 #
-[enable-recovery]
-Enable recovery from process failure [Default = disabled]
-#
-[max-restarts]
-Max number of times to restart a failed process
-#
-[disable-recovery]
-Disable recovery (resets all recovery options to off)
-#
-[continuous]
-Job is to run until explicitly terminated
-#
 #
 #  DEPRECATED OPTIONS
 #
 [mca]
-Syntax: --mca <arg0> <arg1>
-where arg0 is the parameter name and arg1 is the parameter value
-
-Pass generic MCA parameters - i.e., parameters whose project affiliation
-must be determined by PRRTE based on matching the name of the parameter with defined values
-from various projects that PRRTE knows about.
-
-DEPRECATED: This translation can be incomplete (e.g., if  known project adds or changes
-parameters) - thus, it is strongly recommended that users use project-specific parameters
-such as "prtemca" or "pmixmca".
+#include#help-schizo-deprecated#mca
 #
 [gmca]
-Syntax: --gmca <arg0> <arg1>
-where arg0 is the parameter name and arg1 is the parameter value. The "g" prefix
-indicates that this parameter is to be applied to _all_ application contexts and
-not just the one in which the directive appears.
-
-Pass generic MCA parameters - i.e., parameters whose project affiliation
-must be determined by PRRTE based on matching the name of the parameter with defined values
-from various projects that PRRTE knows about. This translation can be incomplete (e.g., if
-a known project adds or changes parameters) - thus, it is strongly recommended that users
-use project-specific parameters such as "prtemca" or "pmixmca".
-
-DEPRECATED: This translation can be incomplete (e.g., if  known project adds or changes
-parameters) - thus, it is strongly recommended that users use project-specific parameters
-such as "gprtemca" or "gpmixmca".
+#include#help-schizo-deprecated#gmca
 #
 [xml]
-Provide all output in XML format
-
-DEPRECATED: please see "--help output" for details
+#include#help-schizo-deprecated#xml
 #
 [tag-output]
-Tag all output with [job,rank]
-
-DEPRECATED: please see "--help output" for details
+#include#help-schizo-deprecated#tag-output
 #
 [timestamp-output]
-Timestamp all application process output
-
-DEPRECATED: please see "--help output" for details
+#include#help-schizo-deprecated#timestamp-output
 #
 [output-directory]
-Redirect output from application processes into filename/job/rank/std[out,err,diag]. A
-relative path value will be converted to an absolute path. The directory name may include a
-colon followed by a comma-delimited list of optional case-insensitive directives. Supported
-directives currently include NOJOBID (do not include a job-id directory level) and NOCOPY
-(do not copy the output to the stdout/err streams)
-
-DEPRECATED: please see "--help output" for details
+#include#help-schizo-deprecated#output-directory
 #
 [output-filename]
-Redirect output from application processes into filename.rank. A relative path value will be
-converted to an absolute path. The directory name may include a colon followed by a
-comma-delimited list of optional case-insensitive directives. Supported directives currently
-include NOCOPY (do not copy the output to the stdout/err streams)
-
-DEPRECATED: please see "--help output" for details
+#include#help-schizo-deprecated#output-filename
 #
 [merge-stderr-to-stdout]
-Merge stderr to stdout for each process
-
-DEPRECATED: please see "--help output" for details
+#include#help-schizo-deprecated#merge-stderr-to-stdout
 #
 [display-devel-map]
-Display a detailed process map (mostly intended for developers)
-just before launch
-
-DEPRECATED: please see "--help display" for details
+#include#help-schizo-deprecated#display-devel-map
 #
 [display-topo]
-Display the topology as part of the process map (mostly intended
-for developers) just before launch
-
-DEPRECATED: please see "--help display" for details
+#include#help-schizo-deprecated#display-topo
 #
 [report-bindings]
-Display process bindings to stderr
-
-DEPRECATED: please see "--help display" for details
+#include#help-schizo-deprecated#report-bindings
 #
 [display-devel-allocation]
-Display a detailed list (mostly intended for developers) of the
-allocation being used by this job
-
-DEPRECATED: please see "--help display" for details
+#include#help-schizo-deprecated#display-devel-allocation
 #
 [display-map]
-Display the process map just before launch
-
-DEPRECATED: please see "--help display" for details
+#include#help-schizo-deprecated#display-map
 #
 [display-allocation]
-Display the allocation being used by this job
-
-DEPRECATED: please see "--help display" for details
+#include#help-schizo-deprecated#display-allocation
+#

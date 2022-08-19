@@ -21,6 +21,9 @@ Supported values include:
 
 -   ALLOCATION displays the detected hosts and slot assignments for this job
 
+-   ALLOC-DEVEL displays a more detailed report of the detected hosts
+    and slot assignments for this job
+
 -   BIND displays the resulting bindings applied to processes in this job
 
 -   MAP displays the resulting locations assigned to processes in this job
@@ -314,4 +317,136 @@ The root of the session directory defaults to the system temporary directory
 as defined in the environment using (in precedence order) the envars TMPDIR, TEMP, and
 finally TMP. In the absence of any of those variables, PRRTE will default to the "/tmp"
 location.
+#
+#  PRTEMCA
+#
+[prtemca]
+Pass a PRRTE MCA parameter
+
+Syntax: --prtemca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value
+#
+#  PMIXMCA
+#
+[pmixmca]
+Pass a PMIx MCA parameter
+
+Syntax: --pmixmca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value
+#
+#  TUNE
+#
+[tune]
+Comma-delimited list of one or more files containing PRRTE and PMIx MCA params
+for tuning DVM and/or application operations. Parameters in the file will be
+treated as _generic_ parameters and subject to the translation rules/uncertainties.
+ See "--help mca" for more information.
+
+Syntax in the file is:
+
+param = value
+
+with one parameter and its associated value per line. Empty lines and lines beginning
+with the '#' character are ignored.
+#
+#  DEBUG-DAEMONS
+#
+[debug-daemons]
+Debug daemon output enabled. This is a somewhat limited stream of information normally
+used to simply confirm that the daemons started. Includes leaving the output streams
+open.
+#
+#  DEBUG-DAEMONS-FILE
+[debug-daemons-file]
+Debug daemon output is enabled and all output from the daemons is redirected into
+files named
+
+   output-prted-<daemon-nspace>-<nodename>.log
+
+to avoid conflict on shared file systems. The files are located in the top-level
+session directory assigned to the DVM.
+
+#include#help-schizo-cli#session-dir
+#
+#  LEAVE-SESSION-ATTACHED
+#
+[leave-session-attached]
+Do not discard stdout/stderr of remote PRRTE daemons. The primary use for this option
+is to ensure that the daemon output streams (i.e., stdout and stderr) remain open after
+launch, thus allowing the user to see any daemon-generated error messages. Otherwise,
+the daemon will "daemonize" itself upon launch, thereby closing its output streams.
+#
+#  PREFIX
+#
+[prefix]
+Prefix to be used to look for PRRTE executables. PRRTE automatically sets the prefix
+for remote daemons if it was either configured with the --enable-prte-prefix-by-default
+option OR prte itself was executed with an absolute path to the prte cmd. This option
+overrides those settings, if present, and forces use of the provided path.
+#
+#  NO-PREFIX
+#
+[noprefix]
+Disable automatic --prefix behavior. PRRTE automatically sets the prefix for remote
+daemons if it was either configured with the --enable-prte-prefix-by-default option
+OR prte itself was executed with an absolute path to the prte cmd. This option disables
+that behavior.
+#
+#  FORWARD-SIGNALS
+#
+[forward-signals]
+Comma-delimited list of additional signals (names or integers) to forward to application
+processes ["none" => forward nothing]. Signals provided by default include SIGTSTP,
+SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT
+#
+#  ALLOW-RUN-AS-ROOT
+#
+[allow-run-as-root]
+Allow execution as root (STRONGLY DISCOURAGED).
+
+Running as root exposes the user to potentially catastrophic file system corruption
+and damage - e.g., if the user accidentally points the root of the session directory
+to a system required point, this directory and all underlying elements will be
+deleted upon job completion, thereby rendering the system inoperable.
+
+It is recognized that some environments (e.g., containers) may require operation as
+root, and that the user accepts the risks in those scenarios. Accordingly, one can
+override PRRTE's run-as-root protection by providing one of the following:
+
+  * the "--allow-run-as-root" cmd line directive
+  * adding BOTH of the following environmental parameters
+    * PRTE_ALLOW_RUN_AS_ROOT=1
+    * PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1
+
+Again, we recommend this only be done if absolutely necessary.
+#
+#  X
+#
+[x]
+Export an environment variable, optionally specifying a value. For example:
+
+  * "-x foo" exports the environment variable foo and takes its value from the
+    current environment
+  * "-x foo=bar" exports the environment variable name foo and sets its value
+    to "bar" in the started processes
+  * "-x foo*" exports all current environmental variables starting with "foo"
+#
+#  STREAM-BUFFERING
+#
+[stream-buffering]
+Adjust buffering for stdout/stderr
+    [0 => unbuffered]
+    [1 => line buffered]
+    [2 => fully buffered]
+#
+#  PERSONALITY
+#
+[personality]
+Specify the personality to be used. This governs selection of the plugin
+responsible for defining and parsing the command line, harvesting and
+forwarding environmental variables, and providing library-dependent
+support to the launched processes. Examples include "ompi" for an
+application compiled with Open MPI, "mpich" for one built against
+the MPICH library, or "oshmem" for an OpenSHMEM application compiled
+against SUNY's reference library.
 #
