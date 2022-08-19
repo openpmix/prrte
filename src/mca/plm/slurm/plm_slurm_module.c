@@ -521,6 +521,49 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
     prte_wait_tracker_t *t2 = (prte_wait_tracker_t *) cbdata;
     prte_proc_t *proc = t2->child;
     prte_job_t *jdata;
+    FILE *fp;
+    char version[1024], *cptr, *endptr;
+    int major, minor;
+
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+
+    /* need to check that we are at least version 17.11 */
+    fp = popen("sinfo -V", "r");
+    if (NULL == fp) {
+        /* default to printing the error advice */
+        pmix_show_help("help-plm-slurm.txt", "ancient-version", true, major, minor);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+        PMIX_RELEASE(t2);
+        return;
+    }
+    memset(version, 0, sizeof(version));
+    while (NULL != fgets(version, sizeof(version), fp)) {
+        /* if the line doesn't start with "slurm", then ignore it */
+        if (0 != strncasecmp(version, "slurm", strlen("slurm"))) {
+            continue;
+        }
+        cptr = &version[strlen("slurm")+1];
+        major = strtoul(cptr, &cptr, 10);
+        ++cptr;
+        minor = strtoul(cptr, NULL, 10);
+        if (major < 17) {
+            pclose(fp);
+            pmix_show_help("help-plm-slurm.txt", "ancient-version", true, major, minor);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+            PMIX_RELEASE(t2);
+            return;
+        }
+        if (17 == major && minor < 11) {
+            pclose(fp);
+            pmix_show_help("help-plm-slurm.txt", "ancient-version", true, major, minor);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
+            PMIX_RELEASE(t2);
+            return;
+        }
+        /* version was not the issue */
+        break;
+    }
+    pclose(fp);
 
     /* According to the SLURM folks, srun always returns the highest exit
      code of our remote processes. Thus, a non-zero exit status doesn't
@@ -542,7 +585,6 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
      pid so nobody thinks this is real
      */
 
-    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
     /* abort only if the status returned is non-zero - i.e., if
      * the orteds exited with an error
@@ -555,7 +597,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
                              "%s plm:slurm: srun returned non-zero exit status (%d) from launching "
                              "the per-node daemon",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), proc->exit_code));
-        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ABORTED);
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
     } else {
         /* otherwise, check to see if this is the primary pid */
         if (primary_srun_pid == proc->pid) {
