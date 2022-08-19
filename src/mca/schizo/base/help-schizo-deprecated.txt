@@ -1,0 +1,157 @@
+# -*- text -*-
+#
+# Copyright (c) 2022 Nanook Consulting.  All rights reserved.
+# $COPYRIGHT$
+#
+# Additional copyrights may follow
+#
+# $HEADER$
+#
+#  MCA
+#
+Syntax: --mca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value
+
+Pass generic MCA parameters - i.e., parameters whose project affiliation
+must be determined by PRRTE based on matching the name of the parameter with defined values
+from various projects that PRRTE knows about.
+
+DEPRECATED: This translation can be incomplete (e.g., if a project adds or changes
+parameters) - thus, it is strongly recommended that users use project-specific parameters
+such as "prtemca" or "pmixmca".
+#
+#  GMCA
+#
+Syntax: --gmca <arg0> <arg1>
+where arg0 is the parameter name and arg1 is the parameter value. The "g" prefix
+indicates that this parameter is to be applied to _all_ application contexts and
+not just the one in which the directive appears.
+
+Pass generic MCA parameters - i.e., parameters whose project affiliation
+must be determined by PRRTE based on matching the name of the parameter with defined values
+from various projects that PRRTE knows about. This translation can be incomplete (e.g., if
+a known project adds or changes parameters) - thus, it is strongly recommended that users
+use project-specific parameters such as "prtemca" or "pmixmca".
+
+DEPRECATED: This translation can be incomplete (e.g., if  known project adds or changes
+parameters) - thus, it is strongly recommended that users use project-specific parameters
+such as "gprtemca" or "gpmixmca".
+#
+#  XML
+#
+[xml]
+Provide all output in XML format
+
+DEPRECATED: please use "--output"
+
+#include#help-schizo-cli#output
+#
+# TAG-OUTPUT
+#
+[tag-output]
+Tag all output with [job,rank]
+
+DEPRECATED: please use "--output tag"
+
+#include#help-schizo-cli#output
+#
+#  TIMESTAMP-OUTPUT
+#
+[timestamp-output]
+Timestamp all application process output
+
+DEPRECATED: please use "--output timestamp"
+
+#include#help-schizo-cli#output
+#
+#  OUTPUT-DIRECTORY
+#
+[output-directory]
+Redirect output from application processes into filename/job/rank/std[out,err,diag]. A
+relative path value will be converted to an absolute path. The directory name may include a
+colon followed by a comma-delimited list of optional case-insensitive directives. Supported
+directives currently include NOJOBID (do not include a job-id directory level) and NOCOPY
+(do not copy the output to the stdout/err streams)
+
+DEPRECATED: please use "--output dir=<path>"
+
+#include#help-schizo-cli#output
+#
+#  OUTPUT-FILENAME
+#
+[output-filename]
+Redirect output from application processes into filename.rank. A relative path value will be
+converted to an absolute path. The directory name may include a colon followed by a
+comma-delimited list of optional case-insensitive directives. Supported directives currently
+include NOCOPY (do not copy the output to the stdout/err streams)
+
+DEPRECATED: please use "--output file=<path>"
+
+#include#help-schizo-cli#output
+#
+#  MERGE-STDERR-TO-STDOUT
+#
+[merge-stderr-to-stdout]
+Merge stderr to stdout for each process
+
+DEPRECATED: please "--output merge"
+
+#include#help-schizo-cli#output
+#
+#  DISPLAY-DEVEL-MAP
+#
+[display-devel-map]
+Display a detailed process map (mostly intended for developers)
+just before launch
+
+DEPRECATED: please use "--display map-devel"
+
+#include#help-schizo-cli#display
+#
+#  DISPLAY-TOPO
+#
+[display-topo]
+Display the topology as part of the process map (mostly intended
+for developers) just before launch
+
+DEPRECATED: please use "--display topo"
+
+#include#help-schizo-cli#display
+#
+#  REPORT-BINDINGS
+#
+[report-bindings]
+Display process bindings to stderr
+
+DEPRECATED: please use "--display bindings"
+
+#include#help-schizo-cli#display
+#
+#  DISPLAY-DEVEL-ALLOCATION
+#
+[display-devel-allocation]
+Display a detailed list (mostly intended for developers) of the
+allocation being used by this job
+
+DEPRECATED: please use "--display alloc-devel"
+
+#include#help-schizo-cli#display
+#
+#  DISPLAY-MAP
+#
+[display-map]
+Display the process map just before launch
+
+DEPRECATED: please use "--display map"
+
+#include#help-schizo-cli#display
+#
+#  DISPLAY-ALLOCATION
+#
+[display-allocation]
+Display the allocation being used by this job
+
+DEPRECATED: please use "--display alloc"
+
+#include#help-schizo-cli#display
+#
