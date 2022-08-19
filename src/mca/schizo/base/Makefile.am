@@ -11,7 +11,8 @@
 
 dist_prtedata_DATA += \
     base/help-schizo-base.txt \
-    base/help-schizo-cli.txt
+    base/help-schizo-cli.txt \
+    base/help-schizo-deprecated.txt
 
 headers += \
         base/base.h
