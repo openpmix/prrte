@@ -404,11 +404,7 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
-    /* if a topology file was given, then the rmaps framework open
-     * will have reset our topology. Ensure we always get the right
-     * one by setting our node topology afterwards
-     */
-    /* add it to the array of known topologies */
+    /* add the topology to the array of known topologies */
     t = PMIX_NEW(prte_topology_t);
     t->topo = prte_hwloc_topology;
     /* generate the signature */
