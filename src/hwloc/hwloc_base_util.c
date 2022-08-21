@@ -170,7 +170,8 @@ hwloc_cpuset_t prte_hwloc_base_setup_summary(hwloc_topology_t topo)
 
     avail = hwloc_bitmap_alloc();
     /* get the cpus we are bound to */
-    if (0 <= hwloc_get_cpubind(topo, avail, HWLOC_CPUBIND_PROCESS)) {
+    if (!prte_hwloc_synthetic_topo &&
+        0 <= hwloc_get_cpubind(topo, avail, HWLOC_CPUBIND_PROCESS)) {
         return avail;
     }
 
@@ -282,6 +283,7 @@ int prte_hwloc_base_get_topology(void)
         if (PRTE_SUCCESS != (rc = prte_hwloc_base_set_topology(prte_hwloc_base_topo_file))) {
             return rc;
         }
+        prte_hwloc_synthetic_topo = true;
     }
 
     /* fill prte_cache_line_size global with the smallest L1 cache
