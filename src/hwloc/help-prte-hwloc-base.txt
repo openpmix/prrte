@@ -153,9 +153,6 @@ combination of one or more of the following to the --bind-to option:
 -   IF-SUPPORTED indicates that the job should continue to
     be launched and executed even if binding cannot be
     performed as requested.
-
--   REPORT outputs a report on the bindings for the processes
-    to stderr
 #
 [bind-upwards]
 Binding is performed to the first available specified object type
