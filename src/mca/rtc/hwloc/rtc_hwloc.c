@@ -155,13 +155,13 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
                     report_binding(jobdat, child->name.rank);
                 } else {
                     prte_output(0,
-                                "MCW rank %d is not bound (or bound to all available processors)",
+                                "Rank %d is not bound (or bound to all available processors)",
                                 child->name.rank);
                 }
             }
         } else if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL,
                                       PMIX_BOOL)) {
-            prte_output(0, "MCW rank %d is not bound (or bound to all available processors)",
+            prte_output(0, "Rank %d is not bound (or bound to all available processors)",
                         child->name.rank);
         }
     } else {
@@ -278,10 +278,10 @@ static void report_binding(prte_job_t *jobdat, int rank)
     /* get the cpus we are bound to */
     mycpus = hwloc_bitmap_alloc();
     if (hwloc_get_cpubind(prte_hwloc_topology, mycpus, HWLOC_CPUBIND_PROCESS) < 0) {
-        prte_output(0, "MCW rank %d is not bound", rank);
+        prte_output(0, "Rank %d is not bound", rank);
     } else {
         tmp1 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, prte_hwloc_topology);
-        prte_output(0, "MCW rank %d bound to %s", rank, tmp1);
+        prte_output(0, "Rank %d bound to %s", rank, tmp1);
         free(tmp1);
     }
     hwloc_bitmap_free(mycpus);
