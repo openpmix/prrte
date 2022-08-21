@@ -787,17 +787,14 @@ int prte_rmaps_base_check_support(prte_job_t *jdata,
         return PRTE_SUCCESS;
     }
 
-    /* if we don't want to launch, then we are just testing the system,
-     * so ignore questions about support capabilities
-     */
     support = (struct hwloc_topology_support *) hwloc_topology_get_support(node->topology->topo);
     /* check if topology supports cpubind - have to be careful here
      * as Linux doesn't currently support thread-level binding. This
      * may change in the future, though, and it isn't clear how hwloc
      * interprets the current behavior. So check both flags to be sure.
      */
-    if (support->cpubind->set_thisproc_cpubind ||
-        support->cpubind->set_thisthread_cpubind) {
+    if (!support->cpubind->set_thisproc_cpubind &&
+        !support->cpubind->set_thisthread_cpubind) {
         if (PRTE_BINDING_REQUIRED(jdata->map->binding) &&
             PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
             /* we are required to bind but cannot */
