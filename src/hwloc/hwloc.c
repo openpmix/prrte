@@ -38,6 +38,7 @@ char *prte_hwloc_default_cpu_list = NULL;
 char *prte_hwloc_base_topo_file = NULL;
 int prte_hwloc_base_output = -1;
 bool prte_hwloc_default_use_hwthread_cpus = false;
+bool prte_hwloc_synthetic_topo = false;
 
 hwloc_obj_type_t prte_hwloc_levels[] = {
     HWLOC_OBJ_MACHINE,

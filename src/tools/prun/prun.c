@@ -668,10 +668,8 @@ int prun(int argc, char *argv[])
                             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
                         } else if (0 == strcasecmp(options[m], PRTE_CLI_PATTERN)) {
                             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
-    #ifdef PMIX_IOF_OUTPUT_RAW
                         } else if (0 == strcasecmp(options[m], PRTE_CLI_RAW)) {
                             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
-    #endif
                         }
                     }
                     pmix_argv_free(options);
@@ -827,11 +825,7 @@ int prun(int argc, char *argv[])
         i = strtol(param, NULL, 10);
     }
     if (0 != i) {
-#ifdef PMIX_JOB_TIMEOUT
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_TIMEOUT, &i, PMIX_INT);
-#else
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT, &i, PMIX_INT);
-#endif
     }
 
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_STACK_TRACES)) {
@@ -840,20 +834,16 @@ int prun(int argc, char *argv[])
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_REPORT_STATE)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_TIMEOUT_REPORT_STATE, &flag, PMIX_BOOL);
     }
-#ifdef PMIX_SPAWN_TIMEOUT
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_SPAWN_TIMEOUT);
     if (NULL != opt) {
         i = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_SPAWN_TIMEOUT, &i, PMIX_INT);
     }
-#endif
-#ifdef PMIX_LOG_AGG
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DO_NOT_AGG_HELP);
     if (NULL != opt) {
         flag = false;
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_LOG_AGG, &flag, PMIX_BOOL);
     }
-#endif
 
     /* give the schizo components a chance to add to the job info */
     schizo->job_info(&results, jinfo);

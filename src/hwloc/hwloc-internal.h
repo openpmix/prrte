@@ -192,6 +192,7 @@ extern char *prte_hwloc_print_null;
 PRTE_EXPORT char *prte_hwloc_base_print_locality(prte_hwloc_locality_t locality);
 
 PRTE_EXPORT extern char *prte_hwloc_base_topo_file;
+PRTE_EXPORT extern bool prte_hwloc_synthetic_topo;
 
 /* convenience macro for debugging */
 #define PRTE_HWLOC_SHOW_BINDING(n, v, t)                                                        \

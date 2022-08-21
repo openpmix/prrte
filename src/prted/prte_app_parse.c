@@ -55,8 +55,6 @@
 
 #include "src/prted/prted.h"
 
-static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfile);
-
 /*
  * This function takes a "char ***app_env" parameter to handle the
  * specific case:
@@ -326,17 +324,4 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
     /* All done */
 
     return PRTE_SUCCESS;
-}
-
-static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfile)
-{
-    if (NULL == strstr(app->app.argv[index], jarfile)) {
-        /* nope - need to add it */
-        char *fmt = ':' == app->app.argv[index][strlen(app->app.argv[index] - 1)] ? "%s%s/%s"
-                                                                                  : "%s:%s/%s";
-        char *str;
-        pmix_asprintf(&str, fmt, app->app.argv[index], prte_install_dirs.libdir, jarfile);
-        free(app->app.argv[index]);
-        app->app.argv[index] = str;
-    }
 }
