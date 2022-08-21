@@ -527,7 +527,8 @@ ranking:
     options.overload = PRTE_BIND_OVERLOAD_ALLOWED(jdata->map->binding);
     options.bind = PRTE_GET_BINDING_POLICY(jdata->map->binding);
     /* sanity check */
-    if (options.mapdepth > options.bind) {
+    if (options.mapdepth > options.bind &&
+        PRTE_BIND_TO_NONE != options.bind) {
         /* we cannot bind to objects higher in the
          * topology than where we mapped */
         pmix_show_help("help-prte-hwloc-base.txt", "bind-upwards", true,
@@ -748,7 +749,7 @@ void prte_rmaps_base_report_bindings(prte_job_t *jdata,
     int n;
     prte_proc_t *proc;
     char **cache = NULL;
-    char *out;
+    char *out, *tmp;
     pmix_proc_t source;
 
     for (n=0; n < jdata->procs->size; n++) {
@@ -760,15 +761,14 @@ void prte_rmaps_base_report_bindings(prte_job_t *jdata,
             pmix_asprintf(&out, "Proc %s Node %s is UNBOUND",
                           PRTE_NAME_PRINT(&proc->name), proc->node->name);
         } else {
-            if (options->use_hwthreads) {
-                pmix_asprintf(&out, "Proc %s Node %s is BOUND to hwthread(s) %s",
-                              PRTE_NAME_PRINT(&proc->name), proc->node->name,
-                              proc->cpuset);
-            } else {
-                pmix_asprintf(&out, "Proc %s Node %s is BOUND to core(s) %s",
-                              PRTE_NAME_PRINT(&proc->name), proc->node->name,
-                              proc->cpuset);
-            }
+            hwloc_bitmap_list_sscanf(prte_rmaps_base.available, proc->cpuset);
+            tmp = prte_hwloc_base_cset2str(prte_rmaps_base.available,
+                                           options->use_hwthreads,
+                                           proc->node->topology->topo);
+            pmix_asprintf(&out, "Proc %s Node %s bound to %s",
+                          PRTE_NAME_PRINT(&proc->name),
+                          proc->node->name, tmp);
+            free(tmp);
         }
         pmix_argv_append_nosize(&cache, out);
         free(out);
