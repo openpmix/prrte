@@ -710,6 +710,9 @@ moveon:
         prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
         /* display the map */
         prte_rmaps_base_display_map(jdata);
+    } else if (options.donotlaunch &&
+               prte_get_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS, NULL, PMIX_BOOL)) {
+        prte_rmaps_base_report_bindings(jdata, &options);
     }
 
     /* set the job state to the next position */
@@ -734,14 +737,51 @@ void prte_rmaps_base_display_map(prte_job_t *jdata)
     pmix_proc_t source;
     char *tmp;
 
-    /* only have rank=0 output this */
-    if (0 != PRTE_PROC_MY_NAME->rank) {
-        return;
-    }
-
     prte_map_print(&tmp, jdata);
     PMIX_LOAD_PROCID(&source, jdata->nspace, PMIX_RANK_WILDCARD);
     prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, tmp);
+}
+
+void prte_rmaps_base_report_bindings(prte_job_t *jdata,
+                                     prte_rmaps_options_t *options)
+{
+    int n;
+    prte_proc_t *proc;
+    char **cache = NULL;
+    char *out;
+    pmix_proc_t source;
+
+    for (n=0; n < jdata->procs->size; n++) {
+        proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, n);
+        if (NULL == proc) {
+            continue;
+        }
+        if (NULL == proc->cpuset) {
+            pmix_asprintf(&out, "Proc %s Node %s is UNBOUND",
+                          PRTE_NAME_PRINT(&proc->name), proc->node->name);
+        } else {
+            if (options->use_hwthreads) {
+                pmix_asprintf(&out, "Proc %s Node %s is BOUND to hwthread(s) %s",
+                              PRTE_NAME_PRINT(&proc->name), proc->node->name,
+                              proc->cpuset);
+            } else {
+                pmix_asprintf(&out, "Proc %s Node %s is BOUND to core(s) %s",
+                              PRTE_NAME_PRINT(&proc->name), proc->node->name,
+                              proc->cpuset);
+            }
+        }
+        pmix_argv_append_nosize(&cache, out);
+        free(out);
+    }
+    if (NULL == cache) {
+        out = strdup("Error: job has no procs");
+    } else {
+        /* add a blank line with \n on it so IOF will output the last line */
+        pmix_argv_append_nosize(&cache, "");
+        out = pmix_argv_join(cache, '\n');
+    }
+    PMIX_LOAD_PROCID(&source, jdata->nspace, PMIX_RANK_WILDCARD);
+    prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, out);
 }
 
 static int map_colocate(prte_job_t *jdata,

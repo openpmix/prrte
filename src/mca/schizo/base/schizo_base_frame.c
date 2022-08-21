@@ -391,8 +391,6 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         NULL
     };
 
-    bool hwtcpus = false;
-
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_MAPBY)) {
         pmix_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_MAPBY);
         return PRTE_ERR_SILENT;
@@ -431,9 +429,6 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     /* quick check that we have valid directives */
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_MAPBY);
     if (NULL != opt) {
-        if (NULL != strcasestr(opt->values[0], PRTE_CLI_HWTCPUS)) {
-            hwtcpus = true;
-        }
         if (!prte_schizo_base_check_directives(PRTE_CLI_MAPBY, mappers, mapquals, opt->values[0])) {
             return PRTE_ERR_SILENT;
         }
@@ -449,12 +444,6 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_BINDTO);
     if (NULL != opt) {
         if (!prte_schizo_base_check_directives(PRTE_CLI_BINDTO, binders, bndquals, opt->values[0])) {
-            return PRTE_ERR_SILENT;
-        }
-        if (0 == strncasecmp(opt->values[0], PRTE_CLI_HWT, strlen(PRTE_CLI_HWT)) && !hwtcpus) {
-            /* if we are told to bind-to hwt, then we have to be treating
-             * hwt's as the allocatable unit */
-            pmix_show_help("help-prte-rmaps-base.txt", "invalid-combination", true);
             return PRTE_ERR_SILENT;
         }
     }
