@@ -362,7 +362,6 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_OVERLOAD,
         PRTE_CLI_NOOVERLOAD,
         PRTE_CLI_IF_SUPP,
-        PRTE_CLI_REPORT,
         NULL
     };
 
