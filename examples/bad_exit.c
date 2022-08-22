@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -97,12 +97,6 @@ int main(int argc, char **argv)
     size_t n;
     pmix_query_t query;
     mylock_t mylock;
-    bool refresh = false;
-    int delay = 0;
-
-    if (1 < argc) {
-        delay = atoi(argv[1]);
-    }
 
     pid = getpid();
     gethostname(hostname, 1024);
@@ -129,35 +123,10 @@ int main(int argc, char **argv)
     fprintf(stderr, "Client ns %s rank %d pid %lu: Running on host %s localrank %d\n",
             myproc.nspace, myproc.rank, (unsigned long) pid, hostname, (int) localrank);
 
-#if PMIX_VERSION_MAJOR >= 0x00040000
-    n = 1;
-    PMIX_QUERY_CONSTRUCT(&query);
-    PMIX_ARGV_APPEND(rc, query.keys, PMIX_QUERY_NUM_PSETS);
-    PMIX_ARGV_APPEND(rc, query.keys, PMIX_QUERY_PSET_NAMES);
-    if (refresh) {
-        PMIX_INFO_CREATE(query.qualifiers, 1);
-        query.nqual = 1;
-        PMIX_INFO_LOAD(&query.qualifiers[0], PMIX_QUERY_REFRESH_CACHE, &refresh, PMIX_BOOL);
-    }
-    /* setup the caddy to retrieve the data */
-    DEBUG_CONSTRUCT_LOCK(&mylock);
-    /* execute the query */
-    if (PMIX_SUCCESS != (rc = PMIx_Query_info_nb(&query, 1, cbfunc, (void *) &mylock))) {
-        fprintf(stderr, "PMIx_Query_info failed: %d\n", rc);
-        goto done;
-    }
-    DEBUG_WAIT_THREAD(&mylock);
-    DEBUG_DESTRUCT_LOCK(&mylock);
-
-#endif
-
-    sleep(delay);
-
 done:
     if (0 == myproc.rank) {
         exit(1);
     }
-    sleep(2);
     /* finalize us */
     fprintf(stderr, "Client ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {

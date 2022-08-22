@@ -598,7 +598,6 @@ PRTE_EXPORT extern bool prte_do_not_barrier;
 /* exit status reporting */
 PRTE_EXPORT extern bool prte_report_child_jobs_separately;
 PRTE_EXPORT extern struct timeval prte_child_time_to_exit;
-PRTE_EXPORT extern bool prte_abort_non_zero_exit;
 
 /* length of stat history to keep */
 PRTE_EXPORT extern int prte_stat_history_size;

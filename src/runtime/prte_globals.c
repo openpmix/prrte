@@ -158,7 +158,6 @@ int32_t prte_max_restarts = 0;
 /* exit status reporting */
 bool prte_report_child_jobs_separately = false;
 struct timeval prte_child_time_to_exit = {0};
-bool prte_abort_non_zero_exit = false;
 
 /* length of stat history to keep */
 int prte_stat_history_size = -1;
