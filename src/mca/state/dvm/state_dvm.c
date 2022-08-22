@@ -904,8 +904,8 @@ static void dvm_notify(int sd, short args, void *cbdata)
         rc = jdata->exit_code;
     }
 
-    if (0 == rc
-        && prte_get_attribute(&jdata->attributes, PRTE_JOB_SILENT_TERMINATION, NULL, PMIX_BOOL)) {
+    if (0 == rc &&
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_SILENT_TERMINATION, NULL, PMIX_BOOL)) {
         notify = false;
     }
     /* if the jobid matches that of the requestor, then don't notify */

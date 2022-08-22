@@ -794,9 +794,8 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
 
     i32ptr = &i32;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, (void **) &i32ptr,
-                           PMIX_INT32)
-        && !prte_abort_non_zero_exit) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, (void **) &i32ptr, PMIX_INT32) &&
+        !prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL)) {
         if (!prte_report_child_jobs_separately || 1 == PRTE_LOCAL_JOBID(jdata->nspace)) {
             /* update the exit code */
             PRTE_UPDATE_EXIT_STATUS(lowest);

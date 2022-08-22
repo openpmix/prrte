@@ -840,10 +840,8 @@ int main(int argc, char *argv[])
                             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
                         } else if (0 == strncasecmp(options[m], PRTE_CLI_PATTERN, strlen(options[m]))) {
                             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
-#ifdef PMIX_IOF_OUTPUT_RAW
                         } else if (0 == strncasecmp(options[m], PRTE_CLI_RAW, strlen(options[m]))) {
                             PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
-#endif
                         }
                     }
                     pmix_argv_free(options);
@@ -964,7 +962,7 @@ int main(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_EXEC_AGENT, opt->values[0], PMIX_STRING);
     }
 
-    /* mark if recovery was enabled on the cmd line */
+    /* mark if recovery was enabled */
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_ENABLE_RECOVERY)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_RECOVERABLE, NULL, PMIX_BOOL);
     }
@@ -982,7 +980,13 @@ int main(int argc, char *argv[])
         /* mark this job as continuously operating */
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_CONTINUOUS, NULL, PMIX_BOOL);
     }
-
+#ifdef PMIX_ABORT_NONZERO_EXIT
+    /* if ignore non-zero exit was specified */
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_TERM_NONZERO)) {
+        /* mark this job as continuously operating */
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_ABORT_NONZERO_EXIT, NULL, PMIX_BOOL);
+    }
+#endif
     /* if stop-on-exec was specified */
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_STOP_ON_EXEC)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);
