@@ -383,7 +383,8 @@ static void proc_errors(int fd, short args, void *cbdata)
     PMIX_ACQUIRE_OBJECT(caddy);
 
     PRTE_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
-                         "%s errmgr:dvm: for proc %s state %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         "%s errmgr:dvm: for proc %s state %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(proc), prte_proc_state_to_str(state)));
 
     /* get the job object */
@@ -686,12 +687,12 @@ keep_going:
         ++i32;
         prte_set_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, PRTE_ATTR_LOCAL, i32ptr,
                            PMIX_INT32);
-        if (prte_abort_non_zero_exit) {
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL)) {
             if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
                 jdata->state = PRTE_JOB_STATE_NON_ZERO_TERM;
                 /* point to the first rank to cause the problem */
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC, PRTE_ATTR_LOCAL, pptr,
-                                   PMIX_POINTER);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_ABORTED_PROC,
+                                   PRTE_ATTR_LOCAL, pptr, PMIX_POINTER);
                 /* retain the object so it doesn't get free'd */
                 PMIX_RETAIN(pptr);
                 PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);

@@ -70,7 +70,6 @@ prte_odls_base_module_t prte_odls = {0};
  */
 prte_odls_globals_t prte_odls_globals = {
     .output = 0,
-    .timeout_before_sigkill = 0,
     .xterm_ranks = PMIX_LIST_STATIC_INIT,
     .xtermcmd = NULL,
     .max_threads = 0,
@@ -88,13 +87,6 @@ static prte_event_base_t **prte_event_base_ptr = NULL;
 static int prte_odls_base_register(prte_mca_base_register_flag_t flags)
 {
     PRTE_HIDE_UNUSED_PARAMS(flags);
-
-    prte_odls_globals.timeout_before_sigkill = 1;
-    (void) prte_mca_base_var_register(
-        "prte", "odls", "base", "sigkill_timeout",
-        "Time to wait for a process to die after issuing a kill signal to it",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_odls_globals.timeout_before_sigkill);
 
     prte_odls_globals.max_threads = 16;
     (void) prte_mca_base_var_register("prte", "odls", "base", "max_threads",

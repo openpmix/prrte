@@ -100,7 +100,9 @@ void prte_quit(int fd, short args, void *cbdata)
     prte_event_base_loopexit(prte_event_base);
 }
 
-static char *print_aborted_job(prte_job_t *job, prte_app_context_t *approc, prte_proc_t *proc,
+static char *print_aborted_job(prte_job_t *job,
+                               prte_app_context_t *approc,
+                               prte_proc_t *proc,
                                prte_node_t *node)
 {
     char *output = NULL;
@@ -278,7 +280,8 @@ static char *print_aborted_job(prte_job_t *job, prte_app_context_t *approc, prte
                                        prte_tool_basename, PRTE_NAME_PRINT(&proc->name),
                                        node->name);
         return output;
-    } else if (prte_abort_non_zero_exit && PRTE_PROC_STATE_TERM_NON_ZERO == proc->state) {
+    } else if (prte_get_attribute(&job->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL) &&
+               PRTE_PROC_STATE_TERM_NON_ZERO == proc->state) {
         output = pmix_show_help_string("help-prun.txt", "prun:non-zero-exit", true,
                                        prte_tool_basename, PRTE_NAME_PRINT(&proc->name),
                                        proc->exit_code);
@@ -308,8 +311,8 @@ static char *dump_job(prte_job_t *job)
             /* array is left-justified - we are done */
             break;
         }
-        if (PRTE_PROC_STATE_FAILED_TO_START == pptr->state
-            || PRTE_PROC_STATE_FAILED_TO_LAUNCH == pptr->state) {
+        if (PRTE_PROC_STATE_FAILED_TO_START == pptr->state ||
+            PRTE_PROC_STATE_FAILED_TO_LAUNCH == pptr->state) {
             ++num_failed_start;
         } else if (PRTE_PROC_STATE_ABORTED == pptr->state) {
             ++num_aborted;

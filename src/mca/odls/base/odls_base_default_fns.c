@@ -1464,7 +1464,8 @@ int prte_odls_base_default_signal_local_procs(const pmix_proc_t *proc, int32_t s
     int rc, i;
     prte_proc_t *child;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output, "%s odls: signaling proc %s",
+    PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                         "%s odls: signaling proc %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (NULL == proc) ? "NULL" : PRTE_NAME_PRINT(proc)));
 
@@ -1563,8 +1564,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                              "%s odls:waitpid_fired child %s died by call to abort",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
         state = PRTE_PROC_STATE_CALLED_ABORT;
-        /* regardless of our eventual code path, we need to
-         * flag that this proc has had its waitpid fired */
         PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
         goto MOVEON;
     }
@@ -1582,8 +1581,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child %s was ordered to die",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
-        /* regardless of our eventual code path, we need to
-         * flag that this proc has had its waitpid fired */
         PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
         goto MOVEON;
     }
@@ -1613,7 +1610,8 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                  * felt it was non-normal - in this latter case, we do not
                  * require that the proc deregister before terminating
                  */
-                if (0 != proc->exit_code && prte_abort_non_zero_exit) {
+                if (0 != proc->exit_code &&
+                    prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL)) {
                     state = PRTE_PROC_STATE_TERM_NON_ZERO;
                     PRTE_OUTPUT_VERBOSE(
                         (5, prte_odls_base_framework.framework_output,
@@ -1676,7 +1674,8 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
              * none of them will. This is considered acceptable. Still
              * flag it as abnormal if the exit code was non-zero
              */
-            if (0 != proc->exit_code && prte_abort_non_zero_exit) {
+            if (0 != proc->exit_code &&
+                prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL)) {
                 state = PRTE_PROC_STATE_TERM_NON_ZERO;
             } else {
                 state = PRTE_PROC_STATE_WAITPID_FIRED;
@@ -1769,6 +1768,7 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
     pmix_pointer_array_t procarray, *procptr;
     bool do_cleanup;
     prte_odls_quick_caddy_t *cd;
+    struct timespec tp = {0, 250000000};
 
     PMIX_CONSTRUCT(&procs_killed, pmix_list_t);
 
@@ -1849,8 +1849,9 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
                 /* ensure, though, that the state is terminated so we don't lockup if
                  * the proc never started
                  */
-                if (PRTE_PROC_STATE_UNDEF == child->state || PRTE_PROC_STATE_INIT == child->state
-                    || PRTE_PROC_STATE_RUNNING == child->state) {
+                if (PRTE_PROC_STATE_UNDEF == child->state ||
+                    PRTE_PROC_STATE_INIT == child->state ||
+                    PRTE_PROC_STATE_RUNNING == child->state) {
                     /* we can't be sure what happened, but make sure we
                      * at least have a value that will let us eventually wakeup
                      */
@@ -1883,7 +1884,8 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
                running, then SIGTERM will not get delivered.  Ignore return
                value. */
             PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                                 "%s SENDING SIGCONT TO %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 "%s SENDING SIGCONT TO %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&child->name)));
             cd = PMIX_NEW(prte_odls_quick_caddy_t);
             PMIX_RETAIN(child);
@@ -1908,38 +1910,36 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
     /* if we are issuing signals, then we need to wait a little
      * and send the next in sequence */
     if (0 < pmix_list_get_size(&procs_killed)) {
-        /* Wait a little. Do so in a loop since sleep() can be interrupted by a
+        /* Wait a little. Do so in nanosleep() - can be interrupted by a
          * signal. Most likely SIGCHLD in this case */
-        ret = prte_odls_globals.timeout_before_sigkill;
-        while (ret > 0) {
-            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                                 "%s Sleep %d sec (total = %d)", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 ret, prte_odls_globals.timeout_before_sigkill));
-            ret = sleep(ret);
-        }
+        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                             "%s Sleep %d nsec",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             tp.tv_nsec));
+        ret = nanosleep(&tp, NULL);
         /* issue a SIGTERM to all */
         PMIX_LIST_FOREACH(cd, &procs_killed, prte_odls_quick_caddy_t)
         {
             PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                                 "%s SENDING SIGTERM TO %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 "%s SENDING SIGTERM TO %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&cd->child->name)));
             kill_local(cd->child->pid, SIGTERM);
         }
-        /* Wait a little. Do so in a loop since sleep() can be interrupted by a
+        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                             "%s Sleep %d nsec",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             tp.tv_nsec));
+        /* Wait a little. Do so in nanosleep() - can be interrupted by a
          * signal. Most likely SIGCHLD in this case */
-        ret = prte_odls_globals.timeout_before_sigkill;
-        while (ret > 0) {
-            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                                 "%s Sleep %d sec (total = %d)", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                 ret, prte_odls_globals.timeout_before_sigkill));
-            ret = sleep(ret);
-        }
+        ret = nanosleep(&tp, NULL);
 
         /* issue a SIGKILL to all */
         PMIX_LIST_FOREACH(cd, &procs_killed, prte_odls_quick_caddy_t)
         {
             PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                                 "%s SENDING SIGKILL TO %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 "%s SENDING SIGKILL TO %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&cd->child->name)));
             kill_local(cd->child->pid, SIGKILL);
             /* indicate the waitpid fired as this is effectively what

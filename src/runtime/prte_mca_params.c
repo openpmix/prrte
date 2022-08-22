@@ -577,13 +577,6 @@ int prte_register_params(void)
         prte_enable_recovery = true;
     }
 
-    prte_abort_non_zero_exit = true;
-    (void) prte_mca_base_var_register(
-        "prte", "prte", NULL, "abort_on_non_zero_status",
-        "Abort the job if any process returns a non-zero exit status - no restart in such cases",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_abort_non_zero_exit);
-
     prte_allowed_exit_without_sync = false;
     (void) prte_mca_base_var_register(
         "prte", "prte", NULL, "allowed_exit_without_sync",
@@ -606,12 +599,11 @@ int prte_register_params(void)
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_stat_history_size);
 
     prte_max_vm_size = -1;
-    (void)
-        prte_mca_base_var_register("prte", "prte", NULL, "max_vm_size",
-                                   "Maximum size of virtual machine - used to subdivide allocation",
-                                   PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
-                                   &prte_max_vm_size);
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "max_vm_size",
+                                      "Maximum size of virtual machine - used to subdivide allocation",
+                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
+                                      PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      &prte_max_vm_size);
 
     (void) prte_mca_base_var_register(
         "prte", "prte", NULL, "set_default_slots",

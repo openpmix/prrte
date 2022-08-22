@@ -54,8 +54,6 @@ BEGIN_C_DECLS
 typedef struct {
     /** Verbose/debug output stream */
     int output;
-    /** Time to allow process to forcibly die */
-    int timeout_before_sigkill;
     /* list of ranks to be displayed on separate xterms */
     pmix_list_t xterm_ranks;
     /* the xterm cmd to be used */

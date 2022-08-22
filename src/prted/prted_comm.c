@@ -457,49 +457,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
             PRTE_ERROR_LOG(ret);
         }
 
-        /* release all resources (even those on other nodes) that we
-         * assigned to this job */
-        if (NULL != jdata->map) {
-            map = (prte_job_map_t *) jdata->map;
-            for (n = 0; n < map->nodes->size; n++) {
-                if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(map->nodes, n))) {
-                    continue;
-                }
-                for (i = 0; i < node->procs->size; i++) {
-                    proct = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, i);
-                    if (NULL == proct) {
-                        continue;
-                    }
-                    if (!PMIX_CHECK_NSPACE(proct->name.nspace, job)) {
-                        /* skip procs from another job */
-                        continue;
-                    }
-                    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, proct->app_idx);
-                    if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_TOOL) &&
-                        !(PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL))) {
-                        node->slots_inuse--;
-                        node->num_procs--;
-                    }
-                    /* deregister this proc - will be ignored if already done */
-                    PRTE_PMIX_CONSTRUCT_LOCK(&lk);
-                    PMIx_server_deregister_client(&proct->name, _notify_release, &lk);
-                    PRTE_PMIX_WAIT_THREAD(&lk);
-                    PRTE_PMIX_DESTRUCT_LOCK(&lk);
-                    /* set the entry in the node array to NULL */
-                    pmix_pointer_array_set_item(node->procs, i, NULL);
-                    /* release the proc once for the map entry */
-                    PMIX_RELEASE(proct);
-                }
-                /* set the node location to NULL */
-                pmix_pointer_array_set_item(map->nodes, n, NULL);
-                /* maintain accounting */
-                PMIX_RELEASE(node);
-                /* flag that the node is no longer in a map */
-                PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
-            }
-            PMIX_RELEASE(map);
-            jdata->map = NULL;
-        }
         PRTE_PMIX_CONSTRUCT_LOCK(&lk);
         PMIx_server_deregister_nspace(job, _notify_release, &lk);
         PRTE_PMIX_WAIT_THREAD(&lk);
