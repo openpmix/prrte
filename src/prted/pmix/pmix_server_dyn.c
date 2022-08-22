@@ -504,7 +504,6 @@ static void interim(int sd, short args, void *cbdata)
 
             /***   STOP ON EXEC FOR DEBUGGER   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_ON_EXEC)) {
-#if PRTE_HAVE_STOP_ON_EXEC
             if (PMIX_PROC_RANK == info->value.type) {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL,
                                    &info->value.data.rank, PMIX_PROC_RANK);
@@ -520,11 +519,6 @@ static void interim(int sd, short args, void *cbdata)
                 rc = PRTE_ERR_NOT_SUPPORTED;
                 goto complete;
             }
-#else
-            /* we cannot support the request */
-            rc = PRTE_ERR_NOT_SUPPORTED;
-            goto complete;
-#endif
 
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_IN_INIT)) {
             if (PMIX_PROC_RANK == info->value.type) {
@@ -626,13 +620,11 @@ static void interim(int sd, short args, void *cbdata)
             prte_set_attribute(&jdata->attributes, PRTE_JOB_MERGE_STDERR_STDOUT, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
 
-#ifdef PMIX_IOF_OUTPUT_RAW
             /***   RAW OUTPUT   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_IOF_OUTPUT_RAW)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_RAW_OUTPUT, PRTE_ATTR_GLOBAL, &flag,
                                PMIX_BOOL);
-#endif
 
             /***   STDIN TARGET   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_STDIN_TGT)) {
@@ -706,22 +698,18 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TOOL)) {
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_TOOL);
 
-#ifdef PMIX_SPAWN_TIMEOUT
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TIMEOUT) ||
                    PMIX_CHECK_KEY(info, PMIX_TIMEOUT)) {
             prte_add_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT, PRTE_ATTR_GLOBAL,
                                &info->value.data.integer, PMIX_INT);
-#else
+
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT)) {
             prte_add_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT, PRTE_ATTR_GLOBAL,
                                &info->value.data.integer, PMIX_INT);
-#endif
 
-#ifdef PMIX_JOB_TIMEOUT
         } else if (PMIX_CHECK_KEY(info, PMIX_JOB_TIMEOUT)) {
             prte_add_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT, PRTE_ATTR_GLOBAL,
                                &info->value.data.integer, PMIX_INT);
-#endif
 
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT_STACKTRACES)) {
             flag = PMIX_INFO_TRUE(info);
@@ -736,14 +724,23 @@ static void interim(int sd, short args, void *cbdata)
                 prte_add_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, PRTE_ATTR_GLOBAL,
                                    &flag, PMIX_BOOL);
             }
-#ifdef PMIX_LOG_AGG
+
         } else if (PMIX_CHECK_KEY(info, PMIX_LOG_AGG)) {
             flag = PMIX_INFO_TRUE(info);
             if (!flag) {
                 prte_add_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
                                    &flag, PMIX_BOOL);
             }
+
+#ifdef PMIX_ABORT_NONZERO_EXIT
+        } else if (PMIX_CHECK_KEY(info, PMIX_ABORT_NONZERO_EXIT)) {
+            flag = PMIX_INFO_TRUE(info);
+            if (!flag) {
+                prte_add_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, PRTE_ATTR_GLOBAL,
+                                   &flag, PMIX_BOOL);
+            }
 #endif
+
             /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {
             pmix_server_cache_job_info(jdata, info);
