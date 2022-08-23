@@ -110,6 +110,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_SET_CWD_SESSION        "set-cwd-to-session-dir"    // none
 #define PRTE_CLI_ENABLE_RECOVERY        "enable-recovery"           // none
 #define PRTE_CLI_MAX_RESTARTS           "max-restarts"              // required
+#define PRTE_CLI_DISABLE_RECOVERY       "disable-recovery"          // none
 #define PRTE_CLI_CONTINUOUS             "continuous"                // none
 #define PRTE_CLI_EXEC_AGENT             "exec-agent"                // required
 #define PRTE_CLI_TERM_NONZERO           "ignore-non-zero-termination"  // none
