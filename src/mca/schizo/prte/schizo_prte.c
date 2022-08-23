@@ -208,6 +208,9 @@ static struct option prterunoptions[] = {
     /* Binding options */
     PMIX_OPTION_DEFINE(PRTE_CLI_BINDTO, PMIX_ARG_REQD),
 
+    /* Runtime options */
+    PMIX_OPTION_DEFINE(PRTE_CLI_RTOS, PMIX_ARG_REQD),
+
     /* display options */
     PMIX_OPTION_DEFINE(PRTE_CLI_DISPLAY, PMIX_ARG_REQD),
 
@@ -316,6 +319,9 @@ static struct option prunoptions[] = {
 
     /* Binding options */
     PMIX_OPTION_DEFINE(PRTE_CLI_BINDTO, PMIX_ARG_REQD),
+
+    /* Runtime options */
+    PMIX_OPTION_DEFINE(PRTE_CLI_RTOS, PMIX_ARG_REQD),
 
     /* display options */
     PMIX_OPTION_DEFINE(PRTE_CLI_DISPLAY, PMIX_ARG_REQD),

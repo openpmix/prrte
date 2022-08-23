@@ -1523,6 +1523,8 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
     prte_job_t *jobdat;
     prte_proc_state_t state = PRTE_PROC_STATE_WAITPID_FIRED;
     prte_proc_t *cptr;
+    bool flag = false;
+    bool *fptr = &flag;
     PRTE_HIDE_UNUSED_PARAMS(fd, sd);
 
     prte_output_verbose(5, prte_odls_base_framework.framework_output,
@@ -1610,8 +1612,9 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                  * felt it was non-normal - in this latter case, we do not
                  * require that the proc deregister before terminating
                  */
-                if (0 != proc->exit_code &&
-                    prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL)) {
+                flag = false;
+                prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void**)&fptr, PMIX_BOOL);
+                if (0 != proc->exit_code && flag) {
                     state = PRTE_PROC_STATE_TERM_NON_ZERO;
                     PRTE_OUTPUT_VERBOSE(
                         (5, prte_odls_base_framework.framework_output,
@@ -1674,8 +1677,9 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
              * none of them will. This is considered acceptable. Still
              * flag it as abnormal if the exit code was non-zero
              */
-            if (0 != proc->exit_code &&
-                prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL)) {
+            flag = false;
+            prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void**)&fptr, PMIX_BOOL);
+            if (0 != proc->exit_code && flag) {
                 state = PRTE_PROC_STATE_TERM_NON_ZERO;
             } else {
                 state = PRTE_PROC_STATE_WAITPID_FIRED;

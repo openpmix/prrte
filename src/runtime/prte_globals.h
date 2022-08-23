@@ -592,8 +592,6 @@ PRTE_EXPORT extern char *prte_report_events_uri;
 /* process recovery */
 PRTE_EXPORT extern bool prte_enable_recovery;
 PRTE_EXPORT extern int32_t prte_max_restarts;
-/* barrier control */
-PRTE_EXPORT extern bool prte_do_not_barrier;
 
 /* exit status reporting */
 PRTE_EXPORT extern bool prte_report_child_jobs_separately;
@@ -604,10 +602,6 @@ PRTE_EXPORT extern int prte_stat_history_size;
 
 /* envars to forward */
 PRTE_EXPORT extern char **prte_forwarded_envars;
-
-/* map stddiag output to stderr so it isn't forwarded to mpirun */
-PRTE_EXPORT extern bool prte_map_stddiag_to_stderr;
-PRTE_EXPORT extern bool prte_map_stddiag_to_stdout;
 
 /* maximum size of virtual machine - used to subdivide allocation */
 PRTE_EXPORT extern int prte_max_vm_size;

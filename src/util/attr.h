@@ -208,6 +208,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_TAG_OUTPUT_DETAILED        (PRTE_JOB_START_KEY + 100) // bool - include [hostname:pid] in output stream tag
 #define PRTE_JOB_TAG_OUTPUT_FULLNAME        (PRTE_JOB_START_KEY + 101) // bool - use full namespace in output stream tag
 #define PRTE_JOB_TERM_NONZERO_EXIT          (PRTE_JOB_START_KEY + 102) // bool - terminate job if a proc exits with non-zero status
+#define PRTE_JOB_CONTROLS                   (PRTE_JOB_START_KEY + 103) // char* - Directives controlling job behavior
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

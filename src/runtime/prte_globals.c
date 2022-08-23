@@ -148,9 +148,6 @@ char *prte_report_events_uri = NULL;
 /* report bindings */
 bool prte_report_bindings = false;
 
-/* barrier control */
-bool prte_do_not_barrier = false;
-
 /* process recovery */
 bool prte_enable_recovery = false;
 int32_t prte_max_restarts = 0;
@@ -164,10 +161,6 @@ int prte_stat_history_size = -1;
 
 /* envars to forward */
 char **prte_forwarded_envars = NULL;
-
-/* map stddiag output to stderr so it isn't forwarded to mpirun */
-bool prte_map_stddiag_to_stderr = false;
-bool prte_map_stddiag_to_stdout = false;
 
 /* maximum size of virtual machine - used to subdivide allocation */
 int prte_max_vm_size = -1;
@@ -725,6 +718,7 @@ static void prte_job_map_construct(prte_job_map_t *map)
     map->mapping = 0;
     map->ranking = 0;
     map->binding = 0;
+    map->rtos_set = false;
     map->num_new_daemons = 0;
     map->daemon_vpid_start = PMIX_RANK_INVALID;
     map->num_nodes = 0;

@@ -424,6 +424,14 @@ static void interim(int sd, short args, void *cbdata)
                 goto complete;
             }
 
+            /***   RUNTIME OPTIONS  ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_RUNTIME_OPTIONS)) {
+            rc = prte_rmaps_base_set_runtime_options(jdata, info->value.data.string);
+            if (PRTE_SUCCESS != rc) {
+                goto complete;
+            }
+            jdata->map->rtos_set = true;
+
             /*** EXEC AGENT ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_EXEC_AGENT)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT, PRTE_ATTR_GLOBAL,
@@ -744,13 +752,11 @@ static void interim(int sd, short args, void *cbdata)
                                    &flag, PMIX_BOOL);
             }
 
-#ifdef PMIX_ABORT_NONZERO_EXIT
-        } else if (PMIX_CHECK_KEY(info, PMIX_ABORT_NONZERO_EXIT)) {
-            flag = PMIX_INFO_TRUE(info);
-            if (!flag) {
-                prte_add_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
-            }
+#ifdef PMIX_CONTROLS
+        } else if (PMIX_CHECK_KEY(info, PMIX_CONTROLS)) {
+            prte_add_attribute(&jdata->attributes, PRTE_JOB_CONTROLS,
+                               PRTE_ATTR_GLOBAL,
+                               &info->value.data.string, PMIX_STRING);
 #endif
 
             /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
