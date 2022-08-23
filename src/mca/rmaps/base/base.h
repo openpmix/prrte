@@ -76,6 +76,7 @@ typedef struct {
      * when the directive comes thru MCA param */
     char *file;
     hwloc_cpuset_t available, baseset;  // scratch for binding calculation
+    bool abort_non_zero_exit;  // default setting for aborting on non-zero proc exit
 } prte_rmaps_base_t;
 
 /**
@@ -124,6 +125,10 @@ PRTE_EXPORT int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *spec
 PRTE_EXPORT int prte_rmaps_base_set_default_ranking(prte_job_t *jdata,
                                                     prte_rmaps_options_t *options);
 PRTE_EXPORT int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec);
+
+PRTE_EXPORT int prte_rmaps_base_set_default_rto(prte_job_t *jdata,
+                                                prte_rmaps_options_t *options);
+PRTE_EXPORT int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec);
 
 PRTE_EXPORT void prte_rmaps_base_display_map(prte_job_t *jdata);
 PRTE_EXPORT void prte_rmaps_base_report_bindings(prte_job_t *jdata,

@@ -126,6 +126,8 @@ int main(int argc, char **argv)
 done:
     if (0 == myproc.rank) {
         exit(1);
+    } else {
+        sleep(3);
     }
     /* finalize us */
     fprintf(stderr, "Client ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);

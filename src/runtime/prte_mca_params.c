@@ -478,28 +478,6 @@ int prte_register_params(void)
         PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_allocation_required);
 
-    /* whether or not to map stddiag to stderr */
-    prte_map_stddiag_to_stderr = false;
-    (void) prte_mca_base_var_register(
-        "prte", "prte", NULL, "map_stddiag_to_stderr",
-        "Map output from prte_output to stderr of the local process [default: no]",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_map_stddiag_to_stderr);
-
-    /* whether or not to map stddiag to stderr */
-    prte_map_stddiag_to_stdout = false;
-    (void) prte_mca_base_var_register(
-        "prte", "prte", NULL, "map_stddiag_to_stdout",
-        "Map output from prte_output to stdout of the local process [default: no]",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_map_stddiag_to_stdout);
-    if (prte_map_stddiag_to_stderr && prte_map_stddiag_to_stdout) {
-        prte_output(0,
-                    "The options \"prte_map_stddiag_to_stderr\" and \"prte_map_stddiag_to_stdout\" "
-                    "are mutually exclusive. They cannot both be set to true.");
-        return PRTE_ERROR;
-    }
-
     /* generate new terminal windows to display output from specified ranks */
     prte_xterm = NULL;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "xterm",
@@ -514,11 +492,6 @@ int prte_register_params(void)
          * back to the controlling terminal
          */
         prte_leave_session_attached = true;
-        /* also want to redirect stddiag output from prte_output
-         * to stderr from the process so those messages show
-         * up in the xterm window instead of being forwarded to mpirun
-         */
-        prte_map_stddiag_to_stderr = true;
     }
 
     /* whether or not to report launch progress */
@@ -539,13 +512,6 @@ int prte_register_params(void)
     if (NULL != prte_report_events_uri) {
         prte_report_events = true;
     }
-
-    /* barrier control */
-    prte_do_not_barrier = false;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "do_not_barrier",
-                                      "Do not barrier in prte_init", PRTE_MCA_BASE_VAR_TYPE_BOOL,
-                                      NULL, 0, PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_do_not_barrier);
 
     prte_enable_recovery = false;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "enable_recovery",

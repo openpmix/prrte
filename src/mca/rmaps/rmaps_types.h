@@ -57,6 +57,7 @@ struct prte_job_map_t {
     prte_mapping_policy_t mapping;
     prte_ranking_policy_t ranking;
     prte_binding_policy_t binding;
+    bool rtos_set;
     /* *** */
     /* number of new daemons required to be launched
      * to support this job map

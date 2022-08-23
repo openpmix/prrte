@@ -70,49 +70,17 @@ option to the help request as "--help <option>".
 
 
 
-/*****      Mapping Options      *****/
+/*****      Placement Options      *****/
 
-   --map-by <arg0>                   Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache
-                                     | l2cache | l3cache | numa (default:np>2) | package | node | seq | dist |
-                                     ppr | rankfile | PE-LIST=a,b (comma-delimited ranges of cpus to use for
-                                     this job)] with supported colon-delimited qualifiers: PE=y (for
-                                     multiple cpus/proc), SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL,
-                                     HWTCPUS, CORECPUS, DEVICE(for dist policy), INHERIT, NOINHERIT, DONOTLAUNCH,
-                                     FILE=<path> for seq and rankfile options, ORDERED to indicate that the
-                                     CPUs specified in PE-LIST should be assigned to individual procs in
-                                     specified order (i.e., the first proc on a node is bound to the first
-                                     CPU in the list, the second proc to the second CPU, etc.). The PE-LIST
-                                     option without the ORDERED qualifier will result in each proc being
-                                     bound to the complete list of CPUs.
-
-
-
-/*****      Ranking Options      *****/
-
-   --rank-by <arg0>                  Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache
-                                     | l2cache | l3cache | numa (default:np>2) | package | node], with
-                                     modifier :SPAN or :FILL
-
-
-
-/*****      Binding Options      *****/
-
-   --bind-to <arg0>                  Binding policy for job. Allowed values: none, hwthread, core, l1cache,
-                                     l2cache, l3cache, numa, package, ("none" is the default when
-                                     oversubscribed, "core" is the default when np<=2, and "numa" is the
-                                     default when np>2). Allowed colon-delimited qualifiers: overload-allowed,
-                                     if-supported
-
-
-
-/*****     Developer Options     *****/
-
-   --do-not-launch                   Perform all necessary operations to prepare to launch the application,
-                                     but do not actually launch it (usually used to test mapping patterns)
+   --map-by <arg0>                   Mapping Policy for job
+   --rank-by <arg0>                  Ranking Policy for job
+   --bind-to <arg0>                  Binding policy for job.
 
 
 
 /*****      Launch Options       *****/
+   --runtime-options <arg0>          Comma-delimited list of runtime directives for the job (e.g., do not
+                                     abort if a process exits on non-zero status)
 -c|--np <arg0>                       Number of processes to run
 -n|--n <arg0>                        Number of processes to run
 -N <arg0>                            Number of processes to run per node
@@ -128,7 +96,6 @@ option to the help request as "--help <option>".
    --tune <arg0>                     File(s) containing MCA params for tuning operations
    --preload-files <arg0>            Preload the comma separated list of files to the remote machines current
                                      working directory before starting the remote process.
-   --prtemca <arg0> <arg1>           Pass context-specific PRTE MCA parameters to the DVM
    --pset <arg0>                     User-specified name assigned to the processes in their given application
    --rankfile <arg0>                 Name of file to specify explicit task mapping
 -s|--preload-binary                  Preload the binary on the remote machine before starting the remote
@@ -248,6 +215,9 @@ Pipe to monitor - DVM will terminate upon closure
 #
 [bind-to]
 #include#help-prte-hwloc-base#bind-to-option
+#
+[runtime-options]
+#include#help-schizo-cli#runtime-options
 #
 [display]
 #include#help-schizo-cli#display

@@ -751,7 +751,7 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
     prte_node_t *node;
     prte_job_map_t *map;
     int32_t index;
-    bool one_still_alive;
+    bool one_still_alive, flag;
     pmix_rank_t lowest = 0;
     int32_t i32, *i32ptr;
     prte_pmix_lock_t lock;
@@ -794,22 +794,25 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
 
     i32ptr = &i32;
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, (void **) &i32ptr, PMIX_INT32) &&
-        !prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL)) {
-        if (!prte_report_child_jobs_separately || 1 == PRTE_LOCAL_JOBID(jdata->nspace)) {
-            /* update the exit code */
-            PRTE_UPDATE_EXIT_STATUS(lowest);
-        }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, (void **) &i32ptr, PMIX_INT32)) {
+        flag = false;
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void*)&flag, PMIX_BOOL);
+        if (flag) {
+            if (!prte_report_child_jobs_separately || 1 == PRTE_LOCAL_JOBID(jdata->nspace)) {
+                /* update the exit code */
+                PRTE_UPDATE_EXIT_STATUS(lowest);
+            }
 
-        /* warn user */
-        pmix_show_help("help-state-base.txt", "normal-termination-but", true,
-                       (1 == PRTE_LOCAL_JOBID(jdata->nspace)) ? "the primary" : "child",
-                       (1 == PRTE_LOCAL_JOBID(jdata->nspace))
-                           ? ""
-                           : PRTE_LOCAL_JOBID_PRINT(jdata->nspace),
-                       i32,
-                       (1 == i32) ? "process returned\na non-zero exit code."
-                                  : "processes returned\nnon-zero exit codes.");
+            /* warn user */
+            pmix_show_help("help-state-base.txt", "normal-termination-but", true,
+                           (1 == PRTE_LOCAL_JOBID(jdata->nspace)) ? "the primary" : "child",
+                           (1 == PRTE_LOCAL_JOBID(jdata->nspace))
+                               ? ""
+                               : PRTE_LOCAL_JOBID_PRINT(jdata->nspace),
+                           i32,
+                           (1 == i32) ? "process returned\na non-zero exit code."
+                                      : "processes returned\nnon-zero exit codes.");
+        }
     }
 
     PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,

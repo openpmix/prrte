@@ -481,6 +481,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "FULL NSPACE IN OUTPUT TAG";
         case PRTE_JOB_TERM_NONZERO_EXIT:
             return "TERM IF NONZERO EXIT";
+        case PRTE_JOB_CONTROLS:
+            return "JOB CONTROLS";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

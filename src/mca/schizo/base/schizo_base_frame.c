@@ -299,6 +299,12 @@ static int check_ndirs(pmix_cli_item_t *opt)
     return PRTE_SUCCESS;
 }
 
+/* the sanity checker is provided for DEVELOPERS as it checks that
+ * the options contained in the cmd line being passed to PRRTE for
+ * execution meet PRRTE requirements. Although it does emit
+ * show_help messages, it really isn't intended for USERS - any
+ * problems in translating user cmd lines to PRRTE internal
+ * structs should be worked out by the developers */
 int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 {
     pmix_cli_item_t *opt, *newopt;
@@ -316,7 +322,6 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_PACKAGE,
         PRTE_CLI_NODE,
         PRTE_CLI_SEQ,
-//        PRTE_CLI_DIST,
         PRTE_CLI_PPR,
         PRTE_CLI_RANKFILE,
         PRTE_CLI_PELIST,
@@ -330,11 +335,9 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_NOLOCAL,
         PRTE_CLI_HWTCPUS,
         PRTE_CLI_CORECPUS,
-//        PRTE_CLI_DEVICE,
         PRTE_CLI_INHERIT,
         PRTE_CLI_NOINHERIT,
         PRTE_CLI_QFILE,
-        PRTE_CLI_NOLAUNCH,
         PRTE_CLI_ORDERED,
         NULL
     };
@@ -393,6 +396,12 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         NULL
     };
 
+    char *rtos[] = {
+        PRTE_CLI_ABORT_NZ,
+        PRTE_CLI_NOLAUNCH,
+        NULL
+    };
+
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_MAPBY)) {
         pmix_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_MAPBY);
         return PRTE_ERR_SILENT;
@@ -403,6 +412,14 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     }
     if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_BINDTO)) {
         pmix_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_BINDTO);
+        return PRTE_ERR_SILENT;
+    }
+    if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_DISPLAY)) {
+        pmix_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_DISPLAY);
+        return PRTE_ERR_SILENT;
+    }
+    if (1 < pmix_cmd_line_get_ninsts(cmd_line, PRTE_CLI_RTOS)) {
+        pmix_show_help("help-schizo-base.txt", "multi-instances", true, PRTE_CLI_RTOS);
         return PRTE_ERR_SILENT;
     }
 
@@ -468,7 +485,15 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         }
     }
 
-    // check too many directives
+    opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_RTOS);
+    if (NULL != opt) {
+        for (n=0; NULL != opt->values[n]; n++) {
+            if (!prte_schizo_base_check_directives(PRTE_CLI_RTOS, rtos, NULL, opt->values[n])) {
+                return PRTE_ERR_SILENT;
+            }
+        }
+    }
+    // check too many values given to a single command line option
     PMIX_LIST_FOREACH(opt, &cmd_line->instances, pmix_cli_item_t) {
         rc = check_ndirs(opt);
         if (PRTE_SUCCESS != rc) {
