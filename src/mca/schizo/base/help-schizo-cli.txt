@@ -21,10 +21,7 @@ Supported values include:
 
 -   ALLOCATION displays the detected hosts and slot assignments for this job
 
--   ALLOC-DEVEL displays a more detailed report of the detected hosts
-    and slot assignments for this job
-
--   BIND displays the resulting bindings applied to processes in this job
+-   BINDINGS displays the resulting bindings applied to processes in this job
 
 -   MAP displays the resulting locations assigned to processes in this job
 
