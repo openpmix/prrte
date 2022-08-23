@@ -378,6 +378,8 @@ static void proc_errors(int fd, short args, void *cbdata)
     prte_proc_state_t state = caddy->proc_state;
     int i;
     int32_t i32, *i32ptr;
+    bool flag;
+    bool *fptr = &flag;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
@@ -679,6 +681,8 @@ keep_going:
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
                              pptr->exit_code));
         jdata->exit_code = pptr->exit_code;
+        PRTE_FLAG_UNSET(pptr, PRTE_PROC_FLAG_ALIVE);
+        jdata->num_terminated++;
         /* track the number of non-zero exits */
         i32 = 0;
         i32ptr = &i32;
@@ -687,7 +691,9 @@ keep_going:
         ++i32;
         prte_set_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, PRTE_ATTR_LOCAL, i32ptr,
                            PMIX_INT32);
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL)) {
+        flag = true;
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void*)&fptr, PMIX_BOOL);
+        if (flag) {
             if (!PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
                 jdata->state = PRTE_JOB_STATE_NON_ZERO_TERM;
                 /* point to the first rank to cause the problem */

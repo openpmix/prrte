@@ -677,10 +677,6 @@ to the --map-by option (except where noted):
     be bound to the first CPU in the list, the second proc shall be
     bound to the second CPU, etc.)
 
--   DONOTLAUNCH directs PRRTE to map but not launch the specified job.
-    This is provided to help explore possible process placement patterns
-    before actually starting execution.
-
 Note that directives and qualifiers are case-insensitive
 and can be shortened to the minimum number of characters
 to uniquely identify them. Thus, "L1CACHE" can be given

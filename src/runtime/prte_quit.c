@@ -106,6 +106,8 @@ static char *print_aborted_job(prte_job_t *job,
                                prte_node_t *node)
 {
     char *output = NULL;
+    bool flag;
+    bool *fptr = &flag;
 
     if (PRTE_PROC_STATE_FAILED_TO_START == proc->state ||
         PRTE_PROC_STATE_FAILED_TO_LAUNCH == proc->state) {
@@ -280,12 +282,15 @@ static char *print_aborted_job(prte_job_t *job,
                                        prte_tool_basename, PRTE_NAME_PRINT(&proc->name),
                                        node->name);
         return output;
-    } else if (prte_get_attribute(&job->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL) &&
-               PRTE_PROC_STATE_TERM_NON_ZERO == proc->state) {
-        output = pmix_show_help_string("help-prun.txt", "prun:non-zero-exit", true,
-                                       prte_tool_basename, PRTE_NAME_PRINT(&proc->name),
-                                       proc->exit_code);
-        return output;
+    } else if (PRTE_PROC_STATE_TERM_NON_ZERO == proc->state) {
+        flag = false;
+        prte_get_attribute(&job->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void**)&fptr, PMIX_BOOL);
+        if (flag) {
+            output = pmix_show_help_string("help-prun.txt", "prun:non-zero-exit", true,
+                                           prte_tool_basename, PRTE_NAME_PRINT(&proc->name),
+                                           proc->exit_code);
+            return output;
+        }
     }
 
     /* nothing here */

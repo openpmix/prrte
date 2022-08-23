@@ -113,12 +113,14 @@ BEGIN_C_DECLS
 #define PRTE_CLI_DISABLE_RECOVERY       "disable-recovery"          // none
 #define PRTE_CLI_CONTINUOUS             "continuous"                // none
 #define PRTE_CLI_EXEC_AGENT             "exec-agent"                // required
-#define PRTE_CLI_TERM_NONZERO           "ignore-non-zero-termination"  // none
 
 // Placement options
 #define PRTE_CLI_MAPBY                  "map-by"                    // required
 #define PRTE_CLI_RANKBY                 "rank-by"                   // required
 #define PRTE_CLI_BINDTO                 "bind-to"                   // required
+
+// Runtime options
+#define PRTE_CLI_RTOS                   "runtime-options"           // required
 
 // Debug options
 #define PRTE_CLI_DO_NOT_LAUNCH          "do-not-launch"             // none
@@ -198,6 +200,11 @@ BEGIN_C_DECLS
 #define PRTE_CLI_MAPDEV     "map-devel"
 #define PRTE_CLI_TOPO       "topo="
 
+// Runtime directives
+#define PRTE_CLI_ABORT_NZ   "abort-nonzero-status"
+#define PRTE_CLI_NOLAUNCH   "donotlaunch"
+
+
 /* define the command line qualifiers PRRTE recognizes */
 
 // Placement qualifiers
@@ -213,7 +220,6 @@ BEGIN_C_DECLS
 #define PRTE_CLI_NOINHERIT  "noinherit"
 #define PRTE_CLI_QDIR       "dir="
 #define PRTE_CLI_QFILE      "file="
-#define PRTE_CLI_NOLAUNCH   "donotlaunch"
 #define PRTE_CLI_OVERLOAD   "overload-allowed"
 #define PRTE_CLI_NOOVERLOAD "no-overload"
 #define PRTE_CLI_IF_SUPP    "if-supported"
@@ -263,6 +269,34 @@ static inline bool prte_check_cli_option(char *a, char *b)
 
 #define PRTE_CHECK_CLI_OPTION(a, b) \
     prte_check_cli_option(a, b)
+
+/* check if an option is "true" */
+static inline bool prte_check_true(char *a)
+{
+    int n;
+    size_t len1, len;
+    char *negs[] = {
+        "false",
+        "0",
+        "no",
+        NULL
+    };
+
+    if (NULL == a) {
+        return true;  // default
+    }
+    len1 = strlen(a);
+
+    for (n=0; NULL != negs[n]; n++) {
+        len = (len1 < strlen(negs[n])) ? len1 : strlen(negs[n]);
+        if (0 == strncasecmp(a, negs[n], len)) {
+            return false;
+        }
+    }
+    return true;
+}
+#define PRTE_CHECK_TRUE(a) \
+    prte_check_true(a)
 
 END_C_DECLS
 

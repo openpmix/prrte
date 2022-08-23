@@ -801,7 +801,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* cannot have both files and directory set for output */
+    /* get output options */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_OUTPUT);
     if (NULL != opt) {
         ret = prte_schizo_base_parse_output(opt, jinfo);
@@ -809,6 +809,12 @@ int main(int argc, char *argv[])
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             goto DONE;
         }
+    }
+
+    /* check for runtime options */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_RTOS);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RUNTIME_OPTIONS, opt->values[0], PMIX_STRING);
     }
 
     /* check what user wants us to do with stdin */

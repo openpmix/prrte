@@ -24,6 +24,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/prte_cmd_line.h"
 
 /*
  * Globals
@@ -531,7 +532,6 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
     prte_binding_policy_t tmp;
     char **quals, *myspec, *ptr;
     prte_job_t *jdata = (prte_job_t *) jdat;
-    size_t len;
 
     /* set default */
     tmp = 0;
@@ -550,15 +550,17 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
         ++ptr;
         quals = pmix_argv_split(ptr, ':');
         for (i = 0; NULL != quals[i]; i++) {
-            len = strlen(quals[i]);
-            if (0 == strncasecmp(quals[i], "if-supported", len)) {
+            if (PRTE_CHECK_CLI_OPTION(quals[i], PRTE_CLI_IF_SUPP)) {
                 tmp |= PRTE_BIND_IF_SUPPORTED;
-            } else if (0 == strncasecmp(quals[i], "overload-allowed", len)) {
+
+            } else if (PRTE_CHECK_CLI_OPTION(quals[i], PRTE_CLI_OVERLOAD)) {
                 tmp |= (PRTE_BIND_ALLOW_OVERLOAD | PRTE_BIND_OVERLOAD_GIVEN);
-            } else if (0 == strncasecmp(quals[i], "no-overload", len)) {
+
+            } else if (PRTE_CHECK_CLI_OPTION(quals[i], PRTE_CLI_NOOVERLOAD)) {
                 tmp = (tmp & ~PRTE_BIND_ALLOW_OVERLOAD);
                 tmp |= PRTE_BIND_OVERLOAD_GIVEN;
-            } else if (0 == strncasecmp(quals[i], "REPORT", len)) {
+
+            } else if (PRTE_CHECK_CLI_OPTION(quals[i], PRTE_CLI_REPORT)) {
                 if (NULL == jdata) {
                     pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                    "binding policy", quals[i]);
@@ -567,6 +569,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 }
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS, PRTE_ATTR_GLOBAL,
                                    NULL, PMIX_BOOL);
+
             } else {
                 /* unknown option */
                 pmix_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
@@ -578,30 +581,35 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
         pmix_argv_free(quals);
     }
 
-    len = strlen(myspec);
-    if (0 < len) {
-        if (0 == strncasecmp(myspec, "none", len)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NONE);
-        } else if (0 == strncasecmp(myspec, "hwthread", len)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
-        } else if (0 == strncasecmp(myspec, "core", len)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);
-        } else if (0 == strncasecmp(myspec, "l1cache", len)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L1CACHE);
-        } else if (0 == strncasecmp(myspec, "l2cache", len)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L2CACHE);
-        } else if (0 == strncasecmp(myspec, "l3cache", len)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L3CACHE);
-        } else if (0 == strncasecmp(myspec, "numa", len)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NUMA);
-        } else if (0 == strncasecmp(myspec, "package", len)) {
-            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
-        } else {
-            pmix_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true, "binding",
-                           spec);
-            free(myspec);
-            return PRTE_ERR_BAD_PARAM;
-        }
+    if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_NONE)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NONE);
+
+    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_HWT)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
+
+    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_CORE)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);
+
+    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_L1CACHE)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L1CACHE);
+
+    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_L2CACHE)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L2CACHE);
+
+    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_L3CACHE)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L3CACHE);
+
+    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_NUMA)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NUMA);
+
+    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_PACKAGE)) {
+        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
+
+    } else {
+        pmix_show_help("help-prte-hwloc-base.txt", "invalid binding_policy", true, "binding",
+                       spec);
+        free(myspec);
+        return PRTE_ERR_BAD_PARAM;
     }
     free(myspec);
 
