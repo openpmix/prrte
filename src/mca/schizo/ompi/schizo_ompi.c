@@ -649,6 +649,13 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
             free(p2);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
+        /* merge-stderr-to-stdout -> --output merge-stderr-to-stdout */
+        else if (0 == strcmp(option, "merge-stderr-to-stdout")) {
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_OUTPUT, PRTE_CLI_MERGE_ERROUT,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
         /* --xml  ->  --output xml */
         else if (0 == strcmp(option, "xml")) {
             rc = prte_schizo_base_add_directive(results, option,
