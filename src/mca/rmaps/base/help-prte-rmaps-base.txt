@@ -677,12 +677,6 @@ to the --map-by option (except where noted):
     be bound to the first CPU in the list, the second proc shall be
     bound to the second CPU, etc.)
 
--   DISPLAY outputs a table showing the mapped location of each process
-    prior to launch.
-
--   DISPLAYALLOC outputs the detected allocation of resources (e.g., nodes,
-    slots) for the job
-
 -   DONOTLAUNCH directs PRRTE to map but not launch the specified job.
     This is provided to help explore possible process placement patterns
     before actually starting execution.
@@ -698,7 +692,7 @@ is determined as follows:
 * by user directive on the command line via the HWTCPUS qualifier to
   the "--map-by" directive
 
-* by setting the "rmaps_base_default_mapping_policy" MCA parameter to
+* by setting the "rmaps_default_mapping_policy" MCA parameter to
   include the "HWTCPUS" qualifier. This parameter sets the default
   value for a PRRTE DVM - qualifiers are carried across to DVM jobs
   started via "prun" unless overridden by the user's cmd line
@@ -871,7 +865,7 @@ type of CPU used (core vs hwthread) is determined by (in priority order):
 * user directive on the command line via the HWTCPUS qualifier to
   the "--map-by" directive
 
-* setting the "rmaps_base_default_mapping_policy" MCA parameter to
+* setting the "rmaps_default_mapping_policy" MCA parameter to
   include the "HWTCPUS" qualifier. This parameter sets the default
   value for a PRRTE DVM - qualifiers are carried across to DVM jobs
   started via "prun" unless overridden by the user's cmd line
@@ -1677,24 +1671,24 @@ These deprecated options will be removed in a future release.
 
 `--display-allocation`
 
-:   **(Deprecated: Use `--map-by :DISPLAYALLOC`)**
+:   **(Deprecated: Use `--display ALLOC`)**
     Display the detected resource allocation.
 
 `--display-devel-map`
 
-:   **(Deprecated: Use `--map-by :DISPLAYDEVEL`)**
+:   **(Deprecated: Use `--display MAP-DEVEL`)**
     Display a detailed process map (mostly intended for developers) just
     before launch.
 
 `--display-map`
 
-:   **(Deprecated: Use `--map-by :DISPLAY`)**
+:   **(Deprecated: Use `--display MAP`)**
     Display a table showing the mapped location of each process prior to
     launch.
 
 `--display-topo`
 
-:   **(Deprecated: Use `--map-by :DISPLAYTOPO`)**
+:   **(Deprecated: Use `--display TOPO`)**
     Display the topology as part of the process map (mostly intended for
     developers) just before launch.
 
@@ -1767,17 +1761,17 @@ These deprecated options will be removed in a future release.
 
 `--report-bindings`
 
-:   **(Deprecated: Use `--bind-to :REPORT`)**
+:   **(Deprecated: Use `--display BINDINGS`)**
     Report any bindings for launched processes.
 
 `--tag-output`
 
-:   **(Deprecated: Use `--map-by :TAGOUTPUT`)**
+:   **(Deprecated: Use `--output TAG`)**
     Tag all output with [job,rank]
 
 `--timestamp-output`
 
-:   **(Deprecated: Use `--map-by :TIMESTAMPOUTPUT`)**
+:   **(Deprecated: Use `--output TIMESTAMP`)**
     Timestamp all application process output
 
 `--use-hwthread-cpus`
@@ -1787,7 +1781,7 @@ These deprecated options will be removed in a future release.
 
 `--xml`
 
-:   **(Deprecated: Use `--map-by :XMLOUTPUT`)**
+:   **(Deprecated: Use `--output XML`)**
     Provide all output in XML format
 #
 #  ALL
