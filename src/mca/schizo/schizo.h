@@ -90,6 +90,9 @@ typedef int (*prte_schizo_base_module_set_default_ranking_fn_t)(prte_job_t *jdat
 typedef int (*prte_schizo_base_module_set_default_binding_fn_t)(prte_job_t *jdata,
                                                                 prte_rmaps_options_t *options);
 
+typedef int (*prte_schizo_base_module_set_default_rto_fn_t)(prte_job_t *jdata,
+                                                            prte_rmaps_options_t *options);
+
 /* do whatever preparation work
  * is required to setup the app for execution. This is intended to be
  * used by prun and other launcher tools to, for example, change
@@ -123,6 +126,7 @@ typedef struct {
     prte_schizo_base_module_set_default_mapping_fn_t    set_default_mapping;
     prte_schizo_base_module_set_default_ranking_fn_t    set_default_ranking;
     prte_schizo_base_module_set_default_binding_fn_t    set_default_binding;
+    prte_schizo_base_module_set_default_rto_fn_t        set_default_rto;
     prte_schizo_base_module_setup_app_fn_t              setup_app;
     prte_schizo_base_module_setup_fork_fn_t             setup_fork;
     prte_schizo_base_module_job_info_fn_t               job_info;

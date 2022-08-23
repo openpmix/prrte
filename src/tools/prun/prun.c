@@ -630,7 +630,7 @@ int prun(int argc, char *argv[])
         }
     }
 
-    /* cannot have both files and directory set for output */
+    /* check for output options */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_OUTPUT);
     if (NULL != opt) {
         ret = prte_schizo_base_parse_output(opt, jinfo);
@@ -638,6 +638,12 @@ int prun(int argc, char *argv[])
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             goto DONE;
         }
+    }
+
+    /* check for runtime options */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_RTOS);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_RUNTIME_OPTIONS, opt->values[0], PMIX_STRING);
     }
 
     /* check what user wants us to do with stdin */
@@ -687,7 +693,13 @@ int prun(int argc, char *argv[])
         /* mark this job as continuously operating */
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_JOB_CONTINUOUS, &flag, PMIX_BOOL);
     }
-
+#ifdef PMIX_ABORT_NONZERO_EXIT
+    /* if ignore non-zero exit was specified */
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_TERM_NONZERO)) {
+        /* mark this job to not terminate if a proc exits with non-zero status */
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_ABORT_NONZERO_EXIT, NULL, PMIX_BOOL);
+    }
+#endif
     /* if stop-on-exec was specified */
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_STOP_ON_EXEC)) {
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_ON_EXEC, &flag, PMIX_BOOL);

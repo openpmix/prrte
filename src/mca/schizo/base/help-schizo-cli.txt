@@ -29,7 +29,8 @@ Supported values include:
     processes in this job that includes local and node ranks, assigned
     bindings, and other data
 
--   TOPO displays the topology of the nodes allocated to the job
+-   TOPO=LIST displays the topology of each node in the comma-delimited list
+    that is allocated to the job
 
 No qualifiers are defined for this directive.
 #
@@ -447,3 +448,38 @@ application compiled with Open MPI, "mpich" for one built against
 the MPICH library, or "oshmem" for an OpenSHMEM application compiled
 against SUNY's reference library.
 #
+#  RUNTIME-OPTIONS
+#
+[runtime-options]
+The "runtime-options" command line directive must be accompanied by a
+comma-delimited list of case-insensitive options that control the runtime
+behavior of the job. The full directive need not be provided - only enough
+characters are required to uniquely identify the directive.
+
+Runtime options are typically "true" or "false", though this is not a
+requirement on developers. Since the value of each option may need to
+be set (e.g., to override a default set by MCA parameter), the syntax
+of the command line directive includes the use of an '=' character to
+allow inclusion of a value for the option. For example, one can set
+the ABORT-NONZERO-STATUS option to "true" by specifying it as
+"ABORT-NONZERO-STATUS=1". Note that boolean options can be set to "true"
+using a non-zero integer or a case-insensitive string of the word "true".
+For the latter representation, the user need only provide at least the
+'T' character. The same policy applies to setting a boolean option to
+"false".
+
+Note that a boolean option will default to "true" if provided without
+a value. Thus, "--runtime-options abort-nonzero" is sufficient to set the
+"ABORT-NONZERO-STATUS" option to "true".
+
+Supported values include:
+
+-   ABORT-NONZERO-STATUS[=(bool)] directs the runtime to not abort a running
+    job if a process exits with non-zero status if set to true.
+
+-   DONOTLAUNCH directs the runtime to map but not launch the specified
+    job. This is provided to help explore possible process placement patterns
+    before actually starting execution.
+
+The runtime-options command line option has no qualifiers. Note that directives
+are case-insensitive.

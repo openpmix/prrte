@@ -79,14 +79,14 @@ option to the help request as "--help <option>".
 
 
 /*****      Launch Options       *****/
-
--n|--np <arg0>                       Number of processes to run
--N|--npernode <arg0>                        Run one process per node
+   --runtime-options <arg0>          Comma-delimited list of runtime directives for the job (e.g., do not
+                                     abort if a process exits on non-zero status)
+-c|--np <arg0>                       Number of processes to run
+-n|--n <arg0>                        Number of processes to run
+-N|--npernode <arg0>                 Run designated number of processes on each node
    --personality <arg0>              Specify the personality to be used
 -H|--host <arg0>                     List of hosts to invoke processes on
    --hostfile <arg0>                 Provide a hostfile
-   --initial-errhandler <arg0>       Specify the initial error handler that is attached to predefined
-                                     communicators during the first MPI call.
    --machinefile <arg0>              Provide a hostfile (synonym for hostfile)
    --pmixmca <arg0> <arg1>           Pass context-specific PMIx MCA parameters; they are considered global if
                                      only one context is specified (arg0 is the parameter name; arg1 is the parameter value)
@@ -317,6 +317,9 @@ Specify procs to receive stdin [rank, "all", "none"] (default: 0, indicating ran
 #
 [bind-to]
 #include#help-prte-hwloc-base#bind-to-option
+#
+[runtime-options]
+#include#help-schizo-cli#runtime-options
 #
 [rankfile]
 Name of file to specify explicit task mapping

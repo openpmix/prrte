@@ -346,9 +346,6 @@ static void track_procs(int fd, short argc, void *cbdata)
     /* get the job object for this proc */
     if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        prte_output(0, "%s ERROR: %s NOT FOUND %s",
-                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
-                    prte_proc_state_to_str(state));
         goto cleanup;
     }
     if (PRTE_PROC_STATE_READY_FOR_DEBUG == state) {
