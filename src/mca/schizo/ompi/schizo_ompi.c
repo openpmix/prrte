@@ -500,6 +500,13 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
+        /* --do-not-launch -> --map-by do-not-launch */
+        else if(0 == strcmp(option, "do-not-launch")) {
+            rc = prte_schizo_base_add_qualifier(results, option,
+                                                PRTE_CLI_MAPBY, PRTE_CLI_NOLAUNCH,
+                                                warn);
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+        }
         /* --cpu-set and --cpu-list -> --map-by pe-list:X
          */
         else if (0 == strcmp(option, "cpu-set") || 0 == strcmp(option, "cpu-list")) {
