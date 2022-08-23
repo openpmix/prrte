@@ -19,6 +19,8 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -69,12 +71,14 @@ static int set_default_ranking(prte_job_t *jdata,
 static int setup_fork(prte_job_t *jdata, prte_app_context_t *context);
 static void job_info(pmix_cli_result_t *results,
                      void *jobinfo);
+static int setup_app(prte_pmix_app_t *app);
 
 prte_schizo_base_module_t prte_schizo_ompi_module = {
     .name = "ompi",
     .parse_cli = parse_cli,
     .parse_env = parse_env,
     .setup_fork = setup_fork,
+    .setup_app = setup_app,
     .detect_proxy = detect_proxy,
     .allow_run_as_root = allow_run_as_root,
     .set_default_ranking = set_default_ranking,
@@ -235,9 +239,161 @@ static struct option ompioptions[] = {
     PMIX_OPTION_END
 };
 static char *ompishorts = "h::vVpn:c:N:sH:x:";
+static char *ompi_install_dirs_libdir = NULL;
 
 static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent);
+
+static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfile)
+{
+    if (NULL == strstr(app->app.argv[index], jarfile)) {
+        /* nope - need to add it */
+        char *fmt = ':' == app->app.argv[index][strlen(app->app.argv[index]-1)]
+                    ? "%s%s/%s" : "%s:%s/%s";
+        char *str;
+        asprintf(&str, fmt, app->app.argv[index], ompi_install_dirs_libdir, jarfile);
+        free(app->app.argv[index]);
+        app->app.argv[index] = str;
+    }
+}
+
+/*
+ * OMPI schizo setup_app is the place we prep for Java apps
+ */
+
+static int setup_app(prte_pmix_app_t *app)
+{
+    bool found;
+    int i,n,java_pos,rc;
+    char *value;
+
+    /* if this is a Java application, we have a bit more work to do. Such
+     * applications actually need to be run under the Java virtual machine
+     * and the "java" command will start the "executable". So we need to ensure
+     * that all the proper java-specific paths are provided
+     */
+
+    if (0 != strcmp(app->app.argv[0], "java")) {
+        return PRTE_SUCCESS;
+    }
+
+    ompi_install_dirs_libdir = getenv("OMPI_LIBDIR_LOC");
+    if (NULL == ompi_install_dirs_libdir) {
+        pmix_show_help("help-schizo-ompi.txt", "openmpi-install-path-not-found",1);
+        return PRTE_ERR_NOT_AVAILABLE;
+    }
+
+    /* see if we were given a library path */
+    found = false;
+    for (i=1; NULL != app->app.argv[i]; i++) {
+        if (NULL != strstr(app->app.argv[i], "java.library.path")) {
+            char *dptr;
+            /* find the '=' that delineates the option from the path */
+            if (NULL == (dptr = strchr(app->app.argv[i], '='))) {
+                /* that's just wrong */
+                rc = PRTE_ERR_BAD_PARAM;
+                goto cleanup;
+            }
+            /* step over the '=' */
+            ++dptr;
+            /* yep - but does it include the path to the mpi libs? */
+            found = true;
+            if (NULL == strstr(app->app.argv[i], ompi_install_dirs_libdir)) {
+                /* doesn't appear to - add it to be safe */
+                if (':' == app->app.argv[i][strlen(app->app.argv[i]-1)]) {
+                    asprintf(&value, "-Djava.library.path=%s%s", dptr, ompi_install_dirs_libdir);
+                } else {
+                    asprintf(&value, "-Djava.library.path=%s:%s", dptr, ompi_install_dirs_libdir);
+                }
+                free(app->app.argv[i]);
+                app->app.argv[i] = value;
+            }
+            break;
+        }
+    }
+
+    if (!found) {
+        /* need to add it right after the java command */
+        asprintf(&value, "-Djava.library.path=%s", ompi_install_dirs_libdir);
+        pmix_argv_insert_element(&app->app.argv, 1, value);
+        free(value);
+    }
+
+    /* see if we were given a class path 
+     * See https://docs.oracle.com/javase/8/docs/technotes/tools/findingclasses.html
+     * for more info about rules for the ways to set the class path
+     */
+    found = false;
+    for (i=1; NULL != app->app.argv[i]; i++) {
+        if (NULL != strstr(app->app.argv[i], "cp") ||
+            NULL != strstr(app->app.argv[i], "classpath")) {
+            /* yep - but does it include the path to the mpi libs? */
+            found = true;
+            /* check if mpi.jar exists - if so, add it */
+            value = pmix_os_path(false, ompi_install_dirs_libdir, "mpi.jar", NULL);
+            if (access(value, F_OK ) != -1) {
+                set_classpath_jar_file(app, i+1, "mpi.jar");
+            }
+            free(value);
+            /* always add the local directory */
+            asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[i+1]);
+            free(app->app.argv[i+1]);
+            app->app.argv[i+1] = value;
+            break;
+        }
+    }
+
+    if (!found) {
+        /* check to see if CLASSPATH is in the environment */
+        found = false;  // just to be pedantic
+        for (i=0; NULL != environ[i]; i++) {
+            if (0 == strncmp(environ[i], "CLASSPATH", strlen("CLASSPATH"))) {
+                value = strchr(environ[i], '=');
+                ++value; /* step over the = */
+                pmix_argv_insert_element(&app->app.argv, 1, value);
+                /* check for mpi.jar */
+                value = pmix_os_path(false, ompi_install_dirs_libdir, "mpi.jar", NULL);
+                if (access(value, F_OK ) != -1) {
+                    set_classpath_jar_file(app, 1, "mpi.jar");
+                }
+                free(value);
+                /* always add the local directory */
+                (void)asprintf(&value, "%s:%s", app->app.cwd, app->app.argv[1]);
+                free(app->app.argv[1]);
+                app->app.argv[1] = value;
+                pmix_argv_insert_element(&app->app.argv, 1, "-cp");
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            /* need to add it right after the java command - have
+             * to include the working directory and trust that
+             * the user set cwd if necessary
+             */
+            char *str, *str2;
+            /* always start with the working directory */
+            str = strdup(app->app.cwd);
+            /* check for mpi.jar */
+            value = pmix_os_path(false, ompi_install_dirs_libdir, "mpi.jar", NULL);
+            if (access(value, F_OK ) != -1) {
+                (void)asprintf(&str2, "%s:%s", str, value);
+                free(str);
+                str = str2;
+            }
+            free(value);
+            pmix_argv_insert_element(&app->app.argv, 1, str);
+            free(str);
+            pmix_argv_insert_element(&app->app.argv, 1, "-cp");
+        }
+    }
+
+    return PRTE_SUCCESS;
+
+cleanup:
+    return rc;
+}
 
 static int parse_cli(char **argv, pmix_cli_result_t *results,
                      bool silent)
@@ -447,7 +603,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     }
 
     return PRTE_SUCCESS;
-};
+}
 
 static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent)
