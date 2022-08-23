@@ -491,6 +491,9 @@ Disable recovery (resets all recovery options to off)
 #
 [continuous]
 Job is to run until explicitly terminated
+[openmpi-install-path-not-found]
+An internal Open MPI environment variable needed for Java support was not set.
+Open MPI 5.0.0 or newer is required for this support.
 #
 #
 #  DEPRECATED OPTIONS

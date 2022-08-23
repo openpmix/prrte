@@ -19,6 +19,8 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022      Triad National Security, LLC.
+ *                         All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -231,6 +233,17 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
                        "strdup returned NULL", errno);
         rc = PRTE_ERR_NOT_FOUND;
         goto cleanup;
+    }
+
+    /*
+     * does the schizo being used have a setup_app method?
+     * if so call here
+     */
+    if(NULL != schizo->setup_app) {
+        rc = schizo->setup_app(app);
+        if (PRTE_SUCCESS != rc) {
+            goto cleanup;
+        }
     }
 
     // parse any environment-related cmd line options

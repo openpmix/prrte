@@ -6,6 +6,8 @@
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -94,7 +96,7 @@ typedef int (*prte_schizo_base_module_set_default_binding_fn_t)(prte_job_t *jdat
  * an executable's relative-path to an absolute-path, or add a command
  * required for starting a particular kind of application (e.g., adding
  * "java" to start a Java application) */
-typedef int (*prte_schizo_base_module_setup_app_fn_t)(prte_app_context_t *app);
+typedef int (*prte_schizo_base_module_setup_app_fn_t)(prte_pmix_app_t *app);
 
 /* add any personality-specific envars required at the job level prior
  * to beginning to execute local procs */
