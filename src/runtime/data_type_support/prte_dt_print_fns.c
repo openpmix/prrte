@@ -434,7 +434,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
                 "\t\tThe compute node architecture has not been probed, and the displayed\n"
                 "\t\tmap reflects the HEADNODE ARCHITECTURE. On systems with a different\n"
                 "\t\tarchitecture between headnode and compute nodes, the map can be\n"
-                "\t\tdisplayed using `prte --display map /bin/true`, which will launch\n"
+                "\t\tdisplayed using `prterun --display map /bin/true`, which will launch\n"
                 "\t\tenough of the DVM to probe the compute node architecture.\n"
                 "\t</comment>\n", tmp);
             free(tmp);
