@@ -103,6 +103,14 @@ pass:
             }
         }
 
+        if (!options->oversubscribe) {
+            /* since oversubscribe is not allowed, cap our usage
+             * at the number of available slots. */
+            if (node->slots_available < options->nprocs) {
+                options->nprocs = node->slots_available;
+            }
+        }
+
         /* if the number of procs is greater than the number of CPUs
          * on this node, but less or equal to the number of slots,
          * then we are not oversubscribed but we are overloaded. If
@@ -240,6 +248,14 @@ pass:
     {
         prte_rmaps_base_get_cpuset(jdata, node, options);
 
+        if (!options->oversubscribe) {
+            /* since oversubscribe is not allowed, cap our usage
+             * at the number of available slots. */
+            if (node->slots_available < options->nprocs) {
+                options->nprocs = node->slots_available;
+            }
+        }
+
         /* if the number of procs is greater than the number of CPUs
          * on this node, but less or equal to the number of slots,
          * then we are not oversubscribed but we are overloaded. If
@@ -257,19 +273,6 @@ pass:
             rc = PRTE_ERR_OUT_OF_RESOURCE;
             options->bind = savebind;
             continue;
-        }
-
-        /* if oversubscribe is specified, then just ignore the
-         * number of slots on each node and assign this number.
-         * Note that oversubscribe automatically dictates that
-         * we do not bind, so binding can also be ignored */
-
-        if (!options->oversubscribe) {
-            /* since oversubscribe is not allowed , cap our usage
-             * at the number of available slots */
-            if (node->slots_available < options->nprocs) {
-                options->nprocs = node->slots_available;
-            }
         }
 
         PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
@@ -371,6 +374,14 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
                 options->nprocs = node->slots_available;
             } else {
                 options->nprocs = node->slots;
+            }
+        }
+
+        if (!options->oversubscribe) {
+            /* oversubscribe is not allowed, so cap our usage
+             * at the number of available slots. */
+            if (node->slots_available < options->nprocs) {
+                options->nprocs = node->slots_available;
             }
         }
 
@@ -576,8 +587,14 @@ pass:
                 }
             }
         }
-        prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
-                            "mca:rmaps:rr: assigning nprocs %d", nprocs);
+
+        if (!options->oversubscribe) {
+            /* since oversubscribe is not allowed, cap our usage
+             * at the number of available slots. */
+            if (node->slots_available < nprocs) {
+                nprocs = node->slots_available;
+            }
+        }
 
         /* if the number of procs is greater than the number of CPUs
          * on this node, but less or equal to the number of slots,
@@ -591,6 +608,9 @@ pass:
             options->bind = PRTE_BIND_TO_NONE;
             jdata->map->binding = PRTE_BIND_TO_NONE;
         }
+
+        prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+                            "mca:rmaps:rr: assigning nprocs %d", nprocs);
 
         nodefull = false;
         if (span) {
@@ -700,8 +720,7 @@ pass:
      * handling the oversubscription. Figure out how many procs
      * to add to each of them.
      */
-    balance = (float) ((int) app->num_procs - nprocs_mapped)
-    / (float) total_nobjs;
+    balance = (float) ((int) app->num_procs - nprocs_mapped) / (float) options->total_nobjs;
     extra_procs_to_assign = (int) balance;
     if (0 < (balance - (float) extra_procs_to_assign)) {
         /* compute how many nodes need an extra proc */

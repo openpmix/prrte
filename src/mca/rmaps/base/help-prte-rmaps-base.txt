@@ -29,7 +29,7 @@ slots that were requested by the application:
 
   %s
 
-Either request fewer slots for your application, or make more slots
+Either request fewer procs for your application, or make more slots
 available for use.
 
 A "slot" is the PRRTE term for an allocatable unit where we can
