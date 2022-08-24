@@ -20,6 +20,9 @@
 #include "src/mca/mca.h"
 #include "src/util/output.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_os_dirpath.h"
+#include "src/util/pmix_os_path.h"
+#include "src/util/pmix_path.h"
 #include "src/util/prte_cmd_line.h"
 #include "src/util/pmix_show_help.h"
 
@@ -471,6 +474,188 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
+    }
+
+    return PRTE_SUCCESS;
+}
+
+int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
+{
+    int n, idx;
+    pmix_status_t ret;
+    char **targv, *ptr;
+
+    for (n=0; NULL != opt->values[n]; n++) {
+        targv = pmix_argv_split(opt->values[n], ',');
+        for (idx = 0; idx < pmix_argv_count(targv); idx++) {
+
+            if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_ALLOC)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_ALLOCATION, NULL, PMIX_BOOL);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAP)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP, NULL, PMIX_BOOL);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAPDEV)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP_DETAILED, NULL, PMIX_BOOL);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_BIND)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REPORT_BINDINGS, NULL, PMIX_BOOL);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TOPO)) {
+                ptr = strchr(targv[idx], '=');
+                if (NULL == ptr) {
+                    /* missing the value or value is invalid */
+                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                   "display", "TOPO", targv[idx]);
+                    pmix_argv_free(targv);
+                    return PRTE_ERR_FATAL;
+                }
+                ++ptr;
+                if ('\0' == *ptr) {
+                    /* missing the value or value is invalid */
+                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                   "display", "TOPO", targv[idx]);
+                    pmix_argv_free(targv);
+                    return PRTE_ERR_FATAL;
+                }
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_TOPOLOGY, ptr, PMIX_STRING);
+            }
+        }
+        pmix_argv_free(targv);
+    }
+
+    return PRTE_SUCCESS;
+}
+
+int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
+{
+    char *outdir=NULL;
+    char *outfile=NULL;
+    char **targv, *ptr, *cptr, **options;
+    int m, n, idx;
+    pmix_status_t ret;
+
+    for (n=0; NULL != opt->values[n]; n++) {
+        targv = pmix_argv_split(opt->values[0], ',');
+        for (idx = 0; NULL != targv[idx]; idx++) {
+            /* check for qualifiers */
+            cptr = strchr(targv[idx], ':');
+            if (NULL != cptr) {
+                *cptr = '\0';
+                ++cptr;
+                /* could be multiple qualifiers, so separate them */
+                options = pmix_argv_split(cptr, ',');
+                for (int m=0; NULL != options[m]; m++) {
+
+                    if (PRTE_CHECK_CLI_OPTION(options[m], PRTE_CLI_NOCOPY)) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
+
+                    } else if (PRTE_CHECK_CLI_OPTION(options[m], PRTE_CLI_PATTERN)) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
+
+                    } else if (PRTE_CHECK_CLI_OPTION(options[m], PRTE_CLI_RAW)) {
+                        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
+                    }
+                }
+                pmix_argv_free(options);
+            }
+            if (0 == strlen(targv[idx])) {
+                // only qualifiers were given
+                continue;
+            }
+            /* remove any '=' sign in the directive */
+            if (NULL != (ptr = strchr(targv[idx], '='))) {
+                *ptr = '\0';
+                ++ptr; // step over '=' sign
+            }
+            if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG_DET)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_DETAILED_OUTPUT, NULL, PMIX_BOOL);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG_FULL)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_FULLNAME_OUTPUT, NULL, PMIX_BOOL);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_RANK)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_RANK_OUTPUT, NULL, PMIX_BOOL);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TIMESTAMP)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_XML)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MERGE_ERROUT)) {
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_DIR)) {
+                if (NULL == ptr || '\0' == *ptr) {
+                    pmix_show_help("help-prte-rmaps-base.txt",
+                                   "missing-qualifier", true,
+                                   "output", "directory", "directory");
+                    pmix_argv_free(targv);
+                    return PRTE_ERR_FATAL;
+                }
+                if (NULL != outfile) {
+                    pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, ptr);
+                    pmix_argv_free(targv);
+                    free(outfile);
+                    return PRTE_ERR_FATAL;
+                }
+                /* If the given filename isn't an absolute path, then
+                 * convert it to one so the name will be relative to
+                 * the directory where prun was given as that is what
+                 * the user will have seen */
+                if (!pmix_path_is_absolute(ptr)) {
+                    char cwd[PRTE_PATH_MAX];
+                    if (NULL == getcwd(cwd, sizeof(cwd))) {
+                        pmix_argv_free(targv);
+                        return PRTE_ERR_FATAL;
+                    }
+                    outdir = pmix_os_path(false, cwd, ptr, NULL);
+                } else {
+                    outdir = strdup(ptr);
+                }
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
+
+            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_FILE)) {
+                if (NULL == ptr || '\0' == *ptr) {
+                    pmix_show_help("help-prte-rmaps-base.txt",
+                                   "missing-qualifier", true,
+                                   "output", "filename", "filename");
+                    pmix_argv_free(targv);
+                    return PRTE_ERR_FATAL;
+                }
+                if (NULL != outdir) {
+                    pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, ptr, outdir);
+                    pmix_argv_free(targv);
+                    return PRTE_ERR_FATAL;
+                }
+                /* If the given filename isn't an absolute path, then
+                 * convert it to one so the name will be relative to
+                 * the directory where prun was given as that is what
+                 * the user will have seen */
+                if (!pmix_path_is_absolute(ptr)) {
+                    char cwd[PRTE_PATH_MAX];
+                    if (NULL == getcwd(cwd, sizeof(cwd))) {
+                        pmix_argv_free(targv);
+                        return PRTE_ERR_FATAL;
+                    }
+                    outfile = pmix_os_path(false, cwd, ptr, NULL);
+                } else {
+                    outfile = strdup(ptr);
+                }
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
+            }
+        }
+        pmix_argv_free(targv);
+    }
+    if (NULL != outdir) {
+        free(outdir);
+    }
+    if (NULL != outfile) {
+        free(outfile);
     }
 
     return PRTE_SUCCESS;
