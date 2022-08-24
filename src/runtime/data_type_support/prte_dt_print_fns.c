@@ -201,20 +201,6 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
         tmp = tmp2;
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO, NULL, PMIX_BOOL)
-        && NULL != src->topology) {
-        pmix_asprintf(&tmp2, "%s\n            Detected Resources:\n", tmp);
-        free(tmp);
-        tmp = tmp2;
-
-        tmp2 = NULL;
-        prte_hwloc_print(&tmp2, NULL, src->topology->topo);
-        pmix_asprintf(&tmp3, "%s%s", tmp, tmp2);
-        free(tmp);
-        free(tmp2);
-        tmp = tmp3;
-    }
-
 PRINT_PROCS:
     /* we want to print these procs in their job-rank'd order, but they
      * will be in the node array based on the order in which they were

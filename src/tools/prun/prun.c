@@ -303,8 +303,6 @@ int prun(int argc, char *argv[])
     char hostname[PRTE_PATH_MAX];
     pmix_rank_t rank;
     pmix_status_t code;
-    char *outdir = NULL;
-    char *outfile = NULL;
     char *personality;
     pmix_proc_t parent;
     pmix_cli_result_t results;
@@ -479,8 +477,10 @@ int prun(int argc, char *argv[])
 
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DO_NOT_CONNECT)) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_TOOL_DO_NOT_CONNECT, NULL, PMIX_BOOL);
+
     } else if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SYS_SERVER_FIRST)) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_SYSTEM_FIRST, NULL, PMIX_BOOL);
+
     } else if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SYS_SERVER_ONLY)) {
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_TO_SYSTEM, NULL, PMIX_BOOL);
     }
@@ -491,7 +491,7 @@ int prun(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_RETRY_DELAY, &ui32, PMIX_UINT32);
     }
 
-    opt = pmix_cmd_line_get_param(&results, "num-connect-retries");
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_NUM_CONNECT_RETRIES);
     if (NULL != opt) {
         ui32 = strtol(opt->values[0], NULL, 10);
         PMIX_INFO_LIST_ADD(ret, tinfo, PMIX_CONNECT_MAX_RETRIES, &ui32, PMIX_UINT32);
@@ -623,142 +623,21 @@ int prun(int argc, char *argv[])
     /* get display options */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DISPLAY);
     if (NULL != opt) {
-        for (n=0; NULL != opt->values[n]; n++) {
-            targv = pmix_argv_split(opt->values[n], ',');
-
-            for (int idx = 0; idx < pmix_argv_count(targv); idx++) {
-                if (0 == strncasecmp(targv[idx], PRTE_CLI_ALLOC, strlen(targv[idx]))) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":"PRTE_CLI_DISPALLOC, PMIX_STRING);
-                }
-                if (0 == strcasecmp(targv[idx], PRTE_CLI_MAP)) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":"PRTE_CLI_DISPLAY, PMIX_STRING);
-                }
-                if (0 == strncasecmp(targv[idx], PRTE_CLI_BIND, strlen(targv[idx]))) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_BINDTO, ":"PRTE_CLI_REPORT, PMIX_STRING);
-                }
-                if (0 == strcasecmp(targv[idx], PRTE_CLI_MAPDEV)) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":"PRTE_CLI_DISPDEV, PMIX_STRING);
-                }
-                if (0 == strncasecmp(targv[idx], PRTE_CLI_TOPO, strlen(targv[idx]))) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MAPBY, ":"PRTE_CLI_DISPTOPO, PMIX_STRING);
-                }
-            }
-            pmix_argv_free(targv);
+        ret = prte_schizo_base_parse_display(opt, jinfo);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            goto DONE;
         }
     }
 
     /* cannot have both files and directory set for output */
-    outdir = NULL;
-    outfile = NULL;
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_OUTPUT);
     if (NULL != opt) {
-        for (n=0; NULL != opt->values[n]; n++) {
-            targv = pmix_argv_split(opt->values[n], ',');
-
-            for (int idx = 0; NULL != targv[idx]; idx++) {
-                /* check for qualifiers */
-                cptr = strchr(targv[idx], ':');
-                if (NULL != cptr) {
-                    *cptr = '\0';
-                    ++cptr;
-                    /* could be multiple qualifiers, so separate them */
-                    options = pmix_argv_split(cptr, ',');
-                    for (int m=0; NULL != options[m]; m++) {
-                        if (0 == strcasecmp(options[m], PRTE_CLI_NOCOPY)) {
-                            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
-                        } else if (0 == strcasecmp(options[m], PRTE_CLI_PATTERN)) {
-                            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
-                        } else if (0 == strcasecmp(options[m], PRTE_CLI_RAW)) {
-                            PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
-                        }
-                    }
-                    pmix_argv_free(options);
-                }
-                if (0 == strlen(targv[idx])) {
-                    // only qualifiers were given
-                    continue;
-                }
-                /* remove any '=' sign in the directive */
-                if (NULL != (ptr = strchr(targv[idx], '='))) {
-                    *ptr = '\0';
-                    ++ptr;
-                }
-                if (0 == strncasecmp(targv[idx], PRTE_CLI_TAG, strlen(targv[idx]))) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, &flag, PMIX_BOOL);
-                } else if (0 == strncasecmp(targv[idx], PRTE_CLI_TAG_DET, strlen(targv[idx]))) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_DETAILED_OUTPUT, NULL, PMIX_BOOL);
-                } else if (0 == strncasecmp(targv[idx], PRTE_CLI_TAG_FULL, strlen(targv[idx]))) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_FULLNAME_OUTPUT, NULL, PMIX_BOOL);
-                } else if (0 == strncasecmp(targv[idx], PRTE_CLI_RANK, strlen(targv[idx]))) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_RANK_OUTPUT, NULL, PMIX_BOOL);
-                } else if (0 == strncasecmp(targv[idx], PRTE_CLI_TIMESTAMP, strlen(targv[idx]))) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TIMESTAMP_OUTPUT, &flag, PMIX_BOOL);
-                } else if (0 == strncasecmp(targv[idx], PRTE_CLI_XML, strlen(targv[idx]))) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
-                } else if (0 == strncasecmp(targv[idx], PRTE_CLI_MERGE_ERROUT, strlen(targv[idx]))) {
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_MERGE_STDERR_STDOUT, &flag, PMIX_BOOL);
-                } else if (0 == strncasecmp(targv[idx], PRTE_CLI_DIR, strlen(targv[idx]))) {
-                    if (NULL != outfile) {
-                        pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
-                        return PRTE_ERR_FATAL;
-                    }
-                    if (NULL == ptr) {
-                        pmix_show_help("help-prte-rmaps-base.txt",
-                                       "missing-qualifier", true,
-                                       "output", "directory", "directory");
-                        return PRTE_ERR_FATAL;
-                    }
-                    /* If the given filename isn't an absolute path, then
-                     * convert it to one so the name will be relative to
-                     * the directory where prun was given as that is what
-                     * the user will have seen */
-                    if (!pmix_path_is_absolute(ptr)) {
-                        char cwd[PRTE_PATH_MAX];
-                        if (NULL == getcwd(cwd, sizeof(cwd))) {
-                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                            goto DONE;
-                        }
-                        outdir = pmix_os_path(false, cwd, ptr, NULL);
-                    } else {
-                        outdir = strdup(ptr);
-                    }
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
-                } else if (0 == strncasecmp(targv[idx], PRTE_CLI_FILE, strlen(targv[idx]))) {
-                    if (NULL != outdir) {
-                        pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, outdir);
-                        return PRTE_ERR_FATAL;
-                    }
-                    if (NULL == ptr) {
-                        pmix_show_help("help-prte-rmaps-base.txt",
-                                       "missing-qualifier", true,
-                                       "output", "filename", "filename");
-                        return PRTE_ERR_FATAL;
-                    }
-                    /* If the given filename isn't an absolute path, then
-                     * convert it to one so the name will be relative to
-                     * the directory where prun was given as that is what
-                     * the user will have seen */
-                    if (!pmix_path_is_absolute(ptr)) {
-                        char cwd[PRTE_PATH_MAX];
-                        if (NULL == getcwd(cwd, sizeof(cwd))) {
-                            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                            goto DONE;
-                        }
-                        outfile = pmix_os_path(false, cwd, ptr, NULL);
-                    } else {
-                        outfile = strdup(ptr);
-                    }
-                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
-                }
-            }
-            pmix_argv_free(targv);
+        ret = prte_schizo_base_parse_output(opt, jinfo);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            goto DONE;
         }
-    }
-    if (NULL != outdir) {
-        free(outdir);
-    }
-    if (NULL != outfile) {
-        free(outfile);
     }
 
     /* check what user wants us to do with stdin */
@@ -874,11 +753,11 @@ int prun(int argc, char *argv[])
     /* transfer any returned ENVARS to the job_info */
     if (NULL != mylock.info) {
         for (n = 0; n < mylock.ninfo; n++) {
-            if (0 == strncmp(mylock.info[n].key, PMIX_SET_ENVAR, PMIX_MAX_KEYLEN)
-                || 0 == strncmp(mylock.info[n].key, PMIX_ADD_ENVAR, PMIX_MAX_KEYLEN)
-                || 0 == strncmp(mylock.info[n].key, PMIX_UNSET_ENVAR, PMIX_MAX_KEYLEN)
-                || 0 == strncmp(mylock.info[n].key, PMIX_PREPEND_ENVAR, PMIX_MAX_KEYLEN)
-                || 0 == strncmp(mylock.info[n].key, PMIX_APPEND_ENVAR, PMIX_MAX_KEYLEN)) {
+            if (PMIX_CHECK_KEY(&mylock.info[n], PMIX_SET_ENVAR) ||
+                PMIX_CHECK_KEY(&mylock.info[n], PMIX_ADD_ENVAR) ||
+                PMIX_CHECK_KEY(&mylock.info[n], PMIX_UNSET_ENVAR) ||
+                PMIX_CHECK_KEY(&mylock.info[n], PMIX_PREPEND_ENVAR) ||
+                PMIX_CHECK_KEY(&mylock.info[n], PMIX_APPEND_ENVAR)) {
                 PMIX_INFO_LIST_XFER(ret, jinfo, &mylock.info[n]);
             }
         }

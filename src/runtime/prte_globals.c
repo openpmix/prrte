@@ -329,7 +329,7 @@ prte_node_rank_t prte_get_proc_node_rank(const pmix_proc_t *proc)
 
 prte_node_t* prte_node_match(pmix_list_t *nodes, const char *name)
 {
-    int m;
+    int m, n;
     prte_node_t *nptr;
     char *nm;
 
@@ -340,23 +340,41 @@ prte_node_t* prte_node_match(pmix_list_t *nodes, const char *name)
         nm = (char*)name;
     }
 
-    PMIX_LIST_FOREACH(nptr, nodes, prte_node_t) {
-        /* start with the simple check */
-        if (0 == strcmp(nptr->name, nm)) {
-            return nptr;
-        }
-    }
-
-    /* see if it is an alias for something already on the list */
-    PMIX_LIST_FOREACH(nptr, nodes, prte_node_t) {
-        if (NULL == nptr->aliases) {
-            continue;
-        }
-        /* no choice but an exhaustive search - fortunately, these lists are short! */
-        for (m = 0; NULL != nptr->aliases[m]; m++) {
-            if (0 == strcmp(name, nptr->aliases[m])) {
-                /* this is the node! */
+    if (NULL != nodes) {
+        PMIX_LIST_FOREACH(nptr, nodes, prte_node_t) {
+            if (0 == strcmp(nptr->name, nm)) {
                 return nptr;
+            }
+            if (NULL == nptr->aliases) {
+                continue;
+            }
+            /* no choice but an exhaustive search - fortunately, these lists are short! */
+            for (m = 0; NULL != nptr->aliases[m]; m++) {
+                if (0 == strcmp(name, nptr->aliases[m])) {
+                    /* this is the node! */
+                    return nptr;
+                }
+            }
+        }
+    } else {
+        /* check the node pool */
+        for (n=0; n < prte_node_pool->size; n++) {
+            nptr = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, n);
+            if (NULL == nptr) {
+                continue;
+            }
+            if (0 == strcmp(nptr->name, nm)) {
+                return nptr;
+            }
+            if (NULL == nptr->aliases) {
+                continue;
+            }
+            /* no choice but an exhaustive search - fortunately, these lists are short! */
+            for (m = 0; NULL != nptr->aliases[m]; m++) {
+                if (0 == strcmp(name, nptr->aliases[m])) {
+                    /* this is the node! */
+                    return nptr;
+                }
             }
         }
     }
