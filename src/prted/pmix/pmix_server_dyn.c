@@ -89,7 +89,7 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
 
     /* mark that we sent it */
     prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED,
-                       PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
+                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
 }
 void pmix_server_launch_resp(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                              prte_rml_tag_t tg, void *cbdata)
@@ -274,12 +274,10 @@ static void interim(int sd, short args, void *cbdata)
                         /* construct the absolute path */
                         app->cwd = pmix_os_path(false, cwd, info->value.data.string, NULL);
                     }
-#ifdef PMIX_WDIR_USER_SPECIFIED
                 } else if (PMIX_CHECK_KEY(info, PMIX_WDIR_USER_SPECIFIED)) {
                     flag = PMIX_INFO_TRUE(info);
                     prte_set_attribute(&app->attributes, PRTE_APP_USER_CWD, PRTE_ATTR_GLOBAL,
                                        &flag, PMIX_BOOL);
-#endif
                 } else if (PMIX_CHECK_KEY(info, PMIX_SET_SESSION_CWD)) {
                     flag = PMIX_INFO_TRUE(info);
                     prte_set_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, PRTE_ATTR_GLOBAL,
@@ -344,6 +342,12 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
             jdata->map->req_mapper = strdup(info->value.data.string);
 
+            /***   DISPLAY ALLOCATION   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_ALLOCATION)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
+
             /***   DISPLAY MAP   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP)) {
             if (PMIX_INFO_TRUE(info)) {
@@ -351,7 +355,25 @@ static void interim(int sd, short args, void *cbdata)
                                    PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
             }
 
-            /***   PPR (PROCS-PER-RESOURCE)   ***/
+            /***   DISPLAY MAP-DEVEL   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP_DETAILED)) {
+            if (PMIX_INFO_TRUE(info)) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            }
+
+            /***   REPORT BINDINGS  ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_REPORT_BINDINGS)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS,
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
+
+            /***   DISPLAY TOPOLOGY   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_TOPOLOGY)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO,
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+
+        /***   PPR (PROCS-PER-RESOURCE)   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_PPR)) {
             if (PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
                 /* not allowed to provide multiple mapping policies */
@@ -373,24 +395,20 @@ static void interim(int sd, short args, void *cbdata)
             }
 
             /*** colocation directives ***/
-#ifdef PMIX_COLOCATE_PROCS
             /***   PROCS WHERE NEW PROCS ARE TO BE COLOCATED   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_COLOCATE_PROCS)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_PROCS,
                                PRTE_ATTR_GLOBAL, info->value.data.darray, PMIX_DATA_ARRAY);
-#endif
-#ifdef PMIX_COLOCATE_NPERPROC
+
             /***   NUMBER OF PROCS TO SPAWN AT EACH COLOCATION  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_COLOCATE_NPERPROC)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_NPERPROC,
                                PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
-#endif
-#ifdef PMIX_COLOCATE_NPERNODE
+
             /***   NUMBER OF PROCS TO SPAWN AT EACH COLOCATION  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_COLOCATE_NPERNODE)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_NPERNODE,
                                PRTE_ATTR_GLOBAL, &info->value.data.uint16, PMIX_UINT16);
-#endif
 
             /***   RANK-BY   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_RANKBY)) {
@@ -438,12 +456,6 @@ static void interim(int sd, short args, void *cbdata)
             }
             /* mark that the user specified it */
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_SUBSCRIBE_GIVEN);
-
-            /***   REPORT BINDINGS  ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_REPORT_BINDINGS)) {
-            flag = PMIX_INFO_TRUE(info);
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS, PRTE_ATTR_GLOBAL,
-                               &flag, PMIX_BOOL);
 
             /***   CPU LIST  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_CPU_LIST)) {
@@ -798,7 +810,7 @@ static int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info)
     } else {
         cache = PMIX_NEW(pmix_list_t);
         pmix_list_append(cache, &kv->super);
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_LOCAL, (void *) cache,
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_GLOBAL, (void *) cache,
                            PMIX_POINTER);
     }
     return 0;

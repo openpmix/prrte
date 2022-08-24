@@ -196,7 +196,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_MAP        "map"
 #define PRTE_CLI_BIND       "bind"
 #define PRTE_CLI_MAPDEV     "map-devel"
-#define PRTE_CLI_TOPO       "topo"
+#define PRTE_CLI_TOPO       "topo="
 
 /* define the command line qualifiers PRRTE recognizes */
 
@@ -222,12 +222,47 @@ BEGIN_C_DECLS
 #define PRTE_CLI_DISPALLOC  "displayalloc"
 // PRTE_CLI_DISPLAY reused here
 #define PRTE_CLI_DISPDEV    "displaydevel"
-#define PRTE_CLI_DISPTOPO   "displaytopo"
 
 // Output qualifiers
 #define PRTE_CLI_NOCOPY     "nocopy"
 #define PRTE_CLI_RAW        "raw"
 #define PRTE_CLI_PATTERN    "pattern"
+
+/* USAGE:
+ *  param "a" is the input command line string
+ *  param "b" is the defined CLI option
+ */
+static inline bool prte_check_cli_option(char *a, char *b)
+{
+    size_t len1, len2, len;
+
+    len1 = strlen(a);
+    len2 = strlen(b);
+
+    /* we have some cases where more than one CLI option
+     * start with the same chars (e.g., "map" and
+     * "map-devel". So if one param has a '-' in it, then
+     * the matching param string must also include the '-'
+     */
+    if (NULL != strchr(b, '-') &&
+        NULL == strchr(a, '-')) {
+        return false;
+    }
+    if (NULL != strchr(a, '-') &&
+        NULL == strchr(b, '-')) {
+        return false;
+    }
+
+    len = (len1 < len2) ? len1 : len2;
+    if (0 == strncasecmp(a, b, len)) {
+        return true;
+    }
+
+    return false;
+}
+
+#define PRTE_CHECK_CLI_OPTION(a, b) \
+    prte_check_cli_option(a, b)
 
 END_C_DECLS
 
