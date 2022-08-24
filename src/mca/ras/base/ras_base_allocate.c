@@ -552,6 +552,26 @@ next_state:
     /* set total slots alloc */
     jdata->total_slots_alloc = prte_ras_base.total_slots_alloc;
 
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO, (void**)&hosts, PMIX_STRING)) {
+        hostlist = pmix_argv_split(hosts, ',');
+        free(hosts);
+        for (j=0; NULL != hostlist[j]; j++) {
+            node = prte_node_match(NULL, hostlist[j]);
+            if (NULL == node) {
+                continue;
+            }
+            prte_output(prte_clean_output,
+                        "=================================================================\n");
+            prte_output(prte_clean_output, "TOPOLOGY FOR NODE %s", node->name);
+            prte_hwloc_print(&ptr, NULL, node->topology->topo);
+            prte_output(prte_clean_output, ptr);
+            free(ptr);
+            prte_output(prte_clean_output,
+                        "=================================================================\n");
+        }
+        pmix_argv_free(hostlist);
+    }
+
     /* set the job state to the next position */
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOCATION_COMPLETE);
 

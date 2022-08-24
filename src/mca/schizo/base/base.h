@@ -104,6 +104,9 @@ PRTE_EXPORT int prte_schizo_base_add_directive(pmix_cli_result_t *results,
 PRTE_EXPORT int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
                                                char *deprecated, char *target,
                                                char *qualifier, bool report);
+PRTE_EXPORT int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo);
+PRTE_EXPORT int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo);
+
 
 
 END_C_DECLS
