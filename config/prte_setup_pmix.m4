@@ -77,18 +77,16 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
     # if the version file exists, then we need to parse it to find
     # the actual release series
-    AC_MSG_CHECKING([version at or above v4.2])
+    AC_MSG_CHECKING([version at or above v4.2.1])
     AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
                                         #include <pmix_version.h>
-                                        #if (PMIX_NUMERIC_VERSION < 0x00040200)
-                                        #error "not version 4.2 or above"
+                                        #if (PMIX_NUMERIC_VERSION < 0x00040201)
+                                        #error "not version 4.2.1 or above"
                                         #endif
                                        ], [])],
                       [AC_MSG_RESULT([yes])],
                       [AC_MSG_RESULT(no)
-                       AC_MSG_WARN([PRRTE does not support PMIx versions])
-                       AC_MSG_WARN([that do not expose the internal PMIx library headers.])
-                       AC_MSG_WARN([This requires PMIx v4.2 or above.])
+                       AC_MSG_WARN([PRRTE requires PMIx v4.2.1 or above.])
                        AC_MSG_ERROR([Please select a supported version and configure again])])
 
     AC_CHECK_HEADER([src/util/pmix_argv.h], [],
