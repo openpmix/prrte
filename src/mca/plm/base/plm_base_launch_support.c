@@ -340,28 +340,41 @@ static void stack_trace_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
 
     /* unpack the stack_trace blob */
     cnt = 1;
-    while (PMIX_SUCCESS == PMIx_Data_unpack(NULL, buffer, &nspace, &cnt, PMIX_STRING)) {
-        if (NULL == jdata) {
-            jdata = prte_get_job_data_object(nspace);
-        }
-        if (NULL == jdata) {
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-            free(nspace);
-            return;
-        }
+    rc = PMIx_Data_unpack(NULL, buffer, &nspace, &cnt, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_DESTRUCT(&blob);
+        return;
+    }
+    jdata = prte_get_job_data_object(nspace);
+    if (NULL == jdata) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         free(nspace);
+        return;
+    }
+    free(nspace);
 
-        if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, buffer, &pbo, &cnt, PMIX_BYTE_OBJECT)) {
-            continue;
-        }
+    while (PMIX_SUCCESS == (rc = PMIx_Data_unpack(NULL, buffer, &pbo, &cnt, PMIX_BYTE_OBJECT))) {
         PMIx_Data_load(&blob, &pbo);
         /* first piece is the name of the process */
         cnt = 1;
-        if (PMIX_SUCCESS != PMIx_Data_unpack(NULL, &blob, &name, &cnt, PMIX_PROC) ||
-            PMIX_SUCCESS != PMIx_Data_unpack(NULL, &blob, &hostname, &cnt, PMIX_STRING) ||
-            PMIX_SUCCESS != PMIx_Data_unpack(NULL, &blob, &pid, &cnt, PMIX_PID)) {
+        rc = PMIx_Data_unpack(NULL, &blob, &name, &cnt, PMIX_PROC);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&blob);
-            continue;
+            goto DONE;
+        }
+        rc = PMIx_Data_unpack(NULL, &blob, &hostname, &cnt, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&blob);
+            goto DONE;
+        }
+        rc = PMIx_Data_unpack(NULL, &blob, &pid, &cnt, PMIX_PID);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_DESTRUCT(&blob);
+            goto DONE;
         }
         pmix_asprintf(&st, "STACK TRACE FOR PROC %s (%s, PID %lu)\n",
                       PRTE_NAME_PRINT(&name), hostname,
@@ -371,20 +384,24 @@ static void stack_trace_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
         free(st);
         /* unpack the stack_trace until complete */
         cnt = 1;
-        while (PRTE_SUCCESS == PMIx_Data_unpack(NULL, &blob, &st, &cnt, PMIX_STRING)) {
+        while (PRTE_SUCCESS == (rc = PMIx_Data_unpack(NULL, &blob, &st, &cnt, PMIX_STRING))) {
             pmix_asprintf(&st2, "\t%s", st); // has its own newline
             pmix_argv_append_nosize(&jdata->traces, st2);
             free(st);
             free(st2);
             cnt = 1;
         }
+        if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
+            PMIX_ERROR_LOG(rc);
+        }
         PMIX_DATA_BUFFER_DESTRUCT(&blob);
         cnt = 1;
     }
-    if (NULL == jdata) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return;
+    if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
+        PMIX_ERROR_LOG(rc);
     }
+
+DONE:
     jdata->ntraces++;
     if (prte_process_info.num_daemons == jdata->ntraces) {
         timer = NULL;
