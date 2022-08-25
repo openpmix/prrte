@@ -93,7 +93,7 @@
 #include "src/mca/ess/base/base.h"
 #include "src/mca/odls/odls.h"
 #include "src/mca/plm/plm.h"
-#include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/rmaps/base/base.h"
 #include "src/rml/rml.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
@@ -651,6 +651,16 @@ int main(int argc, char *argv[])
             }
             prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
                                tpath, PMIX_STRING);
+        }
+    }
+
+    /* apply any provided runtime options */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_RTOS);
+    if (NULL != opt) {
+        rc = prte_rmaps_base_set_runtime_options(jdata, opt->values[0]);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
+            goto DONE;
         }
     }
 
