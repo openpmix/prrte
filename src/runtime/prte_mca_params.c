@@ -494,14 +494,6 @@ int prte_register_params(void)
         prte_leave_session_attached = true;
     }
 
-    /* whether or not to report launch progress */
-    prte_report_launch_progress = false;
-    (void) prte_mca_base_var_register(
-        "prte", "prte", NULL, "report_launch_progress",
-        "Output a brief periodic report on launch progress [default: no]",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_report_launch_progress);
-
     /* tool communication controls */
     prte_report_events_uri = NULL;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "report_events",

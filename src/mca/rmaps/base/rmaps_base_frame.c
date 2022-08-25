@@ -732,6 +732,10 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
                                        &flag, PMIX_BOOL);
                 }
+            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_SHOW_PROGRESS)) {
+                flag = PRTE_CHECK_TRUE(ptr);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, PRTE_ATTR_GLOBAL,
+                                   &flag, PMIX_BOOL);
             } else {
                 pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
                                "runtime options", spec);

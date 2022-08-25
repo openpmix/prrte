@@ -1360,7 +1360,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     prte_topology_t *t, *mytopo;
     hwloc_topology_t topo;
     int i;
-    bool found;
+    bool found, *fptr;
     prte_daemon_cmd_flag_t cmd;
     char *myendian;
     char *alias;
@@ -1436,6 +1436,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             prted_failed_launch = true;
             goto CLEANUP;
         }
+        daemon->rml_uri = strdup(cnctinfo.data.string);
         PMIX_VALUE_DESTRUCT(&cnctinfo);
 
         /* unpack the node name */
@@ -1813,11 +1814,20 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             return;
         } else {
             jdatorted->num_reported++;
+            jdatorted->num_daemons_reported++;
             PRTE_OUTPUT_VERBOSE(
                 (5, prte_plm_base_framework.framework_output,
                  "%s plm:base:orted_report_launch job %s recvd %d of %d reported daemons",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdatorted->nspace),
                  jdatorted->num_reported, jdatorted->num_procs));
+            found = false;
+            fptr = &found;
+            prte_get_attribute(&jdatorted->attributes, PRTE_JOB_SHOW_PROGRESS, (void**)&fptr, PMIX_BOOL);
+            if (found &&
+                (0 == jdatorted->num_reported % 100 ||
+                 jdatorted->num_reported == prte_process_info.num_daemons)) {
+                PRTE_ACTIVATE_JOB_STATE(jdatorted, PRTE_JOB_STATE_REPORT_PROGRESS);
+            }
             if (jdatorted->num_procs == jdatorted->num_reported) {
                 bool dvm = true;
                 jdatorted->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
@@ -2119,7 +2129,8 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
     bool singleton = false;
     bool multi_sim = false;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output, "%s plm:base:setup_vm",
+    PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                         "%s plm:base:setup_vm",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     if (NULL == (daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace))) {
@@ -2679,9 +2690,9 @@ process:
     /* if new daemons are being launched, mark that this job
      * caused it to happen */
     if (0 < map->num_new_daemons) {
-        if (PRTE_SUCCESS
-            != (rc = prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, true, NULL,
-                                        PMIX_BOOL))) {
+        rc = prte_set_attribute(&jdata->attributes, PRTE_JOB_LAUNCHED_DAEMONS, true,
+                                NULL, PMIX_BOOL);
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             return rc;
         }

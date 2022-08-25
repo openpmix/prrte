@@ -359,11 +359,14 @@ void prte_state_base_local_launch_complete(int fd, short argc, void *cbdata)
 {
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata = state->jdata;
+    bool found = false, *fptr;
     PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
-    if (prte_report_launch_progress) {
-        if (0 == jdata->num_daemons_reported % 100
-            || jdata->num_daemons_reported == prte_process_info.num_daemons) {
+    fptr = &found;
+    prte_get_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, (void**)&fptr, PMIX_BOOL);
+    if (found) {
+        if (0 == jdata->num_daemons_reported % 100 ||
+            jdata->num_daemons_reported == prte_process_info.num_daemons) {
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_REPORT_PROGRESS);
         }
     }

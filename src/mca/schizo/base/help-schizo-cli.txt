@@ -474,12 +474,19 @@ a value. Thus, "--runtime-options abort-nonzero" is sufficient to set the
 
 Supported values include:
 
--   ABORT-NONZERO-STATUS[=(bool)] directs the runtime to not abort a running
-    job if a process exits with non-zero status if set to true.
+-   ABORT-NONZERO-STATUS[=(bool)] if set to false, this directs the runtime
+    to not abort a running job if a process exits with non-zero status. The
+    system default for this value is true.
 
 -   DONOTLAUNCH directs the runtime to map but not launch the specified
     job. This is provided to help explore possible process placement patterns
-    before actually starting execution.
+    before actually starting execution. No value need be passed as this is
+    not an option that can be set by default in PRRTE.
+
+-   SHOW-PROGRESS=(bool) requests that the runtime provide progress reports
+    on its startup procedure - i.e., the launch of its daemons in support
+    of a job. This is typically used to debug DVM startup on large systems.
+
 
 The runtime-options command line option has no qualifiers. Note that directives
 are case-insensitive.

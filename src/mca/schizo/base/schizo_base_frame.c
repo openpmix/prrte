@@ -399,6 +399,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     char *rtos[] = {
         PRTE_CLI_ABORT_NZ,
         PRTE_CLI_NOLAUNCH,
+        PRTE_CLI_SHOW_PROGRESS,
         NULL
     };
 
