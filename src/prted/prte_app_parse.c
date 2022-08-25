@@ -160,7 +160,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
             app->app.cwd = pmix_os_path(false, cwd, param, NULL);
         }
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_WDIR_USER_SPECIFIED, NULL, PMIX_BOOL);
-    } else if (pmix_cmd_line_is_taken(&results, "set-cwd-to-session-dir")) {
+    } else if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SET_CWD_SESSION)) {
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_SET_SESSION_CWD, NULL, PMIX_BOOL);
     } else {
         app->app.cwd = strdup(cwd);
@@ -217,7 +217,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     }
 
     /* check for preload files */
-    opt = pmix_cmd_line_get_param(&results, "preload-files");
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PRELOAD_FILES);
     if (NULL != opt) {
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_FILES, opt->values[0], PMIX_STRING);
     }
