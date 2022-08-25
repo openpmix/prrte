@@ -445,6 +445,9 @@ complete:
         PMIX_LIST_FOREACH_SAFE(node, next, allocated_nodes, prte_node_t)
         {
             if (NULL == node->topology || NULL == node->topology->topo) {
+                PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                                     "%s node %s lacks topology",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
                 /* cannot use this node - should never happen */
                 pmix_list_remove_item(allocated_nodes, &node->super);
                 PMIX_RELEASE(node);
@@ -455,6 +458,9 @@ complete:
             if (!prte_hnp_is_allocated ||
                 (PRTE_GET_MAPPING_DIRECTIVE(policy) & PRTE_MAPPING_NO_USE_LOCAL)) {
                 if (0 == node->index) {
+                    PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                                         "%s node %s HNP not allocated or not to be used",
+                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
                     pmix_list_remove_item(allocated_nodes, &node->super);
                     PMIX_RELEASE(node); /* "un-retain" it */
                     continue;
@@ -507,6 +513,10 @@ complete:
                                      "%s node %s is fully used, but available for oversubscription",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
             } else {
+                PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                                     "%s node %s is fully used and not available for oversubscription: SLOTS %d INUSE %d",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name,
+                                     (int)node->slots, (int)node->slots_inuse));
                 /* if we cannot use it, remove it from list */
                 pmix_list_remove_item(allocated_nodes, &node->super);
                 PMIX_RELEASE(node); /* "un-retain" it */
