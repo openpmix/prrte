@@ -240,25 +240,41 @@ BEGIN_C_DECLS
  */
 static inline bool prte_check_cli_option(char *a, char *b)
 {
-    size_t len1, len2, len;
+    size_t len1, len2, len, n;
+    char **asplit, **bsplit;
+    bool match;
 
+    /* if there exists a '-' in b, then we are
+     * dealing with a multi-word option. Parse
+     * those by checking each word segment
+     * individually for a match so the user
+     * doesn't have to spell it all out
+     * unless necessary */
+    if (NULL != strchr(b, '-')) {
+        asplit = pmix_argv_split(a, '-');
+        bsplit = pmix_argv_split(b, '-');
+        match = false;
+        for (n=0; NULL != asplit[n] && NULL != bsplit[n]; n++) {
+            len1 = strlen(asplit[n]);
+            len2 = strlen(bsplit[n]);
+            len = len1 < len2 ? len1 : len2;
+            if (0 == strncasecmp(asplit[n], bsplit[n], len)) {
+                match = true;
+            } else {
+                pmix_argv_free(asplit);
+                pmix_argv_free(bsplit);
+                return false;
+            }
+        }
+        pmix_argv_free(asplit);
+        pmix_argv_free(bsplit);
+        return match;
+    }
+
+    /* if this is not a multi-word option, we just
+     * check the strings */
     len1 = strlen(a);
     len2 = strlen(b);
-
-    /* we have some cases where more than one CLI option
-     * start with the same chars (e.g., "map" and
-     * "map-devel". So if one param has a '-' in it, then
-     * the matching param string must also include the '-'
-     */
-    if (NULL != strchr(b, '-') &&
-        NULL == strchr(a, '-')) {
-        return false;
-    }
-    if (NULL != strchr(a, '-') &&
-        NULL == strchr(b, '-')) {
-        return false;
-    }
-
     len = (len1 < len2) ? len1 : len2;
     if (0 == strncasecmp(a, b, len)) {
         return true;
