@@ -353,6 +353,7 @@ static int rte_init(int argc, char **argv)
     jdata->state = PRTE_JOB_STATE_RUNNING;
     /* obviously, we have "reported" */
     jdata->num_reported = 1;
+    jdata->num_daemons_reported = 1;
 
     if (0 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         prte_output(0, "ALIASES FOR %s", node->name);

@@ -44,6 +44,8 @@ option to the help request as "--help <option>".
 
 /*****       DVM Options        *****/
 
+   --runtime-options <arg0>          Comma-delimited list of runtime directives for the job (e.g., show
+                                     progress reports on DVM startup for large systems)
    --default-hostfile <arg0>         Provide a default hostfile
 -H|--host <arg0>                     List of hosts to use for the DVM
    --hostfile <arg0>                 Provide a hostfile
