@@ -378,6 +378,7 @@ typedef struct {
     pmix_device_type_t generate_dist;
     pmix_list_t tools;
     pmix_list_t psets;
+    pmix_list_t groups;
 } pmix_server_globals_t;
 
 extern pmix_server_globals_t prte_pmix_server_globals;
