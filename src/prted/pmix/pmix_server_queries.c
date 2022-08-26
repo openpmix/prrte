@@ -88,6 +88,7 @@ static void _query(int sd, short args, void *cbdata)
     pmix_info_t *info;
     pmix_data_array_t *darray;
     prte_proc_t *proct;
+    pmix_proc_t *proc;
     size_t sz;
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -139,6 +140,34 @@ static void _query(int sd, short args, void *cbdata)
                         goto done;
                     }
 
+                    PMIX_LOAD_NSPACE(jobid, q->qualifiers[n].value.data.string);
+                    if (PMIX_NSPACE_INVALID(jobid)) {
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
+                } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_GROUP_ID)) {
+                    /* Never trust the group string that is provided.
+                     * First check to see if we know about this group. If
+                     * not then return an error. If so then continue on.
+                     */
+                    /* Make sure the qualifier group exists */
+                    matched = 0;
+                    pmix_server_pset_t *ps;
+                    PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, pmix_server_pset_t)
+                    {
+                        if (PMIX_CHECK_NSPACE(q->qualifiers[n].value.data.string, ps->name)) {
+                            matched = 1;
+                            break;
+                        }
+                    }
+                    if (0 == matched) {
+                        prte_output_verbose(2, prte_pmix_server_globals.output,
+                                            "%s qualifier key \"%s\" : value \"%s\" is an unknown group",
+                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->qualifiers[n].key,
+                                            q->qualifiers[n].value.data.string);
+                        ret = PMIX_ERR_BAD_PARAM;
+                        goto done;
+                    }
                     PMIX_LOAD_NSPACE(jobid, q->qualifiers[n].value.data.string);
                     if (PMIX_NSPACE_INVALID(jobid)) {
                         ret = PMIX_ERR_BAD_PARAM;
@@ -490,6 +519,57 @@ static void _query(int sd, short args, void *cbdata)
                 key = jdata->num_procs;
                 PMIX_INFO_LOAD(&kv->info, PMIX_JOB_SIZE, &key, PMIX_UINT32);
                 pmix_list_append(&results, &kv->super);
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NUM_GROUPS)) {
+                kv = PMIX_NEW(prte_info_item_t);
+                sz = pmix_list_get_size(&prte_pmix_server_globals.groups);
+                PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_NUM_GROUPS, &sz, PMIX_SIZE);
+                pmix_list_append(&results, &kv->super);
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_GROUP_NAMES)) {
+                pmix_server_pset_t *ps;
+                ans = NULL;
+                PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, pmix_server_pset_t)
+                {
+                    pmix_argv_append_nosize(&ans, ps->name);
+                }
+                tmp = pmix_argv_join(ans, ',');
+                pmix_argv_free(ans);
+                ans = NULL;
+                kv = PMIX_NEW(prte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_GROUP_NAMES, tmp, PMIX_STRING);
+                pmix_list_append(&results, &kv->super);
+                free(tmp);
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_GROUP_MEMBERSHIP)) {
+                /* construct a list of values with pmix_proc_t
+                 * entries for each proc in the indicated group */
+                pmix_server_pset_t *ps, *grp = NULL;
+                PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, pmix_server_pset_t)
+                {
+                    if (PMIX_CHECK_NSPACE(ps->name, jobid)) {
+                        grp = ps;
+                        break;
+                    }
+                }
+                if (NULL == grp) {
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                }
+                /* Check if there are any entries in the group */
+                if (0 == grp->num_members) {
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                }
+                /* setup the reply */
+                kv = PMIX_NEW(prte_info_item_t);
+                (void) strncpy(kv->info.key, PMIX_QUERY_GROUP_MEMBERSHIP, PMIX_MAX_KEYLEN);
+                pmix_list_append(&results, &kv->super);
+                /* cycle thru the job and create an entry for each proc */
+                PMIX_DATA_ARRAY_CREATE(darray, grp->num_members, PMIX_PROC);
+                kv->info.value.type = PMIX_DATA_ARRAY;
+                kv->info.value.data.darray = darray;
+                proc = (pmix_proc_t *) darray->array;
+                for (k = 0; k < grp->num_members; k++) {
+                    PMIX_LOAD_PROCID(&proc[k], grp->members[k].nspace, grp->members[k].rank);
+                }
             } else {
                 fprintf(stderr, "Query for unrecognized attribute: %s\n", q->keys[n]);
             }
