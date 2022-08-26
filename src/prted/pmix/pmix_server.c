@@ -279,6 +279,9 @@ static prte_regattr_input_t prte_attributes[] = {
                          "PMIX_QUERY_NUM_PSETS",
                          "PMIX_QUERY_PSET_NAMES",
                          "PMIX_JOB_SIZE",
+                         "PMIX_QUERY_NUM_GROUPS",
+                         "PMIX_QUERY_GROUP_NAMES",
+                         "PMIX_QUERY_GROUP_MEMBERSHIP",
                          NULL}},
     {.function = "PMIx_Query_info_nb",
      .attrs = (char *[]){"PMIX_QUERY_NAMESPACES",
@@ -293,6 +296,9 @@ static prte_regattr_input_t prte_attributes[] = {
                          "PMIX_QUERY_NUM_PSETS",
                          "PMIX_QUERY_PSET_NAMES",
                          "PMIX_JOB_SIZE",
+                         "PMIX_QUERY_NUM_GROUPS",
+                         "PMIX_QUERY_GROUP_NAMES",
+                         "PMIX_QUERY_GROUP_MEMBERSHIP",
                          NULL}},
     {.function = "PMIx_Log", .attrs = (char *[]){"NONE", NULL}},
     {.function = "PMIx_Log_nb", .attrs = (char *[]){"NONE", NULL}},
@@ -582,6 +588,7 @@ int pmix_server_init(void)
     /* setup the server's state variables */
     PMIX_CONSTRUCT(&prte_pmix_server_globals.reqs, pmix_hotel_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.psets, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.groups, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.tools, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.local_reqs, pmix_pointer_array_t);
     pmix_pointer_array_init(&prte_pmix_server_globals.local_reqs, 128, INT_MAX, 2);
@@ -941,6 +948,7 @@ void pmix_server_finalize(void)
     PMIX_DESTRUCT(&prte_pmix_server_globals.local_reqs);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.groups);
 
     /* shutdown the local server */
     prte_pmix_server_globals.initialized = false;

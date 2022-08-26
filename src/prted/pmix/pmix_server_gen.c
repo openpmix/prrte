@@ -988,19 +988,19 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
     }
 
     if (PMIX_GROUP_CONSTRUCT == op) {
-        /* add it to our list of known process sets */
+        /* add it to our list of known groups */
         pset = PMIX_NEW(pmix_server_pset_t);
         pset->name = strdup(gpid);
         pset->num_members = nprocs;
         PMIX_PROC_CREATE(pset->members, pset->num_members);
         memcpy(pset->members, procs, nprocs * sizeof(pmix_proc_t));
-        pmix_list_append(&prte_pmix_server_globals.psets, &pset->super);
+        pmix_list_append(&prte_pmix_server_globals.groups, &pset->super);
     } else if (PMIX_GROUP_DESTRUCT == op) {
         /* find this process set on our list of groups */
-        PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.psets, pmix_server_pset_t)
+        PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, pmix_server_pset_t)
         {
             if (0 == strcmp(pset->name, gpid)) {
-                pmix_list_remove_item(&prte_pmix_server_globals.psets, &pset->super);
+                pmix_list_remove_item(&prte_pmix_server_globals.groups, &pset->super);
                 PMIX_RELEASE(pset);
                 break;
             }
