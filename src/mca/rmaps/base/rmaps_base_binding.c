@@ -58,10 +58,8 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
 {
     hwloc_obj_t trg_obj, tmp_obj;
     unsigned ncpus;
-    uint16_t n;
-    unsigned minload;
     hwloc_obj_type_t type;
-    hwloc_obj_t target, nxt;
+    hwloc_obj_t target;
     hwloc_cpuset_t tgtcpus, tmpcpus;
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
@@ -270,6 +268,7 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
     hwloc_cpuset_t available, result, tgtcpus;
     hwloc_obj_t target, tmp_obj;
     uint16_t n;
+    PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     /* initialize */
     available = hwloc_bitmap_alloc();
@@ -317,8 +316,7 @@ int prte_rmaps_base_bind_proc(prte_job_t *jdata,
                               hwloc_obj_t obj,
                               prte_rmaps_options_t *options)
 {
-    int i, rc;
-    bool dobind;
+    int rc;
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: compute bindings for job %s with policy %s[%x]",

@@ -191,7 +191,6 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
     bool core_cpus_given = false;
     bool oversubscribe_given = false;
     bool nooversubscribe_given = false;
-    prte_job_t *djob;
 
     prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "%s rmaps:base check modifiers with %s",
@@ -410,7 +409,6 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
     char *spec = NULL;
     bool ppr = false;
     char *temp_parm, *temp_token, *parm_delimiter;
-    uint16_t u16;
 
     /* set defaults */
     tmp = 0;
@@ -582,7 +580,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         temp_parm = strdup(ptr);
         temp_token = strtok(temp_parm, ",");
         while (NULL != temp_token) {
-            u16 = strtol(temp_token, &parm_delimiter, 10);
+            (void)strtol(temp_token, &parm_delimiter, 10);
             if ('\0' != *parm_delimiter) {
                 pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                "mapping policy", "PE-LIST", ptr);
@@ -627,6 +625,8 @@ int prte_rmaps_base_set_default_ranking(prte_job_t *jdata,
                                         prte_rmaps_options_t *options)
 {
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(options);
+
     rc = prte_rmaps_base_set_ranking_policy(jdata, NULL);
     return rc;
 }
@@ -634,7 +634,7 @@ int prte_rmaps_base_set_default_ranking(prte_job_t *jdata,
 int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
 {
     prte_ranking_policy_t tmp;
-    size_t len;
+
     /* set default */
     tmp = 0;
 
@@ -685,6 +685,8 @@ int prte_rmaps_base_set_default_rto(prte_job_t *jdata,
                                     prte_rmaps_options_t *options)
 {
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(options);
+
     rc = prte_rmaps_base_set_runtime_options(jdata, NULL);
     return rc;
 }

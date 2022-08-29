@@ -1150,7 +1150,6 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
                                    prte_rml_tag_t tag, void *cbdata)
 {
     hwloc_topology_t topo;
-    hwloc_obj_t root;
     int rc, idx;
     char *sig, *coprocessors, **sns;
     prte_proc_t *daemon = NULL;
@@ -1382,10 +1381,9 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     char *myendian;
     char *alias;
     uint8_t naliases, ni;
-    hwloc_obj_t root;
     char *nodename = NULL;
     pmix_info_t *info;
-    size_t n, ninfo;
+    size_t ninfo;
     pmix_byte_object_t pbo, bo;
     pmix_data_buffer_t pbuf;
     int32_t flag;
