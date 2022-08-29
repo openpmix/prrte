@@ -60,30 +60,21 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
     prte_node_t *node;
-    prte_job_map_t *app_map, *daemon_map;
-    prte_proc_t *proc;
     pmix_proc_t *pptr;
     int rc = PRTE_SUCCESS;
-    bool did_map, pernode = false, perpackage = false, pernuma = false;
-    bool pelist = false;
+    bool did_map, pernode = false;
     prte_rmaps_base_selected_module_t *mod;
-    prte_job_t *parent = NULL, *target_jdata;
-    prte_app_context_t *app, *daemon_app;
+    prte_job_t *parent = NULL;
     bool inherit = false;
     pmix_proc_t *nptr, *target_proc;
-    char *tmp, *p, **t2;
+    char *tmp;
     uint16_t u16 = 0, procs_per_target = 0;
     uint16_t *u16ptr = &u16;
     bool colocate_daemons = false;
     bool colocate = false;
-    size_t ncolocated;
-    bool sequential = false;
-    int32_t slots, npelist;
-    hwloc_obj_t obj = NULL;
     prte_schizo_base_module_t *schizo;
     prte_rmaps_options_t options;
     pmix_data_array_t *darray = NULL;
-    prte_binding_policy_t bind;
 
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -486,8 +477,8 @@ ranking:
     }
     options.rank = PRTE_GET_RANKING_POLICY(jdata->map->ranking);
     /* if we are ranking by FILL or SPAN, then we must map by an object */
-    if (PRTE_RANK_BY_SPAN == options.rank ||
-        PRTE_RANK_BY_FILL == options.rank &&
+    if ((PRTE_RANK_BY_SPAN == options.rank ||
+         PRTE_RANK_BY_FILL == options.rank) &&
         PRTE_MAPPING_PPR != options.map) {
         if (options.map < PRTE_MAPPING_BYNUMA ||
             options.map > PRTE_MAPPING_BYHWTHREAD) {
@@ -701,7 +692,6 @@ ranking:
         goto cleanup;
     }
 
-moveon:
     /* set the offset so shared memory components can potentially
      * connect to any spawned jobs
      */
@@ -802,10 +792,10 @@ static int map_colocate(prte_job_t *jdata,
     char *tmp;
     pmix_status_t rc;
     size_t n, nprocs;
-    pmix_proc_t *procs, pproc;
+    pmix_proc_t *procs;
     prte_job_t *target_jdata;
     prte_job_map_t *target_map, *map;
-    prte_app_context_t *target_app, *app;
+    prte_app_context_t *app;
     int i, j, ret, cnt;
     pmix_list_t targets;
     prte_proc_t *proc;

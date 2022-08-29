@@ -467,10 +467,12 @@ static int int_from_string(const char *src, prte_mca_base_var_enum_t *enumerator
         switch (tmp[0]) {
         case 'G':
         case 'g':
-            value <<= 10;
+            value <<= 30;
+            break;
         case 'M':
         case 'm':
-            value <<= 10;
+            value <<= 20;
+            break;
         case 'K':
         case 'k':
             value <<= 10;
