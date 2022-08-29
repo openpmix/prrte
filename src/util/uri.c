@@ -30,7 +30,7 @@
 
 #include "src/util/uri.h"
 
-const static char *uri_reserved_path_chars = "!$&'()*+,;=:@ ";
+static const char *uri_reserved_path_chars = "!$&'()*+,;=:@ ";
 
 char *prte_uri_get_scheme(const char *uri)
 {

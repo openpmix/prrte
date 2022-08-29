@@ -147,7 +147,6 @@ bool prte_schizo_base_check_directives(char *directive,
         NULL
     };
     bool found;
-    char *str;
 
     /* if it starts with a ':', then these are just qualifiers */
     if (':' == dir[0]) {
@@ -308,8 +307,8 @@ static int check_ndirs(pmix_cli_item_t *opt)
 int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 {
     pmix_cli_item_t *opt, *newopt;
-    int n, rc, count;
-    const char *tgt, *param;
+    int n, rc;
+    const char *tgt;
 
     char *mappers[] = {
         PRTE_CLI_SLOT,
@@ -517,15 +516,35 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
 
             if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_ALLOC)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_ALLOCATION, NULL, PMIX_BOOL);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAP)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP, NULL, PMIX_BOOL);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAPDEV)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP_DETAILED, NULL, PMIX_BOOL);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_BIND)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REPORT_BINDINGS, NULL, PMIX_BOOL);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TOPO)) {
                 ptr = strchr(targv[idx], '=');
@@ -545,6 +564,11 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                     return PRTE_ERR_FATAL;
                 }
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_TOPOLOGY, ptr, PMIX_STRING);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
             }
         }
         pmix_argv_free(targv);
@@ -571,16 +595,34 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 ++cptr;
                 /* could be multiple qualifiers, so separate them */
                 options = pmix_argv_split(cptr, ',');
-                for (int m=0; NULL != options[m]; m++) {
+                for (m=0; NULL != options[m]; m++) {
 
                     if (PRTE_CHECK_CLI_OPTION(options[m], PRTE_CLI_NOCOPY)) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
+                        if (PMIX_SUCCESS != ret) {
+                            PMIX_ERROR_LOG(ret);
+                            pmix_argv_free(targv);
+                            pmix_argv_free(options);
+                            return ret;
+                        }
 
                     } else if (PRTE_CHECK_CLI_OPTION(options[m], PRTE_CLI_PATTERN)) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
+                        if (PMIX_SUCCESS != ret) {
+                            PMIX_ERROR_LOG(ret);
+                            pmix_argv_free(targv);
+                            pmix_argv_free(options);
+                            return ret;
+                        }
 
                     } else if (PRTE_CHECK_CLI_OPTION(options[m], PRTE_CLI_RAW)) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
+                    }
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
+                        pmix_argv_free(targv);
+                        pmix_argv_free(options);
+                        return ret;
                     }
                 }
                 pmix_argv_free(options);
@@ -596,24 +638,59 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
             }
             if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG_DET)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_DETAILED_OUTPUT, NULL, PMIX_BOOL);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG_FULL)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_FULLNAME_OUTPUT, NULL, PMIX_BOOL);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_RANK)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_RANK_OUTPUT, NULL, PMIX_BOOL);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TIMESTAMP)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_XML)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MERGE_ERROUT)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_DIR)) {
                 if (NULL == ptr || '\0' == *ptr) {
@@ -644,6 +721,11 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     outdir = strdup(ptr);
                 }
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
 
             } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_FILE)) {
                 if (NULL == ptr || '\0' == *ptr) {
@@ -673,6 +755,11 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     outfile = strdup(ptr);
                 }
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    pmix_argv_free(targv);
+                    return ret;
+                }
             }
         }
         pmix_argv_free(targv);

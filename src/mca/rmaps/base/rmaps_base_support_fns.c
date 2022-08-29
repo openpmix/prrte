@@ -602,7 +602,7 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
         node->num_procs++;
         ++node->slots_inuse;
     }
-    if (0 > (idx = pmix_pointer_array_add(node->procs, (void *) proc))) {
+    if (0 > (rc = pmix_pointer_array_add(node->procs, (void *) proc))) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(proc); // releases node to maintain accounting
         return NULL;
@@ -630,8 +630,7 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
  */
 void prte_rmaps_base_get_starting_point(pmix_list_t *node_list, prte_job_t *jdata)
 {
-    prte_node_t *node, *nd1, *ndmin;
-    int overload;
+    prte_node_t *node, *nd1;
     bool first = true;
 
     /* if a bookmark exists from some prior mapping, set us to start there */
@@ -777,6 +776,8 @@ void prte_rmaps_base_get_cpuset(prte_job_t *jdata,
                                 prte_node_t *node,
                                 prte_rmaps_options_t *options)
 {
+    PRTE_HIDE_UNUSED_PARAMS(jdata);
+    
     if (NULL != options->cpuset) {
         options->job_cpuset = prte_hwloc_base_generate_cpuset(node->topology->topo,
                                                               options->use_hwthreads,
