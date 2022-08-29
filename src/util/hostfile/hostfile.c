@@ -102,7 +102,8 @@ static char *hostfile_parse_string(void)
     return strdup(prte_util_hostfile_value.sval);
 }
 
-static int hostfile_parse_line(int token, pmix_list_t *updates, pmix_list_t *exclude, bool keep_all)
+static int hostfile_parse_line(int token, pmix_list_t *updates,
+                               pmix_list_t *exclude, bool keep_all)
 {
     int rc;
     prte_node_t *node;
@@ -116,9 +117,9 @@ static int hostfile_parse_line(int token, pmix_list_t *updates, pmix_list_t *exc
     char buff[64];
     char *alias = NULL;
 
-    if (PRTE_HOSTFILE_STRING == token || PRTE_HOSTFILE_HOSTNAME == token
-        || PRTE_HOSTFILE_INT == token || PRTE_HOSTFILE_IPV4 == token
-        || PRTE_HOSTFILE_IPV6 == token) {
+    if (PRTE_HOSTFILE_STRING == token || PRTE_HOSTFILE_HOSTNAME == token ||
+        PRTE_HOSTFILE_INT == token || PRTE_HOSTFILE_IPV4 == token ||
+        PRTE_HOSTFILE_IPV6 == token) {
 
         if (PRTE_HOSTFILE_INT == token) {
             snprintf(buff, 64, "%d", prte_util_hostfile_value.ival);
@@ -322,7 +323,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates, pmix_list_t *exc
         /* Do we need to make a new node object? */
         if (NULL == (node = prte_node_match(updates, node_name))) {
             node = PMIX_NEW(prte_node_t);
-            node->name = node_name;
+            node->name = strdup(node_name);
             node->slots = 1;
             if (NULL != username) {
                 prte_set_attribute(&node->attributes, PRTE_NODE_USERNAME,
@@ -332,7 +333,6 @@ static int hostfile_parse_line(int token, pmix_list_t *updates, pmix_list_t *exc
         } else {
             /* add a slot */
             node->slots++;
-            free(node_name);
             /* the node name may not match the prior entry, so ensure we
              * keep it if necessary */
             if (0 != strcmp(node_name, node->name)) {
@@ -356,6 +356,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates, pmix_list_t *exc
         while (!prte_util_hostfile_done && PRTE_HOSTFILE_NEWLINE != token) {
             token = prte_util_hostfile_lex();
         }
+        free(node_name);
         return PRTE_SUCCESS;
     } else {
         hostfile_parse_error(token);
