@@ -53,13 +53,14 @@ PRTE_EXPORT void prte_odls_base_harvest_threads(void);
 do {                                                                                    \
     int _idx;                                                                           \
     prte_proc_t *_cld;                                                                  \
+    unsigned int _j = (unsigned int)j;                                                  \
     for (_idx = 0; _idx < prte_local_children->size; _idx++) {                          \
         _cld = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, _idx);  \
         if (NULL == _cld) {                                                             \
             continue;                                                                   \
         }                                                                               \
         if (PMIX_CHECK_NSPACE(ns, _cld->name.nspace) &&                                 \
-            (-1 == j || j == _cld->app_idx)) {                                          \
+            (UINT_MAX == _j || _j == _cld->app_idx)) {                                  \
             _cld->exit_code = s;                                                        \
             PRTE_ACTIVATE_PROC_STATE(&_cld->name, PRTE_PROC_STATE_FAILED_TO_LAUNCH);    \
         }                                                                               \

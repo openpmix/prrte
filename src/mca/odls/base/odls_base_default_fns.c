@@ -1114,9 +1114,6 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     char *msg;
     prte_odls_spawn_caddy_t *cd;
     prte_event_base_t *evb;
-    char **argvptr;
-    char *pathenv = NULL, *mpiexec_pathenv = NULL;
-    char *full_search;
     prte_schizo_base_module_t *schizo;
 
     PRTE_HIDE_UNUSED_PARAMS(fd, sd);
@@ -1174,7 +1171,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (prte_sys_limits.num_procs < total_num_local_procs) {
             if (2 < caddy->retries) {
                 /* if we have already tried too many times, then just give up */
-                PRTE_ODLS_SET_ERROR(job, PMIX_ERR_SYS_LIMITS_CHILDREN, -1);
+                PRTE_ODLS_SET_ERROR(job, PMIX_ERR_SYS_LIMITS_CHILDREN, UINT_MAX);
                 PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
                 goto ERROR_OUT;
             }
@@ -1201,7 +1198,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         if (prte_sys_limits.num_files < limit) {
             if (2 < caddy->retries) {
                 /* tried enough - give up */
-                PRTE_ODLS_SET_ERROR(job, PMIX_ERR_SYS_LIMITS_FILES, -1);
+                PRTE_ODLS_SET_ERROR(job, PMIX_ERR_SYS_LIMITS_FILES, UINT_MAX);
                 PRTE_ACTIVATE_JOB_STATE(jobdat, PRTE_JOB_STATE_FAILED_TO_LAUNCH);
                 goto ERROR_OUT;
             }
@@ -1768,7 +1765,7 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
     prte_proc_t *child;
     pmix_list_t procs_killed;
     prte_proc_t *proc, proctmp;
-    int i, j, ret;
+    int i, j;
     pmix_pointer_array_t procarray, *procptr;
     bool do_cleanup;
     prte_odls_quick_caddy_t *cd;
@@ -1917,10 +1914,10 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
         /* Wait a little. Do so in nanosleep() - can be interrupted by a
          * signal. Most likely SIGCHLD in this case */
         PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                             "%s Sleep %d nsec",
+                             "%s Sleep %ld nsec",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             tp.tv_nsec));
-        ret = nanosleep(&tp, NULL);
+                             (long)tp.tv_nsec));
+        (void)nanosleep(&tp, NULL);
         /* issue a SIGTERM to all */
         PMIX_LIST_FOREACH(cd, &procs_killed, prte_odls_quick_caddy_t)
         {
@@ -1931,12 +1928,12 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
             kill_local(cd->child->pid, SIGTERM);
         }
         PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                             "%s Sleep %d nsec",
+                             "%s Sleep %ld nsec",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                             tp.tv_nsec));
+                             (long)tp.tv_nsec));
         /* Wait a little. Do so in nanosleep() - can be interrupted by a
          * signal. Most likely SIGCHLD in this case */
-        ret = nanosleep(&tp, NULL);
+        (void)nanosleep(&tp, NULL);
 
         /* issue a SIGKILL to all */
         PMIX_LIST_FOREACH(cd, &procs_killed, prte_odls_quick_caddy_t)
