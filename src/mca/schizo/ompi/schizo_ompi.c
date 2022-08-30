@@ -209,7 +209,7 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE("output-filename", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("merge-stderr-to-stdout", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-devel-map", PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE("display-topo", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-topo", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("report-bindings", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-devel-allocation", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-map", PMIX_ARG_NONE),
@@ -848,9 +848,11 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         }
         /* --display-topo  ->  --display topo */
         else if (0 == strcmp(option, "display-topo")) {
+            pmix_asprintf(&p2, "%s=%s", "topo", opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option,
-                                                PRTE_CLI_DISPLAY, PRTE_CLI_TOPO,
+                                                PRTE_CLI_DISPLAY, p2,
                                                 warn);
+            free(p2);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --report-bindings  ->  --display bind */
