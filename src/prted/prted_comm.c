@@ -90,13 +90,15 @@ static char *get_prted_comm_cmd_str(int command);
 static void _notify_release(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status);
 
     PRTE_PMIX_WAKEUP_THREAD(lk);
 }
 
 static pmix_pointer_array_t *procs_prev_ordered_to_terminate = NULL;
 
-void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+void prte_daemon_recv(int status, pmix_proc_t *sender,
+                      pmix_data_buffer_t *buffer,
                       prte_rml_tag_t tag, void *cbdata)
 {
     prte_daemon_cmd_flag_t command;
@@ -116,19 +118,17 @@ void prte_daemon_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
     prte_proc_t *cur_proc = NULL, *prev_proc = NULL;
     bool found = false;
     bool compressed;
-    prte_node_t *node;
     FILE *fp;
     char gscmd[256], path[1035], *pathptr;
     char string[256], *string_ptr = string;
     char *coprocessors;
-    prte_job_map_t *map;
     prte_pmix_lock_t lk;
     pmix_proc_t pname;
     pmix_byte_object_t pbo;
     pmix_topology_t ptopo;
     char *tmp;
     pmix_info_t info[4];
-    prte_app_context_t *app;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     /* unpack the command */
     n = 1;

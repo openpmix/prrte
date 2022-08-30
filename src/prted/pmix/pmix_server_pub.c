@@ -143,6 +143,7 @@ static void execute(int sd, short args, void *cbdata)
     pmix_data_buffer_t *xfer;
     pmix_proc_t *target;
     bool stored = false;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(req);
 
@@ -449,7 +450,8 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     return PRTE_SUCCESS;
 }
 
-void pmix_server_keyval_client(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+void pmix_server_keyval_client(int status, pmix_proc_t *sender,
+                               pmix_data_buffer_t *buffer,
                                prte_rml_tag_t tg, void *cbdata)
 {
     uint8_t command;
@@ -462,8 +464,10 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender, pmix_data_buffer
     pmix_info_t info;
     pmix_pdata_t *pdata = NULL;
     size_t n, npdata = 0;
+    PRTE_HIDE_UNUSED_PARAMS(sender, tg, cbdata);
 
-    prte_output_verbose(1, prte_pmix_server_globals.output, "%s recvd lookup data return",
+    prte_output_verbose(1, prte_pmix_server_globals.output,
+                        "%s recvd lookup data return",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* unpack the room number of the request tracker */

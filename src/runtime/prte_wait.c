@@ -185,6 +185,7 @@ static void cancel_callback(int fd, short args, void *cbdata)
 {
     prte_wait_tracker_t *trk = (prte_wait_tracker_t *) cbdata;
     prte_wait_tracker_t *t2;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(trk);
 
@@ -225,6 +226,7 @@ static void wait_signal_callback(int fd, short event, void *arg)
     int status;
     pid_t pid;
     prte_wait_tracker_t *t2;
+    PRTE_HIDE_UNUSED_PARAMS(fd, event);
 
     PMIX_ACQUIRE_OBJECT(signal);
 
