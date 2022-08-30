@@ -580,12 +580,6 @@ Display process bindings to stderr
 
 DEPRECATED: please see "--help display" for details
 #
-[display-devel-allocation]
-Display a detailed list (mostly intended for developers) of the
-allocation being used by this job
-
-DEPRECATED: please see "--help display" for details
-#
 [display-map]
 Display the process map just before launch
 
