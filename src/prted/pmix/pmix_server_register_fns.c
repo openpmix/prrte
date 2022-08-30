@@ -695,7 +695,6 @@ int prte_pmix_server_register_tool(pmix_nspace_t nspace)
 {
     void *ilist;
     pmix_status_t ret;
-    hwloc_obj_t machine;
     char *tmp;
     pmix_data_array_t darray;
     pmix_info_t *iptr;

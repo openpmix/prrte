@@ -426,15 +426,18 @@ void pmix_server_register_params(void)
 
 }
 
-static void eviction_cbfunc(struct pmix_hotel_t *hotel, int room_num, void *occupant)
+static void eviction_cbfunc(struct pmix_hotel_t *hotel,
+                            int room_num, void *occupant)
 {
     pmix_server_req_t *req = (pmix_server_req_t *) occupant;
     bool timeout = false;
     int rc = PRTE_ERR_TIMEOUT;
     pmix_value_t *pval = NULL;
     pmix_status_t prc;
+    PRTE_HIDE_UNUSED_PARAMS(hotel);
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "EVICTION FROM ROOM %d", room_num);
+    prte_output_verbose(2, prte_pmix_server_globals.output,
+                        "EVICTION FROM ROOM %d", room_num);
 
     /* decrement the request timeout */
     req->timeout -= prte_pmix_server_globals.timeout;
@@ -534,6 +537,8 @@ static void lost_connection_hdlr(size_t evhdlr_registration_id, pmix_status_t st
                                  pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
     prte_pmix_tool_t *tl;
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status,
+                            info, ninfo, results, nresults);
 
     /* scan the list of attached tools to see if this one is there */
     PMIX_LIST_FOREACH(tl, &prte_pmix_server_globals.tools, prte_pmix_tool_t)
@@ -561,6 +566,8 @@ static void lost_connection_hdlr(size_t evhdlr_registration_id, pmix_status_t st
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status, ref);
+
     PMIX_ACQUIRE_OBJECT(lock);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
@@ -994,6 +1001,7 @@ static void _mdxresp(int sd, short args, void *cbdata)
     pmix_server_req_t *req = (pmix_server_req_t *) cbdata;
     pmix_data_buffer_t *reply;
     pmix_status_t prc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(req);
 
@@ -1079,7 +1087,8 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
     PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 }
-static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
+                                  pmix_data_buffer_t *buffer,
                                   prte_rml_tag_t tg, void *cbdata)
 {
     int rc, room_num;
@@ -1094,6 +1103,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender, pmix_data_buf
     char *key = NULL;
     size_t sz;
     pmix_value_t *pval = NULL;
+    PRTE_HIDE_UNUSED_PARAMS(status, tg, cbdata);
 
     cnt = 1;
     if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, &pproc, &cnt, PMIX_PROC))) {
@@ -1268,7 +1278,9 @@ static void dcdes(datacaddy_t *p)
         free(p->data);
     }
 }
-static PMIX_CLASS_INSTANCE(datacaddy_t, pmix_object_t, dccon, dcdes);
+static PMIX_CLASS_INSTANCE(datacaddy_t,
+                           pmix_object_t,
+                           dccon, dcdes);
 
 static void relcbfunc(void *relcbdata)
 {
@@ -1277,7 +1289,8 @@ static void relcbfunc(void *relcbdata)
     PMIX_RELEASE(d);
 }
 
-static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
+                                  pmix_data_buffer_t *buffer,
                                   prte_rml_tag_t tg, void *cbdata)
 {
     int room_num, rnum;
@@ -1287,6 +1300,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
     pmix_proc_t pproc;
     size_t psz;
     pmix_status_t prc, pret;
+    PRTE_HIDE_UNUSED_PARAMS(status, tg, cbdata);
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
                         "%s dmdx:recv response recvd from proc %s with %d bytes",
@@ -1409,9 +1423,8 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
     pmix_proc_t source;
     prte_job_t *jdata;
     bool noagg;
-#ifdef PMIX_LOG_AGG
     bool flag;
-#endif
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
 
     /* unpack the source of the request */
     cnt = 1;
@@ -1511,12 +1524,10 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
     /* protect against infinite loop should the PMIx server push
      * this back up to us */
     PMIX_INFO_LOAD(&scd->directives[ndirs+1], "prte.log.noloop", NULL, PMIX_BOOL);
-#ifdef PMIX_LOG_AGG
     if (noagg) {
         flag = false;
         PMIX_INFO_LOAD(&scd->directives[ndirs+2], PMIX_LOG_AGG, &flag, PMIX_BOOL);
     }
-#endif
     scd->info = info;
     scd->ninfo = ninfo;
     /* pass the array down to be logged */

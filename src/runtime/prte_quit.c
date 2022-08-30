@@ -77,7 +77,8 @@ static int num_failed_start = 0;
 void prte_quit(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
-
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
+    
     PMIX_ACQUIRE_OBJECT(caddy);
 
     /* cleanup */
