@@ -174,7 +174,8 @@ void prte_data_server_finalize(void)
     PMIX_LIST_DESTRUCT(&pending);
 }
 
-void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+void prte_data_server(int status, pmix_proc_t *sender,
+                      pmix_data_buffer_t *buffer,
                       prte_rml_tag_t tag, void *cbdata)
 {
     uint8_t command;
@@ -199,6 +200,7 @@ void prte_data_server(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffe
     pmix_list_t answers;
     void *ilist;
     pmix_data_array_t darray;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     prte_output_verbose(1, prte_data_server_output, "%s data server got message from %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender));

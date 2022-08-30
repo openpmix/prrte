@@ -91,12 +91,14 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED,
                        PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
 }
-void pmix_server_launch_resp(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+void pmix_server_launch_resp(int status, pmix_proc_t *sender,
+                             pmix_data_buffer_t *buffer,
                              prte_rml_tag_t tg, void *cbdata)
 {
     int rc, room;
     int32_t ret, cnt;
     pmix_nspace_t jobid;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
 
     /* unpack the status - this is already a PMIx value */
     cnt = 1;
@@ -136,6 +138,7 @@ static void spawn(int sd, short args, void *cbdata)
     prte_plm_cmd_flag_t command;
     char nspace[PMIX_MAX_NSLEN + 1];
     pmix_status_t prc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(req);
 
@@ -204,6 +207,7 @@ static void interim(int sd, short args, void *cbdata)
     size_t m, n;
     uint16_t u16;
     pmix_rank_t rank;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     prte_output_verbose(2, prte_pmix_server_globals.output,
                         "%s spawn called from proc %s with %d apps",
@@ -1046,6 +1050,7 @@ static void _cnct(int sd, short args, void *cbdata)
     pmix_data_array_t *darray;
     pmix_scope_t scope;
     prte_pmix_mdx_caddy_t *md;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
 
@@ -1226,10 +1231,12 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     return PMIX_SUCCESS;
 }
 
-static void mdxcbfunc(pmix_status_t status, const char *data, size_t ndata, void *cbdata,
+static void mdxcbfunc(pmix_status_t status,
+                      const char *data, size_t ndata, void *cbdata,
                       pmix_release_cbfunc_t relcbfunc, void *relcbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(data, ndata, relcbfunc, relcbdata);
 
     PMIX_ACQUIRE_OBJECT(cd);
     /* ack the call */
@@ -1272,5 +1279,6 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client, pmix_alloc_directi
                                    pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
     /* PRTE currently has no way of supporting allocation requests */
+    PRTE_HIDE_UNUSED_PARAMS(client, directive, data, ndata, cbfunc, cbdata);
     return PMIX_ERR_NOT_SUPPORTED;
 }

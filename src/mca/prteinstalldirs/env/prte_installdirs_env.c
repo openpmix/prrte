@@ -34,7 +34,9 @@ prte_prteinstalldirs_base_component_t prte_prteinstalldirs_env_component = {
      /* Component open and close functions */
      prteinstalldirs_env_open, NULL},
     {/* This component is checkpointable */
-     PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT},
+     PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT,
+            .reserved[0] = '\0'
+    },
 
     /* Next the prte_install_dirs_t install_dirs_data information */
     {

@@ -83,15 +83,14 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
                       char ***hostfiles, char ***hosts)
 {
     char cwd[PRTE_PATH_MAX];
-    int i, j, count, rc;
+    int i, count, rc;
     char *param, *value, *ptr;
     prte_pmix_app_t *app = NULL;
-    bool found = false;
     char *appname = NULL;
     pmix_cli_item_t *opt;
-    prte_value_t *pvalue;
     pmix_cli_result_t results;
     char *tval;
+    PRTE_HIDE_UNUSED_PARAMS(jdata, app_env);
 
     *made_app = false;
 
