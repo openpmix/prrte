@@ -211,7 +211,6 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE("display-devel-map", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-topo", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("report-bindings", PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE("display-devel-allocation", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-map", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("display-allocation", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("nolocal", PMIX_ARG_NONE),
