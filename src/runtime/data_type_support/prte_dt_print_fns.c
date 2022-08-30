@@ -231,7 +231,6 @@ PRINT_PROCS:
 void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
 {
     char *tmp, *tmp3, *tmp4, *pfx2 = "        ";
-    hwloc_obj_t loc = NULL;
     char *locale, *tmp2;
     hwloc_cpuset_t mycpus;
     char *str;
@@ -330,6 +329,7 @@ void prte_app_print(char **output, prte_job_t *jdata, prte_app_context_t *src)
 {
     char *tmp, *tmp2, *tmp3;
     int i, count;
+    PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     /* set default result */
     *output = NULL;

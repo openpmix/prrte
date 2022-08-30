@@ -29,7 +29,8 @@ const prte_prteinstalldirs_base_component_t prte_prteinstalldirs_config_componen
      /* Component open and close functions */
      NULL, NULL},
     {/* This component is Checkpointable */
-     PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT},
+        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT,
+        .reserved[0] = '\0'},
 
     {PRTE_PREFIX, PRTE_EXEC_PREFIX, PRTE_BINDIR, PRTE_SBINDIR, PRTE_LIBEXECDIR, PRTE_DATAROOTDIR,
      PRTE_DATADIR, PRTE_SYSCONFDIR, PRTE_SHAREDSTATEDIR, PRTE_LOCALSTATEDIR, PRTE_LIBDIR,

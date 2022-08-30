@@ -208,6 +208,7 @@ static const char *shared_thread_name = "PRTE-wide async progress thread";
 static void dummy_timeout_cb(int fd, short args, void *cbdata)
 {
     prte_progress_tracker_t *trk = (prte_progress_tracker_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     prte_event_add(&trk->block, &long_timeout);
 }

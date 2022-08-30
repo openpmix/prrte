@@ -197,6 +197,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     pmix_status_t prc = PMIX_ERROR;
     bool refresh_cache = false;
     pmix_value_t *pval;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(rq);
 
