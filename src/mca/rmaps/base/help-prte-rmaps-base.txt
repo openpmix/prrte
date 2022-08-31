@@ -118,12 +118,13 @@ Please correct one or both of these values and try again.
 [failed-map]
 Your job failed to map. Either no mapper was available, or none
 of the available mappers was able to perform the requested
-mapping operation. This can happen if you request a map type
-(e.g., loadbalance) and the corresponding mapper was not built.
+mapping operation.
 
-  Mapper result:    %s
-  #procs mapped:    %d
-  #nodes assigned:  %d
+  Mapper result:       %s
+  Application:         %s
+  #procs to be mapped: %d
+  Mapping policy:      %s
+  Binding policy:      %s
 
 #
 [unrecognized-policy]

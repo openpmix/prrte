@@ -66,6 +66,12 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
+        } else {
+            if (!PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+                jdata->map->binding = PRTE_BIND_TO_NONE;
+                options->bind = PRTE_BIND_TO_NONE;
+                savebind = options->bind;
+            }
         }
     }
 
@@ -137,7 +143,8 @@ pass:
         for (i = 0; i < options->nprocs && nprocs_mapped < app->num_procs; i++) {
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto errout;
             }
             nprocs_mapped++;
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
@@ -146,7 +153,7 @@ pass:
                 break;
             } else if (PRTE_SUCCESS != rc) {
                 /* got an error */
-                return rc;
+                goto errout;
             }
         }
 
@@ -157,16 +164,17 @@ pass:
     }
 
     if (second_pass) {
-        /* unable to do it */
-        if (PRTE_ERR_OUT_OF_RESOURCE == rc) {
+    errout:
+        if (PRTE_ERR_SILENT != rc) {
             pmix_show_help("help-prte-rmaps-base.txt",
-                           "out-of-resource", true,
-                           app->num_procs, app->app,
+                           "failed-map", true,
+                           PRTE_ERROR_NAME(rc),
+                           (NULL == app) ? "N/A" : app->app,
+                           (NULL == app) ? -1 : app->num_procs,
                            prte_rmaps_base_print_mapping(options->map),
                            prte_hwloc_base_print_binding(options->bind));
-            return PRTE_ERR_SILENT;
         }
-        return PRTE_ERR_FAILED_TO_MAP;
+        return PRTE_ERR_SILENT;
     }
 
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
@@ -223,6 +231,12 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
+        } else {
+            if (!PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+                jdata->map->binding = PRTE_BIND_TO_NONE;
+                options->bind = PRTE_BIND_TO_NONE;
+                savebind = PRTE_BIND_TO_NONE;
+            }
         }
     }
 
@@ -283,7 +297,8 @@ pass:
         for (j=0; j < options->nprocs && nprocs_mapped < app->num_procs; j++) {
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto errout;
             }
             nprocs_mapped++;
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
@@ -292,7 +307,7 @@ pass:
                 break;
             } else if (PRTE_SUCCESS != rc) {
                 /* got an error */
-                return rc;
+                goto errout;
             }
         }
         if (nprocs_mapped == app->num_procs) {
@@ -302,16 +317,18 @@ pass:
     }
 
     if (second_pass) {
+    errout:
         /* unable to do it */
-        if (PRTE_ERR_OUT_OF_RESOURCE == rc) {
+        if (PRTE_ERR_SILENT != rc) {
             pmix_show_help("help-prte-rmaps-base.txt",
-                           "out-of-resource", true,
-                           app->num_procs, app->app,
+                           "failed-map", true,
+                           PRTE_ERROR_NAME(rc),
+                           (NULL == app) ? "N/A" : app->app,
+                           (NULL == app) ? -1 : app->num_procs,
                            prte_rmaps_base_print_mapping(options->map),
                            prte_hwloc_base_print_binding(options->bind));
-            return PRTE_ERR_SILENT;
         }
-        return PRTE_ERR_FAILED_TO_MAP;
+        return PRTE_ERR_SILENT;
     }
     prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr:node job %s is oversubscribed - performing second pass",
@@ -351,6 +368,12 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
+        } else {
+            if (!PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+                jdata->map->binding = PRTE_BIND_TO_NONE;
+                options->bind = PRTE_BIND_TO_NONE;
+                savebind = PRTE_BIND_TO_NONE;
+            }
         }
     }
 
@@ -411,7 +434,8 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
         for (i = 0; i < options->nprocs && nprocs_mapped < app->num_procs; i++) {
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
-                return PRTE_ERR_OUT_OF_RESOURCE;
+                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                goto errout;
             }
             nprocs_mapped++;
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
@@ -420,7 +444,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
                 break;
             } else if (PRTE_SUCCESS != rc) {
                 /* got an error */
-                return rc;
+                goto errout;
             }
         }
         if (nprocs_mapped == app->num_procs) {
@@ -428,16 +452,18 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
         }
     }
 
+errout:
     /* if we get here, then we were unable to map all the procs */
-    if (PRTE_ERR_OUT_OF_RESOURCE == rc) {
+    if (PRTE_ERR_SILENT != rc) {
         pmix_show_help("help-prte-rmaps-base.txt",
-                       "out-of-resource", true,
-                       app->num_procs, app->app,
+                       "failed-map", true,
+                       PRTE_ERROR_NAME(rc),
+                       (NULL == app) ? "N/A" : app->app,
+                       (NULL == app) ? -1 : app->num_procs,
                        prte_rmaps_base_print_mapping(options->map),
                        prte_hwloc_base_print_binding(options->bind));
-        return PRTE_ERR_SILENT;
     }
-    return PRTE_ERR_FAILED_TO_MAP;
+    return PRTE_ERR_SILENT;
 }
 
 /* mapping by hwloc object looks a lot like mapping by node,
@@ -475,6 +501,12 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                            app->num_procs, app->app, prte_process_info.nodename);
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
             return PRTE_ERR_SILENT;
+        } else {
+            if (!PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+                jdata->map->binding = PRTE_BIND_TO_NONE;
+                options->bind = PRTE_BIND_TO_NONE;
+                savebind = PRTE_BIND_TO_NONE;
+            }
         }
     }
 
@@ -565,7 +597,7 @@ pass:
                 rc = prte_rmaps_base_check_support(jdata, node, options);
                 if (PRTE_SUCCESS != rc) {
                     PRTE_ERROR_LOG(rc);
-                    return rc;
+                    goto errout;
                 }
             }
             if (span) {
@@ -636,7 +668,8 @@ pass:
                     }
                     proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, obj, options);
                     if (NULL == proc) {
-                        return PRTE_ERR_OUT_OF_RESOURCE;
+                        rc = PRTE_ERR_OUT_OF_RESOURCE;
+                        goto errout;
                     }
                     /* setup_proc removes any node at max_slots */
                     if (0 == i) {
@@ -651,7 +684,7 @@ pass:
                         break;
                     } else if (PRTE_SUCCESS != rc) {
                         /* got an error */
-                        return rc;
+                        goto errout;
                     }
                 }
             }
@@ -678,7 +711,8 @@ pass:
                 for (i=0; i < options->nprocs && nprocs_mapped < app->num_procs; i++) {
                     proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, obj, options);
                     if (NULL == proc) {
-                        return PRTE_ERR_OUT_OF_RESOURCE;
+                        rc = PRTE_ERR_OUT_OF_RESOURCE;
+                        goto errout;
                     }
                     /* setup_proc removes any node at max_slots */
                     nprocs_mapped++;
@@ -689,7 +723,7 @@ pass:
                         break;
                     } else if (PRTE_SUCCESS != rc) {
                         /* got an error */
-                        return rc;
+                        goto errout;
                     }
                 }
             }
@@ -701,16 +735,18 @@ pass:
     }
 
     if (second_pass) {
+    errout:
         /* unable to do it */
-        if (PRTE_ERR_OUT_OF_RESOURCE == rc) {
+        if (PRTE_ERR_SILENT != rc) {
             pmix_show_help("help-prte-rmaps-base.txt",
-                           "out-of-resource", true,
-                           app->num_procs, app->app,
+                           "failed-map", true,
+                           PRTE_ERROR_NAME(rc),
+                           (NULL == app) ? "N/A" : app->app,
+                           (NULL == app) ? -1 : app->num_procs,
                            prte_rmaps_base_print_mapping(options->map),
                            prte_hwloc_base_print_binding(options->bind));
-            return PRTE_ERR_SILENT;
         }
-        return PRTE_ERR_FAILED_TO_MAP;
+        return PRTE_ERR_SILENT;
     }
 
     /* second pass: if we haven't mapped everyone yet, it is
