@@ -356,11 +356,11 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
             if (PMIX_SUCCESS != rc) {
                 PMIX_RELEASE(proc);
-                return rc;
+                goto error;
             }
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
             if (PRTE_SUCCESS != rc) {
-                return rc;
+                goto error;
             }
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: assigned proc %s to node %s for app %s",
@@ -392,7 +392,16 @@ error:
     if (NULL != hosts) {
         free(hosts);
     }
-    return rc;
+    if (PRTE_ERR_SILENT != rc) {
+        pmix_show_help("help-prte-rmaps-base.txt",
+                       "failed-map", true,
+                       PRTE_ERROR_NAME(rc),
+                       (NULL == app) ? "N/A" : app->app,
+                       (NULL == app) ? -1 : app->num_procs,
+                       prte_rmaps_base_print_mapping(options->map),
+                       prte_hwloc_base_print_binding(options->bind));
+    }
+    return PRTE_ERR_SILENT;
 }
 
 static char *prte_getline(FILE *fp)
