@@ -1620,36 +1620,6 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 /* cleanup */
                 PMIX_DATA_BUFFER_DESTRUCT(data);
             }
-            /* process any cached daemons */
-            while (NULL != (dptr = (prte_proc_t*)pmix_list_remove_first(&prte_plm_globals.daemon_cache))) {
-               PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                    "%s plm:base:prted_daemon_cback processing cached daemon %s",
-                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                   PRTE_NAME_PRINT(&dptr->name)));
-                if (0 == strcmp(dptr->node->topology->sig, sig)) {
-                    dptr->node->available = prte_hwloc_base_filter_cpus(topo);
-                    jdatorted->num_reported++;
-                } else {
-                    /* we need to request this topology */
-                    PMIX_DATA_BUFFER_CREATE(relay);
-                    cmd = PRTE_DAEMON_REPORT_TOPOLOGY_CMD;
-                    ret = PMIx_Data_pack(NULL, relay, &cmd, 1, PMIX_UINT8);
-                    if (PMIX_SUCCESS != ret) {
-                        PMIX_ERROR_LOG(ret);
-                        PMIX_DATA_BUFFER_RELEASE(relay);
-                        prted_failed_launch = true;
-                        goto CLEANUP;
-                    }
-                    /* send it */
-                    PRTE_RML_SEND(ret, dptr->name.rank, relay, PRTE_RML_TAG_DAEMON);
-                    if (PRTE_SUCCESS != ret) {
-                        PRTE_ERROR_LOG(ret);
-                        PMIX_DATA_BUFFER_RELEASE(relay);
-                        prted_failed_launch = true;
-                        goto CLEANUP;
-                    }
-                }
-            }
         }
 
         /* see if they provided their inventory */
@@ -1738,6 +1708,39 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                     /* daemon1 would have included the topology, so we
                      * can pick it up here */
                     t->topo = topo;
+                    /* At this point, we are at daemon1 and have the relevant
+                     * topology. We can now process any cached
+                     * daemons */
+                    while (NULL != (dptr = (prte_proc_t*)pmix_list_remove_first(&prte_plm_globals.daemon_cache))) {
+                       PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                                            "%s plm:base:prted_daemon_cback processing cached daemon %s",
+                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                           PRTE_NAME_PRINT(&dptr->name)));
+                        if (0 == strcmp(dptr->node->topology->sig, sig)) {
+                            dptr->node->topology = t;
+                            dptr->node->available = prte_hwloc_base_filter_cpus(topo);
+                            jdatorted->num_reported++;
+                        } else {
+                            /* we need to request this topology */
+                            PMIX_DATA_BUFFER_CREATE(relay);
+                            cmd = PRTE_DAEMON_REPORT_TOPOLOGY_CMD;
+                            ret = PMIx_Data_pack(NULL, relay, &cmd, 1, PMIX_UINT8);
+                            if (PMIX_SUCCESS != ret) {
+                                PMIX_ERROR_LOG(ret);
+                                PMIX_DATA_BUFFER_RELEASE(relay);
+                                prted_failed_launch = true;
+                                goto CLEANUP;
+                            }
+                            /* send it */
+                            PRTE_RML_SEND(ret, dptr->name.rank, relay, PRTE_RML_TAG_DAEMON);
+                            if (PRTE_SUCCESS != ret) {
+                                PRTE_ERROR_LOG(ret);
+                                PMIX_DATA_BUFFER_RELEASE(relay);
+                                prted_failed_launch = true;
+                                goto CLEANUP;
+                            }
+                        }
+                    }
                 } else if (NULL != topo && topo != mytopo->topo) {
                     /* we already have the topology */
                     hwloc_topology_destroy(topo);
