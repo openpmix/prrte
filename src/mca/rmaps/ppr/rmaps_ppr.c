@@ -229,6 +229,11 @@ static int ppr_mapper(prte_job_t *jdata,
                                app->num_procs, app->app, prte_process_info.nodename);
                 rc = PRTE_ERR_SILENT;
                 goto error;
+            } else {
+                if (!PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+                    jdata->map->binding = PRTE_BIND_TO_NONE;
+                    options->bind = PRTE_BIND_TO_NONE;
+                }
             }
         }
 
