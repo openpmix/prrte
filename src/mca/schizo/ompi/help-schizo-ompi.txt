@@ -2,6 +2,7 @@
 #
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2022      Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2022      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -402,6 +403,7 @@ the output to the stdout/err streams).
 #
 [stream-buffering]
 Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]
+Can also be set via the MCA parameter: --mca ompi_stream_buffering VALUE
 #
 [stdin]
 Specify procs to receive stdin [rank, "all", "none"] (default: 0, indicating rank 0)

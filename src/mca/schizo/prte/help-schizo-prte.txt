@@ -1,6 +1,7 @@
 # -*- text -*-
 #
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -53,7 +54,6 @@ option to the help request as "--help <option>".
    --pmixmca <arg0> <arg1>           Pass PMIx MCA parameters
    --prtemca <arg0> <arg1>           Pass PRTE MCA parameters to the DVM
    --show-progress                   Output a brief periodic report on DVM startup progress
-   --stream-buffering <arg0>         Adjust buffering for stdout/stderr
 -x <arg0>                            Export an environment variable, optionally specifying a value
    --allow-run-as-root               Allow execution as root (STRONGLY DISCOURAGED)
    --daemonize                       Daemonize the DVM daemons into the background
@@ -182,9 +182,6 @@ Provide a hostfile (synonym for "hostfile")
 #
 [host]
 #include#help-schizo-cli#dash-host
-#
-[stream-buffering]
-#include#help-schizo-cli#stream-buffering
 #
 [display]
 #include#help-schizo-cli#display
