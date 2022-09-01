@@ -14,7 +14,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2017      IBM Corporation. All rights reserved.
+ * Copyright (c) 2017-2022 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -98,7 +98,6 @@ BEGIN_C_DECLS
 #define PRTE_CLI_SHOW_PROGRESS          "show-progress"             // none
 #define PRTE_CLI_HOSTFILE               "hostfile"                  // required
 #define PRTE_CLI_HOST                   "host"                      // required
-#define PRTE_CLI_STREAM_BUF             "stream-buffering"          // required
 #define PRTE_CLI_REPORT_CHILD_SEP       "report-child-jobs-separately"  // none
 #define PRTE_CLI_PATH                   "path"                      // required
 #define PRTE_CLI_PSET                   "pset"                      // required
