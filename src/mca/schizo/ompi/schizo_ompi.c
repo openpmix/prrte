@@ -17,7 +17,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2018-2021 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2018-2022 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
@@ -140,7 +140,7 @@ static struct option ompioptions[] = {
 
     /* output options */
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE(PRTE_CLI_STREAM_BUF, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("stream-buffering", PMIX_ARG_REQD),
 
     /* input options */
     PMIX_OPTION_DEFINE(PRTE_CLI_STDIN, PMIX_ARG_REQD),
@@ -1511,6 +1511,16 @@ static int parse_env(char **srcenv, char ***dstenv,
         pmix_setenv("OMPI_MCA_ompi_display_comm", "mpi_finalize", true, dstenv);
     }
 
+    if (NULL != (opt = pmix_cmd_line_get_param(results, "stream-buffering"))) {
+        uint16_t u16;
+        u16 = strtol(opt->values[0], NULL, 10);
+        if (0 != u16 && 1 != u16 && 2 != u16) {
+            /* bad value */
+            pmix_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, u16);
+        }
+        pmix_setenv("OMPI_MCA_ompi_stream_buffering", opt->values[0], true, dstenv);
+    }
+
     /* now look for any "--mca" options - note that it is an error
      * for the same MCA param to be given more than once if the
      * values differ */
@@ -2145,20 +2155,5 @@ static int set_default_ranking(prte_job_t *jdata,
 static void job_info(pmix_cli_result_t *results,
                      void *jobinfo)
 {
-    pmix_cli_item_t *opt;
-    uint16_t u16;
-    pmix_status_t rc;
-
-    if (NULL != (opt = pmix_cmd_line_get_param(results, "stream-buffering"))) {
-        u16 = strtol(opt->values[0], NULL, 10);
-        if (0 != u16 && 1 != u16 && 2 != u16) {
-            /* bad value */
-            pmix_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, u16);
-            return;
-        }
-        PMIX_INFO_LIST_ADD(rc, jobinfo, "OMPI_STREAM_BUFFERING", &u16, PMIX_UINT16);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
-    }
+    ;
 }
