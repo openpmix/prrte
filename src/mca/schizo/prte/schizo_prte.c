@@ -122,7 +122,6 @@ static struct option prteoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_RTOS, PMIX_ARG_REQD),
 
     // output options
-    PMIX_OPTION_DEFINE(PRTE_CLI_STREAM_BUF, PMIX_ARG_REQD),
 
     /* developer options */
     PMIX_OPTION_DEFINE(PRTE_CLI_DISPLAY, PMIX_ARG_REQD),
@@ -195,7 +194,6 @@ static struct option prterunoptions[] = {
 
     // output options
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE(PRTE_CLI_STREAM_BUF, PMIX_ARG_REQD),
 
     // input options
     PMIX_OPTION_DEFINE(PRTE_CLI_STDIN, PMIX_ARG_REQD),
@@ -306,7 +304,6 @@ static struct option prunoptions[] = {
 
     // output options
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE(PRTE_CLI_STREAM_BUF, PMIX_ARG_REQD),
 
     // input options
     PMIX_OPTION_DEFINE(PRTE_CLI_STDIN, PMIX_ARG_REQD),
