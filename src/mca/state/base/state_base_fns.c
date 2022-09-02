@@ -359,11 +359,10 @@ void prte_state_base_local_launch_complete(int fd, short argc, void *cbdata)
 {
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata = state->jdata;
-    bool found = false, *fptr;
+    bool found = false;
     PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
-    fptr = &found;
-    prte_get_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, (void**)&fptr, PMIX_BOOL);
+    found = prte_get_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, NULL, PMIX_BOOL);
     if (found) {
         if (0 == jdata->num_daemons_reported % 100 ||
             jdata->num_daemons_reported == prte_process_info.num_daemons) {
@@ -798,8 +797,7 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
 
     i32ptr = &i32;
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_NUM_NONZERO_EXIT, (void **) &i32ptr, PMIX_INT32)) {
-        flag = false;
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void*)&flag, PMIX_BOOL);
+        flag = prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL);
         if (flag) {
             if (!prte_report_child_jobs_separately || 1 == PRTE_LOCAL_JOBID(jdata->nspace)) {
                 /* update the exit code */

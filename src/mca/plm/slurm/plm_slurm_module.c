@@ -256,8 +256,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* start one orted on each node */
     pmix_argv_append(&argc, &argv, "--ntasks-per-node=1");
 
-    if (!prte_enable_recovery) {
-        /* kill the job if any orteds die */
+    if (!PRTE_FLAG_TEST(state->jdata, PRTE_JOB_FLAG_RECOVERABLE)) {
+        /* kill the job if any prteds die */
         pmix_argv_append(&argc, &argv, "--kill-on-bad-exit");
     }
 

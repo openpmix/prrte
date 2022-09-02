@@ -356,8 +356,8 @@ int prte_session_dir_cleanup(pmix_nspace_t jobid)
         return PRTE_SUCCESS;
     }
 
-    if (!prte_create_session_dirs || prte_process_info.rm_session_dirs) {
-        /* we haven't created them or RM will clean them up for us*/
+    if (prte_process_info.rm_session_dirs) {
+        /* RM will clean them up for us */
         return PRTE_SUCCESS;
     }
 
@@ -426,12 +426,13 @@ int prte_session_dir_finalize(pmix_proc_t *proc)
 {
     int ret;
 
-    if (!prte_create_session_dirs || prte_process_info.rm_session_dirs) {
-        /* we haven't created them or RM will clean them up for us*/
+    if (prte_process_info.rm_session_dirs) {
+        /* RM will clean them up for us */
         return PRTE_SUCCESS;
     }
 
-    if (NULL == prte_process_info.job_session_dir || NULL == prte_process_info.proc_session_dir) {
+    if (NULL == prte_process_info.job_session_dir ||
+        NULL == prte_process_info.proc_session_dir) {
         /* this should never happen - it means we are calling
          * cleanup *before* properly setting up the session
          * dir system. This leaves open the possibility of

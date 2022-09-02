@@ -72,6 +72,7 @@ pmix_pointer_array_t *prte_cache = NULL;
 bool prte_persistent = true;
 bool prte_add_pid_to_session_dirname = false;
 bool prte_allow_run_as_root = false;
+bool prte_show_launch_progress = false;
 
 /* PRTE OOB port flags */
 bool prte_static_ports = false;
@@ -149,6 +150,7 @@ bool prte_report_bindings = false;
 /* process recovery */
 bool prte_enable_recovery = false;
 int32_t prte_max_restarts = 0;
+bool prte_continuous_op = false;
 
 /* exit status reporting */
 bool prte_report_child_jobs_separately = false;

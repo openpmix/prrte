@@ -1543,6 +1543,27 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
     }
 }
 
+int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info)
+{
+    prte_info_item_t *kv;
+    pmix_list_t *cache;
+
+    /* cache for inclusion with job info at registration */
+    kv = PMIX_NEW(prte_info_item_t);
+    PMIX_INFO_XFER(&kv->info, info);
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE,
+                           (void **) &cache, PMIX_POINTER)) {
+        pmix_list_append(cache, &kv->super);
+    } else {
+        cache = PMIX_NEW(pmix_list_t);
+        pmix_list_append(cache, &kv->super);
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_INFO_CACHE, PRTE_ATTR_GLOBAL,
+                           (void *) cache, PMIX_POINTER);
+
+    }
+    return 0;
+}
+
 /****    INSTANTIATE LOCAL OBJECTS    ****/
 static void opcon(prte_pmix_server_op_caddy_t *p)
 {

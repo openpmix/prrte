@@ -1597,6 +1597,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
 
         /* provide a default state */
         state = PRTE_PROC_STATE_WAITPID_FIRED;
+        flag = prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL);
 
         /* check to see if a sync was required and if it was received */
         if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_REG)) {
@@ -1609,8 +1610,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                  * felt it was non-normal - in this latter case, we do not
                  * require that the proc deregister before terminating
                  */
-                flag = false;
-                prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void**)&fptr, PMIX_BOOL);
                 if (0 != proc->exit_code && flag) {
                     state = PRTE_PROC_STATE_TERM_NON_ZERO;
                     PRTE_OUTPUT_VERBOSE(
@@ -1674,8 +1673,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
              * none of them will. This is considered acceptable. Still
              * flag it as abnormal if the exit code was non-zero
              */
-            flag = false;
-            prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void**)&fptr, PMIX_BOOL);
             if (0 != proc->exit_code && flag) {
                 state = PRTE_PROC_STATE_TERM_NON_ZERO;
             } else {

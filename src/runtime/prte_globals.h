@@ -63,7 +63,6 @@ BEGIN_C_DECLS
 PRTE_EXPORT extern int prte_debug_verbosity;           /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern char *prte_prohibited_session_dirs; /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern char *prte_job_ident;           /* instantiated in src/runtime/prte_globals.c */
-PRTE_EXPORT extern bool prte_create_session_dirs;  /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern bool prte_execute_quiet;        /* instantiated in src/runtime/prte_globals.c */
 PRTE_EXPORT extern bool prte_report_silent_errors; /* instantiated in src/runtime/prte_globals.c */
 PRTE_EXPORT extern bool prte_event_base_active;    /* instantiated in src/runtime/prte_init.c */
@@ -73,6 +72,8 @@ PRTE_EXPORT extern char *prte_tool_basename;       // argv[0] of prun or one of 
 PRTE_EXPORT extern char *prte_tool_actual;         // actual tool executable
 PRTE_EXPORT extern char *prte_progress_thread_cpus;
 PRTE_EXPORT extern bool prte_bind_progress_thread_reqd;
+PRTE_EXPORT extern bool prte_show_launch_progress;
+PRTE_EXPORT extern bool prte_continuous_op;
 
 /**
  * Global indicating where this process was bound to at launch (will
