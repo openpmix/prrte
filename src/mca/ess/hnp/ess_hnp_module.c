@@ -183,29 +183,27 @@ static int rte_init(int argc, char **argv)
     }
 
     /* setup my session directory here as the OOB may need it */
-    if (prte_create_session_dirs) {
-        PRTE_OUTPUT_VERBOSE(
-            (2, prte_debug_output, "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
-             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-             (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
-             prte_process_info.nodename));
-        /* take a pass thru the session directory code to fillin the
-         * tmpdir names - don't create anything yet
-         */
-        if (PRTE_SUCCESS != (ret = prte_session_dir(false, PRTE_PROC_MY_NAME))) {
-            error = "prte_session_dir define";
-            goto error;
-        }
-        /* clear the session directory just in case there are
-         * stale directories laying around
-         */
-        prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+    PRTE_OUTPUT_VERBOSE(
+        (2, prte_debug_output, "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
+         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+         (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
+         prte_process_info.nodename));
+    /* take a pass thru the session directory code to fillin the
+     * tmpdir names - don't create anything yet
+     */
+    if (PRTE_SUCCESS != (ret = prte_session_dir(false, PRTE_PROC_MY_NAME))) {
+        error = "prte_session_dir define";
+        goto error;
+    }
+    /* clear the session directory just in case there are
+     * stale directories laying around
+     */
+    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
 
-        /* now actually create the directory tree */
-        if (PRTE_SUCCESS != (ret = prte_session_dir(true, PRTE_PROC_MY_NAME))) {
-            error = "prte_session_dir";
-            goto error;
-        }
+    /* now actually create the directory tree */
+    if (PRTE_SUCCESS != (ret = prte_session_dir(true, PRTE_PROC_MY_NAME))) {
+        error = "prte_session_dir";
+        goto error;
     }
 
     /* setup the PMIx server - we need this here in case the
@@ -449,16 +447,14 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
-    if (prte_create_session_dirs) {
-        /* set the prte_output hnp file location to be in the
-         * proc-specific session directory. */
-        prte_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
-        /* save my contact info in a file for others to find */
-        if (NULL == prte_process_info.jobfam_session_dir) {
-            /* has to be set here! */
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            goto error;
-        }
+    /* set the prte_output hnp file location to be in the
+     * proc-specific session directory. */
+    prte_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
+    /* save my contact info in a file for others to find */
+    if (NULL == prte_process_info.jobfam_session_dir) {
+        /* has to be set here! */
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        goto error;
     }
 
     /* setup I/O forwarding system - must come after we init routes */

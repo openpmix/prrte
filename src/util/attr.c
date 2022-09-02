@@ -136,23 +136,6 @@ prte_attribute_t *prte_fetch_attribute(pmix_list_t *attributes, prte_attribute_t
     return NULL;
 }
 
-int prte_add_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local, void *data,
-                       pmix_data_type_t type)
-{
-    prte_attribute_t *kv;
-    int rc;
-
-    kv = PMIX_NEW(prte_attribute_t);
-    kv->key = key;
-    kv->local = local;
-    if (PRTE_SUCCESS != (rc = prte_attr_load(kv, data, type))) {
-        PMIX_RELEASE(kv);
-        return rc;
-    }
-    pmix_list_append(attributes, &kv->super);
-    return PRTE_SUCCESS;
-}
-
 int prte_prepend_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local,
                            void *data, pmix_data_type_t type)
 {
@@ -485,6 +468,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB CONTROLS";
         case PRTE_JOB_SHOW_PROGRESS:
             return "SHOW LAUNCH PROGRESS";
+        case PRTE_JOB_RECOVERABLE:
+            return "JOB IS RECOVERABLE";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

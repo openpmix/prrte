@@ -350,6 +350,8 @@ PRTE_EXPORT extern void pmix_server_jobid_return(int status, pmix_proc_t *sender
 
 PRTE_EXPORT extern int prte_pmix_server_register_tool(pmix_nspace_t nspace);
 
+PRTE_EXPORT extern int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info);
+
 /* exposed shared variables */
 typedef struct {
     pmix_list_item_t super;
