@@ -137,8 +137,6 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --set-cwd-to-session-dir          Set the working directory of the started processes to their session
                                      directory
    --show-progress                   Output a brief periodic report on launch progress
-   --stream-buffering <arg0>         Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2
-                                     fully buffered]
    --wd <arg0>                       Synonym for --wdir
    --wdir <arg0>                     Set the working directory of the started processes
 -x <arg0>                            Export an environment variable, optionally specifying a value (e.g., "-x
