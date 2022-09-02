@@ -140,7 +140,6 @@ static struct option ompioptions[] = {
 
     /* output options */
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE("stream-buffering", PMIX_ARG_REQD),
 
     /* input options */
     PMIX_OPTION_DEFINE(PRTE_CLI_STDIN, PMIX_ARG_REQD),
@@ -235,6 +234,7 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE("rankfile", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("output-proctable", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("stream-buffering", PMIX_ARG_REQD),
 
     PMIX_OPTION_END
 };
@@ -1511,8 +1511,14 @@ static int parse_env(char **srcenv, char ***dstenv,
         pmix_setenv("OMPI_MCA_ompi_display_comm", "mpi_finalize", true, dstenv);
     }
 
+    /* --stream-buffering will be deprecated starting with Open MPI v5 */
     if (NULL != (opt = pmix_cmd_line_get_param(results, "stream-buffering"))) {
         uint16_t u16;
+        if (prte_schizo_ompi_component.warn_deprecations) {
+            pmix_show_help("help-schizo-base.txt", "deprecated-inform", true, "stream-buffering",
+                           "This CLI option will be deprecated starting in Open MPI v5. "
+                           "If you need this functionality use the Open MPI MCA option: ompi_stream_buffering");
+        }
         u16 = strtol(opt->values[0], NULL, 10);
         if (0 != u16 && 1 != u16 && 2 != u16) {
             /* bad value */
