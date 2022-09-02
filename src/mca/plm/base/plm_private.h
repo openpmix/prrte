@@ -65,6 +65,8 @@ typedef struct {
     bool daemon_nodes_assigned_at_launch;
     size_t node_regex_threshold;
     pmix_list_t daemon_cache;
+    bool daemon1_has_reported;
+    char **cache;
 } prte_plm_globals_t;
 /**
  * Global instance of PLM framework data
