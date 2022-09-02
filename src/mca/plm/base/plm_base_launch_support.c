@@ -752,45 +752,6 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
     /* convenience */
     jdata = caddy->jdata;
 
-    /* if coprocessors were detected, now is the time to
-     * identify who is attached to what host - this info
-     * will be shipped to the daemons in the nidmap. Someday,
-     * there may be a direct way for daemons on coprocessors
-     * to detect their hosts - but not today.
-     */
-    if (prte_coprocessors_detected) {
-        /* cycle thru the nodes looking for coprocessors */
-        for (i = 0; i < prte_node_pool->size; i++) {
-            if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
-                continue;
-            }
-            /* if we don't have a serial number, then we are not a coprocessor */
-            serial_number = NULL;
-            if (!prte_get_attribute(&node->attributes, PRTE_NODE_SERIAL_NUMBER,
-                                    (void **) &serial_number, PMIX_STRING)) {
-                continue;
-            }
-            if (NULL != serial_number) {
-                /* if we have a serial number, then we are a coprocessor - so
-                 * compute our hash and lookup our hostid
-                 */
-                PRTE_HASH_STR(serial_number, h);
-                free(serial_number);
-                rc = pmix_hash_table_get_value_uint32(prte_coprocessors, h, (void **) &vptr);
-                if (PRTE_SUCCESS != rc) {
-                    PRTE_ERROR_LOG(rc);
-                    break;
-                }
-                prte_set_attribute(&node->attributes, PRTE_NODE_HOSTID, PRTE_ATTR_LOCAL, vptr,
-                                   PMIX_PROC_RANK);
-            }
-        }
-    }
-    /* done with the coprocessor mapping at this time */
-    if (NULL != prte_coprocessors) {
-        PMIX_RELEASE(prte_coprocessors);
-    }
-
     /* set the job state to the next position */
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_LAUNCH_APPS);
 
@@ -1146,13 +1107,14 @@ static bool prted_failed_launch;
 static prte_job_t *jdatorted = NULL;
 
 /* callback for topology reports */
-void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender,
+                                   pmix_data_buffer_t *buffer,
                                    prte_rml_tag_t tag, void *cbdata)
 {
     hwloc_topology_t topo;
     int rc, idx;
     char *sig, *coprocessors, **sns;
-    prte_proc_t *daemon = NULL;
+    prte_proc_t *daemon = NULL, *dptr, *dnxt;
     prte_topology_t *t, *t2;
     int i;
     uint32_t h;
@@ -1221,8 +1183,10 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         prted_failed_launch = true;
+        PMIX_DATA_BUFFER_DESTRUCT(data);
         goto CLEANUP;
     }
+
     /* find it in the array */
     t = NULL;
     for (i = 0; i < prte_node_topologies->size; i++) {
@@ -1236,10 +1200,12 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
             break;
         }
     }
+    free(sig);
     if (NULL == t) {
         /* should never happen */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         prted_failed_launch = true;
+        PMIX_DATA_BUFFER_DESTRUCT(data);
         goto CLEANUP;
     }
 
@@ -1249,11 +1215,13 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         prted_failed_launch = true;
+        PMIX_DATA_BUFFER_DESTRUCT(data);
         goto CLEANUP;
     }
     topo = ptopo.topology;
     ptopo.topology = NULL;
     PMIX_TOPOLOGY_DESTRUCT(&ptopo);
+    PMIX_DATA_BUFFER_DESTRUCT(data);
     /* record the final topology */
     t->topo = topo;
     /* update the node's available processors */
@@ -1263,57 +1231,18 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender, pmix_data_bu
     /* Apply any CPU filters (not preserved by the XML) */
     daemon->node->available = prte_hwloc_base_filter_cpus(topo);
 
-    /* unpack any coprocessors */
-    idx = 1;
-    rc = PMIx_Data_unpack(NULL, data, &coprocessors, &idx, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        prted_failed_launch = true;
-        goto CLEANUP;
-    }
-    if (NULL != coprocessors) {
-        /* init the hash table, if necessary */
-        if (NULL == prte_coprocessors) {
-            prte_coprocessors = PMIX_NEW(pmix_hash_table_t);
-            pmix_hash_table_init(prte_coprocessors, prte_process_info.num_daemons);
+    /* process any cached daemons that match this signature */
+    PMIX_LIST_FOREACH_SAFE(dptr, dnxt, &prte_plm_globals.daemon_cache, prte_proc_t) {
+        PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                             "%s plm:base:report_topo processing cached daemon %s",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                             PRTE_NAME_PRINT(&dptr->name)));
+        if (0 == strcmp(dptr->node->topology->sig, t->sig)) {
+            dptr->node->topology = t;
+            dptr->node->available = prte_hwloc_base_filter_cpus(topo);
+            jdatorted->num_reported++;
+            pmix_list_remove_item(&prte_plm_globals.daemon_cache, &dptr->super);
         }
-        /* separate the serial numbers of the coprocessors
-         * on this host
-         */
-        sns = pmix_argv_split(coprocessors, ',');
-        for (idx = 0; NULL != sns[idx]; idx++) {
-            /* compute the hash */
-            PRTE_HASH_STR(sns[idx], h);
-            /* mark that this coprocessor is hosted by this node */
-            pmix_hash_table_set_value_uint32(prte_coprocessors, h, (void *) &daemon->name.rank);
-        }
-        pmix_argv_free(sns);
-        free(coprocessors);
-        prte_coprocessors_detected = true;
-    }
-    /* see if this daemon is on a coprocessor */
-    idx = 1;
-    rc = PMIx_Data_unpack(NULL, data, &coprocessors, &idx, PMIX_STRING);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        prted_failed_launch = true;
-        goto CLEANUP;
-    }
-    if (NULL != coprocessors) {
-        if (prte_get_attribute(&daemon->node->attributes, PRTE_NODE_SERIAL_NUMBER, NULL,
-                               PMIX_STRING)) {
-            /* this is not allowed - a coprocessor cannot be host
-             * to another coprocessor at this time
-             */
-            PRTE_ERROR_LOG(PRTE_ERR_NOT_SUPPORTED);
-            prted_failed_launch = true;
-            free(coprocessors);
-            goto CLEANUP;
-        }
-        prte_set_attribute(&daemon->node->attributes, PRTE_NODE_SERIAL_NUMBER, PRTE_ATTR_LOCAL,
-                           coprocessors, PMIX_STRING);
-        free(coprocessors);
-        prte_coprocessors_detected = true;
     }
 
 CLEANUP:
@@ -1391,7 +1320,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     pmix_data_buffer_t datbuf, *data;
     pmix_topology_t ptopo;
     pmix_value_t cnctinfo;
-    bool daemon1_has_reported = false;
+    pmix_list_t cachelist;
 
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
@@ -1550,7 +1479,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         /* rank=1 always sends its topology back */
         topo = NULL;
         if (1 == dname.rank) {
-            daemon1_has_reported = true;
+            prte_plm_globals.daemon1_has_reported = true;
             PMIX_DATA_BUFFER_CONSTRUCT(&datbuf);
             /* unpack the flag to see if this payload is compressed */
             idx = 1;
@@ -1681,10 +1610,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             }
         }
 
-        /* do we already have this topology from some other node?
-         * NOTE: if this is daemon1, then topo will NOT be NULL - it
-         * will either point to mytopo or to the daemon1 topo. If it
-         * is NOT daemon1, then it will be NULL */
+        /* do we already have this topology from some other node? */
         found = false;
         for (i = 0; i < prte_node_topologies->size; i++) {
             t = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, i);
@@ -1694,56 +1620,20 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             /* just check the signature */
             if (0 == strcmp(sig, t->sig)) {
                 PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                     "%s TOPOLOGY SIGNATURE ALREADY RECORDED",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                                     "%s TOPOLOGY SIGNATURE ALREADY RECORDED IN POSN %d",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), i));
                 daemon->node->topology = t;
+                found = true;
                 /* the topology in this struct can be NULL in the case
                  * where an earlier daemon other than daemon1 reported the
                  * signature but did not include its topology */
                 if (NULL == t->topo) {
-                    if (NULL == topo) {
-                        /* must not be from daemon1 - treat as not found */
+                    if (1 == dname.rank) {
+                        /* we will have received its topology */
+                        t->topo = topo;
+                    } else {
                         break;
                     }
-                    /* daemon1 would have included the topology, so we
-                     * can pick it up here */
-                    t->topo = topo;
-                    /* At this point, we are at daemon1 and have the relevant
-                     * topology. We can now process any cached
-                     * daemons */
-                    while (NULL != (dptr = (prte_proc_t*)pmix_list_remove_first(&prte_plm_globals.daemon_cache))) {
-                       PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                            "%s plm:base:prted_daemon_cback processing cached daemon %s",
-                                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                           PRTE_NAME_PRINT(&dptr->name)));
-                        if (0 == strcmp(dptr->node->topology->sig, sig)) {
-                            dptr->node->topology = t;
-                            dptr->node->available = prte_hwloc_base_filter_cpus(topo);
-                            jdatorted->num_reported++;
-                        } else {
-                            /* we need to request this topology */
-                            PMIX_DATA_BUFFER_CREATE(relay);
-                            cmd = PRTE_DAEMON_REPORT_TOPOLOGY_CMD;
-                            ret = PMIx_Data_pack(NULL, relay, &cmd, 1, PMIX_UINT8);
-                            if (PMIX_SUCCESS != ret) {
-                                PMIX_ERROR_LOG(ret);
-                                PMIX_DATA_BUFFER_RELEASE(relay);
-                                prted_failed_launch = true;
-                                goto CLEANUP;
-                            }
-                            /* send it */
-                            PRTE_RML_SEND(ret, dptr->name.rank, relay, PRTE_RML_TAG_DAEMON);
-                            if (PRTE_SUCCESS != ret) {
-                                PRTE_ERROR_LOG(ret);
-                                PMIX_DATA_BUFFER_RELEASE(relay);
-                                prted_failed_launch = true;
-                                goto CLEANUP;
-                            }
-                        }
-                    }
-                } else if (NULL != topo && topo != mytopo->topo) {
-                    /* we already have the topology */
-                    hwloc_topology_destroy(topo);
                 }
                 /* update the node's available processors */
                 if (NULL != daemon->node->available) {
@@ -1751,13 +1641,69 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 }
                 daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
                 free(sig);
-                found = true;
                 break;
             }
         }
 
+        if (1 == dname.rank) {
+            /* process any cached daemons */
+            PMIX_CONSTRUCT(&cachelist, pmix_list_t);
+            while (NULL != (dptr = (prte_proc_t*)pmix_list_remove_first(&prte_plm_globals.daemon_cache))) {
+                PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                                     "%s plm:base:prted_daemon_cback processing cached daemon %s",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                     PRTE_NAME_PRINT(&dptr->name)));
+                if (0 == strcmp(dptr->node->topology->sig, sig)) {
+                    dptr->node->topology = t;
+                    dptr->node->available = prte_hwloc_base_filter_cpus(topo);
+                    jdatorted->num_reported++;
+                } else {
+                    /* see if this topology has already been requested */
+                    compressed = false;
+                    if (NULL != prte_plm_globals.cache) {
+                        for (i=0; NULL != prte_plm_globals.cache[i]; i++) {
+                            if (0 == strcmp(prte_plm_globals.cache[i], dptr->node->topology->sig)) {
+                                /* already requested - cache it */
+                                pmix_list_append(&cachelist, &dptr->super);
+                                compressed = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (compressed) {
+                        continue;
+                    }
+                    /* we need to request this topology */
+                    PMIX_DATA_BUFFER_CREATE(relay);
+                    cmd = PRTE_DAEMON_REPORT_TOPOLOGY_CMD;
+                    ret = PMIx_Data_pack(NULL, relay, &cmd, 1, PMIX_UINT8);
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
+                        PMIX_DATA_BUFFER_RELEASE(relay);
+                        prted_failed_launch = true;
+                        goto CLEANUP;
+                    }
+                    /* send it */
+                    PRTE_RML_SEND(ret, dptr->name.rank, relay, PRTE_RML_TAG_DAEMON);
+                    if (PRTE_SUCCESS != ret) {
+                        PRTE_ERROR_LOG(ret);
+                        PMIX_DATA_BUFFER_RELEASE(relay);
+                        prted_failed_launch = true;
+                        goto CLEANUP;
+                    }
+                    /* track that we requested it */
+                    pmix_argv_append_nosize(&prte_plm_globals.cache, dptr->node->topology->sig);
+                }
+            }
+            /* transfer back any cached items */
+            while (NULL != (dptr = (prte_proc_t*)pmix_list_remove_first(&cachelist))) {
+                pmix_list_append(&prte_plm_globals.daemon_cache, &dptr->super);
+            }
+            PMIX_DESTRUCT(&cachelist);
+        }
+
         if (!found) {
-            /* nope - save the signature */
+            /* signature not found - record it */
             PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                  "%s NEW TOPOLOGY - ADDING SIGNATURE",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -1765,27 +1711,45 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             t->sig = sig;
             t->index = pmix_pointer_array_add(prte_node_topologies, t);
             daemon->node->topology = t;
-           if (NULL != topo) {
-                t->topo = topo;
-                /* update the node's available processors */
-                if (NULL != daemon->node->available) {
-                    hwloc_bitmap_free(daemon->node->available);
-                }
-                daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
-                goto CLEANUP;
-            } else if (!daemon1_has_reported) {
-                /* if daemon1 has not reported, then cache this daemon
+        }
+        if (!prte_plm_globals.daemon1_has_reported) {
+            if (NULL == daemon->node->topology->topo) {
+                /* if daemon1 has not reported and the topology is
+                 * different than the one for DVM controller, then cache this daemon
                  * for later processing */
                 PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                      "%s CACHING DAEMON %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                     PRTE_NAME_PRINT(&dname)));
                 pmix_list_append(&prte_plm_globals.daemon_cache, &daemon->super);
-            } else {
+                /* we will count this node as completed
+                 * when we get the full topology back */
+                if (NULL != nodename) {
+                    free(nodename);
+                    nodename = NULL;
+                }
+                idx = 1;
+                continue;
+            }
+        } else if (1 != dname.rank && NULL == daemon->node->topology->topo) {
+            /* see if we already have requested a topology for this signature */
+            compressed = false;
+            if (NULL != prte_plm_globals.cache) {
+                for (i=0; NULL != prte_plm_globals.cache[i]; i++) {
+                    if (0 == strcmp(prte_plm_globals.cache[i], daemon->node->topology->sig)) {
+                        /* already requested - cache it */
+                        compressed = true;
+                        break;
+                    }
+                }
+            }
+            if (!compressed) {
                 /* request the complete topology from that node */
                 PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                     "%s REQUESTING TOPOLOGY FROM %s",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&dname)));
+                                     "%s REQUESTING TOPOLOGY FROM %s FOR SIG %s",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                     PRTE_NAME_PRINT(&dname),
+                                     daemon->node->topology->sig));
                 /* construct the request */
                 PMIX_DATA_BUFFER_CREATE(relay);
                 cmd = PRTE_DAEMON_REPORT_TOPOLOGY_CMD;
@@ -1804,6 +1768,8 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                     prted_failed_launch = true;
                     goto CLEANUP;
                 }
+                /* record that it was sent */
+                pmix_argv_append_nosize(&prte_plm_globals.cache, daemon->node->topology->sig);
             }
             /* we will count this node as completed
              * when we get the full topology back */
