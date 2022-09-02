@@ -85,20 +85,15 @@ BEGIN_C_DECLS
 #define PRTE_CLI_NOPREFIX               "noprefix"                  // none
 #define PRTE_CLI_FWD_SIGNALS            "forward-signals"           // required
 #define PRTE_CLI_RUN_AS_ROOT            "allow-run-as-root"         // none
+#define PRTE_CLI_STREAM_BUF             "stream-buffering"          // required
 
 // Application options
 #define PRTE_CLI_NP                     "np"                        // required
 #define PRTE_CLI_NPERNODE               "N"                         // required
 #define PRTE_CLI_APPFILE                "app"                       // required
-#define PRTE_CLI_TIMEOUT                "timeout"                   // required
-#define PRTE_CLI_SPAWN_TIMEOUT          "spawn-timeout"             // required
-#define PRTE_CLI_REPORT_STATE           "report-state-on-timeout"   // none
-#define PRTE_CLI_STACK_TRACES           "get-stack-traces"          // none
 #define PRTE_CLI_FWD_ENVAR              "x"                         // required
-#define PRTE_CLI_SHOW_PROGRESS          "show-progress"             // none
 #define PRTE_CLI_HOSTFILE               "hostfile"                  // required
 #define PRTE_CLI_HOST                   "host"                      // required
-#define PRTE_CLI_REPORT_CHILD_SEP       "report-child-jobs-separately"  // none
 #define PRTE_CLI_PATH                   "path"                      // required
 #define PRTE_CLI_PSET                   "pset"                      // required
 #define PRTE_CLI_PRELOAD_FILES          "preload-files"             // required
@@ -108,10 +103,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_WDIR                   "wdir"                      // required
 #define PRTE_CLI_SET_CWD_SESSION        "set-cwd-to-session-dir"    // none
 #define PRTE_CLI_ENABLE_RECOVERY        "enable-recovery"           // none
-#define PRTE_CLI_MAX_RESTARTS           "max-restarts"              // required
 #define PRTE_CLI_DISABLE_RECOVERY       "disable-recovery"          // none
-#define PRTE_CLI_CONTINUOUS             "continuous"                // none
-#define PRTE_CLI_EXEC_AGENT             "exec-agent"                // required
 
 // Placement options
 #define PRTE_CLI_MAPBY                  "map-by"                    // required
@@ -125,9 +117,6 @@ BEGIN_C_DECLS
 #define PRTE_CLI_DO_NOT_LAUNCH          "do-not-launch"             // none
 #define PRTE_CLI_DISPLAY                "display"                   // required
 #define PRTE_CLI_XTERM                  "xterm"                     // none
-#define PRTE_CLI_STOP_ON_EXEC           "stop-on-exec"              // none
-#define PRTE_CLI_STOP_IN_INIT           "stop-in-init"              // required
-#define PRTE_CLI_STOP_IN_APP            "stop-in-app"               // required
 #define PRTE_CLI_DO_NOT_AGG_HELP        "no-aggregate-help"         // none
 
 // Tool connection options
@@ -200,8 +189,22 @@ BEGIN_C_DECLS
 #define PRTE_CLI_TOPO       "topo="
 
 // Runtime directives
-#define PRTE_CLI_ABORT_NZ   "abort-nonzero-status"
-#define PRTE_CLI_NOLAUNCH   "donotlaunch"
+#define PRTE_CLI_ABORT_NZ           "abort-nonzero-status"          // optional arg
+#define PRTE_CLI_NOLAUNCH           "donotlaunch"                   // no arg
+#define PRTE_CLI_SHOW_PROGRESS      "show-progress"                 // optional arg
+#define PRTE_CLI_RECOVER            "recover"                       // optional arg
+#define PRTE_CLI_CONTINUOUS         "continuous"                    // optional arg
+#define PRTE_CLI_MAX_RESTARTS       "max-restarts"                  // reqd arg
+#define PRTE_CLI_EXEC_AGENT         "exec-agent"                    // reqd arg
+#define PRTE_CLI_STOP_ON_EXEC       "stop-on-exec"                  // optional arg
+#define PRTE_CLI_STOP_IN_INIT       "stop-in-init"                  // optional arg
+#define PRTE_CLI_STOP_IN_APP        "stop-in-app"                   // optional arg
+#define PRTE_CLI_TIMEOUT            "timeout"                       // reqd arg
+#define PRTE_CLI_SPAWN_TIMEOUT      "spawn-timeout"                 // reqd arg
+#define PRTE_CLI_REPORT_STATE       "report-state-on-timeout"       // optional arg
+#define PRTE_CLI_STACK_TRACES       "get-stack-traces"              // optional arg
+#define PRTE_CLI_REPORT_CHILD_SEP   "report-child-jobs-separately"  // optional arg
+#define PRTE_CLI_AGG_HELP           "aggregate-help"                // optional arg
 
 
 /* define the command line qualifiers PRRTE recognizes */
@@ -312,6 +315,79 @@ static inline bool prte_check_true(char *a)
 }
 #define PRTE_CHECK_TRUE(a) \
     prte_check_true(a)
+
+/* check if an option is a boolean */
+static inline bool prte_check_bool(char *a)
+{
+    int n;
+    size_t len1, len;
+    char *negs[] = {
+        "false",
+        "0",
+        "no",
+        NULL
+    };
+    char *trues[] = {
+        "true",
+        "yes",
+        "1",
+        NULL
+    };
+
+    if (NULL == a) {
+        return true;  // default
+    }
+    len1 = strlen(a);
+
+    /* see if it is a negative (false) */
+    for (n=0; NULL != negs[n]; n++) {
+        len = (len1 < strlen(negs[n])) ? len1 : strlen(negs[n]);
+        if (0 == strncasecmp(a, negs[n], len)) {
+            return true;
+        }
+    }
+
+    /* see if it is a positive (true) */
+    for (n=0; NULL != trues[n]; n++) {
+        len = (len1 < strlen(trues[n])) ? len1 : strlen(trues[n]);
+        if (0 == strncasecmp(a, trues[n], len)) {
+            return true;
+        }
+    }
+
+    /* anything unrecognized must not be a boolean */
+    return false;
+}
+
+#define PRTE_CHECK_BOOL(a) \
+    prte_check_bool(a)
+
+static unsigned int prte_convert_string_to_time(const char *t)
+{
+    char **tmp = pmix_argv_split(t, ':');
+    int sz = pmix_argv_count(tmp);
+    unsigned int tm;
+
+    /* work upwards from the bottom, where the
+     * bottom represents seconds, then minutes,
+     * then hours, and then days */
+    tm = strtoul(tmp[sz-1], NULL, 10);
+    if (0 <= (sz-2) && NULL != tmp[sz-2]) {
+        tm += 60 * strtoul(tmp[sz-2], NULL, 10);
+    }
+    if (0 <= (sz-3) && NULL != tmp[sz-3]) {
+        tm += 60 * 60 * strtoul(tmp[sz-3], NULL, 10);
+    }
+    if (0 <= (sz-4) && NULL != tmp[sz-4]) {
+        tm += 24 * 60 * 60 * strtoul(tmp[sz-4], NULL, 10);
+    }
+    pmix_argv_free(tmp);
+    return tm;
+}
+
+#define PRTE_CONVERT_TIME(s)    \
+    prte_convert_string_to_time(s)
+
 
 END_C_DECLS
 

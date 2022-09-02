@@ -646,33 +646,6 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
             PMIX_RELEASE(caddy);
             return;
         }
-
-        /* store it on the global job data pool - this is the key
-         * step required before we launch the daemons. It allows
-         * the prte_rmaps_base_setup_virtual_machine routine to
-         * search all apps for any hosts to be used by the vm
-         *
-         * Note that the prte_plm_base_create_jobid function will
-         * place the "caddy->jdata" object at the correct position
-         * in the hash table. There is no need to store it again here.
-         */
-    }
-
-    /* if job recovery is not enabled, set it to default */
-    if (!PRTE_FLAG_TEST(caddy->jdata, PRTE_JOB_FLAG_RECOVERABLE) && prte_enable_recovery) {
-        PRTE_FLAG_SET(caddy->jdata, PRTE_JOB_FLAG_RECOVERABLE);
-    }
-
-    /* if app recovery is not defined, set apps to defaults */
-    for (i = 0; i < caddy->jdata->apps->size; i++) {
-        if (NULL
-            == (app = (prte_app_context_t *) pmix_pointer_array_get_item(caddy->jdata->apps, i))) {
-            continue;
-        }
-        if (!prte_get_attribute(&app->attributes, PRTE_APP_RECOV_DEF, NULL, PMIX_BOOL)) {
-            prte_set_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, PRTE_ATTR_LOCAL,
-                               &prte_max_restarts, PMIX_INT32);
-        }
     }
 
     /* if the spawn operation has a timeout assigned to it, setup the timer for it */
@@ -1305,7 +1278,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     prte_topology_t *t, *mytopo;
     hwloc_topology_t topo;
     int i;
-    bool found, *fptr;
+    bool found;
     prte_daemon_cmd_flag_t cmd;
     char *myendian;
     char *alias;
@@ -1804,9 +1777,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                  "%s plm:base:orted_report_launch job %s recvd %d of %d reported daemons",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdatorted->nspace),
                  jdatorted->num_reported, jdatorted->num_procs));
-            found = false;
-            fptr = &found;
-            prte_get_attribute(&jdatorted->attributes, PRTE_JOB_SHOW_PROGRESS, (void**)&fptr, PMIX_BOOL);
+            found = prte_get_attribute(&jdatorted->attributes, PRTE_JOB_SHOW_PROGRESS, NULL, PMIX_BOOL);
             if (found &&
                 (0 == jdatorted->num_reported % 100 ||
                  jdatorted->num_reported == prte_process_info.num_daemons)) {

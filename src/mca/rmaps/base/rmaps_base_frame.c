@@ -30,6 +30,7 @@
 
 #include "src/mca/base/base.h"
 #include "src/mca/mca.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 #include "src/util/pmix_printf.h"
@@ -691,17 +692,100 @@ int prte_rmaps_base_set_default_rto(prte_job_t *jdata,
     return rc;
 }
 
+/* this function is called if pmix_server_dyn receives a
+ * PMIX_RUNTIME_OPTIONS info struct */
 int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
 {
-    char **options, *ptr;
+    char **options, **tmp, *ptr;
     int n;
-    bool flag;
+    bool flag, *fptr = &flag;
+    int32_t i32;
     prte_job_t *djob;
+    prte_app_context_t *app;
+    pmix_rank_t rank;
+    pmix_info_t info;
 
     if (NULL == spec) {
-        /* set everything to the defaults */
-        prte_add_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, PRTE_ATTR_GLOBAL,
-                           &prte_rmaps_base.abort_non_zero_exit, PMIX_BOOL);
+        /* set everything to the defaults if not already set. We don't want to
+         * have to check the value of BOOL settings everywhere we use them, so
+         * we translate them here by removing the attribute if it is set to false,
+         * and leaving it if it is set to true. If it isn't present, then it wasn't
+         * provided via PMIx_Spawn and we instead set it based on the defaults
+         */
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void**)&fptr, PMIX_BOOL)) {
+            /* it is present - check the value */
+            if (!flag) {
+                /* remove the attribute */
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT);
+            }
+        } else {
+            /* set it based on default value */
+            if (prte_rmaps_base.abort_non_zero_exit) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            }
+        }
+
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, (void**)&fptr, PMIX_BOOL)) {
+            /* it is present - check the value */
+            if (!flag) {
+                /* remove the attribute */
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS);
+            }
+        } else {
+            /* set it based on default value */
+            if (prte_show_launch_progress) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            }
+        }
+
+        /* if recovery has been defined, leave it and the recoverable flag alone */
+       if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVER_DEFINED, NULL, PMIX_BOOL)) {
+           /* not defined, so use the defaults */
+            if (prte_enable_recovery) {
+                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
+            } else {
+                PRTE_FLAG_UNSET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
+            }
+        }
+
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS_OP, (void**)&fptr, PMIX_BOOL)) {
+            /* it is present - check the value */
+            if (!flag) {
+                /* remove the attribute */
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS_OP);
+            }
+        } else {
+            /* set it based on default value */
+            if (prte_continuous_op) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS_OP,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            }
+        }
+
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT, NULL, PMIX_STRING)) {
+            if (NULL != prte_fork_agent_string) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT,
+                                   PRTE_ATTR_GLOBAL,
+                                   prte_fork_agent_string, PMIX_STRING);
+            }
+        }
+
+        /* check the apps for max restarts */
+        if (0 < prte_max_restarts) {
+            for (n = 0; n < jdata->apps->size; n++) {
+                app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+                if (NULL == app) {
+                    continue;
+                }
+                if (!prte_get_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, NULL, PMIX_INT32)) {
+                    prte_set_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, PRTE_ATTR_GLOBAL,
+                                       &prte_max_restarts, PMIX_INT32);
+                }
+            }
+        }
+
     } else {
         options = pmix_argv_split(spec, ',');
         for (n=0; NULL != options[n]; n++) {
@@ -718,27 +802,164 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 pmix_argv_free(options);
                 return PRTE_ERR_BAD_PARAM;
             }
+
             /* check the options */
             if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_ABORT_NZ)) {
                 flag = PRTE_CHECK_TRUE(ptr);
-                prte_add_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                } else {
+                    /* ensure this attribute is not present */
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT);
+                }
+
             } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOLAUNCH)) {
                 flag = PRTE_CHECK_TRUE(ptr);
-                prte_add_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
-                /* if we are not in a persistent DVM, then make sure we also
-                 * apply this to the daemons */
-                if (!prte_persistent) {
-                    djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-                    prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
-                                       &flag, PMIX_BOOL);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
+                                       NULL, PMIX_BOOL);
+                    /* if we are not in a persistent DVM, then make sure we also
+                     * apply this to the daemons */
+                    if (!prte_persistent) {
+                        djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                        prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
+                                           NULL, PMIX_BOOL);
+                    }
+                } else {
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH);
+                    if (!prte_persistent) {
+                        djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                        prte_remove_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH);
+                    }
                 }
+
             } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_SHOW_PROGRESS)) {
                 flag = PRTE_CHECK_TRUE(ptr);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
-            } else {
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, PRTE_ATTR_GLOBAL,
+                                       NULL, PMIX_BOOL);
+                } else {
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS);
+                }
+
+            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_RECOVER)) {
+                flag = PRTE_CHECK_TRUE(ptr);
+                if (flag) {
+                    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
+                } else {
+                    PRTE_FLAG_UNSET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
+                }
+
+            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_MAX_RESTARTS)) {
+                i32 = strtol(ptr, NULL, 10);
+                for (n = 0; n < jdata->apps->size; n++) {
+                    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+                    if (NULL == app) {
+                        continue;
+                    }
+                    prte_set_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, PRTE_ATTR_GLOBAL,
+                                       &i32, PMIX_INT32);
+                }
+
+            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_ON_EXEC)) {
+                if (NULL == ptr || PRTE_CHECK_BOOL(ptr)) {
+                    flag = PRTE_CHECK_TRUE(ptr);
+                    if (flag) {
+                        rank = PMIX_RANK_WILDCARD;
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL,
+                                           &rank, PMIX_PROC_RANK);
+                    } else {
+                        prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC);
+                    }
+                } else {
+                    tmp = pmix_argv_split(ptr, ',');
+                    if (1 == pmix_argv_count(tmp)) {
+                        rank = strtoul(tmp[0], NULL, 10);
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL,
+                                           &rank, PMIX_PROC_RANK);
+                    } else {
+                        pmix_argv_free(tmp);
+                        pmix_argv_free(options);
+                        return PMIX_ERR_NOT_SUPPORTED;
+                    }
+                    pmix_argv_free(tmp);
+                }
+
+            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_INIT)) {
+                if (NULL == ptr || PRTE_CHECK_BOOL(ptr)) {
+                    flag = PRTE_CHECK_TRUE(ptr);
+                    if (flag) {
+                        rank = PMIX_RANK_WILDCARD;
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
+                                           &rank, PMIX_PROC_RANK);
+                        /* also must add to job-level cache */
+                        PMIX_INFO_LOAD(&info, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);
+                        pmix_server_cache_job_info(jdata, &info);
+                    } else {
+                        prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT);
+                    }
+                } else {
+                    tmp = pmix_argv_split(ptr, ',');
+                    if (1 == pmix_argv_count(tmp)) {
+                        rank = strtoul(tmp[0], NULL, 10);
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
+                                           &rank, PMIX_PROC_RANK);
+                        /* also must add to job-level cache */
+                        PMIX_INFO_LOAD(&info, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);
+                        pmix_server_cache_job_info(jdata, &info);
+                    } else {
+                        pmix_argv_free(tmp);
+                        pmix_argv_free(options);
+                        return PMIX_ERR_NOT_SUPPORTED;
+                    }
+                    pmix_argv_free(tmp);
+                }
+
+            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_APP)) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, PRTE_ATTR_GLOBAL,
+                                   ptr, PMIX_STRING);
+                /* also must add to job-level cache */
+                pmix_server_cache_job_info(jdata, &info);
+
+            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_TIMEOUT)) {
+                n = PRTE_CONVERT_TIME(ptr);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT, PRTE_ATTR_GLOBAL,
+                                   &n, PMIX_INT);
+
+            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_SPAWN_TIMEOUT)) {
+                n = PRTE_CONVERT_TIME(ptr);
+                prte_set_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT, PRTE_ATTR_GLOBAL,
+                                   &n, PMIX_INT);
+
+            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_STACK_TRACES)) {
+                flag = PRTE_CHECK_TRUE(ptr);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES, PRTE_ATTR_GLOBAL,
+                                       NULL, PMIX_BOOL);
+                } else {
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES);
+                }
+
+            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_REPORT_STATE)) {
+                flag = PRTE_CHECK_TRUE(ptr);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, PRTE_ATTR_GLOBAL,
+                                       NULL, PMIX_BOOL);
+                } else {
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE);
+                }
+
+            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_AGG_HELP)) {
+                flag = PRTE_CHECK_TRUE(ptr);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
+                                       NULL, PMIX_BOOL);
+                } else {
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP);
+                }
+
+           } else {
                 pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
                                "runtime options", spec);
                 return PRTE_ERR_SILENT;
