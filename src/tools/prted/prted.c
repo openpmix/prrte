@@ -580,8 +580,6 @@ int main(int argc, char *argv[])
     }
     pmix_argv_free(nonlocal);
 
-    /* always send back our topology signature - this is a small string
-     * and won't hurt anything */
     prc = PMIx_Data_pack(NULL, &buffer, &prte_topo_signature, 1, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);

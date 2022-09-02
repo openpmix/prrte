@@ -422,46 +422,10 @@ static int rte_init(int argc, char **argv)
         free(output);
     }
 
-    /* init the hash table, if necessary */
-    if (NULL == prte_coprocessors) {
-        prte_coprocessors = PMIX_NEW(pmix_hash_table_t);
-        pmix_hash_table_init(prte_coprocessors, prte_process_info.num_daemons);
-    }
-    /* detect and add any coprocessors */
-    coprocessors = prte_hwloc_base_find_coprocessors(prte_hwloc_topology);
-    if (NULL != coprocessors) {
-        /* separate the serial numbers of the coprocessors
-         * on this host
-         */
-        sns = pmix_argv_split(coprocessors, ',');
-        for (idx = 0; NULL != sns[idx]; idx++) {
-            /* compute the hash */
-            PRTE_HASH_STR(sns[idx], h);
-            /* mark that this coprocessor is hosted by this node */
-            pmix_hash_table_set_value_uint32(prte_coprocessors, h,
-                                             (void *) &(PRTE_PROC_MY_NAME->rank));
-        }
-        pmix_argv_free(sns);
-        free(coprocessors);
-        prte_coprocessors_detected = true;
-    }
-    /* see if I am on a coprocessor */
-    coprocessors = prte_hwloc_base_check_on_coprocessor();
-    if (NULL != coprocessors) {
-        /* compute the hash */
-        PRTE_HASH_STR(coprocessors, h);
-        /* mark that I am on this coprocessor */
-        pmix_hash_table_set_value_uint32(prte_coprocessors, h, (void *) &(PRTE_PROC_MY_NAME->rank));
-        prte_set_attribute(&node->attributes, PRTE_NODE_SERIAL_NUMBER, PRTE_ATTR_LOCAL,
-                           coprocessors, PMIX_STRING);
-        free(coprocessors);
-        prte_coprocessors_detected = true;
-    }
-
     /* Open/select the odls */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_odls_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    ret = prte_mca_base_framework_open(&prte_odls_base_framework,
+                                       PRTE_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         error = "prte_odls_base_open";
         goto error;
@@ -472,9 +436,9 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
     /* Open/select the rtc */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rtc_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    ret = prte_mca_base_framework_open(&prte_rtc_base_framework,
+                                       PRTE_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rtc_base_open";
         goto error;
