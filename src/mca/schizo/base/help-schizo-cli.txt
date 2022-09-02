@@ -483,10 +483,69 @@ Supported values include:
     before actually starting execution. No value need be passed as this is
     not an option that can be set by default in PRRTE.
 
--   SHOW-PROGRESS=(bool) requests that the runtime provide progress reports
+-   SHOW-PROGRESS[=(bool)] requests that the runtime provide progress reports
     on its startup procedure - i.e., the launch of its daemons in support
     of a job. This is typically used to debug DVM startup on large systems.
+    Defaults to true in absence of a given value.
 
+-   RECOVER[=(bool)] if set to true, this directs the runtime to recover a
+    process that has failed by restarting it. Defaults to true in absence
+    of a given value.
+
+-   CONTINUOUS[=(bool)] if set to true, this informs the runtime that the
+    processes in this job shall run until explicitly terminated. Defaults
+    to true in absence of a given value.
+
+-   MAX-RESTARTS=<int> indicates the maximum number of times a given process
+    shall be restarted
+
+-   EXEC-AGENT=<path> indicates the executable that shall be used to start
+    an application process. The resulting command for starting an application
+    process will be "<path> app <app-argv>". The path may contain its own
+    command line arguments.
+
+-   STOP-ON-EXEC[(=<bool or ranks>)] directs the runtime to stop the indicated
+    application process(es) immediately upon exec'ing it. If a boolean value is
+    provided, then the directive will apply to all processes in the job. Otherwise,
+    a comma-delimited list of rank ranges can be specified. Used for debugging.
+    Defaults to "true" in the absence of a specified value.
+
+-   STOP-IN-INIT[(=<bool or ranks>)] indicates that the runtime should direct the
+    indicated application process(es) to stop in PMIx_Init. If a boolean value is
+    provided, then the directive will apply to all processes in the job. Otherwise,
+    a comma-delimited list of rank ranges can be specified. Used for debugging.
+    Defaults to "true" in the absence of a specified value.
+
+-   STOP-IN-APP=<label> indicates that the runtime should direct application processes
+    to stop at some pre-defined place in the application corresponding to the provided
+    label. Used for debugging.
+
+-   TIMEOUT=<string> directs the runtime to terminate the job after it has executed for
+    the specified time. Time is specified in colon-delimited format - e.g.,
+     "01:20:13:05" to indicate 1 day, 20 hours, 13 minutes and 5 seconds. Time specified
+     without colons will be assumed to have been given in seconds.
+
+-   SPAWN-TIMEOUT=<string> directs the runtime to terminate the job if job launch is
+    not completed within the specified time. Time is specified in colon-delimited
+    format - e.g., "01:20:13:05" to indicate 1 day, 20 hours, 13 minutes and 5 seconds.
+    Time specified without colons will be assumed to have been given in seconds.
+
+-   REPORT-STATE-ON-TIMEOUT[(=bool)] directs the runtime to provide a detailed report
+    on job and application process state upon job timeout. Defaults to "true" in the
+    absence of a specified value.
+
+-   GET-STACK-TRACES[(=bool)] requests that the runtime provide stack traces on all
+    application processes still executing upon timeout. Defaults to "true" in the
+    absence of a specified value.
+
+-   REPORT-CHILD-JOBS-SEPARATELY[(=bool)] directs the runtime to report the exit status
+    of any child jobs spawned by the primary job separately. If false, then the final
+    exit status reported will be zero if the primary job and all spawned jobs exit
+    normally, or the first non-zero status returned by either primary or child jobs.
+
+-   AGGREGATE-HELP-MESSAGES[(=bool)] directs the runtime to aggregate help messages,
+    reporting each unique help message once accompanied by the number of processes
+    that reported it
 
 The runtime-options command line option has no qualifiers. Note that directives
 are case-insensitive.

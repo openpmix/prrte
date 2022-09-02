@@ -136,17 +136,16 @@ int prte_register_params(void)
      */
     string = strdup("stderr");
     prte_stacktrace_output_filename = string;
-    ret = prte_mca_base_var_register(
-        "prte", "prte", NULL, "stacktrace_output",
-        "Specifies where the stack trace output stream goes.  "
-        "Accepts one of the following: none (disabled), stderr (default), stdout, file[:filename]. "
-        "  "
-        "If 'filename' is not specified, a default filename of 'stacktrace' is used.  "
-        "The 'filename' is appended with either '.PID' or '.RANK.PID', if RANK is available.  "
-        "The 'filename' can be an absolute path or a relative path to the current working "
-        "directory.",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_3,
-        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_stacktrace_output_filename);
+    ret = prte_mca_base_var_register("prte", "prte", NULL, "stacktrace_output",
+                                     "Specifies where the stack trace output stream goes.  "
+                                     "Accepts one of the following: none (disabled), stderr (default), stdout, file[:filename]. "
+                                     "  "
+                                     "If 'filename' is not specified, a default filename of 'stacktrace' is used.  "
+                                     "The 'filename' is appended with either '.PID' or '.RANK.PID', if RANK is available.  "
+                                     "The 'filename' can be an absolute path or a relative path to the current working "
+                                     "directory.",
+                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_3,
+                                     PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_stacktrace_output_filename);
     free(string);
     if (0 > ret) {
         return ret;
@@ -161,12 +160,11 @@ int prte_register_params(void)
        - 169.254.0.0/16 for DHCP onlink iff there's no DHCP server
     */
     prte_net_private_ipv4 = "10.0.0.0/8;172.16.0.0/12;192.168.0.0/16;169.254.0.0/16";
-    ret = prte_mca_base_var_register(
-        "prte", "prte", "net", "private_ipv4",
-        "Semicolon-delimited list of CIDR notation entries specifying what networks are considered "
-        "\"private\" (default value based on RFC1918 and RFC3330)",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_3,
-        PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ, &prte_net_private_ipv4);
+    ret = prte_mca_base_var_register("prte", "prte", "net", "private_ipv4",
+                                     "Semicolon-delimited list of CIDR notation entries specifying what networks are considered "
+                                     "\"private\" (default value based on RFC1918 and RFC3330)",
+                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_3,
+                                     PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ, &prte_net_private_ipv4);
     if (0 > ret) {
         return ret;
     }
@@ -210,12 +208,11 @@ int prte_register_params(void)
     }
 
     prte_set_max_sys_limits = NULL;
-    ret = prte_mca_base_var_register(
-        "prte", "prte", NULL, "set_max_sys_limits",
-        "Set the specified system-imposed limits to the specified value, including \"unlimited\"."
-        "Supported params: core, filesize, maxmem, openfiles, stacksize, maxchildren",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_3,
-        PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ, &prte_set_max_sys_limits);
+    ret = prte_mca_base_var_register("prte", "prte", NULL, "set_max_sys_limits",
+                                     "Set the specified system-imposed limits to the specified value, including \"unlimited\"."
+                                     "Supported params: core, filesize, maxmem, openfiles, stacksize, maxchildren",
+                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_SETTABLE, PRTE_INFO_LVL_3,
+                                     PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ, &prte_set_max_sys_limits);
     if (0 > ret) {
         return ret;
     }
@@ -266,8 +263,8 @@ int prte_register_params(void)
     /* if a global tmpdir was specified, then we do not allow specification
      * of the local or remote values to avoid confusion
      */
-    if (NULL != prte_tmpdir_base
-        && (NULL != prte_local_tmpdir_base || NULL != prte_remote_tmpdir_base)) {
+    if (NULL != prte_tmpdir_base &&
+        (NULL != prte_local_tmpdir_base || NULL != prte_remote_tmpdir_base)) {
         prte_output(prte_clean_output,
                     "------------------------------------------------------------------\n"
                     "The MCA param prte_tmpdir_base was specified, which sets the base\n"
@@ -302,34 +299,6 @@ int prte_register_params(void)
         prte_process_info.tmpdir_base = strdup(prte_remote_tmpdir_base);
     }
 
-    prte_top_session_dir = NULL;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "top_session_dir",
-                                      "Top of the session directory tree for applications",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ, &prte_top_session_dir);
-
-    if (NULL != prte_top_session_dir) {
-        if (NULL != prte_process_info.top_session_dir) {
-            free(prte_process_info.top_session_dir);
-        }
-        prte_process_info.top_session_dir = strdup(prte_top_session_dir);
-    }
-
-    prte_jobfam_session_dir = NULL;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "jobfam_session_dir",
-                                      "The jobfamily session directory for applications",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_ALL_EQ, &prte_jobfam_session_dir);
-
-    if (NULL != prte_jobfam_session_dir) {
-        if (NULL != prte_process_info.jobfam_session_dir) {
-            free(prte_process_info.jobfam_session_dir);
-        }
-        prte_process_info.jobfam_session_dir = strdup(prte_jobfam_session_dir);
-    }
-
     prte_prohibited_session_dirs = NULL;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "no_session_dirs",
                                       "Prohibited locations for session directories (multiple "
@@ -337,12 +306,6 @@ int prte_register_params(void)
                                       PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_ALL, &prte_prohibited_session_dirs);
-
-    prte_create_session_dirs = true;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "create_session_dirs",
-                                      "Create session directories", PRTE_MCA_BASE_VAR_TYPE_BOOL,
-                                      NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_ALL, &prte_create_session_dirs);
 
     prte_add_pid_to_session_dirname = false;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "add_pid_to_session_dirname",
@@ -393,6 +356,12 @@ int prte_register_params(void)
         PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prted_debug_failure_delay);
 
+    prte_show_launch_progress = false;
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "show_progress",
+                                      "Provide progress reports on DVM startup",
+                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_show_launch_progress);
+
     /* default hostfile */
     prte_default_hostfile = NULL;
     (void)
@@ -432,19 +401,11 @@ int prte_register_params(void)
         prte_default_dash_host = NULL;
     }
 
-    prte_hostname_cutoff = 1000;
-    (void) prte_mca_base_var_register(
-        "prte", "prte", NULL, "hostname_cutoff",
-        "Pass hostnames to all procs when #nodes is less than cutoff [default:1000]",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_hostname_cutoff);
-
     prte_show_resolved_nodenames = false;
-    (void) prte_mca_base_var_register(
-        "prte", "prte", NULL, "show_resolved_nodenames",
-        "Display any node names that are resolved to a different name [default: false]",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_show_resolved_nodenames);
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "show_resolved_nodenames",
+                                      "Display any node names that are resolved to a different name [default: false]",
+                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_show_resolved_nodenames);
 
     prte_do_not_resolve = true;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "do_not_resolve",
@@ -456,95 +417,56 @@ int prte_register_params(void)
 
     /* allow specification of the launch agent */
     prte_launch_agent = "prted";
-    (void) prte_mca_base_var_register(
-        "prte", "prte", NULL, "launch_agent",
-        "Command used to start processes on remote nodes [default: prted]",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_launch_agent);
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "launch_agent",
+                                      "Executable for DVM daemons on remote nodes [default: prted]",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_launch_agent);
 
     prte_fork_agent_string = NULL;
-    (void)
-        prte_mca_base_var_register("prte", "prte", NULL, "fork_agent",
-                                   "Command used to fork processes on remote nodes [default: NULL]",
-                                   PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                   PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                   PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_fork_agent_string);
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "exec_agent",
+                                      "Command used to exec application processes [default: NULL]",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
+                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_fork_agent_string);
 
     /* whether or not to require RM allocation */
     prte_allocation_required = false;
-    (void) prte_mca_base_var_register(
-        "prte", "prte", NULL, "allocation_required",
-        "Whether or not an allocation by a resource manager is required [default: no]",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_allocation_required);
-
-    /* generate new terminal windows to display output from specified ranks */
-    prte_xterm = NULL;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "xterm",
-                                      "Create a new xterm window and display output from the "
-                                      "specified ranks there [default: none]",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_xterm);
-    if (NULL != prte_xterm) {
-        /* if an xterm request is given, we have to leave any ssh
-         * sessions attached so the xterm window manager can get
-         * back to the controlling terminal
-         */
-        prte_leave_session_attached = true;
-    }
-
-    /* tool communication controls */
-    prte_report_events_uri = NULL;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "report_events",
-                                      "URI to which events are to be reported [default: NULL]",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_report_events_uri);
-    if (NULL != prte_report_events_uri) {
-        prte_report_events = true;
-    }
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "allocation_required",
+                                      "Whether or not an allocation by a resource manager is required [default: no]",
+                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_allocation_required);
 
     prte_enable_recovery = false;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "enable_recovery",
-                                      "Enable recovery from process failure [Default = disabled]",
+                                      "Set default policy for process recovery from failure to enabled",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_enable_recovery);
 
     prte_max_restarts = 0;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "max_restarts",
-                                      "Max number of times to restart a failed process",
+                                      "Set default max number of times to restart a failed process",
                                       PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_max_restarts);
 
-    if (!prte_enable_recovery && prte_max_restarts != 0) {
-        if (PRTE_PROC_IS_MASTER) {
-            prte_output(prte_clean_output,
-                        "------------------------------------------------------------------\n"
-                        "The MCA param prte_enable_recovery was not set to true, but\n"
-                        "a value was provided for the number of restarts:\n\n"
-                        "Max restarts: %d\n"
-                        "We are enabling process recovery and continuing execution. To avoid\n"
-                        "this warning in the future, please set the prte_enable_recovery\n"
-                        "param to non-zero.\n"
-                        "------------------------------------------------------------------",
-                        prte_max_restarts);
-        }
-        prte_enable_recovery = true;
-    }
+    prte_continuous_op = false;
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "continuous_operation",
+                                      "Set default policy for processes to run continuously until explicitly terminated",
+                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
+                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_continuous_op);
 
     prte_allowed_exit_without_sync = false;
     (void) prte_mca_base_var_register(
         "prte", "prte", NULL, "allowed_exit_without_sync",
-        "Process exiting without calling finalize will not trigger job termination",
+        "Set default process exiting without calling finalize policy to not trigger job termination",
         PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
         PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_allowed_exit_without_sync);
 
     prte_report_child_jobs_separately = false;
     (void) prte_mca_base_var_register("prte", "prte", NULL, "report_child_jobs_separately",
-                                      "Return the exit status of the primary job only",
+                                      "Set default to return the exit status of the primary job only",
                                       PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
                                       PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
                                       PRTE_MCA_BASE_VAR_SCOPE_READONLY,
@@ -563,14 +485,13 @@ int prte_register_params(void)
                                       PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
                                       &prte_max_vm_size);
 
-    (void) prte_mca_base_var_register(
-        "prte", "prte", NULL, "set_default_slots",
-        "Set the number of slots on nodes that lack such info to the"
-        " number of specified objects [a number, \"cores\" (default),"
-        " \"packages\", \"hwthreads\" (default if hwthreads_as_cpus is set),"
-        " or \"none\" to skip this option]",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_set_slots);
+    (void) prte_mca_base_var_register("prte", "prte", NULL, "set_default_slots",
+                                      "Set the number of slots on nodes that lack such info to the"
+                                      " number of specified objects [a number, \"cores\" (default),"
+                                      " \"packages\", \"hwthreads\" (default if hwthreads_as_cpus is set),"
+                                      " or \"none\" to skip this option]",
+                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
+                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_set_slots);
 
     /* allow specification of the cores to be used by daemons */
     prte_daemon_cores = NULL;
@@ -600,7 +521,7 @@ int prte_register_params(void)
         PRTE_MCA_BASE_VAR_SCOPE_ALL, &prte_data_server_uri);
 
     prte_mca_base_var_register("prte", "prte", NULL, "pmix_verbose",
-                               "Verbosity for PRTE-level PMIx code", PRTE_MCA_BASE_VAR_TYPE_INT,
+                               "Verbosity for PRRTE-level PMIx code", PRTE_MCA_BASE_VAR_TYPE_INT,
                                NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
                                PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_pmix_verbose_output);
 

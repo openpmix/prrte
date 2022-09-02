@@ -228,61 +228,60 @@ int prte_ess_base_prted_setup(void)
         }
     }
     /* setup my session directory here as the OOB may need it */
-    if (prte_create_session_dirs) {
-        PRTE_OUTPUT_VERBOSE(
-            (2, prte_ess_base_framework.framework_output,
-             "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
-             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-             (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
-             prte_process_info.nodename));
+    PRTE_OUTPUT_VERBOSE(
+        (2, prte_ess_base_framework.framework_output,
+         "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
+         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+         (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
+         prte_process_info.nodename));
 
-        /* take a pass thru the session directory code to fillin the
-         * tmpdir names - don't create anything yet
+    /* take a pass thru the session directory code to fillin the
+     * tmpdir names - don't create anything yet
+     */
+    if (PRTE_SUCCESS != (ret = prte_session_dir(false, PRTE_PROC_MY_NAME))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_session_dir define";
+        goto error;
+    }
+    /* clear the session directory just in case there are
+     * stale directories laying around
+     */
+    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+    /* now actually create the directory tree */
+    if (PRTE_SUCCESS != (ret = prte_session_dir(true, PRTE_PROC_MY_NAME))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_session_dir";
+        goto error;
+    }
+    /* set the prte_output env file location to be in the
+     * proc-specific session directory. */
+    prte_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
+    /* setup stdout/stderr */
+    if (prte_debug_daemons_file_flag) {
+        /* if we are debugging to a file, then send stdout/stderr to
+         * the prted log file
          */
-        if (PRTE_SUCCESS != (ret = prte_session_dir(false, PRTE_PROC_MY_NAME))) {
-            PRTE_ERROR_LOG(ret);
-            error = "prte_session_dir define";
-            goto error;
-        }
-        /* clear the session directory just in case there are
-         * stale directories laying around
-         */
-        prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
-        /* now actually create the directory tree */
-        if (PRTE_SUCCESS != (ret = prte_session_dir(true, PRTE_PROC_MY_NAME))) {
-            PRTE_ERROR_LOG(ret);
-            error = "prte_session_dir";
-            goto error;
-        }
-        /* set the prte_output env file location to be in the
-         * proc-specific session directory. */
-        prte_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
-        /* setup stdout/stderr */
-        if (prte_debug_daemons_file_flag) {
-            /* if we are debugging to a file, then send stdout/stderr to
-             * the prted log file
+
+        /* define a log file name in the session directory */
+        snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log", prte_process_info.myproc.nspace,
+                 prte_process_info.nodename);
+        log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
+
+        fd = open(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
+        if (fd < 0) {
+            /* couldn't open the file for some reason, so
+             * just connect everything to /dev/null
              */
-
-            /* define a log file name in the session directory */
-            snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log", prte_process_info.myproc.nspace,
-                     prte_process_info.nodename);
-            log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
-
-            fd = open(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
-            if (fd < 0) {
-                /* couldn't open the file for some reason, so
-                 * just connect everything to /dev/null
-                 */
-                fd = open("/dev/null", O_RDWR | O_CREAT | O_TRUNC, 0666);
-            } else {
-                dup2(fd, STDOUT_FILENO);
-                dup2(fd, STDERR_FILENO);
-                if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
-                    close(fd);
-                }
+            fd = open("/dev/null", O_RDWR | O_CREAT | O_TRUNC, 0666);
+        } else {
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+            if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+                close(fd);
             }
         }
     }
+
     /* Setup the job data object for the daemons */
     /* create and store the job data object */
     jdata = PMIX_NEW(prte_job_t);

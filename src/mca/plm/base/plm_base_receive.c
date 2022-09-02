@@ -127,7 +127,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     prte_app_context_t *app, *child_app;
     pmix_proc_t name, *nptr;
     pid_t pid;
-    bool debugging, found, *fptr;
+    bool debugging, found;
     int i, room;
     char **env;
     char *prefix_dir, *tmp;
@@ -633,9 +633,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         }
         /* record that we heard back from a daemon during app launch */
         jdata->num_daemons_reported++;
-        found = false;
-        fptr = &found;
-        prte_get_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, (void**)&fptr, PMIX_BOOL);
+        found = prte_get_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, NULL, PMIX_BOOL);
         if (found) {
             if (0 == jdata->num_daemons_reported % 100 ||
                 jdata->num_daemons_reported == prte_process_info.num_daemons) {
