@@ -45,7 +45,9 @@ TESTS = \
 	connect \
 	loop_child \
 	loop_spawn \
-	reinit
+	reinit \
+	cmspawn \
+	qspawn
 
 all: $(TESTS)
 
