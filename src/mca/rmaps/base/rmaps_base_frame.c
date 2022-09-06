@@ -204,11 +204,11 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
 
     ck2 = pmix_argv_split(ck, ':');
     for (i = 0; NULL != ck2[i]; i++) {
-        if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_SPAN)) {
+        if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_SPAN)) {
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_SPAN);
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_GIVEN);
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_OVERSUB)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_OVERSUB)) {
             if (nooversubscribe_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -220,7 +220,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_SUBSCRIBE_GIVEN);
             oversubscribe_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOOVER)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOOVER)) {
             if (oversubscribe_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -232,10 +232,10 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_SUBSCRIBE_GIVEN);
             nooversubscribe_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOLOCAL)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOLOCAL)) {
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_NO_USE_LOCAL);
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_ORDERED)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_ORDERED)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -243,7 +243,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_ORDERED);
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_PE)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_PE)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -261,7 +261,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL,
                                &u16, PMIX_UINT16);
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_INHERIT)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_INHERIT)) {
             if (noinherit_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -277,7 +277,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             inherit_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOINHERIT)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOINHERIT)) {
             if (inherit_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -293,7 +293,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             noinherit_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_HWTCPUS)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_HWTCPUS)) {
             if (core_cpus_given) {
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "HWTCPUS", "CORECPUS");
@@ -308,7 +308,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             hwthread_cpus_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_CORECPUS)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_CORECPUS)) {
             if (hwthread_cpus_given) {
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "HWTCPUS", "CORECPUS");
@@ -323,7 +323,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             core_cpus_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_QFILE)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_QFILE)) {
             if ('\0' == ck2[i][5]) {
                 /* missing the value */
                 pmix_show_help("help-prte-rmaps-base.txt", "missing-value", true, "mapping policy",
@@ -502,37 +502,37 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         }
     }
 
-    if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
+    if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYSLOT);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYNODE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_SEQ)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SEQ)) {
         /* there are several mechanisms by which the file specifying
          * the sequence can be passed, so not really feasible to check
          * it here */
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_SEQ);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_CORE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_CORE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYCORE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_L1CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_L1CACHE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL1CACHE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_L2CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_L2CACHE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL2CACHE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_L3CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_L3CACHE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL3CACHE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_NUMA)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_NUMA)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYNUMA);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_PACKAGE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_PACKAGE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYPACKAGE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_RANKFILE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_RANKFILE)) {
         /* check that the file was given */
         if ((NULL == jdata && NULL == prte_rmaps_base.file) ||
             (NULL != jdata && !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING))) {
@@ -556,7 +556,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         }
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYUSER);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_HWT)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_HWT)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
         /* if we are mapping processes to individual hwthreads, then
          * we need to treat those hwthreads as separate cpus
@@ -568,7 +568,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                                NULL, PMIX_BOOL);
         }
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_PELIST)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_PELIST)) {
         if (NULL == jdata) {
             pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-policy", true,
                            "mapping policy", spec);
@@ -649,16 +649,16 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
         }
     } else {
-        if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
+        if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
 
-        } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
+        } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NODE);
 
-        } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_FILL)) {
+        } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_FILL)) {
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_FILL);
 
-        } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_SPAN)) {
+        } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SPAN)) {
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SPAN);
 
         } else {
@@ -704,6 +704,7 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
     prte_app_context_t *app;
     pmix_rank_t rank;
     pmix_info_t info;
+    pmix_value_t value;
 
     if (NULL == spec) {
         /* set everything to the defaults if not already set. We don't want to
@@ -802,10 +803,10 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 pmix_argv_free(options);
                 return PRTE_ERR_BAD_PARAM;
             }
-
+            PMIX_VALUE_LOAD(&value, ptr, PMIX_STRING);
             /* check the options */
-            if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_ABORT_NZ)) {
-                flag = PRTE_CHECK_TRUE(ptr);
+            if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_ABORT_NZ)) {
+                flag = PMIX_CHECK_TRUE(&value);
                 if (flag) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT,
                                        PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
@@ -814,8 +815,8 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     prte_remove_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT);
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOLAUNCH)) {
-                flag = PRTE_CHECK_TRUE(ptr);
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOLAUNCH)) {
+                flag = PMIX_CHECK_TRUE(&value);
                 if (flag) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
                                        NULL, PMIX_BOOL);
@@ -834,8 +835,8 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     }
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_SHOW_PROGRESS)) {
-                flag = PRTE_CHECK_TRUE(ptr);
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_SHOW_PROGRESS)) {
+                flag = PMIX_CHECK_TRUE(&value);
                 if (flag) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, PRTE_ATTR_GLOBAL,
                                        NULL, PMIX_BOOL);
@@ -843,15 +844,15 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     prte_remove_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS);
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_RECOVER)) {
-                flag = PRTE_CHECK_TRUE(ptr);
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_RECOVER)) {
+                flag = PMIX_CHECK_TRUE(&value);
                 if (flag) {
                     PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
                 } else {
                     PRTE_FLAG_UNSET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_MAX_RESTARTS)) {
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_MAX_RESTARTS)) {
                 i32 = strtol(ptr, NULL, 10);
                 for (n = 0; n < jdata->apps->size; n++) {
                     app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
@@ -862,9 +863,9 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                                        &i32, PMIX_INT32);
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_ON_EXEC)) {
-                if (NULL == ptr || PRTE_CHECK_BOOL(ptr)) {
-                    flag = PRTE_CHECK_TRUE(ptr);
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_ON_EXEC)) {
+                if (PMIX_CHECK_BOOL(&value)) {
+                    flag = PMIX_CHECK_TRUE(&value);
                     if (flag) {
                         rank = PMIX_RANK_WILDCARD;
                         prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL,
@@ -886,9 +887,9 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     pmix_argv_free(tmp);
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_INIT)) {
-                if (NULL == ptr || PRTE_CHECK_BOOL(ptr)) {
-                    flag = PRTE_CHECK_TRUE(ptr);
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_INIT)) {
+                if (PMIX_CHECK_BOOL(&value)) {
+                    flag = PMIX_CHECK_TRUE(&value);
                     if (flag) {
                         rank = PMIX_RANK_WILDCARD;
                         prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
@@ -916,24 +917,24 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     pmix_argv_free(tmp);
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_APP)) {
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_APP)) {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, PRTE_ATTR_GLOBAL,
                                    ptr, PMIX_STRING);
                 /* also must add to job-level cache */
                 pmix_server_cache_job_info(jdata, &info);
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_TIMEOUT)) {
-                n = PRTE_CONVERT_TIME(ptr);
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_TIMEOUT)) {
+                n = PMIX_CONVERT_TIME(ptr);
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT, PRTE_ATTR_GLOBAL,
                                    &n, PMIX_INT);
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_SPAWN_TIMEOUT)) {
-                n = PRTE_CONVERT_TIME(ptr);
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_SPAWN_TIMEOUT)) {
+                n = PMIX_CONVERT_TIME(ptr);
                 prte_set_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT, PRTE_ATTR_GLOBAL,
                                    &n, PMIX_INT);
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_STACK_TRACES)) {
-                flag = PRTE_CHECK_TRUE(ptr);
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STACK_TRACES)) {
+                flag = PMIX_CHECK_TRUE(&value);
                 if (flag) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES, PRTE_ATTR_GLOBAL,
                                        NULL, PMIX_BOOL);
@@ -941,8 +942,8 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     prte_remove_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES);
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_REPORT_STATE)) {
-                flag = PRTE_CHECK_TRUE(ptr);
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_REPORT_STATE)) {
+                flag = PMIX_CHECK_TRUE(&value);
                 if (flag) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, PRTE_ATTR_GLOBAL,
                                        NULL, PMIX_BOOL);
@@ -950,8 +951,8 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                     prte_remove_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE);
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_AGG_HELP)) {
-                flag = PRTE_CHECK_TRUE(ptr);
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_AGG_HELP)) {
+                flag = PMIX_CHECK_TRUE(&value);
                 if (flag) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
                                        NULL, PMIX_BOOL);
