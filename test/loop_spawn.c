@@ -82,15 +82,19 @@ int main(int argc, char **argv)
     pmix_proc_t pname;
     mylock_t lock, rellock;
     pmix_info_t iptr[3];
-    static struct option myoptions[] = {{"iters", required_argument, NULL, 'i'},
-                                        {"sync", no_argument, NULL, 's'},
-                                        {"verbose", no_argument, NULL, 'v'},
-                                        {"help", no_argument, NULL, 'h'},
-                                        {0, 0, 0, 0}};
+    static struct option myoptions[] = {
+        {"iters", required_argument, NULL, 'i'},
+        {"sync", no_argument, NULL, 's'},
+        {"verbose", no_argument, NULL, 'v'},
+        {"help", no_argument, NULL, 'h'},
+        {"report", required_argument, NULL, 'r'},
+        {0, 0, 0, 0}
+    };
     int option_index;
     int opt;
+    int freq = 100;
 
-    while ((opt = getopt_long(argc, argv, "hsvi:", myoptions, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hsvi:r:", myoptions, &option_index)) != -1) {
         switch (opt) {
             case 'i':
                 itermax = strtol(optarg, NULL, 10);
@@ -101,12 +105,16 @@ int main(int argc, char **argv)
             case 'v':
                 verbose = true;
                 break;
+            case 'r':
+                freq = strtol(optarg, NULL, 10);
+                break;
             case 'h':
                 fprintf(stderr,
                         "Usage: %s\n    Options:\n"
                         "        [-i N] [number of iterations]\n"
                         "        [-s] [Sync mode - wait for termination before spawning next child]\n"
                         "        [-v] [Verbose]\n",
+                        "        [-r N] [Report progress every N iterations]\n",
                         argv[0]);
                 exit(1);
             default:
@@ -115,6 +123,7 @@ int main(int argc, char **argv)
                         "        [-i N] [number of iterations]\n"
                         "        [-s] [Sync mode - wait for termination before spawning next child]\n"
                         "        [-v] [Verbose]\n",
+                        "        [-r N] [Report progress every N iterations]\n",
                         argv[0]);
                 exit(1);
         }
@@ -181,6 +190,9 @@ int main(int argc, char **argv)
         if (sync) {
             DEBUG_WAIT_THREAD(&rellock);
             DEBUG_DESTRUCT_LOCK(&rellock);
+        }
+        if (!verbose && 0 == (iter % freq)) {
+            fprintf(stderr, "Completed iteration %d\n", iter);
         }
     }
 
