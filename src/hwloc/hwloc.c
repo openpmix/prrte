@@ -550,17 +550,17 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
         ++ptr;
         quals = pmix_argv_split(ptr, ':');
         for (i = 0; NULL != quals[i]; i++) {
-            if (PRTE_CHECK_CLI_OPTION(quals[i], PRTE_CLI_IF_SUPP)) {
+            if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_IF_SUPP)) {
                 tmp |= PRTE_BIND_IF_SUPPORTED;
 
-            } else if (PRTE_CHECK_CLI_OPTION(quals[i], PRTE_CLI_OVERLOAD)) {
+            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_OVERLOAD)) {
                 tmp |= (PRTE_BIND_ALLOW_OVERLOAD | PRTE_BIND_OVERLOAD_GIVEN);
 
-            } else if (PRTE_CHECK_CLI_OPTION(quals[i], PRTE_CLI_NOOVERLOAD)) {
+            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_NOOVERLOAD)) {
                 tmp = (tmp & ~PRTE_BIND_ALLOW_OVERLOAD);
                 tmp |= PRTE_BIND_OVERLOAD_GIVEN;
 
-            } else if (PRTE_CHECK_CLI_OPTION(quals[i], PRTE_CLI_REPORT)) {
+            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_REPORT)) {
                 if (NULL == jdata) {
                     pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                    "binding policy", quals[i]);
@@ -581,28 +581,28 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
         pmix_argv_free(quals);
     }
 
-    if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_NONE)) {
+    if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NONE)) {
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NONE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_HWT)) {
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_HWT)) {
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
 
-    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_CORE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_CORE)) {
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_L1CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L1CACHE)) {
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L1CACHE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_L2CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L2CACHE)) {
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L2CACHE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_L3CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L3CACHE)) {
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L3CACHE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_NUMA)) {
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NUMA)) {
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_NUMA);
 
-    } else if (PRTE_CHECK_CLI_OPTION(myspec, PRTE_CLI_PACKAGE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_PACKAGE)) {
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_PACKAGE);
 
     } else {

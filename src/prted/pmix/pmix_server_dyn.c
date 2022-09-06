@@ -741,7 +741,7 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_TIMEOUT) ||
                    PMIX_CHECK_KEY(info, PMIX_TIMEOUT)) {
             if (PMIX_STRING == info->value.type) {
-                rc = PRTE_CONVERT_TIME(info->value.data.string);
+                rc = PMIX_CONVERT_TIME(info->value.data.string);
             } else {
                 PMIX_VALUE_GET_NUMBER(i, &info->value, rc, int);
                 if (PMIX_SUCCESS != i) {
@@ -758,7 +758,7 @@ static void interim(int sd, short args, void *cbdata)
 
         } else if (PMIX_CHECK_KEY(info, PMIX_JOB_TIMEOUT)) {
             if (PMIX_STRING == info->value.type) {
-                rc = PRTE_CONVERT_TIME(info->value.data.string);
+                rc = PMIX_CONVERT_TIME(info->value.data.string);
             } else {
                 PMIX_VALUE_GET_NUMBER(i, &info->value, rc, int);
                 if (PMIX_SUCCESS != i) {
