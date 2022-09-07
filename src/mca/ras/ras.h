@@ -114,25 +114,13 @@ typedef prte_ras_base_module_2_0_0_t prte_ras_base_module_t;
  * ras component
  */
 
-/**
- * Component init / selection
- * ras component
- */
-struct prte_ras_base_component_2_0_0_t {
-    /** Base MCA structure */
-    prte_mca_base_component_t base_version;
-    /** Base MCA data */
-    prte_mca_base_component_data_t base_data;
-};
 /** Convenience typedef */
-typedef struct prte_ras_base_component_2_0_0_t prte_ras_base_component_2_0_0_t;
-/** Convenience typedef */
-typedef prte_ras_base_component_2_0_0_t prte_ras_base_component_t;
+typedef pmix_mca_base_component_t prte_ras_base_component_t;
 
 /**
  * Macro for use in components that are of type ras
  */
-#define PRTE_RAS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("ras", 2, 0, 0)
+#define PRTE_RAS_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("ras", 2, 0, 0)
 
 END_C_DECLS
 

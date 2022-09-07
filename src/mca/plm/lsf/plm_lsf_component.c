@@ -55,7 +55,7 @@ const char *prte_plm_lsf_component_version_string
  */
 static int plm_lsf_open(void);
 static int plm_lsf_close(void);
-static int prte_plm_lsf_component_query(prte_mca_base_module_t **module, int *priority);
+static int prte_plm_lsf_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
@@ -63,27 +63,20 @@ static int prte_plm_lsf_component_query(prte_mca_base_module_t **module, int *pr
  */
 
 prte_plm_lsf_component_t prte_plm_lsf_component = {
-    {
-        /* First, the mca_component_t struct containing meta information
-           about the component itself */
+    .super = {
+        PRTE_PLM_BASE_VERSION_2_0_0,
 
-        .base_version = {
-            PRTE_PLM_BASE_VERSION_2_0_0,
+        /* Component name and version */
+        .pmix_mca_component_name = "lsf",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
 
-            /* Component name and version */
-            .mca_component_name = "lsf",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-
-            /* Component open and close functions */
-            .mca_open_component = plm_lsf_open,
-            .mca_close_component = plm_lsf_close,
-            .mca_query_component = prte_plm_lsf_component_query,
-        },
-        .base_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        /* Component open and close functions */
+        .pmix_mca_open_component = plm_lsf_open,
+        .pmix_mca_close_component = plm_lsf_close,
+        .pmix_mca_query_component = prte_plm_lsf_component_query,
     }
 };
 
@@ -97,7 +90,7 @@ static int plm_lsf_close(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_plm_lsf_component_query(prte_mca_base_module_t **module, int *priority)
+static int prte_plm_lsf_component_query(pmix_mca_base_module_t **module, int *priority)
 {
 
     /* check if lsf is running here and make sure IBM CSM is NOT enabled */
@@ -111,6 +104,6 @@ static int prte_plm_lsf_component_query(prte_mca_base_module_t **module, int *pr
     }
 
     *priority = 75;
-    *module = (prte_mca_base_module_t *) &prte_plm_lsf_module;
+    *module = (pmix_mca_base_module_t *) &prte_plm_lsf_module;
     return PRTE_SUCCESS;
 }

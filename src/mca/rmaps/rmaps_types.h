@@ -123,7 +123,7 @@ typedef struct {
  **
  * Macro for use in components that are of type rmaps
  */
-#define PRTE_RMAPS_BASE_VERSION_4_0_0 PRTE_MCA_BASE_VERSION_2_1_0("rmaps", 4, 0, 0)
+#define PRTE_RMAPS_BASE_VERSION_4_0_0 PMIX_MCA_BASE_VERSION_1_0_0("rmaps", 4, 0, 0)
 
 /* define map-related directives */
 #define PRTE_MAPPING_NO_USE_LOCAL     0x0100

@@ -140,17 +140,12 @@ typedef struct {
 /**
  * schizo component version 1.3.0
  */
-typedef struct {
-    /** Base MCA structure */
-    prte_mca_base_component_t base_version;
-    /** Base MCA data */
-    prte_mca_base_component_data_t base_data;
-} prte_schizo_base_component_t;
+typedef pmix_mca_base_component_t prte_schizo_base_component_t;
 
 /**
  * Macro for use in components that are of type schizo
  */
-#define PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_2_1_0("schizo", 1, 0, 0)
+#define PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0 PMIX_MCA_BASE_VERSION_1_0_0("schizo", 1, 0, 0)
 
 END_C_DECLS
 

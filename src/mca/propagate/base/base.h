@@ -35,7 +35,7 @@ PRTE_EXPORT extern prte_propagate_base_module_t prte_propagate;
 /*
  * MCA framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_propagate_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_propagate_base_framework;
 /*
  * Select an available component.
  */

@@ -18,7 +18,7 @@
 
 #include "types.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/schizo/schizo.h"
 
 BEGIN_C_DECLS

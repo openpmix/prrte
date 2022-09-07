@@ -42,7 +42,7 @@
 
 #include "src/class/pmix_hotel.h"
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/include/pmix_atomic.h"
 #include "src/util/pmix_printf.h"

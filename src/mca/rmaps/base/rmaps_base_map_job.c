@@ -32,7 +32,7 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
@@ -651,7 +651,7 @@ ranking:
             /* forced selection */
             mod = (prte_rmaps_base_selected_module_t *) pmix_list_get_first(
                 &prte_rmaps_base.selected_modules);
-            jdata->map->req_mapper = strdup(mod->component->mca_component_name);
+            jdata->map->req_mapper = strdup(mod->component->pmix_mca_component_name);
         }
         PMIX_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t)
         {

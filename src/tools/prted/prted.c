@@ -62,8 +62,8 @@
 
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/base/base.h"
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_base.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
@@ -257,8 +257,8 @@ int main(int argc, char *argv[])
 
     /* open the SCHIZO framework */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         return ret;
     }
@@ -465,11 +465,10 @@ int main(int argc, char *argv[])
      * any messages we send can flow thru him.
      */
     prte_parent_uri = NULL;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "parent_uri",
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "parent_uri",
                                       "URI for the parent if tree launch is enabled.",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_CONSTANT, &prte_parent_uri);
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &prte_parent_uri);
     if (NULL != prte_parent_uri) {
         /* set the contact info into our local database */
         ret = prte_rml_parse_uris(prte_parent_uri, PRTE_PROC_MY_PARENT, NULL);

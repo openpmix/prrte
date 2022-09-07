@@ -26,7 +26,7 @@
 static int my_priority = 5;
 static int bmg_open(void);
 static int bmg_close(void);
-static int bmg_query(prte_mca_base_module_t **module, int *priority);
+static int bmg_query(pmix_mca_base_module_t **module, int *priority);
 static int bmg_register(void);
 
 /*
@@ -36,7 +36,7 @@ prte_grpcomm_base_component_t prte_grpcomm_bmg_component = {
     .base_version = {
         PRTE_GRPCOMM_BASE_VERSION_3_0_0,
 
-        .mca_component_name = "bmg",
+        \.pmix_mca_component_name = "bmg",
         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                 PMIX_RELEASE_VERSION),
         .mca_open_component = bmg_open,
@@ -52,7 +52,7 @@ prte_grpcomm_base_component_t prte_grpcomm_bmg_component = {
 
 static int bmg_register(void)
 {
-    prte_mca_base_component_t *c = &prte_grpcomm_bmg_component.base_version;
+    pmix_mca_base_component_t *c = &prte_grpcomm_bmg_component.base_version;
 
     /* make the priority adjustable so users can select
      * bmg for use by apps without affecting daemons
@@ -77,11 +77,11 @@ static int bmg_close(void)
     return PRTE_SUCCESS;
 }
 
-static int bmg_query(prte_mca_base_module_t **module, int *priority)
+static int bmg_query(pmix_mca_base_module_t **module, int *priority)
 {
     if (prte_enable_ft) {
         *priority = my_priority;
-        *module = (prte_mca_base_module_t *) &prte_grpcomm_bmg_module;
+        *module = (pmix_mca_base_module_t *) &prte_grpcomm_bmg_module;
         return PRTE_SUCCESS;
     }
 

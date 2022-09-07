@@ -35,7 +35,7 @@
 
 #include "src/class/pmix_list.h"
 #include "src/mca/mca.h"
-#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/mca/schizo/schizo.h"
 #include "src/util/pmix_printf.h"
 
@@ -48,7 +48,7 @@ BEGIN_C_DECLS
 /*
  * MCA Framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_rmaps_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_rmaps_base_framework;
 /* select a component */
 PRTE_EXPORT int prte_rmaps_base_select(void);
 
@@ -91,7 +91,7 @@ typedef struct {
     pmix_list_item_t super;
     int pri;
     prte_rmaps_base_module_t *module;
-    prte_mca_base_component_t *component;
+    pmix_mca_base_component_t *component;
 } prte_rmaps_base_selected_module_t;
 PMIX_CLASS_DECLARATION(prte_rmaps_base_selected_module_t);
 

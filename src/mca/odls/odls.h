@@ -100,21 +100,12 @@ typedef struct prte_odls_base_module_1_3_0_t prte_odls_base_module_t;
 /**
  * odls component
  */
-struct prte_odls_base_component_2_0_0_t {
-    /** component version */
-    prte_mca_base_component_t version;
-    /** component data */
-    prte_mca_base_component_data_t base_data;
-};
-/** Convenience typedef */
-typedef struct prte_odls_base_component_2_0_0_t prte_odls_base_component_2_0_0_t;
-/** Convenience typedef */
-typedef prte_odls_base_component_2_0_0_t prte_odls_base_component_t;
+typedef pmix_mca_base_component_t prte_odls_base_component_t;
 
 /**
  * Macro for use in modules that are of type odls
  */
-#define PRTE_ODLS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("odls", 2, 0, 0)
+#define PRTE_ODLS_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("odls", 2, 0, 0)
 
 /* Global structure for accessing ODLS functions
  */

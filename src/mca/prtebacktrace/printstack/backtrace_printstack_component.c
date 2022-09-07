@@ -28,19 +28,13 @@
 
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 
-const prte_backtrace_base_component_2_0_0_t prte_prtebacktrace_printstack_component = {
-    /* First, the mca_component_t struct containing meta information
-       about the component itself */
-    .backtracec_version = {
-        PRTE_BACKTRACE_BASE_VERSION_2_0_0,
+const pmix_mca_base_component_t prte_prtebacktrace_printstack_component = {
+    PRTE_BACKTRACE_BASE_VERSION_2_0_0,
 
-        /* Component name and version */
-        .mca_component_name = "printstack",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PMIX_RELEASE_VERSION),
-    },
-    .backtracec_data = {
-        /* The component is checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-    },
+    /* Component name and version */
+    .pmix_mca_component_name = "printstack",
+    PMIX_MCA_BASE_MAKE_VERSION(component,
+                               PRTE_MAJOR_VERSION,
+                               PRTE_MINOR_VERSION,
+                               PMIX_RELEASE_VERSION),
 };

@@ -13,7 +13,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,7 +40,7 @@ BEGIN_C_DECLS
  */
 int prte_ess_alps_component_open(void);
 int prte_ess_alps_component_close(void);
-int prte_ess_alps_component_query(prte_mca_base_module_t **module, int *priority);
+int prte_ess_alps_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * alps component internal utility functions

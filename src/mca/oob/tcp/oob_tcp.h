@@ -31,7 +31,7 @@
 #include "types.h"
 
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 
 #include "src/mca/oob/base/base.h"
 #include "src/mca/oob/oob.h"

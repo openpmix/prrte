@@ -57,7 +57,6 @@
 
 #include "prte_stdint.h"
 #include "src/event/event-internal.h"
-#include "src/mca/base/prte_mca_base_var.h"
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/util/error.h"
 #include "src/util/pmix_fd.h"

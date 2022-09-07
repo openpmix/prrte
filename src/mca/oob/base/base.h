@@ -77,7 +77,7 @@ typedef struct {
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_oob_base_peer_t);
 
 /* MCA framework */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_oob_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_oob_base_framework;
 PRTE_EXPORT int prte_oob_base_select(void);
 
 /* Access the OOB internal functions via set of event-based macros

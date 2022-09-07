@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,7 +30,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prte_mca_base_component_t struct.
+ * component's public pmix_mca_base_component_t struct.
  */
 #include "src/mca/prtebacktrace/base/static-components.h"
 
@@ -39,6 +39,6 @@
  */
 
 /* Uses default register/open/close functions */
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prtebacktrace, NULL, NULL, NULL, NULL,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, prtebacktrace, NULL, NULL, NULL, NULL,
                                 prte_prtebacktrace_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

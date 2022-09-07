@@ -129,7 +129,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
     pmix_list_t default_seq_list;
     pmix_list_t node_list, *seq_list, sq_list;
     prte_proc_t *proc;
-    prte_mca_base_component_t *c = &prte_rmaps_seq_component.base_version;
+    pmix_mca_base_component_t *c = &prte_rmaps_seq_component;
     char *hosts = NULL;
     bool match;
 
@@ -148,7 +148,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper) {
-        if (0 != strcasecmp(jdata->map->req_mapper, c->mca_component_name)) {
+        if (0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
             /* a mapper has been specified, and it isn't me */
             prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: job %s not using sequential mapper",
@@ -172,7 +172,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
     if (NULL != jdata->map->last_mapper) {
         free(jdata->map->last_mapper);
     }
-    jdata->map->last_mapper = strdup(c->mca_component_name);
+    jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
 
     /* convenience def */
     map = jdata->map;

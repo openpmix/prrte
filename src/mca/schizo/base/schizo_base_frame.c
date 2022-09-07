@@ -16,7 +16,7 @@
 
 #include <string.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/output.h"
 #include "src/util/pmix_argv.h"
@@ -33,7 +33,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prte_mca_base_component_t struct.
+ * component's public pmix_mca_base_component_t struct.
  */
 
 #include "src/mca/schizo/base/static-components.h"
@@ -46,15 +46,14 @@ prte_schizo_base_t prte_schizo_base = {
     .test_proxy_launch = false
 };
 
-static int prte_schizo_base_register(prte_mca_base_register_flag_t flags)
+static int prte_schizo_base_register(pmix_mca_base_register_flag_t flags)
 {
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     /* test proxy launch */
     prte_schizo_base.test_proxy_launch = false;
-    prte_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch", "Test proxy launches",
-                               PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+    pmix_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch", "Test proxy launches",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                &prte_schizo_base.test_proxy_launch);
     return PRTE_SUCCESS;
 }
@@ -64,14 +63,14 @@ static int prte_schizo_base_close(void)
     /* cleanup globals */
     PMIX_LIST_DESTRUCT(&prte_schizo_base.active_modules);
 
-    return prte_mca_base_framework_components_close(&prte_schizo_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_schizo_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components, or the one
  * that was specifically requested via a MCA parameter.
  */
-static int prte_schizo_base_open(prte_mca_base_open_flag_t flags)
+static int prte_schizo_base_open(pmix_mca_base_open_flag_t flags)
 {
     int rc;
 
@@ -79,16 +78,16 @@ static int prte_schizo_base_open(prte_mca_base_open_flag_t flags)
     PMIX_CONSTRUCT(&prte_schizo_base.active_modules, pmix_list_t);
 
     /* Open up all available components */
-    rc = prte_mca_base_framework_components_open(&prte_schizo_base_framework, flags);
+    rc = pmix_mca_base_framework_components_open(&prte_schizo_base_framework, flags);
 
     /* All done */
     return rc;
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, schizo, "PRTE Schizo Subsystem", prte_schizo_base_register,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, schizo, "PRTE Schizo Subsystem", prte_schizo_base_register,
                                 prte_schizo_base_open, prte_schizo_base_close,
                                 prte_schizo_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 void prte_schizo_base_expose(char *param, char *prefix)
 {

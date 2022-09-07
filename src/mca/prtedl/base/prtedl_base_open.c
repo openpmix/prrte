@@ -7,7 +7,7 @@
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,10 +37,10 @@ prte_prtedl_base_component_t *prte_prtedl_base_selected_component = NULL;
  * executable code in this file, or some linkers (cough cough OS X
  * cough cough) may not actually link in this .o file.
  */
-int prte_dl_base_open(prte_mca_base_open_flag_t flags)
+int prte_dl_base_open(pmix_mca_base_open_flag_t flags)
 {
     /* Open up all available components */
-    return prte_mca_base_framework_components_open(&prte_prtedl_base_framework, flags);
+    return pmix_mca_base_framework_components_open(&prte_prtedl_base_framework, flags);
 }
 
 /* VERY IMPORTANT: This framework is static, and is opened before any
@@ -48,7 +48,7 @@ int prte_dl_base_open(prte_mca_base_open_flag_t flags)
    But we must mark this framework is NO_DSO so that the MCA framework
    base doesn't try to open any dynamic components in this
    framework. */
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, prtedl, "Dynamic loader framework", NULL /* register */,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, prtedl, "Dynamic loader framework", NULL /* register */,
                                 prte_dl_base_open /* open */, NULL /* close */,
                                 prte_prtedl_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_NO_DSO);

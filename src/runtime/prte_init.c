@@ -53,7 +53,7 @@
 #include "src/prted/pmix/pmix_server.h"
 #include "src/threads/pmix_threads.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/errmgr/base/base.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
@@ -121,8 +121,8 @@ int prte_init_util(prte_proc_type_t flags)
     pmix_tool_basename = prte_tool_basename;
 
     /* initialize install dirs code */
-    ret = prte_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
-                                       PRTE_MCA_BASE_OPEN_DEFAULT);
+    ret = pmix_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != ret) {
         fprintf(stderr,
                 "prte_prteinstalldirs_base_open() failed -- process will likely abort (%s:%d, "
@@ -151,7 +151,7 @@ int prte_init_util(prte_proc_type_t flags)
 
     /* keyval lex-based parser */
     /* Setup the parameter system */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_var_init())) {
+    if (PRTE_SUCCESS != (ret = pmix_mca_base_var_init())) {
         error = "mca_base_var_init";
         goto error;
     }
@@ -178,7 +178,7 @@ int prte_init_util(prte_proc_type_t flags)
     }
 
     /* Initialize the data storage service. */ /* initialize the mca */
-    if (PRTE_SUCCESS != (ret = prte_mca_base_open())) {
+    if (PRTE_SUCCESS != (ret = pmix_mca_base_open(NULL))) {
         error = "mca_base_open";
         goto error;
     }
@@ -189,8 +189,8 @@ int prte_init_util(prte_proc_type_t flags)
         goto error;
     }
 
-    ret = prte_mca_base_framework_open(&prte_prtebacktrace_base_framework,
-                                       PRTE_MCA_BASE_OPEN_DEFAULT);
+    ret = pmix_mca_base_framework_open(&prte_prtebacktrace_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != ret) {
         error = "prte_backtrace_base_open";
         goto error;
@@ -287,8 +287,8 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     /* open the SCHIZO framework as everyone needs it, and the
      * ess will use it to help select its component */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_schizo_base_open";
         goto error;
@@ -301,8 +301,8 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
 
     /* open the ESS and select the correct module for this environment */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_ess_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_ess_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_ess_base_open";
         goto error;
