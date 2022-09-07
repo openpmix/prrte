@@ -14,7 +14,7 @@
 
 #include <string.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
 #include "src/mca/rtc/base/base.h"
@@ -27,9 +27,9 @@ static bool selected = false;
  */
 int prte_rtc_base_select(void)
 {
-    prte_mca_base_component_list_item_t *cli = NULL;
-    prte_mca_base_component_t *component = NULL;
-    prte_mca_base_module_t *module = NULL;
+    pmix_mca_base_component_list_item_t *cli = NULL;
+    pmix_mca_base_component_t *component = NULL;
+    pmix_mca_base_module_t *module = NULL;
     prte_rtc_base_module_t *nmodule;
     prte_rtc_base_selected_module_t *newmodule, *mod;
     int rc, priority;
@@ -43,35 +43,35 @@ int prte_rtc_base_select(void)
 
     /* Query all available components and ask if they have a module */
     PMIX_LIST_FOREACH(cli, &prte_rtc_base_framework.framework_components,
-                      prte_mca_base_component_list_item_t)
+                      pmix_mca_base_component_list_item_t)
     {
-        component = (prte_mca_base_component_t *) cli->cli_component;
+        component = (pmix_mca_base_component_t *) cli->cli_component;
 
         prte_output_verbose(5, prte_rtc_base_framework.framework_output,
                             "mca:rtc:select: checking available component %s",
-                            component->mca_component_name);
+                            component->pmix_mca_component_name);
 
         /* If there's no query function, skip it */
-        if (NULL == component->mca_query_component) {
+        if (NULL == component->pmix_mca_query_component) {
             prte_output_verbose(
                 5, prte_rtc_base_framework.framework_output,
                 "mca:rtc:select: Skipping component [%s]. It does not implement a query function",
-                component->mca_component_name);
+                component->pmix_mca_component_name);
             continue;
         }
 
         /* Query the component */
         prte_output_verbose(5, prte_rtc_base_framework.framework_output,
                             "mca:rtc:select: Querying component [%s]",
-                            component->mca_component_name);
-        rc = component->mca_query_component(&module, &priority);
+                            component->pmix_mca_component_name);
+        rc = component->pmix_mca_query_component(&module, &priority);
 
         /* If no module was returned, then skip component */
         if (PRTE_SUCCESS != rc || NULL == module) {
             prte_output_verbose(
                 5, prte_rtc_base_framework.framework_output,
                 "mca:rtc:select: Skipping component [%s]. Query failed to return a module",
-                component->mca_component_name);
+                component->pmix_mca_component_name);
             continue;
         }
         nmodule = (prte_rtc_base_module_t *) module;
@@ -81,7 +81,7 @@ int prte_rtc_base_select(void)
             if (PRTE_SUCCESS != (rc = nmodule->init())) {
                 prte_output_verbose(5, prte_rtc_base_framework.framework_output,
                                     "mca:rtc:select: Skipping component [%s]. Failed to init",
-                                    component->mca_component_name);
+                                    component->pmix_mca_component_name);
                 continue;
             }
         }
@@ -114,7 +114,7 @@ int prte_rtc_base_select(void)
         /* show the prioritized list */
         PMIX_LIST_FOREACH(mod, &prte_rtc_base.actives, prte_rtc_base_selected_module_t)
         {
-            prte_output(0, "\tModule: %s Priority: %d", mod->component->mca_component_name,
+            prte_output(0, "\tModule: %s Priority: %d", mod->component->pmix_mca_component_name,
                         mod->pri);
         }
     }

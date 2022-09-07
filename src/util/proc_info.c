@@ -36,8 +36,8 @@
 #endif
 #include <ctype.h>
 
-#include "src/mca/base/base.h"
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_base.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
@@ -89,22 +89,20 @@ void prte_setup_hostname(void)
 
     /* whether or not to keep FQDN hostnames */
     prte_keep_fqdn_hostnames = false;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "keep_fqdn_hostnames",
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "keep_fqdn_hostnames",
                                       "Whether or not to keep FQDN hostnames [default: no]",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_keep_fqdn_hostnames);
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_keep_fqdn_hostnames);
 
     /* get the nodename */
     gethostname(hostname, sizeof(hostname));
 
     prte_strip_prefix = NULL;
-    (void) prte_mca_base_var_register(
+    (void) pmix_mca_base_var_register(
         "prte", "prte", NULL, "strip_prefix",
         "Prefix(es) to match when deciding whether to strip leading characters and zeroes from "
         "node names returned by daemons",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_strip_prefix);
+        PMIX_MCA_BASE_VAR_TYPE_STRING, &prte_strip_prefix);
 
     /* we have to strip node names here, if user directs, to ensure that
      * the names exchanged in the modex match the names found locally
@@ -198,10 +196,9 @@ int prte_proc_info(void)
     init = true;
 
     prte_process_info.my_hnp_uri = NULL;
-    prte_mca_base_var_register("prte", "prte", NULL, "hnp_uri", "HNP contact info",
-                               PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                               PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
-                               PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_process_info.my_hnp_uri);
+    pmix_mca_base_var_register("prte", "prte", NULL, "hnp_uri", "HNP contact info",
+                               PMIX_MCA_BASE_VAR_TYPE_STRING,
+                               &prte_process_info.my_hnp_uri);
 
     if (NULL != prte_process_info.my_hnp_uri) {
         ptr = prte_process_info.my_hnp_uri;
@@ -221,19 +218,16 @@ int prte_proc_info(void)
 
     /* get the number of nodes in the job */
     prte_process_info.num_nodes = 1;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "num_nodes",
-                                      "Number of nodes in the job", PRTE_MCA_BASE_VAR_TYPE_INT,
-                                      NULL, 0, PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "num_nodes",
+                                      "Number of nodes in the job",
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_process_info.num_nodes);
 
     /* get the number of times this proc has restarted */
     prte_process_info.num_restarts = 0;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "num_restarts",
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "num_restarts",
                                       "Number of times this proc has restarted",
-                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_process_info.num_restarts);
 
     return PRTE_SUCCESS;

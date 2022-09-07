@@ -66,7 +66,7 @@ BEGIN_C_DECLS
 /*
  * MCA framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_iof_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_iof_base_framework;
 /*
  * Select an available component.
  */

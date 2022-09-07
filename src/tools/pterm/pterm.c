@@ -66,7 +66,7 @@
 #endif
 
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/pmix_mutex.h"
@@ -256,8 +256,8 @@ int main(int argc, char *argv[])
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
 
     /* open the SCHIZO framework */
-    rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                      PRTE_MCA_BASE_OPEN_DEFAULT);
+    rc = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                      PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;

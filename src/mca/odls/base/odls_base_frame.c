@@ -32,7 +32,7 @@
 
 #include "src/class/pmix_ring_buffer.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/runtime/prte_progress_threads.h"
 #include "src/util/pmix_argv.h"
@@ -55,7 +55,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prte_mca_base_component_t struct.
+ * component's public pmix_mca_base_component_t struct.
  */
 
 #include "src/mca/odls/base/static-components.h"
@@ -84,40 +84,34 @@ prte_odls_globals_t prte_odls_globals = {
 
 static prte_event_base_t **prte_event_base_ptr = NULL;
 
-static int prte_odls_base_register(prte_mca_base_register_flag_t flags)
+static int prte_odls_base_register(pmix_mca_base_register_flag_t flags)
 {
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     prte_odls_globals.max_threads = 16;
-    (void) prte_mca_base_var_register("prte", "odls", "base", "max_threads",
+    (void) pmix_mca_base_var_register("prte", "odls", "base", "max_threads",
                                       "Maximum number of threads to use for spawning local procs",
-                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_odls_globals.max_threads);
 
     prte_odls_globals.num_threads = -1;
-    (void) prte_mca_base_var_register("prte", "odls", "base", "num_threads",
+    (void) pmix_mca_base_var_register("prte", "odls", "base", "num_threads",
                                       "Specific number of threads to use for spawning local procs",
-                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_odls_globals.num_threads);
 
     prte_odls_globals.cutoff = 32;
-    (void) prte_mca_base_var_register(
-        "prte", "odls", "base", "cutoff",
-        "Minimum number of local procs before using thread pool for spawn",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_odls_globals.cutoff);
+    (void) pmix_mca_base_var_register("prte", "odls", "base", "cutoff",
+                                      "Minimum number of local procs before using thread pool for spawn",
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
+                                      &prte_odls_globals.cutoff);
 
     prte_odls_globals.signal_direct_children_only = false;
-    (void) prte_mca_base_var_register(
-        "prte", "odls", "base", "signal_direct_children_only",
-        "Whether to restrict signals (e.g., SIGTERM) to direct children, or "
-        "to apply them as well to any children spawned by those processes",
-        PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_odls_globals.signal_direct_children_only);
+    (void) pmix_mca_base_var_register("prte", "odls", "base", "signal_direct_children_only",
+                                      "Whether to restrict signals (e.g., SIGTERM) to direct children, or "
+                                      "to apply them as well to any children spawned by those processes",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_odls_globals.signal_direct_children_only);
 
     return PRTE_SUCCESS;
 }
@@ -230,14 +224,14 @@ static int prte_odls_base_close(void)
 
     PMIX_DESTRUCT_LOCK(&prte_odls_globals.lock);
 
-    return prte_mca_base_framework_components_close(&prte_odls_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_odls_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components, or the one
  * that was specifically requested via a MCA parameter.
  */
-static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
+static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
 {
     char **ranks = NULL, *tmp;
     int rc, i, rank;
@@ -318,13 +312,13 @@ static int prte_odls_base_open(prte_mca_base_open_flag_t flags)
     }
 
     /* Open up all available components */
-    return prte_mca_base_framework_components_open(&prte_odls_base_framework, flags);
+    return pmix_mca_base_framework_components_open(&prte_odls_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, odls, "PRTE Daemon Launch Subsystem", prte_odls_base_register,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, odls, "PRTE Daemon Launch Subsystem", prte_odls_base_register,
                                 prte_odls_base_open, prte_odls_base_close,
                                 prte_odls_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 static void launch_local_const(prte_odls_launch_local_t *ptr)
 {

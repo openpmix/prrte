@@ -31,7 +31,7 @@ const char *prte_errmgr_detector_component_version_string
 static int errmgr_detector_register(void);
 static int errmgr_detector_open(void);
 static int errmgr_detector_close(void);
-static int errmgr_detector_component_query(prte_mca_base_module_t **module, int *priority);
+static int errmgr_detector_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
@@ -45,7 +45,7 @@ prte_errmgr_detector_component_t prte_errmgr_detector_component = {
         .base_version = {
             PRTE_ERRMGR_BASE_VERSION_3_0_0,
             /* Component name and version */
-            .mca_component_name = "detector",
+            \.pmix_mca_component_name = "detector",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                     PMIX_RELEASE_VERSION),
 
@@ -68,7 +68,7 @@ static int my_priority;
 
 static int errmgr_detector_register(void)
 {
-    prte_mca_base_component_t *c = &prte_errmgr_detector_component.super.base_version;
+    pmix_mca_base_component_t *c = &prte_errmgr_detector_component.super.base_version;
     if (PRTE_PROC_IS_DAEMON)
         my_priority = 1005;
     else
@@ -102,12 +102,12 @@ static int errmgr_detector_close(void)
     return PRTE_SUCCESS;
 }
 
-static int errmgr_detector_component_query(prte_mca_base_module_t **module, int *priority)
+static int errmgr_detector_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* used by DVM masters */
     if (prte_enable_ft && PRTE_PROC_IS_DAEMON) {
         *priority = my_priority;
-        *module = (prte_mca_base_module_t *) &prte_errmgr_detector_module;
+        *module = (pmix_mca_base_module_t *) &prte_errmgr_detector_module;
         return PRTE_SUCCESS;
     }
 

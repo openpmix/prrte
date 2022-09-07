@@ -33,7 +33,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/util/output.h"
 
 #include "src/runtime/prte_globals.h"
@@ -49,18 +49,18 @@
 static int prte_ras_gridengine_register(void);
 static int prte_ras_gridengine_open(void);
 static int prte_ras_gridengine_close(void);
-static int prte_ras_gridengine_component_query(prte_mca_base_module_t **module, int *priority);
+static int prte_ras_gridengine_component_query(pmix_mca_base_module_t **module, int *priority);
 
 static int prte_ras_gridengine_verbose;
 
 prte_ras_gridengine_component_t prte_ras_gridengine_component = {
     {
-        /* First, the prte_mca_base_component_t struct containing meta
+        /* First, the pmix_mca_base_component_t struct containing meta
            information about the component itself */
 
         .base_version = {
             PRTE_RAS_BASE_VERSION_2_0_0,
-            .mca_component_name = "gridengine",
+            \.pmix_mca_component_name = "gridengine",
             PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                                         PMIX_RELEASE_VERSION),
             .mca_open_component = prte_ras_gridengine_open,
@@ -77,7 +77,7 @@ prte_ras_gridengine_component_t prte_ras_gridengine_component = {
 
 static int prte_ras_gridengine_register(void)
 {
-    prte_mca_base_component_t *c = &prte_ras_gridengine_component.super.base_version;
+    pmix_mca_base_component_t *c = &prte_ras_gridengine_component.super.base_version;
 
     prte_ras_gridengine_component.priority = 100;
     (void) prte_mca_base_component_var_register(c, "priority",
@@ -118,7 +118,7 @@ static int prte_ras_gridengine_open(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_ras_gridengine_component_query(prte_mca_base_module_t **module, int *priority)
+static int prte_ras_gridengine_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     *priority = prte_ras_gridengine_component.priority;
 
@@ -127,7 +127,7 @@ static int prte_ras_gridengine_component_query(prte_mca_base_module_t **module, 
         PRTE_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
                              "%s ras:gridengine: available for selection",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-        *module = (prte_mca_base_module_t *) &prte_ras_gridengine_module;
+        *module = (pmix_mca_base_module_t *) &prte_ras_gridengine_module;
         return PRTE_SUCCESS;
     }
     PRTE_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,

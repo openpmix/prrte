@@ -53,7 +53,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
     pmix_list_item_t *item;
     int32_t num_slots;
     int rc;
-    prte_mca_base_component_t *c = &prte_rmaps_round_robin_component.base_version;
+    pmix_mca_base_component_t *c = &prte_rmaps_round_robin_component;
     bool initial_map = true;
     char **tmp;
 
@@ -68,7 +68,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper
-        && 0 != strcasecmp(jdata->map->req_mapper, c->mca_component_name)) {
+        && 0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: job %s not using rr mapper",
@@ -91,7 +91,7 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
     if (NULL != jdata->map->last_mapper) {
         free(jdata->map->last_mapper);
     }
-    jdata->map->last_mapper = strdup(c->mca_component_name);
+    jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
 
     /* start at the beginning... */
     jdata->num_procs = 0;

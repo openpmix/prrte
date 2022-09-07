@@ -28,7 +28,7 @@
 #include "constants.h"
 
 #include "src/class/pmix_bitmap.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -40,7 +40,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prte_mca_base_component_t struct.
+ * component's public pmix_mca_base_component_t struct.
  */
 
 #include "src/mca/oob/base/static-components.h"
@@ -53,11 +53,11 @@ prte_oob_base_t prte_oob_base = {0};
 static int prte_oob_base_close(void)
 {
     prte_oob_base_component_t *component;
-    prte_mca_base_component_list_item_t *cli;
+    pmix_mca_base_component_list_item_t *cli;
 
     /* shutdown all active transports */
     while (NULL
-           != (cli = (prte_mca_base_component_list_item_t *) pmix_list_remove_first(
+           != (cli = (pmix_mca_base_component_list_item_t *) pmix_list_remove_first(
                    &prte_oob_base.actives))) {
         component = (prte_oob_base_component_t *) cli->cli_component;
         if (NULL != component->shutdown) {
@@ -72,14 +72,14 @@ static int prte_oob_base_close(void)
     /* release all peers from the list */
     PMIX_LIST_DESTRUCT(&prte_oob_base.peers);
 
-    return prte_mca_base_framework_components_close(&prte_oob_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_oob_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components,
  * or the one that was specifically requested via a MCA parameter.
  */
-static int prte_oob_base_open(prte_mca_base_open_flag_t flags)
+static int prte_oob_base_open(pmix_mca_base_open_flag_t flags)
 {
     /* setup globals */
     prte_oob_base.max_uri_length = -1;
@@ -87,13 +87,13 @@ static int prte_oob_base_open(prte_mca_base_open_flag_t flags)
     PMIX_CONSTRUCT(&prte_oob_base.actives, pmix_list_t);
 
     /* Open up all available components */
-    return prte_mca_base_framework_components_open(&prte_oob_base_framework, flags);
+    return pmix_mca_base_framework_components_open(&prte_oob_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, oob, "Out-of-Band Messaging Subsystem", NULL,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, oob, "Out-of-Band Messaging Subsystem", NULL,
                                 prte_oob_base_open, prte_oob_base_close,
                                 prte_oob_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 PMIX_CLASS_INSTANCE(prte_oob_send_t, pmix_object_t, NULL, NULL);
 

@@ -13,7 +13,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/output.h"
 
@@ -25,7 +25,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prte_mca_base_component_t struct.
+ * component's public pmix_mca_base_component_t struct.
  */
 #include "src/mca/propagate/base/static-components.h"
 
@@ -41,18 +41,18 @@ static int prte_propagate_base_close(void)
         prte_propagate.finalize();
     }
 
-    return prte_mca_base_framework_components_close(&prte_propagate_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_propagate_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components, or the one
  * that was specifically requested via a MCA parameter.
  */
-static int prte_propagate_base_open(prte_mca_base_open_flag_t flags)
+static int prte_propagate_base_open(pmix_mca_base_open_flag_t flags)
 {
-    return prte_mca_base_framework_components_open(&prte_propagate_base_framework, flags);
+    return pmix_mca_base_framework_components_open(&prte_propagate_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, propagate, "PROPAGATE", NULL, prte_propagate_base_open,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, propagate, "PROPAGATE", NULL, prte_propagate_base_open,
                                 prte_propagate_base_close, prte_propagate_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);

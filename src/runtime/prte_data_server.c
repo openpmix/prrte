@@ -129,11 +129,10 @@ int prte_data_server_init(void)
 
     /* register a verbosity */
     prte_data_server_verbosity = -1;
-    (void) prte_mca_base_var_register("prte", "prte", "data", "server_verbose",
+    (void) pmix_mca_base_var_register("prte", "prte", "data", "server_verbose",
                                       "Debug verbosity for PRTE data server",
-                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_ALL, &prte_data_server_verbosity);
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
+                                      &prte_data_server_verbosity);
     if (0 <= prte_data_server_verbosity) {
         prte_data_server_output = prte_output_open(NULL);
         prte_output_set_verbosity(prte_data_server_output, prte_data_server_verbosity);

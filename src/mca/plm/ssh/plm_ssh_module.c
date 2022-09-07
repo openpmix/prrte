@@ -67,7 +67,7 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/pinstalldirs/pinstalldirs_types.h"
 #include "src/util/pmix_argv.h"

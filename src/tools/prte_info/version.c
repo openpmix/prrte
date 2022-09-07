@@ -29,7 +29,7 @@
 #include <string.h>
 
 #include "src/include/version.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_printf.h"
 
@@ -60,7 +60,7 @@ static const char *prte_info_ver_component = "component";
  * Private functions
  */
 
-static void show_mca_version(const prte_mca_base_component_t *component, const char *scope,
+static void show_mca_version(const pmix_mca_base_component_t *component, const char *scope,
                              const char *ver_type);
 static char *make_version_str(const char *scope, int major, int minor, int release,
                               const char *greek, const char *repo);
@@ -164,8 +164,8 @@ void prte_info_show_component_version(const char *type_name, const char *compone
     bool want_all_components = false;
     bool found;
     pmix_list_item_t *item;
-    prte_mca_base_component_list_item_t *cli;
-    const prte_mca_base_component_t *component;
+    pmix_mca_base_component_list_item_t *cli;
+    const pmix_mca_base_component_t *component;
     pmix_list_t *components;
     int j;
     char *pos;
@@ -210,10 +210,10 @@ void prte_info_show_component_version(const char *type_name, const char *compone
         if (pmix_list_get_size(components) > 0) {
             for (item = pmix_list_get_first(components); pmix_list_get_end(components) != item;
                  item = pmix_list_get_next(item)) {
-                cli = (prte_mca_base_component_list_item_t *) item;
+                cli = (pmix_mca_base_component_list_item_t *) item;
                 component = cli->cli_component;
                 if (want_all_components
-                    || 0 == strcmp(component->mca_component_name, component_name)) {
+                    || 0 == strcmp(component->pmix_mca_component_name, component_name)) {
                     show_mca_version(component, scope, ver_type);
                 }
             }
@@ -224,7 +224,7 @@ void prte_info_show_component_version(const char *type_name, const char *compone
 /*
  * Given a component, display its relevant version(s)
  */
-static void show_mca_version(const prte_mca_base_component_t *component, const char *scope,
+static void show_mca_version(const pmix_mca_base_component_t *component, const char *scope,
                              const char *ver_type)
 {
     bool printed;
@@ -250,20 +250,21 @@ static void show_mca_version(const prte_mca_base_component_t *component, const c
         want_component = true;
     }
 
-    mca_version = make_version_str(scope, component->mca_major_version,
-                                   component->mca_minor_version, component->mca_release_version, "",
+    mca_version = make_version_str(scope, component->pmix_mca_major_version,
+                                   component->pmix_mca_minor_version,
+                                   component->pmix_mca_release_version, "",
                                    "");
-    api_version = make_version_str(scope, component->mca_type_major_version,
-                                   component->mca_type_minor_version,
-                                   component->mca_type_release_version, "", "");
-    component_version = make_version_str(scope, component->mca_component_major_version,
-                                         component->mca_component_minor_version,
-                                         component->mca_component_release_version, "", "");
+    api_version = make_version_str(scope, component->pmix_mca_type_major_version,
+                                   component->pmix_mca_type_minor_version,
+                                   component->pmix_mca_type_release_version, "", "");
+    component_version = make_version_str(scope, component->pmix_mca_component_major_version,
+                                         component->pmix_mca_component_minor_version,
+                                         component->pmix_mca_component_release_version, "", "");
 
     if (prte_info_pretty) {
-        pmix_asprintf(&message, "MCA %s", component->mca_type_name);
+        pmix_asprintf(&message, "MCA %s", component->pmix_mca_type_name);
         printed = false;
-        pmix_asprintf(&content, "%s (", component->mca_component_name);
+        pmix_asprintf(&content, "%s (", component->pmix_mca_component_name);
 
         if (want_mca) {
             pmix_asprintf(&tmp, "%sMCA v%s", content, mca_version);
@@ -307,8 +308,9 @@ static void show_mca_version(const prte_mca_base_component_t *component, const c
         free(tmp);
 
     } else {
-        pmix_asprintf(&message, "mca:%s:%s:version", component->mca_type_name,
-                      component->mca_component_name);
+        pmix_asprintf(&message, "mca:%s:%s:version",
+                      component->pmix_mca_type_name,
+                      component->pmix_mca_component_name);
         if (want_mca) {
             pmix_asprintf(&tmp, "mca:%s", mca_version);
             prte_info_out(NULL, message, tmp);

@@ -45,7 +45,7 @@ static int ppr_mapper(prte_job_t *jdata,
 {
     int rc = PRTE_SUCCESS, j, n, ppr, idx, ncpus;
     prte_proc_t *proc;
-    prte_mca_base_component_t *c = &prte_rmaps_ppr_component.base_version;
+    pmix_mca_base_component_t *c = &prte_rmaps_ppr_component;
     prte_node_t *node, *nd;
     prte_app_context_t *app;
     pmix_rank_t total_procs, nprocs_mapped;
@@ -70,7 +70,7 @@ static int ppr_mapper(prte_job_t *jdata,
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper
-        && 0 != strcasecmp(jdata->map->req_mapper, c->mca_component_name)) {
+        && 0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:ppr: job %s not using ppr mapper",
@@ -101,7 +101,7 @@ static int ppr_mapper(prte_job_t *jdata,
     if (NULL != jdata->map->last_mapper) {
         free(jdata->map->last_mapper);
     }
-    jdata->map->last_mapper = strdup(c->mca_component_name);
+    jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
 
         /* split on the colon */
     ck = pmix_argv_split(jobppr, ':');

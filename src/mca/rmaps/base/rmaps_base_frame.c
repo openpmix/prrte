@@ -28,7 +28,7 @@
 
 #include <string.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/pmix_argv.h"
@@ -45,7 +45,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prte_mca_base_component_t struct.
+ * component's public pmix_mca_base_component_t struct.
  */
 
 #include "src/mca/rmaps/base/static-components.h"
@@ -73,48 +73,44 @@ static char *rmaps_base_ranking_policy = NULL;
 static bool rmaps_base_inherit = false;
 static bool rmaps_base_abort_non_zero_exit = true;
 
-static int prte_rmaps_base_register(prte_mca_base_register_flag_t flags)
+static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
 {
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     /* define default mapping policy */
     rmaps_base_mapping_policy = NULL;
-    (void) prte_mca_base_var_register(
-        "prte", "rmaps", "default", "mapping_policy",
-        "Default mapping Policy [slot | hwthread | core | l1cache | "
-        "l2cache | l3cache | numa | package | node | seq | dist | ppr | "
-        "rankfile | pe-list=a,b (comma-delimited ranges of cpus to use for this job)],"
-        " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
-        "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
-        "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, ORDERED, FILE=%s (path to file containing sequential "
-        "or rankfile entries)",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_mapping_policy);
+    (void) pmix_mca_base_var_register("prte", "rmaps", "default", "mapping_policy",
+                                      "Default mapping Policy [slot | hwthread | core | l1cache | "
+                                      "l2cache | l3cache | numa | package | node | seq | dist | ppr | "
+                                      "rankfile | pe-list=a,b (comma-delimited ranges of cpus to use for this job)],"
+                                      " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
+                                      "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
+                                      "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, ORDERED, FILE=%s (path to file containing sequential "
+                                      "or rankfile entries)",
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &rmaps_base_mapping_policy);
 
     /* define default ranking policy */
     rmaps_base_ranking_policy = NULL;
-    (void) prte_mca_base_var_register(
-        "prte", "rmaps", "default", "ranking_policy",
-        "Default ranking Policy [slot | node | span | fill]",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_ranking_policy);
+    (void) pmix_mca_base_var_register("prte", "rmaps", "default", "ranking_policy",
+                                      "Default ranking Policy [slot | node | span | fill]",
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &rmaps_base_ranking_policy);
 
     rmaps_base_inherit = false;
-    (void) prte_mca_base_var_register("prte", "rmaps", "default", "inherit",
+    (void) pmix_mca_base_var_register("prte", "rmaps", "default", "inherit",
                                       "Whether child jobs shall inherit mapping/ranking/binding "
                                       "directives from their parent by default",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_inherit);
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &rmaps_base_inherit);
 
     /* set some default job controls - since they get resolved in
      prte_rmaps_base_map_job, we put them here */
     rmaps_base_abort_non_zero_exit = true;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "abort_on_non_zero_status",
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "abort_on_non_zero_status",
                                       "Set default policy for aborting the job if any process returns a non-zero exit status",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_abort_non_zero_exit);
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &rmaps_base_abort_non_zero_exit);
 
     return PRTE_SUCCESS;
 }
@@ -131,14 +127,14 @@ static int prte_rmaps_base_close(void)
     hwloc_bitmap_free(prte_rmaps_base.available);
     hwloc_bitmap_free(prte_rmaps_base.baseset);
 
-    return prte_mca_base_framework_components_close(&prte_rmaps_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_rmaps_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components, or the one
  * that was specifically requested via a MCA parameter.
  */
-static int prte_rmaps_base_open(prte_mca_base_open_flag_t flags)
+static int prte_rmaps_base_open(pmix_mca_base_open_flag_t flags)
 {
     int rc;
 
@@ -171,13 +167,13 @@ static int prte_rmaps_base_open(prte_mca_base_open_flag_t flags)
     }
 
     /* Open up all available components */
-    return prte_mca_base_framework_components_open(&prte_rmaps_base_framework, flags);
+    return pmix_mca_base_framework_components_open(&prte_rmaps_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, rmaps, "PRTE Mapping Subsystem", prte_rmaps_base_register,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, rmaps, "PRTE Mapping Subsystem", prte_rmaps_base_register,
                                 prte_rmaps_base_open, prte_rmaps_base_close,
                                 prte_rmaps_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 PMIX_CLASS_INSTANCE(prte_rmaps_base_selected_module_t, pmix_list_item_t, NULL, NULL);
 

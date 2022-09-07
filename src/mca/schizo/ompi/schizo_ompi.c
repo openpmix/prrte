@@ -53,7 +53,7 @@
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
 
-#include "src/mca/base/prte_mca_base_vari.h"
+#include "src/mca/base/pmix_mca_base_vari.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/rmaps/base/base.h"
@@ -1968,7 +1968,7 @@ static int detect_proxy(char *personalities)
     char *file;
     const char *home;
     pmix_list_t params;
-    prte_mca_base_var_file_value_t *fv;
+    pmix_mca_base_var_file_value_t *fv;
     uid_t uid;
     int n, len;
 
@@ -2058,9 +2058,9 @@ weareit:
     if (NULL != home) {
         file = pmix_os_path(false, home, ".openmpi", "mca-params.conf", NULL);
         PMIX_CONSTRUCT(&params, pmix_list_t);
-        prte_mca_base_parse_paramfile(file, &params);
+        pmix_mca_base_parse_paramfile(file, &params);
         free(file);
-        PMIX_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+        PMIX_LIST_FOREACH (fv, &params, pmix_mca_base_var_file_value_t) {
             // see if this param relates to PRRTE
             if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
@@ -2090,9 +2090,9 @@ weareit:
         /* look for the default MCA param file */
         file = pmix_os_path(false, evar, "etc", "openmpi-mca-params.conf", NULL);
         PMIX_CONSTRUCT(&params, pmix_list_t);
-        prte_mca_base_parse_paramfile(file, &params);
+        pmix_mca_base_parse_paramfile(file, &params);
         free(file);
-        PMIX_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+        PMIX_LIST_FOREACH (fv, &params, pmix_mca_base_var_file_value_t) {
             // see if this param relates to PRRTE
             if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);

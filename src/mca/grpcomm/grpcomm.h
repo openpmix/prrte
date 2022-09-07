@@ -197,19 +197,14 @@ typedef struct {
 /*
  * the standard component data structure
  */
-struct prte_grpcomm_base_component_3_0_0_t {
-    prte_mca_base_component_t base_version;
-    prte_mca_base_component_data_t base_data;
-};
-typedef struct prte_grpcomm_base_component_3_0_0_t prte_grpcomm_base_component_3_0_0_t;
-typedef prte_grpcomm_base_component_3_0_0_t prte_grpcomm_base_component_t;
+typedef pmix_mca_base_component_t prte_grpcomm_base_component_t;
 
 /*
  * Macro for use in components that are of type grpcomm v3.0.0
  */
 #define PRTE_GRPCOMM_BASE_VERSION_3_0_0       \
     /* grpcomm v3.0 is chained to MCA v2.0 */ \
-    PRTE_MCA_BASE_VERSION_2_1_0("grpcomm", 3, 0, 0)
+    PMIX_MCA_BASE_VERSION_1_0_0("grpcomm", 3, 0, 0)
 
 /* Global structure for accessing grpcomm functions */
 PRTE_EXPORT extern prte_grpcomm_API_module_t prte_grpcomm;

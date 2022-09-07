@@ -33,6 +33,7 @@
 
 #include "src/class/pmix_list.h"
 #include "src/class/pmix_pointer_array.h"
+#include "src/include/constants.h"
 
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_cmd_line.h"
@@ -45,7 +46,7 @@
 
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 
-#include "src/mca/base/prte_mca_base_component_repository.h"
+#include "src/mca/base/pmix_mca_base_component_repository.h"
 #include "src/tools/prte_info/pinfo.h"
 
 /*
@@ -65,10 +66,12 @@ static void component_map_destruct(prte_info_component_map_t *map)
      * list of components
      */
 }
-PMIX_CLASS_INSTANCE(prte_info_component_map_t, pmix_list_item_t, component_map_construct,
+PMIX_CLASS_INSTANCE(prte_info_component_map_t,
+                    pmix_list_item_t,
+                    component_map_construct,
                     component_map_destruct);
 
-pmix_pointer_array_t prte_component_map = {{0}};
+pmix_pointer_array_t prte_component_map = PMIX_POINTER_ARRAY_STATIC_INIT;
 
 /*
  * Private variables
@@ -76,14 +79,14 @@ pmix_pointer_array_t prte_component_map = {{0}};
 
 static bool opened_components = false;
 
-static int info_register_framework(prte_mca_base_framework_t *framework,
+static int info_register_framework(pmix_mca_base_framework_t *framework,
                                    pmix_pointer_array_t *component_map)
 {
     prte_info_component_map_t *map;
     int rc;
 
-    rc = prte_mca_base_framework_register(framework, PRTE_MCA_BASE_REGISTER_ALL);
-    if (PRTE_SUCCESS != rc && PRTE_ERR_BAD_PARAM != rc) {
+    rc = pmix_mca_base_framework_register(framework, PMIX_MCA_BASE_REGISTER_ALL);
+    if (PMIX_SUCCESS != rc && PMIX_ERR_BAD_PARAM != rc) {
         return rc;
     }
 
@@ -99,21 +102,21 @@ static int info_register_framework(prte_mca_base_framework_t *framework,
 }
 
 static int register_project_frameworks(const char *project_name,
-                                       prte_mca_base_framework_t **frameworks,
+                                       pmix_mca_base_framework_t **frameworks,
                                        pmix_pointer_array_t *component_map)
 {
     int i, rc = PRTE_SUCCESS;
 
     for (i = 0; NULL != frameworks[i]; i++) {
-        if (PRTE_SUCCESS != (rc = info_register_framework(frameworks[i], component_map))) {
-            if (PRTE_ERR_BAD_PARAM == rc) {
+        if (PMIX_SUCCESS != (rc = info_register_framework(frameworks[i], component_map))) {
+            if (PMIX_ERR_BAD_PARAM == rc) {
                 fprintf(stderr,
                         "\nA \"bad parameter\" error was encountered when opening the %s %s "
                         "framework\n",
                         project_name, frameworks[i]->framework_name);
                 fprintf(stderr, "The output received from that framework includes the following "
                                 "parameters:\n\n");
-            } else if (PRTE_ERR_NOT_AVAILABLE != rc) {
+            } else if (PMIX_ERR_NOT_AVAILABLE != rc) {
                 fprintf(stderr, "%s_info_register: %s failed\n", project_name,
                         frameworks[i]->framework_name);
                 rc = PRTE_ERROR;
@@ -133,7 +136,7 @@ static int register_framework_params(pmix_pointer_array_t *component_map)
     int rc;
 
     /* Register mca/base parameters */
-    if (PRTE_SUCCESS != prte_mca_base_open()) {
+    if (PMIX_SUCCESS != pmix_mca_base_open(NULL)) {
         pmix_show_help("help-prte_info.txt", "lib-call-fail", true, "mca_base_open", __FILE__,
                        __LINE__);
         return PRTE_ERROR;
@@ -176,7 +179,7 @@ void prte_info_components_close(void)
     }
 
     for (i = 0; NULL != prte_frameworks[i]; i++) {
-        (void) prte_mca_base_framework_close(prte_frameworks[i]);
+        (void) pmix_mca_base_framework_close(prte_frameworks[i]);
     }
 
     for (i = 0; i < prte_component_map.size; i++) {
