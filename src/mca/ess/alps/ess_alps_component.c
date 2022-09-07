@@ -46,25 +46,19 @@
  * and pointers to our public functions in it
  */
 prte_ess_base_component_t prte_ess_alps_component = {
-    /* First, the mca_component_t struct containing meta information
-       about the component itself */
-    .base_version = {
-        PRTE_ESS_BASE_VERSION_3_0_0,
+    PRTE_ESS_BASE_VERSION_3_0_0,
 
-        /* Component name and version */
-        .mca_component_name = "alps",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PMIX_RELEASE_VERSION),
+    /* Component name and version */
+    .pmix_mca_component_name = "alps",
+    PMIX_MCA_BASE_MAKE_VERSION(component,
+                               PRTE_MAJOR_VERSION,
+                               PRTE_MINOR_VERSION,
+                               PMIX_RELEASE_VERSION),
 
-        /* Component open and close functions */
-        .mca_open_component = prte_ess_alps_component_open,
-        .mca_close_component = prte_ess_alps_component_close,
-        .mca_query_component = prte_ess_alps_component_query,
-    },
-    .base_data = {
-        /* The component is not checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_NONE
-    },
+    /* Component open and close functions */
+    .pmix_mca_open_component = prte_ess_alps_component_open,
+    .pmix_mca_close_component = prte_ess_alps_component_close,
+    .pmix_mca_query_component = prte_ess_alps_component_query,
 };
 
 int prte_ess_alps_component_open(void)
@@ -72,7 +66,7 @@ int prte_ess_alps_component_open(void)
     return PRTE_SUCCESS;
 }
 
-int prte_ess_alps_component_query(prte_mca_base_module_t **module, int *priority)
+int prte_ess_alps_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     int rc = PRTE_SUCCESS;
     bool flag;
@@ -87,7 +81,7 @@ int prte_ess_alps_component_query(prte_mca_base_module_t **module, int *priority
     rc = prte_common_alps_proc_in_pagg(&flag);
     if ((PRTE_SUCCESS == rc) && flag) {
         *priority = 35; /* take precendence over base */
-        *module = (prte_mca_base_module_t *) &prte_ess_alps_module;
+        *module = (pmix_mca_base_module_t *) &prte_ess_alps_module;
     }
 
     return rc;

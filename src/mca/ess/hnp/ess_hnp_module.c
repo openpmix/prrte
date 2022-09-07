@@ -130,8 +130,8 @@ static int rte_init(int argc, char **argv)
 
     /* open and setup the state machine */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_state_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_state_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_state_base_open";
         goto error;
     }
@@ -142,8 +142,8 @@ static int rte_init(int argc, char **argv)
 
     /* open the errmgr */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_errmgr_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_errmgr_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_errmgr_base_open";
         goto error;
     }
@@ -151,8 +151,8 @@ static int rte_init(int argc, char **argv)
 #if PRTE_ENABLE_FT
     /* open the propagator */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_propagate_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_propagate_base_open";
         goto error;
     }
@@ -164,8 +164,8 @@ static int rte_init(int argc, char **argv)
      * first and select that component.
      */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_plm_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_plm_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_plm_base_open";
         goto error;
     }
@@ -217,8 +217,8 @@ static int rte_init(int argc, char **argv)
     }
     /* Setup the communication infrastructure */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_prtereachable_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_prtereachable_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_prtereachable_base_open";
         goto error;
@@ -232,8 +232,8 @@ static int rte_init(int argc, char **argv)
      * OOB Layer
      */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_oob_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_oob_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_oob_base_open";
         goto error;
     }
@@ -254,8 +254,8 @@ static int rte_init(int argc, char **argv)
      * Group communications
      */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_grpcomm_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_grpcomm_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_grpcomm_base_open";
         goto error;
@@ -379,8 +379,8 @@ static int rte_init(int argc, char **argv)
      * the hnp proxy support in the PLM framework.
      */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_ras_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_ras_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_ras_base_open";
         goto error;
@@ -391,8 +391,8 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rmaps_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_rmaps_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rmaps_base_open";
         goto error;
@@ -421,8 +421,8 @@ static int rte_init(int argc, char **argv)
     }
 
     /* Open/select the odls */
-    ret = prte_mca_base_framework_open(&prte_odls_base_framework,
-                                       PRTE_MCA_BASE_OPEN_DEFAULT);
+    ret = pmix_mca_base_framework_open(&prte_odls_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         error = "prte_odls_base_open";
@@ -434,8 +434,8 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
     /* Open/select the rtc */
-    ret = prte_mca_base_framework_open(&prte_rtc_base_framework,
-                                       PRTE_MCA_BASE_OPEN_DEFAULT);
+    ret = pmix_mca_base_framework_open(&prte_rtc_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rtc_base_open";
@@ -459,8 +459,8 @@ static int rte_init(int argc, char **argv)
 
     /* setup I/O forwarding system - must come after we init routes */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_iof_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_iof_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_iof_base_open";
         goto error;
@@ -472,8 +472,8 @@ static int rte_init(int argc, char **argv)
     }
     /* setup the FileM */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_filem_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_filem_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_filem_base_open";
         goto error;
@@ -513,7 +513,7 @@ static int rte_finalize(void)
      * the required facilities until the rml and oob are offline */
     prte_errmgr.finalize();
 #if PRTE_ENABLE_FT
-    (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_propagate_base_framework);
 #endif
 
     /* remove my contact info file, if we have session directories */
@@ -525,19 +525,19 @@ static int rte_finalize(void)
     }
 
     /* close frameworks */
-    (void) prte_mca_base_framework_close(&prte_filem_base_framework);
-    (void) prte_mca_base_framework_close(&prte_grpcomm_base_framework);
-    (void) prte_mca_base_framework_close(&prte_iof_base_framework);
-    (void) prte_mca_base_framework_close(&prte_plm_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_filem_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_iof_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_plm_base_framework);
     /* make sure our local procs are dead */
     prte_odls.kill_local_procs(NULL);
-    (void) prte_mca_base_framework_close(&prte_rtc_base_framework);
-    (void) prte_mca_base_framework_close(&prte_odls_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_rtc_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
     prte_rml_close();
-    (void) prte_mca_base_framework_close(&prte_oob_base_framework);
-    (void) prte_mca_base_framework_close(&prte_prtereachable_base_framework);
-    (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);
-    (void) prte_mca_base_framework_close(&prte_state_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_oob_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_prtereachable_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_state_base_framework);
 
     /* remove our use of the session directory tree */
     prte_session_dir_finalize(PRTE_PROC_MY_NAME);

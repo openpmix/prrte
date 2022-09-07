@@ -41,7 +41,7 @@ BEGIN_C_DECLS
 /*
  * MCA Framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_errmgr_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_errmgr_base_framework;
 /* select a component */
 PRTE_EXPORT int prte_errmgr_base_select(void);
 

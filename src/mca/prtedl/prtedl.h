@@ -4,7 +4,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -51,7 +51,7 @@
 
 #include "prte_config.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
 BEGIN_C_DECLS
@@ -145,9 +145,7 @@ typedef int (*prte_prtedl_base_module_foreachfile_fn_t)(
  */
 struct prte_prtedl_base_component_1_0_0_t {
     /** MCA base component */
-    prte_mca_base_component_t base_version;
-    /** MCA base data */
-    prte_mca_base_component_data_t base_data;
+    pmix_mca_base_component_t base_version;
 
     /** Default priority */
     int priority;
@@ -159,7 +157,7 @@ typedef struct prte_prtedl_base_component_1_0_0_t prte_prtedl_base_component_t;
  * Structure for DL modules
  */
 struct prte_prtedl_base_module_1_0_0_t {
-    prte_mca_base_module_2_0_0_t super;
+    pmix_mca_base_module_t super;
 
     /** Open / close */
     prte_prtedl_base_module_open_fn_t open;
@@ -177,7 +175,7 @@ typedef struct prte_prtedl_base_module_1_0_0_t prte_prtedl_base_module_t;
 /**
  * Macro for use in components that are of type DL
  */
-#define PRTE_DL_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_2_1_0("prtedl", 1, 0, 0)
+#define PRTE_DL_BASE_VERSION_1_0_0 PMIX_MCA_BASE_VERSION_1_0_0("prtedl", 1, 0, 0)
 
 END_C_DECLS
 

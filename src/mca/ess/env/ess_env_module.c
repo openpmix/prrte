@@ -38,7 +38,7 @@
 #include "src/event/event-internal.h"
 #include "src/pmix/pmix-internal.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/malloc.h"

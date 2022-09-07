@@ -181,18 +181,13 @@ typedef struct prte_iof_base_module_2_0_0_t prte_iof_base_module_2_0_0_t;
 typedef prte_iof_base_module_2_0_0_t prte_iof_base_module_t;
 PRTE_EXPORT extern prte_iof_base_module_t prte_iof;
 
-struct prte_iof_base_component_2_0_0_t {
-    prte_mca_base_component_t iof_version;
-    prte_mca_base_component_data_t iof_data;
-};
-typedef struct prte_iof_base_component_2_0_0_t prte_iof_base_component_2_0_0_t;
-typedef struct prte_iof_base_component_2_0_0_t prte_iof_base_component_t;
+typedef pmix_mca_base_component_t prte_iof_base_component_t;
 
 END_C_DECLS
 
 /*
  * Macro for use in components that are of type iof
  */
-#define PRTE_IOF_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("iof", 2, 0, 0)
+#define PRTE_IOF_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("iof", 2, 0, 0)
 
 #endif /* PRTE_IOF_H */

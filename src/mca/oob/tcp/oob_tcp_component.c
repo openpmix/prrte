@@ -111,19 +111,17 @@ static bool component_is_reachable(pmix_proc_t *peer);
  * Struct of function pointers and all that to let us be initialized
  */
 prte_oob_tcp_component_t prte_oob_tcp_component = {
-    {
+    .super = {
         .oob_base = {
             PRTE_OOB_BASE_VERSION_2_0_0,
-            .mca_component_name = "tcp",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-            .mca_open_component = tcp_component_open,
-            .mca_close_component = tcp_component_close,
-            .mca_register_component_params = tcp_component_register,
-        },
-        .oob_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+            .pmix_mca_component_name = "tcp",
+            PMIX_MCA_BASE_MAKE_VERSION(component,
+                                       PRTE_MAJOR_VERSION,
+                                       PRTE_MINOR_VERSION,
+                                       PMIX_RELEASE_VERSION),
+            .pmix_mca_open_component = tcp_component_open,
+            .pmix_mca_close_component = tcp_component_close,
+            .pmix_mca_register_component_params = tcp_component_register,
         },
         .priority = 30, // default priority of this transport
         .available = component_available,
@@ -133,7 +131,7 @@ prte_oob_tcp_component_t prte_oob_tcp_component = {
         .get_addr = component_get_addr,
         .set_addr = component_set_addr,
         .is_reachable = component_is_reachable,
-    },
+    }
 };
 
 /*
@@ -200,43 +198,38 @@ static char *dyn_port_string6;
 
 static int tcp_component_register(void)
 {
-    prte_mca_base_component_t *component = &prte_oob_tcp_component.super.oob_base;
+    pmix_mca_base_component_t *component = &prte_oob_tcp_component.super.oob_base;
 
     /* register oob module parameters */
     prte_oob_tcp_component.peer_limit = -1;
-    (void) prte_mca_base_component_var_register(
-        component, "peer_limit",
-        "Maximum number of peer connections to simultaneously maintain (-1 = infinite)",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
-        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.peer_limit);
+    (void) pmix_mca_base_component_var_register(component, "peer_limit",
+                                                "Maximum number of peer connections to simultaneously maintain (-1 = infinite)",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
+                                                &prte_oob_tcp_component.peer_limit);
 
     prte_oob_tcp_component.max_retries = 2;
-    (void) prte_mca_base_component_var_register(
-        component, "peer_retries",
-        "Number of times to try shutting down a connection before giving up",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
-        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.max_retries);
+    (void) pmix_mca_base_component_var_register(component, "peer_retries",
+                                                "Number of times to try shutting down a connection before giving up",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
+                                                &prte_oob_tcp_component.max_retries);
 
     prte_oob_tcp_component.tcp_sndbuf = 0;
-    (void) prte_mca_base_component_var_register(
-        component, "sndbuf", "TCP socket send buffering size (in bytes, 0 => leave system default)",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
-        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.tcp_sndbuf);
+    (void) pmix_mca_base_component_var_register(component, "sndbuf",
+                                                "TCP socket send buffering size (in bytes, 0 => leave system default)",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
+                                                &prte_oob_tcp_component.tcp_sndbuf);
 
     prte_oob_tcp_component.tcp_rcvbuf = 0;
-    (void) prte_mca_base_component_var_register(
-        component, "rcvbuf",
-        "TCP socket receive buffering size (in bytes, 0 => leave system default)",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
-        PRTE_MCA_BASE_VAR_SCOPE_LOCAL, &prte_oob_tcp_component.tcp_rcvbuf);
+    (void) pmix_mca_base_component_var_register(component, "rcvbuf",
+                                                "TCP socket receive buffering size (in bytes, 0 => leave system default)",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
+                                                &prte_oob_tcp_component.tcp_rcvbuf);
 
 
     static_port_string = NULL;
-    (void) prte_mca_base_component_var_register(component, "static_ipv4_ports",
+    (void) pmix_mca_base_component_var_register(component, "static_ipv4_ports",
                                                 "Static ports for daemons and procs (IPv4)",
-                                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &static_port_string);
 
     /* if ports were provided, parse the provided range */
@@ -252,11 +245,9 @@ static int tcp_component_register(void)
 
 #if PRTE_ENABLE_IPV6
     static_port_string6 = NULL;
-    (void) prte_mca_base_component_var_register(component, "static_ipv6_ports",
+    (void) pmix_mca_base_component_var_register(component, "static_ipv6_ports",
                                                 "Static ports for daemons and procs (IPv6)",
-                                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_2,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &static_port_string6);
 
     /* if ports were provided, parse the provided range */
@@ -278,11 +269,10 @@ static int tcp_component_register(void)
     }
 
     dyn_port_string = NULL;
-    (void) prte_mca_base_component_var_register(
-        component, "dynamic_ipv4_ports",
-        "Range of ports to be dynamically used by daemons and procs (IPv4)",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &dyn_port_string);
+    (void) pmix_mca_base_component_var_register(component, "dynamic_ipv4_ports",
+                                                "Range of ports to be dynamically used by daemons and procs (IPv4)",
+                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                                &dyn_port_string);
     /* if ports were provided, parse the provided range */
     if (NULL != dyn_port_string) {
         /* can't have both static and dynamic ports! */
@@ -303,11 +293,10 @@ static int tcp_component_register(void)
 
 #if PRTE_ENABLE_IPV6
     dyn_port_string6 = NULL;
-    (void) prte_mca_base_component_var_register(
-        component, "dynamic_ipv6_ports",
-        "Range of ports to be dynamically used by daemons and procs (IPv6)",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &dyn_port_string6);
+    (void) pmix_mca_base_component_var_register(component, "dynamic_ipv6_ports",
+                                                "Range of ports to be dynamically used by daemons and procs (IPv6)",
+                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                                &dyn_port_string6);
     /* if ports were provided, parse the provided range */
     if (NULL != dyn_port_string6) {
         /* can't have both static and dynamic ports! */
@@ -341,63 +330,54 @@ static int tcp_component_register(void)
 #endif // PRTE_ENABLE_IPV6
 
     prte_oob_tcp_component.disable_ipv4_family = false;
-    (void) prte_mca_base_component_var_register(component, "disable_ipv4_family",
+    (void) pmix_mca_base_component_var_register(component, "disable_ipv4_family",
                                                 "Disable the IPv4 interfaces",
-                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_oob_tcp_component.disable_ipv4_family);
 
 #if PRTE_ENABLE_IPV6
     prte_oob_tcp_component.disable_ipv6_family = false;
-    (void) prte_mca_base_component_var_register(component, "disable_ipv6_family",
+    (void) pmix_mca_base_component_var_register(component, "disable_ipv6_family",
                                                 "Disable the IPv6 interfaces",
-                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_oob_tcp_component.disable_ipv6_family);
 #endif // PRTE_ENABLE_IPV6
 
     // Wait for this amount of time before sending the first keepalive probe
     prte_oob_tcp_component.keepalive_time = 300;
-    (void) prte_mca_base_component_var_register(
-        component, "keepalive_time",
-        "Idle time in seconds before starting to send keepalives (keepalive_time <= 0 disables "
-        "keepalive functionality)",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_oob_tcp_component.keepalive_time);
+    (void) pmix_mca_base_component_var_register(component, "keepalive_time",
+                                                "Idle time in seconds before starting to send keepalives (keepalive_time <= 0 disables "
+                                                "keepalive functionality)",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
+                                                &prte_oob_tcp_component.keepalive_time);
 
     // Resend keepalive probe every INT seconds
     prte_oob_tcp_component.keepalive_intvl = 20;
-    (void) prte_mca_base_component_var_register(
-        component, "keepalive_intvl",
-        "Time between successive keepalive pings when peer has not responded, in seconds (ignored "
-        "if keepalive_time <= 0)",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_oob_tcp_component.keepalive_intvl);
+    (void) pmix_mca_base_component_var_register(component, "keepalive_intvl",
+                                                "Time between successive keepalive pings when peer has not responded, in seconds (ignored "
+                                                "if keepalive_time <= 0)",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
+                                                &prte_oob_tcp_component.keepalive_intvl);
 
     // After sending PR probes every INT seconds consider the connection dead
     prte_oob_tcp_component.keepalive_probes = 9;
-    (void) prte_mca_base_component_var_register(component, "keepalive_probes",
+    (void) pmix_mca_base_component_var_register(component, "keepalive_probes",
                                                 "Number of keepalives that can be missed before "
                                                 "declaring error (ignored if keepalive_time <= 0)",
-                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_5,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                                 &prte_oob_tcp_component.keepalive_probes);
 
     prte_oob_tcp_component.retry_delay = 0;
-    (void) prte_mca_base_component_var_register(
-        component, "retry_delay", "Time (in sec) to wait before trying to connect to peer again",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_oob_tcp_component.retry_delay);
+    (void) pmix_mca_base_component_var_register(component, "retry_delay",
+                                                "Time (in sec) to wait before trying to connect to peer again",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
+                                                &prte_oob_tcp_component.retry_delay);
 
     prte_oob_tcp_component.max_recon_attempts = 10;
-    (void) prte_mca_base_component_var_register(
-        component, "max_recon_attempts",
-        "Max number of times to attempt connection before giving up (-1 -> never give up)",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_oob_tcp_component.max_recon_attempts);
+    (void) pmix_mca_base_component_var_register(component, "max_recon_attempts",
+                                                "Max number of times to attempt connection before giving up (-1 -> never give up)",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
+                                                &prte_oob_tcp_component.max_recon_attempts);
 
     return PRTE_SUCCESS;
 }

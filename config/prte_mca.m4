@@ -14,7 +14,7 @@ dnl Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2019      Research Organization for Information Science
 dnl                         and Technology (RIST).  All rights reserved.
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -395,7 +395,7 @@ extern "C" {
 
 `cat $outfile.extern`
 
-const prte_mca_base_component_t *prte_$1_base_static_components[[]] = {
+const pmix_mca_base_component_t *prte_$1_base_static_components[[]] = {
 `cat $outfile.struct`
   NULL
 };
@@ -664,7 +664,7 @@ AC_DEFUN([MCA_PROCESS_COMPONENT],[
             # $FRAMEWORK_LIB_PREFIX prefix.
             $6="mca/$1/$2/libmca_$1_$2.la $$6"
         fi
-        echo "extern const prte_mca_base_component_t prte_$1_$2_component;" >> $outfile.extern
+        echo "extern const pmix_mca_base_component_t prte_$1_$2_component;" >> $outfile.extern
         echo "  &prte_$1_$2_component, " >> $outfile.struct
         $4="$$4 $2"
     fi

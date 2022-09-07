@@ -9,7 +9,7 @@
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2015      IBM Corporation.  All rights reserved.
 #
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -281,7 +281,7 @@ sub mca_generate_framework_header(\$\@) {
         if ($framework ne "common" and $framework ne "src") {
             my $framework_name = "prte_${framework}_base_framework";
             $framework_array_output .= "    &$framework_name,\n";
-            $framework_decl_output .= "extern prte_mca_base_framework_t $framework_name;\n";
+            $framework_decl_output .= "extern pmix_mca_base_framework_t $framework_name;\n";
         }
     }
 
@@ -293,10 +293,10 @@ sub mca_generate_framework_header(\$\@) {
 #ifndef $ifdef_string
 #define $ifdef_string
 
-#include \"src/mca/base/prte_mca_base_framework.h\"
+#include \"src/mca/base/pmix_mca_base_framework.h\"
 
 $framework_decl_output
-static prte_mca_base_framework_t *prte_frameworks[] = {
+static pmix_mca_base_framework_t *prte_frameworks[] = {
 $framework_array_output    NULL
 };
 

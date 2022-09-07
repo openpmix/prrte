@@ -33,7 +33,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -54,7 +54,7 @@ const char *prte_plm_alps_component_version_string
 static int plm_alps_register(void);
 static int plm_alps_open(void);
 static int plm_alps_close(void);
-static int prte_plm_alps_component_query(prte_mca_base_module_t **module, int *priority);
+static int prte_plm_alps_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
@@ -62,44 +62,31 @@ static int prte_plm_alps_component_query(prte_mca_base_module_t **module, int *p
  */
 
 prte_plm_alps_component_t prte_plm_alps_component = {
+    .super = {
+        PRTE_PLM_BASE_VERSION_2_0_0,
 
-    {
-        /* First, the mca_component_t struct containing meta
-           information about the component itself */
+        /* Component name and version */
+        .pmix_mca_component_name = "alps",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
 
-        .base_version = {
-            PRTE_PLM_BASE_VERSION_2_0_0,
-
-            /* Component name and version */
-            .mca_component_name = "alps",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-
-            /* Component open and close functions */
-            .mca_open_component = plm_alps_open,
-            .mca_close_component = plm_alps_close,
-            .mca_query_component = prte_plm_alps_component_query,
-            .mca_register_component_params = plm_alps_register,
-        },
-        .base_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        /* Component open and close functions */
+        .pmix_mca_open_component = plm_alps_open,
+        .pmix_mca_close_component = plm_alps_close,
+        .pmix_mca_query_component = prte_plm_alps_component_query,
+        .pmix_mca_register_component_params = plm_alps_register,
     }
-
-    /* Other prte_plm_alps_component_t items -- left uninitialized
-       here; will be initialized in plm_alps_open() */
 };
 
 static int plm_alps_register(void)
 {
-    prte_mca_base_component_t *comp = &prte_plm_alps_component.super.base_version;
+    pmix_mca_base_component_t *comp = &prte_plm_alps_component.super;
 
     prte_plm_alps_component.debug = false;
-    (void) prte_mca_base_component_var_register(comp, "debug", "Enable debugging of alps plm",
-                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+    (void) pmix_mca_base_component_var_register(comp, "debug", "Enable debugging of alps plm",
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_plm_alps_component.debug);
 
     if (prte_plm_alps_component.debug == 0) {
@@ -107,24 +94,18 @@ static int plm_alps_register(void)
     }
 
     prte_plm_alps_component.priority = 100;
-    (void) prte_mca_base_component_var_register(comp, "priority", "Default selection priority",
-                                                PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+    (void) pmix_mca_base_component_var_register(comp, "priority", "Default selection priority",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                                 &prte_plm_alps_component.priority);
 
     prte_plm_alps_component.aprun_cmd = "aprun";
-    (void) prte_mca_base_component_var_register(comp, "aprun", "Command to run instead of aprun",
-                                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+    (void) pmix_mca_base_component_var_register(comp, "aprun", "Command to run instead of aprun",
+                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &prte_plm_alps_component.aprun_cmd);
 
     prte_plm_alps_component.custom_args = NULL;
-    (void) prte_mca_base_component_var_register(comp, "args", "Custom arguments to aprun",
-                                                PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+    (void) pmix_mca_base_component_var_register(comp, "args", "Custom arguments to aprun",
+                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &prte_plm_alps_component.custom_args);
     return PRTE_SUCCESS;
 }
@@ -134,7 +115,7 @@ static int plm_alps_open(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_plm_alps_component_query(prte_mca_base_module_t **module, int *priority)
+static int prte_plm_alps_component_query(pmix_mca_base_module_t **module, int *priority)
 {
 #if CRAY_WLM_DETECT
     char slurm[] = "SLURM";
@@ -165,7 +146,7 @@ static int prte_plm_alps_component_query(prte_mca_base_module_t **module, int *p
 #endif
 
     *priority = prte_plm_alps_component.priority;
-    *module = (prte_mca_base_module_t *) &prte_plm_alps_module;
+    *module = (pmix_mca_base_module_t *) &prte_plm_alps_module;
     PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                          "%s plm:alps: available for selection",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));

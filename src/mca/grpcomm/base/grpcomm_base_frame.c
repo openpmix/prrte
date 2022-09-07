@@ -27,7 +27,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/mca.h"
 #include "src/rml/rml.h"
@@ -38,7 +38,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prte_mca_base_component_t struct.
+ * component's public pmix_mca_base_component_t struct.
  */
 
 #include "src/mca/grpcomm/base/static-components.h"
@@ -62,15 +62,14 @@ prte_grpcomm_API_module_t prte_grpcomm = {
     .unregister_cb = NULL
 };
 
-static int base_register(prte_mca_base_register_flag_t flags)
+static int base_register(pmix_mca_base_register_flag_t flags)
 {
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     prte_grpcomm_base.context_id = 1;
-    prte_mca_base_var_register("prte", "grpcomm", "base", "starting_context_id",
+    pmix_mca_base_var_register("prte", "grpcomm", "base", "starting_context_id",
                                "Starting value for assigning context id\'s",
-                               PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
                                &prte_grpcomm_base.context_id);
 
     return PRTE_SUCCESS;
@@ -102,14 +101,14 @@ static int prte_grpcomm_base_close(void)
     }
     PMIX_DESTRUCT(&prte_grpcomm_base.sig_table);
 
-    return prte_mca_base_framework_components_close(&prte_grpcomm_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_grpcomm_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components, or the one
  * that was specifically requested via a MCA parameter.
  */
-static int prte_grpcomm_base_open(prte_mca_base_open_flag_t flags)
+static int prte_grpcomm_base_open(pmix_mca_base_open_flag_t flags)
 {
     PMIX_CONSTRUCT(&prte_grpcomm_base.actives, pmix_list_t);
     PMIX_CONSTRUCT(&prte_grpcomm_base.ongoing, pmix_list_t);
@@ -117,12 +116,12 @@ static int prte_grpcomm_base_open(prte_mca_base_open_flag_t flags)
     pmix_hash_table_init(&prte_grpcomm_base.sig_table, 128);
     prte_grpcomm_base.context_id = UINT32_MAX;
 
-    return prte_mca_base_framework_components_open(&prte_grpcomm_base_framework, flags);
+    return pmix_mca_base_framework_components_open(&prte_grpcomm_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, grpcomm, "GRPCOMM", base_register, prte_grpcomm_base_open,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, grpcomm, "GRPCOMM", base_register, prte_grpcomm_base_open,
                                 prte_grpcomm_base_close, prte_grpcomm_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 PMIX_CLASS_INSTANCE(prte_grpcomm_base_active_t, pmix_list_item_t, NULL, NULL);
 

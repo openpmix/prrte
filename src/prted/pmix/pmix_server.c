@@ -51,7 +51,7 @@
 #include "prte_stdint.h"
 #include "src/class/pmix_hotel.h"
 #include "src/class/pmix_list.h"
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
@@ -348,10 +348,9 @@ void pmix_server_register_params(void)
 
     /* register a verbosity */
     prte_pmix_server_globals.verbosity = -1;
-    (void) prte_mca_base_var_register("prte", "pmix", NULL, "server_verbose",
-                                      "Debug verbosity for PMIx server", PRTE_MCA_BASE_VAR_TYPE_INT,
-                                      NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_ALL,
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "server_verbose",
+                                      "Debug verbosity for PMIx server",
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_pmix_server_globals.verbosity);
     if (0 <= prte_pmix_server_globals.verbosity) {
         prte_pmix_server_globals.output = prte_output_open(NULL);
@@ -361,54 +360,44 @@ void pmix_server_register_params(void)
     /* specify the size of the hotel */
     prte_pmix_server_globals.num_rooms = -1;
     (void)
-        prte_mca_base_var_register("prte", "pmix", NULL, "server_max_reqs",
+        pmix_mca_base_var_register("prte", "pmix", NULL, "server_max_reqs",
                                    "Maximum number of backlogged PMIx server direct modex requests",
-                                   PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                                   PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_ALL,
+                                   PMIX_MCA_BASE_VAR_TYPE_INT,
                                    &prte_pmix_server_globals.num_rooms);
     /* specify the timeout for the hotel */
     prte_pmix_server_globals.timeout = 2;
-    (void) prte_mca_base_var_register(
-        "prte", "pmix", NULL, "server_max_wait",
-        "Maximum time (in seconds) the PMIx server should wait to service direct modex requests",
-        PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_ALL, &prte_pmix_server_globals.timeout);
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "server_max_wait",
+                                      "Maximum time (in seconds) the PMIx server should wait to service direct modex requests",
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
+                                      &prte_pmix_server_globals.timeout);
 
     /* whether or not to wait for the universal server */
     prte_pmix_server_globals.wait_for_server = false;
     (void)
-        prte_mca_base_var_register("prte", "pmix", NULL, "wait_for_server",
+        pmix_mca_base_var_register("prte", "pmix", NULL, "wait_for_server",
                                    "Whether or not to wait for the session-level server to start",
-                                   PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                   PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                   PRTE_MCA_BASE_VAR_SCOPE_ALL,
+                                   PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                    &prte_pmix_server_globals.wait_for_server);
 
     /* whether or not to drop a session-level tool rendezvous point */
     prte_pmix_server_globals.session_server = false;
     (void)
-        prte_mca_base_var_register("prte", "pmix", NULL, "session_server",
+        pmix_mca_base_var_register("prte", "pmix", NULL, "session_server",
                                    "Whether or not to drop a session-level tool rendezvous point",
-                                   PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                   PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                   PRTE_MCA_BASE_VAR_SCOPE_ALL,
+                                   PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                    &prte_pmix_server_globals.session_server);
 
     /* whether or not to drop a system-level tool rendezvous point */
     prte_pmix_server_globals.system_server = false;
-    (void) prte_mca_base_var_register("prte", "pmix", NULL, "system_server",
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "system_server",
                                       "Whether or not to drop a system-level tool rendezvous point",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_ALL,
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_pmix_server_globals.system_server);
 
     /* whether or not to drop a system-level tool rendezvous point */
-    (void) prte_mca_base_var_register("prte", "pmix", NULL, "generate_distances",
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "generate_distances",
                                       "Device types whose distances are to be provided (default=none, options=fabric,gpu,network",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_ALL,
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &generate_dist);
     prte_pmix_server_globals.generate_dist = 0;
     if (NULL != generate_dist) {

@@ -36,7 +36,7 @@
 #include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_list.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/mca.h"
 #include "src/mca/odls/odls_types.h"
@@ -51,7 +51,7 @@ BEGIN_C_DECLS
 /*
  * MCA framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_grpcomm_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_grpcomm_base_framework;
 /*
  * Select an available component.
  */
@@ -64,7 +64,7 @@ typedef struct {
     pmix_list_item_t super;
     int pri;
     prte_grpcomm_base_module_t *module;
-    prte_mca_base_component_t *component;
+    pmix_mca_base_component_t *component;
 } prte_grpcomm_base_active_t;
 PMIX_CLASS_DECLARATION(prte_grpcomm_base_active_t);
 
