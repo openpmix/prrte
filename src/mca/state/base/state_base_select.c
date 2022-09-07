@@ -4,7 +4,7 @@
  *                         All rights reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,7 +17,7 @@
 
 #include <string.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/output.h"
 
@@ -33,11 +33,11 @@ int prte_state_base_select(void)
     /*
      * Select the best component
      */
-    exit_status = prte_mca_base_select("state",
+    exit_status = pmix_mca_base_select("state",
                                        prte_state_base_framework.framework_output,
                                        &prte_state_base_framework.framework_components,
-                                       (prte_mca_base_module_t **) &best_module,
-                                       (prte_mca_base_component_t **) &best_component, NULL);
+                                       (pmix_mca_base_module_t **) &best_module,
+                                       (pmix_mca_base_component_t **) &best_component, NULL);
     if (PRTE_SUCCESS != exit_status || NULL == best_module) {
         /* This will only happen if no component was selected */
         exit_status = PRTE_ERROR;

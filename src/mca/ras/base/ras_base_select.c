@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,7 +25,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
 #include "src/mca/ras/base/base.h"
@@ -45,10 +45,10 @@ int prte_ras_base_select(void)
      * Select the best component
      */
     if (PRTE_SUCCESS
-        != prte_mca_base_select("ras", prte_ras_base_framework.framework_output,
+        != pmix_mca_base_select("ras", prte_ras_base_framework.framework_output,
                                 &prte_ras_base_framework.framework_components,
-                                (prte_mca_base_module_t **) &best_module,
-                                (prte_mca_base_component_t **) &best_component, NULL)) {
+                                (pmix_mca_base_module_t **) &best_module,
+                                (pmix_mca_base_component_t **) &best_component, NULL)) {
         /* This will only happen if no component was selected */
         /* If we didn't find one to select, that is okay */
         return PRTE_SUCCESS;

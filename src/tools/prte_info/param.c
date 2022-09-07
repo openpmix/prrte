@@ -43,6 +43,7 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/class/pmix_value_array.h"
+#include "src/include/constants.h"
 #include "src/include/prte_portable_platform.h"
 #include "src/include/version.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
@@ -148,10 +149,10 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
     }
 }
 
-static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *group,
+static void prte_info_show_mca_group_params(const pmix_mca_base_var_group_t *group,
                                             bool want_internal)
 {
-    const prte_mca_base_var_t *var;
+    const pmix_mca_base_var_t *var;
     const int *variables;
     int ret, i, j, count;
     const int *groups;
@@ -161,15 +162,14 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
     count = pmix_value_array_get_size((pmix_value_array_t *) &group->group_vars);
 
     for (i = 0; i < count; ++i) {
-        ret = prte_mca_base_var_get(variables[i], &var);
-        if (PRTE_SUCCESS != ret
-            || ((var->mbv_flags & PRTE_MCA_BASE_VAR_FLAG_INTERNAL) && !want_internal)) {
+        ret = pmix_mca_base_var_get(variables[i], &var);
+        if (PRTE_SUCCESS != ret) {
             continue;
         }
 
-        ret = prte_mca_base_var_dump(variables[i], &strings,
-                                     !prte_info_pretty ? PRTE_MCA_BASE_VAR_DUMP_PARSABLE
-                                                       : PRTE_MCA_BASE_VAR_DUMP_READABLE);
+        ret = pmix_mca_base_var_dump(variables[i], &strings,
+                                     !prte_info_pretty ? PMIX_MCA_BASE_VAR_DUMP_PARSABLE
+                                                       : PMIX_MCA_BASE_VAR_DUMP_READABLE);
         if (PRTE_SUCCESS != ret) {
             continue;
         }
@@ -193,7 +193,7 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
     count = pmix_value_array_get_size((pmix_value_array_t *) &group->group_subgroups);
 
     for (i = 0; i < count; ++i) {
-        ret = prte_mca_base_var_group_get(groups[i], &group);
+        ret = pmix_mca_base_var_group_get(groups[i], &group);
         if (PRTE_SUCCESS != ret) {
             continue;
         }
@@ -203,25 +203,25 @@ static void prte_info_show_mca_group_params(const prte_mca_base_var_group_t *gro
 
 void prte_info_show_mca_params(const char *type, const char *component, bool want_internal)
 {
-    const prte_mca_base_var_group_t *group;
+    const pmix_mca_base_var_group_t *group;
     int ret;
 
     if (0 == strcmp(component, "all")) {
-        ret = prte_mca_base_var_group_find("*", type, NULL);
+        ret = pmix_mca_base_var_group_find("*", type, NULL);
         if (0 > ret) {
             return;
         }
 
-        (void) prte_mca_base_var_group_get(ret, &group);
+        (void) pmix_mca_base_var_group_get(ret, &group);
 
         prte_info_show_mca_group_params(group, want_internal);
     } else {
-        ret = prte_mca_base_var_group_find("*", type, component);
+        ret = pmix_mca_base_var_group_find("*", type, component);
         if (0 > ret) {
             return;
         }
 
-        (void) prte_mca_base_var_group_get(ret, &group);
+        (void) pmix_mca_base_var_group_get(ret, &group);
         prte_info_show_mca_group_params(group, want_internal);
     }
 }

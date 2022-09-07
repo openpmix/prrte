@@ -19,15 +19,15 @@
 #include "src/mca/prtedl/prtedl.h"
 #include "src/util/pmix_environ.h"
 
-#include "src/mca/base/base.h"
-#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/base/pmix_base.h"
+#include "src/mca/base/pmix_mca_base_framework.h"
 
 BEGIN_C_DECLS
 
 /**
  * Globals
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_prtedl_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_prtedl_base_framework;
 PRTE_EXPORT extern prte_prtedl_base_component_t *prte_prtedl_base_selected_component;
 PRTE_EXPORT extern prte_prtedl_base_module_t *prte_prtedl;
 
@@ -39,7 +39,7 @@ PRTE_EXPORT extern prte_prtedl_base_module_t *prte_prtedl;
  *
  * This function is invoked during prte_init();
  */
-PRTE_EXPORT int prte_dl_base_open(prte_mca_base_open_flag_t flags);
+PRTE_EXPORT int prte_dl_base_open(pmix_mca_base_open_flag_t flags);
 
 /**
  * Select an available component.

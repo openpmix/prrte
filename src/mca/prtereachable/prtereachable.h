@@ -91,15 +91,14 @@ typedef struct {
 } prte_reachable_base_module_t;
 
 typedef struct {
-    prte_mca_base_component_t base_version;
-    prte_mca_base_component_data_t base_data;
+    pmix_mca_base_component_t base_version;
     int priority;
 } prte_reachable_base_component_t;
 
 /*
  * Macro for use in components that are of type reachable
  */
-#define PRTE_REACHABLE_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("prtereachable", 2, 0, 0)
+#define PRTE_REACHABLE_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("prtereachable", 2, 0, 0)
 
 /* Global structure for accessing reachability functions */
 PRTE_EXPORT extern prte_reachable_base_module_t prte_reachable;

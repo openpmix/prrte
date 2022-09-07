@@ -30,7 +30,7 @@
  * includes
  */
 #include "prte_config.h"
-#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/base/pmix_mca_base_framework.h"
 
 #include "src/mca/ras/ras.h"
 #include "src/runtime/prte_globals.h"
@@ -44,7 +44,7 @@ BEGIN_C_DECLS
 /*
  * MCA Framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_ras_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_ras_base_framework;
 /* select a component */
 PRTE_EXPORT int prte_ras_base_select(void);
 

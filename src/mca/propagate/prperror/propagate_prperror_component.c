@@ -31,7 +31,7 @@ const char *prte_propagate_prperror_component_version_string
 static int propagate_prperror_register(void);
 static int propagate_prperror_open(void);
 static int propagate_prperror_close(void);
-static int propagate_prperror_component_query(prte_mca_base_module_t **module, int *priority);
+static int propagate_prperror_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
@@ -44,7 +44,7 @@ prte_propagate_base_component_t prte_propagate_prperror_component = {
     .base_version = {
         PRTE_PROPAGATE_BASE_VERSION_3_0_0,
         /* Component name and version */
-        .mca_component_name = "prperror",
+        \.pmix_mca_component_name = "prperror",
         PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
                 PMIX_RELEASE_VERSION),
 
@@ -64,7 +64,7 @@ static int my_priority;
 
 static int propagate_prperror_register(void)
 {
-    prte_mca_base_component_t *c = &prte_propagate_prperror_component.base_version;
+    pmix_mca_base_component_t *c = &prte_propagate_prperror_component.base_version;
 
     my_priority = 1000;
     (void) prte_mca_base_component_var_register(c, "priority",
@@ -86,12 +86,12 @@ static int propagate_prperror_close(void)
     return PRTE_SUCCESS;
 }
 
-static int propagate_prperror_component_query(prte_mca_base_module_t **module, int *priority)
+static int propagate_prperror_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* only daemon propagate */
     if (prte_enable_ft && (PRTE_PROC_IS_DAEMON || PRTE_PROC_IS_MASTER)) {
         *priority = my_priority;
-        *module = (prte_mca_base_module_t *) &prte_propagate_prperror_module;
+        *module = (pmix_mca_base_module_t *) &prte_propagate_prperror_module;
         return PRTE_SUCCESS;
     }
 

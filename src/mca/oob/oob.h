@@ -60,8 +60,7 @@ typedef bool (*mca_oob_base_component_is_reachable_fn_t)(pmix_proc_t *peer);
 typedef void (*mca_oob_ping_callback_fn_t)(int status, void *cbdata);
 
 typedef struct {
-    prte_mca_base_component_t oob_base;
-    prte_mca_base_component_data_t oob_data;
+    pmix_mca_base_component_t oob_base;
     int idx;
     int priority;
     mca_oob_base_component_avail_fn_t available;
@@ -76,7 +75,7 @@ typedef struct {
 /**
  * Macro for use in components that are of type oob
  */
-#define PRTE_OOB_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("oob", 2, 0, 0)
+#define PRTE_OOB_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("oob", 2, 0, 0)
 
 END_C_DECLS
 

@@ -26,7 +26,7 @@
 
 #include "prte_config.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 
 #include "src/util/proc_info.h"
 
@@ -37,7 +37,7 @@
  */
 static int prte_iof_prted_open(void);
 static int prte_iof_prted_close(void);
-static int prte_iof_prted_query(prte_mca_base_module_t **module, int *priority);
+static int prte_iof_prted_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Public string showing the iof prted component version number
@@ -47,22 +47,18 @@ const char *prte_iof_prted_component_version_string
 
 prte_iof_prted_component_t prte_iof_prted_component = {
     {
-        .iof_version = {
-            PRTE_IOF_BASE_VERSION_2_0_0,
+        PRTE_IOF_BASE_VERSION_2_0_0,
 
-            .mca_component_name = "prted",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
+        .pmix_mca_component_name = "prted",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
 
-            /* Component open, close, and query functions */
-            .mca_open_component = prte_iof_prted_open,
-            .mca_close_component = prte_iof_prted_close,
-            .mca_query_component = prte_iof_prted_query,
-        },
-        .iof_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        /* Component open, close, and query functions */
+        .pmix_mca_open_component = prte_iof_prted_open,
+        .pmix_mca_close_component = prte_iof_prted_close,
+        .pmix_mca_query_component = prte_iof_prted_query,
     }
 };
 
@@ -80,7 +76,7 @@ static int prte_iof_prted_close(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_iof_prted_query(prte_mca_base_module_t **module, int *priority)
+static int prte_iof_prted_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* if we are not a daemon, then don't use this module */
     if (!PRTE_PROC_IS_DAEMON) {
@@ -90,7 +86,7 @@ static int prte_iof_prted_query(prte_mca_base_module_t **module, int *priority)
     }
 
     *priority = 80;
-    *module = (prte_mca_base_module_t *) &prte_iof_prted_module;
+    *module = (pmix_mca_base_module_t *) &prte_iof_prted_module;
 
     return PRTE_SUCCESS;
 }

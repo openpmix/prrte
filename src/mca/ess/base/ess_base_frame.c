@@ -27,7 +27,7 @@
 
 #include <signal.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
@@ -39,7 +39,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * module's public prte_mca_base_module_t struct.
+ * module's public pmix_mca_base_module_t struct.
  */
 
 #include "src/mca/ess/base/static-components.h"
@@ -49,75 +49,49 @@ prte_ess_base_module_t prte_ess = {
     .finalize = NULL,
     .abort = NULL,
 };
-int prte_ess_base_std_buffering = -1;
 int prte_ess_base_num_procs = -1;
 char *prte_ess_base_nspace = NULL;
 char *prte_ess_base_vpid = NULL;
 pmix_list_t prte_ess_base_signals = PMIX_LIST_STATIC_INIT;
 
-static prte_mca_base_var_enum_value_t stream_buffering_values[] = {
-    {-1, "default"},
-    {0, "unbuffered"},
-    {1, "line_buffered"},
-    {2, "fully_buffered"},
-    {0, NULL}
-};
-
 static char *forwarded_signals = NULL;
 
-static int prte_ess_base_register(prte_mca_base_register_flag_t flags)
+static int prte_ess_base_register(pmix_mca_base_register_flag_t flags)
 {
-    prte_mca_base_var_enum_t *new_enum;
     int ret;
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
-    prte_ess_base_std_buffering = -1;
-    (void) prte_mca_base_var_enum_create("ess_base_stream_buffering", stream_buffering_values,
-                                         &new_enum);
-    (void) prte_mca_base_var_register(
-        "prte", "ess", "base", "stream_buffering",
-        "Adjust buffering for stdout/stderr "
-        "[-1 system default] [0 unbuffered] [1 line buffered] [2 fully buffered] "
-        "(Default: -1)",
-        PRTE_MCA_BASE_VAR_TYPE_INT, new_enum, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_std_buffering);
-    PMIX_RELEASE(new_enum);
-
     prte_ess_base_nspace = NULL;
-    ret = prte_mca_base_var_register("prte", "ess", "base", "nspace", "Process nspace",
-                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                     PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
-                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_nspace);
-    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "nspace",
-                                       PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
+    ret = pmix_mca_base_var_register("prte", "ess", "base", "nspace", "Process nspace",
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                     &prte_ess_base_nspace);
+    pmix_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "nspace",
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     prte_ess_base_vpid = NULL;
-    ret = prte_mca_base_var_register("prte", "ess", "base", "vpid", "Process vpid",
-                                     PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                     PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
-                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_vpid);
-    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "vpid",
-                                       PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
+    ret = pmix_mca_base_var_register("prte", "ess", "base", "vpid", "Process vpid",
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                     &prte_ess_base_vpid);
+    pmix_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "vpid",
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     prte_ess_base_num_procs = -1;
-    ret = prte_mca_base_var_register("prte", "ess", "base", "num_procs",
+    ret = pmix_mca_base_var_register("prte", "ess", "base", "num_procs",
                                      "Used to discover the number of procs in the job",
-                                     PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                     PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
-                                     PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_ess_base_num_procs);
-    prte_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "num_procs",
-                                       PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
+                                     PMIX_MCA_BASE_VAR_TYPE_INT,
+                                     &prte_ess_base_num_procs);
+    pmix_mca_base_var_register_synonym(ret, "prte", "prte", "ess", "num_procs",
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     forwarded_signals = NULL;
-    ret = prte_mca_base_var_register(
-        "prte", "ess", "base", "forward_signals",
-        "Comma-delimited list of additional signals (names or integers) to forward to "
-        "application processes [\"none\" => forward nothing]. Signals provided by "
-        "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_4,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &forwarded_signals);
-    prte_mca_base_var_register_synonym(ret, "prte", "ess", "hnp", "forward_signals",
-                                       PRTE_MCA_BASE_VAR_SYN_FLAG_NONE);
+    ret = pmix_mca_base_var_register("prte", "ess", "base", "forward_signals",
+                                     "Comma-delimited list of additional signals (names or integers) to forward to "
+                                     "application processes [\"none\" => forward nothing]. Signals provided by "
+                                     "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
+                                     PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                     &forwarded_signals);
+    pmix_mca_base_var_register_synonym(ret, "prte", "ess", "hnp", "forward_signals",
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     return PRTE_SUCCESS;
 }
@@ -126,10 +100,10 @@ static int prte_ess_base_close(void)
 {
     PMIX_LIST_DESTRUCT(&prte_ess_base_signals);
 
-    return prte_mca_base_framework_components_close(&prte_ess_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_ess_base_framework, NULL);
 }
 
-static int prte_ess_base_open(prte_mca_base_open_flag_t flags)
+static int prte_ess_base_open(pmix_mca_base_open_flag_t flags)
 {
     int rc;
 
@@ -139,13 +113,13 @@ static int prte_ess_base_open(prte_mca_base_open_flag_t flags)
         return rc;
     }
 
-    return prte_mca_base_framework_components_open(&prte_ess_base_framework, flags);
+    return pmix_mca_base_framework_components_open(&prte_ess_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, ess, "PRTE Environmenal System Setup", prte_ess_base_register,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, ess, "PRTE Environmenal System Setup", prte_ess_base_register,
                                 prte_ess_base_open, prte_ess_base_close,
                                 prte_ess_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 /* signal forwarding */
 

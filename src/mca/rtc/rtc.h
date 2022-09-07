@@ -92,12 +92,7 @@ typedef struct {
 /**
  * rtc component version 1.0.0
  */
-typedef struct prte_rtc_base_component_1_0_0_t {
-    /** Base MCA structure */
-    prte_mca_base_component_t base_version;
-    /** Base MCA data */
-    prte_mca_base_component_data_t base_data;
-} prte_rtc_base_component_t;
+typedef pmix_mca_base_component_t prte_rtc_base_component_t;
 
 /* declare the struct containing the public API */
 PRTE_EXPORT extern prte_rtc_API_module_t prte_rtc;
@@ -105,7 +100,7 @@ PRTE_EXPORT extern prte_rtc_API_module_t prte_rtc;
 /*
  * Macro for use in components that are of type rtc
  */
-#define PRTE_RTC_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_2_1_0("rtc", 1, 0, 0)
+#define PRTE_RTC_BASE_VERSION_1_0_0 PMIX_MCA_BASE_VERSION_1_0_0("rtc", 1, 0, 0)
 
 END_C_DECLS
 

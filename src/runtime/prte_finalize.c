@@ -31,13 +31,13 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/output.h"
 
-#include "src/mca/base/prte_mca_base_alias.h"
-#include "src/mca/base/prte_mca_base_var.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_mca_base_alias.h"
+#include "src/mca/base/pmix_mca_base_var.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
 #include "src/runtime/prte_globals.h"
@@ -141,18 +141,18 @@ int prte_finalize(void)
     /* Close the general debug stream */
     prte_output_close(prte_debug_output);
 
-    prte_mca_base_alias_cleanup();
+    pmix_mca_base_alias_cleanup();
 
     /* call the finalize function for this environment */
     if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {
         return rc;
     }
-    (void) prte_mca_base_framework_close(&prte_ess_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
     prte_proc_info_finalize();
 
     prte_output_finalize();
-    prte_mca_base_var_finalize();
-    prte_mca_base_close();
+    pmix_mca_base_var_finalize();
+    pmix_mca_base_close();
 
     /* now shutdown PMIx - need to do this last as it finalizes
      * the utilities and class system we depend upon */

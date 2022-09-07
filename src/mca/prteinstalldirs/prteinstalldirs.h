@@ -4,7 +4,7 @@
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -17,7 +17,7 @@
 
 #include "prte_config.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
 BEGIN_C_DECLS
@@ -77,9 +77,7 @@ PRTE_EXPORT char *prte_install_dirs_expand(const char *input);
  */
 struct prte_prteinstalldirs_base_component_2_0_0_t {
     /** MCA base component */
-    prte_mca_base_component_t component;
-    /** MCA base data */
-    prte_mca_base_component_data_t component_data;
+    pmix_mca_base_component_t component;
     /** install directories provided by the given component */
     prte_install_dirs_t install_dirs_data;
 };
@@ -91,7 +89,7 @@ typedef struct prte_prteinstalldirs_base_component_2_0_0_t prte_prteinstalldirs_
 /*
  * Macro for use in components that are of type prteinstalldirs
  */
-#define PRTE_INSTALLDIRS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("prteinstalldirs", 2, 0, 0)
+#define PRTE_INSTALLDIRS_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("prteinstalldirs", 2, 0, 0)
 
 END_C_DECLS
 

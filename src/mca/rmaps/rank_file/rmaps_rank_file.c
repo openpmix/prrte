@@ -88,7 +88,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     int32_t relative_index, tmp_cnt;
     int rc;
     prte_proc_t *proc;
-    prte_mca_base_component_t *c = &prte_rmaps_rank_file_component.super.base_version;
+    pmix_mca_base_component_t *c = &prte_rmaps_rank_file_component.super;
     char *slots;
     bool initial_map = true;
     char *rankfile = NULL;
@@ -102,7 +102,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper
-        && 0 != strcasecmp(jdata->map->req_mapper, c->mca_component_name)) {
+        && 0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
         /* a mapper has been specified, and it isn't me */
         prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rf: job %s not using rank_file mapper",
@@ -139,7 +139,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     if (NULL != jdata->map->last_mapper) {
         free(jdata->map->last_mapper);
     }
-    jdata->map->last_mapper = strdup(c->mca_component_name);
+    jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
 
     /* convenience def */
     map = jdata->map;

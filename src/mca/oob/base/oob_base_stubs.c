@@ -33,7 +33,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
 {
     prte_oob_send_t *cd = (prte_oob_send_t *) cbdata;
     prte_rml_send_t *msg;
-    prte_mca_base_component_list_item_t *cli;
+    pmix_mca_base_component_list_item_t *cli;
     prte_oob_base_peer_t *pr;
     int rc;
     bool msg_sent;
@@ -107,7 +107,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
              */
             reachable = false;
             pr = NULL;
-            PMIX_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+            PMIX_LIST_FOREACH(cli, &prte_oob_base.actives, pmix_mca_base_component_list_item_t)
             {
                 component = (prte_oob_base_component_t *) cli->cli_component;
                 if (NULL != component->is_reachable) {
@@ -165,7 +165,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
      * Let it try to make the connection
      */
     msg_sent = false;
-    PMIX_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+    PMIX_LIST_FOREACH(cli, &prte_oob_base.actives, pmix_mca_base_component_list_item_t)
     {
         component = (prte_oob_base_component_t *) cli->cli_component;
         /* is this peer reachable via this component? */
@@ -223,7 +223,7 @@ void prte_oob_base_get_addr(char **uri)
     char *turi, *final = NULL, *tmp;
     size_t len = 0;
     bool one_added = false;
-    prte_mca_base_component_list_item_t *cli;
+    pmix_mca_base_component_list_item_t *cli;
     prte_oob_base_component_t *component;
     pmix_status_t rc;
 
@@ -239,7 +239,7 @@ void prte_oob_base_get_addr(char **uri)
     /* loop across all available modules to get their input
      * up to the max length
      */
-    PMIX_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+    PMIX_LIST_FOREACH(cli, &prte_oob_base.actives, pmix_mca_base_component_list_item_t)
     {
         component = (prte_oob_base_component_t *) cli->cli_component;
         /* ask the component for its input, obtained when it
@@ -288,7 +288,7 @@ static prte_oob_base_peer_t* process_uri(char *uri)
 {
     pmix_proc_t peer;
     char *cptr;
-    prte_mca_base_component_list_item_t *cli;
+    pmix_mca_base_component_list_item_t *cli;
     prte_oob_base_component_t *component;
     char **uris = NULL;
     prte_oob_base_peer_t *pr;
@@ -339,13 +339,13 @@ static prte_oob_base_peer_t* process_uri(char *uri)
      * are all operating on our event base, so we can just
      * directly call their functions
      */
-    PMIX_LIST_FOREACH(cli, &prte_oob_base.actives, prte_mca_base_component_list_item_t)
+    PMIX_LIST_FOREACH(cli, &prte_oob_base.actives, pmix_mca_base_component_list_item_t)
     {
         component = (prte_oob_base_component_t *) cli->cli_component;
         prte_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s:set_addr checking if peer %s is reachable via component %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer),
-                            component->oob_base.mca_component_name);
+                            component->oob_base.pmix_mca_component_name);
         if (NULL != component->set_addr) {
             if (PRTE_SUCCESS == component->set_addr(&peer, uris)) {
                 /* this component found reachable addresses
@@ -354,13 +354,13 @@ static prte_oob_base_peer_t* process_uri(char *uri)
                 prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                     "%s: peer %s is reachable via component %s",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer),
-                                    component->oob_base.mca_component_name);
+                                    component->oob_base.pmix_mca_component_name);
                 pmix_bitmap_set_bit(&pr->addressable, component->idx);
             } else {
                 prte_output_verbose(5, prte_oob_base_framework.framework_output,
                                     "%s: peer %s is NOT reachable via component %s",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer),
-                                    component->oob_base.mca_component_name);
+                                    component->oob_base.pmix_mca_component_name);
             }
         }
     }
