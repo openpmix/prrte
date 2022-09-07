@@ -739,7 +739,6 @@ bool prte_rmaps_base_check_avail(prte_job_t *jdata,
     }
 
     if (PRTE_BIND_TO_NONE == options->bind) {
-        prte_output(0, "BINDTONONE SET");
         options->target = NULL;
         avail = true;
         goto done;
