@@ -969,9 +969,6 @@ AC_SUBST(prtedatadir)
 AC_SUBST(prtelibdir)
 AC_SUBST(prteincludedir)
 
-PRTE_SET_MCA_PREFIX([PRTE_MCA_])
-PRTE_SET_MCA_CMD_LINE_ID([mca])
-
 prte_want_prd=0
 
 prte_show_subtitle "Final output"
