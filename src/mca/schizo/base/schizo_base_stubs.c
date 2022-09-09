@@ -402,6 +402,7 @@ static char *pmix_frameworks[] = {
     "pstat",
     "pstrg",
     "ptl",
+    "mca",  // mca base now resides in pmix
     NULL
 };
 
