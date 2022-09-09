@@ -46,7 +46,7 @@
 /*
  * Public string showing the plm ompi_slurm component version number
  */
-const char *prte_plm_slurm_component_version_string
+const char *prte_mca_plm_slurm_component_version_string
     = "PRTE slurm plm MCA component version " PRTE_VERSION;
 
 /*
@@ -55,14 +55,14 @@ const char *prte_plm_slurm_component_version_string
 static int plm_slurm_register(void);
 static int plm_slurm_open(void);
 static int plm_slurm_close(void);
-static int prte_plm_slurm_component_query(pmix_mca_base_module_t **module, int *priority);
+static int prte_mca_plm_slurm_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
 
-prte_plm_slurm_component_t prte_plm_slurm_component = {
+prte_mca_plm_slurm_component_t prte_mca_plm_slurm_component = {
     .super = {
         PRTE_PLM_BASE_VERSION_2_0_0,
 
@@ -76,27 +76,27 @@ prte_plm_slurm_component_t prte_plm_slurm_component = {
         /* Component open and close functions */
         .pmix_mca_open_component = plm_slurm_open,
         .pmix_mca_close_component = plm_slurm_close,
-        .pmix_mca_query_component = prte_plm_slurm_component_query,
+        .pmix_mca_query_component = prte_mca_plm_slurm_component_query,
         .pmix_mca_register_component_params = plm_slurm_register,
     }
 
-    /* Other prte_plm_slurm_component_t items -- left uninitialized
+    /* Other prte_mca_plm_slurm_component_t items -- left uninitialized
        here; will be initialized in plm_slurm_open() */
 };
 
 static int plm_slurm_register(void)
 {
-    pmix_mca_base_component_t *comp = &prte_plm_slurm_component.super;
+    pmix_mca_base_component_t *comp = &prte_mca_plm_slurm_component.super;
 
-    prte_plm_slurm_component.custom_args = NULL;
+    prte_mca_plm_slurm_component.custom_args = NULL;
     (void) pmix_mca_base_component_var_register(comp, "args", "Custom arguments to srun",
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                                &prte_plm_slurm_component.custom_args);
+                                                &prte_mca_plm_slurm_component.custom_args);
 
-    prte_plm_slurm_component.slurm_warning_msg = true;
+    prte_mca_plm_slurm_component.slurm_warning_msg = true;
     (void) pmix_mca_base_component_var_register(comp, "warning", "Turn off warning message",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &prte_plm_slurm_component.slurm_warning_msg);
+                                                &prte_mca_plm_slurm_component.slurm_warning_msg);
 
     return PRTE_SUCCESS;
 }
@@ -106,7 +106,7 @@ static int plm_slurm_open(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_plm_slurm_component_query(pmix_mca_base_module_t **module, int *priority)
+static int prte_mca_plm_slurm_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* Are we running under a SLURM job? */
 

@@ -29,10 +29,10 @@
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 
 BEGIN_C_DECLS
-PRTE_EXPORT extern const pmix_mca_base_component_t prte_backtrace_none_component;
+PRTE_EXPORT extern const pmix_mca_base_component_t prte_mca_backtrace_none_component;
 END_C_DECLS
 
-const pmix_mca_base_component_t prte_prtebacktrace_none_component = {
+const pmix_mca_base_component_t prte_mca_prtebacktrace_none_component = {
     PRTE_BACKTRACE_BASE_VERSION_2_0_0,
 
     /* Component name and version */

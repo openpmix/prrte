@@ -26,7 +26,7 @@
 /*
  * Public string for version number
  */
-const char *prte_errmgr_dvm_component_version_string
+const char *prte_mca_errmgr_dvm_component_version_string
     = "PRTE ERRMGR dvm MCA component version " PRTE_VERSION;
 
 /*
@@ -41,7 +41,7 @@ static int dvm_component_query(pmix_mca_base_module_t **module, int *priority);
  * Instantiate the public struct with all of our public information
  * and pointer to our public functions in it
  */
-prte_errmgr_base_component_t prte_errmgr_dvm_component = {
+prte_errmgr_base_component_t prte_mca_errmgr_dvm_component = {
     /* Handle the general mca_component_t struct containing
      *  meta information about the component dvm
      */
@@ -66,7 +66,7 @@ static int my_priority;
 
 static int dvm_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_errmgr_dvm_component.base_version;
+    pmix_mca_base_component_t *c = &prte_mca_errmgr_dvm_component.base_version;
 
     my_priority = 1000;
     (void) pmix_mca_base_component_var_register(c, "priority",

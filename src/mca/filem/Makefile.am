@@ -12,7 +12,7 @@
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,18 +21,16 @@
 #
 
 # main library setup
-noinst_LTLIBRARIES = libmca_filem.la
-libmca_filem_la_SOURCES =
+noinst_LTLIBRARIES = libprtemca_filem.la
+libprtemca_filem_la_SOURCES =
 
 # local files
 headers = filem.h
-libmca_filem_la_SOURCES += $(headers)
+libprtemca_filem_la_SOURCES += $(headers)
 
 # Conditionally install the header files
-if WANT_INSTALL_HEADERS
 prtedir = $(prteincludedir)/$(subdir)
 nobase_prte_HEADERS = $(headers)
-endif
 
 include base/Makefile.am
 

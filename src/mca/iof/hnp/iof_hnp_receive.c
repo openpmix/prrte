@@ -128,7 +128,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&origin)));
 
     /* do we already have this process in our list? */
-    PMIX_LIST_FOREACH(proct, &prte_iof_hnp_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_mca_iof_hnp_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, &origin)) {
             /* found it */
@@ -139,7 +139,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     /* if we get here, then we don't yet have this proc in our list */
     proct = PMIX_NEW(prte_iof_proc_t);
     PMIX_XFER_PROCID(&proct->name, &origin);
-    pmix_list_append(&prte_iof_hnp_component.procs, &proct->super);
+    pmix_list_append(&prte_mca_iof_hnp_component.procs, &proct->super);
 
 NSTEP:
     pchan = 0;

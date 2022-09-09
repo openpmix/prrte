@@ -11,6 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -22,7 +23,7 @@ headers += \
         base/base.h \
         base/plm_private.h
 
-libmca_plm_la_SOURCES += \
+libprtemca_plm_la_SOURCES += \
         base/plm_base_frame.c \
         base/plm_base_select.c \
         base/plm_base_receive.c \

@@ -45,7 +45,7 @@ static int ppr_mapper(prte_job_t *jdata,
 {
     int rc = PRTE_SUCCESS, j, n, ppr, idx, ncpus;
     prte_proc_t *proc;
-    pmix_mca_base_component_t *c = &prte_rmaps_ppr_component;
+    pmix_mca_base_component_t *c = &prte_mca_rmaps_ppr_component;
     prte_node_t *node, *nd;
     prte_app_context_t *app;
     pmix_rank_t total_procs, nprocs_mapped;

@@ -43,7 +43,7 @@ static int prte_rmaps_seq_query(pmix_mca_base_module_t **module, int *priority);
 
 static int my_priority;
 
-prte_rmaps_base_component_t prte_rmaps_seq_component = {
+prte_rmaps_base_component_t prte_mca_rmaps_seq_component = {
     PRTE_RMAPS_BASE_VERSION_4_0_0,
 
     .pmix_mca_component_name = "seq",
@@ -63,7 +63,7 @@ prte_rmaps_base_component_t prte_rmaps_seq_component = {
 static int prte_rmaps_seq_register(void)
 {
     my_priority = 60;
-    (void) pmix_mca_base_component_var_register(&prte_rmaps_seq_component, "priority",
+    (void) pmix_mca_base_component_var_register(&prte_mca_rmaps_seq_component, "priority",
                                                 "Priority of the seq rmaps component",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
                                                 &my_priority);

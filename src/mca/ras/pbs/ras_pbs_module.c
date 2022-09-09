@@ -141,7 +141,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
     /* if we are in SMP mode, then read the environment to get the
      * number of cpus for each node read in the file
      */
-    if (prte_ras_pbs_component.smp_mode) {
+    if (prte_mca_ras_pbs_component.smp_mode) {
         if (NULL == (cppn = getenv("PBS_PPN"))) {
             pmix_show_help("help-ras-pbs.txt", "smp-error", true);
             return PRTE_ERR_NOT_FOUND;
@@ -180,7 +180,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
         found = false;
         PMIX_LIST_FOREACH(node, nodelist, prte_node_t) {
             if (0 == strcmp(node->name, hostname)) {
-                if (prte_ras_pbs_component.smp_mode) {
+                if (prte_mca_ras_pbs_component.smp_mode) {
                     /* this cannot happen in smp mode */
                     pmix_show_help("help-ras-pbs.txt", "smp-multi", true);
                     return PRTE_ERR_BAD_PARAM;

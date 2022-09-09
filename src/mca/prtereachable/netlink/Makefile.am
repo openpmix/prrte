@@ -4,6 +4,7 @@
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2020      Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -25,9 +26,9 @@ sources = \
 
 if MCA_BUILD_prte_prtereachable_netlink_DSO
 component_noinst =
-component_install = mca_prtereachable_netlink.la
+component_install = prte_mca_prtereachable_netlink.la
 else
-component_noinst = libmca_prtereachable_netlink.la
+component_noinst = libprtemca_prtereachable_netlink.la
 component_install =
 endif
 
@@ -37,12 +38,12 @@ AM_CPPFLAGS = \
 
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
-mca_prtereachable_netlink_la_SOURCES = $(sources)
-mca_prtereachable_netlink_la_LDFLAGS = -module -avoid-version $(prte_reachable_netlink_LDFLAGS)
-mca_prtereachable_netlink_la_LIBADD = $(top_builddir)/src/libprrte.la \
+prte_mca_prtereachable_netlink_la_SOURCES = $(sources)
+prte_mca_prtereachable_netlink_la_LDFLAGS = -module -avoid-version $(prte_reachable_netlink_LDFLAGS)
+prte_mca_prtereachable_netlink_la_LIBADD = $(top_builddir)/src/libprrte.la \
 	$(prte_reachable_netlink_LIBS)
 
 noinst_LTLIBRARIES = $(component_noinst)
-libmca_prtereachable_netlink_la_SOURCES =$(sources)
-libmca_prtereachable_netlink_la_LDFLAGS = -module -avoid-version $(prte_reachable_netlink_LDFLAGS)
-libmca_prtereachable_netlink_la_LIBADD = $(prte_reachable_netlink_LIBS)
+libprtemca_prtereachable_netlink_la_SOURCES =$(sources)
+libprtemca_prtereachable_netlink_la_LDFLAGS = -module -avoid-version $(prte_reachable_netlink_LDFLAGS)
+libprtemca_prtereachable_netlink_la_LIBADD = $(prte_reachable_netlink_LIBS)

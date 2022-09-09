@@ -25,7 +25,7 @@
 /*
  * Public string for version number
  */
-const char *prte_filem_raw_component_version_string
+const char *prte_mca_filem_raw_component_version_string
     = "PRTE FILEM raw MCA component version " PRTE_VERSION;
 
 /*
@@ -38,7 +38,7 @@ static int filem_raw_query(pmix_mca_base_module_t **module, int *priority);
 
 bool prte_filem_raw_flatten_trees = false;
 
-prte_filem_base_component_t prte_filem_raw_component = {
+prte_filem_base_component_t prte_mca_filem_raw_component = {
     PRTE_FILEM_BASE_VERSION_2_0_0,
     /* Component name and version */
     .pmix_mca_component_name = "raw",
@@ -56,7 +56,7 @@ prte_filem_base_component_t prte_filem_raw_component = {
 
 static int filem_raw_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_filem_raw_component;
+    pmix_mca_base_component_t *c = &prte_mca_filem_raw_component;
 
     prte_filem_raw_flatten_trees = false;
     (void) pmix_mca_base_component_var_register(c, "flatten_directory_trees",
