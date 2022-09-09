@@ -35,6 +35,9 @@
 #ifdef HAVE_UNISTD_H
 #    include <unistd.h>
 #endif
+#ifdef HAVE_SYS_STAT_H
+#    include <sys/stat.h>
+#endif
 
 #include "src/util/error.h"
 #include "src/util/error_strings.h"
@@ -113,10 +116,21 @@ const char prte_version_string[] = PRTE_IDENT_STRING;
 
 static void preload_default_mca_params(void);
 
+static bool check_exist(char *path)
+{
+    struct stat buf;
+    /* coverity[TOCTOU] */
+    if (0 == stat(path, &buf)) { /* exists */
+        return true;
+    }
+    return false;
+}
+
 int prte_init_util(prte_proc_type_t flags)
 {
     int ret;
     char *error = NULL;
+    char *path = NULL;
 
     if (util_initialized) {
         return PRTE_SUCCESS;
@@ -137,7 +151,14 @@ int prte_init_util(prte_proc_type_t flags)
         return ret;
     }
 
-    ret = pmix_init_util(NULL, 0, prte_install_dirs.prtedatadir);
+    /* initialize the MCA infrastructure */
+    if (check_exist(prte_install_dirs.prtelibdir)) {
+        pmix_asprintf(&path, "prte@%s", prte_install_dirs.prtelibdir);
+    }
+    ret = pmix_init_util(NULL, 0, path);
+    if (NULL != path) {
+        free(path);
+    }
     if (PMIX_SUCCESS != ret) {
         return prte_pmix_convert_status(ret);
     }
@@ -180,12 +201,6 @@ int prte_init_util(prte_proc_type_t flags)
     if (PRTE_SUCCESS != (ret = prte_util_init_sys_limits(&error))) {
         pmix_show_help("help-prte-runtime.txt", "prte_init:syslimit", false, error);
         return PRTE_ERR_SILENT;
-    }
-
-    /* initialize the mca */
-    if (PRTE_SUCCESS != (ret = pmix_mca_base_open(prte_install_dirs.prtelibdir))) {
-        error = "mca_base_open";
-        goto error;
     }
 
     /* pre-load any default mca param files */

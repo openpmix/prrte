@@ -13,6 +13,7 @@
 # Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -41,10 +42,10 @@ sources = \
 if MCA_BUILD_prte_ras_alps_DSO
 lib =
 lib_sources =
-component = mca_ras_alps.la
+component = prte_mca_ras_alps.la
 component_sources = $(sources)
 else
-lib = libmca_ras_alps.la
+lib = libprtemca_ras_alps.la
 lib_sources = $(sources)
 component =
 component_sources =
@@ -52,14 +53,14 @@ endif
 
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component)
-mca_ras_alps_la_SOURCES = $(component_sources)
-mca_ras_alps_la_LDFLAGS = -module -avoid-version $(ras_alps_LDFLAGS)
-mca_ras_alps_la_LIBADD = $(ras_alps_LIBS) \
+prte_mca_ras_alps_la_SOURCES = $(component_sources)
+prte_mca_ras_alps_la_LDFLAGS = -module -avoid-version $(ras_alps_LDFLAGS)
+prte_mca_ras_alps_la_LIBADD = $(ras_alps_LIBS) \
                          $(top_builddir)/src/libprrte.la
-mca_ras_alps_la_CPPFLAGS = $(ras_alps_CPPFLAGS)
+prte_mca_ras_alps_la_CPPFLAGS = $(ras_alps_CPPFLAGS)
 
 noinst_LTLIBRARIES = $(lib)
-libmca_ras_alps_la_SOURCES = $(lib_sources)
-libmca_ras_alps_la_LDFLAGS = -module -avoid-version $(ras_alps_LDFLAGS)
-libmca_ras_alps_la_LIBADD = $(ras_alps_LIBS)
-libmca_ras_alps_la_CPPFLAGS = $(ras_alps_CPPFLAGS)
+libprtemca_ras_alps_la_SOURCES = $(lib_sources)
+libprtemca_ras_alps_la_LDFLAGS = -module -avoid-version $(ras_alps_LDFLAGS)
+libprtemca_ras_alps_la_LIBADD = $(ras_alps_LIBS)
+libprtemca_ras_alps_la_CPPFLAGS = $(ras_alps_CPPFLAGS)

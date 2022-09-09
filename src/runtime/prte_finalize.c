@@ -151,8 +151,6 @@ int prte_finalize(void)
     prte_proc_info_finalize();
 
     prte_output_finalize();
-    pmix_mca_base_var_finalize();
-    pmix_mca_base_close();
 
     /* now shutdown PMIx - need to do this last as it finalizes
      * the utilities and class system we depend upon */

@@ -88,7 +88,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     int32_t relative_index, tmp_cnt;
     int rc;
     prte_proc_t *proc;
-    pmix_mca_base_component_t *c = &prte_rmaps_rank_file_component.super;
+    pmix_mca_base_component_t *c = &prte_mca_rmaps_rank_file_component.super;
     char *slots;
     bool initial_map = true;
     char *rankfile = NULL;

@@ -415,7 +415,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     if (silent) {
         warn = false;
     } else {
-        warn = prte_schizo_ompi_component.warn_deprecations;
+        warn = prte_mca_schizo_ompi_component.warn_deprecations;
     }
 
     if(warn) {
@@ -617,7 +617,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
     if (silent) {
         warn = false;
     } else {
-        warn = prte_schizo_ompi_component.warn_deprecations;
+        warn = prte_mca_schizo_ompi_component.warn_deprecations;
     }
 
     PMIX_LIST_FOREACH_SAFE(opt, nxt, &results->instances, pmix_cli_item_t) {
@@ -1514,7 +1514,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     /* --stream-buffering will be deprecated starting with Open MPI v5 */
     if (NULL != (opt = pmix_cmd_line_get_param(results, "stream-buffering"))) {
         uint16_t u16;
-        if (prte_schizo_ompi_component.warn_deprecations) {
+        if (prte_mca_schizo_ompi_component.warn_deprecations) {
             pmix_show_help("help-schizo-base.txt", "deprecated-inform", true, "stream-buffering",
                            "This CLI option will be deprecated starting in Open MPI v5. "
                            "If you need this functionality use the Open MPI MCA option: ompi_stream_buffering");

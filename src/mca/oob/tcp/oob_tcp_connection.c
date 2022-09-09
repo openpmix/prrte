@@ -149,7 +149,7 @@ static int tcp_peer_create_socket(prte_oob_tcp_peer_t *peer, sa_family_t family)
  */
 void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
 {
-    pmix_list_t *local_list = &prte_oob_tcp_component.local_ifs, *remote_list;
+    pmix_list_t *local_list = &prte_mca_oob_tcp_component.local_ifs, *remote_list;
     int rc, i, j, local_if_count, remote_if_count, best, best_i = 0, best_j = 0;
     prte_oob_tcp_conn_op_t *op = (prte_oob_tcp_conn_op_t *) cbdata;
     prte_reachable_t *results = NULL;
@@ -245,7 +245,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         peer->active_addr = (prte_oob_tcp_addr_t *) ptr;
         addr = peer->active_addr;
         /* Grab the local address we are using to bind the socket with */
-        ptr = prte_oob_tcp_component.local_ifs.pmix_list_sentinel.pmix_list_next;
+        ptr = prte_mca_oob_tcp_component.local_ifs.pmix_list_sentinel.pmix_list_next;
         for (i = 0; i < best_i; i++) {
             ptr = ptr->pmix_list_next;
         }
@@ -264,7 +264,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                                 pmix_net_get_port((struct sockaddr *) &addr->addr));
             continue;
         }
-        if (prte_oob_tcp_component.max_retries < addr->retries) {
+        if (prte_mca_oob_tcp_component.max_retries < addr->retries) {
             prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                 "%s prte_tcp_peer_try_connect: %s:%d retries exceeded",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -351,7 +351,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
              * way by trying twice before giving up
              */
             if (ECONNABORTED == prte_socket_errno) {
-                if (addr->retries < prte_oob_tcp_component.max_retries) {
+                if (addr->retries < prte_mca_oob_tcp_component.max_retries) {
                     prte_output_verbose(OOB_TCP_DEBUG_CONNECT,
                                         prte_oob_base_framework.framework_output,
                                         "%s connection aborted by OS to %s - retrying",
@@ -380,9 +380,9 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
         /* it could be that the intended recipient just hasn't
          * started yet. if requested, wait awhile and try again
          * unless/until we hit the maximum number of retries */
-        if (0 < prte_oob_tcp_component.retry_delay) {
-            if (prte_oob_tcp_component.max_recon_attempts < 0
-                || peer->num_retries < prte_oob_tcp_component.max_recon_attempts) {
+        if (0 < prte_mca_oob_tcp_component.retry_delay) {
+            if (prte_mca_oob_tcp_component.max_recon_attempts < 0
+                || peer->num_retries < prte_mca_oob_tcp_component.max_recon_attempts) {
                 struct timeval tv;
                 /* close the current socket */
                 CLOSE_THE_SOCKET(peer->sd);
@@ -393,7 +393,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
                     addr->retries = 0;
                 }
                 /* give it awhile and try again */
-                tv.tv_sec = prte_oob_tcp_component.retry_delay;
+                tv.tv_sec = prte_mca_oob_tcp_component.retry_delay;
                 tv.tv_usec = 0;
                 ++peer->num_retries;
                 PRTE_RETRY_TCP_CONN_STATE(peer, prte_oob_tcp_peer_try_connect, &tv);
@@ -427,7 +427,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
          * an event in the component event base, and so it will fire async
          * from us if we are in our own progress thread
          */
-        PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_oob_tcp_component_failed_to_connect);
+        PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_failed_to_connect);
         /* FIXME: post any messages in the send queue back to the OOB
          * level for reassignment
          */
@@ -874,7 +874,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
             peer = PMIX_NEW(prte_oob_tcp_peer_t);
             PMIX_XFER_PROCID(&peer->name, &hdr.origin);
             peer->state = MCA_OOB_TCP_ACCEPTING;
-            pmix_list_append(&prte_oob_tcp_component.peers, &peer->super);
+            pmix_list_append(&prte_mca_oob_tcp_component.peers, &peer->super);
         }
     } else {
         /* compare the peers name to the expected value */
@@ -1001,7 +1001,7 @@ int prte_oob_tcp_peer_recv_connect_ack(prte_oob_tcp_peer_t *pr, int sd, prte_oob
     /* set the peer into the component and OOB-level peer tables to indicate
      * that we know this peer and we will be handling him
      */
-    PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_oob_tcp_component_set_module);
+    PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_set_module);
 
     /* connected */
     tcp_peer_connected(peer);
@@ -1086,7 +1086,7 @@ void prte_oob_tcp_peer_close(prte_oob_tcp_peer_t *peer)
     /* inform the component-level that we have lost a connection so
      * it can decide what to do about it.
      */
-    PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_oob_tcp_component_lost_connection);
+    PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_lost_connection);
 
     if (prte_prteds_term_ordered || prte_finalizing || prte_abnormal_term_ordered) {
         /* nothing more to do */
@@ -1286,7 +1286,7 @@ bool prte_oob_tcp_peer_accept(prte_oob_tcp_peer_t *peer)
         /* set the peer into the component and OOB-level peer tables to indicate
          * that we know this peer and we will be handling him
          */
-        PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_oob_tcp_component_set_module);
+        PRTE_ACTIVATE_TCP_CMP_OP(peer, prte_mca_oob_tcp_component_set_module);
 
         tcp_peer_connected(peer);
         if (!peer->recv_ev_active) {

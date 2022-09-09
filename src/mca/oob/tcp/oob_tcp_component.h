@@ -88,14 +88,14 @@ typedef struct {
     int retry_delay;        /**< time to wait before retrying connection */
     int max_recon_attempts; /**< maximum number of times to attempt connect before giving up (-1 for
                                never) */
-} prte_oob_tcp_component_t;
+} prte_mca_oob_tcp_component_t;
 
-PRTE_MODULE_EXPORT extern prte_oob_tcp_component_t prte_oob_tcp_component;
+PRTE_MODULE_EXPORT extern prte_mca_oob_tcp_component_t prte_mca_oob_tcp_component;
 
-PRTE_MODULE_EXPORT void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata);
-PRTE_MODULE_EXPORT void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata);
-PRTE_MODULE_EXPORT void prte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata);
-PRTE_MODULE_EXPORT void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata);
-PRTE_MODULE_EXPORT void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_mca_oob_tcp_component_set_module(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_mca_oob_tcp_component_lost_connection(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_mca_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_mca_oob_tcp_component_no_route(int fd, short args, void *cbdata);
+PRTE_MODULE_EXPORT void prte_mca_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata);
 
 #endif /* _MCA_OOB_TCP_COMPONENT_H_ */

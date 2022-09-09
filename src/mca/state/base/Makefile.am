@@ -5,6 +5,7 @@
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -18,7 +19,7 @@ headers += \
         base/state_private.h \
         base/base.h
 
-libmca_state_la_SOURCES += \
+libprtemca_state_la_SOURCES += \
         base/state_base_frame.c \
         base/state_base_select.c \
         base/state_base_fns.c

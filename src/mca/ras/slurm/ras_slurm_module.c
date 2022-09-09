@@ -141,13 +141,13 @@ static int init(void)
     int flags;
     struct hostent *h;
 
-    if (prte_ras_slurm_component.dyn_alloc_enabled) {
-        if (NULL == prte_ras_slurm_component.config_file) {
+    if (prte_mca_ras_slurm_component.dyn_alloc_enabled) {
+        if (NULL == prte_mca_ras_slurm_component.config_file) {
             pmix_show_help("help-ras-slurm.txt", "dyn-alloc-no-config", true);
             return PRTE_ERR_SILENT;
         }
         /* setup the socket */
-        if (PRTE_SUCCESS != read_ip_port(prte_ras_slurm_component.config_file, &slurm_host, &port)
+        if (PRTE_SUCCESS != read_ip_port(prte_mca_ras_slurm_component.config_file, &slurm_host, &port)
             || NULL == slurm_host || 0 == port) {
             if (NULL != slurm_host) {
                 free(slurm_host);
@@ -156,7 +156,7 @@ static int init(void)
         }
         PRTE_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
                              "ras:slurm got [ ip = %s, port = %u ] from %s\n", slurm_host, port,
-                             prte_ras_slurm_component.config_file));
+                             prte_mca_ras_slurm_component.config_file));
 
         /* obtain a socket for our use */
         if ((socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -231,7 +231,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
         /* we are not in a slurm allocation - see if dyn alloc
          * is enabled
          */
-        if (!prte_ras_slurm_component.dyn_alloc_enabled) {
+        if (!prte_mca_ras_slurm_component.dyn_alloc_enabled) {
             /* nope - nothing we can do */
             prte_output_verbose(2, prte_ras_base_framework.framework_output,
                                 "%s ras:slurm: no prior allocation and dynamic alloc disabled",
@@ -248,7 +248,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
     slurm_node_str = getenv("SLURM_NODELIST");
     if (NULL == slurm_node_str) {
         /* see if dynamic allocation is enabled */
-        if (prte_ras_slurm_component.dyn_alloc_enabled) {
+        if (prte_mca_ras_slurm_component.dyn_alloc_enabled) {
             /* attempt to get the allocation - the function
              * dyn_allocate will return as PRTE_ERR_ALLOCATION_PENDING
              * if it succeeds in sending the allocation request
@@ -268,7 +268,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    if (prte_ras_slurm_component.use_all) {
+    if (prte_mca_ras_slurm_component.use_all) {
         /* this is an oddball case required for debug situations where
          * a tool is started that will then call mpirun. In this case,
          * Slurm will assign only 1 tasks/per node to the tool, but
@@ -353,7 +353,7 @@ static int prte_ras_slurm_finalize(void)
 {
     pmix_list_item_t *item;
 
-    if (prte_ras_slurm_component.dyn_alloc_enabled) {
+    if (prte_mca_ras_slurm_component.dyn_alloc_enabled) {
         /* delete the recv event */
         prte_event_del(&recv_ev);
         while (NULL != (item = pmix_list_remove_first(&jobs))) {
@@ -965,7 +965,7 @@ static int dyn_allocate(prte_job_t *jdata)
     local_jobtracker_t *jtrk;
     int64_t i64, *i64ptr;
 
-    if (NULL == prte_ras_slurm_component.config_file) {
+    if (NULL == prte_mca_ras_slurm_component.config_file) {
         prte_output(0, "Cannot perform dynamic allocation as no Slurm configuration file provided");
         return PRTE_ERR_NOT_FOUND;
     }
@@ -997,7 +997,7 @@ static int dyn_allocate(prte_job_t *jdata)
      * rolling allocations in the rest of the code base
      */
 #if 0
-    if (!prte_ras_slurm_component.rolling_alloc) {
+    if (!prte_mca_ras_slurm_component.rolling_alloc) {
         pmix_argv_append_nosize(&cmd, "return=all");
     }
 #else
@@ -1005,7 +1005,7 @@ static int dyn_allocate(prte_job_t *jdata)
 #endif
 
     /* pass the timeout */
-    pmix_asprintf(&tmp, "timeout=%d", prte_ras_slurm_component.timeout);
+    pmix_asprintf(&tmp, "timeout=%d", prte_mca_ras_slurm_component.timeout);
     pmix_argv_append_nosize(&cmd, tmp);
     free(tmp);
 
@@ -1057,7 +1057,7 @@ static int dyn_allocate(prte_job_t *jdata)
      * responding to us
      */
     prte_event_evtimer_set(prte_event_base, &jtrk->timeout_ev, timeout, jtrk);
-    tv.tv_sec = prte_ras_slurm_component.timeout * 2;
+    tv.tv_sec = prte_mca_ras_slurm_component.timeout * 2;
     tv.tv_usec = 0;
     prte_event_evtimer_add(&jtrk->timeout_ev, &tv);
 

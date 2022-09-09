@@ -3,7 +3,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,9 +32,9 @@ BEGIN_C_DECLS
 
 typedef struct {
     prte_reachable_base_component_t super;
-} prte_prtereachable_weighted_component_t;
+} prte_mca_prtereachable_weighted_component_t;
 
-PRTE_EXPORT extern prte_prtereachable_weighted_component_t prte_prtereachable_weighted_component;
+PRTE_EXPORT extern prte_mca_prtereachable_weighted_component_t prte_mca_prtereachable_weighted_component;
 
 PRTE_EXPORT extern const prte_reachable_base_module_t prte_prtereachable_weighted_module;
 
