@@ -1805,14 +1805,6 @@ static bool check_pmix_overlap(char *var, char *value)
         setenv(tmp, value, false);
         free(tmp);
         return true;
-    } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
-        // need to convert reachable to preachable
-        pmix_asprintf(&tmp, "PMIX_MCA_preachable_%s", &var[strlen("reachable")]);
-        // set it, but don't overwrite if they already
-        // have a value in our environment
-        setenv(tmp, value, false);
-        free(tmp);
-        return true;
     }
     return false;
 }
