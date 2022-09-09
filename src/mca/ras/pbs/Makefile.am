@@ -40,10 +40,10 @@ sources = \
 if MCA_BUILD_prte_ras_pbs_DSO
 lib =
 lib_sources =
-component = mca_ras_pbs.la
+component = prte_mca_ras_pbs.la
 component_sources = $(sources)
 else
-lib = libmca_ras_pbs.la
+lib = libprtemca_ras_pbs.la
 lib_sources = $(sources)
 component =
 component_sources =
@@ -51,10 +51,10 @@ endif
 
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component)
-mca_ras_pbs_la_SOURCES = $(component_sources)
-mca_ras_pbs_la_LDFLAGS = -module -avoid-version
-mca_ras_pbs_la_LIBADD = $(top_builddir)/src/libprrte.la
+prte_mca_ras_pbs_la_SOURCES = $(component_sources)
+prte_mca_ras_pbs_la_LDFLAGS = -module -avoid-version
+prte_mca_ras_pbs_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(lib)
-libmca_ras_pbs_la_SOURCES = $(lib_sources)
-libmca_ras_pbs_la_LDFLAGS = -module -avoid-version
+libprtemca_ras_pbs_la_SOURCES = $(lib_sources)
+libprtemca_ras_pbs_la_LDFLAGS = -module -avoid-version

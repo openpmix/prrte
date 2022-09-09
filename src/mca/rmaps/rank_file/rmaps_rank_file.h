@@ -46,7 +46,7 @@ struct prte_rmaps_rf_component_t {
 };
 typedef struct prte_rmaps_rf_component_t prte_rmaps_rf_component_t;
 
-PRTE_MODULE_EXPORT extern prte_rmaps_rf_component_t prte_rmaps_rank_file_component;
+PRTE_MODULE_EXPORT extern prte_rmaps_rf_component_t prte_mca_rmaps_rank_file_component;
 extern prte_rmaps_base_module_t prte_rmaps_rank_file_module;
 
 typedef struct cpu_package_t cpu_package_t;

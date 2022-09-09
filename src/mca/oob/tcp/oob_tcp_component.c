@@ -110,7 +110,7 @@ static bool component_is_reachable(pmix_proc_t *peer);
 /*
  * Struct of function pointers and all that to let us be initialized
  */
-prte_oob_tcp_component_t prte_oob_tcp_component = {
+prte_mca_oob_tcp_component_t prte_mca_oob_tcp_component = {
     .super = {
         .oob_base = {
             PRTE_OOB_BASE_VERSION_2_0_0,
@@ -139,22 +139,22 @@ prte_oob_tcp_component_t prte_oob_tcp_component = {
  */
 static int tcp_component_open(void)
 {
-    PMIX_CONSTRUCT(&prte_oob_tcp_component.peers, pmix_list_t);
-    PMIX_CONSTRUCT(&prte_oob_tcp_component.listeners, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_mca_oob_tcp_component.peers, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_mca_oob_tcp_component.listeners, pmix_list_t);
     if (PRTE_PROC_IS_MASTER) {
-        PMIX_CONSTRUCT(&prte_oob_tcp_component.listen_thread, pmix_thread_t);
-        prte_oob_tcp_component.listen_thread_active = false;
-        prte_oob_tcp_component.listen_thread_tv.tv_sec = 3600;
-        prte_oob_tcp_component.listen_thread_tv.tv_usec = 0;
+        PMIX_CONSTRUCT(&prte_mca_oob_tcp_component.listen_thread, pmix_thread_t);
+        prte_mca_oob_tcp_component.listen_thread_active = false;
+        prte_mca_oob_tcp_component.listen_thread_tv.tv_sec = 3600;
+        prte_mca_oob_tcp_component.listen_thread_tv.tv_usec = 0;
     }
-    prte_oob_tcp_component.addr_count = 0;
-    prte_oob_tcp_component.ipv4conns = NULL;
-    prte_oob_tcp_component.ipv4ports = NULL;
-    prte_oob_tcp_component.ipv6conns = NULL;
-    prte_oob_tcp_component.ipv6ports = NULL;
-    prte_oob_tcp_component.if_masks = NULL;
+    prte_mca_oob_tcp_component.addr_count = 0;
+    prte_mca_oob_tcp_component.ipv4conns = NULL;
+    prte_mca_oob_tcp_component.ipv4ports = NULL;
+    prte_mca_oob_tcp_component.ipv6conns = NULL;
+    prte_mca_oob_tcp_component.ipv6ports = NULL;
+    prte_mca_oob_tcp_component.if_masks = NULL;
 
-    PMIX_CONSTRUCT(&prte_oob_tcp_component.local_ifs, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_mca_oob_tcp_component.local_ifs, pmix_list_t);
     return PRTE_SUCCESS;
 }
 
@@ -163,26 +163,26 @@ static int tcp_component_open(void)
  */
 static int tcp_component_close(void)
 {
-    PMIX_LIST_DESTRUCT(&prte_oob_tcp_component.local_ifs);
-    PMIX_LIST_DESTRUCT(&prte_oob_tcp_component.peers);
+    PMIX_LIST_DESTRUCT(&prte_mca_oob_tcp_component.local_ifs);
+    PMIX_LIST_DESTRUCT(&prte_mca_oob_tcp_component.peers);
 
-    if (NULL != prte_oob_tcp_component.ipv4conns) {
-        pmix_argv_free(prte_oob_tcp_component.ipv4conns);
+    if (NULL != prte_mca_oob_tcp_component.ipv4conns) {
+        pmix_argv_free(prte_mca_oob_tcp_component.ipv4conns);
     }
-    if (NULL != prte_oob_tcp_component.ipv4ports) {
-        pmix_argv_free(prte_oob_tcp_component.ipv4ports);
+    if (NULL != prte_mca_oob_tcp_component.ipv4ports) {
+        pmix_argv_free(prte_mca_oob_tcp_component.ipv4ports);
     }
 
 #if PRTE_ENABLE_IPV6
-    if (NULL != prte_oob_tcp_component.ipv6conns) {
-        pmix_argv_free(prte_oob_tcp_component.ipv6conns);
+    if (NULL != prte_mca_oob_tcp_component.ipv6conns) {
+        pmix_argv_free(prte_mca_oob_tcp_component.ipv6conns);
     }
-    if (NULL != prte_oob_tcp_component.ipv6ports) {
-        pmix_argv_free(prte_oob_tcp_component.ipv6ports);
+    if (NULL != prte_mca_oob_tcp_component.ipv6ports) {
+        pmix_argv_free(prte_mca_oob_tcp_component.ipv6ports);
     }
 #endif
-    if (NULL != prte_oob_tcp_component.if_masks) {
-        pmix_argv_free(prte_oob_tcp_component.if_masks);
+    if (NULL != prte_mca_oob_tcp_component.if_masks) {
+        pmix_argv_free(prte_mca_oob_tcp_component.if_masks);
     }
     return PRTE_SUCCESS;
 }
@@ -198,32 +198,32 @@ static char *dyn_port_string6;
 
 static int tcp_component_register(void)
 {
-    pmix_mca_base_component_t *component = &prte_oob_tcp_component.super.oob_base;
+    pmix_mca_base_component_t *component = &prte_mca_oob_tcp_component.super.oob_base;
 
     /* register oob module parameters */
-    prte_oob_tcp_component.peer_limit = -1;
+    prte_mca_oob_tcp_component.peer_limit = -1;
     (void) pmix_mca_base_component_var_register(component, "peer_limit",
                                                 "Maximum number of peer connections to simultaneously maintain (-1 = infinite)",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_oob_tcp_component.peer_limit);
+                                                &prte_mca_oob_tcp_component.peer_limit);
 
-    prte_oob_tcp_component.max_retries = 2;
+    prte_mca_oob_tcp_component.max_retries = 2;
     (void) pmix_mca_base_component_var_register(component, "peer_retries",
                                                 "Number of times to try shutting down a connection before giving up",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_oob_tcp_component.max_retries);
+                                                &prte_mca_oob_tcp_component.max_retries);
 
-    prte_oob_tcp_component.tcp_sndbuf = 0;
+    prte_mca_oob_tcp_component.tcp_sndbuf = 0;
     (void) pmix_mca_base_component_var_register(component, "sndbuf",
                                                 "TCP socket send buffering size (in bytes, 0 => leave system default)",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_oob_tcp_component.tcp_sndbuf);
+                                                &prte_mca_oob_tcp_component.tcp_sndbuf);
 
-    prte_oob_tcp_component.tcp_rcvbuf = 0;
+    prte_mca_oob_tcp_component.tcp_rcvbuf = 0;
     (void) pmix_mca_base_component_var_register(component, "rcvbuf",
                                                 "TCP socket receive buffering size (in bytes, 0 => leave system default)",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_oob_tcp_component.tcp_rcvbuf);
+                                                &prte_mca_oob_tcp_component.tcp_rcvbuf);
 
 
     static_port_string = NULL;
@@ -234,13 +234,13 @@ static int tcp_component_register(void)
 
     /* if ports were provided, parse the provided range */
     if (NULL != static_port_string) {
-        pmix_util_parse_range_options(static_port_string, &prte_oob_tcp_component.tcp_static_ports);
-        if (0 == strcmp(prte_oob_tcp_component.tcp_static_ports[0], "-1")) {
-            pmix_argv_free(prte_oob_tcp_component.tcp_static_ports);
-            prte_oob_tcp_component.tcp_static_ports = NULL;
+        pmix_util_parse_range_options(static_port_string, &prte_mca_oob_tcp_component.tcp_static_ports);
+        if (0 == strcmp(prte_mca_oob_tcp_component.tcp_static_ports[0], "-1")) {
+            pmix_argv_free(prte_mca_oob_tcp_component.tcp_static_ports);
+            prte_mca_oob_tcp_component.tcp_static_ports = NULL;
         }
     } else {
-        prte_oob_tcp_component.tcp_static_ports = NULL;
+        prte_mca_oob_tcp_component.tcp_static_ports = NULL;
     }
 
 #if PRTE_ENABLE_IPV6
@@ -253,18 +253,18 @@ static int tcp_component_register(void)
     /* if ports were provided, parse the provided range */
     if (NULL != static_port_string6) {
         pmix_util_parse_range_options(static_port_string6,
-                                      &prte_oob_tcp_component.tcp6_static_ports);
-        if (0 == strcmp(prte_oob_tcp_component.tcp6_static_ports[0], "-1")) {
-            pmix_argv_free(prte_oob_tcp_component.tcp6_static_ports);
-            prte_oob_tcp_component.tcp6_static_ports = NULL;
+                                      &prte_mca_oob_tcp_component.tcp6_static_ports);
+        if (0 == strcmp(prte_mca_oob_tcp_component.tcp6_static_ports[0], "-1")) {
+            pmix_argv_free(prte_mca_oob_tcp_component.tcp6_static_ports);
+            prte_mca_oob_tcp_component.tcp6_static_ports = NULL;
         }
     } else {
-        prte_oob_tcp_component.tcp6_static_ports = NULL;
+        prte_mca_oob_tcp_component.tcp6_static_ports = NULL;
     }
 #endif // PRTE_ENABLE_IPV6
 
-    if (NULL != prte_oob_tcp_component.tcp_static_ports
-        || NULL != prte_oob_tcp_component.tcp6_static_ports) {
+    if (NULL != prte_mca_oob_tcp_component.tcp_static_ports
+        || NULL != prte_mca_oob_tcp_component.tcp6_static_ports) {
         prte_static_ports = true;
     }
 
@@ -277,18 +277,18 @@ static int tcp_component_register(void)
     if (NULL != dyn_port_string) {
         /* can't have both static and dynamic ports! */
         if (prte_static_ports) {
-            char *err = pmix_argv_join(prte_oob_tcp_component.tcp_static_ports, ',');
+            char *err = pmix_argv_join(prte_mca_oob_tcp_component.tcp_static_ports, ',');
             pmix_show_help("help-oob-tcp.txt", "static-and-dynamic", true, err, dyn_port_string);
             free(err);
             return PRTE_ERROR;
         }
-        pmix_util_parse_range_options(dyn_port_string, &prte_oob_tcp_component.tcp_dyn_ports);
-        if (0 == strcmp(prte_oob_tcp_component.tcp_dyn_ports[0], "-1")) {
-            pmix_argv_free(prte_oob_tcp_component.tcp_dyn_ports);
-            prte_oob_tcp_component.tcp_dyn_ports = NULL;
+        pmix_util_parse_range_options(dyn_port_string, &prte_mca_oob_tcp_component.tcp_dyn_ports);
+        if (0 == strcmp(prte_mca_oob_tcp_component.tcp_dyn_ports[0], "-1")) {
+            pmix_argv_free(prte_mca_oob_tcp_component.tcp_dyn_ports);
+            prte_mca_oob_tcp_component.tcp_dyn_ports = NULL;
         }
     } else {
-        prte_oob_tcp_component.tcp_dyn_ports = NULL;
+        prte_mca_oob_tcp_component.tcp_dyn_ports = NULL;
     }
 
 #if PRTE_ENABLE_IPV6
@@ -302,11 +302,11 @@ static int tcp_component_register(void)
         /* can't have both static and dynamic ports! */
         if (prte_static_ports) {
             char *err4 = NULL, *err6 = NULL;
-            if (NULL != prte_oob_tcp_component.tcp_static_ports) {
-                err4 = pmix_argv_join(prte_oob_tcp_component.tcp_static_ports, ',');
+            if (NULL != prte_mca_oob_tcp_component.tcp_static_ports) {
+                err4 = pmix_argv_join(prte_mca_oob_tcp_component.tcp_static_ports, ',');
             }
-            if (NULL != prte_oob_tcp_component.tcp6_static_ports) {
-                err6 = pmix_argv_join(prte_oob_tcp_component.tcp6_static_ports, ',');
+            if (NULL != prte_mca_oob_tcp_component.tcp6_static_ports) {
+                err6 = pmix_argv_join(prte_mca_oob_tcp_component.tcp6_static_ports, ',');
             }
             pmix_show_help("help-oob-tcp.txt", "static-and-dynamic-ipv6", true,
                            (NULL == err4) ? "N/A" : err4, (NULL == err6) ? "N/A" : err6,
@@ -319,65 +319,65 @@ static int tcp_component_register(void)
             }
             return PRTE_ERROR;
         }
-        pmix_util_parse_range_options(dyn_port_string6, &prte_oob_tcp_component.tcp6_dyn_ports);
-        if (0 == strcmp(prte_oob_tcp_component.tcp6_dyn_ports[0], "-1")) {
-            pmix_argv_free(prte_oob_tcp_component.tcp6_dyn_ports);
-            prte_oob_tcp_component.tcp6_dyn_ports = NULL;
+        pmix_util_parse_range_options(dyn_port_string6, &prte_mca_oob_tcp_component.tcp6_dyn_ports);
+        if (0 == strcmp(prte_mca_oob_tcp_component.tcp6_dyn_ports[0], "-1")) {
+            pmix_argv_free(prte_mca_oob_tcp_component.tcp6_dyn_ports);
+            prte_mca_oob_tcp_component.tcp6_dyn_ports = NULL;
         }
     } else {
-        prte_oob_tcp_component.tcp6_dyn_ports = NULL;
+        prte_mca_oob_tcp_component.tcp6_dyn_ports = NULL;
     }
 #endif // PRTE_ENABLE_IPV6
 
-    prte_oob_tcp_component.disable_ipv4_family = false;
+    prte_mca_oob_tcp_component.disable_ipv4_family = false;
     (void) pmix_mca_base_component_var_register(component, "disable_ipv4_family",
                                                 "Disable the IPv4 interfaces",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &prte_oob_tcp_component.disable_ipv4_family);
+                                                &prte_mca_oob_tcp_component.disable_ipv4_family);
 
 #if PRTE_ENABLE_IPV6
-    prte_oob_tcp_component.disable_ipv6_family = false;
+    prte_mca_oob_tcp_component.disable_ipv6_family = false;
     (void) pmix_mca_base_component_var_register(component, "disable_ipv6_family",
                                                 "Disable the IPv6 interfaces",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &prte_oob_tcp_component.disable_ipv6_family);
+                                                &prte_mca_oob_tcp_component.disable_ipv6_family);
 #endif // PRTE_ENABLE_IPV6
 
     // Wait for this amount of time before sending the first keepalive probe
-    prte_oob_tcp_component.keepalive_time = 300;
+    prte_mca_oob_tcp_component.keepalive_time = 300;
     (void) pmix_mca_base_component_var_register(component, "keepalive_time",
                                                 "Idle time in seconds before starting to send keepalives (keepalive_time <= 0 disables "
                                                 "keepalive functionality)",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_oob_tcp_component.keepalive_time);
+                                                &prte_mca_oob_tcp_component.keepalive_time);
 
     // Resend keepalive probe every INT seconds
-    prte_oob_tcp_component.keepalive_intvl = 20;
+    prte_mca_oob_tcp_component.keepalive_intvl = 20;
     (void) pmix_mca_base_component_var_register(component, "keepalive_intvl",
                                                 "Time between successive keepalive pings when peer has not responded, in seconds (ignored "
                                                 "if keepalive_time <= 0)",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_oob_tcp_component.keepalive_intvl);
+                                                &prte_mca_oob_tcp_component.keepalive_intvl);
 
     // After sending PR probes every INT seconds consider the connection dead
-    prte_oob_tcp_component.keepalive_probes = 9;
+    prte_mca_oob_tcp_component.keepalive_probes = 9;
     (void) pmix_mca_base_component_var_register(component, "keepalive_probes",
                                                 "Number of keepalives that can be missed before "
                                                 "declaring error (ignored if keepalive_time <= 0)",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_oob_tcp_component.keepalive_probes);
+                                                &prte_mca_oob_tcp_component.keepalive_probes);
 
-    prte_oob_tcp_component.retry_delay = 0;
+    prte_mca_oob_tcp_component.retry_delay = 0;
     (void) pmix_mca_base_component_var_register(component, "retry_delay",
                                                 "Time (in sec) to wait before trying to connect to peer again",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_oob_tcp_component.retry_delay);
+                                                &prte_mca_oob_tcp_component.retry_delay);
 
-    prte_oob_tcp_component.max_recon_attempts = 10;
+    prte_mca_oob_tcp_component.max_recon_attempts = 10;
     (void) pmix_mca_base_component_var_register(component, "max_recon_attempts",
                                                 "Max number of times to attempt connection before giving up (-1 -> never give up)",
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
-                                                &prte_oob_tcp_component.max_recon_attempts);
+                                                &prte_mca_oob_tcp_component.max_recon_attempts);
 
     return PRTE_SUCCESS;
 }
@@ -437,7 +437,7 @@ static int component_available(void)
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 pmix_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-            pmix_argv_append_nosize(&prte_oob_tcp_component.ipv4conns,
+            pmix_argv_append_nosize(&prte_mca_oob_tcp_component.ipv4conns,
                                     pmix_net_get_hostname((struct sockaddr *) &my_ss));
         } else if (AF_INET6 == my_ss.ss_family) {
 #if PRTE_ENABLE_IPV6
@@ -446,7 +446,7 @@ static int component_available(void)
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 pmix_net_get_hostname((struct sockaddr *) &my_ss),
                                 (AF_INET == my_ss.ss_family) ? "V4" : "V6");
-            pmix_argv_append_nosize(&prte_oob_tcp_component.ipv6conns,
+            pmix_argv_append_nosize(&prte_mca_oob_tcp_component.ipv6conns,
                                     pmix_net_get_hostname((struct sockaddr *) &my_ss));
 #endif // PRTE_ENABLE_IPV6
         } else {
@@ -478,13 +478,13 @@ static int component_available(void)
         copied_interface->ifmtu = selected_interface->ifmtu;
         /* Add the if_mask to the list */
         sprintf(string, "%d", selected_interface->if_mask);
-        pmix_argv_append_nosize(&prte_oob_tcp_component.if_masks, string);
-        pmix_list_append(&prte_oob_tcp_component.local_ifs, &(copied_interface->super));
+        pmix_argv_append_nosize(&prte_mca_oob_tcp_component.if_masks, string);
+        pmix_list_append(&prte_mca_oob_tcp_component.local_ifs, &(copied_interface->super));
     }
 
-    if (0 == pmix_argv_count(prte_oob_tcp_component.ipv4conns)
+    if (0 == pmix_argv_count(prte_mca_oob_tcp_component.ipv4conns)
 #if PRTE_ENABLE_IPV6
-        && 0 == pmix_argv_count(prte_oob_tcp_component.ipv6conns)
+        && 0 == pmix_argv_count(prte_mca_oob_tcp_component.ipv6conns)
 #endif
     ) {
         return PRTE_ERR_NOT_AVAILABLE;
@@ -523,23 +523,23 @@ static void component_shutdown(void)
     prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP SHUTDOWN",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
-    if (PRTE_PROC_IS_MASTER && prte_oob_tcp_component.listen_thread_active) {
-        prte_oob_tcp_component.listen_thread_active = false;
+    if (PRTE_PROC_IS_MASTER && prte_mca_oob_tcp_component.listen_thread_active) {
+        prte_mca_oob_tcp_component.listen_thread_active = false;
         /* tell the thread to exit */
-        rc = write(prte_oob_tcp_component.stop_thread[1], &i, sizeof(int));
+        rc = write(prte_mca_oob_tcp_component.stop_thread[1], &i, sizeof(int));
         if (0 < rc) {
-            pmix_thread_join(&prte_oob_tcp_component.listen_thread, NULL);
+            pmix_thread_join(&prte_mca_oob_tcp_component.listen_thread, NULL);
         }
 
-        close(prte_oob_tcp_component.stop_thread[0]);
-        close(prte_oob_tcp_component.stop_thread[1]);
+        close(prte_mca_oob_tcp_component.stop_thread[0]);
+        close(prte_mca_oob_tcp_component.stop_thread[1]);
 
     } else {
         prte_output_verbose(2, prte_oob_base_framework.framework_output, "no hnp or not active");
     }
 
     /* cleanup listen event list */
-    PMIX_LIST_DESTRUCT(&prte_oob_tcp_component.listeners);
+    PMIX_LIST_DESTRUCT(&prte_mca_oob_tcp_component.listeners);
 
     prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP SHUTDOWN done",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -567,18 +567,18 @@ static char *component_get_addr(void)
 {
     char *cptr = NULL, *tmp, *tp, *tm;
 
-    if (!prte_oob_tcp_component.disable_ipv4_family &&
-        NULL != prte_oob_tcp_component.ipv4conns) {
-        tmp = pmix_argv_join(prte_oob_tcp_component.ipv4conns, ',');
-        tp = pmix_argv_join(prte_oob_tcp_component.ipv4ports, ',');
-        tm = pmix_argv_join(prte_oob_tcp_component.if_masks, ',');
+    if (!prte_mca_oob_tcp_component.disable_ipv4_family &&
+        NULL != prte_mca_oob_tcp_component.ipv4conns) {
+        tmp = pmix_argv_join(prte_mca_oob_tcp_component.ipv4conns, ',');
+        tp = pmix_argv_join(prte_mca_oob_tcp_component.ipv4ports, ',');
+        tm = pmix_argv_join(prte_mca_oob_tcp_component.if_masks, ',');
         pmix_asprintf(&cptr, "tcp://%s:%s:%s", tmp, tp, tm);
         free(tmp);
         free(tp);
         free(tm);
     }
 #if PRTE_ENABLE_IPV6
-    if (!prte_oob_tcp_component.disable_ipv6_family && NULL != prte_oob_tcp_component.ipv6conns) {
+    if (!prte_mca_oob_tcp_component.disable_ipv6_family && NULL != prte_mca_oob_tcp_component.ipv6conns) {
         char *tmp2;
 
         /* Fixes #2498
@@ -592,9 +592,9 @@ static char *component_get_addr(void)
          * an implementation may use an optional version flag to indicate such a format
          * explicitly rather than rely on heuristic determination.
          */
-        tmp = pmix_argv_join(prte_oob_tcp_component.ipv6conns, ',');
-        tp = pmix_argv_join(prte_oob_tcp_component.ipv6ports, ',');
-        tm = pmix_argv_join(prte_oob_tcp_component.if_masks, ',');
+        tmp = pmix_argv_join(prte_mca_oob_tcp_component.ipv6conns, ',');
+        tp = pmix_argv_join(prte_mca_oob_tcp_component.ipv6ports, ',');
+        tm = pmix_argv_join(prte_mca_oob_tcp_component.if_masks, ',');
         if (NULL == cptr) {
             /* no ipv4 stuff */
             pmix_asprintf(&cptr, "tcp6://[%s]:%s:%s", tmp, tp, tm);
@@ -753,18 +753,18 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
             if (0 == strcasecmp(addrs[j], "localhost")) {
 #if PRTE_ENABLE_IPV6
                 if (AF_INET6 == af_family) {
-                    if (NULL == prte_oob_tcp_component.ipv6conns
-                        || NULL == prte_oob_tcp_component.ipv6conns[0]) {
+                    if (NULL == prte_mca_oob_tcp_component.ipv6conns
+                        || NULL == prte_mca_oob_tcp_component.ipv6conns[0]) {
                         continue;
                     }
-                    host = prte_oob_tcp_component.ipv6conns[0];
+                    host = prte_mca_oob_tcp_component.ipv6conns[0];
                 } else {
 #endif // PRTE_ENABLE_IPV6
-                    if (NULL == prte_oob_tcp_component.ipv4conns
-                        || NULL == prte_oob_tcp_component.ipv4conns[0]) {
+                    if (NULL == prte_mca_oob_tcp_component.ipv4conns
+                        || NULL == prte_mca_oob_tcp_component.ipv4conns[0]) {
                         continue;
                     }
-                    host = prte_oob_tcp_component.ipv4conns[0];
+                    host = prte_mca_oob_tcp_component.ipv4conns[0];
 #if PRTE_ENABLE_IPV6
                 }
 #endif
@@ -778,7 +778,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
                 prte_output_verbose(20, prte_oob_base_framework.framework_output,
                                     "%s SET_PEER ADDING PEER %s",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer));
-                pmix_list_append(&prte_oob_tcp_component.peers, &pr->super);
+                pmix_list_append(&prte_mca_oob_tcp_component.peers, &pr->super);
             }
 
             maddr = PMIX_NEW(prte_oob_tcp_addr_t);
@@ -788,7 +788,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
                                    (struct sockaddr_storage *) &(maddr->addr)))) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_RELEASE(maddr);
-                pmix_list_remove_item(&prte_oob_tcp_component.peers, &pr->super);
+                pmix_list_remove_item(&prte_mca_oob_tcp_component.peers, &pr->super);
                 PMIX_RELEASE(pr);
                 return PRTE_ERR_TAKE_NEXT_OPTION;
             }
@@ -821,7 +821,7 @@ static bool component_is_reachable(pmix_proc_t *peer)
     return true;
 }
 
-void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
+void prte_mca_oob_tcp_component_set_module(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
     prte_oob_base_peer_t *bpr;
@@ -842,13 +842,13 @@ void prte_oob_tcp_component_set_module(int fd, short args, void *cbdata)
         PMIX_XFER_PROCID(&bpr->name, &pop->peer);
         pmix_list_append(&prte_oob_base.peers, &bpr->super);
     }
-    pmix_bitmap_set_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
-    bpr->component = &prte_oob_tcp_component.super;
+    pmix_bitmap_set_bit(&bpr->addressable, prte_mca_oob_tcp_component.super.idx);
+    bpr->component = &prte_mca_oob_tcp_component.super;
 
     PMIX_RELEASE(pop);
 }
 
-void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
+void prte_mca_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
     prte_oob_base_peer_t *bpr;
@@ -862,7 +862,7 @@ void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
     /* Mark that we no longer support this peer */
     bpr = prte_oob_base_get_peer(&pop->peer);
     if (NULL != bpr) {
-        pmix_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
+        pmix_bitmap_clear_bit(&bpr->addressable, prte_mca_oob_tcp_component.super.idx);
         pmix_list_remove_item(&prte_oob_base.peers, &bpr->super);
         PMIX_RELEASE(bpr);
     }
@@ -878,7 +878,7 @@ void prte_oob_tcp_component_lost_connection(int fd, short args, void *cbdata)
     PMIX_RELEASE(pop);
 }
 
-void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
+void prte_mca_oob_tcp_component_no_route(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t *) cbdata;
     prte_oob_base_peer_t *bpr;
@@ -895,7 +895,7 @@ void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
         bpr = PMIX_NEW(prte_oob_base_peer_t);
         PMIX_XFER_PROCID(&bpr->name, &mop->hop);
     }
-    pmix_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
+    pmix_bitmap_clear_bit(&bpr->addressable, prte_mca_oob_tcp_component.super.idx);
 
     /* report the error back to the OOB and let it try other components
      * or declare a problem
@@ -907,7 +907,7 @@ void prte_oob_tcp_component_no_route(int fd, short args, void *cbdata)
     PMIX_RELEASE(mop);
 }
 
-void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
+void prte_mca_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t *) cbdata;
     prte_rml_send_t *snd;
@@ -945,7 +945,7 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
         PMIX_RELEASE(mop);
         return;
     }
-    pmix_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
+    pmix_bitmap_clear_bit(&bpr->addressable, prte_mca_oob_tcp_component.super.idx);
 
     /* mark that this component cannot reach this destination either */
     bpr = prte_oob_base_get_peer(&mop->snd->hdr.dst);
@@ -958,7 +958,7 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
         PMIX_RELEASE(mop);
         return;
     }
-    pmix_bitmap_clear_bit(&bpr->addressable, prte_oob_tcp_component.super.idx);
+    pmix_bitmap_clear_bit(&bpr->addressable, prte_mca_oob_tcp_component.super.idx);
 
     /* post the message to the OOB so it can see
      * if another component can transfer it
@@ -986,7 +986,7 @@ void prte_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
     PMIX_RELEASE(mop);
 }
 
-void prte_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata)
+void prte_mca_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
 

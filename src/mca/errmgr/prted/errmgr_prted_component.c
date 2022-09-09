@@ -24,7 +24,7 @@
 /*
  * Public string for version number
  */
-const char *prte_errmgr_prted_component_version_string
+const char *prte_mca_errmgr_prted_component_version_string
     = "PRTE ERRMGR prted MCA component version " PRTE_VERSION;
 
 /*
@@ -39,7 +39,7 @@ static int errmgr_prted_component_query(pmix_mca_base_module_t **module, int *pr
  * Instantiate the public struct with all of our public information
  * and pointer to our public functions in it
  */
-prte_errmgr_base_component_t prte_errmgr_prted_component =
+prte_errmgr_base_component_t prte_mca_errmgr_prted_component =
 {
     /* Handle the general mca_component_t struct containing
      *  meta information about the component itprted
@@ -65,7 +65,7 @@ static int my_priority;
 
 static int errmgr_prted_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_errmgr_prted_component.base_version;
+    pmix_mca_base_component_t *c = &prte_mca_errmgr_prted_component.base_version;
 
     my_priority = 1000;
     (void) pmix_mca_base_component_var_register(c, "priority",

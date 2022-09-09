@@ -24,7 +24,7 @@
 /*
  * Public string for version number
  */
-const char *prte_state_dvm_component_version_string
+const char *prte_mca_state_dvm_component_version_string
     = "PRTE STATE dvm MCA component version " PRTE_VERSION;
 
 /*
@@ -38,7 +38,7 @@ static int state_dvm_component_query(pmix_mca_base_module_t **module, int *prior
  * Instantiate the public struct with all of our public information
  * and pointer to our public functions in it
  */
-prte_state_base_component_t prte_state_dvm_component =
+prte_state_base_component_t prte_mca_state_dvm_component =
 {
     PRTE_STATE_BASE_VERSION_1_0_0,
     /* Component name and version */

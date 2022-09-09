@@ -10,6 +10,7 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -20,5 +21,5 @@
 headers += \
         base/base.h
 
-libmca_prtebacktrace_la_SOURCES += \
+libprtemca_prtebacktrace_la_SOURCES += \
 	base/backtrace_component.c

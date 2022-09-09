@@ -13,6 +13,7 @@
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,21 +22,19 @@
 #
 
 # main library setup
-noinst_LTLIBRARIES = libmca_ras.la
-libmca_ras_la_SOURCES =
+noinst_LTLIBRARIES = libprtemca_ras.la
+libprtemca_ras_la_SOURCES =
 
 # pkgdata setup
 dist_prtedata_DATA =
 
 # local files
 headers = ras.h
-libmca_ras_la_SOURCES += $(headers)
+libprtemca_ras_la_SOURCES += $(headers)
 
 # Conditionally install the header files
-if WANT_INSTALL_HEADERS
 prtedir = $(prteincludedir)/$(subdir)
 nobase_prte_HEADERS = $(headers)
-endif
 
 include base/Makefile.am
 

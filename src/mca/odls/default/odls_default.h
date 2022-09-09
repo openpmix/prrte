@@ -38,15 +38,15 @@ BEGIN_C_DECLS
 /*
  * Module open / close
  */
-int prte_odls_default_component_open(void);
-int prte_odls_default_component_close(void);
-int prte_odls_default_component_query(pmix_mca_base_module_t **module, int *priority);
+int prte_mca_odls_default_component_open(void);
+int prte_mca_odls_default_component_close(void);
+int prte_mca_odls_default_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * ODLS Default module
  */
 extern prte_odls_base_module_t prte_odls_default_module;
-PRTE_MODULE_EXPORT extern prte_odls_base_component_t prte_odls_default_component;
+PRTE_MODULE_EXPORT extern prte_odls_base_component_t prte_mca_odls_default_component;
 
 END_C_DECLS
 

@@ -30,7 +30,7 @@ static int component_register(void);
 /*
  * Struct of function pointers and all that to let us be initialized
  */
-prte_schizo_prte_component_t prte_schizo_prte_component = {
+prte_schizo_prte_component_t prte_mca_schizo_prte_component = {
     .super = {
         PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0,
         .pmix_mca_component_name = "prte",
@@ -47,13 +47,13 @@ prte_schizo_prte_component_t prte_schizo_prte_component = {
 
 static int component_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_schizo_prte_component.super;
+    pmix_mca_base_component_t *c = &prte_mca_schizo_prte_component.super;
 
-    prte_schizo_prte_component.warn_deprecations = true;
+    prte_mca_schizo_prte_component.warn_deprecations = true;
     (void) pmix_mca_base_component_var_register(c, "warn_deprecations",
                                                 "Issue warnings about deprecated command line options",
                                                 PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &prte_schizo_prte_component.warn_deprecations);
+                                                &prte_mca_schizo_prte_component.warn_deprecations);
 
     return PRTE_SUCCESS;
 }
@@ -61,6 +61,6 @@ static int component_register(void)
 static int component_query(pmix_mca_base_module_t **module, int *priority)
 {
     *module = (pmix_mca_base_module_t *) &prte_schizo_prte_module;
-    *priority = prte_schizo_prte_component.priority;
+    *priority = prte_mca_schizo_prte_component.priority;
     return PRTE_SUCCESS;
 }
