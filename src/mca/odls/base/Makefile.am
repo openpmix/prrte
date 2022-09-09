@@ -13,6 +13,7 @@
 #                         All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -24,7 +25,7 @@ headers += \
         base/base.h \
         base/odls_private.h
 
-libmca_odls_la_SOURCES += \
+libprtemca_odls_la_SOURCES += \
         base/odls_base_frame.c \
         base/odls_base_select.c \
         base/odls_base_default_fns.c

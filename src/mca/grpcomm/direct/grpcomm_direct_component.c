@@ -34,7 +34,7 @@ static int direct_register(void);
 /*
  * Struct of function pointers that need to be initialized
  */
-prte_grpcomm_base_component_t prte_grpcomm_direct_component = {
+prte_grpcomm_base_component_t prte_mca_grpcomm_direct_component = {
     PRTE_GRPCOMM_BASE_VERSION_3_0_0,
 
     .pmix_mca_component_name = "direct",
@@ -50,7 +50,7 @@ prte_grpcomm_base_component_t prte_grpcomm_direct_component = {
 
 static int direct_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_grpcomm_direct_component;
+    pmix_mca_base_component_t *c = &prte_mca_grpcomm_direct_component;
 
     /* make the priority adjustable so users can select
      * direct for use by apps without affecting daemons

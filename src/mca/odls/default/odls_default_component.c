@@ -51,7 +51,7 @@
  * and pointers to our public functions in it
  */
 
-prte_odls_base_component_t prte_odls_default_component = {
+prte_odls_base_component_t prte_mca_odls_default_component = {
     PRTE_ODLS_BASE_VERSION_2_0_0,
     /* Component name and version */
     .pmix_mca_component_name = "default",
@@ -61,17 +61,17 @@ prte_odls_base_component_t prte_odls_default_component = {
                                PMIX_RELEASE_VERSION),
 
     /* Component open and close functions */
-    .pmix_mca_open_component = prte_odls_default_component_open,
-    .pmix_mca_close_component = prte_odls_default_component_close,
-    .pmix_mca_query_component = prte_odls_default_component_query,
+    .pmix_mca_open_component = prte_mca_odls_default_component_open,
+    .pmix_mca_close_component = prte_mca_odls_default_component_close,
+    .pmix_mca_query_component = prte_mca_odls_default_component_query,
 };
 
-int prte_odls_default_component_open(void)
+int prte_mca_odls_default_component_open(void)
 {
     return PRTE_SUCCESS;
 }
 
-int prte_odls_default_component_query(pmix_mca_base_module_t **module, int *priority)
+int prte_mca_odls_default_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* the base open/select logic protects us against operation when
      * we are NOT in a daemon, so we don't have to check that here
@@ -87,7 +87,7 @@ int prte_odls_default_component_query(pmix_mca_base_module_t **module, int *prio
     return PRTE_SUCCESS;
 }
 
-int prte_odls_default_component_close(void)
+int prte_mca_odls_default_component_close(void)
 {
     return PRTE_SUCCESS;
 }

@@ -12,6 +12,7 @@
 # Copyright (c) 2007-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -27,9 +28,9 @@ dist_prtedata_DATA = help-ras-lsf.txt
 
 if MCA_BUILD_prte_ras_lsf_DSO
 component_noinst =
-component_install = mca_ras_lsf.la
+component_install = prte_mca_ras_lsf.la
 else
-component_noinst = libmca_ras_lsf.la
+component_noinst = libprtemca_ras_lsf.la
 component_install =
 endif
 
@@ -42,12 +43,12 @@ proxy_SOURCES = \
 
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
-mca_ras_lsf_la_SOURCES = $(proxy_SOURCES)
-mca_ras_lsf_la_LIBADD = $(ras_lsf_LIBS) \
+prte_mca_ras_lsf_la_SOURCES = $(proxy_SOURCES)
+prte_mca_ras_lsf_la_LIBADD = $(ras_lsf_LIBS) \
                         $(top_builddir)/src/libprrte.la
-mca_ras_lsf_la_LDFLAGS = -module -avoid-version $(ras_lsf_LDFLAGS)
+prte_mca_ras_lsf_la_LDFLAGS = -module -avoid-version $(ras_lsf_LDFLAGS)
 
 noinst_LTLIBRARIES = $(component_noinst)
-libmca_ras_lsf_la_SOURCES = $(proxy_SOURCES)
-libmca_ras_lsf_la_LIBADD = $(ras_lsf_LIBS)
-libmca_ras_lsf_la_LDFLAGS = -module -avoid-version $(ras_lsf_LDFLAGS)
+libprtemca_ras_lsf_la_SOURCES = $(proxy_SOURCES)
+libprtemca_ras_lsf_la_LIBADD = $(ras_lsf_LIBS)
+libprtemca_ras_lsf_la_LDFLAGS = -module -avoid-version $(ras_lsf_LDFLAGS)

@@ -29,11 +29,11 @@ BEGIN_C_DECLS
 /*
  * Module open / close
  */
-int prte_ess_env_component_open(void);
-int prte_ess_env_component_close(void);
-int prte_ess_env_component_query(pmix_mca_base_module_t **module, int *priority);
+int prte_mca_ess_env_component_open(void);
+int prte_mca_ess_env_component_close(void);
+int prte_mca_ess_env_component_query(pmix_mca_base_module_t **module, int *priority);
 
-PRTE_MODULE_EXPORT extern prte_ess_base_component_t prte_ess_env_component;
+PRTE_MODULE_EXPORT extern prte_ess_base_component_t prte_mca_ess_env_component;
 
 END_C_DECLS
 

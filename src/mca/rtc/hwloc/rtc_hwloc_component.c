@@ -32,7 +32,7 @@ static int rtc_hwloc_register(void);
 
 static int my_priority;
 
-prte_rtc_hwloc_component_t prte_rtc_hwloc_component = {
+prte_mca_rtc_hwloc_component_t prte_mca_rtc_hwloc_component = {
     .super = {
         PRTE_RTC_BASE_VERSION_1_0_0,
 
@@ -52,7 +52,7 @@ static char *vmhole;
 
 static int rtc_hwloc_register(void)
 {
-    pmix_mca_base_component_t *c = &prte_rtc_hwloc_component.super;
+    pmix_mca_base_component_t *c = &prte_mca_rtc_hwloc_component.super;
 
     /* set as the default */
     my_priority = 70;
@@ -61,24 +61,24 @@ static int rtc_hwloc_register(void)
                                                 PMIX_MCA_BASE_VAR_TYPE_INT,
                                                 &my_priority);
 
-    prte_rtc_hwloc_component.kind = VM_HOLE_BIGGEST;
+    prte_mca_rtc_hwloc_component.kind = VM_HOLE_BIGGEST;
     vmhole = biggest;
     (void) pmix_mca_base_component_var_register(c, "vmhole",
                                                 "Kind of VM hole to identify - none, begin, biggest, libs, heap, stack (default=biggest)",
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &vmhole);
     if (0 == strcasecmp(vmhole, "none")) {
-        prte_rtc_hwloc_component.kind = VM_HOLE_NONE;
+        prte_mca_rtc_hwloc_component.kind = VM_HOLE_NONE;
     } else if (0 == strcasecmp(vmhole, "begin")) {
-        prte_rtc_hwloc_component.kind = VM_HOLE_BEGIN;
+        prte_mca_rtc_hwloc_component.kind = VM_HOLE_BEGIN;
     } else if (0 == strcasecmp(vmhole, "biggest")) {
-        prte_rtc_hwloc_component.kind = VM_HOLE_BIGGEST;
+        prte_mca_rtc_hwloc_component.kind = VM_HOLE_BIGGEST;
     } else if (0 == strcasecmp(vmhole, "libs")) {
-        prte_rtc_hwloc_component.kind = VM_HOLE_IN_LIBS;
+        prte_mca_rtc_hwloc_component.kind = VM_HOLE_IN_LIBS;
     } else if (0 == strcasecmp(vmhole, "heap")) {
-        prte_rtc_hwloc_component.kind = VM_HOLE_AFTER_HEAP;
+        prte_mca_rtc_hwloc_component.kind = VM_HOLE_AFTER_HEAP;
     } else if (0 == strcasecmp(vmhole, "stack")) {
-        prte_rtc_hwloc_component.kind = VM_HOLE_BEFORE_STACK;
+        prte_mca_rtc_hwloc_component.kind = VM_HOLE_BEFORE_STACK;
     } else {
         prte_output(0, "INVALID VM HOLE TYPE");
         return PRTE_ERROR;

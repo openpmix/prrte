@@ -2,6 +2,7 @@
 # Copyright (c) 2017-2020 The University of Tennessee and The University
 #                         of Tennessee Research Foundation.  All rights
 #                         reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -10,19 +11,17 @@
 #
 
 # main library setup
-noinst_LTLIBRARIES = libmca_propagate.la
-libmca_propagate_la_SOURCES =
+noinst_LTLIBRARIES = libprtemca_propagate.la
+libprtemca_propagate_la_SOURCES =
 
 # local files
 headers = propagate.h
 
-libmca_propagate_la_SOURCES += $(headers)
+libprtemca_propagate_la_SOURCES += $(headers)
 
 # Conditionally install the header files
-if WANT_INSTALL_HEADERS
 prtedir = $(prteincludedir)/$(subdir)
 nobase_prte_HEADERS = $(headers)
-endif
 
 include base/Makefile.am
 

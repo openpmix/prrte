@@ -2,6 +2,7 @@
 # Copyright (c) 2017-2020      The University of Tennessee and The University
 #                              of Tennessee Research Foundation.  All rights
 #                              reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -12,6 +13,6 @@
 headers += \
         base/base.h
 
-libmca_propagate_la_SOURCES += \
+libprtemca_propagate_la_SOURCES += \
         base/propagate_base_select.c \
         base/propagate_base_frame.c

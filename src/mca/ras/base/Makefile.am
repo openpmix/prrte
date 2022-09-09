@@ -11,6 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -24,7 +25,7 @@ headers += \
         base/base.h \
         base/ras_private.h
 
-libmca_ras_la_SOURCES += \
+libprtemca_ras_la_SOURCES += \
         base/ras_base_frame.c \
         base/ras_base_select.c \
         base/ras_base_allocate.c \

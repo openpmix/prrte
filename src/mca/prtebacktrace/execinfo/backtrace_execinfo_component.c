@@ -28,7 +28,7 @@
 
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 
-const pmix_mca_base_component_t prte_prtebacktrace_execinfo_component = {
+const pmix_mca_base_component_t prte_mca_prtebacktrace_execinfo_component = {
     PRTE_BACKTRACE_BASE_VERSION_2_0_0,
 
     /* Component name and version */
