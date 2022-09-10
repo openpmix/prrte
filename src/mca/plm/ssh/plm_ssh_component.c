@@ -178,7 +178,7 @@ static int ssh_component_register(void)
     /* XXX -- var_conversion -- Why does this component register prte_assume_same_shell? Components
      * should ONLY register THEIR OWN variables. */
     (void) pmix_mca_base_var_register_synonym(var_id, "prte", "prte", NULL, "assume_same_shell",
-                                              PMIX_MCA_BASE_VAR_FLAG_NONE);
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     prte_mca_plm_ssh_component.pass_environ_mca_params = true;
     (void) pmix_mca_base_component_var_register(c, "pass_environ_mca_params",

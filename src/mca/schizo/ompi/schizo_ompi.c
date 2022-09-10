@@ -176,13 +176,11 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_LAUNCH, PMIX_ARG_NONE),
 
 
-#if PRTE_ENABLE_FT
     PMIX_OPTION_DEFINE(PRTE_CLI_ENABLE_RECOVERY, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_MAX_RESTARTS, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_DISABLE_RECOVERY, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_CONTINUOUS, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("with-ft", PMIX_ARG_REQD),
-#endif
 
     /* mpiexec mandated form launch key parameters */
     PMIX_OPTION_DEFINE("initial-errhandler", PMIX_ARG_REQD),
@@ -555,7 +553,6 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
                 p1 = opt->values[n];
                 prte_schizo_base_expose(p1, "OMPI_MCA_");
             }
-#if PRTE_ENABLE_FT
         } else if (0 == strcmp(opt->key, "with-ft")) {
             if (NULL == opt->values || NULL == opt->values[0]) {
                 /* this is an error */
@@ -585,7 +582,6 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
                     return PRTE_ERR_FATAL;
                 }
             }
-#endif
         }
     }
 
