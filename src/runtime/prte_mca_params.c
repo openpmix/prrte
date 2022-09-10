@@ -505,12 +505,6 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_bind_progress_thread_reqd);
 
-#if PRTE_ENABLE_FT
-    pmix_mca_base_var_register("prte", "prte", NULL, "enable_ft", "Enable/disable fault tolerance",
-                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                               &prte_enable_ft);
-#endif
-
     /* pickup the RML params */
     prte_rml_register();
 

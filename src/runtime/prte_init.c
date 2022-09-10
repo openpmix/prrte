@@ -348,14 +348,6 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     prte_cache = PMIX_NEW(pmix_pointer_array_t);
     pmix_pointer_array_init(prte_cache, 1, INT_MAX, 1);
 
-#if PRTE_ENABLE_FT
-    if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_DAEMON) {
-        if (NULL != prte_errmgr.enable_detector) {
-            prte_errmgr.enable_detector(prte_enable_ft);
-        }
-    }
-#endif
-
     /* All done */
     PMIX_ACQUIRE_THREAD(&prte_init_lock);
     prte_initialized = true;

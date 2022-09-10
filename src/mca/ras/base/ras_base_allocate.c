@@ -564,7 +564,7 @@ next_state:
                         "=================================================================\n");
             prte_output(prte_clean_output, "TOPOLOGY FOR NODE %s", node->name);
             prte_hwloc_print(&ptr, NULL, node->topology->topo);
-            prte_output(prte_clean_output, ptr);
+            prte_output(prte_clean_output, "%s", ptr);
             free(ptr);
             prte_output(prte_clean_output,
                         "=================================================================\n");
