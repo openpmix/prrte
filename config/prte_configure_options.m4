@@ -377,22 +377,4 @@ fi
 AC_DEFINE_UNQUOTED([PRTE_ENABLE_GETPWUID], [$prte_want_getpwuid],
                    [Disable getpwuid support (default: enabled)])
 
-dnl Check for FT
-AC_MSG_CHECKING([if want fault tolerance support])
-AC_ARG_ENABLE([prte-ft],
-    [AS_HELP_STRING([--enable-prte-ft],
-        [ENable PRRTE fault tolerance support (default: disabled)])])
-if test "$enable_prte_ft" = "yes"; then
-    AC_MSG_RESULT([yes])
-    prte_enable_ft=1
-    PRTE_SUMMARY_ADD([Options], [Fault tolerance], [], [yes])
-else
-    AC_MSG_RESULT([no])
-    prte_enable_ft=0
-    PRTE_SUMMARY_ADD([Options], [Fault tolerance], [], [no])
-fi
-AC_DEFINE_UNQUOTED([PRTE_ENABLE_FT], [$prte_enable_ft],
-                   [Enable PRRTE fault tolerance support (default: disabled)])
-
-
 ])dnl

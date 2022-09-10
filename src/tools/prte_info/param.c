@@ -362,7 +362,6 @@ void prte_info_do_config(bool want_all)
     prun_prefix_by_default = PRTE_WANT_PRTE_PREFIX_BY_DEFAULT ? "yes" : "no";
     symbol_visibility = PRTE_C_HAVE_VISIBILITY ? "yes" : "no";
     manpages = "yes";
-    resilience = PRTE_ENABLE_FT ? "yes" : "no";
 
     /* output values */
     prte_info_out("Configured by", "config:user", PRTE_CONFIGURE_USER);
