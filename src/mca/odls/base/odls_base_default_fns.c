@@ -1704,31 +1704,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                              strsignal(WTERMSIG(proc->exit_code))));
         proc->exit_code = WTERMSIG(proc->exit_code) + 128;
 
-#if PRTE_ENABLE_FT
-        if (prte_enable_ft) {
-            /* register an event handler for the PRTE_ERR_PROC_ABORTED event */
-            int rc;
-            pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
-            pmix_info_t *pinfo;
-            PMIX_INFO_CREATE(pinfo, 2);
-            PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &proc->name, PMIX_PROC);
-            PMIX_INFO_LOAD(&pinfo[1], "prte.notify.donotloop", NULL, PMIX_BOOL);
-
-            rc = PMIx_Notify_event(pcode, PRTE_PROC_MY_NAME, PMIX_RANGE_LOCAL, pinfo, 2, NULL,  NULL);
-            if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-                PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                                     "%s odls:notify failed, release pinfo",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            }
-            PMIX_INFO_FREE(pinfo, 2);
-
-            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                                 "%s odls:event notify in odls proc %s gone",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
-            PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
-        }
-#endif
-
         /* Do not decrement the number of local procs here. That is handled in the errmgr */
     }
 
