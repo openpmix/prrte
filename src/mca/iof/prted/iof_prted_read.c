@@ -79,7 +79,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     /* read up to the fragment size */
     numbytes = read(fd, data, sizeof(data));
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s read %d bytes from %s of %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
                          (PRTE_IOF_STDOUT & rev->tag) ? "stdout"
@@ -162,7 +162,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     }
 
     /* start non-blocking RML call to forward received data */
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:prted:read handler sending %d bytes to HNP",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes));
 

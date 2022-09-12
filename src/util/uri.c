@@ -23,7 +23,7 @@
 #    include <unistd.h>
 #endif
 
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_show_help.h"

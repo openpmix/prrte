@@ -26,7 +26,7 @@
 
 #include "prte_config.h"
 #include "constants.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
@@ -115,7 +115,7 @@ static int prted_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
     prte_iof_proc_t *proct;
     prte_job_t *jobdat = NULL;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:prted pushing fd %d for process %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fd, PRTE_NAME_PRINT(dst_name)));
 
@@ -123,7 +123,7 @@ static int prted_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
      * and activate the read event in case it fires right away
      */
     if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-        prte_output(prte_iof_base_framework.framework_output,
+        pmix_output(prte_iof_base_framework.framework_output,
                     "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
@@ -197,7 +197,7 @@ static int prted_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
         return PRTE_ERR_NOT_SUPPORTED;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:prted pulling fd %d for process %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fd, PRTE_NAME_PRINT(dst_name)));
 
@@ -205,7 +205,7 @@ static int prted_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
      * the sink in case it fires right away
      */
     if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-        prte_output(prte_iof_base_framework.framework_output,
+        pmix_output(prte_iof_base_framework.framework_output,
                     "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
@@ -306,7 +306,7 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(sink);
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s prted:stdin:write:handler writing data to %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
 
@@ -318,7 +318,7 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
             /* this indicates we are to close the fd - there is
              * nothing to write
              */
-            PRTE_OUTPUT_VERBOSE(
+            PMIX_OUTPUT_VERBOSE(
                 (20, prte_iof_base_framework.framework_output,
                  "%s iof:prted closing fd %d on write event due to zero bytes output",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
@@ -327,7 +327,7 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
             return;
         }
         num_written = write(wev->fd, output->data, output->numbytes);
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s prted:stdin:write:handler wrote %d bytes",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_written));
         if (num_written < 0) {
@@ -344,7 +344,7 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
              * error and abort
              */
             PMIX_RELEASE(output);
-            PRTE_OUTPUT_VERBOSE(
+            PMIX_OUTPUT_VERBOSE(
                 (20, prte_iof_base_framework.framework_output,
                  "%s iof:prted closing fd %d on write event due to negative bytes written",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
@@ -357,7 +357,7 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
             }
             return;
         } else if (num_written < output->numbytes) {
-            PRTE_OUTPUT_VERBOSE(
+            PMIX_OUTPUT_VERBOSE(
                 (1, prte_iof_base_framework.framework_output,
                  "%s prted:stdin:write:handler incomplete write %d - adjusting data",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_written));

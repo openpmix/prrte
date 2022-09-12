@@ -75,7 +75,7 @@
 #include "src/util/prte_cmd_line.h"
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
@@ -141,7 +141,7 @@ static void defhandler(size_t evhdlr_registration_id, pmix_status_t status,
     pmix_status_t rc;
 
     if (verbose) {
-        prte_output(0, "PRUN: DEFHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
+        pmix_output(0, "PRUN: DEFHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
     }
 
     if (PMIX_ERR_IOF_FAILURE == status) {
@@ -199,7 +199,7 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
     char *msg = NULL;
 
     if (verbose) {
-        prte_output(0, "PRUN: EVHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
+        pmix_output(0, "PRUN: EVHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
     }
 
     /* we should always have info returned to us - if not, there is
@@ -217,7 +217,7 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
             }
         }
         if (verbose && PMIX_CHECK_NSPACE(jobid, spawnednspace)) {
-            prte_output(0, "JOB %s COMPLETED WITH STATUS %d", PRTE_JOBID_PRINT(jobid), jobstatus);
+            pmix_output(0, "JOB %s COMPLETED WITH STATUS %d", PRTE_JOBID_PRINT(jobid), jobstatus);
         }
     }
     if (NULL != lock) {
@@ -790,7 +790,7 @@ int prun(int argc, char *argv[])
 
     /* bozo check */
     if (0 == pmix_list_get_size(&apps)) {
-        prte_output(0, "No application specified!");
+        pmix_output(0, "No application specified!");
         goto DONE;
     }
 
@@ -819,12 +819,12 @@ int prun(int argc, char *argv[])
     PMIX_LIST_DESTRUCT(&apps);
 
     if (verbose) {
-        prte_output(0, "Calling PMIx_Spawn");
+        pmix_output(0, "Calling PMIx_Spawn");
     }
 
     ret = PMIx_Spawn(iptr, ninfo, papps, napps, spawnednspace);
     if (PRTE_SUCCESS != ret) {
-        prte_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
+        pmix_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
         rc = ret;
         goto DONE;
     }
@@ -865,7 +865,7 @@ int prun(int argc, char *argv[])
         PRTE_PMIX_CONSTRUCT_LOCK(&lock);
         ret = PMIx_IOF_push(&pname, 1, NULL, iptr, 1, opcbfunc, &lock);
         if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
-            prte_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
+            pmix_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
         } else if (PMIX_SUCCESS == ret) {
             PRTE_PMIX_WAIT_THREAD(&lock);
         }
@@ -894,7 +894,7 @@ int prun(int argc, char *argv[])
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
 
     if (verbose) {
-        prte_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(spawnednspace));
+        pmix_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(spawnednspace));
     }
     PRTE_PMIX_WAIT_THREAD(&rellock);
     /* save the status */
@@ -921,7 +921,7 @@ int prun(int argc, char *argv[])
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
     ret = PMIx_IOF_push(NULL, 0, NULL, &info, 1, opcbfunc, &lock);
     if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
-        prte_output(0, "IOF close of stdin failed: %s", PMIx_Error_string(ret));
+        pmix_output(0, "IOF close of stdin failed: %s", PMIx_Error_string(ret));
     } else if (PMIX_SUCCESS == ret) {
         PRTE_PMIX_WAIT_THREAD(&lock);
     }
@@ -943,7 +943,7 @@ DONE:
         // Since the user job has probably exited by
         // now, let's preserve its return code and print
         // a warning here, if prte logging is on.
-        prte_output(0, "PMIx_tool_finalize() failed. Status = %d", ret);
+        pmix_output(0, "PMIx_tool_finalize() failed. Status = %d", ret);
     }
     return rc;
 }
@@ -1053,7 +1053,7 @@ static void epipe_signal_callback(int signal)
 
     if (10 < sigpipe_error_count) {
         /* time to abort */
-        prte_output(0, "%s: SIGPIPE detected - aborting", prte_tool_basename);
+        pmix_output(0, "%s: SIGPIPE detected - aborting", prte_tool_basename);
         clean_abort(0, 0, NULL);
     }
 

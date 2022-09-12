@@ -34,7 +34,7 @@
 #endif
 
 #include "src/pmix/pmix-internal.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/grpcomm.h"
@@ -201,7 +201,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(rq);
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s DMODX REQ FOR %s:%u",
+    pmix_output_verbose(2, prte_pmix_server_globals.output, "%s DMODX REQ FOR %s:%u",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->tproc.nspace, req->tproc.rank);
 
     /* check if they want us to refresh the cache */
@@ -216,7 +216,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
         }
     }
 
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s DMODX REQ REFRESH %s REQUIRED KEY %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), refresh_cache ? "TRUE" : "FALSE",
                         (NULL == req->key) ? "NULL" : req->key);
@@ -314,7 +314,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     /* track the request so we know the function and cbdata
      * to callback upon completion */
     req->room_num = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s:%d MY REQ ROOM IS %d FOR KEY %s",
                         __FILE__, __LINE__, req->room_num,
                         (NULL == req->key) ? "NULL" : req->key);

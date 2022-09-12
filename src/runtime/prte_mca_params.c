@@ -39,7 +39,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/rml/rml.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"
@@ -72,7 +72,7 @@ int prte_max_thread_in_progress = 1;
 int prte_register_params(void)
 {
     int ret;
-    prte_output_stream_t lds;
+    pmix_output_stream_t lds;
     char *string = NULL;
 
     /* only go thru this once - mpirun calls it twice, which causes
@@ -216,9 +216,9 @@ int prte_register_params(void)
      * we use it below, and prun and some other tools call this
      * function prior to calling prte_init
      */
-    PMIX_CONSTRUCT(&lds, prte_output_stream_t);
+    PMIX_CONSTRUCT(&lds, pmix_output_stream_t);
     lds.lds_want_stdout = true;
-    prte_clean_output = prte_output_open(&lds);
+    prte_clean_output = pmix_output_open(&lds);
     PMIX_DESTRUCT(&lds);
 
     /* LOOK FOR A TMP DIRECTORY BASE */
@@ -257,7 +257,7 @@ int prte_register_params(void)
      */
     if (NULL != prte_tmpdir_base &&
         (NULL != prte_local_tmpdir_base || NULL != prte_remote_tmpdir_base)) {
-        prte_output(prte_clean_output,
+        pmix_output(prte_clean_output,
                     "------------------------------------------------------------------\n"
                     "The MCA param prte_tmpdir_base was specified, which sets the base\n"
                     "of the temporary directory tree for all procs. However, values for\n"
@@ -323,8 +323,8 @@ int prte_register_params(void)
                                       &prte_progress_thread_debug_level);
 
     if (0 <= prte_progress_thread_debug_level) {
-        prte_progress_thread_debug = prte_output_open(NULL);
-        prte_output_set_verbosity(prte_progress_thread_debug, prte_progress_thread_debug_level);
+        prte_progress_thread_debug = pmix_output_open(NULL);
+        pmix_output_set_verbosity(prte_progress_thread_debug, prte_progress_thread_debug_level);
     }
 
     prted_debug_failure = PMIX_RANK_INVALID;

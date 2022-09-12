@@ -80,7 +80,7 @@ static int rtc_hwloc_register(void)
     } else if (0 == strcasecmp(vmhole, "stack")) {
         prte_mca_rtc_hwloc_component.kind = VM_HOLE_BEFORE_STACK;
     } else {
-        prte_output(0, "INVALID VM HOLE TYPE");
+        pmix_output(0, "INVALID VM HOLE TYPE");
         return PRTE_ERROR;
     }
 

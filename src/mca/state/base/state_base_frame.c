@@ -29,7 +29,7 @@
 #include "src/mca/mca.h"
 
 #include "src/class/pmix_list.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/plm/plm_types.h"
 #include "src/runtime/prte_globals.h"

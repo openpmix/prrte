@@ -36,7 +36,7 @@
 #include "src/mca/mca.h"
 #include "src/runtime/prte_progress_threads.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 

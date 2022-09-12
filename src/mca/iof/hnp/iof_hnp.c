@@ -27,7 +27,7 @@
  */
 #include "prte_config.h"
 #include "constants.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
@@ -118,7 +118,7 @@ static int hnp_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int fd)
         return PRTE_SUCCESS;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:hnp pushing fd %d for process %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fd, PRTE_NAME_PRINT(dst_name)));
 
@@ -140,7 +140,7 @@ SETUP:
      * and activate the read event in case it fires right away
      */
     if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-        prte_output(prte_iof_base_framework.framework_output,
+        pmix_output(prte_iof_base_framework.framework_output,
                     "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
@@ -193,7 +193,7 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
         return PRTE_SUCCESS;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:hnp pushing stdin to process %s (size %zu)",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(dst_name), sz));
 
@@ -222,7 +222,7 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
 
             /* if the daemon is me, then this is a local sink */
             if (proct->stdinev->daemon.rank == PRTE_PROC_MY_NAME->rank) {
-                PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                      "%s read %d bytes from stdin - writing to %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) sz,
                                      PRTE_NAME_PRINT(&proct->name)));
@@ -236,13 +236,13 @@ static int push_stdin(const pmix_proc_t *dst_name, uint8_t *data, size_t sz)
                                                                                 proct->stdinev->wev)) {
                         /* getting too backed up - stop the read event for now if it is still active */
 
-                        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                        PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                              "buffer backed up - holding"));
                         return PRTE_ERR_OUT_OF_RESOURCE;
                     }
                 }
             } else {
-                PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                      "%s sending %d bytes from stdinev to daemon %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) sz,
                                      PRTE_NAME_PRINT(&proct->stdinev->daemon)));
@@ -287,7 +287,7 @@ static int hnp_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int fd)
         return PRTE_ERR_NOT_SUPPORTED;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:hnp pulling fd %d for process %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fd, PRTE_NAME_PRINT(dst_name)));
 
@@ -295,7 +295,7 @@ static int hnp_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int fd)
      * the sink in case it fires right away
      */
     if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-        prte_output(prte_iof_base_framework.framework_output,
+        pmix_output(prte_iof_base_framework.framework_output,
                     "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
@@ -331,7 +331,7 @@ static int hnp_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag)
 {
     prte_iof_proc_t *proct;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:hnp closing connection to process %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer)));
 
@@ -408,7 +408,7 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(sink);
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s hnp:stdin:write:handler writing %d data to %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (int)pmix_list_get_size(&wev->outputs), wev->fd));
@@ -428,13 +428,13 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
             /* this indicates we are to close the fd - there is
              * nothing to write
              */
-            PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                                  "%s iof:hnp closing fd %d on write event due to zero bytes output",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
             goto finish;
         }
         num_written = write(wev->fd, output->data, output->numbytes);
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s hnp:stdin:write:handler wrote %d bytes",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_written));
         if (num_written < 0) {
@@ -450,13 +450,13 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
              * error and abort
              */
             PMIX_RELEASE(output);
-            PRTE_OUTPUT_VERBOSE(
+            PMIX_OUTPUT_VERBOSE(
                 (20, prte_iof_base_framework.framework_output,
                  "%s iof:hnp closing fd %d on write event due to negative bytes written",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
             goto finish;
         } else if (num_written < output->numbytes) {
-            PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                  "%s hnp:stdin:write:handler incomplete write %d - adjusting data",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_written));
             /* incomplete write - adjust data to avoid duplicate output */

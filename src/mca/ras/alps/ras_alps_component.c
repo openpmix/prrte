@@ -33,7 +33,7 @@
 #include "ras_alps.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/base/prte_mca_base_var.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/proc_info.h"
 
 #include <ctype.h>
@@ -208,7 +208,7 @@ static int prte_mca_ras_alps_component_query(pmix_mca_base_module_t **module, in
     }
     if (0 != prte_ras_alps_res_id) {
         *priority = param_priority;
-        prte_output_verbose(2, prte_ras_base_framework.framework_output,
+        pmix_output_verbose(2, prte_ras_base_framework.framework_output,
                             "ras:alps: available for selection");
         *module = (pmix_mca_base_module_t *) &prte_ras_alps_module;
         return PRTE_SUCCESS;
@@ -216,7 +216,7 @@ static int prte_mca_ras_alps_component_query(pmix_mca_base_module_t **module, in
 
     /* Sadly, no */
 
-    prte_output(prte_ras_base_framework.framework_output,
+    pmix_output(prte_ras_base_framework.framework_output,
                 "ras:alps: NOT available for selection -- "
                 "OMPI_ALPS_RESID or BASIL_RESERVATION_ID not set?");
     *module = NULL;
@@ -226,7 +226,7 @@ static int prte_mca_ras_alps_component_query(pmix_mca_base_module_t **module, in
 int prte_ras_alps_get_appinfo_attempts(int *attempts)
 {
     *attempts = ras_alps_read_attempts;
-    prte_output_verbose(2, prte_ras_base_framework.framework_output,
+    pmix_output_verbose(2, prte_ras_base_framework.framework_output,
                         "ras:alps:prte_ras_alps_get_appinfo_attempts: %d", *attempts);
     return PRTE_SUCCESS;
 }

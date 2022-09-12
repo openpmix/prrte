@@ -56,7 +56,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
 #define PRTE_ACTIVATE_TCP_CONN_STATE(p, cbfunc)                                             \
     do {                                                                                    \
         prte_oob_tcp_conn_op_t *cop;                                                        \
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,                    \
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,                    \
                             "%s:[%s:%d] connect to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT((&(p)->name)));             \
         cop = PMIX_NEW(prte_oob_tcp_conn_op_t);                                             \
@@ -77,7 +77,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
 #define PRTE_RETRY_TCP_CONN_STATE(p, cbfunc, tv)                                                  \
     do {                                                                                          \
         prte_oob_tcp_conn_op_t *cop;                                                              \
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,                          \
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,                          \
                             "%s:[%s:%d] retry connect to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT((&(p)->name)));                   \
         cop = PMIX_NEW(prte_oob_tcp_conn_op_t);                                                   \

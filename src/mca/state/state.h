@@ -59,7 +59,7 @@
 BEGIN_C_DECLS
 
 /*
- * MCA Framework - put here to access the prte_output channel
+ * MCA Framework - put here to access the pmix_output channel
  * in the macros
  */
 PRTE_EXPORT extern pmix_mca_base_framework_t prte_state_base_framework;
@@ -87,7 +87,7 @@ PRTE_EXPORT extern pmix_mca_base_framework_t prte_state_base_framework;
         if (prte_state_base_framework.framework_verbose > 0) {                                \
             double timestamp = 0.0;                                                           \
             PRTE_STATE_GET_TIMESTAMP(timestamp);                                              \
-            prte_output_verbose(1, prte_state_base_framework.framework_output,                \
+            pmix_output_verbose(1, prte_state_base_framework.framework_output,                \
                                 "%s [%f] ACTIVATE JOB %s STATE %s AT %s:%d",                  \
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), timestamp,                \
                                 (NULL == shadow) ? "NULL" : PRTE_JOBID_PRINT(shadow->nspace), \
@@ -102,7 +102,7 @@ PRTE_EXPORT extern pmix_mca_base_framework_t prte_state_base_framework;
         if (prte_state_base_framework.framework_verbose > 0) {                       \
             double timestamp = 0.0;                                                  \
             PRTE_STATE_GET_TIMESTAMP(timestamp);                                     \
-            prte_output_verbose(1, prte_state_base_framework.framework_output,       \
+            pmix_output_verbose(1, prte_state_base_framework.framework_output,       \
                                 "%s [%f] ACTIVATE PROC %s STATE %s AT %s:%d",        \
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), timestamp,       \
                                 (NULL == shadow) ? "NULL" : PRTE_NAME_PRINT(shadow), \
@@ -118,7 +118,7 @@ PRTE_EXPORT extern pmix_mca_base_framework_t prte_state_base_framework;
         if (prte_state_base_framework.framework_verbose > 0) {                                \
             double timestamp = 0.0;                                                           \
             PRTE_STATE_GET_TIMESTAMP(timestamp);                                              \
-            prte_output_verbose(1, prte_state_base_framework.framework_output,                \
+            pmix_output_verbose(1, prte_state_base_framework.framework_output,                \
                                 "%s [%f] ACTIVATING JOB %s STATE %s PRI %d",                  \
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), timestamp,                \
                                 (NULL == shadow) ? "NULL" : PRTE_JOBID_PRINT(shadow->nspace), \
@@ -132,7 +132,7 @@ PRTE_EXPORT extern pmix_mca_base_framework_t prte_state_base_framework;
         if (prte_state_base_framework.framework_verbose > 0) {                       \
             double timestamp = 0.0;                                                  \
             PRTE_STATE_GET_TIMESTAMP(timestamp);                                     \
-            prte_output_verbose(1, prte_state_base_framework.framework_output,       \
+            pmix_output_verbose(1, prte_state_base_framework.framework_output,       \
                                 "%s [%f] ACTIVATING PROC %s STATE %s PRI %d",        \
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), timestamp,       \
                                 (NULL == shadow) ? "NULL" : PRTE_NAME_PRINT(shadow), \

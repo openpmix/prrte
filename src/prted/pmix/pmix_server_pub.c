@@ -35,7 +35,7 @@
 
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml_contact.h"
@@ -179,17 +179,17 @@ static void execute(int sd, short args, void *cbdata)
 
     /* if the range is SESSION, then set the target to the global server */
     if (PMIX_RANGE_SESSION == req->range) {
-        prte_output_verbose(1, prte_pmix_server_globals.output,
+        pmix_output_verbose(1, prte_pmix_server_globals.output,
                             "%s orted:pmix:server range SESSION",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         target = &prte_pmix_server_globals.server;
     } else if (PMIX_RANGE_LOCAL == req->range) {
         /* if the range is local, send it to myself */
-        prte_output_verbose(1, prte_pmix_server_globals.output, "%s orted:pmix:server range LOCAL",
+        pmix_output_verbose(1, prte_pmix_server_globals.output, "%s orted:pmix:server range LOCAL",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         target = PRTE_PROC_MY_NAME;
     } else {
-        prte_output_verbose(1, prte_pmix_server_globals.output, "%s orted:pmix:server range GLOBAL",
+        pmix_output_verbose(1, prte_pmix_server_globals.output, "%s orted:pmix:server range GLOBAL",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         target = PRTE_PROC_MY_HNP;
     }
@@ -225,7 +225,7 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
     uint8_t cmd = PRTE_PMIX_PUBLISH_CMD;
     size_t n;
 
-    prte_output_verbose(1, prte_pmix_server_globals.output, "%s orted:pmix:server PUBLISH",
+    pmix_output_verbose(1, prte_pmix_server_globals.output, "%s orted:pmix:server PUBLISH",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* create the caddy */
@@ -466,7 +466,7 @@ void pmix_server_keyval_client(int status, pmix_proc_t *sender,
     size_t n, npdata = 0;
     PRTE_HIDE_UNUSED_PARAMS(sender, tg, cbdata);
 
-    prte_output_verbose(1, prte_pmix_server_globals.output,
+    pmix_output_verbose(1, prte_pmix_server_globals.output,
                         "%s recvd lookup data return",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 

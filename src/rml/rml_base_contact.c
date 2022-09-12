@@ -25,7 +25,7 @@
 #include "types.h"
 
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"

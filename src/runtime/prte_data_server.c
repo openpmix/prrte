@@ -36,7 +36,7 @@
 #include "src/class/pmix_pointer_array.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml.h"
@@ -134,8 +134,8 @@ int prte_data_server_init(void)
                                       PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_data_server_verbosity);
     if (0 <= prte_data_server_verbosity) {
-        prte_data_server_output = prte_output_open(NULL);
-        prte_output_set_verbosity(prte_data_server_output, prte_data_server_verbosity);
+        prte_data_server_output = pmix_output_open(NULL);
+        pmix_output_set_verbosity(prte_data_server_output, prte_data_server_verbosity);
     }
 
     PMIX_CONSTRUCT(&prte_data_server_store, pmix_pointer_array_t);
@@ -201,7 +201,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
     pmix_data_array_t darray;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
-    prte_output_verbose(1, prte_data_server_output, "%s data server got message from %s",
+    pmix_output_verbose(1, prte_data_server_output, "%s data server got message from %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender));
 
     /* unpack the room number of the caller's request */
@@ -250,7 +250,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
             goto SEND_ERROR;
         }
 
-        prte_output_verbose(1, prte_data_server_output,
+        pmix_output_verbose(1, prte_data_server_output,
                             "%s data server: publishing data from %s:%d",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), data->owner.nspace,
                             data->owner.rank);
@@ -317,7 +317,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
         /* store this object */
         data->index = pmix_pointer_array_add(&prte_data_server_store, data);
 
-        prte_output_verbose(1, prte_data_server_output,
+        pmix_output_verbose(1, prte_data_server_output,
                             "%s data server: checking for pending requests",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -339,15 +339,15 @@ void prte_data_server(int status, pmix_proc_t *sender,
             for (i = 0; NULL != req->keys[i]; i++) {
                 /* cycle thru the data keys for matches */
                 for (n = 0; n < data->ninfo; n++) {
-                    prte_output_verbose(10, prte_data_server_output, "%s\tCHECKING %s TO %s",
+                    pmix_output_verbose(10, prte_data_server_output, "%s\tCHECKING %s TO %s",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), data->info[n].key,
                                         req->keys[i]);
                     if (0 == strncmp(data->info[n].key, req->keys[i], PMIX_MAX_KEYLEN)) {
-                        prte_output_verbose(10, prte_data_server_output,
+                        pmix_output_verbose(10, prte_data_server_output,
                                             "%s data server: packaging return",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                         /* track this response */
-                        prte_output_verbose(
+                        pmix_output_verbose(
                             10, prte_data_server_output,
                             "%s data server: adding %s data %s from %s:%d to response",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), data->info[n].key,
@@ -363,7 +363,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
             }
             if (0 < (n = pmix_list_get_size(&req->answers))) {
                 /* send it back to the requestor */
-                prte_output_verbose(1, prte_data_server_output,
+                pmix_output_verbose(1, prte_data_server_output,
                                     "%s data server: returning data to %s:%d",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->requestor.nspace,
                                     req->requestor.rank);
@@ -464,7 +464,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
         goto SEND_ANSWER;
 
     case PRTE_PMIX_LOOKUP_CMD:
-        prte_output_verbose(1, prte_data_server_output, "%s data server: lookup data from %s",
+        pmix_output_verbose(1, prte_data_server_output, "%s data server: lookup data from %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender));
 
         /* unpack the requestor */
@@ -538,7 +538,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
         PMIX_CONSTRUCT(&answers, pmix_list_t);
 
         for (i = 0; NULL != keys[i]; i++) {
-            prte_output_verbose(10, prte_data_server_output, "%s data server: looking for %s",
+            pmix_output_verbose(10, prte_data_server_output, "%s data server: looking for %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), keys[i]);
             /* cycle across the stored data, looking for a match */
             for (k = 0; k < prte_data_server_store.size; k++) {
@@ -549,7 +549,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                 }
                 /* for security reasons, can only access data posted by the same user id */
                 if (uid != data->uid) {
-                    prte_output_verbose(10, prte_data_server_output, "%s\tMISMATCH UID %u %u",
+                    pmix_output_verbose(10, prte_data_server_output, "%s\tMISMATCH UID %u %u",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned) uid,
                                         (unsigned) data->uid);
                     continue;
@@ -559,7 +559,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                  * in the same namespace as the requestor */
                 if (PMIX_RANGE_NAMESPACE == data->range) {
                     if (0 != strncmp(requestor.nspace, data->owner.nspace, PMIX_MAX_NSLEN)) {
-                        prte_output_verbose(10, prte_data_server_output,
+                        pmix_output_verbose(10, prte_data_server_output,
                                             "%s\tMISMATCH NSPACES %s %s",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), requestor.nspace,
                                             data->owner.nspace);
@@ -568,7 +568,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                 }
                 /* see if we have this key */
                 for (n = 0; n < data->ninfo; n++) {
-                    prte_output_verbose(10, prte_data_server_output, "%s COMPARING %s %s",
+                    pmix_output_verbose(10, prte_data_server_output, "%s COMPARING %s %s",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), keys[i],
                                         data->info[n].key);
                     if (PMIX_CHECK_KEY(&data->info[n], keys[i])) {
@@ -577,7 +577,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                         rinfo->info = &data->info[n];
                         rinfo->persistence = data->persistence;
                         pmix_list_append(&answers, &rinfo->super);
-                        prte_output_verbose(1, prte_data_server_output,
+                        pmix_output_verbose(1, prte_data_server_output,
                                             "%s data server: adding %s to data from %s",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), data->info[n].key,
                                             PRTE_NAME_PRINT(&data->owner));
@@ -619,7 +619,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                     goto SEND_ERROR;
                 }
                 if (PMIX_PERSIST_FIRST_READ == rinfo->persistence) {
-                    prte_output_verbose(1, prte_data_server_output,
+                    pmix_output_verbose(1, prte_data_server_output,
                                         "%s REMOVING DATA FROM %s FOR KEY %s",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&rinfo->source), rinfo->info->key);
@@ -632,7 +632,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
         if (nanswers == (size_t) pmix_argv_count(keys)) {
             rc = PRTE_SUCCESS;
         } else {
-            prte_output_verbose(1, prte_data_server_output,
+            pmix_output_verbose(1, prte_data_server_output,
                                 "%s data server:lookup: at least some data not found %d vs %d",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) nanswers,
                                 (int) pmix_argv_count(keys));
@@ -640,7 +640,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
             /* if we were told to wait for the data, then queue this up
              * for later processing */
             if (wait) {
-                prte_output_verbose(1, prte_data_server_output,
+                pmix_output_verbose(1, prte_data_server_output,
                                     "%s data server:lookup: pushing request to wait",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                 PMIX_DATA_BUFFER_RELEASE(answer);
@@ -668,7 +668,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
             }
         }
         pmix_argv_free(keys);
-        prte_output_verbose(1, prte_data_server_output, "%s data server:lookup: data found",
+        pmix_output_verbose(1, prte_data_server_output, "%s data server:lookup: data found",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         /* pack the status */
         rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_INT);
@@ -700,7 +700,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
             goto SEND_ERROR;
         }
 
-        prte_output_verbose(1, prte_data_server_output, "%s data server: unpublish data from %s:%d",
+        pmix_output_verbose(1, prte_data_server_output, "%s data server: unpublish data from %s:%d",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), requestor.nspace, requestor.rank);
 
         /* unpack the number of keys */
@@ -822,7 +822,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
             goto SEND_ERROR;
         }
 
-        prte_output_verbose(1, prte_data_server_output, "%s data server: purge data from %s:%d",
+        pmix_output_verbose(1, prte_data_server_output, "%s data server: purge data from %s:%d",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), requestor.nspace, requestor.rank);
 
         /* cycle across the stored data, looking for a match */
@@ -857,7 +857,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
     }
 
 SEND_ERROR:
-    prte_output_verbose(1, prte_data_server_output, "%s data server: sending error %s",
+    pmix_output_verbose(1, prte_data_server_output, "%s data server: sending error %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc));
     /* pack the error code */
     rc = PMIx_Data_pack(NULL, answer, &rc, 1, PMIX_INT);

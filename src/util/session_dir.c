@@ -54,7 +54,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 
@@ -329,11 +329,11 @@ int prte_session_dir(bool create, pmix_proc_t *proc)
     }
 
     if (prte_debug_flag) {
-        prte_output(0, "procdir: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.proc_session_dir));
-        prte_output(0, "jobdir: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.job_session_dir));
-        prte_output(0, "job: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.jobfam_session_dir));
-        prte_output(0, "top: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.top_session_dir));
-        prte_output(0, "tmp: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.tmpdir_base));
+        pmix_output(0, "procdir: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.proc_session_dir));
+        pmix_output(0, "jobdir: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.job_session_dir));
+        pmix_output(0, "job: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.jobfam_session_dir));
+        pmix_output(0, "top: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.top_session_dir));
+        pmix_output(0, "tmp: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.tmpdir_base));
     }
 
 cleanup:
@@ -379,16 +379,16 @@ int prte_session_dir_cleanup(pmix_nspace_t jobid)
 
     if (pmix_os_dirpath_is_empty(prte_process_info.jobfam_session_dir)) {
         if (prte_debug_flag) {
-            prte_output(0, "sess_dir_cleanup: found jobfam session dir empty - deleting");
+            pmix_output(0, "sess_dir_cleanup: found jobfam session dir empty - deleting");
         }
         rmdir(prte_process_info.jobfam_session_dir);
     } else {
         if (prte_debug_flag) {
             ret = pmix_os_dirpath_access(prte_process_info.job_session_dir, 0);
             if (PMIX_ERR_NOT_FOUND == ret) {
-                prte_output(0, "sess_dir_cleanup: job session dir does not exist");
+                pmix_output(0, "sess_dir_cleanup: job session dir does not exist");
             } else {
-                prte_output(0, "sess_dir_cleanup: job session dir not empty - leaving");
+                pmix_output(0, "sess_dir_cleanup: job session dir not empty - leaving");
             }
         }
     }
@@ -396,16 +396,16 @@ int prte_session_dir_cleanup(pmix_nspace_t jobid)
     if (NULL != prte_process_info.top_session_dir) {
         if (pmix_os_dirpath_is_empty(prte_process_info.top_session_dir)) {
             if (prte_debug_flag) {
-                prte_output(0, "sess_dir_cleanup: found top session dir empty - deleting");
+                pmix_output(0, "sess_dir_cleanup: found top session dir empty - deleting");
             }
             rmdir(prte_process_info.top_session_dir);
         } else {
             if (prte_debug_flag) {
                 ret = pmix_os_dirpath_access(prte_process_info.top_session_dir, 0);
                 if (PMIX_ERR_NOT_FOUND == ret) {
-                    prte_output(0, "sess_dir_cleanup: top session dir does not exist");
+                    pmix_output(0, "sess_dir_cleanup: top session dir does not exist");
                 } else {
-                    prte_output(0, "sess_dir_cleanup: top session dir not empty - leaving");
+                    pmix_output(0, "sess_dir_cleanup: top session dir not empty - leaving");
                 }
             }
         }
@@ -446,16 +446,16 @@ int prte_session_dir_finalize(pmix_proc_t *proc)
 
     if (pmix_os_dirpath_is_empty(prte_process_info.proc_session_dir)) {
         if (prte_debug_flag) {
-            prte_output(0, "sess_dir_finalize: found proc session dir empty - deleting");
+            pmix_output(0, "sess_dir_finalize: found proc session dir empty - deleting");
         }
         rmdir(prte_process_info.proc_session_dir);
     } else {
         if (prte_debug_flag) {
             ret = pmix_os_dirpath_access(prte_process_info.proc_session_dir, 0);
             if (PMIX_ERR_NOT_FOUND == ret) {
-                prte_output(0, "sess_dir_finalize: proc session dir does not exist");
+                pmix_output(0, "sess_dir_finalize: proc session dir does not exist");
             } else {
-                prte_output(0, "sess_dir_finalize: proc session dir not empty - leaving");
+                pmix_output(0, "sess_dir_finalize: proc session dir not empty - leaving");
             }
         }
     }
@@ -482,32 +482,32 @@ int prte_session_dir_finalize(pmix_proc_t *proc)
 
     if (pmix_os_dirpath_is_empty(prte_process_info.job_session_dir)) {
         if (prte_debug_flag) {
-            prte_output(0, "sess_dir_finalize: found job session dir empty - deleting");
+            pmix_output(0, "sess_dir_finalize: found job session dir empty - deleting");
         }
         rmdir(prte_process_info.job_session_dir);
     } else {
         if (prte_debug_flag) {
             ret = pmix_os_dirpath_access(prte_process_info.job_session_dir, 0);
             if (PMIX_ERR_NOT_FOUND == ret) {
-                prte_output(0, "sess_dir_finalize: job session dir does not exist");
+                pmix_output(0, "sess_dir_finalize: job session dir does not exist");
             } else {
-                prte_output(0, "sess_dir_finalize: job session dir not empty - leaving");
+                pmix_output(0, "sess_dir_finalize: job session dir not empty - leaving");
             }
         }
     }
 
     if (pmix_os_dirpath_is_empty(prte_process_info.jobfam_session_dir)) {
         if (prte_debug_flag) {
-            prte_output(0, "sess_dir_finalize: found jobfam session dir empty - deleting");
+            pmix_output(0, "sess_dir_finalize: found jobfam session dir empty - deleting");
         }
         rmdir(prte_process_info.jobfam_session_dir);
     } else {
         if (prte_debug_flag) {
             ret = pmix_os_dirpath_access(prte_process_info.jobfam_session_dir, 0);
             if (PMIX_ERR_NOT_FOUND == ret) {
-                prte_output(0, "sess_dir_finalize: jobfam session dir does not exist");
+                pmix_output(0, "sess_dir_finalize: jobfam session dir does not exist");
             } else {
-                prte_output(0, "sess_dir_finalize: jobfam session dir not empty - leaving");
+                pmix_output(0, "sess_dir_finalize: jobfam session dir not empty - leaving");
             }
         }
     }
@@ -515,16 +515,16 @@ int prte_session_dir_finalize(pmix_proc_t *proc)
     if (NULL != prte_process_info.top_session_dir) {
         if (pmix_os_dirpath_is_empty(prte_process_info.top_session_dir)) {
             if (prte_debug_flag) {
-                prte_output(0, "sess_dir_finalize: found top session dir empty - deleting");
+                pmix_output(0, "sess_dir_finalize: found top session dir empty - deleting");
             }
             rmdir(prte_process_info.top_session_dir);
         } else {
             if (prte_debug_flag) {
                 ret = pmix_os_dirpath_access(prte_process_info.top_session_dir, 0);
                 if (PMIX_ERR_NOT_FOUND == ret) {
-                    prte_output(0, "sess_dir_finalize: top session dir does not exist");
+                    pmix_output(0, "sess_dir_finalize: top session dir does not exist");
                 } else {
-                    prte_output(0, "sess_dir_finalize: top session dir not empty - leaving");
+                    pmix_output(0, "sess_dir_finalize: top session dir not empty - leaving");
                 }
             }
         }

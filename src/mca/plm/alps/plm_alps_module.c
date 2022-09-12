@@ -58,7 +58,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 
@@ -223,7 +223,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * will trigger the daemons_reported event and cause the
          * job to move to the following step
          */
-        PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:alps: no new daemons to launch",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
@@ -341,7 +341,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
     rc = prte_util_convert_vpid_to_string(&vpid_string, map->daemon_vpid_start);
     if (PRTE_SUCCESS != rc) {
-        prte_output(0, "plm_alps: unable to create process name");
+        pmix_output(0, "plm_alps: unable to create process name");
         goto cleanup;
     }
 
@@ -352,8 +352,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     if (prte_mca_plm_alps_component.debug) {
         param = pmix_argv_join(argv, ' ');
         if (NULL != param) {
-            prte_output(0, "plm:alps: final top-level argv:");
-            prte_output(0, "plm:alps:     %s", param);
+            pmix_output(0, "plm:alps: final top-level argv:");
+            pmix_output(0, "plm:alps:     %s", param);
             free(param);
         }
     }
@@ -387,7 +387,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             if (NULL == cur_prefix) {
                 cur_prefix = strdup(app_prefix_dir);
                 if (prte_mca_plm_alps_component.debug) {
-                    prte_output(0, "plm:alps: Set prefix:%s", cur_prefix);
+                    pmix_output(0, "plm:alps: Set prefix:%s", cur_prefix);
                 }
             }
             free(app_prefix_dir);
@@ -400,9 +400,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* setup environment */
     env = pmix_argv_copy(prte_launch_environ);
 
-    if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
+    if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
         param = pmix_argv_join(argv, ' ');
-        PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:alps: final top-level argv:\n\t%s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == param) ? "NULL" : param));
         if (NULL != param)
@@ -447,7 +447,7 @@ static int plm_alps_terminate_orteds(void)
     int rc;
     prte_job_t *jdata;
 
-    PRTE_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
                          "%s plm:alps: terminating orteds", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* deregister the waitpid callback to ensure we don't make it look like
@@ -467,7 +467,7 @@ static int plm_alps_terminate_orteds(void)
     jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
 
-    PRTE_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
                          "%s plm:alps: terminated orteds", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     return rc;
 }
@@ -586,7 +586,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
             }
             pmix_setenv("PATH", newenv, true, &env);
             if (prte_mca_plm_alps_component.debug) {
-                prte_output(0, "plm:alps: reset PATH: %s", newenv);
+                pmix_output(0, "plm:alps: reset PATH: %s", newenv);
             }
             free(newenv);
 
@@ -599,7 +599,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
             }
             pmix_setenv("LD_LIBRARY_PATH", newenv, true, &env);
             if (prte_mca_plm_alps_component.debug) {
-                prte_output(0, "plm:alps: reset LD_LIBRARY_PATH: %s", newenv);
+                pmix_output(0, "plm:alps: reset LD_LIBRARY_PATH: %s", newenv);
             }
             free(newenv);
         }
@@ -633,7 +633,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
 
         execve(exec_argv, argv, env);
 
-        prte_output(0, "plm:alps:start_proc: exec failed");
+        pmix_output(0, "plm:alps:start_proc: exec failed");
         /* don't return - need to exit - returning would be bad -
            we're not in the calling process anymore */
         exit(1);

@@ -120,7 +120,7 @@ static int lsf_set_name(void)
     vpid = strtoul(prte_ess_base_vpid, NULL, 10);
 
     lsf_nodeid = atoi(getenv("LSF_PM_TASKID"));
-    prte_output_verbose(1, prte_ess_base_framework.framework_output,
+    pmix_output_verbose(1, prte_ess_base_framework.framework_output,
                         "ess:lsf found LSF_PM_TASKID set to %d", lsf_nodeid);
     PRTE_PROC_MY_NAME->rank = vpid + lsf_nodeid - 1;
 

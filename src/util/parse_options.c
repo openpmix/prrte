@@ -35,7 +35,7 @@
 #endif
 
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -134,7 +134,7 @@ void prte_util_get_ranges(char *inp, char ***startpts, char ***endpts)
             pmix_argv_append_nosize(endpts, r2[0]);
         } else {
             /* no idea how to parse this */
-            prte_output(0, "%s Unknown parse error on string: %s(%s)",
+            pmix_output(0, "%s Unknown parse error on string: %s(%s)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), inp, r1[i]);
         }
         pmix_argv_free(r2);

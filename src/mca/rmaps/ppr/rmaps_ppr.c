@@ -64,7 +64,7 @@ static int ppr_mapper(prte_job_t *jdata,
      * or NPERxxx jobs - allow restarting of failed apps
      */
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:ppr: job %s being restarted - ppr cannot map",
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
@@ -72,7 +72,7 @@ static int ppr_mapper(prte_job_t *jdata,
     if (NULL != jdata->map->req_mapper
         && 0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
         /* a mapper has been specified, and it isn't me */
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:ppr: job %s not using ppr mapper",
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
@@ -81,7 +81,7 @@ static int ppr_mapper(prte_job_t *jdata,
     if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &jobppr, PMIX_STRING) ||
         NULL == jobppr || PRTE_MAPPING_PPR != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         /* not for us */
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:ppr: job %s not using ppr mapper PPR %s policy %s",
                             PRTE_JOBID_PRINT(jdata->nspace), (NULL == jobppr) ? "NULL" : jobppr,
                             (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(jdata->map->mapping))
@@ -93,7 +93,7 @@ static int ppr_mapper(prte_job_t *jdata,
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:ppr: mapping job %s with ppr %s",
                         PRTE_JOBID_PRINT(jdata->nspace), jobppr);
 
@@ -153,7 +153,7 @@ static int ppr_mapper(prte_job_t *jdata,
 
     /* if nothing was given, that's an error */
     if (0 == mapping) {
-        prte_output(0, "NOTHING GIVEN");
+        pmix_output(0, "NOTHING GIVEN");
         free(jobppr);
         return PRTE_ERR_SILENT;
     }
@@ -176,7 +176,7 @@ static int ppr_mapper(prte_job_t *jdata,
         }
     }
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:ppr: job %s assigned policy %s:%s",
                         PRTE_JOBID_PRINT(jdata->nspace),
                         prte_rmaps_base_print_mapping(options->map),

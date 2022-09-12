@@ -37,7 +37,7 @@
 #include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_if.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -182,7 +182,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
         /* if the app provided a dash-host, then use those nodes */
         hosts = NULL;
         if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING)) {
-            PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                  "%s using dash_host %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  hosts));
             if (PRTE_SUCCESS != (rc = prte_util_add_dash_host_nodes(&nodes, hosts, false))) {
@@ -193,7 +193,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
             free(hosts);
         } else if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) {
             /* otherwise, if the app provided a hostfile, then use that */
-            PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                  "%s using hostfile %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  hosts));
             if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, hosts))) {
@@ -206,7 +206,7 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
             /* if nothing else was specified by the app, then use all known nodes, which
              * will include ourselves
              */
-            PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                  "%s using known nodes", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             goto addknown;
         }
@@ -240,19 +240,19 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                 }
                 /* ignore nodes that are marked as do-not-use for this mapping */
                 if (PRTE_NODE_STATE_DO_NOT_USE == node->state) {
-                    PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
+                    PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                          "NODE %s IS MARKED NO_USE", node->name));
                     /* reset the state so it can be used another time */
                     node->state = PRTE_NODE_STATE_UP;
                     continue;
                 }
                 if (PRTE_NODE_STATE_DOWN == node->state) {
-                    PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
+                    PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                          "NODE %s IS DOWN", node->name));
                     continue;
                 }
                 if (PRTE_NODE_STATE_NOT_INCLUDED == node->state) {
-                    PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
+                    PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                          "NODE %s IS MARKED NO_INCLUDE", node->name));
                     /* not to be used */
                     continue;
@@ -261,12 +261,12 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
                  * unless we are mapping prior to launching the vm
                  */
                 if (NULL == node->daemon && !novm) {
-                    PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
+                    PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                          "NODE %s HAS NO DAEMON", node->name));
                     continue;
                 }
                 if (!prte_nptr_match(node, nptr)) {
-                    PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
+                    PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                          "NODE %s DOESNT MATCH NODE %s", node->name, nptr->name));
                     continue;
                 }
@@ -326,19 +326,19 @@ addknown:
             }
             /* ignore nodes that are marked as do-not-use for this mapping */
             if (PRTE_NODE_STATE_DO_NOT_USE == node->state) {
-                PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                      "NODE %s IS MARKED NO_USE", node->name));
                 /* reset the state so it can be used another time */
                 node->state = PRTE_NODE_STATE_UP;
                 continue;
             }
             if (PRTE_NODE_STATE_DOWN == node->state) {
-                PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                      "NODE %s IS MARKED DOWN", node->name));
                 continue;
             }
             if (PRTE_NODE_STATE_NOT_INCLUDED == node->state) {
-                PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                      "NODE %s IS MARKED NO_INCLUDE", node->name));
                 /* not to be used */
                 continue;
@@ -347,7 +347,7 @@ addknown:
              * unless we are mapping prior to launching the vm
              */
             if (NULL == node->daemon && !novm) {
-                PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                      "NODE %s HAS NO DAEMON", node->name));
                 continue;
             }
@@ -393,7 +393,7 @@ addknown:
         }
     }
 
-    PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                          "%s Starting with %d nodes in list", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (int) pmix_list_get_size(allocated_nodes)));
 
@@ -407,7 +407,7 @@ addknown:
     }
 
     /* filter the nodes thru any hostfile and dash-host options */
-    PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output, "%s Filtering thru apps",
+    PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output, "%s Filtering thru apps",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     if (PRTE_SUCCESS != (rc = prte_rmaps_base_filter_nodes(app, allocated_nodes, true))
@@ -415,7 +415,7 @@ addknown:
         PRTE_ERROR_LOG(rc);
         return rc;
     }
-    PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                          "%s Retained %d nodes in list", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (int) pmix_list_get_size(allocated_nodes)));
 
@@ -445,7 +445,7 @@ complete:
         PMIX_LIST_FOREACH_SAFE(node, next, allocated_nodes, prte_node_t)
         {
             if (NULL == node->topology || NULL == node->topology->topo) {
-                PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s node %s lacks topology",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
                 /* cannot use this node - should never happen */
@@ -458,7 +458,7 @@ complete:
             if (!prte_hnp_is_allocated ||
                 (PRTE_GET_MAPPING_DIRECTIVE(policy) & PRTE_MAPPING_NO_USE_LOCAL)) {
                 if (0 == node->index) {
-                    PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                    PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                          "%s node %s HNP not allocated or not to be used",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
                     pmix_list_remove_item(allocated_nodes, &node->super);
@@ -468,7 +468,7 @@ complete:
             }
             /** check to see if this node is fully used - remove if so */
             if (0 != node->slots_max && node->slots_inuse >= node->slots_max) {
-                PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s Removing node %s: max %d inuse %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name,
                                      node->slots_max, node->slots_inuse));
@@ -479,7 +479,7 @@ complete:
             if (node->slots <= node->slots_inuse &&
                 (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(policy))) {
                 /* remove the node as fully used */
-                PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s Removing node %s slots %d inuse %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->slots,
                                      node->slots_inuse));
@@ -498,7 +498,7 @@ complete:
                 }
                 node->slots_available = s;
                 /* add the available slots */
-                PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s node %s has %d slots available",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, s));
                 num_slots += s;
@@ -509,11 +509,11 @@ complete:
                  * count as we don't have any available. Just let the mapper
                  * do what it needs to do to meet the request
                  */
-                PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s node %s is fully used, but available for oversubscription",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
             } else {
-                PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                                      "%s node %s is fully used and not available for oversubscription: SLOTS %d INUSE %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name,
                                      (int)node->slots, (int)node->slots_inuse));
@@ -544,12 +544,12 @@ complete:
     /* check for prior bookmark */
     prte_rmaps_base_get_starting_point(allocated_nodes, jdata);
 
-    if (4 < prte_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
-        prte_output(0, "AVAILABLE NODES FOR MAPPING:");
+    if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
+        pmix_output(0, "AVAILABLE NODES FOR MAPPING:");
         for (item = pmix_list_get_first(allocated_nodes);
              item != pmix_list_get_end(allocated_nodes); item = pmix_list_get_next(item)) {
             node = (prte_node_t *) item;
-            prte_output(0, "    node: %s daemon: %s slots_available: %d", node->name,
+            pmix_output(0, "    node: %s daemon: %s slots_available: %d", node->name,
                         (NULL == node->daemon) ? "NULL" : PRTE_VPID_PRINT(node->daemon->name.rank),
                         node->slots_available);
         }
@@ -649,7 +649,7 @@ void prte_rmaps_base_get_starting_point(pmix_list_t *node_list, prte_job_t *jdat
         return;
     }
 
-    PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                          "%s Starting bookmark at node %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          node->name));
@@ -713,7 +713,7 @@ bool prte_rmaps_base_check_avail(prte_job_t *jdata,
     int nprocs;
     bool avail = false;
 
-    prte_output_verbose(10, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
                         "%s get_avail_ncpus: node %s has %d procs on it",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->num_procs);
 
@@ -724,7 +724,7 @@ bool prte_rmaps_base_check_avail(prte_job_t *jdata,
 
     if (!options->oversubscribe) {
         if (node->slots <= node->slots_inuse) {
-            prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps: node %s is full - skipping",
                                 node->name);
             goto done;
