@@ -33,7 +33,7 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -105,7 +105,7 @@ static int tm_set_name(void)
 {
     pmix_rank_t vpid;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:tm setting name"));
+    PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:tm setting name"));
 
     if (NULL == prte_ess_base_nspace) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -121,7 +121,7 @@ static int tm_set_name(void)
     vpid = strtoul(prte_ess_base_vpid, NULL, 10);
     PRTE_PROC_MY_NAME->rank = vpid;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:tm set name to %s",
+    PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:tm set name to %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* get the num procs as provided in the cmd line param */

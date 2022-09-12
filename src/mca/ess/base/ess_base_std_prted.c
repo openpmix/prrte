@@ -213,7 +213,7 @@ int prte_ess_base_prted_setup(void)
         }
     }
     /* setup my session directory here as the OOB may need it */
-    PRTE_OUTPUT_VERBOSE(
+    PMIX_OUTPUT_VERBOSE(
         (2, prte_ess_base_framework.framework_output,
          "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -238,9 +238,9 @@ int prte_ess_base_prted_setup(void)
         error = "prte_session_dir";
         goto error;
     }
-    /* set the prte_output env file location to be in the
+    /* set the pmix_output env file location to be in the
      * proc-specific session directory. */
-    prte_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
+    pmix_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
     /* setup stdout/stderr */
     if (prte_debug_daemons_file_flag) {
         /* if we are debugging to a file, then send stdout/stderr to
@@ -437,10 +437,10 @@ int prte_ess_base_prted_setup(void)
     /* save the topology - note that this may have to be moved later
      * to ensure a common array position with the DVM master */
     pmix_pointer_array_add(prte_node_topologies, t);
-    if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+    if (15 < pmix_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         char *output = NULL;
         pmix_topology_t topo;
-        prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        pmix_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         topo.source = "hwloc";
         topo.topology = prte_hwloc_topology;
         ret = PMIx_Data_print(&output, NULL, &topo, PMIX_TOPO);

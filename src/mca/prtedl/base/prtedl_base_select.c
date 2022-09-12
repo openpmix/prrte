@@ -26,7 +26,7 @@
 #include "src/mca/mca.h"
 #include "src/mca/prtedl/base/base.h"
 #include "src/mca/prtedl/prtedl.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 int prte_dl_base_select(void)
 {

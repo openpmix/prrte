@@ -68,7 +68,7 @@
 #include "src/util/pmix_if.h"
 #include "src/util/error.h"
 #include "src/util/pmix_net.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -393,7 +393,7 @@ static int component_available(void)
     int i;
     bool keeploopback = false;
 
-    prte_output_verbose(5, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                         "oob:tcp: component_available called");
 
     /* if we are the master, then check the interfaces for loopbacks
@@ -432,7 +432,7 @@ static int component_available(void)
 
         /* add this address to our connections */
         if (AF_INET == my_ss.ss_family) {
-            prte_output_verbose(10, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init adding %s to our list of %s connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 pmix_net_get_hostname((struct sockaddr *) &my_ss),
@@ -441,7 +441,7 @@ static int component_available(void)
                                     pmix_net_get_hostname((struct sockaddr *) &my_ss));
         } else if (AF_INET6 == my_ss.ss_family) {
 #if PRTE_ENABLE_IPV6
-            prte_output_verbose(10, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init adding %s to our list of %s connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 pmix_net_get_hostname((struct sockaddr *) &my_ss),
@@ -450,7 +450,7 @@ static int component_available(void)
                                     pmix_net_get_hostname((struct sockaddr *) &my_ss));
 #endif // PRTE_ENABLE_IPV6
         } else {
-            prte_output_verbose(10, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(10, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp:init ignoring %s from out list of connections",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                 pmix_net_get_hostname((struct sockaddr *) &my_ss));
@@ -498,7 +498,7 @@ static int component_startup(void)
 {
     int rc = PRTE_SUCCESS;
 
-    prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP STARTUP",
+    pmix_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP STARTUP",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* if we are a daemon/HNP,
@@ -520,7 +520,7 @@ static void component_shutdown(void)
 {
     int i = 0, rc;
 
-    prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP SHUTDOWN",
+    pmix_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP SHUTDOWN",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     if (PRTE_PROC_IS_MASTER && prte_mca_oob_tcp_component.listen_thread_active) {
@@ -535,19 +535,19 @@ static void component_shutdown(void)
         close(prte_mca_oob_tcp_component.stop_thread[1]);
 
     } else {
-        prte_output_verbose(2, prte_oob_base_framework.framework_output, "no hnp or not active");
+        pmix_output_verbose(2, prte_oob_base_framework.framework_output, "no hnp or not active");
     }
 
     /* cleanup listen event list */
     PMIX_LIST_DESTRUCT(&prte_mca_oob_tcp_component.listeners);
 
-    prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP SHUTDOWN done",
+    pmix_output_verbose(2, prte_oob_base_framework.framework_output, "%s TCP SHUTDOWN done",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 }
 
 static int component_send(prte_rml_send_t *msg)
 {
-    prte_output_verbose(5, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                         "%s oob:tcp:send_nb to peer %s:%d seq = %d",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->dst), msg->tag,
                         msg->seq_num);
@@ -637,7 +637,7 @@ static int parse_uri(const uint16_t af_family, const char *host, const char *por
         in6 = (struct sockaddr_in6 *) inaddr;
 
         if (0 == inet_pton(AF_INET6, host, (void *) &in6->sin6_addr)) {
-            prte_output(0, "oob_tcp_parse_uri: Could not convert %s\n", host);
+            pmix_output(0, "oob_tcp_parse_uri: Could not convert %s\n", host);
             return PRTE_ERR_BAD_PARAM;
         }
         in6->sin6_family = AF_INET6;
@@ -668,7 +668,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
     for (i = 0; NULL != uris[i]; i++) {
         tcpuri = strdup(uris[i]);
         if (NULL == tcpuri) {
-            prte_output_verbose(2, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp: out of memory", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             continue;
         }
@@ -681,7 +681,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
             host = tcpuri + strlen("tcp6://");
 #else  // PRTE_ENABLE_IPV6
             /* we don't support this connection type */
-            prte_output_verbose(2, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp: address %s not supported",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), uris[i]);
             free(tcpuri);
@@ -689,7 +689,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
 #endif // PRTE_ENABLE_IPV6
         } else {
             /* not one of ours */
-            prte_output_verbose(2, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                                 "%s oob:tcp: ignoring address %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), uris[i]);
             free(tcpuri);
@@ -697,7 +697,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
         }
 
         /* this one is ours - record the peer */
-        prte_output_verbose(2, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                             "%s oob:tcp: working peer %s address %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer), uris[i]);
 
@@ -744,7 +744,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
         for (j = 0; NULL != addrs[j]; j++) {
             if (NULL == masks[j]) {
                 /* Missing mask information */
-                prte_output_verbose(2, prte_oob_base_framework.framework_output,
+                pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                                     "%s oob:tcp: uri missing mask information.",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                 return PRTE_ERR_TAKE_NEXT_OPTION;
@@ -775,7 +775,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
             if (NULL == (pr = prte_oob_tcp_peer_lookup(peer))) {
                 pr = PMIX_NEW(prte_oob_tcp_peer_t);
                 PMIX_XFER_PROCID(&pr->name, peer);
-                prte_output_verbose(20, prte_oob_base_framework.framework_output,
+                pmix_output_verbose(20, prte_oob_base_framework.framework_output,
                                     "%s SET_PEER ADDING PEER %s",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer));
                 pmix_list_append(&prte_mca_oob_tcp_component.peers, &pr->super);
@@ -794,7 +794,7 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
             }
             maddr->if_mask = atoi(masks[j]);
 
-            prte_output_verbose(20, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(20, prte_oob_base_framework.framework_output,
                                 "%s set_peer: peer %s is listening on net %s port %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer),
                                 (NULL == host) ? "NULL" : host, (NULL == ports) ? "NULL" : ports);
@@ -828,7 +828,7 @@ void prte_mca_oob_tcp_component_set_module(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(pop);
 
-    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:set_module called for peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(&pop->peer));
 
@@ -855,7 +855,7 @@ void prte_mca_oob_tcp_component_lost_connection(int fd, short args, void *cbdata
 
     PMIX_ACQUIRE_OBJECT(pop);
 
-    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:lost connection called for peer %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&pop->peer));
 
@@ -885,7 +885,7 @@ void prte_mca_oob_tcp_component_no_route(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(mop);
 
-    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:no route called for peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(&mop->hop));
 
@@ -917,7 +917,7 @@ void prte_mca_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(mop);
 
-    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:unknown hop called for peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(&mop->hop));
 
@@ -936,7 +936,7 @@ void prte_mca_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
          * OOB framework hash table. We have no way of knowing
          * what to do next, so just output an error message and
          * abort */
-        prte_output(0,
+        pmix_output(0,
                     "%s ERROR: message to %s requires routing and the OOB has no knowledge of the "
                     "reqd hop %s",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&mop->snd->hdr.dst),
@@ -950,7 +950,7 @@ void prte_mca_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
     /* mark that this component cannot reach this destination either */
     bpr = prte_oob_base_get_peer(&mop->snd->hdr.dst);
     if (NULL == bpr) {
-        prte_output(
+        pmix_output(
             0,
             "%s ERROR: message to %s requires routing and the OOB has no knowledge of this process",
             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&mop->snd->hdr.dst));
@@ -992,7 +992,7 @@ void prte_mca_oob_tcp_component_failed_to_connect(int fd, short args, void *cbda
 
     PMIX_ACQUIRE_OBJECT(pop);
 
-    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:failed_to_connect called for peer %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&pop->peer));
 
@@ -1003,7 +1003,7 @@ void prte_mca_oob_tcp_component_failed_to_connect(int fd, short args, void *cbda
     }
 
     /* activate the proc state */
-    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s tcp:failed_to_connect unable to reach peer %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&pop->peer));
 
@@ -1044,7 +1044,7 @@ static void peer_des(prte_oob_tcp_peer_t *peer)
         prte_event_del(&peer->timer_event);
     }
     if (0 <= peer->sd) {
-        prte_output_verbose(2, prte_oob_base_framework.framework_output, "%s CLOSING SOCKET %d",
+        pmix_output_verbose(2, prte_oob_base_framework.framework_output, "%s CLOSING SOCKET %d",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), peer->sd);
         CLOSE_THE_SOCKET(peer->sd);
     }

@@ -32,7 +32,7 @@
 #include "src/runtime/prte_data_server.h"
 #include "src/runtime/prte_quit.h"
 #include "src/threads/pmix_threads.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
 
@@ -126,7 +126,7 @@ static int init(void)
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
-    if (5 < prte_output_get_verbosity(prte_state_base_framework.framework_output)) {
+    if (5 < pmix_output_get_verbosity(prte_state_base_framework.framework_output)) {
         prte_state_base_print_job_state_machine();
     }
 
@@ -140,7 +140,7 @@ static int init(void)
             PRTE_ERROR_LOG(rc);
         }
     }
-    if (5 < prte_output_get_verbosity(prte_state_base_framework.framework_output)) {
+    if (5 < pmix_output_get_verbosity(prte_state_base_framework.framework_output)) {
         prte_state_base_print_proc_state_machine();
     }
     return PRTE_SUCCESS;
@@ -168,7 +168,7 @@ static void track_jobs(int fd, short argc, void *cbdata)
 
     switch (caddy->job_state) {
     case PRTE_JOB_STATE_LOCAL_LAUNCH_COMPLETE:
-        PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
                              "%s state:prted:track_jobs sending local launch complete for job %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_JOBID_PRINT(caddy->jdata->nspace)));
@@ -244,7 +244,7 @@ static void track_jobs(int fd, short argc, void *cbdata)
         break;
 
     case PRTE_JOB_STATE_READY_FOR_DEBUG:
-        PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
                              "%s state:prted:track_jobs sending ready for debug for job %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_JOBID_PRINT(caddy->jdata->nspace)));
@@ -338,7 +338,7 @@ static void track_procs(int fd, short argc, void *cbdata)
     proc = &caddy->name;
     state = caddy->proc_state;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
                          "%s state:prted:track_procs called for proc %s state %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
                          prte_proc_state_to_str(state)));
@@ -362,7 +362,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                 if (PMIX_RANK_WILDCARD == tgt && jdata->num_ready_for_debug < jdata->num_local_procs) {
                     goto cleanup;
                 }
-                PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                      "%s state:prted all local %s procs on node %s ready for debug",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      proc->nspace, prte_process_info.nodename));
@@ -398,7 +398,7 @@ static void track_procs(int fd, short argc, void *cbdata)
         if (jdata->num_reported == jdata->num_local_procs) {
             /* once everyone registers, notify the HNP */
 
-            PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
                                  "%s state:prted: notifying HNP all local registered",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -500,7 +500,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                                                                                 i))
                     && PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
                     /* at least one is still alive */
-                    PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+                    PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
                                          "%s state:prted all routes gone but proc %s still alive",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                          PRTE_NAME_PRINT(&pdata->name)));
@@ -508,7 +508,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                 }
             }
             /* call our appropriate exit procedure */
-            PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
                                  "%s state:prted all routes and children gone - exiting",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
@@ -533,7 +533,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                 goto cleanup;
             }
             /* send it */
-            PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
                                  "%s state:prted: SENDING JOB LOCAL TERMINATION UPDATE FOR JOB %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_JOBID_PRINT(jdata->nspace)));
@@ -578,7 +578,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                     if (NULL == node) {
                         continue;
                     }
-                    PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                    PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                          "%s state:prted releasing procs from node %s",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
                     for (i = 0; i < node->procs->size; i++) {
@@ -596,7 +596,7 @@ static void track_procs(int fd, short argc, void *cbdata)
                             node->slots_inuse--;
                             node->num_procs--;
                         }
-                        PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                        PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                              "%s state:prted releasing proc %s from node %s",
                                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                              PRTE_NAME_PRINT(&pptr->name), node->name));

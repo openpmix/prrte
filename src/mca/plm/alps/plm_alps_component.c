@@ -131,7 +131,7 @@ static int prte_mca_plm_alps_component_query(pmix_mca_base_module_t **module, in
 
     if (NULL == wlm_detected) {
         wlm_detected = (char *) wlm_detect_get_default();
-        PRTE_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
                              "%s plm:alps: wlm_detect_get_active returned NULL, using %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wlm_detected));
     }
@@ -147,7 +147,7 @@ static int prte_mca_plm_alps_component_query(pmix_mca_base_module_t **module, in
 
     *priority = prte_mca_plm_alps_component.priority;
     *module = (pmix_mca_base_module_t *) &prte_plm_alps_module;
-    PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                          "%s plm:alps: available for selection",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 

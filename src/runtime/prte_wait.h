@@ -47,7 +47,7 @@
 #endif
 
 #include "src/event/event-internal.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/rml/rml_types.h"
 #include "src/runtime/prte_globals.h"
@@ -100,7 +100,7 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
  */
 #define PRTE_WAIT_FOR_COMPLETION(flg)                                                \
     do {                                                                             \
-        prte_output_verbose(1, prte_progress_thread_debug,                           \
+        pmix_output_verbose(1, prte_progress_thread_debug,                           \
                             "%s waiting on progress thread at %s:%d",                \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__); \
         while ((flg)) {                                                              \
@@ -146,7 +146,7 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
         }                                                                                         \
         tmp->tv.tv_sec = timeout / 1000000;                                                       \
         tmp->tv.tv_usec = timeout % 1000000;                                                      \
-        PRTE_OUTPUT_VERBOSE((1, prte_debug_output, "defining timeout: %ld sec %ld usec at %s:%d", \
+        PMIX_OUTPUT_VERBOSE((1, prte_debug_output, "defining timeout: %ld sec %ld usec at %s:%d", \
                              (long) tmp->tv.tv_sec, (long) tmp->tv.tv_usec, __FILE__, __LINE__)); \
         PMIX_POST_OBJECT(tmp);                                                                    \
         prte_event_evtimer_add(tmp->ev, &tmp->tv);                                                \
@@ -169,7 +169,7 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
         prte_event_set_priority(tm->ev, (pri));                                                 \
         tm->tv.tv_sec = (sec) + (usec) / 1000000;                                               \
         tm->tv.tv_usec = (usec) % 1000000;                                                      \
-        PRTE_OUTPUT_VERBOSE((1, prte_debug_output,                                              \
+        PMIX_OUTPUT_VERBOSE((1, prte_debug_output,                                              \
                              "defining timer event: %ld sec %ld usec at %s:%d",                 \
                              (long) tm->tv.tv_sec, (long) tm->tv.tv_usec, __FILE__, __LINE__)); \
         PMIX_POST_OBJECT(tm);                                                                   \

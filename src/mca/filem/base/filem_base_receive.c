@@ -43,7 +43,7 @@
 
 #include "src/mca/mca.h"
 #include "src/util/name_fns.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 
 #include "constants.h"
@@ -77,7 +77,7 @@ int prte_filem_base_comm_start(void)
         return PRTE_SUCCESS;
     }
 
-    PRTE_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
                          "%s filem:base: Receive: Start command recv",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -99,7 +99,7 @@ int prte_filem_base_comm_stop(void)
         return PRTE_SUCCESS;
     }
 
-    PRTE_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
                          "%s filem:base:receive stop comm", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FILEM_BASE);
@@ -121,7 +121,7 @@ void prte_filem_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *b
     int rc;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
-    PRTE_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_filem_base_framework.framework_output,
                          "%s filem:base: Receive a command message.",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -134,7 +134,7 @@ void prte_filem_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *b
 
     switch (command) {
     case PRTE_FILEM_GET_PROC_NODE_NAME_CMD:
-        PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                              "%s filem:base: Command: Get Proc node name command",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -142,7 +142,7 @@ void prte_filem_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *b
         break;
 
     case PRTE_FILEM_GET_REMOTE_PATH_CMD:
-        PRTE_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((10, prte_filem_base_framework.framework_output,
                              "%s filem:base: Command: Get remote path command",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -250,7 +250,7 @@ static void filem_base_process_get_remote_path_cmd(pmix_proc_t *sender, pmix_dat
         tmp_name = strdup(filename);
     }
 
-    prte_output_verbose(10, prte_filem_base_framework.framework_output,
+    pmix_output_verbose(10, prte_filem_base_framework.framework_output,
                         "filem:base: process_get_remote_path_cmd: %s -> %s: Filename Requested "
                         "(%s) translated to (%s)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender), filename,

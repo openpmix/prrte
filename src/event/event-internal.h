@@ -34,7 +34,7 @@
 #endif
 
 #include "src/class/pmix_list.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 typedef event_callback_fn prte_event_cbfunc_t;
 

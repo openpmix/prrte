@@ -22,7 +22,7 @@
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/error.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/util/bipartite_graph.h"
 #include "src/util/bipartite_graph_internal.h"
@@ -256,7 +256,7 @@ int prte_bp_graph_clone(const prte_bp_graph_t *g, bool copy_user_data,
     *g_clone_out = NULL;
 
     if (copy_user_data) {
-        prte_output(0, "[%s:%d:%s] user data copy requested but not yet supported", __FILE__,
+        pmix_output(0, "[%s:%d:%s] user data copy requested but not yet supported", __FILE__,
                     __LINE__, __func__);
         abort();
         return PRTE_ERR_FATAL;
@@ -570,7 +570,7 @@ bool prte_bp_graph_bellman_ford(prte_bp_graph_t *gx, int source, int target, int
             v = e_ptr->target;
             if (e_ptr->capacity > 0 && dist[u] != MAX_COST && /* avoid signed overflow */
                 (dist[u] + e_ptr->cost) < dist[v]) {
-                prte_output(0, "[%s:%d:%s] negative-weight cycle detected", __FILE__, __LINE__,
+                pmix_output(0, "[%s:%d:%s] negative-weight cycle detected", __FILE__, __LINE__,
                             __func__);
                 abort();
                 goto out;
@@ -643,7 +643,7 @@ int prte_bp_graph_bipartite_to_flow(prte_bp_graph_t *g)
         int outbound = prte_bp_graph_outdegree(g, u);
 
         if (inbound > 0 && outbound > 0) {
-            prte_output(0, "[%s:%d:%s] graph is not (unidirectionally) bipartite", __FILE__,
+            pmix_output(0, "[%s:%d:%s] graph is not (unidirectionally) bipartite", __FILE__,
                         __LINE__, __func__);
             abort();
         } else if (inbound > 0) {
@@ -806,7 +806,7 @@ static int min_cost_flow_ssp(prte_bp_graph_t *gx, int **flow_out)
             assert(c >= 0);
             err = set_capacity(gx, u, v, c);
             if (PRTE_SUCCESS != err) {
-                prte_output(0, "[%s:%d:%s] unable to set capacity, missing edge?", __FILE__,
+                pmix_output(0, "[%s:%d:%s] unable to set capacity, missing edge?", __FILE__,
                             __LINE__, __func__);
                 abort();
             }
@@ -815,7 +815,7 @@ static int min_cost_flow_ssp(prte_bp_graph_t *gx, int **flow_out)
             assert(c >= 0);
             err = set_capacity(gx, v, u, c);
             if (PRTE_SUCCESS != err) {
-                prte_output(0, "[%s:%d:%s] unable to set capacity, missing edge?", __FILE__,
+                pmix_output(0, "[%s:%d:%s] unable to set capacity, missing edge?", __FILE__,
                             __LINE__, __func__);
                 abort();
             }

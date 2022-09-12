@@ -113,7 +113,7 @@ static int prte_mca_plm_slurm_component_query(pmix_mca_base_module_t **module, i
     if (NULL != getenv("SLURM_JOBID")) {
         *priority = 75;
 
-        PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:slurm: available for selection",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 

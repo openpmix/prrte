@@ -18,7 +18,7 @@
 
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
@@ -398,6 +398,19 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_ABORT_NZ,
         PRTE_CLI_NOLAUNCH,
         PRTE_CLI_SHOW_PROGRESS,
+        PRTE_CLI_RECOVER,
+        PRTE_CLI_CONTINUOUS,
+        PRTE_CLI_MAX_RESTARTS,
+        PRTE_CLI_EXEC_AGENT,
+        PRTE_CLI_STOP_ON_EXEC,
+        PRTE_CLI_STOP_IN_INIT,
+        PRTE_CLI_STOP_IN_APP,
+        PRTE_CLI_TIMEOUT,
+        PRTE_CLI_SPAWN_TIMEOUT,
+        PRTE_CLI_REPORT_STATE,
+        PRTE_CLI_STACK_TRACES,
+        PRTE_CLI_REPORT_CHILD_SEP,
+        PRTE_CLI_AGG_HELP,
         NULL
     };
 

@@ -35,7 +35,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
@@ -167,7 +167,7 @@ static void prte_iof_base_sink_construct(prte_iof_sink_t *ptr)
 static void prte_iof_base_sink_destruct(prte_iof_sink_t *ptr)
 {
     if (NULL != ptr->wev) {
-        PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                              "%s iof: closing sink for process %s on fd %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&ptr->name),
                              ptr->wev->fd));
@@ -196,7 +196,7 @@ static void prte_iof_base_read_event_destruct(prte_iof_read_event_t *rev)
 
     if (0 <= rev->fd) {
         prte_event_free(rev->ev);
-        PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                              "%s iof: closing fd %d for process %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rev->fd,
                              (NULL == proct) ? "UNKNOWN" : PRTE_NAME_PRINT(&proct->name)));
@@ -234,7 +234,7 @@ static void prte_iof_base_write_event_destruct(prte_iof_write_event_t *wev)
         free(wev->ev);
     }
     if (2 < wev->fd) {
-        PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                              "%s iof: closing fd %d for write event",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
         close(wev->fd);

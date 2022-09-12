@@ -880,7 +880,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     char *param, *value;
     pmix_cli_item_t *opt;
 
-    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:prte: parse_env",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -1110,7 +1110,7 @@ static int detect_proxy(char *personalities)
 {
     char *evar;
 
-    prte_output_verbose(2, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(2, prte_schizo_base_framework.framework_output,
                         "%s[%s]: detect proxy with %s (%s)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__,
                         (NULL == personalities) ? "NULL" : personalities,

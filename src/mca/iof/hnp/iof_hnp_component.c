@@ -29,7 +29,7 @@
 
 #include "src/event/event-internal.h"
 #include "src/mca/base/pmix_base.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/util/proc_info.h"
 

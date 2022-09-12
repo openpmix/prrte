@@ -33,7 +33,7 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
@@ -307,7 +307,7 @@ void prte_rmaps_base_update_local_ranks(prte_job_t *jdata, prte_node_t *oldnode,
     prte_local_rank_t local_rank;
     prte_proc_t *proc;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_rmaps_base_framework.framework_output,
                          "%s rmaps:base:update_local_ranks",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 

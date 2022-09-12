@@ -32,7 +32,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/ras/base/ras_private.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
 
 #include <ctype.h>
@@ -91,7 +91,7 @@ static int parser_ini(char **val_if_found, FILE *fp, const char *var_name)
 {
     char *alps_config_str = NULL;
 
-    prte_output_verbose(1, prte_ras_base_framework.framework_output,
+    pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                         "ras:alps:allocate: parser_ini");
 
     /* invalid argument */
@@ -164,7 +164,7 @@ static int parser_separated_columns(char **val_if_found, FILE *fp, const char *v
     int var_len = strlen(var_name);
     int i;
 
-    prte_output_verbose(1, prte_ras_base_framework.framework_output,
+    pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                         "ras:alps:allocate: parser_separated_columns");
 
     /* invalid argument */
@@ -240,13 +240,13 @@ static char *prte_ras_get_appinfo_path(void)
      * until we either fail or find what we are looking for.
      */
     for (i = 0; NULL != sysconfigs[i].path; ++i) {
-        prte_output_verbose(1, prte_ras_base_framework.framework_output,
+        pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                             "ras:alps:allocate: Trying ALPS configuration "
                             "file: \"%s\"",
                             sysconfigs[i].path);
         if (NULL == (fp = fopen(sysconfigs[i].path, "r"))) {
             int err = errno;
-            prte_output_verbose(1, prte_ras_base_framework.framework_output,
+            pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                                 "ras:alps:allocate: Skipping ALPS "
                                 "configuration file: \"%s\" (%s).",
                                 sysconfigs[i].path, strerror(err));
@@ -269,7 +269,7 @@ static char *prte_ras_get_appinfo_path(void)
         }
         /* Failure */
         else {
-            prte_output_verbose(1, prte_ras_base_framework.framework_output,
+            pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                                 "ras:alps:allocate: failure "
                                 "(get_appinfo_dir_path = %d)",
                                 rc);
@@ -278,7 +278,7 @@ static char *prte_ras_get_appinfo_path(void)
     }
     /* Were we successful? */
     if (NULL != sysconfigs[i].path) {
-        prte_output_verbose(1, prte_ras_base_framework.framework_output,
+        pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                             "ras:alps:allocate: Located ALPS scheduler file: "
                             "\"%s\"",
                             appinfo_path);
@@ -286,7 +286,7 @@ static char *prte_ras_get_appinfo_path(void)
     }
     /* Nope */
     else {
-        prte_output_verbose(1, prte_ras_base_framework.framework_output,
+        pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                             "ras:alps:allocate: Could not locate ALPS "
                             "scheduler file.");
         return NULL;
@@ -329,10 +329,10 @@ cleanup:
         free(appinfo_path);
     }
     if (PRTE_SUCCESS == ret) {
-        prte_output_verbose(1, prte_ras_base_framework.framework_output,
+        pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                             "ras:alps:allocate: success");
     } else {
-        prte_output_verbose(1, prte_ras_base_framework.framework_output,
+        pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                             "ras:alps:allocate: failure "
                             "(base_allocate_nodes = %d)",
                             ret);
@@ -396,7 +396,7 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
     prte_ras_alps_get_appinfo_attempts(&max_appinfo_read_attempts);
     oNow = 0;
     iTrips = 0;
-    prte_output_verbose(1, prte_ras_base_framework.framework_output,
+    pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                         "ras:alps:allocate: begin processing appinfo file");
 
     while (!oNow) { /* Until appinfo read is complete */
@@ -404,7 +404,7 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
 
         iFd = open(filename, O_RDONLY);
         if (iFd == -1) { /* If file absent, ALPS is down   */
-            prte_output_verbose(1, prte_ras_base_framework.framework_output,
+            pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                                 "ras:alps:allocate: ALPS information open failure");
             usleep(iTrips * 50000); /* Increasing delays, .05 s/try   */
 
@@ -432,7 +432,7 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
         if ((oNow = read(iFd, cpBuf, szLen)) != (off_t) szLen) {
 
             /*          This is where apstat fails; we will record it and try again.      */
-            prte_output_verbose(1, prte_ras_base_framework.framework_output,
+            pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                                 "ras:alps:allocate: ALPS information read failure: %ld bytes",
                                 (long int) oNow);
 
@@ -449,7 +449,7 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
         }
     }
     close(iFd);
-    prte_output_verbose(1, prte_ras_base_framework.framework_output,
+    pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                         "ras:alps:allocate: file %s read", filename);
 
     /*  Now that we have the scheduler information, we just have to parse it for  *
@@ -457,7 +457,7 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
     oNow = 0;
     apHdr = (appInfoHdr_t *) cpBuf;
 
-    prte_output_verbose(1, prte_ras_base_framework.framework_output,
+    pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                         "ras:alps:allocate: %d entries in file", apHdr->apNum);
 
     /*  Header info (apHdr) tells us how many entries are in the file:            *
@@ -477,7 +477,7 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
         /*      Calculate the dependent offsets.                                      */
         oSlots = sizeof(cmdDetail_t) * apInfo->numCmds;
 
-        prte_output_verbose(1, prte_ras_base_framework.framework_output,
+        pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                             "ras:alps:allocate: read data for resId %u - myId %u", apInfo->resId,
                             *uMe);
 
@@ -502,7 +502,7 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
          */
         for (ix = 0; ix < apInfo->numPlaces; ix++) {
 
-            prte_output_verbose(5, prte_ras_base_framework.framework_output,
+            pmix_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "ras:alps:read_appinfo: got NID %d", apSlots[ix].nid);
 
             pmix_asprintf(&hostname, "nid%05d", apSlots[ix].nid);
@@ -518,7 +518,7 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
                 ++node->slots;
             } else { /* must be new, so add to list    */
 
-                prte_output_verbose(1, prte_ras_base_framework.framework_output,
+                pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                                     "ras:alps:read_appinfo: added NID %d to list", apSlots[ix].nid);
 
                 node = PMIX_NEW(prte_node_t);
@@ -551,7 +551,7 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
             continue; /* Filter to our reservation Id */
 
         for (ix = 0; ix < apInfo->numPlaces; ix++) {
-            prte_output_verbose(5, prte_ras_base_framework.framework_output,
+            pmix_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "ras:alps:read_appinfo(modern): processing NID %d with %d slots",
                                 apNodes[ix].nid, apNodes[ix].numPEs);
             pmix_asprintf(&hostname, "nid%05d", apNodes[ix].nid);
@@ -591,7 +591,7 @@ static int prte_ras_alps_read_appinfo_file(pmix_list_t *nodes, char *filename, u
 /* There's really nothing to do here */
 static int prte_ras_alps_finalize(void)
 {
-    prte_output_verbose(1, prte_ras_base_framework.framework_output,
+    pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                         "ras:alps:finalize: success (nothing to do)");
     return PRTE_SUCCESS;
 }

@@ -22,7 +22,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/prte_cmd_line.h"
 
@@ -72,8 +72,8 @@ int prte_hwloc_base_register(void)
                                        PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     if (0 < verbosity) {
-        prte_hwloc_base_output = prte_output_open(NULL);
-        prte_output_set_verbosity(prte_hwloc_base_output, verbosity);
+        prte_hwloc_base_output = pmix_output_open(NULL);
+        pmix_output_set_verbosity(prte_hwloc_base_output, verbosity);
     }
 
     /* handle some deprecated options */
@@ -288,13 +288,13 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
         /* bind to cpus */
         if (options->use_hwthreads) {
             /* if we are using hwthread cpus, then bind to those */
-            prte_output_verbose(options->verbosity, options->stream,
+            pmix_output_verbose(options->verbosity, options->stream,
                                 "setdefaultbinding[%d] binding not given - using byhwthread",
                                 __LINE__);
             PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
         } else {
             /* bind to core */
-            prte_output_verbose(options->verbosity, options->stream,
+            pmix_output_verbose(options->verbosity, options->stream,
                                 "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
             PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
         }
@@ -307,45 +307,45 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
         mpol = PRTE_GET_MAPPING_POLICY(jdata->map->mapping);
         if (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
             if (PRTE_MAPPING_BYHWTHREAD == mpol) {
-                prte_output_verbose(options->verbosity, options->stream,
+                pmix_output_verbose(options->verbosity, options->stream,
                                     "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
             } else if (PRTE_MAPPING_BYCORE == mpol) {
-                prte_output_verbose(options->verbosity, options->stream,
+                pmix_output_verbose(options->verbosity, options->stream,
                                     "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
             } else if (PRTE_MAPPING_BYL1CACHE == mpol) {
-                prte_output_verbose(options->verbosity, options->stream,
+                pmix_output_verbose(options->verbosity, options->stream,
                                     "setdefaultbinding[%d] binding not given - using byL1", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L1CACHE);
             } else if (PRTE_MAPPING_BYL2CACHE == mpol) {
-                prte_output_verbose(options->verbosity, options->stream,
+                pmix_output_verbose(options->verbosity, options->stream,
                                     "setdefaultbinding[%d] binding not given - using byL2", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L2CACHE);
             } else if (PRTE_MAPPING_BYL3CACHE == mpol) {
-                prte_output_verbose(options->verbosity, options->stream,
+                pmix_output_verbose(options->verbosity, options->stream,
                                     "setdefaultbinding[%d] binding not given - using byL3", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L3CACHE);
             } else if (PRTE_MAPPING_BYNUMA == mpol) {
-                prte_output_verbose(options->verbosity, options->stream,
+                pmix_output_verbose(options->verbosity, options->stream,
                                     "setdefaultbinding[%d] binding not given - using bynuma",
                                     __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
             } else if (PRTE_MAPPING_BYPACKAGE == mpol) {
-                prte_output_verbose(options->verbosity, options->stream,
+                pmix_output_verbose(options->verbosity, options->stream,
                                     "setdefaultbinding[%d] binding not given - using bypackage", __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
             } else {
                 /* we are mapping by node or some other non-object method */
                 if (options->use_hwthreads) {
                     /* if we are using hwthread cpus, then bind to those */
-                    prte_output_verbose(options->verbosity, options->stream,
+                    pmix_output_verbose(options->verbosity, options->stream,
                                         "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
                     PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
                                                     PRTE_BIND_TO_HWTHREAD);
                 } else {
                     /* otherwise bind to core */
-                    prte_output_verbose(options->verbosity, options->stream,
+                    pmix_output_verbose(options->verbosity, options->stream,
                                         "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
                     PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
                                                     PRTE_BIND_TO_CORE);
@@ -354,13 +354,13 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
         } else {
             if (options->use_hwthreads) {
                 /* if we are using hwthread cpus, then bind to those */
-                prte_output_verbose(options->verbosity, options->stream,
+                pmix_output_verbose(options->verbosity, options->stream,
                                     "setdefaultbinding[%d] binding not given - using byhwthread",
                                     __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
             } else {
                 /* otherwise bind to core */
-                prte_output_verbose(options->verbosity, options->stream,
+                pmix_output_verbose(options->verbosity, options->stream,
                                     "setdefaultbinding[%d] binding not given - using bycore",
                                     __LINE__);
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);

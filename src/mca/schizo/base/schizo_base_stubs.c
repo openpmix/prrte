@@ -301,7 +301,7 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
             if (NULL == target) {
                 /* push it into our environment */
                 asprintf(&param, "PRTE_MCA_%s", p1);
-                prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                     "%s schizo:prte:parse_cli pushing %s=%s into environment",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param, p2);
                 setenv(param, p2, true);
@@ -359,13 +359,13 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                 if (NULL == target) {
                     /* push it into our environment */
                     asprintf(&param, "PRTE_MCA_%s", p1);
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:prte:parse_cli pushing %s into environment",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1);
                     setenv(param, p2, true);
                     free(param);
                 } else {
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:prte:parse_cli adding %s to target",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), p1);
                     pmix_argv_append_nosize(target, "--prtemca");
@@ -441,7 +441,7 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
             if (NULL == target) {
                 /* push it into our environment */
                 asprintf(&param, "PMIX_MCA_%s", p1);
-                prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                     "%s schizo:pmix:parse_cli pushing %s into environment",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
                 setenv(param, p2, true);
@@ -499,7 +499,7 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
                 if (NULL == target) {
                     /* push it into our environment */
                     asprintf(&param, "PMIX_MCA_%s", p1);
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:pmix:parse_cli pushing %s into environment",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), param);
                     setenv(param, p2, true);

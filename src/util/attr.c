@@ -19,7 +19,7 @@
 #include "types.h"
 
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_string_copy.h"
 
@@ -52,7 +52,7 @@ bool prte_get_attribute(pmix_list_t *attributes, prte_attribute_key_t key, void 
         if (key == kv->key) {
             if (kv->data.type != type) {
                 PRTE_ERROR_LOG(PRTE_ERR_TYPE_MISMATCH);
-                prte_output(0, "KV %s TYPE %s", PMIx_Data_type_string(kv->data.type), PMIx_Data_type_string(type));
+                pmix_output(0, "KV %s TYPE %s", PMIx_Data_type_string(kv->data.type), PMIx_Data_type_string(type));
                 return false;
             }
             if (NULL != data) {

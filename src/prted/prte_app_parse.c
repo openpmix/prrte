@@ -45,7 +45,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_environ.h"

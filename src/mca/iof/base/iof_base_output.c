@@ -37,7 +37,7 @@
 #include <errno.h>
 #include <time.h>
 
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/state/state.h"
@@ -55,7 +55,7 @@ int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
     int num_buffered;
     PRTE_HIDE_UNUSED_PARAMS(stream);
 
-    PRTE_OUTPUT_VERBOSE(
+    PMIX_OUTPUT_VERBOSE(
         (1, prte_iof_base_framework.framework_output,
          "%s write:output setting up to write %d bytes to stdin for %s on fd %d",
          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
@@ -86,7 +86,7 @@ int prte_iof_base_write_output(const pmix_proc_t *name, prte_iof_tag_t stream,
     /* is the write event issued? */
     if (!channel->pending) {
         /* issue it */
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s write:output adding write event",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PRTE_IOF_SINK_ACTIVATE(channel);
@@ -106,7 +106,7 @@ void prte_iof_base_write_handler(int _fd, short event, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(sink);
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s write:handler writing data to %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          wev->fd));
 
@@ -124,7 +124,7 @@ void prte_iof_base_write_handler(int _fd, short event, void *cbdata)
                 pmix_list_prepend(&wev->outputs, item);
                 /* if the list is getting too large, abort */
                 if (prte_iof_base_output_limit < (int)pmix_list_get_size(&wev->outputs)) {
-                    prte_output(0, "IO Forwarding is running too far behind - something is "
+                    pmix_output(0, "IO Forwarding is running too far behind - something is "
                                    "blocking us from writing");
                     PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                     goto ABORT;
@@ -148,7 +148,7 @@ void prte_iof_base_write_handler(int _fd, short event, void *cbdata)
             pmix_list_prepend(&wev->outputs, item);
             /* if the list is getting too large, abort */
             if (prte_iof_base_output_limit < (int)pmix_list_get_size(&wev->outputs)) {
-                prte_output(0, "IO Forwarding is running too far behind - something is blocking us "
+                pmix_output(0, "IO Forwarding is running too far behind - something is blocking us "
                                "from writing");
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 goto ABORT;

@@ -39,7 +39,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_path.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/iof/iof.h"
@@ -93,7 +93,7 @@ static void _query(int sd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(cd);
 
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s processing query",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -109,7 +109,7 @@ static void _query(int sd, short args, void *cbdata)
         /* see if they provided any qualifiers */
         if (NULL != q->qualifiers && 0 < q->nqual) {
             for (n = 0; n < q->nqual; n++) {
-                prte_output_verbose(2, prte_pmix_server_globals.output,
+                pmix_output_verbose(2, prte_pmix_server_globals.output,
                                     "%s qualifier key \"%s\" : value \"%s\"",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->qualifiers[n].key,
                                     (q->qualifiers[n].value.type == PMIX_STRING
@@ -132,7 +132,7 @@ static void _query(int sd, short args, void *cbdata)
                         }
                     }
                     if (0 == matched) {
-                        prte_output_verbose(2, prte_pmix_server_globals.output,
+                        pmix_output_verbose(2, prte_pmix_server_globals.output,
                                             "%s qualifier key \"%s\" : value \"%s\" is an unknown namespace",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->qualifiers[n].key,
                                             q->qualifiers[n].value.data.string);
@@ -161,7 +161,7 @@ static void _query(int sd, short args, void *cbdata)
                         }
                     }
                     if (0 == matched) {
-                        prte_output_verbose(2, prte_pmix_server_globals.output,
+                        pmix_output_verbose(2, prte_pmix_server_globals.output,
                                             "%s qualifier key \"%s\" : value \"%s\" is an unknown group",
                                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->qualifiers[n].key,
                                             q->qualifiers[n].value.data.string);
@@ -181,7 +181,7 @@ static void _query(int sd, short args, void *cbdata)
             }
         }
         for (n = 0; NULL != q->keys[n]; n++) {
-            prte_output_verbose(2, prte_pmix_server_globals.output,
+            pmix_output_verbose(2, prte_pmix_server_globals.output,
                                 "%s processing key %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->keys[n]);
             if (0 == strcmp(q->keys[n], PMIX_QUERY_NAMESPACES)) {
