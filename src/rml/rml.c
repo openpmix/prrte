@@ -22,7 +22,7 @@
 
 #include "src/mca/base/pmix_mca_base_component_repository.h"
 #include "src/mca/mca.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml.h"
@@ -60,8 +60,8 @@ void prte_rml_register(void)
                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                &verbosity);
     if (0 < verbosity) {
-        prte_rml_base.rml_output = prte_output_open(NULL);
-        prte_output_set_verbosity(prte_rml_base.rml_output, verbosity);
+        prte_rml_base.rml_output = pmix_output_open(NULL);
+        pmix_output_set_verbosity(prte_rml_base.rml_output, verbosity);
     }
 
     verbosity = 0;
@@ -70,8 +70,8 @@ void prte_rml_register(void)
                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                &verbosity);
     if (0 < verbosity) {
-        prte_rml_base.routed_output = prte_output_open(NULL);
-        prte_output_set_verbosity(prte_rml_base.routed_output, verbosity);
+        prte_rml_base.routed_output = pmix_output_open(NULL);
+        pmix_output_set_verbosity(prte_rml_base.routed_output, verbosity);
     }
 
     pmix_mca_base_var_register("prte", "rml", "base", "radix",
@@ -86,7 +86,7 @@ void prte_rml_close(void)
     PMIX_LIST_DESTRUCT(&prte_rml_base.unmatched_msgs);
     PMIX_LIST_DESTRUCT(&prte_rml_base.children);
     if (0 <= prte_rml_base.rml_output) {
-        prte_output_close(prte_rml_base.rml_output);
+        pmix_output_close(prte_rml_base.rml_output);
     }
 }
 
@@ -111,7 +111,7 @@ void prte_rml_send_callback(int status, pmix_proc_t *peer,
     PRTE_HIDE_UNUSED_PARAMS(buffer, cbdata);
 
     if (PRTE_SUCCESS != status) {
-        prte_output_verbose(2, prte_rml_base.rml_output,
+        pmix_output_verbose(2, prte_rml_base.rml_output,
                             "%s UNABLE TO SEND MESSAGE TO %s TAG %d: %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer), tag,
                             PRTE_ERROR_NAME(status));

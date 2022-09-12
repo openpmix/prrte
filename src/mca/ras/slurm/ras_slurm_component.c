@@ -126,7 +126,7 @@ static int prte_mca_ras_slurm_component_query(pmix_mca_base_module_t **module, i
         return PRTE_ERROR;
     }
 
-    PRTE_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
                          "%s ras:slurm: available for selection",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     /* since only one RM can exist on a cluster, just set

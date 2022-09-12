@@ -34,7 +34,7 @@
 #include "constants.h"
 
 #include "src/mca/base/pmix_base.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/util/name_fns.h"
@@ -110,7 +110,7 @@ static int prte_ras_gridengine_register(void)
 static int prte_ras_gridengine_open(void)
 {
     if (prte_ras_gridengine_verbose != 0) {
-        prte_mca_ras_gridengine_component.verbose = prte_output_open(NULL);
+        prte_mca_ras_gridengine_component.verbose = pmix_output_open(NULL);
     } else {
         prte_mca_ras_gridengine_component.verbose = -1;
     }
@@ -124,13 +124,13 @@ static int prte_mca_ras_gridengine_component_query(pmix_mca_base_module_t **modu
 
     if (NULL != getenv("SGE_ROOT") && NULL != getenv("ARC") && NULL != getenv("PE_HOSTFILE")
         && NULL != getenv("JOB_ID")) {
-        PRTE_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
                              "%s ras:gridengine: available for selection",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         *module = (pmix_mca_base_module_t *) &prte_ras_gridengine_module;
         return PRTE_SUCCESS;
     }
-    PRTE_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
                          "%s ras:gridengine: NOT available for selection",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     *module = NULL;

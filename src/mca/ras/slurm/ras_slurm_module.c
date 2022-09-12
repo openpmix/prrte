@@ -47,7 +47,7 @@
 #include "src/include/prte_socket_errno.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_net.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/base/base.h"
@@ -154,7 +154,7 @@ static int init(void)
             }
             return PRTE_ERR_SILENT;
         }
-        PRTE_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_ras_base_framework.framework_output,
                              "ras:slurm got [ ip = %s, port = %u ] from %s\n", slurm_host, port,
                              prte_mca_ras_slurm_component.config_file));
 
@@ -192,13 +192,13 @@ static int init(void)
 
         /* set socket up to be non-blocking */
         if ((flags = fcntl(socket_fd, F_GETFL, 0)) < 0) {
-            prte_output(0, "ras:slurm:dyn: fcntl(F_GETFL) failed: %s (%d)",
+            pmix_output(0, "ras:slurm:dyn: fcntl(F_GETFL) failed: %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             return PRTE_ERROR;
         } else {
             flags |= O_NONBLOCK;
             if (fcntl(socket_fd, F_SETFL, flags) < 0) {
-                prte_output(0, "ras:slurm:dyn: fcntl(F_SETFL) failed: %s (%d)",
+                pmix_output(0, "ras:slurm:dyn: fcntl(F_SETFL) failed: %s (%d)",
                             strerror(prte_socket_errno), prte_socket_errno);
                 return PRTE_ERROR;
             }
@@ -233,7 +233,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
          */
         if (!prte_mca_ras_slurm_component.dyn_alloc_enabled) {
             /* nope - nothing we can do */
-            prte_output_verbose(2, prte_ras_base_framework.framework_output,
+            pmix_output_verbose(2, prte_ras_base_framework.framework_output,
                                 "%s ras:slurm: no prior allocation and dynamic alloc disabled",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             return PRTE_ERR_TAKE_NEXT_OPTION;
@@ -312,7 +312,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
         if (NULL != tmp) {
             cpus_per_task = atoi(tmp);
             if (0 >= cpus_per_task) {
-                prte_output(0,
+                pmix_output(0,
                             "ras:slurm:allocate: Got bad value from SLURM_CPUS_PER_TASK. "
                             "Variable was: %s\n",
                             tmp);
@@ -330,7 +330,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
     free(regexp);
     free(node_tasks);
     if (PRTE_SUCCESS != ret) {
-        PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s ras:slurm:allocate: discover failed!",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         return ret;
@@ -340,7 +340,7 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     /* All done */
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s ras:slurm:allocate: success", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     return PRTE_SUCCESS;
 }
@@ -397,7 +397,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s ras:slurm:allocate:discover: checking nodelist: %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), regexp));
 
@@ -468,7 +468,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
         } else {
             /* If we didn't find a range, just add the node */
 
-            PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s ras:slurm:allocate:discover: found node %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), base));
 
@@ -551,7 +551,7 @@ static int prte_ras_slurm_discover(char *regexp, char *tasks_per_node, pmix_list
     for (i = 0; NULL != names && NULL != names[i]; ++i) {
         prte_node_t *node;
 
-        PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s ras:slurm:allocate:discover: adding node %s (%d slot%s)",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), names[i], slots[i],
                              (1 == slots[i]) ? "" : "s"));
@@ -608,7 +608,7 @@ static int prte_ras_slurm_parse_ranges(char *base, char *ranges, char ***names)
 
     if (start < orig + len) {
 
-        PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s ras:slurm:allocate:discover: parse range %s (2)",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), start));
 
@@ -735,7 +735,7 @@ static void timeout(int fd, short args, void *cbdata)
     prte_job_t *jdata;
 
     pmix_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-timeout", true);
-    prte_output_verbose(2, prte_ras_base_framework.framework_output,
+    pmix_output_verbose(2, prte_ras_base_framework.framework_output,
                         "%s Timed out on dynamic allocation", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     /* indicate that we failed to receive an allocation */
     jdata = prte_get_job_data_object(jtrk->nspace);
@@ -759,7 +759,7 @@ static void recv_data(int fd, short args, void *cbdata)
     prte_job_t *jdata;
     char **dash_host = NULL;
 
-    prte_output_verbose(2, prte_ras_base_framework.framework_output,
+    pmix_output_verbose(2, prte_ras_base_framework.framework_output,
                         "%s ras:slurm: dynamic allocation - data recvd",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -769,7 +769,7 @@ static void recv_data(int fd, short args, void *cbdata)
     memset(recv_msg, 0, sizeof(recv_msg));
     nbytes = read(fd, recv_msg, sizeof(recv_msg) - 1);
 
-    prte_output_verbose(2, prte_ras_base_framework.framework_output,
+    pmix_output_verbose(2, prte_ras_base_framework.framework_output,
                         "%s ras:slurm: dynamic allocation msg: %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), recv_msg);
 
@@ -966,7 +966,7 @@ static int dyn_allocate(prte_job_t *jdata)
     int64_t i64, *i64ptr;
 
     if (NULL == prte_mca_ras_slurm_component.config_file) {
-        prte_output(0, "Cannot perform dynamic allocation as no Slurm configuration file provided");
+        pmix_output(0, "Cannot perform dynamic allocation as no Slurm configuration file provided");
         return PRTE_ERR_NOT_FOUND;
     }
 
@@ -1061,7 +1061,7 @@ static int dyn_allocate(prte_job_t *jdata)
     tv.tv_usec = 0;
     prte_event_evtimer_add(&jtrk->timeout_ev, &tv);
 
-    prte_output_verbose(2, prte_ras_base_framework.framework_output,
+    pmix_output_verbose(2, prte_ras_base_framework.framework_output,
                         "%s slurm:dynalloc cmd_str = %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         cmd_str);
 
@@ -1178,11 +1178,11 @@ static int read_ip_port(char *filename, char **ip, uint16_t *port)
 
     fclose(fp);
     if (!found_ip) {
-        prte_output(0, "The IP address or name of the Slurm control machine was not provided");
+        pmix_output(0, "The IP address or name of the Slurm control machine was not provided");
         return PRTE_ERR_NOT_FOUND;
     }
     if (!found_port) {
-        prte_output(0, "The IP port of the Slurm dynamic allocation service was not provided");
+        pmix_output(0, "The IP port of the Slurm dynamic allocation service was not provided");
         return PRTE_ERR_NOT_FOUND;
     }
 

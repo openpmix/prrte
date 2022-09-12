@@ -85,7 +85,7 @@ void prte_iof_hnp_read_local_handler(int fd, short event, void *cbdata)
     memset(data, 0, PRTE_IOF_BASE_MSG_MAX);
     numbytes = read(fd, data, sizeof(data));
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s read %d bytes from %s of %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes,
                          (PRTE_IOF_STDOUT & rev->tag) ? "stdout"

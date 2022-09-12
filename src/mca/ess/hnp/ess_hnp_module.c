@@ -51,7 +51,7 @@
 #include "src/util/pmix_if.h"
 #include "src/util/malloc.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/base/base.h"
@@ -171,7 +171,7 @@ static int rte_init(int argc, char **argv)
     }
 
     /* setup my session directory here as the OOB may need it */
-    PRTE_OUTPUT_VERBOSE(
+    PMIX_OUTPUT_VERBOSE(
         (2, prte_debug_output, "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
          (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
@@ -335,11 +335,11 @@ static int rte_init(int argc, char **argv)
     jdata->num_reported = 1;
     jdata->num_daemons_reported = 1;
 
-    if (0 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
-        prte_output(0, "ALIASES FOR %s", node->name);
+    if (0 < pmix_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+        pmix_output(0, "ALIASES FOR %s", node->name);
         if (NULL != node->aliases) {
             for (idx=0; NULL != node->aliases[idx]; idx++) {
-                prte_output(0, "\tALIAS: %s", node->aliases[idx]);
+                pmix_output(0, "\tALIAS: %s", node->aliases[idx]);
             }
         }
     }
@@ -394,11 +394,11 @@ static int rte_init(int argc, char **argv)
     pmix_pointer_array_add(prte_node_topologies, t);
     node->topology = t;
     node->available = prte_hwloc_base_filter_cpus(prte_hwloc_topology);
-    if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+    if (15 < pmix_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         char *output = NULL;
-        prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        pmix_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         prte_hwloc_print(&output, "\t", prte_hwloc_topology);
-        prte_output(0, "%s", output);
+        pmix_output(0, "%s", output);
         free(output);
     }
 
@@ -429,9 +429,9 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
-    /* set the prte_output hnp file location to be in the
+    /* set the pmix_output hnp file location to be in the
      * proc-specific session directory. */
-    prte_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
+    pmix_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
     /* save my contact info in a file for others to find */
     if (NULL == prte_process_info.jobfam_session_dir) {
         /* has to be set here! */
@@ -536,7 +536,7 @@ static int rte_finalize(void)
 
 static void rte_abort(int status, bool report)
 {
-    prte_output(0, "ABORT");
+    pmix_output(0, "ABORT");
     /* do NOT do a normal finalize as this will very likely
      * hang the process. We are aborting due to an abnormal condition
      * that precludes normal cleanup

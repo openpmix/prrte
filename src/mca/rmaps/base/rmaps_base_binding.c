@@ -38,7 +38,7 @@
 #include "src/mca/mca.h"
 #include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_if.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -62,7 +62,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     hwloc_obj_t target;
     hwloc_cpuset_t tgtcpus, tmpcpus;
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind %s with policy %s",
                         PRTE_NAME_PRINT(&proc->name),
                         prte_hwloc_base_print_binding(jdata->map->binding));
@@ -128,10 +128,10 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     tgtcpus = trg_obj->cpuset;
 #endif
     hwloc_bitmap_list_asprintf(&proc->cpuset, tgtcpus); // bind to the entire target object
-    if (4 < prte_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
+    if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
         char *tmp1;
         tmp1 = prte_hwloc_base_cset2str(trg_obj->cpuset, options->use_hwthreads, node->topology->topo);
-        prte_output(prte_rmaps_base_framework.framework_output, "%s BOUND PROC %s[%s] TO %s",
+        pmix_output(prte_rmaps_base_framework.framework_output, "%s BOUND PROC %s[%s] TO %s",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                     node->name, tmp1);
         free(tmp1);
@@ -174,7 +174,7 @@ static int bind_to_cpuset(prte_job_t *jdata,
     char **cpus;
     hwloc_obj_type_t type;
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind job %s to cpus %s %s",
                         PRTE_JOBID_PRINT(jdata->nspace),
                         options->cpuset,
@@ -318,7 +318,7 @@ int prte_rmaps_base_bind_proc(prte_job_t *jdata,
 {
     int rc;
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: compute bindings for job %s with policy %s[%x]",
                         PRTE_JOBID_PRINT(jdata->nspace),
                         prte_hwloc_base_print_binding(jdata->map->binding), jdata->map->binding);
@@ -349,7 +349,7 @@ int prte_rmaps_base_bind_proc(prte_job_t *jdata,
      */
     if (!PRTE_BINDING_POLICY_IS_SET(jdata->map->binding) &&
         HWLOC_TYPE_DEPTH_UNKNOWN == hwloc_get_type_depth(node->topology->topo, HWLOC_OBJ_CORE)) {
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "Unable to bind-to core by default on node %s as no cores detected",
                             node->name);
         return PRTE_SUCCESS;

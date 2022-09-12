@@ -55,7 +55,6 @@ headers = \
         name_fns.h \
         nidmap.h \
         numtostr.h \
-        output.h \
         proc_info.h \
         session_dir.h \
         stacktrace.h \
@@ -76,7 +75,6 @@ libprrteutil_la_SOURCES = \
         name_fns.c \
         nidmap.c \
         numtostr.c \
-        output.c \
         proc_info.c \
         session_dir.c \
         stacktrace.c \

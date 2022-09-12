@@ -52,7 +52,7 @@
 #include "libnl_utils.h"
 
 /* Adapt this copied code for PRTE */
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 static struct nla_policy route_policy[RTA_MAX+1] = {
 	[RTA_IIF]	= { .type = NLA_STRING,
@@ -72,7 +72,7 @@ static int prte_reachable_netlink_is_nlreply_expected(struct prte_reachable_netl
 #if PRTE_ENABLE_DEBUG
     if (nlm_hdr->nlmsg_pid != nl_socket_get_local_port(unlsk->nlh)
         || nlm_hdr->nlmsg_seq != unlsk->seq) {
-        prte_output(
+        pmix_output(
             0, "Not an expected reply msg pid: %u local pid: %u msg seq: %u expected seq: %u\n",
             nlm_hdr->nlmsg_pid, nl_socket_get_local_port(unlsk->nlh), nlm_hdr->nlmsg_seq,
             unlsk->seq);
@@ -88,9 +88,9 @@ static int prte_reachable_netlink_is_nlreply_err(struct nlmsghdr *nlm_hdr)
     if (nlm_hdr->nlmsg_type == NLMSG_ERROR) {
         struct nlmsgerr *e = (struct nlmsgerr *) nlmsg_data(nlm_hdr);
         if (nlm_hdr->nlmsg_len >= (__u32) NLMSG_SIZE(sizeof(*e)))
-            prte_output_verbose(20, 0, "Received a netlink error message");
+            pmix_output_verbose(20, 0, "Received a netlink error message");
         else
-            prte_output_verbose(20, 0, "Received a truncated netlink error message\n");
+            pmix_output_verbose(20, 0, "Received a truncated netlink error message\n");
         return 1;
     }
 
@@ -123,7 +123,7 @@ static int prte_reachable_netlink_set_rcvsk_timer(NL_HANDLE *nlh)
                      sizeof(timeout));
 #if PRTE_ENABLE_DEBUG
     if (err < 0)
-        prte_output(0, "Failed to set SO_RCVTIMEO for nl socket");
+        pmix_output(0, "Failed to set SO_RCVTIMEO for nl socket");
 #endif
 
     return err;
@@ -137,20 +137,20 @@ static int prte_reachable_netlink_sk_alloc(struct prte_reachable_netlink_sk **p_
 
     unlsk = calloc(1, sizeof(*unlsk));
     if (!unlsk) {
-        prte_output(0, "Failed to allocate prte_reachable_netlink_sk struct\n");
+        pmix_output(0, "Failed to allocate prte_reachable_netlink_sk struct\n");
         return ENOMEM;
     }
 
     nlh = NL_HANDLE_ALLOC();
     if (!nlh) {
-        prte_output(0, "Failed to allocate nl handle\n");
+        pmix_output(0, "Failed to allocate nl handle\n");
         err = ENOMEM;
         goto err_free_unlsk;
     }
 
     err = nl_connect(nlh, protocol);
     if (err < 0) {
-        prte_output(0, "Failed to connnect netlink route socket error: %s\n", NL_GETERROR(err));
+        pmix_output(0, "Failed to connnect netlink route socket error: %s\n", NL_GETERROR(err));
         err = EINVAL;
         goto err_free_nlh;
     }
@@ -212,7 +212,7 @@ static int prte_reachable_netlink_rt_raw_parse_cb(struct nl_msg *msg, void *arg)
 #if PRTE_ENABLE_DEBUG
         char buf[128];
         nl_nlmsgtype2str(nlm_hdr->nlmsg_type, buf, sizeof(buf));
-        prte_output(0, "Received an invalid route request reply message type: %s\n", buf);
+        pmix_output(0, "Received an invalid route request reply message type: %s\n", buf);
         nl_msg_dump(msg, stderr);
 #endif
         return NL_SKIP;
@@ -225,7 +225,7 @@ static int prte_reachable_netlink_rt_raw_parse_cb(struct nl_msg *msg, void *arg)
 #endif
     ) {
 #if PRTE_ENABLE_DEBUG
-        prte_output(0, "RTM message contains invalid AF family: %u\n", rtm->rtm_family);
+        pmix_output(0, "RTM message contains invalid AF family: %u\n", rtm->rtm_family);
         nl_msg_dump(msg, stderr);
 #endif
         return NL_SKIP;
@@ -234,7 +234,7 @@ static int prte_reachable_netlink_rt_raw_parse_cb(struct nl_msg *msg, void *arg)
     err = nlmsg_parse(nlm_hdr, sizeof(struct rtmsg), tb, RTA_MAX, route_policy);
     if (err < 0) {
 #if PRTE_ENABLE_DEBUG
-        prte_output(0, "nlmsg parse error %s\n", NL_GETERROR(err));
+        pmix_output(0, "nlmsg parse error %s\n", NL_GETERROR(err));
         nl_msg_dump(msg, stderr);
 #endif
         return NL_SKIP;
@@ -247,7 +247,7 @@ static int prte_reachable_netlink_rt_raw_parse_cb(struct nl_msg *msg, void *arg)
             /* usually, this means that there is a route to the remote
                host, but that it's not through the given interface.  For
                our purposes, that means it's not reachable. */
-            prte_output_verbose(
+            pmix_output_verbose(
                 20, 0, "Retrieved route has a different outgoing interface %d (expected %d)\n",
                 nla_get_u32(tb[RTA_OIF]), lookup_arg->oif);
     }
@@ -283,7 +283,7 @@ int prte_reachable_netlink_rt_lookup(uint32_t src_addr, uint32_t dst_addr, int o
     /* allocate netlink message of type RTM_GETROUTE */
     nlm = nlmsg_alloc_simple(RTM_GETROUTE, 0);
     if (!nlm) {
-        prte_output(0, "Failed to alloc nl message, %s\n", NL_GETERROR(err));
+        pmix_output(0, "Failed to alloc nl message, %s\n", NL_GETERROR(err));
         err = ENOMEM;
         goto out;
     }
@@ -297,7 +297,7 @@ int prte_reachable_netlink_rt_lookup(uint32_t src_addr, uint32_t dst_addr, int o
     err = prte_reachable_netlink_send_query(unlsk, nlm, NETLINK_ROUTE, NLM_F_REQUEST);
     nlmsg_free(nlm);
     if (err < 0) {
-        prte_output(0, "Failed to send RTM_GETROUTE query message, error %s\n", NL_GETERROR(err));
+        pmix_output(0, "Failed to send RTM_GETROUTE query message, error %s\n", NL_GETERROR(err));
         err = EINVAL;
         goto out;
     }
@@ -309,7 +309,7 @@ int prte_reachable_netlink_rt_lookup(uint32_t src_addr, uint32_t dst_addr, int o
     err = nl_socket_modify_cb(unlsk->nlh, NL_CB_MSG_IN, NL_CB_CUSTOM,
                               prte_reachable_netlink_rt_raw_parse_cb, &arg);
     if (err != 0) {
-        prte_output(0, "Failed to setup callback function, error %s\n", NL_GETERROR(err));
+        pmix_output(0, "Failed to setup callback function, error %s\n", NL_GETERROR(err));
         err = EINVAL;
         goto out;
     }
@@ -357,7 +357,7 @@ int prte_reachable_netlink_rt_lookup6(struct in6_addr *src_addr, struct in6_addr
     /* allocate netlink message of type RTM_GETROUTE */
     nlm = nlmsg_alloc_simple(RTM_GETROUTE, 0);
     if (!nlm) {
-        prte_output(0, "Failed to alloc nl message, %s\n", NL_GETERROR(err));
+        pmix_output(0, "Failed to alloc nl message, %s\n", NL_GETERROR(err));
         err = ENOMEM;
         goto out;
     }
@@ -371,7 +371,7 @@ int prte_reachable_netlink_rt_lookup6(struct in6_addr *src_addr, struct in6_addr
     err = prte_reachable_netlink_send_query(unlsk, nlm, NETLINK_ROUTE, NLM_F_REQUEST);
     nlmsg_free(nlm);
     if (err < 0) {
-        prte_output(0, "Failed to send RTM_GETROUTE query message, error %s\n", NL_GETERROR(err));
+        pmix_output(0, "Failed to send RTM_GETROUTE query message, error %s\n", NL_GETERROR(err));
         err = EINVAL;
         goto out;
     }
@@ -383,7 +383,7 @@ int prte_reachable_netlink_rt_lookup6(struct in6_addr *src_addr, struct in6_addr
     err = nl_socket_modify_cb(unlsk->nlh, NL_CB_MSG_IN, NL_CB_CUSTOM,
                               prte_reachable_netlink_rt_raw_parse_cb, &arg);
     if (err != 0) {
-        prte_output(0, "Failed to setup callback function, error %s\n", NL_GETERROR(err));
+        pmix_output(0, "Failed to setup callback function, error %s\n", NL_GETERROR(err));
         err = EINVAL;
         goto out;
     }

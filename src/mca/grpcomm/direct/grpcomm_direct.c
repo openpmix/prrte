@@ -114,7 +114,7 @@ static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf,
     int rc;
     pmix_data_buffer_t *relay;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct: allgather",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -162,7 +162,7 @@ static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf,
     }
 
     /* send this to ourselves for processing */
-    PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct:allgather sending to ourself",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -183,7 +183,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     prte_grpcomm_coll_t *coll;
     pmix_status_t local_status;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct allgather recvd from %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender)));
 
@@ -237,7 +237,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
         return;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct allgather recv nexpected %d nrep %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) coll->nexpected,
                          (int) coll->nreported));
@@ -245,7 +245,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     /* see if everyone has reported */
     if (coll->nreported == coll->nexpected) {
         if (PRTE_PROC_IS_MASTER) {
-            PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:direct allgather HNP reports complete",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             /* the allgather is complete - send the xcast */
@@ -306,7 +306,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             (void) prte_grpcomm.xcast(&sig, PRTE_RML_TAG_COLL_RELEASE, reply);
             PMIX_DATA_BUFFER_RELEASE(reply);
         } else {
-            PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:direct allgather rollup complete - sending to %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_PARENT)));
@@ -383,7 +383,7 @@ static void xcast_recv(int status, pmix_proc_t *sender,
     pmix_value_t val;
     pmix_proc_t dmn;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct:xcast:recv: with %d bytes",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) buffer->bytes_used));
 
@@ -563,7 +563,7 @@ static void xcast_recv(int status, pmix_proc_t *sender,
         /* send the message to each of our children */
         PMIX_LIST_FOREACH(nm, &prte_rml_base.children, prte_routed_tree_t)
         {
-            PRTE_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:direct:send_relay sending relay msg of %d bytes to %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) rly->bytes_used,
                                  PRTE_VPID_PRINT(nm->rank)));
@@ -615,7 +615,7 @@ static void barrier_release(int status, pmix_proc_t *sender, pmix_data_buffer_t 
     prte_grpcomm_signature_t sig;
     prte_grpcomm_coll_t *coll;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct: barrier release called with %d bytes",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) buffer->bytes_used));
 

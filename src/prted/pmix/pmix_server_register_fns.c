@@ -42,7 +42,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "types.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -91,7 +91,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     pmix_data_array_t darray, lparray;
     bool flag, *fptr;
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s register nspace for %s",
+    pmix_output_verbose(2, prte_pmix_server_globals.output, "%s register nspace for %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace));
 
     /* setup the info list */
@@ -470,10 +470,10 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                                                  devinfo, 2, &distances, &ndist);
                     devinfo[1].value.data.string = NULL;
                     if (PMIX_SUCCESS == ret) {
-                        if (4 < prte_output_get_verbosity(prte_pmix_server_globals.output)) {
+                        if (4 < pmix_output_get_verbosity(prte_pmix_server_globals.output)) {
                             size_t f;
                             for (f=0; f < ndist; f++) {
-                                prte_output(0, "UUID: %s OSNAME: %s TYPE: %s MIND: %u MAXD: %u",
+                                pmix_output(0, "UUID: %s OSNAME: %s TYPE: %s MIND: %u MAXD: %u",
                                             distances[f].uuid, distances[f].osname,
                                             PMIx_Device_type_string(distances[f].type),
                                             distances[f].mindist, distances[f].maxdist);

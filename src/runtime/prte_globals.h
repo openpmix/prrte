@@ -174,7 +174,7 @@ PRTE_EXPORT extern int prte_clean_output;
 #define PRTE_UPDATE_EXIT_STATUS(newstatus)                                                     \
     do {                                                                                       \
         if (0 == prte_exit_status && 0 != newstatus) {                                         \
-            PRTE_OUTPUT_VERBOSE((1, prte_debug_output, "%s:%s(%d) updating exit status to %d", \
+            PMIX_OUTPUT_VERBOSE((1, prte_debug_output, "%s:%s(%d) updating exit status to %d", \
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,       \
                                  newstatus));                                                  \
             prte_exit_status = newstatus;                                                      \
@@ -186,7 +186,7 @@ PRTE_EXPORT extern int prte_clean_output;
  */
 #define PRTE_RESET_EXIT_STATUS()                                                       \
     do {                                                                               \
-        PRTE_OUTPUT_VERBOSE((1, prte_debug_output, "%s:%s(%d) reseting exit status",   \
+        PMIX_OUTPUT_VERBOSE((1, prte_debug_output, "%s:%s(%d) reseting exit status",   \
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__)); \
         prte_exit_status = 0;                                                          \
     } while (0);
@@ -623,14 +623,11 @@ extern char *prte_set_max_sys_limits;
 extern char *prte_if_include;
 extern char *prte_if_exclude;
 
-/* Enable/disable ft */
-PRTE_EXPORT extern bool prte_enable_ft;
-
 #if PRTE_PICKY_COMPILERS
 #define PRTE_HIDE_UNUSED_PARAMS(...)                \
-do {                                            \
-int __x = 3;                                \
-prte_hide_unused_params(__x, __VA_ARGS__);  \
+    do {                                            \
+        int __x = 3;                                \
+        prte_hide_unused_params(__x, __VA_ARGS__);  \
 } while(0)
 
 PMIX_EXPORT void prte_hide_unused_params(int x, ...);

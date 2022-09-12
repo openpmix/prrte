@@ -46,7 +46,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/proc_info.h"
@@ -174,7 +174,7 @@ int prte_init_util(prte_proc_type_t flags)
     prte_malloc_init();
 
     /* initialize the output system */
-    prte_output_init();
+    pmix_output_init();
 
     /* keyval lex-based parser */
     /* Setup the parameter system */
@@ -186,8 +186,6 @@ int prte_init_util(prte_proc_type_t flags)
     /* set the nodename so anyone who needs it has it - this
      * must come AFTER we initialize the installdirs */
     prte_setup_hostname();
-    /* load the output verbose stream */
-    prte_output_setup_stream_prefix();
 
     /* pretty-print stack handlers */
     if (PRTE_SUCCESS != (ret = prte_util_register_stackhandlers())) {
