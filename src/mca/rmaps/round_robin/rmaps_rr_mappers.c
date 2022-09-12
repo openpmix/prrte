@@ -28,7 +28,7 @@
 #include <string.h>
 
 #include "src/hwloc/hwloc-internal.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
@@ -54,7 +54,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
     bool second_pass = false;
     prte_binding_policy_t savebind = options->bind;
 
-    prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by slot for job %s slots %d num_procs %lu",
                         PRTE_JOBID_PRINT(jdata->nspace), (int) num_slots,
                         (unsigned long) num_procs);
@@ -80,7 +80,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
 pass:
     PMIX_LIST_FOREACH_SAFE(node, nd, node_list, prte_node_t)
     {
-        prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:slot working node %s", node->name);
 
         prte_rmaps_base_get_cpuset(jdata, node, options);
@@ -136,7 +136,7 @@ pass:
             continue;
         }
 
-        prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:slot assigning %d procs to node %s",
                             (int) options->nprocs, node->name);
 
@@ -177,7 +177,7 @@ pass:
         return PRTE_ERR_SILENT;
     }
 
-    prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr:slot job %s is oversubscribed - performing second pass",
                         PRTE_JOBID_PRINT(jdata->nspace));
 
@@ -219,7 +219,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
     prte_proc_t *proc;
     prte_binding_policy_t savebind = options->bind;
 
-    prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by node for job %s app %d slots %d num_procs %lu",
                         PRTE_JOBID_PRINT(jdata->nspace), (int) app->idx, (int) num_slots,
                         (unsigned long) num_procs);
@@ -289,7 +289,7 @@ pass:
             continue;
         }
 
-        PRTE_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                              "%s NODE %s ASSIGNING %d PROCS",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              node->name, options->nprocs));
@@ -330,7 +330,7 @@ pass:
         }
         return PRTE_ERR_SILENT;
     }
-    prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr:node job %s is oversubscribed - performing second pass",
                         PRTE_JOBID_PRINT(jdata->nspace));
 
@@ -356,7 +356,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     int ntomap;
     prte_binding_policy_t savebind = options->bind;
 
-    prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by cpu for job %s slots %d num_procs %lu",
                         PRTE_JOBID_PRINT(jdata->nspace), (int) num_slots,
                         (unsigned long)app->num_procs);
@@ -384,7 +384,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
 
     PMIX_LIST_FOREACH_SAFE(node, nd, node_list, prte_node_t)
     {
-        prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:cpu working node %s", node->name);
 
         prte_rmaps_base_get_cpuset(jdata, node, options);
@@ -427,7 +427,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
             continue;
         }
 
-        prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr:cpu assigning %d procs to node %s",
                             (int) options->nprocs, node->name);
 
@@ -488,7 +488,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
     unsigned j, total_nobjs, nobjs;
     prte_binding_policy_t savebind = options->bind;
 
-    prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by %s for job %s slots %d num_procs %lu",
                         hwloc_obj_type_string(options->maptype),
                         PRTE_JOBID_PRINT(jdata->nspace),
@@ -578,7 +578,7 @@ pass:
         if (0 == nobjs) {
             continue;
         }
-        prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: found %u %s objects on node %s",
                             nobjs, hwloc_obj_type_string(options->maptype),
                             node->name);
@@ -641,7 +641,7 @@ pass:
             jdata->map->binding = PRTE_BIND_TO_NONE;
         }
 
-        prte_output_verbose(2, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rr: assigning nprocs %d", nprocs);
 
         nodefull = false;
@@ -652,7 +652,7 @@ pass:
              * all the objects on the node */
             for (i=0; i < nprocs && nprocs_mapped < app->num_procs && !nodefull; i++) {
                 for (j=0; j < nobjs && nprocs_mapped < app->num_procs; j++) {
-                    prte_output_verbose(10, prte_rmaps_base_framework.framework_output,
+                    pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:rr: assigning proc to object %d", j);
                     /* get the hwloc object */
                     obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,

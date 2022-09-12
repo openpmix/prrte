@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +43,7 @@
 #endif
 
 #if PRTE_ENABLE_DEBUG
-#    include "src/util/output.h"
+#    include "src/util/pmix_output.h"
 #endif
 
 /**
@@ -169,7 +169,7 @@ static inline void *prte_ptr_ltop(uint64_t value)
 {
 #if SIZEOF_VOID_P == 4 && PRTE_ENABLE_DEBUG
     if (value > ((1ULL << 32) - 1ULL)) {
-        prte_output(0, "Warning: truncating value in prte_ptr_ltop");
+        pmix_output(0, "Warning: truncating value in prte_ptr_ltop");
     }
 #endif
     return (void *) (uintptr_t) value;

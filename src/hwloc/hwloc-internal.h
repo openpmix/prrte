@@ -201,10 +201,10 @@ PRTE_EXPORT extern bool prte_hwloc_synthetic_topo;
         hwloc_cpuset_t bind;                                                                    \
         bind = prte_hwloc_alloc();                                                              \
         if (hwloc_get_cpubind(t, bind, HWLOC_CPUBIND_PROCESS) < 0) {                            \
-            prte_output_verbose(n, v, "CANNOT DETERMINE BINDING AT %s:%d", __FILE__, __LINE__); \
+            pmix_output_verbose(n, v, "CANNOT DETERMINE BINDING AT %s:%d", __FILE__, __LINE__); \
         } else {                                                                                \
             prte_hwloc_base_cset2mapstr(tmp1, sizeof(tmp1), t, bind);                           \
-            prte_output_verbose(n, v, "BINDINGS AT %s:%d: %s", __FILE__, __LINE__, tmp1);       \
+            pmix_output_verbose(n, v, "BINDINGS AT %s:%d: %s", __FILE__, __LINE__, tmp1);       \
         }                                                                                       \
         hwloc_bitmap_free(bind);                                                                \
     } while (0);

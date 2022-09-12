@@ -57,13 +57,13 @@ int prte_rmaps_base_select(void)
     {
         component = (pmix_mca_base_component_t *) cli->cli_component;
 
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:select: checking available component %s",
                             component->pmix_mca_component_name);
 
         /* If there's no query function, skip it */
         if (NULL == component->pmix_mca_query_component) {
-            prte_output_verbose(
+            pmix_output_verbose(
                 5, prte_rmaps_base_framework.framework_output,
                 "mca:rmaps:select: Skipping component [%s]. It does not implement a query function",
                 component->pmix_mca_component_name);
@@ -71,14 +71,14 @@ int prte_rmaps_base_select(void)
         }
 
         /* Query the component */
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:select: Querying component [%s]",
                             component->pmix_mca_component_name);
         rc = component->pmix_mca_query_component(&module, &priority);
 
         /* If no module was returned, then skip component */
         if (PRTE_SUCCESS != rc || NULL == module) {
-            prte_output_verbose(
+            pmix_output_verbose(
                 5, prte_rmaps_base_framework.framework_output,
                 "mca:rmaps:select: Skipping component [%s]. Query failed to return a module",
                 component->pmix_mca_component_name);
@@ -109,13 +109,12 @@ int prte_rmaps_base_select(void)
             pmix_list_append(&prte_rmaps_base.selected_modules, &newmodule->super);
         }
     }
-
-    if (4 < prte_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
-        prte_output(0, "%s: Final mapper priorities", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+    if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
+        pmix_output(0, "%s: Final mapper priorities", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         /* show the prioritized list */
         PMIX_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t)
         {
-            prte_output(0, "\tMapper: %s Priority: %d", mod->component->pmix_mca_component_name,
+            pmix_output(0, "\tMapper: %s Priority: %d", mod->component->pmix_mca_component_name,
                         mod->pri);
         }
     }

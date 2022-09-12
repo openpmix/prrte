@@ -37,7 +37,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_getcwd.h"
 
@@ -208,7 +208,7 @@ static void interim(int sd, short args, void *cbdata)
     pmix_rank_t rank;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s spawn called from proc %s with %d apps",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(requestor),
                         (int) cd->napps);
@@ -324,7 +324,7 @@ static void interim(int sd, short args, void *cbdata)
                                        info->value.data.string, PMIX_STRING);
                 } else {
                     /* unrecognized key */
-                    if (9 < prte_output_get_verbosity(prte_pmix_server_globals.output)) {
+                    if (9 < pmix_output_get_verbosity(prte_pmix_server_globals.output)) {
                         pmix_show_help("help-prted.txt", "bad-key", true, "spawn", "application",
                                        info->key);
                     }
@@ -846,7 +846,7 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc, const pmix_info_t job_info[], 
 {
     prte_pmix_server_op_caddy_t *cd;
 
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s spawn upcalled on behalf of proc %s:%u with %" PRIsize_t " job infos",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), proc->nspace, proc->rank, ninfo);
 
@@ -1211,7 +1211,7 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
 {
     prte_pmix_server_op_caddy_t *op;
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s connect called with %d procs",
+    pmix_output_verbose(2, prte_pmix_server_globals.output, "%s connect called with %d procs",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) nprocs);
 
     /* protect ourselves */
@@ -1267,7 +1267,7 @@ pmix_status_t pmix_server_disconnect_fn(const pmix_proc_t procs[], size_t nprocs
     prte_pmix_server_op_caddy_t *cd;
     pmix_status_t rc;
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s disconnect called",
+    pmix_output_verbose(2, prte_pmix_server_globals.output, "%s disconnect called",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* at some point, we need to add bookeeping to track which

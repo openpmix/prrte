@@ -112,7 +112,7 @@ PRTE_EXPORT void prte_oob_base_send_nb(int fd, short args, void *cbdata);
 #define PRTE_OOB_SEND(m)                                                                          \
     do {                                                                                          \
         prte_oob_send_t *prte_oob_send_cd;                                                        \
-        prte_output_verbose(1, prte_oob_base_framework.framework_output, "%s OOB_SEND: %s:%d",    \
+        pmix_output_verbose(1, prte_oob_base_framework.framework_output, "%s OOB_SEND: %s:%d",    \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__);              \
         prte_oob_send_cd = PMIX_NEW(prte_oob_send_t);                                             \
         prte_oob_send_cd->msg = (m);                                                              \

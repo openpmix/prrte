@@ -58,7 +58,7 @@ static void failed_cmd(int fd, short event, void *cbdata)
     /* we get called if an abnormal term
      * don't complete in time - just force exit
      */
-    PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:orted_cmd command timed out",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     PMIX_RELEASE(tm);
@@ -73,7 +73,7 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
     prte_daemon_cmd_flag_t cmmnd;
     prte_grpcomm_signature_t *sig;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:prted_cmd sending prted_exit commands",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -133,7 +133,7 @@ int prte_plm_base_prted_terminate_job(pmix_nspace_t jobid)
     prte_proc_t proc;
     int rc;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:prted_terminate job %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_JOBID_PRINT(jobid)));
 
@@ -159,7 +159,7 @@ int prte_plm_base_prted_kill_local_procs(pmix_pointer_array_t *procs)
     prte_proc_t *proc;
     prte_grpcomm_signature_t *sig;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:orted_cmd sending kill_local_procs cmds",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -208,7 +208,7 @@ int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
     prte_daemon_cmd_flag_t command = PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
     prte_grpcomm_signature_t *sig;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:prted_cmd sending signal_local_procs cmds",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 

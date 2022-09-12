@@ -33,7 +33,7 @@
 #include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 /*
  * The following file was created by configure.  It contains extern

@@ -565,20 +565,20 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
                         /* push it into our environment */
                     char *tmp = strdup("prte_enable_ft=1");
                     prte_schizo_base_expose(tmp, "PRTE_MCA_");
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:ompi:parse_cli pushing PRTE_MCA_prte_enable_ft=1 into environment",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                     prte_enable_recovery = true;
                     free(tmp);
                     tmp = strdup("mpi_ft_enable=1");
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:ompi:parse_cli pushing OMPI_MCA_mpi_ft_enable into environment",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                     prte_schizo_base_expose(tmp, "OMPI_MCA_");
                     free(tmp);
                 }
                 else {
-                    prte_output(0, "UNRECOGNIZED OPTION: --with-ft %s", p1);
+                    pmix_output(0, "UNRECOGNIZED OPTION: --with-ft %s", p1);
                     return PRTE_ERR_FATAL;
                 }
             }
@@ -1467,7 +1467,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     pmix_cli_item_t *opt;
     int i, j, rc;
 
-    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:ompi: parse_env",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -1979,7 +1979,7 @@ static int detect_proxy(char *personalities)
     uid_t uid;
     int n, len;
 
-    prte_output_verbose(2, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(2, prte_schizo_base_framework.framework_output,
                         "%s[%s]: detect proxy with %s (%s)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__,
                         (NULL == personalities) ? "NULL" : personalities,

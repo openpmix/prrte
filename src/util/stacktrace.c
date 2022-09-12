@@ -51,7 +51,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
 #include "src/util/stacktrace.h"
@@ -125,7 +125,7 @@ static void show_stackframe(int signo, siginfo_t *info, void *p)
         prte_stacktrace_output_fileno = open(prte_stacktrace_output_filename,
                                              O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
         if (0 > prte_stacktrace_output_fileno) {
-            prte_output(0,
+            pmix_output(0,
                         "Error: Failed to open the stacktrace output file. Default: "
                         "stderr\n\tFilename: %s\n\tErrno: %s",
                         prte_stacktrace_output_filename, strerror(errno));
@@ -524,7 +524,7 @@ void prte_stackframe_output(int stream)
            function calls, which will be this function and
            prte_backtrace_buffer(). */
         for (i = 2; i < traces_size; ++i) {
-            prte_output(stream, "%s", traces[i]);
+            pmix_output(stream, "%s", traces[i]);
         }
     } else {
         /* Do not print the stack trace */
@@ -538,7 +538,7 @@ void prte_stackframe_output(int stream)
             prte_stacktrace_output_fileno = open(prte_stacktrace_output_filename,
                                                  O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
             if (0 > prte_stacktrace_output_fileno) {
-                prte_output(0,
+                pmix_output(0,
                             "Error: Failed to open the stacktrace output file. Default: "
                             "stderr\n\tFilename: %s\n\tErrno: %s",
                             prte_stacktrace_output_filename, strerror(errno));

@@ -17,7 +17,7 @@
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/runtime/prte_globals.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/prtereachable/base/base.h"
 

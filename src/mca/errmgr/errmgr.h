@@ -57,7 +57,7 @@
 #include "src/class/pmix_object.h"
 #include "src/class/pmix_pointer_array.h"
 #include "src/util/error.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/plm/plm_types.h"
 #include "src/runtime/prte_globals.h"
@@ -148,7 +148,7 @@ struct prte_errmgr_base_component_3_0_0_t {
 
     /** Verbosity Level */
     int verbose;
-    /** Output Handle for prte_output */
+    /** Output Handle for pmix_output */
     int output_handle;
     /** Default Priority */
     int priority;

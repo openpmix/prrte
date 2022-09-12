@@ -27,7 +27,7 @@
 #include <string.h>
 
 #include "src/pmix/pmix-internal.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 
 #include "src/threads/pmix_threads.h"
@@ -266,7 +266,7 @@ static void job_errors(int fd, short args, void *cbdata)
     jobstate = caddy->job_state;
     jdata->state = jobstate;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:prted: job %s repprted error state %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace),
                          prte_job_state_to_str(jobstate)));
@@ -331,7 +331,7 @@ static void proc_errors(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(caddy);
 
-    PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:prted:proc_errors process %s error state %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
                          prte_proc_state_to_str(state)));
@@ -340,7 +340,7 @@ static void proc_errors(int fd, short args, void *cbdata)
      * if prte is trying to shutdown, just let it
      */
     if (prte_finalizing) {
-        PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:prted:proc_errors finalizing - ignoring error",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         goto cleanup;
@@ -348,7 +348,7 @@ static void proc_errors(int fd, short args, void *cbdata)
 
     /* if this is a heartbeat failure, let the HNP handle it */
     if (PRTE_PROC_STATE_HEARTBEAT_FAILED == state) {
-        PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:prted:proc_errors heartbeat failed - ignoring error",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         goto cleanup;
@@ -360,7 +360,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     if (PRTE_PROC_STATE_LIFELINE_LOST == state || PRTE_PROC_STATE_UNABLE_TO_SEND_MSG == state
         || PRTE_PROC_STATE_NO_PATH_TO_TARGET == state || PRTE_PROC_STATE_PEER_UNKNOWN == state
         || PRTE_PROC_STATE_FAILED_TO_CONNECT == state) {
-        PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:prted lifeline lost or unable to communicate - exiting",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         /* set our exit status */
@@ -377,7 +377,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     /* get the job object */
     if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
         /* must already be complete */
-        PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:prted:proc_errors NULL jdata - ignoring error",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         goto cleanup;
@@ -386,7 +386,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     if (PRTE_PROC_STATE_COMM_FAILED == state) {
         /* if it is our own connection, ignore it */
         if (PRTE_EQUAL == prte_util_compare_name_fields(PRTE_NS_CMP_ALL, PRTE_PROC_MY_NAME, proc)) {
-            PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                  "%s errmgr:prted:proc_errors comm_failed to self - ignoring error",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             goto cleanup;
@@ -397,7 +397,7 @@ static void proc_errors(int fd, short args, void *cbdata)
              * in this situation, so push this over to be handled as if
              * it were a waitpid trigger so we don't create a bunch of
              * duplicate code */
-            PRTE_OUTPUT_VERBOSE(
+            PMIX_OUTPUT_VERBOSE(
                 (2, prte_errmgr_base_framework.framework_output,
                  "%s errmgr:prted:proc_errors comm_failed to non-daemon - handling as waitpid",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
@@ -420,7 +420,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             prte_event_active(&t2->ev, PRTE_EV_WRITE, 1);
             goto cleanup;
         }
-        PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:default:prted daemon %s exited",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc)));
 
@@ -431,7 +431,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                     != (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
                                                                             i))) {
                     if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE)) {
-                        PRTE_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+                        PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
                                              "%s errmgr:default:prted[%s(%d)] proc %s is alive",
                                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,
                                              PRTE_NAME_PRINT(&child->name)));
@@ -442,12 +442,12 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* if all my routes and children are gone, then terminate
                ourselves nicely (i.e., this is a normal termination) */
             if (0 == pmix_list_get_size(&prte_rml_base.children)) {
-                PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                      "%s errmgr:default:prted all routes gone - exiting",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             } else {
-                PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                      "%s errmgr:default:prted not exiting, num_routes() == %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      (int) pmix_list_get_size(&prte_rml_base.children)));
@@ -466,13 +466,13 @@ static void proc_errors(int fd, short args, void *cbdata)
      * ignore this call
      */
     if (!PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_LOCAL)) {
-        PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:prted:proc_errors proc is not local - ignoring error",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         goto cleanup;
     }
 
-    PRTE_OUTPUT_VERBOSE(
+    PMIX_OUTPUT_VERBOSE(
         (2, prte_errmgr_base_framework.framework_output, "%s errmgr:prted got state %s for proc %s",
          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_proc_state_to_str(state), PRTE_NAME_PRINT(proc)));
 
@@ -508,7 +508,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                 return;
             }
             /* send it */
-            PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                                  "%s errmgr:prted reporting proc %s abnormally terminated with "
                                  "non-zero status (local procs = %d)",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
@@ -580,7 +580,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             /* if all my routes and children are gone, then terminate
                ourselves nicely (i.e., this is a normal termination) */
             if (0 == pmix_list_get_size(&prte_rml_base.children)) {
-                PRTE_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((2, prte_errmgr_base_framework.framework_output,
                                      "%s errmgr:default:prted all routes gone - exiting",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
@@ -620,7 +620,7 @@ static void proc_errors(int fd, short args, void *cbdata)
                 PMIX_DATA_BUFFER_RELEASE(alert);
                 return;
             }
-            PRTE_OUTPUT_VERBOSE(
+            PMIX_OUTPUT_VERBOSE(
                 (5, prte_errmgr_base_framework.framework_output,
                  "%s errmgr:prted reporting proc %s abprted to HNP (local procs = %d)",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
@@ -662,7 +662,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             return;
         }
 
-        PRTE_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
                              "%s errmgr:prted reporting all procs in %s terminated",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace)));
 
@@ -813,7 +813,7 @@ static void failed_start(prte_job_t *jobdat)
             }
         }
     }
-    PRTE_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_errmgr_base_framework.framework_output,
                          "%s errmgr:hnp: job %s reported incomplete start",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jobdat->nspace)));
     return;

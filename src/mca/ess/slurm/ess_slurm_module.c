@@ -33,7 +33,7 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -104,7 +104,7 @@ static int slurm_set_name(void)
     pmix_rank_t vpid;
     char *tmp;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:slurm setting name"));
+    PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:slurm setting name"));
 
     if (NULL == prte_ess_base_nspace) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -123,7 +123,7 @@ static int slurm_set_name(void)
     slurm_nodeid = atoi(getenv("SLURM_NODEID"));
     PRTE_PROC_MY_NAME->rank = vpid + slurm_nodeid;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:slurm set name to %s",
+    PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:slurm set name to %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* fix up the system info nodename to match exactly what slurm returned */
@@ -136,7 +136,7 @@ static int slurm_set_name(void)
     }
     prte_process_info.nodename = strdup(tmp);
 
-    PRTE_OUTPUT_VERBOSE(
+    PMIX_OUTPUT_VERBOSE(
         (1, prte_ess_base_framework.framework_output, "ess:slurm set nodename to %s",
          (NULL == prte_process_info.nodename) ? "NULL" : prte_process_info.nodename));
 

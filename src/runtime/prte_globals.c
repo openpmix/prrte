@@ -46,7 +46,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_net.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/proc_info.h"
 
 #include "src/runtime/prte_globals.h"
@@ -178,21 +178,18 @@ bool prte_in_parallel_debugger = false;
 
 char *prte_daemon_cores = NULL;
 
-/* enable/disable ft */
-bool prte_enable_ft = false;
-
 int prte_dt_init(void)
 {
     /* set default output */
-    prte_debug_output = prte_output_open(NULL);
+    prte_debug_output = pmix_output_open(NULL);
 
     /* open up the verbose output for PRTE debugging */
     if (prte_debug_flag || 0 < prte_debug_verbosity
         || (prte_debug_daemons_flag && (PRTE_PROC_IS_DAEMON || PRTE_PROC_IS_MASTER))) {
         if (0 < prte_debug_verbosity) {
-            prte_output_set_verbosity(prte_debug_output, prte_debug_verbosity);
+            pmix_output_set_verbosity(prte_debug_output, prte_debug_verbosity);
         } else {
-            prte_output_set_verbosity(prte_debug_output, 1);
+            pmix_output_set_verbosity(prte_debug_output, 1);
         }
     }
 
@@ -523,7 +520,7 @@ static void prte_job_destruct(prte_job_t *job)
     }
 
     if (prte_debug_flag) {
-        prte_output(0, "%s Releasing job data for %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+        pmix_output(0, "%s Releasing job data for %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     PRTE_JOBID_PRINT(job->nspace));
     }
 

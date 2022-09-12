@@ -32,7 +32,7 @@
 #include "src/mca/mca.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/prte_cmd_line.h"
 
@@ -189,7 +189,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
     bool oversubscribe_given = false;
     bool nooversubscribe_given = false;
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "%s rmaps:base check modifiers with %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         (NULL == ck) ? "NULL" : ck);
@@ -354,21 +354,21 @@ int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
              * objects that have multiple cpus in them, so default
              * to byslot if nothing else was specified by the user.
              */
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps[%d] mapping not given - using byslot", __LINE__);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
         } else if (options->use_hwthreads) {
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps[%d] mapping not given - using byhwthread",
                                 __LINE__);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
         } else {
             if (PRTE_BIND_TO_NONE != PRTE_GET_BINDING_POLICY(jdata->map->binding)) {
-                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps[%d] mapping not given - using bycore", __LINE__);
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
             } else {
-                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps[%d] mapping not given - using byslot (bind = NONE)",
                                     __LINE__);
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
@@ -377,17 +377,17 @@ int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
     } else {
         /* if NUMA is available, map by that */
         if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps[%d] mapping not set by user - using bynuma", __LINE__);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
         } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
             /* if package is available, map by that */
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps[%d] mapping not set by user - using bypackage", __LINE__);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
         } else {
             /* if we have neither, then just do by slot */
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps[%d] mapping not given and no packages - using byslot",
                                 __LINE__);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
@@ -410,7 +410,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
     /* set defaults */
     tmp = 0;
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "%s rmaps:base set policy with %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         (NULL == inspec) ? "NULL" : inspec);
@@ -425,7 +425,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
     if (NULL != ck) {
         *ck = '\0'; // terminate spec where the colon was
         ck++;       // step past the colon
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "%s rmaps:base policy %s modifiers %s provided",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), spec, ck);
 

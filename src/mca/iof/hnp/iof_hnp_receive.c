@@ -77,7 +77,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     prte_iof_deliver_t *p;
     pmix_status_t prc;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s received IOF msg from proc %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(sender)));
 
@@ -97,7 +97,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         goto CLEAN_RETURN;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s received IOF cmd for source %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(&origin)));
 
@@ -123,7 +123,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     }
     p->bo.size = numbytes;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s unpacked %d bytes from remote proc %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&origin)));
 
