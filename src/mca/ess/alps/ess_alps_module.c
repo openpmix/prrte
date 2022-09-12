@@ -58,7 +58,7 @@ static int rte_init(int argc, char **argv)
     int ret;
     char *error = NULL;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:alps in rte_init"));
+    PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:alps in rte_init"));
 
     /* run the prolog */
     if (PRTE_SUCCESS != (ret = prte_ess_base_std_prolog())) {

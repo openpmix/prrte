@@ -45,7 +45,7 @@
 
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_string_copy.h"
@@ -262,7 +262,7 @@ static int ssh_component_query(pmix_mca_base_module_t **module, int *priority)
         /* see if the agent is available */
         if (PRTE_SUCCESS != ssh_launch_agent_lookup("qrsh", tmp)) {
             /* can't be SGE */
-            prte_output_verbose(1, prte_plm_base_framework.framework_output,
+            pmix_output_verbose(1, prte_plm_base_framework.framework_output,
                                 "%s plm:ssh: unable to be used: SGE indicated but cannot find path "
                                 "or execution permissions not set for launching agent qrsh",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
@@ -279,7 +279,7 @@ static int ssh_component_query(pmix_mca_base_module_t **module, int *priority)
     if (!prte_mca_plm_ssh_component.disable_llspawn && NULL != getenv("LOADL_STEP_ID")) {
         /* Search for llspawn in the users PATH */
         if (PRTE_SUCCESS != ssh_launch_agent_lookup("llspawn", NULL)) {
-            prte_output_verbose(1, prte_plm_base_framework.framework_output,
+            pmix_output_verbose(1, prte_plm_base_framework.framework_output,
                                 "%s plm:ssh: unable to be used: LoadLeveler "
                                 "indicated but cannot find path or execution "
                                 "permissions not set for launching agent llspawn",
@@ -305,7 +305,7 @@ lookup:
             return PRTE_ERR_FATAL;
         }
         /* this isn't an error - we just cannot be selected */
-        PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:ssh: unable to be used: cannot find path "
                              "for launching agent \"%s\"\n",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_mca_plm_ssh_component.agent));
@@ -392,13 +392,13 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
     int i;
 
     if (NULL == agent_list && NULL == prte_mca_plm_ssh_component.agent) {
-        PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                              "%s plm:ssh_lookup on agent (null) path %s - No agent specified.",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == path) ? "NULL" : path));
         return PRTE_ERR_NOT_FOUND;
     }
 
-    PRTE_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:ssh_lookup on agent %s path %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (NULL == agent_list) ? prte_mca_plm_ssh_component.agent : agent_list,
@@ -422,7 +422,7 @@ static int ssh_launch_agent_lookup(const char *agent_list, char *path)
         /* if xterm option was given, add '-X', ensuring we don't do it twice */
         if (NULL != prte_xterm) {
             pmix_argv_append_unique_nosize(&prte_mca_plm_ssh_component.agent_argv, "-X");
-        } else if (0 >= prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
+        } else if (0 >= pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
             /* if debug was not specified, and the user didn't explicitly
              * specify X11 forwarding/non-forwarding, add "-x" if it
              * isn't already there (check either case)

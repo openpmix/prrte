@@ -280,7 +280,7 @@ static int start_progress_engine(prte_progress_tracker_t *trk)
         }
         rc = pthread_setaffinity_np(trk->engine.t_handle, sizeof(cpu_set_t), &cpuset);
         if (0 != rc && prte_bind_progress_thread_reqd) {
-            prte_output(0, "Failed to bind progress thread %s",
+            pmix_output(0, "Failed to bind progress thread %s",
                         (NULL == trk->name) ? "NULL" : trk->name);
             rc = PRTE_ERR_NOT_SUPPORTED;
         } else {

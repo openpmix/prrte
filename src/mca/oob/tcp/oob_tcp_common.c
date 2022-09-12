@@ -61,7 +61,7 @@
 #include "src/util/error.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "oob_tcp_common.h"
 #include "oob_tcp_peer.h"
@@ -87,7 +87,7 @@ static void set_keepalive(int sd)
     /* Set the option active */
     option = 1;
     if (setsockopt(sd, SOL_SOCKET, SO_KEEPALIVE, &option, optlen) < 0) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(SO_KEEPALIVE) failed: %s (%d)", __FILE__, __LINE__,
                             strerror(prte_socket_errno), prte_socket_errno);
         return;
@@ -97,7 +97,7 @@ static void set_keepalive(int sd)
     if (setsockopt(sd, IPPROTO_TCP, TCP_KEEPALIVE, &prte_mca_oob_tcp_component.keepalive_time,
                    sizeof(prte_mca_oob_tcp_component.keepalive_time))
         < 0) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(TCP_KEEPALIVE) failed: %s (%d)", __FILE__, __LINE__,
                             strerror(prte_socket_errno), prte_socket_errno);
         return;
@@ -107,7 +107,7 @@ static void set_keepalive(int sd)
     if (setsockopt(sd, IPPROTO_TCP, TCP_KEEPIDLE, &prte_mca_oob_tcp_component.keepalive_time,
                    sizeof(prte_mca_oob_tcp_component.keepalive_time))
         < 0) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(TCP_KEEPIDLE) failed: %s (%d)", __FILE__, __LINE__,
                             strerror(prte_socket_errno), prte_socket_errno);
         return;
@@ -118,7 +118,7 @@ static void set_keepalive(int sd)
     if (setsockopt(sd, IPPROTO_TCP, TCP_KEEPINTVL, &prte_mca_oob_tcp_component.keepalive_intvl,
                    sizeof(prte_mca_oob_tcp_component.keepalive_intvl))
         < 0) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(TCP_KEEPINTVL) failed: %s (%d)", __FILE__, __LINE__,
                             strerror(prte_socket_errno), prte_socket_errno);
         return;
@@ -129,7 +129,7 @@ static void set_keepalive(int sd)
     if (setsockopt(sd, IPPROTO_TCP, TCP_KEEPCNT, &prte_mca_oob_tcp_component.keepalive_probes,
                    sizeof(prte_mca_oob_tcp_component.keepalive_probes))
         < 0) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(TCP_KEEPCNT) failed: %s (%d)", __FILE__, __LINE__,
                             strerror(prte_socket_errno), prte_socket_errno);
     }
@@ -144,7 +144,7 @@ void prte_oob_tcp_set_socket_options(int sd)
     optval = 1;
     if (setsockopt(sd, IPPROTO_TCP, TCP_NODELAY, (char *) &optval, sizeof(optval)) < 0) {
         prte_backtrace_print(stderr, NULL, 1);
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(TCP_NODELAY) failed: %s (%d)", __FILE__, __LINE__,
                             strerror(prte_socket_errno), prte_socket_errno);
     }
@@ -154,7 +154,7 @@ void prte_oob_tcp_set_socket_options(int sd)
         && setsockopt(sd, SOL_SOCKET, SO_SNDBUF, (char *) &prte_mca_oob_tcp_component.tcp_sndbuf,
                       sizeof(int))
                < 0) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(SO_SNDBUF) failed: %s (%d)", __FILE__, __LINE__,
                             strerror(prte_socket_errno), prte_socket_errno);
     }
@@ -164,7 +164,7 @@ void prte_oob_tcp_set_socket_options(int sd)
         && setsockopt(sd, SOL_SOCKET, SO_RCVBUF, (char *) &prte_mca_oob_tcp_component.tcp_rcvbuf,
                       sizeof(int))
                < 0) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "[%s:%d] setsockopt(SO_RCVBUF) failed: %s (%d)", __FILE__, __LINE__,
                             strerror(prte_socket_errno), prte_socket_errno);
     }

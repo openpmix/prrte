@@ -27,7 +27,7 @@
 
 #include "src/pmix/pmix-internal.h"
 #include "src/util/name_fns.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_name_fns.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -46,7 +46,7 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
     pmix_status_t rc;
     pmix_proc_t peer;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_rml_base.rml_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_rml_base.rml_output,
          "%s rml_send_buffer to peer %s at tag %d",
          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
          PMIX_RANK_PRINT(rank), tag));
@@ -66,7 +66,7 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
      * for receipt - no need to dive into the oob
      */
     if (PRTE_PROC_MY_NAME->rank == rank) { /* local delivery */
-        PRTE_OUTPUT_VERBOSE((1, prte_rml_base.rml_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_rml_base.rml_output,
                              "%s rml_send_buffer_to_self at tag %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tag));
         /* copy the message for the recv */

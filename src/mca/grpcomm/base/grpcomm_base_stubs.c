@@ -85,7 +85,7 @@ int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig, prte_rml_tag_t tag,
     pmix_rank_t *dmns;
     size_t ndmns;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:base:xcast sending %u bytes to tag %ld",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (NULL == msg) ? 0 : (unsigned int) msg->bytes_used, (long) tag));
@@ -136,7 +136,7 @@ int prte_grpcomm_API_rbcast(prte_grpcomm_signature_t *sig, prte_rml_tag_t tag,
     pmix_data_buffer_t *buf;
     prte_grpcomm_base_active_t *active;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:base:rbcast sending %u bytes to tag %ld",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (NULL == msg) ? 0 : (unsigned int) msg->bytes_used, (long) tag));
@@ -193,7 +193,7 @@ static void allgather_stub(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(cd);
 
-    PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:base:allgather stub", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* retrieve an existing tracker, create it if not
@@ -207,7 +207,7 @@ static void allgather_stub(int fd, short args, void *cbdata)
     } else if (PMIX_SUCCESS == ret) {
         *seq_number = *seq_number + 1;
     } else {
-        PRTE_OUTPUT((prte_grpcomm_base_framework.framework_output,
+        PMIX_OUTPUT((prte_grpcomm_base_framework.framework_output,
                      "%s rpcomm:base:allgather cannot get signature from hash table",
                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PMIX_ERROR_LOG(ret);
@@ -217,7 +217,7 @@ static void allgather_stub(int fd, short args, void *cbdata)
     ret = pmix_hash_table_set_value_ptr(&prte_grpcomm_base.sig_table, (void *) cd->sig->signature,
                                         cd->sig->sz * sizeof(pmix_proc_t), (void *) seq_number);
     if (PMIX_SUCCESS != ret) {
-        PRTE_OUTPUT((prte_grpcomm_base_framework.framework_output,
+        PMIX_OUTPUT((prte_grpcomm_base_framework.framework_output,
                      "%s rpcomm:base:allgather cannot add new signature to hash table",
                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PMIX_ERROR_LOG(ret);
@@ -253,7 +253,7 @@ int prte_grpcomm_API_allgather(prte_grpcomm_signature_t *sig, pmix_data_buffer_t
     prte_grpcomm_caddy_t *cd;
     pmix_status_t rc;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:base:allgather", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* must push this into the event library to ensure we can
@@ -300,7 +300,7 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
         }
         if (sig->sz == coll->sig->sz &&
             0 == memcmp(sig->signature, coll->sig->signature, sig->sz * sizeof(pmix_proc_t))) {
-            PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:base:returning existing collective",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             return coll;
@@ -309,7 +309,7 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
     /* if we get here, then this is a new collective - so create
      * the tracker for it */
     if (!create) {
-        PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                              "%s grpcomm:base: not creating new coll",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -360,7 +360,7 @@ static int create_dmns(prte_grpcomm_signature_t *sig, pmix_rank_t **dmns, size_t
     pmix_rank_t *dns = NULL;
     int rc = PRTE_SUCCESS;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:base:create_dmns called with %s signature size %" PRIsize_t "",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (NULL == sig->signature) ? "NULL" : "NON-NULL", sig->sz));
@@ -394,7 +394,7 @@ static int create_dmns(prte_grpcomm_signature_t *sig, pmix_rank_t **dmns, size_t
             break;
         }
         if (PMIX_RANK_WILDCARD == sig->signature[n].rank) {
-            PRTE_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:base:create_dmns called for all procs in job %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_JOBID_PRINT(sig->signature[0].nspace)));
@@ -417,7 +417,7 @@ static int create_dmns(prte_grpcomm_signature_t *sig, pmix_rank_t **dmns, size_t
                     }
                 }
                 if (!found) {
-                    PRTE_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
+                    PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
                                          "%s grpcomm:base:create_dmns adding daemon %s to list",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                          PRTE_NAME_PRINT(&node->daemon->name)));
@@ -428,7 +428,7 @@ static int create_dmns(prte_grpcomm_signature_t *sig, pmix_rank_t **dmns, size_t
             }
         } else {
             /* lookup the daemon for this proc and add it to the list */
-            PRTE_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
                                  "%s sign: GETTING PROC OBJECT FOR %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&sig->signature[n])));
@@ -466,7 +466,7 @@ done:
         dns = (pmix_rank_t *) malloc(pmix_list_get_size(&ds) * sizeof(pmix_rank_t));
         nds = 0;
         while (NULL != (nm = (prte_namelist_t *) pmix_list_remove_first(&ds))) {
-            PRTE_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:base:create_dmns adding daemon %s to array",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&nm->name)));
             dns[nds++] = nm->name.rank;
@@ -552,7 +552,7 @@ static int pack_xcast(prte_grpcomm_signature_t *sig, pmix_data_buffer_t *buffer,
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&bo);
 
-    PRTE_OUTPUT_VERBOSE(
+    PMIX_OUTPUT_VERBOSE(
         (1, prte_grpcomm_base_framework.framework_output, "MSG SIZE: %lu", buffer->bytes_used));
     return PRTE_SUCCESS;
 }

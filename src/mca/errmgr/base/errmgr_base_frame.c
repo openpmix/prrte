@@ -39,7 +39,7 @@
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/base/base.h"

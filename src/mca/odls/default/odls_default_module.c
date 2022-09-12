@@ -187,13 +187,13 @@ static int odls_default_kill_local(pid_t pid, int signum)
 
     if (0 != kill(pid, signum)) {
         if (ESRCH != errno) {
-            PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                                  "%s odls:default:SENT KILL %d TO PID %d GOT ERRNO %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int) pid, errno));
             return errno;
         }
     }
-    PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                          "%s odls:default:SENT KILL %d TO PID %d SUCCESS",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int) pid));
     return 0;
@@ -660,7 +660,7 @@ int prte_odls_default_launch_local_procs(pmix_data_buffer_t *data)
     /* construct the list of children we are to launch */
     rc = prte_odls_base_default_construct_child_list(data, &job);
     if (PRTE_SUCCESS != rc) {
-        PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                              "%s odls:default:launch:local failed to construct child list on error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
         return rc;
@@ -693,7 +693,7 @@ static int send_signal(pid_t pd, int signal)
 #endif
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_odls_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_odls_base_framework.framework_output,
                          "%s sending signal %d to pid %ld", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          signal, (long) pid));
 
@@ -739,7 +739,7 @@ static int prte_odls_default_restart_proc(prte_proc_t *child)
     /* restart the local proc */
     rc = prte_odls_base_default_restart_proc(child, odls_default_fork_local_proc);
     if (PRTE_SUCCESS != rc) {
-        PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                              "%s odls:default:restart_proc failed to launch on error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
     }

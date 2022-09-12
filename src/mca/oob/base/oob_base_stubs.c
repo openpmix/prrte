@@ -18,7 +18,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -48,7 +48,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
     msg = cd->msg;
     PMIX_RELEASE(cd);
 
-    prte_output_verbose(5, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                         "%s oob:base:send to target %s - attempt %u",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->dst),
                         msg->retries);
@@ -70,7 +70,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
         if (prte_abnormal_term_ordered || prte_never_launched || prte_job_term_ordered) {
             return;
         }
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s oob:base:send unknown peer %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(&msg->dst));
@@ -85,7 +85,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
                 pr = process_uri(uri);
                 if (NULL == pr) {
                     /* that is just plain wrong */
-                    prte_output_verbose(5, prte_oob_base_framework.framework_output,
+                    pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                                         "%s oob:base:send addressee unknown %s",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&msg->dst));
@@ -151,7 +151,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
         /* post this msg for send by this transport - the component
          * runs on our event base, so we can just call their function
          */
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s oob:base:send known transport for peer %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->dst));
         if (PRTE_SUCCESS == (rc = pr->component->send_nb(msg))) {
@@ -194,7 +194,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
      * it back to the RML for handling
      */
     if (!msg_sent) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s oob:base:send no path to target %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&msg->dst));
         msg->status = PRTE_ERR_NO_PATH_TO_TARGET;
@@ -293,7 +293,7 @@ static prte_oob_base_peer_t* process_uri(char *uri)
     char **uris = NULL;
     prte_oob_base_peer_t *pr;
 
-    prte_output_verbose(5, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                         "%s:set_addr processing uri %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), uri);
 
@@ -316,7 +316,7 @@ static prte_oob_base_peer_t* process_uri(char *uri)
      * know our own contact info
      */
     if (PMIX_CHECK_PROCID(&peer, PRTE_PROC_MY_NAME)) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s:set_addr peer %s is me",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             PRTE_NAME_PRINT(&peer));
@@ -342,7 +342,7 @@ static prte_oob_base_peer_t* process_uri(char *uri)
     PMIX_LIST_FOREACH(cli, &prte_oob_base.actives, pmix_mca_base_component_list_item_t)
     {
         component = (prte_oob_base_component_t *) cli->cli_component;
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s:set_addr checking if peer %s is reachable via component %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer),
                             component->oob_base.pmix_mca_component_name);
@@ -351,13 +351,13 @@ static prte_oob_base_peer_t* process_uri(char *uri)
                 /* this component found reachable addresses
                  * in the uris
                  */
-                prte_output_verbose(5, prte_oob_base_framework.framework_output,
+                pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                                     "%s: peer %s is reachable via component %s",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer),
                                     component->oob_base.pmix_mca_component_name);
                 pmix_bitmap_set_bit(&pr->addressable, component->idx);
             } else {
-                prte_output_verbose(5, prte_oob_base_framework.framework_output,
+                pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                                     "%s: peer %s is NOT reachable via component %s",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer),
                                     component->oob_base.pmix_mca_component_name);

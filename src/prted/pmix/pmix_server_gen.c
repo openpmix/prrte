@@ -37,7 +37,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/iof/base/base.h"
@@ -249,7 +249,7 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     size_t ninfo;
     pmix_rank_t vpid;
 
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s PRTE Notification received from %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(sender));
@@ -317,7 +317,7 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
      * passed down to the server by me */
     PMIX_INFO_LOAD(&cd->info[ninfo - 1], "prte.notify.donotloop", NULL, PMIX_BOOL);
 
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s NOTIFYING PMIX SERVER OF STATUS %s SOURCE %s RANGE %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PMIx_Error_string(code), source.nspace,
                         PMIx_Data_range_string(range));
@@ -344,7 +344,7 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *so
     pmix_status_t ret;
     size_t n;
 
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s local process %s generated event code %s range %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(source),
                         PMIx_Error_string(code), PMIx_Data_range_string(range));
@@ -490,7 +490,7 @@ void pmix_server_jobid_return(int status, pmix_proc_t *sender,
     if (NULL == req) {
         /* we are hosed */
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        prte_output(0, "UNABLE TO RETRIEVE SPWN_REQ FOR JOB %s [room=%d]", jobid, room);
+        pmix_output(0, "UNABLE TO RETRIEVE SPWN_REQ FOR JOB %s [room=%d]", jobid, room);
         return;
     }
 
@@ -520,7 +520,7 @@ static void _toolconn(int sd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(cd);
 
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s PROCESSING TOOL CONNECTION",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -572,7 +572,7 @@ static void _toolconn(int sd, short args, void *cbdata)
         }
     }
 
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s TOOL CONNECTION FROM UID %d GID %d NSPACE %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         cd->uid, cd->gid, cd->target.nspace);
@@ -633,7 +633,7 @@ void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo, pmix_tool_connectio
 {
     pmix_server_req_t *cd;
 
-    prte_output_verbose(2, prte_pmix_server_globals.output, "%s TOOL CONNECTION REQUEST RECVD",
+    pmix_output_verbose(2, prte_pmix_server_globals.output, "%s TOOL CONNECTION REQUEST RECVD",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* need to threadshift this request */
@@ -670,7 +670,7 @@ void pmix_server_log_fn(const pmix_proc_t *client, const pmix_info_t data[], siz
     pmix_byte_object_t pbo, dbo;
     pmix_status_t ret;
 
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s logging info",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -766,7 +766,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
     prte_grpcomm_signature_t *sig;
     pmix_proc_t *proct;
 
-    prte_output_verbose(2, prte_pmix_server_globals.output,
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s job control request from %s:%d",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         requestor->nspace, requestor->rank);
@@ -1097,7 +1097,7 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata)
     size_t n;
 
     for (n = 0; n < cd->nprocs; n++) {
-        PRTE_OUTPUT_VERBOSE((1, prte_pmix_server_globals.output,
+        PMIX_OUTPUT_VERBOSE((1, prte_pmix_server_globals.output,
                              "%s pmix_server_stdin_push to dest %s: size %zu",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_NAME_PRINT(&cd->procs[n]),

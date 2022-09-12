@@ -49,7 +49,7 @@ int prte_ras_base_close(void)
                               NULL);
 
     /* Close the framework output */
-    prte_output_close(prte_ras_base_framework.framework_output);
+    pmix_output_close(prte_ras_base_framework.framework_output);
     prte_ras_base_framework.framework_output = -1;
 
     return PRTE_SUCCESS;

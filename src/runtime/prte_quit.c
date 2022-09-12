@@ -57,7 +57,7 @@
 #include "src/mca/state/state.h"
 
 #include "src/threads/pmix_threads.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
 

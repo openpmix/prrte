@@ -210,7 +210,7 @@ static int get_weights(pmix_pif_t *local_if, pmix_pif_t *remote_if)
         weight = calculate_weight(0, 0, CQ_NO_CONNECTION);
     }
 
-    prte_output_verbose(20, prte_prtereachable_base_framework.framework_output,
+    pmix_output_verbose(20, prte_prtereachable_base_framework.framework_output,
                         "reachable:weighted: path from %s to %s: %s", str_local, str_remote,
                         conn_type);
 

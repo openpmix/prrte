@@ -61,7 +61,7 @@ void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
         return;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output, "%s sending %s",
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output, "%s sending %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (PRTE_IOF_XON == tag) ? "xon" : "xoff"));
 
@@ -122,7 +122,7 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
     }
     /* numbytes will contain the actual #bytes that were sent */
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s unpacked %d bytes for local proc %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&target)));
 
@@ -133,7 +133,7 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
         if (PMIX_CHECK_NSPACE(target.nspace, proct->name.nspace)) {
             /* yes - is this intended for all vpids or this vpid? */
             if (PMIX_CHECK_RANK(target.rank, proct->name.rank)) {
-                PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                      "%s writing data to local proc %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&proct->name)));

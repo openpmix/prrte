@@ -29,7 +29,7 @@
 
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/util/pmix_show_help.h"
 
@@ -56,13 +56,13 @@ int prte_oob_base_select(void)
     {
         component = (prte_oob_base_component_t *) cli->cli_component;
 
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "mca:oob:select: checking available component %s",
                             component->oob_base.pmix_mca_component_name);
 
         /* If there's no query function, skip it */
         if (NULL == component->available) {
-            prte_output_verbose(
+            pmix_output_verbose(
                 5, prte_oob_base_framework.framework_output,
                 "mca:oob:select: Skipping component [%s]. It does not implement a query function",
                 component->oob_base.pmix_mca_component_name);
@@ -70,7 +70,7 @@ int prte_oob_base_select(void)
         }
 
         /* Query the component */
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "mca:oob:select: Querying component [%s]",
                             component->oob_base.pmix_mca_component_name);
 
@@ -80,7 +80,7 @@ int prte_oob_base_select(void)
          * it has no available interfaces
          */
         if (PRTE_SUCCESS != rc && PRTE_ERR_FORCE_SELECT != rc) {
-            prte_output_verbose(5, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                                 "mca:oob:select: Skipping component [%s] - no available interfaces",
                                 component->oob_base.pmix_mca_component_name);
             continue;
@@ -88,7 +88,7 @@ int prte_oob_base_select(void)
 
         /* if it fails to startup, then skip it */
         if (PRTE_SUCCESS != component->startup()) {
-            prte_output_verbose(5, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                                 "mca:oob:select: Skipping component [%s] - failed to startup",
                                 component->oob_base.pmix_mca_component_name);
             continue;
@@ -120,7 +120,7 @@ int prte_oob_base_select(void)
             if (c3->priority > component->priority) {
                 continue;
             }
-            prte_output_verbose(5, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                                 "mca:oob:select: Inserting component");
             c2 = PMIX_NEW(pmix_mca_base_component_list_item_t);
             c2->cli_component = (pmix_mca_base_component_t *) component;
@@ -130,7 +130,7 @@ int prte_oob_base_select(void)
         }
         if (!added) {
             /* add to end */
-            prte_output_verbose(5, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                                 "mca:oob:select: Adding component to end");
             c2 = PMIX_NEW(pmix_mca_base_component_list_item_t);
             c2->cli_component = (pmix_mca_base_component_t *) component;
@@ -140,7 +140,7 @@ int prte_oob_base_select(void)
 
     if (0 == pmix_list_get_size(&prte_oob_base.actives)) {
         /* no support available means we really cannot run */
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "mca:oob:select: Init failed to return any available transports");
         pmix_show_help("help-oob-base.txt", "no-interfaces-avail", true);
         return PRTE_ERR_SILENT;
@@ -154,7 +154,7 @@ int prte_oob_base_select(void)
         c3->idx = i++;
     }
 
-    prte_output_verbose(5, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                         "mca:oob:select: Found %d active transports",
                         (int) pmix_list_get_size(&prte_oob_base.actives));
     return PRTE_SUCCESS;

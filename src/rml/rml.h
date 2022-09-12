@@ -77,7 +77,7 @@ PRTE_EXPORT int prte_rml_send_buffer_nb(pmix_rank_t rank,
 
 #define PRTE_RML_SEND(_r, r, b, t)                              \
     do {                                                        \
-        prte_output_verbose(2, prte_rml_base.rml_output,        \
+        pmix_output_verbose(2, prte_rml_base.rml_output,        \
                             "RML-SEND(%s:%d): %s:%s:%d",        \
                             PMIX_RANK_PRINT(r), t,              \
                             __FILE__, __func__, __LINE__);      \
@@ -93,7 +93,7 @@ PRTE_EXPORT void prte_rml_purge(pmix_proc_t *peer);
 
 #define PRTE_RML_PURGE(p)                                       \
     do {                                                        \
-        prte_output_verbose(2, prte_rml_base.rml_output,            \
+        pmix_output_verbose(2, prte_rml_base.rml_output,            \
                             "RML-PURGE(%s): %s:%s:%d",          \
                             PMIX_NAME_PRINT(p),                 \
                             __FILE__, __func__, __LINE__);      \
@@ -116,7 +116,7 @@ PRTE_EXPORT void prte_rml_recv_buffer_nb(pmix_proc_t *peer, prte_rml_tag_t tag,
 
 #define PRTE_RML_RECV(p, t, prs, c, cb)                         \
     do {                                                        \
-        prte_output_verbose(2, prte_rml_base.rml_output,            \
+        pmix_output_verbose(2, prte_rml_base.rml_output,            \
                             "RML-RECV(%d): %s:%s:%d",           \
                             t, __FILE__, __func__, __LINE__);   \
         prte_rml_recv_buffer_nb(p, t, prs, c, cb);              \
@@ -136,7 +136,7 @@ PRTE_EXPORT void prte_rml_recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag);
 
 #define PRTE_RML_CANCEL(p, t)                                   \
     do {                                                        \
-        prte_output_verbose(2, prte_rml_base.rml_output,            \
+        pmix_output_verbose(2, prte_rml_base.rml_output,            \
                             "RML-CANCEL(%d): %s:%s:%d",         \
                             t, __FILE__, __func__, __LINE__);   \
         prte_rml_recv_cancel(p, t);                             \
@@ -175,7 +175,7 @@ PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
         prte_rml_recv_t *msg;                                                                   \
         pmix_status_t _rc;                                                                      \
         pmix_byte_object_t _bo;                                                                 \
-        prte_output_verbose(5, prte_rml_base.rml_output,                                            \
+        pmix_output_verbose(5, prte_rml_base.rml_output,                                            \
                             "%s Message posted at %s:%d for tag %d",                            \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__, (t));       \
         msg = PMIX_NEW(prte_rml_recv_t);                                                        \
@@ -206,7 +206,7 @@ PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
 
 #define PRTE_RML_SEND_COMPLETE(m)                                                             \
     do {                                                                                      \
-        prte_output_verbose(5, prte_rml_base.rml_output,                                          \
+        pmix_output_verbose(5, prte_rml_base.rml_output,                                          \
                             "%s-%s Send message complete at %s:%d",                           \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&((m)->dst)), \
                             __FILE__, __LINE__);                                              \

@@ -170,7 +170,7 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
 #define PRTE_IOF_SINK_DEFINE(snk, nm, fid, tg, wrthndlr)                                           \
     do {                                                                                           \
         prte_iof_sink_t *ep;                                                                       \
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,                          \
+        PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,                          \
                              "defining endpt: file %s line %d fd %d", __FILE__, __LINE__, (fid))); \
         ep = PMIX_NEW(prte_iof_sink_t);                                                            \
         PMIX_LOAD_PROCID(&ep->name, (nm)->nspace, (nm)->rank);                                     \
@@ -218,7 +218,7 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
 #define PRTE_IOF_READ_EVENT(rv, p, fid, tg, cbfunc, actv)                                     \
     do {                                                                                      \
         prte_iof_read_event_t *rev;                                                           \
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,                     \
+        PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,                     \
                              "%s defining read event for %s: %s %d",                          \
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(p)->name), \
                              __FILE__, __LINE__));                                            \

@@ -61,7 +61,7 @@
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -204,7 +204,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         return;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output, "%s plm:lsf: launching vm",
+    PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output, "%s plm:lsf: launching vm",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* Get the map for this job */
@@ -220,7 +220,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * will trigger the daemons_reported event and cause the
          * job to move to the following step
          */
-        PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:lsf: no new daemons to launch",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
@@ -279,7 +279,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
     rc = prte_util_convert_vpid_to_string(&vpid_string, map->daemon_vpid_start);
     if (PRTE_SUCCESS != rc) {
-        prte_output(0, "plm_lsf: unable to get daemon vpid as string");
+        pmix_output(0, "plm_lsf: unable to get daemon vpid as string");
         goto cleanup;
     }
     free(argv[proc_vpid_index]);
@@ -289,11 +289,11 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* protect the args in case someone has a script wrapper */
     prte_plm_base_wrap_args(argv);
 
-    if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
+    if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
         param = pmix_argv_join(argv, ' ');
         if (NULL != param) {
-            prte_output(0, "plm:lsf: final top-level argv:");
-            prte_output(0, "plm:lsf:     %s", param);
+            pmix_output(0, "plm:lsf: final top-level argv:");
+            pmix_output(0, "plm:lsf:     %s", param);
             free(param);
         }
     }
@@ -326,7 +326,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                same anyway */
             if (NULL == cur_prefix) {
                 cur_prefix = strdup(app_prefix_dir);
-                PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:lsf: Set prefix:%s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cur_prefix));
             }

@@ -33,7 +33,7 @@
 
 #include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/base/pmix_mca_base_alias.h"
 #include "src/mca/base/pmix_mca_base_var.h"
@@ -139,7 +139,7 @@ int prte_finalize(void)
     PMIX_RELEASE(prte_node_pool);
 
     /* Close the general debug stream */
-    prte_output_close(prte_debug_output);
+    pmix_output_close(prte_debug_output);
 
     pmix_mca_base_alias_cleanup();
 
@@ -150,7 +150,7 @@ int prte_finalize(void)
     (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
     prte_proc_info_finalize();
 
-    prte_output_finalize();
+    pmix_output_finalize();
 
     /* now shutdown PMIx - need to do this last as it finalizes
      * the utilities and class system we depend upon */

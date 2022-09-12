@@ -54,7 +54,7 @@
 #include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
@@ -92,11 +92,11 @@ hwloc_obj_t prte_hwloc_base_get_pu(hwloc_topology_t topo, bool use_hwthread_cpus
         obj_type = HWLOC_OBJ_PU;
     }
 
-    prte_output_verbose(5, prte_hwloc_base_output, "Searching for %d LOGICAL PU", lid);
+    pmix_output_verbose(5, prte_hwloc_base_output, "Searching for %d LOGICAL PU", lid);
 
     /* Now do the actual lookup. */
     obj = hwloc_get_obj_by_type(topo, obj_type, lid);
-    PRTE_OUTPUT_VERBOSE(
+    PMIX_OUTPUT_VERBOSE(
         (5, prte_hwloc_base_output, "logical cpu %d %s found", lid, (NULL == obj) ? "not" : "is"));
 
     /* Found the right core (or PU). Return the object */
@@ -207,11 +207,11 @@ hwloc_cpuset_t prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
 
     /* process any specified default cpu set against this topology */
     if (NULL == prte_hwloc_default_cpu_list) {
-        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                              "hwloc:base: no cpus specified - using root available cpuset"));
         avail = prte_hwloc_base_setup_summary(topo);
     } else {
-        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base: filtering cpuset"));
+        PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base: filtering cpuset"));
         avail = prte_hwloc_base_generate_cpuset(topo, prte_hwloc_default_use_hwthread_cpus,
                                                 prte_hwloc_default_cpu_list);
     }
@@ -259,7 +259,7 @@ int prte_hwloc_base_get_topology(void)
 {
     int rc;
 
-    prte_output_verbose(2, prte_hwloc_base_output,
+    pmix_output_verbose(2, prte_hwloc_base_output,
                         "hwloc:base:get_topology");
 
     /* see if we already have it */
@@ -268,7 +268,7 @@ int prte_hwloc_base_get_topology(void)
     }
 
     if (NULL == prte_hwloc_base_topo_file) {
-        prte_output_verbose(1, prte_hwloc_base_output,
+        pmix_output_verbose(1, prte_hwloc_base_output,
                             "hwloc:base discovering topology");
         if (0 != hwloc_topology_init(&prte_hwloc_topology) ||
             0 != prte_hwloc_base_topology_set_flags(prte_hwloc_topology, 0, true) ||
@@ -277,7 +277,7 @@ int prte_hwloc_base_get_topology(void)
             return PRTE_ERR_NOT_SUPPORTED;
         }
     } else {
-        prte_output_verbose(1, prte_hwloc_base_output,
+        pmix_output_verbose(1, prte_hwloc_base_output,
                             "hwloc:base loading topology from file %s",
                             prte_hwloc_base_topo_file);
         if (PRTE_SUCCESS != (rc = prte_hwloc_base_set_topology(prte_hwloc_base_topo_file))) {
@@ -299,7 +299,7 @@ int prte_hwloc_base_set_topology(char *topofile)
     hwloc_obj_t obj;
     unsigned j, k;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology %s", topofile));
+    PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology %s", topofile));
 
     if (NULL != prte_hwloc_topology) {
         hwloc_topology_destroy(prte_hwloc_topology);
@@ -309,7 +309,7 @@ int prte_hwloc_base_set_topology(char *topofile)
     }
     if (0 != hwloc_topology_set_xml(prte_hwloc_topology, topofile)) {
         hwloc_topology_destroy(prte_hwloc_topology);
-        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology bad topo file"));
+        PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology bad topo file"));
         return PRTE_ERR_NOT_SUPPORTED;
     }
     /* since we are loading this from an external source, we have to
@@ -322,7 +322,7 @@ int prte_hwloc_base_set_topology(char *topofile)
     }
     if (0 != hwloc_topology_load(prte_hwloc_topology)) {
         hwloc_topology_destroy(prte_hwloc_topology);
-        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology failed to load"));
+        PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:set_topology failed to load"));
         return PRTE_ERR_NOT_SUPPORTED;
     }
 
@@ -462,7 +462,7 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj)
     hwloc_obj_t ptr;
     unsigned int nobjs, i;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:get_idx"));
+    PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:get_idx"));
 
 #if HWLOC_API_VERSION < 0x20000
     /* determine the number of objects of this type */
@@ -473,7 +473,7 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj)
 
     nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, obj->type, cache_level);
 
-    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:get_idx found %u objects of type %s:%u", nobjs,
                          hwloc_obj_type_string(obj->type), cache_level));
 
@@ -528,13 +528,13 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
 
     /* bozo check */
     if (NULL == topo) {
-        PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:get_nbobjs NULL topology"));
+        PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:get_nbobjs NULL topology"));
         return 0;
     }
 
 #if HWLOC_API_VERSION >= 0x20000
     if (0 > (rc = hwloc_get_nbobjs_by_type(topo, target))) {
-        prte_output(0, "UNKNOWN HWLOC ERROR");
+        pmix_output(0, "UNKNOWN HWLOC ERROR");
         return 0;
     }
     return rc;
@@ -548,7 +548,7 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
     if (HWLOC_OBJ_CACHE != target) {
         /* we should not get an error back, but just in case... */
         if (0 > (rc = hwloc_get_nbobjs_by_type(topo, target))) {
-            prte_output(0, "UNKNOWN HWLOC ERROR");
+            pmix_output(0, "UNKNOWN HWLOC ERROR");
             return 0;
         }
         return rc;
@@ -560,7 +560,7 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
 
     df_search(topo, obj, target, cache_level, 0, &num_objs);
 
-    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:get_nbojbs computed data %u of %s:%u", num_objs,
                          hwloc_obj_type_string(target), cache_level));
 
@@ -719,7 +719,7 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
                 break;
 
             case 2: /* range of core id's was given */
-                prte_output_verbose(5, prte_hwloc_base_output,
+                pmix_output_verbose(5, prte_hwloc_base_output,
                                     "range of cores given: start %s stop %s", range[0], range[1]);
                 lower_range = atoi(range[0]);
                 upper_range = atoi(range[1]);
@@ -768,7 +768,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
         return PRTE_ERR_BAD_PARAM;
     }
 
-    prte_output_verbose(5, prte_hwloc_base_output, "slot assignment: slot_list == %s", slot_str);
+    pmix_output_verbose(5, prte_hwloc_base_output, "slot assignment: slot_list == %s", slot_str);
 
     /* split at ';' */
     item = pmix_argv_split(slot_str, ';');
@@ -777,7 +777,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
     hwloc_bitmap_zero(cpumask);
     /* loop across the items and accumulate the mask */
     for (i = 0; NULL != item[i]; i++) {
-        prte_output_verbose(5, prte_hwloc_base_output, "working assignment %s", item[i]);
+        pmix_output_verbose(5, prte_hwloc_base_output, "working assignment %s", item[i]);
         /* if they specified "package" by starting with an S/s,
          * or if they use package:core notation, then parse the
          * package/core info
@@ -1000,7 +1000,7 @@ prte_hwloc_locality_t prte_hwloc_base_get_relative_locality(hwloc_topology_t top
                                                    loc2, &locality, &shared);
 #endif
 
-    prte_output_verbose(5, prte_hwloc_base_output, "locality: %s",
+    pmix_output_verbose(5, prte_hwloc_base_output, "locality: %s",
                         prte_hwloc_base_print_locality(locality));
     hwloc_bitmap_free(loc1);
     hwloc_bitmap_free(loc2);
@@ -1026,7 +1026,7 @@ char *prte_hwloc_base_find_coprocessors(hwloc_topology_t topo)
      * see if we have any of those
      */
     if (HWLOC_TYPE_DEPTH_UNKNOWN == (depth = hwloc_get_type_depth(topo, HWLOC_OBJ_OS_DEVICE))) {
-        PRTE_OUTPUT_VERBOSE(
+        PMIX_OUTPUT_VERBOSE(
             (5, prte_hwloc_base_output, "hwloc:base:find_coprocessors: NONE FOUND IN TOPO"));
         return NULL;
     }
@@ -1040,7 +1040,7 @@ char *prte_hwloc_base_find_coprocessors(hwloc_topology_t topo)
                 if (0
                     == strncmp(osdev->infos[i].name, "MICSerialNumber",
                                strlen("MICSerialNumber"))) {
-                    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
+                    PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                                          "hwloc:base:find_coprocessors: coprocessor %s found",
                                          osdev->infos[i].value));
                     pmix_argv_append_nosize(&cps, osdev->infos[i].value);
@@ -1053,11 +1053,11 @@ char *prte_hwloc_base_find_coprocessors(hwloc_topology_t topo)
         cpstring = pmix_argv_join(cps, ',');
         pmix_argv_free(cps);
     }
-    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:find_coprocessors: hosting coprocessors %s",
                          (NULL == cpstring) ? "NONE" : cpstring));
 #else
-    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:find_coprocessors: the version of hwloc that PRTE was built "
                          "against (v%d.%d.%d) does not support detecting coprocessors",
                          (HWLOC_API_VERSION >> 16) && 0xFF, (HWLOC_API_VERSION >> 8) & 0xFF,
@@ -1129,7 +1129,7 @@ char *prte_hwloc_base_check_on_coprocessor(void)
         free(cptr);
     }
     fclose(fp);
-    PRTE_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:check_coprocessor: on coprocessor %s",
                          (NULL == cp) ? "NONE" : cp));
     return cp;
@@ -1676,7 +1676,7 @@ prte_hwloc_locality_t prte_hwloc_compute_relative_locality(char *loc1, char *loc
                         locality |= PRTE_PROC_ON_HWTHREAD;
                     } else {
                         /* should never happen */
-                        prte_output(0, "UNRECOGNIZED LOCALITY %s", set1[n1]);
+                        pmix_output(0, "UNRECOGNIZED LOCALITY %s", set1[n1]);
                     }
                 }
                 break;

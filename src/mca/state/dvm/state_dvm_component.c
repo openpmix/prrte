@@ -15,7 +15,7 @@
  */
 
 #include "prte_config.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"

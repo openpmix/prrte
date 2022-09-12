@@ -16,7 +16,7 @@
 
 #include "prte_config.h"
 #include "constants.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "filem_raw.h"
 #include "src/mca/filem/base/base.h"

@@ -136,7 +136,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
             }
             PMIX_RETAIN(t);
             node->topology = t;
-            prte_output_verbose(1, prte_ras_base_framework.framework_output,
+            pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                                 "Created Node <%10s> [%3d : %3d]", node->name, node->slots,
                                 node->slots_max);
             node->available = hwloc_bitmap_dup(available);

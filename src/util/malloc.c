@@ -28,7 +28,7 @@
 
 #include "src/runtime/prte_globals.h"
 #include "src/util/malloc.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 /*
  * Undefine "malloc" and "free"
@@ -57,7 +57,7 @@ int prte_malloc_output = -1;
  * Private variables
  */
 #if PRTE_ENABLE_DEBUG
-static prte_output_stream_t malloc_stream;
+static pmix_output_stream_t malloc_stream;
 #endif
 
 #if PRTE_ENABLE_DEBUG
@@ -67,7 +67,7 @@ static prte_output_stream_t malloc_stream;
 void prte_malloc_finalize(void)
 {
     if (-1 != prte_malloc_output) {
-        prte_output_close(prte_malloc_output);
+        pmix_output_close(prte_malloc_output);
         prte_malloc_output = -1;
         PMIX_DESTRUCT(&malloc_stream);
     }
@@ -78,12 +78,12 @@ void prte_malloc_finalize(void)
  */
 void prte_malloc_init(void)
 {
-    PMIX_CONSTRUCT(&malloc_stream, prte_output_stream_t);
+    PMIX_CONSTRUCT(&malloc_stream, pmix_output_stream_t);
     malloc_stream.lds_is_debugging = true;
     malloc_stream.lds_verbose_level = 5;
     malloc_stream.lds_prefix = "malloc debug: ";
     malloc_stream.lds_want_stderr = true;
-    prte_malloc_output = prte_output_open(&malloc_stream);
+    prte_malloc_output = pmix_output_open(&malloc_stream);
 }
 #else
 void prte_malloc_init(void)
@@ -103,7 +103,7 @@ void *prte_malloc(size_t size, const char *file, int line)
 #if PRTE_ENABLE_DEBUG
     if (prte_malloc_debug_level > 1) {
         if (size <= 0) {
-            prte_output(prte_malloc_output, "Request for %ld bytes (%s, %d)", (long) size, file,
+            pmix_output(prte_malloc_output, "Request for %ld bytes (%s, %d)", (long) size, file,
                         line);
         }
     }
@@ -114,7 +114,7 @@ void *prte_malloc(size_t size, const char *file, int line)
 #if PRTE_ENABLE_DEBUG
     if (prte_malloc_debug_level > 0) {
         if (NULL == addr) {
-            prte_output(prte_malloc_output, "Request for %ld bytes failed (%s, %d)", (long) size,
+            pmix_output(prte_malloc_output, "Request for %ld bytes failed (%s, %d)", (long) size,
                         file, line);
         }
     }
@@ -131,7 +131,7 @@ void *prte_calloc(size_t nmembers, size_t size, const char *file, int line)
 #if PRTE_ENABLE_DEBUG
     if (prte_malloc_debug_level > 1) {
         if (size <= 0) {
-            prte_output(prte_malloc_output, "Request for %ld zeroed elements of size %ld (%s, %d)",
+            pmix_output(prte_malloc_output, "Request for %ld zeroed elements of size %ld (%s, %d)",
                         (long) nmembers, (long) size, file, line);
         }
     }
@@ -140,7 +140,7 @@ void *prte_calloc(size_t nmembers, size_t size, const char *file, int line)
 #if PRTE_ENABLE_DEBUG
     if (prte_malloc_debug_level > 0) {
         if (NULL == addr) {
-            prte_output(prte_malloc_output,
+            pmix_output(prte_malloc_output,
                         "Request for %ld zeroed elements of size %ld failed (%s, %d)",
                         (long) nmembers, (long) size, file, line);
         }
@@ -159,10 +159,10 @@ void *prte_realloc(void *ptr, size_t size, const char *file, int line)
     if (prte_malloc_debug_level > 1) {
         if (size <= 0) {
             if (NULL == ptr) {
-                prte_output(prte_malloc_output, "Realloc NULL for %ld bytes (%s, %d)", (long) size,
+                pmix_output(prte_malloc_output, "Realloc NULL for %ld bytes (%s, %d)", (long) size,
                             file, line);
             } else {
-                prte_output(prte_malloc_output, "Realloc %p for %ld bytes (%s, %d)", ptr,
+                pmix_output(prte_malloc_output, "Realloc %p for %ld bytes (%s, %d)", ptr,
                             (long) size, file, line);
             }
         }
@@ -172,7 +172,7 @@ void *prte_realloc(void *ptr, size_t size, const char *file, int line)
 #if PRTE_ENABLE_DEBUG
     if (prte_malloc_debug_level > 0) {
         if (NULL == addr) {
-            prte_output(prte_malloc_output, "Realloc %p for %ld bytes failed (%s, %d)", ptr,
+            pmix_output(prte_malloc_output, "Realloc %p for %ld bytes failed (%s, %d)", ptr,
                         (long) size, file, line);
         }
     }

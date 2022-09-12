@@ -37,7 +37,7 @@
 
 #include <lsf/lsbatch.h>
 
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "plm_lsf.h"
 #include "src/mca/plm/base/base.h"
@@ -97,7 +97,7 @@ static int prte_mca_plm_lsf_component_query(pmix_mca_base_module_t **module, int
     if (NULL == getenv("LSB_JOBID") || getenv("CSM_ALLOCATION_ID")
         || lsb_init("PRTE launcher") < 0) {
         /* nope, not here */
-        prte_output_verbose(10, prte_plm_base_framework.framework_output,
+        pmix_output_verbose(10, prte_plm_base_framework.framework_output,
                             "plm:lsf: NOT available for selection");
         *module = NULL;
         return PRTE_ERROR;

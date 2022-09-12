@@ -15,7 +15,7 @@
  */
 
 #include "prte_config.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "errmgr_prted.h"
 #include "src/mca/errmgr/base/base.h"
