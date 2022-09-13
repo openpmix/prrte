@@ -55,8 +55,7 @@
 #include "src/util/pmix_output.h"
 
 static struct nla_policy route_policy[RTA_MAX+1] = {
-	[RTA_IIF]	= { .type = NLA_STRING,
-			    .maxlen = IFNAMSIZ, },
+	[RTA_IIF]	= { .type = NLA_STRING, .maxlen = IFNAMSIZ },
 	[RTA_OIF]	= { .type = NLA_U32 },
 	[RTA_PRIORITY]	= { .type = NLA_U32 },
 	[RTA_FLOW]	= { .type = NLA_U32 },
@@ -70,12 +69,11 @@ static int prte_reachable_netlink_is_nlreply_expected(struct prte_reachable_netl
                                                       struct nlmsghdr *nlm_hdr)
 {
 #if PRTE_ENABLE_DEBUG
-    if (nlm_hdr->nlmsg_pid != nl_socket_get_local_port(unlsk->nlh)
-        || nlm_hdr->nlmsg_seq != unlsk->seq) {
-        pmix_output(
-            0, "Not an expected reply msg pid: %u local pid: %u msg seq: %u expected seq: %u\n",
-            nlm_hdr->nlmsg_pid, nl_socket_get_local_port(unlsk->nlh), nlm_hdr->nlmsg_seq,
-            unlsk->seq);
+    if (nlm_hdr->nlmsg_pid != nl_socket_get_local_port(unlsk->nlh) ||
+        nlm_hdr->nlmsg_seq != unlsk->seq) {
+        pmix_output(0, "Not an expected reply msg pid: %u local pid: %u msg seq: %u expected seq: %u\n",
+                    nlm_hdr->nlmsg_pid, nl_socket_get_local_port(unlsk->nlh), nlm_hdr->nlmsg_seq,
+                    unlsk->seq);
         return 0;
     }
 #endif
@@ -87,10 +85,11 @@ static int prte_reachable_netlink_is_nlreply_err(struct nlmsghdr *nlm_hdr)
 {
     if (nlm_hdr->nlmsg_type == NLMSG_ERROR) {
         struct nlmsgerr *e = (struct nlmsgerr *) nlmsg_data(nlm_hdr);
-        if (nlm_hdr->nlmsg_len >= (__u32) NLMSG_SIZE(sizeof(*e)))
+        if (nlm_hdr->nlmsg_len >= (__u32) NLMSG_SIZE(sizeof(*e))) {
             pmix_output_verbose(20, 0, "Received a netlink error message");
-        else
+        } else {
             pmix_output_verbose(20, 0, "Received a truncated netlink error message\n");
+        }
         return 1;
     }
 
@@ -157,8 +156,9 @@ static int prte_reachable_netlink_sk_alloc(struct prte_reachable_netlink_sk **p_
 
     NL_DISABLE_SEQ_CHECK(nlh);
     err = prte_reachable_netlink_set_rcvsk_timer(nlh);
-    if (err < 0)
+    if (err < 0) {
         goto err_close_nlh;
+    }
 
     unlsk->nlh = nlh;
     unlsk->seq = time(NULL);
@@ -241,15 +241,16 @@ static int prte_reachable_netlink_rt_raw_parse_cb(struct nl_msg *msg, void *arg)
     }
 
     if (tb[RTA_OIF]) {
-        if (nla_get_u32(tb[RTA_OIF]) == (uint32_t) lookup_arg->oif)
+        if (nla_get_u32(tb[RTA_OIF]) == (uint32_t) lookup_arg->oif) {
             found = 1;
-        else
+        } else {
             /* usually, this means that there is a route to the remote
                host, but that it's not through the given interface.  For
                our purposes, that means it's not reachable. */
-            pmix_output_verbose(
-                20, 0, "Retrieved route has a different outgoing interface %d (expected %d)\n",
-                nla_get_u32(tb[RTA_OIF]), lookup_arg->oif);
+            pmix_output_verbose(20, 0,
+                                "Retrieved route has a different outgoing interface %d (expected %d)\n",
+                                nla_get_u32(tb[RTA_OIF]), lookup_arg->oif);
+        }
     }
 
     if (found && tb[RTA_GATEWAY]) {
@@ -271,8 +272,9 @@ int prte_reachable_netlink_rt_lookup(uint32_t src_addr, uint32_t dst_addr, int o
     /* allocate netlink socket */
     unlsk = NULL;
     err = prte_reachable_netlink_sk_alloc(&unlsk, NETLINK_ROUTE);
-    if (err)
+    if (err) {
         return err;
+    }
 
     /* allocate route message */
     memset(&rmsg, 0, sizeof(rmsg));
