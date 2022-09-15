@@ -83,11 +83,6 @@ PRTE_LOAD_PLATFORM
 
 PRTE_CONFIGURE_SETUP
 
-# compatability for oac_check_package
-m4_copy([PRTE_LOG_COMMAND], [OAC_LOG_COMMAND])
-m4_copy([PRTE_LOG_MSG], [OAC_LOG_MSG])
-m4_copy([PRTE_APPEND], [OAC_APPEND])
-
 prte_show_title "Configuring PRTE"
 
 #

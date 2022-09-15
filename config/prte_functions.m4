@@ -209,225 +209,50 @@ dnl #######################################################################
 dnl #######################################################################
 dnl #######################################################################
 
-AC_DEFUN([PRTE_LOG_MSG],[
-# 1 is the message
-# 2 is whether to put a prefix or not
-if test -n "$2"; then
-    echo "configure:__oline__: $1" >&5
-else
-    echo $1 >&5
-fi])dnl
+AC_DEFUN([PRTE_LOG_MSG],
+[AS_IF([test -n "$2"], [OAC_LOG_MSG([$1])], [OAC_LOG_MSG_NOPREFIX([$1])])])
 
 dnl #######################################################################
 dnl #######################################################################
 dnl #######################################################################
 
-AC_DEFUN([PRTE_LOG_FILE],[
-# 1 is the filename
-if test -n "$1" && test -f "$1"; then
-    cat $1 >&5
-fi])dnl
+m4_copy([OAC_LOG_FILE], [PRTE_LOG_FILE])
 
 dnl #######################################################################
 dnl #######################################################################
 dnl #######################################################################
 
-AC_DEFUN([PRTE_LOG_COMMAND],[
-# 1 is the command
-# 2 is actions to do if success
-# 3 is actions to do if fail
-echo "configure:__oline__: $1" >&5
-$1 1>&5 2>&1
-prte_status=$?
-PRTE_LOG_MSG([\$? = $prte_status], 1)
-if test "$prte_status" = "0"; then
-    unset prte_status
-    $2
-else
-    unset prte_status
-    $3
-fi])dnl
+m4_copy([OAC_LOG_COMMAND], [PRTE_LOG_COMMAND])
 
 dnl #######################################################################
 dnl #######################################################################
 dnl #######################################################################
 
-AC_DEFUN([PRTE_UNIQ],[
-# 1 is the variable name to be uniq-ized
-prte_name=$1
-
-# Go through each item in the variable and only keep the unique ones
-
-prte_count=0
-for val in ${$1}; do
-    prte_done=0
-    prte_i=1
-    prte_found=0
-
-    # Loop over every token we've seen so far
-
-    prte_done="`expr $prte_i \> $prte_count`"
-    while test "$prte_found" = "0" && test "$prte_done" = "0"; do
-
-	# Have we seen this token already?  Prefix the comparison with
-	# "x" so that "-Lfoo" values won't be cause an error.
-
-	prte_eval="expr x$val = x\$prte_array_$prte_i"
-	prte_found=`eval $prte_eval`
-
-	# Check the ending condition
-
-	prte_done="`expr $prte_i \>= $prte_count`"
-
-	# Increment the counter
-
-	prte_i="`expr $prte_i + 1`"
-    done
-
-    # Check for special cases where we do want to allow repeated
-    # arguments (per
-    # https://www.open-mpi.org/community/lists/devel/2012/08/11362.php).
-
-    case $val in
-    -Xclang|-Xg)
-            prte_found=0
-            prte_i=`expr $prte_count + 1`
-            ;;
-    esac
-
-    # If we didn't find the token, add it to the "array"
-
-    if test "$prte_found" = "0"; then
-	prte_eval="prte_array_$prte_i=$val"
-	eval $prte_eval
-	prte_count="`expr $prte_count + 1`"
-    else
-	prte_i="`expr $prte_i - 1`"
-    fi
-done
-
-# Take all the items in the "array" and assemble them back into a
-# single variable
-
-prte_i=1
-prte_done="`expr $prte_i \> $prte_count`"
-prte_newval=
-while test "$prte_done" = "0"; do
-    prte_eval="prte_newval=\"$prte_newval \$prte_array_$prte_i\""
-    eval $prte_eval
-
-    prte_eval="unset prte_array_$prte_i"
-    eval $prte_eval
-
-    prte_done="`expr $prte_i \>= $prte_count`"
-    prte_i="`expr $prte_i + 1`"
-done
-
-# Done; do the assignment
-
-prte_newval="`echo $prte_newval`"
-prte_eval="$prte_name=\"$prte_newval\""
-eval $prte_eval
-
-# Clean up
-
-unset prte_name prte_i prte_done prte_newval prte_eval prte_count])dnl
+m4_copy([OAC_UNIQ], [PRTE_UNIQ])
 
 dnl #######################################################################
 dnl #######################################################################
 dnl #######################################################################
 
-# PRTE_APPEND(variable, new_argument)
-# ----------------------------------------
-# Append new_argument to variable, assuming a space separated list.
-#
-AC_DEFUN([PRTE_APPEND], [
-  AS_IF([test -z "${$1}"], [$1="$2"], [$1="${$1} $2"])
-])
+m4_copy([OAC_APPEND], [PRTE_APPEND])
 
 dnl #######################################################################
 dnl #######################################################################
 dnl #######################################################################
 
-# PRTE_APPEND_UNIQ(variable, new_argument)
-# ----------------------------------------
-# Append new_argument to variable if not already in variable.  This assumes a
-# space seperated list.
-#
-# This could probably be made more efficient :(.
-AC_DEFUN([PRTE_APPEND_UNIQ], [
-for arg in $2; do
-    prte_found=0;
-    for val in ${$1}; do
-        if test "x$val" = "x$arg" ; then
-            prte_found=1
-            break
-        fi
-    done
-    if test "$prte_found" = "0" ; then
-        PRTE_APPEND([$1], [$arg])
-    fi
-done
-unset prte_found
-])
+m4_copy([OAC_APPEND_UNIQ], [PRTE_APPEND_UNIQ])
 
 dnl #######################################################################
 dnl #######################################################################
 dnl #######################################################################
 
-# PRTE_FLAGS_APPEND_UNIQ(variable, new_argument)
-# ----------------------------------------------
-# Append new_argument to variable if:
-#
-# - the argument does not begin with -I, -L, or -l, or
-# - the argument begins with -I, -L, or -l, and it's not already in variable
-#
-# This macro assumes a space seperated list.
-AC_DEFUN([PRTE_FLAGS_APPEND_UNIQ], [
-    PRTE_VAR_SCOPE_PUSH([prte_tmp prte_append])
-
-    for arg in $2; do
-        prte_tmp=`echo $arg | cut -c1-2`
-        prte_append=1
-        AS_IF([test "$prte_tmp" = "-I" || test "$prte_tmp" = "-L" || test "$prte_tmp" = "-l"],
-              [for val in ${$1}; do
-                   AS_IF([test "x$val" = "x$arg"], [prte_append=0])
-               done])
-        AS_IF([test "$prte_append" = "1"],
-              [PRTE_APPEND([$1], [$arg])])
-    done
-
-    PRTE_VAR_SCOPE_POP
-])
+m4_copy([OAC_FLAGS_APPEND_UNIQ], [PRTE_FLAGS_APPEND_UNIQ])
 
 dnl #######################################################################
 dnl #######################################################################
 dnl #######################################################################
 
-# PRTE_FLAGS_PREPEND_UNIQ(variable, new_argument)
-# ----------------------------------------------
-# Prepend new_argument to variable if:
-#
-# - the argument does not begin with -I, -L, or -l, or
-# - the argument begins with -I, -L, or -l, and it's not already in variable
-#
-# This macro assumes a space seperated list.
-AC_DEFUN([PRTE_FLAGS_PREPEND_UNIQ], [
-    PRTE_VAR_SCOPE_PUSH([prte_tmp prte_prepend])
-
-    for arg in $2; do
-        prte_tmp=`echo $arg | cut -c1-2`
-        prte_prepend=1
-        AS_IF([test "$prte_tmp" = "-I" || test "$prte_tmp" = "-L" || test "$prte_tmp" = "-l"],
-              [for val in ${$1}; do
-                   AS_IF([test "x$val" = "x$arg"], [prte_prepend=0])
-               done])
-        AS_IF([test "$prte_prepend" = "1"],
-              [PRTE_APPEND([$1], [$arg])])
-    done
-
-    PRTE_VAR_SCOPE_POP
-])
+m4_copy([OAC_FLAGS_PREPEND_UNIQ], [PRTE_FLAGS_PREPEND_UNIQ])
 
 dnl #######################################################################
 dnl #######################################################################
@@ -464,63 +289,8 @@ dnl #######################################################################
 dnl #######################################################################
 dnl #######################################################################
 
-# Declare some variables; use PRTE_VAR_SCOPE_END to ensure that they
-# are cleaned up / undefined.
-AC_DEFUN([PRTE_VAR_SCOPE_PUSH],[
-
-    # Is the private index set?  If not, set it.
-    if test "x$prte_scope_index" = "x"; then
-        prte_scope_index=1
-    fi
-
-    # First, check to see if any of these variables are already set.
-    # This is a simple sanity check to ensure we're not already
-    # overwriting pre-existing variables (that have a non-empty
-    # value).  It's not a perfect check, but at least it's something.
-    for prte_var in $1; do
-        prte_str="prte_str=\"\$$prte_var\""
-        eval $prte_str
-
-        if test "x$prte_str" != "x"; then
-            AC_MSG_WARN([Found configure shell variable clash!])
-            AC_MSG_WARN([[PRTE_VAR_SCOPE_PUSH] called on "$prte_var",])
-            AC_MSG_WARN([but it is already defined with value "$prte_str"])
-            AC_MSG_WARN([This usually indicates an error in configure.])
-            AC_MSG_ERROR([Cannot continue])
-        fi
-    done
-
-    # Ok, we passed the simple sanity check.  Save all these names so
-    # that we can unset them at the end of the scope.
-    prte_str="prte_scope_$prte_scope_index=\"$1\""
-    eval $prte_str
-    unset prte_str
-
-    env | grep prte_scope
-    prte_scope_index=`expr $prte_scope_index + 1`
-])dnl
-
-# Unset a bunch of variables that were previously set
-AC_DEFUN([PRTE_VAR_SCOPE_POP],[
-    # Unwind the index
-    prte_scope_index=`expr $prte_scope_index - 1`
-    prte_scope_test=`expr $prte_scope_index \> 0`
-    if test "$prte_scope_test" = "0"; then
-        AC_MSG_WARN([[PRTE_VAR_SCOPE_POP] popped too many PRTE configure scopes.])
-        AC_MSG_WARN([This usually indicates an error in configure.])
-        AC_MSG_ERROR([Cannot continue])
-    fi
-
-    # Get the variable names from that index
-    prte_str="prte_str=\"\$prte_scope_$prte_scope_index\""
-    eval $prte_str
-
-    # Iterate over all the variables and unset them all
-    for prte_var in $prte_str; do
-        unset $prte_var
-    done
-])dnl
-
+m4_copy([OAC_VAR_SCOPE_PUSH], [PRTE_VAR_SCOPE_PUSH])
+m4_copy([OAC_VAR_SCOPE_POP], [PRTE_VAR_SCOPE_POP])
 
 dnl #######################################################################
 dnl #######################################################################
