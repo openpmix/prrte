@@ -45,7 +45,6 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --stop-on-exec                    If supported, stop each specified process at start of execution
    --stop-in-init                    Direct the specified processes to stop in PMIx_Init
    --stop-in-app                     Direct the specified processes to stop at an application-controlled location
-   --test-suicide <arg0>             Suicide instead of clean abort after delay
    --timeout <arg0>                  Timeout the job after the specified number of seconds
    --output-proctable <arg0>         Print the complete proctable to stdout [-], stderr [+], or a file
                                      [anything else] after launch
@@ -134,8 +133,6 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --rankfile <arg0>                 Name of file to specify explicit task mapping
 -s|--preload-binary                  Preload the binary on the remote machine before starting the remote
                                      process.
-   --set-cwd-to-session-dir          Set the working directory of the started processes to their session
-                                     directory
    --show-progress                   Output a brief periodic report on launch progress
    --wd <arg0>                       Synonym for --wdir
    --wdir <arg0>                     Set the working directory of the started processes
@@ -150,23 +147,15 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 /*****    Specific Options   *****/
 
    --allow-run-as-root               Allow execution as root (STRONGLY DISCOURAGED)
-   --daemonize                       Daemonize the DVM daemons into the background
    --forward-signals <arg0>          Comma-delimited list of additional signals (names or integers) to forward
                                      to application processes ["none" => forward nothing]. Signals provided by
                                      default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT
-   --keepalive <arg0>                Pipe to monitor - DVM will terminate upon closure
    --launch-agent <arg0>             Name of daemon executable used to start processes on remote nodes
                                      (default: prted)
    --max-vm-size <arg0>              Number of daemons to start
-   --no-ready-msg                    Do not print a DVM ready message
    --noprefix                        Disable automatic --prefix behavior
    --personality <arg0>              Specify the personality to be used
    --prefix <arg0>                   Prefix to be used to look for RTE executables
-   --report-pid <arg0>               Printout pid on stdout [-], stderr [+], or a file [anything else]
-   --report-uri <arg0>               Printout URI on stdout [-], stderr [+], or a file [anything else]
-   --set-sid                         Direct the DVM daemons to separate from the current session
-   --singleton <arg0>                ID of the singleton process that started us
-   --system-server                   Start the DVM as the system server
    --tmpdir <arg0>                   Set the root for the session directory tree
    --tune <arg0>                     File(s) containing MCA params for tuning DVM operations
 
@@ -222,35 +211,8 @@ param = value
 with one parameter and its associated value per line. Empty lines and lines beginning
 with the '#' character are ignored.
 #
-[no-ready-msg]
-Do not print a DVM ready message
-#
-[daemonize]
-Daemonize the DVM daemons into the background
-#
-[system-server]
-Start the DVM as the system server
-#
-[set-sid]
-Direct the DVM daemons to separate from the current session
-#
-[report-pid]
-Printout PID on stdout [-], stderr [+], or a file [anything else]
-#
-[report-uri]
-Printout URI on stdout [-], stderr [+], or a file [anything else]
-#
-[test-suicide]
-Suicide instead of clean abort after delay
-#
 [default-hostfile]
 Provide a default hostfile
-#
-[singleton]
-ID of the singleton process that started us
-#
-[keepalive]
-Pipe to monitor - DVM will terminate upon closure
 #
 [launch-agent]
 Name of daemon executable used to start processes on remote nodes (default: prted)
@@ -342,9 +304,6 @@ Set the working directory of the started processes
 #
 [wd]
 Synonym for --wdir
-#
-[set-cwd-to-session-dir]
-Set the working directory of the started processes to their session directory
 #
 [path]
 PATH to be used to look for executables to start processes
