@@ -565,6 +565,11 @@ next:
             rc = PRTE_ERR_NOT_FOUND;
             goto REPORT_ERROR;
         }
+        if (NULL == jdata->schizo) {
+            pmix_show_help("help-schizo-base.txt", "no-proxy", true,
+                           prte_tool_basename, "NULL");
+            return 1;
+        }
     } else {
         prte_set_job_data_object(jdata);
 
@@ -572,24 +577,24 @@ next:
         if (NULL == jdata->map) {
             jdata->map = PMIX_NEW(prte_job_map_t);
         }
-    }
-    /* get the associated schizo module */
-    if (NULL != jdata->personality) {
-        tmp = pmix_argv_join(jdata->personality, ',');
-    } else {
-        tmp = NULL;
-    }
-    jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
-    if (NULL == jdata->schizo) {
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true,
-                       prte_tool_basename, (NULL == tmp) ? "NULL" : tmp);
+        /* get the associated schizo module */
+        if (NULL != jdata->personality) {
+            tmp = pmix_argv_join(jdata->personality, ',');
+        } else {
+            tmp = NULL;
+        }
+        jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
+        if (NULL == jdata->schizo) {
+            pmix_show_help("help-schizo-base.txt", "no-proxy", true,
+                           prte_tool_basename, (NULL == tmp) ? "NULL" : tmp);
+            if (NULL != tmp) {
+                free(tmp);
+            }
+            return 1;
+        }
         if (NULL != tmp) {
             free(tmp);
         }
-        return 1;
-    }
-    if (NULL != tmp) {
-        free(tmp);
     }
 
     /* unpack the byte object containing any application setup info - there

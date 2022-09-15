@@ -169,16 +169,16 @@ typedef struct {
 /* macro to separate out the mapping policy
  * from the directives
  */
-#define PRTE_GET_MAPPING_POLICY(pol) ((pol) &0x00ff)
+#define PRTE_GET_MAPPING_POLICY(pol) ((pol) & 0x00ff)
 /* macro to determine if mapping policy is set */
-#define PRTE_MAPPING_POLICY_IS_SET(pol)      ((pol) &0x00ff)
-#define PRTE_SET_MAPPING_POLICY(target, pol) (target) = (pol) | ((target) &0xff00)
+#define PRTE_MAPPING_POLICY_IS_SET(pol)      ((pol) & 0x00ff)
+#define PRTE_SET_MAPPING_POLICY(target, pol) (target) = (pol) | ((target) & 0xff00)
 
 /* define ranking directives */
 #define PRTE_RANKING_GIVEN                        0x1000
 #define PRTE_SET_RANKING_DIRECTIVE(target, pol)   (target) |= (pol)
 #define PRTE_UNSET_RANKING_DIRECTIVE(target, pol) (target) &= ~(pol)
-#define PRTE_GET_RANKING_DIRECTIVE(pol)           ((pol) &0xf000)
+#define PRTE_GET_RANKING_DIRECTIVE(pol)           ((pol) & 0xf000)
 
 /* define ranking policies */
 #define PRTE_RANK_BY_NODE            1
@@ -189,8 +189,8 @@ typedef struct {
 
 #define PRTE_GET_RANKING_POLICY(pol) ((pol) &0x0fff)
 /* macro to determine if ranking policy is set */
-#define PRTE_RANKING_POLICY_IS_SET(pol)      ((pol) &0x0fff)
-#define PRTE_SET_RANKING_POLICY(target, pol) (target) = (pol) | ((target) &0xf000)
+#define PRTE_RANKING_POLICY_IS_SET(pol)      ((pol) & 0x0fff)
+#define PRTE_SET_RANKING_POLICY(target, pol) (target) = (pol) | ((target) & 0xf000)
 
 END_C_DECLS
 

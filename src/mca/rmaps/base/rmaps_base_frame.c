@@ -631,46 +631,60 @@ int prte_rmaps_base_set_default_ranking(prte_job_t *jdata,
 int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
 {
     prte_ranking_policy_t tmp;
+    prte_mapping_policy_t mapping;
+    char **ck, *jobppr;
+    size_t len;
 
     /* set default */
     tmp = 0;
 
     if (NULL == spec) {
+        if (NULL == jdata) {
+            return PRTE_SUCCESS;
+        }
+        if (NULL == jdata->map) {
+            jdata->map = PMIX_NEW(prte_job_map_t);
+        }
+        if (PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+            return PRTE_SUCCESS;
+        }
+        mapping = PRTE_GET_MAPPING_POLICY(jdata->map->mapping);
         /* if mapping by-node, then default to rank-by node */
-        if (PRTE_MAPPING_BYNODE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        if (PRTE_MAPPING_BYNODE == mapping) {
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NODE);
 
-        } else if (PRTE_MAPPING_PPR != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        } else if (PRTE_MAPPING_PPR != mapping) {
             /* default to by-slot */
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
         }
-    } else {
-        if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
-            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
-
-        } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
-            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NODE);
-
-        } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_FILL)) {
-            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_FILL);
-
-        } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SPAN)) {
-            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SPAN);
-
-        } else {
-            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
-                           "ranking", spec);
-            return PRTE_ERR_SILENT;
-        }
-        PRTE_SET_RANKING_DIRECTIVE(tmp, PRTE_RANKING_GIVEN);
+        jdata->map->ranking = tmp;
+        return PRTE_SUCCESS;
     }
+
+    if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
+
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NODE);
+
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_FILL)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_FILL);
+
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SPAN)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SPAN);
+
+    } else {
+        pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
+                       "ranking", spec);
+        return PRTE_ERR_SILENT;
+    }
+    PRTE_SET_RANKING_DIRECTIVE(tmp, PRTE_RANKING_GIVEN);
 
     if (NULL == jdata) {
         prte_rmaps_base.ranking = tmp;
     } else {
         if (NULL == jdata->map) {
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            return PRTE_ERR_BAD_PARAM;
+            jdata->map = PMIX_NEW(prte_job_map_t);
         }
         jdata->map->ranking = tmp;
     }
