@@ -454,7 +454,7 @@ void prte_state_base_notify_data_server(pmix_proc_t *target)
 }
 
 static void _send_notification(int status, prte_proc_state_t state, pmix_proc_t *proc,
-                               pmix_proc_t *target)
+                               pmix_proc_t *target, int exit_code)
 {
     prte_grpcomm_signature_t sig;
     int rc;
@@ -504,10 +504,17 @@ static void _send_notification(int status, prte_proc_state_t state, pmix_proc_t 
     }
 
     /* setup the info */
-    ninfo = 2;
+    if (-1 != exit_code) {
+        ninfo = 3;
+    } else {
+        ninfo = 2;
+    }
     PMIX_INFO_CREATE(info, ninfo);
     PMIX_INFO_LOAD(&info[0], PMIX_EVENT_AFFECTED_PROC, proc, PMIX_PROC);
     PMIX_INFO_LOAD(&info[1], PMIX_EVENT_CUSTOM_RANGE, target, PMIX_PROC);
+    if (-1 != exit_code) {
+        PMIX_INFO_LOAD(&info[2], PMIX_EXIT_CODE, &exit_code, PMIX_INT);
+    }
 
     /* pack the number of infos */
     if (PMIX_SUCCESS != (ret = PMIx_Data_pack(NULL, &pbkt, &ninfo, 1, PMIX_SIZE))) {
@@ -726,13 +733,12 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
                 prte_state_base_notify_data_server(&target);
             }
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_TERMINATED);
-        } else if (PRTE_PROC_STATE_TERMINATED < pdata->state && !prte_job_term_ordered) {
-            /* if this was an abnormal term, notify the other procs of the termination */
+        } else if (PRTE_PROC_STATE_TERMINATED < pdata->state && !prte_job_term_ordered &&
+                   PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RECOVERABLE)) {
+            /* notify the other procs of the termination */
             PMIX_LOAD_PROCID(&parent, jdata->nspace, PMIX_RANK_WILDCARD);
-
-            /* if ft prte is enabled, a PMIx event has already been produced
-             * and this is redundant. */
-            //    _send_notification(PRTE_ERR_PROC_ABORTED, pdata->state, &pdata->name, &parent);
+            _send_notification(PRTE_ERR_PROC_ABORTED, pdata->state,
+                               &pdata->name, &parent, pdata->exit_code);
         }
     }
 

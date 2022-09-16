@@ -206,6 +206,8 @@ static void interim(int sd, short args, void *cbdata)
     size_t m, n;
     uint16_t u16;
     pmix_rank_t rank;
+    prte_rmaps_options_t options;
+    prte_schizo_base_module_t *schizo;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
@@ -218,6 +220,20 @@ static void interim(int sd, short args, void *cbdata)
     jdata->map = PMIX_NEW(prte_job_map_t);
     /* default to the requestor as the originator */
     PMIX_LOAD_PROCID(&jdata->originator, requestor->nspace, requestor->rank);
+    /* find the personality being passed - we need this info to direct
+     * option parsing */
+    for (n=0; n < cd->ninfo; n++) {
+        if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PERSONALITY)) {
+            jdata->personality = pmix_argv_split(cd->info[n].value.data.string, ',');
+            jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(cd->info[n].value.data.string);
+            pmix_server_cache_job_info(jdata, &cd->info[n]);
+            break;
+        }
+    }
+    if (NULL == jdata->personality) {
+        /* use the default */
+        jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(NULL);
+    }
 
     /* transfer the apps across */
     for (n = 0; n < cd->napps; n++) {
@@ -332,17 +348,24 @@ static void interim(int sd, short args, void *cbdata)
             }
         }
     }
+    /* initiate the default runtime options - had to delay this until
+     * after we parsed the apps as some runtime options are for
+     * the apps themselves */
+    memset(&options, 0, sizeof(prte_rmaps_options_t));
+    options.stream = prte_rmaps_base_framework.framework_output;
+    options.verbosity = 5;  // usual value for base-level functions
+    schizo = (prte_schizo_base_module_t*)jdata->schizo;
+    rc = schizo->set_default_rto(jdata, &options);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        goto complete;
+    }
 
     /* transfer the job info across */
     for (m = 0; m < cd->ninfo; m++) {
         info = &cd->info[m];
-        /***   PERSONALITY   ***/
-        if (PMIX_CHECK_KEY(info, PMIX_PERSONALITY)) {
-            jdata->personality = pmix_argv_split(info->value.data.string, ',');
-            pmix_server_cache_job_info(jdata, info);
-
             /***   REQUESTED MAPPER   ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
+        if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
             jdata->map->req_mapper = strdup(info->value.data.string);
 
             /***   DISPLAY ALLOCATION   ***/
@@ -433,7 +456,6 @@ static void interim(int sd, short args, void *cbdata)
             if (PRTE_SUCCESS != rc) {
                 goto complete;
             }
-            jdata->map->rtos_set = true;  // protect against doing this again in rmaps_map_job
 
             /*** ABORT_NON_ZERO  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_ABORT_NON_ZERO_TERM)) {
