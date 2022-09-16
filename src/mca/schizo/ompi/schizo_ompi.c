@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2006-2017 Los Alamos National Security, LLC.
  *                         All rights reserved.
- * Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2009-2022 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2011-2017 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2017      UT-Battelle, LLC. All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
@@ -1377,15 +1377,14 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
     return PRTE_SUCCESS;
 }
 
+// These frameworks are current as of 16 Sep, 2022, and are the list
+// of frameworks that are planned to be in Open MPI v5.0.0.
 static char *ompi_frameworks[] = {
     /* OPAL frameworks */
     "allocator",
     "backtrace",
     "btl",
-    "compress",
-    "crs",
     "dl",
-    "event",
     "hwloc",
     "if",
     "installdirs",
@@ -1395,11 +1394,10 @@ static char *ompi_frameworks[] = {
     "mpool",
     "patcher",
     "pmix",
-    "pstat",
     "rcache",
     "reachable",
-    "smsc",
     "shmem",
+    "smsc",
     "threads",
     "timer",
     /* OMPI frameworks */
@@ -1414,6 +1412,7 @@ static char *ompi_frameworks[] = {
     "mtl",
     "op",
     "osc",
+    "part",
     "pml",
     "sharedfp",
     "topo",
