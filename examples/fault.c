@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +43,7 @@ static void notification_fn(size_t evhdlr_registration_id, pmix_status_t status,
 {
     myrel_t *lock;
     bool found;
-    int exit_code;
+    int exit_code = -1;
     size_t n;
     pmix_proc_t *affected = NULL;
 
@@ -75,8 +75,14 @@ static void notification_fn(size_t evhdlr_registration_id, pmix_status_t status,
     if (NULL != cbfunc) {
         cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
     }
-    fprintf(stderr, "DEBUGGER DAEMON NOTIFIED TERMINATED - AFFECTED %s\n",
-            (NULL == affected) ? "NULL" : affected->nspace);
+    if (NULL == affected) {
+        fprintf(stderr, "CLIENT %s:%u NOTIFIED STATUS %s - AFFECTED NULL\n",
+                myproc.nspace, myproc.rank, PMIx_Error_string(status));
+    } else {
+        fprintf(stderr, "CLIENT %s:%u NOTIFIED STATUS %s - AFFECTED %s:%u EXIT STATUS %d\n",
+                myproc.nspace, myproc.rank, PMIx_Error_string(status),
+                affected->nspace, affected->rank, exit_code);
+    }
 
     if (found) {
         lock->exit_code = exit_code;
@@ -88,8 +94,6 @@ static void notification_fn(size_t evhdlr_registration_id, pmix_status_t status,
 static void op_callbk(pmix_status_t status, void *cbdata)
 {
     mylock_t *lock = (mylock_t *) cbdata;
-    fprintf(stderr, "Client %s:%d OP CALLBACK CALLED WITH STATUS %d\n", myproc.nspace, myproc.rank,
-            status);
     DEBUG_WAKEUP_THREAD(lock);
 }
 
@@ -97,9 +101,6 @@ static void evhandler_reg_callbk(pmix_status_t status, size_t errhandler_ref, vo
 {
     mylock_t *lock = (mylock_t *) cbdata;
 
-    fprintf(stderr,
-            "Client %s:%d ERRHANDLER REGISTRATION CALLBACK CALLED WITH STATUS %d, ref=%lu\n",
-            myproc.nspace, myproc.rank, status, (unsigned long) errhandler_ref);
     DEBUG_WAKEUP_THREAD(lock);
 }
 
@@ -135,7 +136,6 @@ int main(int argc, char **argv)
     }
     nprocs = val->data.uint32;
     PMIX_VALUE_RELEASE(val);
-    fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank, nprocs);
 
     /* register another handler specifically for when the target
      * job completes */

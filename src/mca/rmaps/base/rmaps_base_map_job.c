@@ -94,14 +94,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     memset(&options, 0, sizeof(prte_rmaps_options_t));
     options.stream = prte_rmaps_base_framework.framework_output;
     options.verbosity = 5;  // usual value for base-level functions
-    if (!jdata->map->rtos_set) {
-        /* set the runtime options first */
-        if (NULL != schizo->set_default_rto) {
-            rc = schizo->set_default_rto(jdata, &options);
-        } else {
-            rc = prte_rmaps_base_set_default_rto(jdata, &options);
-        }
-    }
+
     /* check and set some general options */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         options.donotlaunch = true;
