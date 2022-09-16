@@ -1616,13 +1616,13 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                  * require that the proc deregister before terminating
                  */
                 if (0 != proc->exit_code && flag) {
-                    state = PRTE_PROC_STATE_TERM_NON_ZERO;
                     PMIX_OUTPUT_VERBOSE(
                         (5, prte_odls_base_framework.framework_output,
                          "%s odls:waitpid_fired child process %s terminated normally "
                          "but with a non-zero exit status - it "
                          "will be treated as an abnormal termination",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
+                    state = PRTE_PROC_STATE_TERM_NON_ZERO;
                 } else {
                     /* indicate the waitpid fired */
                     state = PRTE_PROC_STATE_WAITPID_FIRED;
