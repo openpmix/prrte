@@ -691,7 +691,6 @@ void prte_plm_base_setup_job_complete(int fd, short args, void *cbdata)
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
-
     /* nothing to do here but move along */
     PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_ALLOCATE);
     PMIX_RELEASE(caddy);
