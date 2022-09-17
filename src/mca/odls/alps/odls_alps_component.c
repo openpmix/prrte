@@ -47,8 +47,7 @@
 
 #include "src/mca/common/alps/common_alps.h"
 #include "src/mca/odls/alps/odls_alps.h"
-#include "src/mca/odls/base/odls_private.h"
-#include "src/mca/odls/odls.h"
+#include "src/mca/odls/base/base.h"
 
 /*
  * Instantiate the public struct with all of our public information

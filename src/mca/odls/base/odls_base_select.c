@@ -29,7 +29,6 @@
 #include "src/mca/mca.h"
 
 #include "src/mca/odls/base/base.h"
-#include "src/mca/odls/base/odls_private.h"
 
 /**
  * Function for selecting one component from all those that are

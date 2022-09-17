@@ -16,10 +16,10 @@
 dist_prtedata_DATA += base/help-state-base.txt
 
 headers += \
-        base/state_private.h \
         base/base.h
 
 libprtemca_state_la_SOURCES += \
         base/state_base_frame.c \
         base/state_base_select.c \
-        base/state_base_fns.c
+        base/state_base_fns.c \
+        base/state_base_options.c

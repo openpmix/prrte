@@ -763,7 +763,7 @@ static void send_chunk(int xxx, short argc, void *cbdata)
     /* if job termination has been ordered, just ignore the
      * data and delete the read event
      */
-    if (prte_job_term_ordered) {
+    if (prte_dvm_abort_ordered) {
         PMIX_RELEASE(rev);
         return;
     }

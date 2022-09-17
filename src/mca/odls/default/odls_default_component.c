@@ -42,9 +42,8 @@
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
-#include "src/mca/odls/base/odls_private.h"
 #include "src/mca/odls/default/odls_default.h"
-#include "src/mca/odls/odls.h"
+#include "src/mca/odls/base/base.h"
 
 /*
  * Instantiate the public struct with all of our public information
