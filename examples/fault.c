@@ -114,7 +114,11 @@ int main(int argc, char **argv)
     pmix_info_t *info;
     mylock_t mylock;
     myrel_t myrel;
-    pmix_status_t code[2] = {PMIX_ERR_PROC_ABORTED, PMIX_EVENT_JOB_END};
+    pmix_status_t codes[4] = {
+        PMIX_ERR_PROC_ABORTED,
+        PMIX_ERR_EXIT_NONZERO_TERM,
+        PMIX_ERR_PROC_ABORTED_BY_SIG,
+        PMIX_EVENT_JOB_END};
 
     /* init us */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
@@ -146,7 +150,7 @@ int main(int argc, char **argv)
     PMIX_INFO_LOAD(&info[1], PMIX_NSPACE, myproc.nspace, PMIX_STRING);
 
     DEBUG_CONSTRUCT_LOCK(&mylock);
-    PMIx_Register_event_handler(code, 2, info, 2, notification_fn, evhandler_reg_callbk,
+    PMIx_Register_event_handler(codes, 4, info, 2, notification_fn, evhandler_reg_callbk,
                                 (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     if (PMIX_SUCCESS != mylock.status) {

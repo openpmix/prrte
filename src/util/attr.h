@@ -95,7 +95,6 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_FLAG_FORWARD_OUTPUT    0x0020 // forward output from the apps
 #define PRTE_JOB_FLAG_DO_NOT_MONITOR    0x0040 // do not monitor apps for termination
 #define PRTE_JOB_FLAG_FORWARD_COMM      0x0080 //
-#define PRTE_JOB_FLAG_RECOVERABLE       0x0100 // job is recoverable
 #define PRTE_JOB_FLAG_RESTART           0x0200 //
 #define PRTE_JOB_FLAG_PROCS_MIGRATING   0x0400 // some procs in job are migrating from one node to another
 #define PRTE_JOB_FLAG_OVERSUBSCRIBED    0x0800 // at least one node in the job is oversubscribed
@@ -124,7 +123,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_INDEX_ARGV                 (PRTE_JOB_START_KEY +  16) // bool - automatically index argvs
 #define PRTE_JOB_NO_VM                      (PRTE_JOB_START_KEY +  17) // bool - do not use VM launch
 #define PRTE_JOB_SPIN_FOR_DEBUG             (PRTE_JOB_START_KEY +  18) // bool - the prted's are to spin while waiting for debugger
-#define PRTE_JOB_CONTINUOUS_OP              (PRTE_JOB_START_KEY +  19) // bool - job consists of continuously operating apps
+#define PRTE_JOB_CONTINUOUS                 (PRTE_JOB_START_KEY +  19) // bool - job consists of continuously operating apps
 #define PRTE_JOB_RECOVER_DEFINED            (PRTE_JOB_START_KEY +  20) // bool - recovery policy has been defined
 #define PRTE_JOB_NON_PRTE_JOB               (PRTE_JOB_START_KEY +  22) // bool - non-prte job
 #define PRTE_JOB_STDOUT_TARGET              (PRTE_JOB_START_KEY +  23) // pmix_nspace_t - job that is to receive the stdout (on its
@@ -207,11 +206,13 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_COLOCATE_NPERNODE          (PRTE_JOB_START_KEY +  99) // uint16_t - number of procs to colocate on node of each proc
 #define PRTE_JOB_TAG_OUTPUT_DETAILED        (PRTE_JOB_START_KEY + 100) // bool - include [hostname:pid] in output stream tag
 #define PRTE_JOB_TAG_OUTPUT_FULLNAME        (PRTE_JOB_START_KEY + 101) // bool - use full namespace in output stream tag
-#define PRTE_JOB_TERM_NONZERO_EXIT          (PRTE_JOB_START_KEY + 102) // bool - terminate job if a proc exits with non-zero status
+#define PRTE_JOB_ERROR_NONZERO_EXIT         (PRTE_JOB_START_KEY + 102) // bool - mark it as an error if a proc exits with non-zero status
 #define PRTE_JOB_CONTROLS                   (PRTE_JOB_START_KEY + 103) // char* - Directives controlling job behavior
 #define PRTE_JOB_SHOW_PROGRESS              (PRTE_JOB_START_KEY + 104) // bool - show launch progress of this job
 #define PRTE_JOB_RECOVERABLE                (PRTE_JOB_START_KEY + 105) // bool - job processes can be recovered, do not terminate upon
                                                                        //        process failure
+#define PRTE_JOB_NOTIFY_ERRORS              (PRTE_JOB_START_KEY + 106) // bool - provide PMIx events on errors
+#define PRTE_JOB_AUTORESTART                (PRTE_JOB_START_KEY + 107) // bool - automatically restart failed processes
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

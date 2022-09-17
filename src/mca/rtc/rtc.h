@@ -25,7 +25,7 @@
 
 #include "src/class/pmix_list.h"
 #include "src/mca/mca.h"
-#include "src/mca/odls/base/odls_private.h"
+#include "src/mca/odls/base/base.h"
 #include "src/runtime/prte_globals.h"
 
 BEGIN_C_DECLS

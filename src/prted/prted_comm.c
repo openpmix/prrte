@@ -65,15 +65,12 @@
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
-#include "src/mca/odls/odls.h"
 #include "src/mca/oob/base/base.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml.h"
 #include "src/mca/state/state.h"
-
-#include "src/mca/odls/base/odls_private.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_quit.h"

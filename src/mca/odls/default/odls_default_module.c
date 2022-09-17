@@ -135,7 +135,6 @@
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/odls/base/base.h"
-#include "src/mca/odls/base/odls_private.h"
 #include "src/mca/odls/default/odls_default.h"
 #include "src/prted/pmix/pmix_server.h"
 

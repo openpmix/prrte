@@ -102,13 +102,12 @@ bool prte_node_info_communicated = false;
 /* launch agents */
 char *prte_launch_agent = NULL;
 char **prted_cmd_line = NULL;
-char *prte_fork_agent_string = NULL;
 
 /* exit flags */
 int prte_exit_status = 0;
 bool prte_abnormal_term_ordered = false;
 bool prte_routing_is_enabled = true;
-bool prte_job_term_ordered = false;
+bool prte_dvm_abort_ordered = false;
 bool prte_prteds_term_ordered = false;
 bool prte_allowed_exit_without_sync = false;
 
@@ -146,11 +145,6 @@ char *prte_report_events_uri = NULL;
 
 /* report bindings */
 bool prte_report_bindings = false;
-
-/* process recovery */
-bool prte_enable_recovery = false;
-int32_t prte_max_restarts = 0;
-bool prte_continuous_op = false;
 
 /* exit status reporting */
 bool prte_report_child_jobs_separately = false;
