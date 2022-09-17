@@ -47,7 +47,7 @@
 #include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/odls/base/odls_private.h"
+#include "src/mca/odls/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/runtime/prte_globals.h"
 #include "src/util/error_strings.h"

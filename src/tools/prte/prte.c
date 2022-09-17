@@ -436,7 +436,7 @@ int main(int argc, char *argv[])
      */
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         pipe(wait_pipe);
-        prte_state_base_parent_fd = wait_pipe[1];
+        prte_state_base.parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
         close(wait_pipe[0]);
     } else {
@@ -449,7 +449,7 @@ int main(int argc, char *argv[])
     }
 
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_NO_READY_MSG)) {
-        prte_state_base_ready_msg = false;
+        prte_state_base.ready_msg = false;
     }
 
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SYSTEM_SERVER)) {
@@ -654,10 +654,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* apply any provided runtime options */
+    /* apply any provided runtime options to the DVM itself */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_RTOS);
     if (NULL != opt) {
-        rc = prte_rmaps_base_set_runtime_options(jdata, opt->values[0]);
+        rc = prte_state_base_set_runtime_options(jdata, opt->values[0]);
         if (PRTE_SUCCESS != rc) {
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             goto DONE;
@@ -1130,7 +1130,7 @@ static void clean_abort(int fd, short flags, void *arg)
     /* ensure we exit with a non-zero status */
     PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
     /* ensure that the forwarding of stdin stops */
-    prte_job_term_ordered = true;
+    prte_dvm_abort_ordered = true;
     /* tell us to be quiet - hey, the user killed us with a ctrl-c,
      * so need to tell them that!
      */

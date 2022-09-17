@@ -44,8 +44,6 @@
 #include "src/threads/pmix_threads.h"
 
 #include "src/mca/state/base/base.h"
-#include "src/mca/state/base/state_private.h"
-#include "src/mca/state/state.h"
 #include "state_dvm.h"
 
 /*
@@ -338,16 +336,16 @@ static void vm_ready(int fd, short args, void *cbdata)
     if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
         prte_dvm_ready = true;
         /* notify that the vm is ready */
-        if (0 > prte_state_base_parent_fd) {
-            if (prte_state_base_ready_msg && prte_persistent) {
+        if (0 > prte_state_base.parent_fd) {
+            if (prte_state_base.ready_msg && prte_persistent) {
                 fprintf(stdout, "DVM ready\n");
                 fflush(stdout);
             }
         } else {
             char ok = 'K';
-            write(prte_state_base_parent_fd, &ok, 1);
-            close(prte_state_base_parent_fd);
-            prte_state_base_parent_fd = -1;
+            write(prte_state_base.parent_fd, &ok, 1);
+            close(prte_state_base.parent_fd);
+            prte_state_base.parent_fd = -1;
         }
         for (i = 0; i < prte_cache->size; i++) {
             jptr = (prte_job_t *) pmix_pointer_array_get_item(prte_cache, i);
@@ -811,7 +809,7 @@ release:
     }
 
     /* if requested, check fd status for leaks */
-    if (prte_state_base_run_fdcheck) {
+    if (prte_state_base.run_fdcheck) {
         prte_state_base_check_fds(jdata);
     }
 

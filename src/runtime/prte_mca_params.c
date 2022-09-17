@@ -339,12 +339,6 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prted_debug_failure_delay);
 
-    prte_show_launch_progress = false;
-    (void) pmix_mca_base_var_register("prte", "prte", NULL, "show_progress",
-                                      "Provide progress reports on DVM startup",
-                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_show_launch_progress);
-
     /* default hostfile */
     prte_default_hostfile = NULL;
     (void)
@@ -377,7 +371,8 @@ int prte_register_params(void)
                                       "environmental or default MCA param setting)",
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
                                       &prte_default_dash_host);
-    if (NULL != prte_default_dash_host && 0 == strcmp(prte_default_dash_host, "none")) {
+    if (NULL != prte_default_dash_host &&
+        0 == strcmp(prte_default_dash_host, "none")) {
         free(prte_default_dash_host);
         prte_default_dash_host = NULL;
     }
@@ -402,36 +397,12 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
                                       &prte_launch_agent);
 
-    prte_fork_agent_string = NULL;
-    (void) pmix_mca_base_var_register("prte", "prte", NULL, "exec_agent",
-                                      "Command used to exec application processes [default: NULL]",
-                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                      &prte_fork_agent_string);
-
     /* whether or not to require RM allocation */
     prte_allocation_required = false;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "allocation_required",
                                       "Whether or not an allocation by a resource manager is required [default: no]",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_allocation_required);
-
-    prte_enable_recovery = false;
-    (void) pmix_mca_base_var_register("prte", "prte", NULL, "enable_recovery",
-                                      "Set default policy for process recovery from failure to enabled",
-                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_enable_recovery);
-
-    prte_max_restarts = 0;
-    (void) pmix_mca_base_var_register("prte", "prte", NULL, "max_restarts",
-                                      "Set default max number of times to restart a failed process",
-                                      PMIX_MCA_BASE_VAR_TYPE_INT,
-                                      &prte_max_restarts);
-
-    prte_continuous_op = false;
-    (void) pmix_mca_base_var_register("prte", "prte", NULL, "continuous_operation",
-                                      "Set default policy for processes to run continuously until explicitly terminated",
-                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_continuous_op);
 
     prte_allowed_exit_without_sync = false;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "allowed_exit_without_sync",

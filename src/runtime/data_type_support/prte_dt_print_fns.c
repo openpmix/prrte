@@ -56,10 +56,7 @@ void prte_job_print(char **output, prte_job_t *src)
                   "\nData for job: %s\tPersonality: %s\tRecovery: %s(%s)\n\tNum apps: %ld\tStdin "
                   "target: %s\tState: %s\tAbort: %s",
                   PRTE_JOBID_PRINT(src->nspace), tmp2,
-                  (PRTE_FLAG_TEST(src, PRTE_JOB_FLAG_RECOVERABLE)) ? "ENABLED" : "DISABLED",
-                  (prte_get_attribute(&src->attributes, PRTE_JOB_RECOVER_DEFINED, NULL, PMIX_BOOL))
-                      ? "DEFINED"
-                      : "DEFAULT",
+                  (prte_get_attribute(&src->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL)) ? "ENABLED" : "DISABLED",
                   (long) src->num_apps, PRTE_VPID_PRINT(src->stdin_target),
                   prte_job_state_to_str(src->state),
                   (PRTE_FLAG_TEST(src, PRTE_JOB_FLAG_ABORTED)) ? "True" : "False");
@@ -231,7 +228,7 @@ PRINT_PROCS:
 void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
 {
     char *tmp, *tmp3, *tmp4, *pfx2 = "        ";
-    char *locale, *tmp2;
+    char *tmp2;
     hwloc_cpuset_t mycpus;
     char *str;
     bool use_hwthread_cpus;
@@ -294,12 +291,6 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     free(tmp);
     tmp = tmp3;
 
-    if (NULL != src->obj) {
-        locale = prte_hwloc_base_cset2str(src->obj->cpuset, use_hwthread_cpus,
-                                          src->node->topology->topo);
-    } else {
-        locale = strdup("UNKNOWN");
-    }
     if (NULL != src->cpuset) {
         mycpus = hwloc_bitmap_alloc();
         hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
@@ -309,10 +300,8 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
         tmp2 = strdup("UNBOUND");
     }
     pmix_asprintf(&tmp4,
-                  "%s\n%s        State: %s\tApp_context: %ld\n%s\tMapped:  %s\n%s\tBinding: %s",
-                  tmp, pfx2, prte_proc_state_to_str(src->state), (long) src->app_idx, pfx2, locale,
-                  pfx2, tmp2);
-    free(locale);
+                  "%s\n%s        State: %s\tApp_context: %ld\n%s\tBinding: %s",
+                  tmp, pfx2, prte_proc_state_to_str(src->state), (long) src->app_idx, pfx2, tmp2);
     free(tmp);
     free(tmp2);
 
