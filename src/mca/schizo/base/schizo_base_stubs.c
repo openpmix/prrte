@@ -68,6 +68,7 @@ static bool check_multi(const char *target)
         "display",
         "output",
         "tune",
+        "runtime-options",
         NULL
     };
     int n;

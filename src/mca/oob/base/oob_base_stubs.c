@@ -67,7 +67,7 @@ void prte_oob_base_send_nb(int fd, short args, void *cbdata)
     if (NULL == pr) {
         /* if we are abnormally terminating, or terminating the DVM, then
          * don't bother looking for it */
-        if (prte_abnormal_term_ordered || prte_never_launched || prte_job_term_ordered) {
+        if (prte_abnormal_term_ordered || prte_never_launched || prte_dvm_abort_ordered) {
             return;
         }
         pmix_output_verbose(5, prte_oob_base_framework.framework_output,

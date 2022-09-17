@@ -50,7 +50,6 @@
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/odls/base/base.h"
-#include "src/mca/odls/base/odls_private.h"
 
 /*
  * The following file was created by configure.  It contains extern
@@ -79,7 +78,8 @@ prte_odls_globals_t prte_odls_globals = {
     .ev_threads = NULL,
     .next_base = 0,
     .signal_direct_children_only = false,
-    .lock = PMIX_LOCK_STATIC_INIT
+    .lock = PMIX_LOCK_STATIC_INIT,
+    .exec_agent = NULL
 };
 
 static prte_event_base_t **prte_event_base_ptr = NULL;
@@ -112,6 +112,12 @@ static int prte_odls_base_register(pmix_mca_base_register_flag_t flags)
                                       "to apply them as well to any children spawned by those processes",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_odls_globals.signal_direct_children_only);
+
+    prte_odls_globals.exec_agent = NULL;
+    (void) pmix_mca_base_var_register("prte", "odls", "base", "exec_agent",
+                                      "Command used to exec application processes [default: NULL]",
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &prte_odls_globals.exec_agent);
 
     return PRTE_SUCCESS;
 }

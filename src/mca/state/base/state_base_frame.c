@@ -35,26 +35,73 @@
 #include "src/runtime/prte_globals.h"
 
 #include "src/mca/state/base/base.h"
-#include "src/mca/state/base/state_private.h"
 
 #include "src/mca/state/base/static-components.h"
 
 /*
  * Globals
  */
+prte_state_base_t prte_state_base = {
+    .parent_fd = -1,
+    .ready_msg = true,
+    .run_fdcheck = false,
+    .recoverable = false,
+    .max_restarts = 0,
+    .continuous = false
+};
 prte_state_base_module_t prte_state = {0};
-bool prte_state_base_run_fdcheck = false;
-int prte_state_base_parent_fd = -1;
-bool prte_state_base_ready_msg = true;
+
 
 static int prte_state_base_register(pmix_mca_base_register_flag_t flags)
 {
     PRTE_HIDE_UNUSED_PARAMS(flags);
-    prte_state_base_run_fdcheck = false;
+    prte_state_base.run_fdcheck = false;
     pmix_mca_base_var_register("prte", "state", "base", "check_fds",
                                "Daemons should check fds for leaks after each job completes",
                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                               &prte_state_base_run_fdcheck);
+                               &prte_state_base.run_fdcheck);
+
+    prte_state_base.recoverable = false;
+    pmix_mca_base_var_register("prte", "state", "base", "recoverable",
+                               "Default setting for recoverable runtime option",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                               &prte_state_base.recoverable);
+
+    prte_state_base.max_restarts = 0;
+    pmix_mca_base_var_register("prte", "state", "base", "max_restarts",
+                               "Set default max number of times to restart a failed process",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_state_base.max_restarts);
+
+    prte_state_base.continuous = false;
+    pmix_mca_base_var_register("prte", "state", "base", "continuous",
+                               "Set default policy for processes to run continuously until explicitly terminated",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                               &prte_state_base.continuous);
+
+    prte_state_base.error_non_zero_exit = true;
+    pmix_mca_base_var_register("prte", "state", "base", "error_non_zero_exit",
+                               "Set default policy for marking it an error for a process to return a non-zero exit status",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                               &prte_state_base.error_non_zero_exit);
+
+    prte_state_base.show_launch_progress = false;
+    pmix_mca_base_var_register("prte", "state", "base", "show_launch_progress",
+                               "Provide progress reports on DVM startup",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                               &prte_state_base.show_launch_progress);
+
+    prte_state_base.notifyerrors = false;
+    pmix_mca_base_var_register("prte", "state", "base", "notify_errors",
+                               "Generate a PMIx event for reportable process errors",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                               &prte_state_base.notifyerrors);
+
+    prte_state_base.autorestart = false;
+    pmix_mca_base_var_register("prte", "state", "base", "autorestart",
+                               "Automatically restart failed processes up to the max restart limit",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                               &prte_state_base.autorestart);
 
     return PRTE_SUCCESS;
 }

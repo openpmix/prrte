@@ -189,13 +189,15 @@ BEGIN_C_DECLS
 #define PRTE_CLI_TOPO       "topo="
 
 // Runtime directives
-#define PRTE_CLI_ABORT_NZ           "abort-nonzero-status"          // optional arg
+#define PRTE_CLI_ERROR_NZ           "error-nonzero-status"          // optional arg
 #define PRTE_CLI_NOLAUNCH           "donotlaunch"                   // no arg
 #define PRTE_CLI_SHOW_PROGRESS      "show-progress"                 // optional arg
-#define PRTE_CLI_RECOVER            "recover"                       // optional arg
+#define PRTE_CLI_RECOVERABLE        "recoverable"                   // optional arg
+#define PRTE_CLI_AUTORESTART        "autorestart"                   // optional arg
 #define PRTE_CLI_CONTINUOUS         "continuous"                    // optional arg
 #define PRTE_CLI_MAX_RESTARTS       "max-restarts"                  // reqd arg
 #define PRTE_CLI_EXEC_AGENT         "exec-agent"                    // reqd arg
+#define PRTE_CLI_DEFAULT_EXEC_AGENT "default-exec-agent"            // no arg
 #define PRTE_CLI_STOP_ON_EXEC       "stop-on-exec"                  // optional arg
 #define PRTE_CLI_STOP_IN_INIT       "stop-in-init"                  // optional arg
 #define PRTE_CLI_STOP_IN_APP        "stop-in-app"                   // optional arg
@@ -205,6 +207,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_STACK_TRACES       "get-stack-traces"              // optional arg
 #define PRTE_CLI_REPORT_CHILD_SEP   "report-child-jobs-separately"  // optional arg
 #define PRTE_CLI_AGG_HELP           "aggregate-help"                // optional arg
+#define PRTE_CLI_NOTIFY_ERRORS      "notifyerrors"                  // optional flag
 
 
 /* define the command line qualifiers PRRTE recognizes */

@@ -282,7 +282,7 @@ static char *print_aborted_job(prte_job_t *job,
                                        node->name);
         return output;
     } else if (PRTE_PROC_STATE_TERM_NON_ZERO == proc->state) {
-        if (prte_get_attribute(&job->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL)) {
+        if (prte_get_attribute(&job->attributes, PRTE_JOB_ERROR_NONZERO_EXIT, NULL, PMIX_BOOL)) {
             output = pmix_show_help_string("help-prun.txt", "prun:non-zero-exit", true,
                                            prte_tool_basename, PRTE_NAME_PRINT(&proc->name),
                                            proc->exit_code);
