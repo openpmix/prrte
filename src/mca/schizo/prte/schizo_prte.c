@@ -52,6 +52,7 @@
 #include "src/mca/ess/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/rmaps/base/base.h"
+#include "src/mca/state/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/pmix_init_util.h"
 
@@ -1174,5 +1175,5 @@ static void job_info(pmix_cli_result_t *results,
 static int set_default_rto(prte_job_t *jdata,
                            prte_rmaps_options_t *options)
 {
-    return prte_rmaps_base_set_runtime_options(jdata, NULL);
+    return prte_state_base_set_runtime_options(jdata, NULL);
 }

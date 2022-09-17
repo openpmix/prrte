@@ -45,7 +45,7 @@
 #include "src/mca/rmaps/base/base.h"
 #include "src/rml/rml.h"
 #include "src/mca/schizo/base/base.h"
-#include "src/mca/state/state.h"
+#include "src/mca/state/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
@@ -376,17 +376,15 @@ static void interim(int sd, short args, void *cbdata)
 
             /***   DISPLAY MAP   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP)) {
-            if (PMIX_INFO_TRUE(info)) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            }
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_MAP,
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
             /***   DISPLAY MAP-DEVEL   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP_DETAILED)) {
-            if (PMIX_INFO_TRUE(info)) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-            }
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP,
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
             /***   REPORT BINDINGS  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_REPORT_BINDINGS)) {
@@ -452,7 +450,7 @@ static void interim(int sd, short args, void *cbdata)
 
             /***   RUNTIME OPTIONS  - SHOULD ONLY APPEAR IF NOT PRE-PROCESSED BY SCHIZO ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_RUNTIME_OPTIONS)) {
-            rc = prte_rmaps_base_set_runtime_options(jdata, info->value.data.string);
+            rc = prte_state_base_set_runtime_options(jdata, info->value.data.string);
             if (PRTE_SUCCESS != rc) {
                 goto complete;
             }
@@ -460,8 +458,8 @@ static void interim(int sd, short args, void *cbdata)
             /*** ABORT_NON_ZERO  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_ABORT_NON_ZERO_TERM)) {
             flag = PMIX_INFO_TRUE(info);
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT, PRTE_ATTR_GLOBAL,
-                               &flag, PMIX_BOOL);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ERROR_NONZERO_EXIT,
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
             /*** DO_NOT_LAUNCH  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DO_NOT_LAUNCH)) {
@@ -485,21 +483,13 @@ static void interim(int sd, short args, void *cbdata)
             /*** RECOVER  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_JOB_RECOVERABLE)) {
             flag = PMIX_INFO_TRUE(info);
-            if (flag) {
-                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
-            } else {
-                PRTE_FLAG_UNSET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
-            }
-            /* mark that the recovery policy has been defined so it doesn't
-             * get overwritten later with defaults */
-            flag = true;
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_RECOVER_DEFINED, PRTE_ATTR_GLOBAL,
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
 
             /*** CONTINUOUS  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_JOB_CONTINUOUS)) {
             flag = PMIX_INFO_TRUE(info);
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS_OP, PRTE_ATTR_GLOBAL,
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
 
             /***   MAX RESTARTS  ***/
@@ -606,13 +596,11 @@ static void interim(int sd, short args, void *cbdata)
             /***   SPAWN REQUESTOR IS TOOL   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_REQUESTOR_IS_TOOL)) {
             flag = PMIX_INFO_TRUE(info);
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, PRTE_ATTR_GLOBAL, &flag,
-                               PMIX_BOOL);
-            if (flag) {
-                /* request that IO be forwarded to the requesting tool */
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_FWDIO_TO_TOOL, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
-            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DVM_JOB, PRTE_ATTR_GLOBAL,
+                               &flag, PMIX_BOOL);
+            /* request that IO be forwarded to the requesting tool */
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_FWDIO_TO_TOOL, PRTE_ATTR_GLOBAL,
+                               &flag, PMIX_BOOL);
 
             /***   NOTIFY UPON JOB COMPLETION   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_NOTIFY_COMPLETION)) {
@@ -646,8 +634,8 @@ static void interim(int sd, short args, void *cbdata)
                                PMIX_BOOL);
 
             /***   TIMESTAMP OUTPUT   ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_TIMESTAMP_OUTPUT)
-                   || PMIX_CHECK_KEY(info, PMIX_TIMESTAMP_OUTPUT)) {
+        } else if (PMIX_CHECK_KEY(info, PMIX_IOF_TIMESTAMP_OUTPUT) ||
+                   PMIX_CHECK_KEY(info, PMIX_TIMESTAMP_OUTPUT)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMESTAMP_OUTPUT, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
@@ -793,31 +781,23 @@ static void interim(int sd, short args, void *cbdata)
 
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT_STACKTRACES)) {
             flag = PMIX_INFO_TRUE(info);
-            if (flag) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
-            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES, PRTE_ATTR_GLOBAL,
+                               &flag, PMIX_BOOL);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_TIMEOUT_REPORT_STATE)) {
             flag = PMIX_INFO_TRUE(info);
-            if (flag) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
-            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, PRTE_ATTR_GLOBAL,
+                               &flag, PMIX_BOOL);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_LOG_AGG)) {
-            flag = PMIX_INFO_TRUE(info);
-            if (!flag) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
-            }
+            flag = !PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
+                               &flag, PMIX_BOOL);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_AGGREGATE_HELP)) {
-            flag = PMIX_INFO_TRUE(info);
-            if (!flag) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
-            }
+            flag = !PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
+                               &flag, PMIX_BOOL);
 
             /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {

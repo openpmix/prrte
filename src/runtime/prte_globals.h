@@ -73,7 +73,6 @@ PRTE_EXPORT extern char *prte_tool_actual;         // actual tool executable
 PRTE_EXPORT extern char *prte_progress_thread_cpus;
 PRTE_EXPORT extern bool prte_bind_progress_thread_reqd;
 PRTE_EXPORT extern bool prte_show_launch_progress;
-PRTE_EXPORT extern bool prte_continuous_op;
 
 /**
  * Global indicating where this process was bound to at launch (will
@@ -549,12 +548,11 @@ PRTE_EXPORT extern bool prte_node_info_communicated;
 /* launch agents */
 PRTE_EXPORT extern char *prte_launch_agent;
 PRTE_EXPORT extern char **prted_cmd_line;
-PRTE_EXPORT extern char *prte_fork_agent_string;
 
 /* exit flags */
 PRTE_EXPORT extern bool prte_abnormal_term_ordered;
 PRTE_EXPORT extern bool prte_routing_is_enabled;
-PRTE_EXPORT extern bool prte_job_term_ordered;
+PRTE_EXPORT extern bool prte_dvm_abort_ordered;
 PRTE_EXPORT extern bool prte_prteds_term_ordered;
 PRTE_EXPORT extern bool prte_allowed_exit_without_sync;
 
@@ -587,10 +585,6 @@ PRTE_EXPORT extern char *prte_default_dash_host;
 /* tool communication controls */
 PRTE_EXPORT extern bool prte_report_events;
 PRTE_EXPORT extern char *prte_report_events_uri;
-
-/* process recovery */
-PRTE_EXPORT extern bool prte_enable_recovery;
-PRTE_EXPORT extern int32_t prte_max_restarts;
 
 /* exit status reporting */
 PRTE_EXPORT extern bool prte_report_child_jobs_separately;

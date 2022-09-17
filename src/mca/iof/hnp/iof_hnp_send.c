@@ -58,7 +58,7 @@ int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
      */
     if (PMIX_CHECK_NSPACE(PRTE_JOB_FAMILY_PRINT(host->nspace),
                           PRTE_JOB_FAMILY_PRINT(PRTE_PROC_MY_NAME->nspace))
-        && prte_job_term_ordered) {
+        && prte_dvm_abort_ordered) {
         return PRTE_SUCCESS;
     }
 

@@ -22,8 +22,7 @@
 #
 
 headers += \
-        base/base.h \
-        base/odls_private.h
+        base/base.h
 
 libprtemca_odls_la_SOURCES += \
         base/odls_base_frame.c \

@@ -67,10 +67,12 @@ bool prte_get_attribute(pmix_list_t *attributes, prte_attribute_key_t key, void 
     return false;
 }
 
-int prte_set_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local, void *data,
+int prte_set_attribute(pmix_list_t *attributes, prte_attribute_key_t key,
+                       bool local, void *data,
                        pmix_data_type_t type)
 {
     prte_attribute_t *kv;
+    bool *bl;
     int rc;
 
     PMIX_LIST_FOREACH(kv, attributes, prte_attribute_t)
@@ -78,6 +80,14 @@ int prte_set_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool l
         if (key == kv->key) {
             if (kv->data.type != type) {
                 return PRTE_ERR_TYPE_MISMATCH;
+            }
+            if (PMIX_BOOL == type) {
+                bl = (bool*)data;
+                if (false == *bl) {
+                    pmix_list_remove_item(attributes, &kv->super);
+                    PMIX_RELEASE(kv);
+                    return PRTE_SUCCESS;
+                }
             }
             if (PRTE_SUCCESS != (rc = prte_attr_load(kv, data, type))) {
                 PRTE_ERROR_LOG(rc);
@@ -304,8 +314,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB-NO-VM";
         case PRTE_JOB_SPIN_FOR_DEBUG:
             return "JOB-SPIN-FOR-DEBUG";
-        case PRTE_JOB_CONTINUOUS_OP:
-            return "JOB-CONTINUOUS-OP";
+        case PRTE_JOB_CONTINUOUS:
+            return "JOB-CONTINUOUS";
         case PRTE_JOB_RECOVER_DEFINED:
             return "JOB-RECOVERY-DEFINED";
         case PRTE_JOB_NON_PRTE_JOB:
@@ -462,14 +472,18 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "DETAILED OUTPUT TAG";
         case PRTE_JOB_TAG_OUTPUT_FULLNAME:
             return "FULL NSPACE IN OUTPUT TAG";
-        case PRTE_JOB_TERM_NONZERO_EXIT:
-            return "TERM IF NONZERO EXIT";
+        case PRTE_JOB_ERROR_NONZERO_EXIT:
+            return "ERROR IF NONZERO EXIT";
         case PRTE_JOB_CONTROLS:
             return "JOB CONTROLS";
         case PRTE_JOB_SHOW_PROGRESS:
             return "SHOW LAUNCH PROGRESS";
         case PRTE_JOB_RECOVERABLE:
             return "JOB IS RECOVERABLE";
+        case PRTE_JOB_NOTIFY_ERRORS:
+            return "NOTIFY ERRORS";
+        case PRTE_JOB_AUTORESTART:
+            return "AUTORESTART";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
