@@ -61,7 +61,7 @@ void prte_iof_prted_send_xonxoff(prte_iof_tag_t tag)
         return;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output, "%s sending %s",
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output, "%s sending %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (PRTE_IOF_XON == tag) ? "xon" : "xoff"));
 
@@ -122,18 +122,18 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
     }
     /* numbytes will contain the actual #bytes that were sent */
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s unpacked %d bytes for local proc %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), numbytes, PRTE_NAME_PRINT(&target)));
 
     /* cycle through our list of procs */
-    PMIX_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_mca_iof_prted_component.procs, prte_iof_proc_t)
     {
         /* is this intended for this jobid? */
         if (PMIX_CHECK_NSPACE(target.nspace, proct->name.nspace)) {
             /* yes - is this intended for all vpids or this vpid? */
             if (PMIX_CHECK_RANK(target.rank, proct->name.rank)) {
-                PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                                      "%s writing data to local proc %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&proct->name)));
@@ -150,8 +150,8 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
                     /* getting too backed up - tell the HNP to hold off any more input if we
                      * haven't already told it
                      */
-                    if (!prte_iof_prted_component.xoff) {
-                        prte_iof_prted_component.xoff = true;
+                    if (!prte_mca_iof_prted_component.xoff) {
+                        prte_mca_iof_prted_component.xoff = true;
                         prte_iof_prted_send_xonxoff(PRTE_IOF_XOFF);
                     }
                 }

@@ -104,7 +104,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
  */
 static int finalize(void)
 {
-    PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s ras:pbs:finalize: success (nothing to do)",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
     return PRTE_SUCCESS;
@@ -141,7 +141,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
     /* if we are in SMP mode, then read the environment to get the
      * number of cpus for each node read in the file
      */
-    if (prte_ras_pbs_component.smp_mode) {
+    if (prte_mca_ras_pbs_component.smp_mode) {
         if (NULL == (cppn = getenv("PBS_PPN"))) {
             pmix_show_help("help-ras-pbs.txt", "smp-error", true);
             return PRTE_ERR_NOT_FOUND;
@@ -171,7 +171,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
     nodeid = 0;
     while (NULL != (hostname = pbs_getline(fp))) {
 
-        PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s ras:pbs:allocate:discover: got hostname %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hostname));
 
@@ -180,14 +180,14 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
         found = false;
         PMIX_LIST_FOREACH(node, nodelist, prte_node_t) {
             if (0 == strcmp(node->name, hostname)) {
-                if (prte_ras_pbs_component.smp_mode) {
+                if (prte_mca_ras_pbs_component.smp_mode) {
                     /* this cannot happen in smp mode */
                     pmix_show_help("help-ras-pbs.txt", "smp-multi", true);
                     return PRTE_ERR_BAD_PARAM;
                 }
                 ++node->slots;
 
-                PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                      "%s ras:pbs:allocate:discover: found -- bumped slots to %d",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->slots));
                 found = true;
@@ -201,7 +201,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
 
             /* Nope -- didn't find it, so add a new item to the list */
 
-            PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s ras:pbs:allocate:discover: not found -- added to list",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 

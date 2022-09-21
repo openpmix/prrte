@@ -91,16 +91,7 @@ typedef prte_rmaps_base_module_4_0_0_t prte_rmaps_base_module_t;
 /**
  * rmaps component version 3.0.0
  */
-struct prte_rmaps_base_component_4_0_0_t {
-    /** Base MCA structure */
-    prte_mca_base_component_t base_version;
-    /** Base MCA data */
-    prte_mca_base_component_data_t base_data;
-};
-/** Convenience typedef */
-typedef struct prte_rmaps_base_component_4_0_0_t prte_rmaps_base_component_4_0_0_t;
-/** Convenience typedef */
-typedef prte_rmaps_base_component_4_0_0_t prte_rmaps_base_component_t;
+typedef pmix_mca_base_component_t prte_rmaps_base_component_t;
 
 END_C_DECLS
 

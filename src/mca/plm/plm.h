@@ -125,21 +125,12 @@ typedef struct prte_plm_base_module_1_0_0_t prte_plm_base_module_t;
 /**
  * plm component
  */
-struct prte_plm_base_component_2_0_0_t {
-    /** component version */
-    prte_mca_base_component_t base_version;
-    /** component data */
-    prte_mca_base_component_data_t base_data;
-};
-/** Convenience typedef */
-typedef struct prte_plm_base_component_2_0_0_t prte_plm_base_component_2_0_0_t;
-/** Convenience typedef */
-typedef prte_plm_base_component_2_0_0_t prte_plm_base_component_t;
+typedef pmix_mca_base_component_t prte_plm_base_component_t;
 
 /**
  * Macro for use in modules that are of type plm
  */
-#define PRTE_PLM_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("plm", 2, 0, 0)
+#define PRTE_PLM_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("plm", 2, 0, 0)
 
 /* Global structure for accessing PLM functions */
 PRTE_EXPORT extern prte_plm_base_module_t prte_plm; /* holds selected module's function pointers */

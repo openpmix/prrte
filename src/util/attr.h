@@ -123,8 +123,8 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_COMBINER                   (PRTE_JOB_START_KEY +  15) // bool - job consists of MapReduce combiners
 #define PRTE_JOB_INDEX_ARGV                 (PRTE_JOB_START_KEY +  16) // bool - automatically index argvs
 #define PRTE_JOB_NO_VM                      (PRTE_JOB_START_KEY +  17) // bool - do not use VM launch
-#define PRTE_JOB_SPIN_FOR_DEBUG             (PRTE_JOB_START_KEY +  18) // bool - job consists of continuously operating apps
-#define PRTE_JOB_CONTINUOUS_OP              (PRTE_JOB_START_KEY +  19) // bool - recovery policy defined for job
+#define PRTE_JOB_SPIN_FOR_DEBUG             (PRTE_JOB_START_KEY +  18) // bool - the prted's are to spin while waiting for debugger
+#define PRTE_JOB_CONTINUOUS_OP              (PRTE_JOB_START_KEY +  19) // bool - job consists of continuously operating apps
 #define PRTE_JOB_RECOVER_DEFINED            (PRTE_JOB_START_KEY +  20) // bool - recovery policy has been defined
 #define PRTE_JOB_NON_PRTE_JOB               (PRTE_JOB_START_KEY +  22) // bool - non-prte job
 #define PRTE_JOB_STDOUT_TARGET              (PRTE_JOB_START_KEY +  23) // pmix_nspace_t - job that is to receive the stdout (on its
@@ -194,7 +194,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_DEBUG_DAEMONS_PER_NODE     (PRTE_JOB_START_KEY +  86) // uint16_t - Number of debug daemons per node
 #define PRTE_JOB_DEBUG_DAEMONS_PER_PROC     (PRTE_JOB_START_KEY +  87) // uint16_t - Number of debug daemons per application proc
 #define PRTE_JOB_STOP_IN_INIT               (PRTE_JOB_START_KEY +  88) // pmix_rank_t of procs to stop
-#define PRTE_JOB_STOP_IN_APP                (PRTE_JOB_START_KEY +  89) // pmix_rank_t of procs to stop
+#define PRTE_JOB_STOP_IN_APP                (PRTE_JOB_START_KEY +  89) // char* of application label where the procs are to stop
 #define PRTE_JOB_ENVARS_HARVESTED           (PRTE_JOB_START_KEY +  90) // envars have already been harvested
 #define PRTE_JOB_OUTPUT_NOCOPY              (PRTE_JOB_START_KEY +  91) // bool - do not copy output to stdout/err
 #define PRTE_JOB_RANK_OUTPUT                (PRTE_JOB_START_KEY +  92) // bool - tag stdout/stderr with rank
@@ -210,6 +210,8 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_TERM_NONZERO_EXIT          (PRTE_JOB_START_KEY + 102) // bool - terminate job if a proc exits with non-zero status
 #define PRTE_JOB_CONTROLS                   (PRTE_JOB_START_KEY + 103) // char* - Directives controlling job behavior
 #define PRTE_JOB_SHOW_PROGRESS              (PRTE_JOB_START_KEY + 104) // bool - show launch progress of this job
+#define PRTE_JOB_RECOVERABLE                (PRTE_JOB_START_KEY + 105) // bool - job processes can be recovered, do not terminate upon
+                                                                       //        process failure
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
@@ -285,9 +287,6 @@ PRTE_EXPORT void prte_remove_attribute(pmix_list_t *attributes, prte_attribute_k
 
 PRTE_EXPORT prte_attribute_t *prte_fetch_attribute(pmix_list_t *attributes, prte_attribute_t *prev,
                                                    prte_attribute_key_t key);
-
-PRTE_EXPORT int prte_add_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local,
-                                   void *data, pmix_data_type_t type);
 
 PRTE_EXPORT int prte_prepend_attribute(pmix_list_t *attributes, prte_attribute_key_t key,
                                        bool local, void *data, pmix_data_type_t type);

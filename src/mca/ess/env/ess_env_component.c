@@ -44,39 +44,35 @@ extern prte_ess_base_module_t prte_ess_env_module;
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
-prte_ess_base_component_t prte_ess_env_component = {
-    .base_version = {
-        PRTE_ESS_BASE_VERSION_3_0_0,
+prte_ess_base_component_t prte_mca_ess_env_component = {
+    PRTE_ESS_BASE_VERSION_3_0_0,
 
-        /* Component name and version */
-        .mca_component_name = "env",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PMIX_RELEASE_VERSION),
+    /* Component name and version */
+    .pmix_mca_component_name = "env",
+    PMIX_MCA_BASE_MAKE_VERSION(component,
+                               PRTE_MAJOR_VERSION,
+                               PRTE_MINOR_VERSION,
+                               PMIX_RELEASE_VERSION),
 
-        /* Component open and close functions */
-        .mca_open_component = prte_ess_env_component_open,
-        .mca_close_component = prte_ess_env_component_close,
-        .mca_query_component = prte_ess_env_component_query,
-    },
-    .base_data = {
-        /* The component is checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-    },
+    /* Component open and close functions */
+    .pmix_mca_open_component = prte_mca_ess_env_component_open,
+    .pmix_mca_close_component = prte_mca_ess_env_component_close,
+    .pmix_mca_query_component = prte_mca_ess_env_component_query,
 };
 
-int prte_ess_env_component_open(void)
+int prte_mca_ess_env_component_open(void)
 {
     return PRTE_SUCCESS;
 }
 
-int prte_ess_env_component_query(prte_mca_base_module_t **module, int *priority)
+int prte_mca_ess_env_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* we are the env module, only used by daemons that are
      * launched by ssh so allow any enviro-specifc modules
      * to override us */
     if (PRTE_PROC_IS_DAEMON) {
         *priority = 1;
-        *module = (prte_mca_base_module_t *) &prte_ess_env_module;
+        *module = (pmix_mca_base_module_t *) &prte_ess_env_module;
         return PRTE_SUCCESS;
     }
 
@@ -86,7 +82,7 @@ int prte_ess_env_component_query(prte_mca_base_module_t **module, int *priority)
     return PRTE_ERROR;
 }
 
-int prte_ess_env_component_close(void)
+int prte_mca_ess_env_component_close(void)
 {
     return PRTE_SUCCESS;
 }

@@ -14,7 +14,7 @@ dnl Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2019      Research Organization for Information Science
 dnl                         and Technology (RIST).  All rights reserved.
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -217,7 +217,7 @@ AC_DEFUN([PRTE_MCA],[
                                  MCA_prte_FRAMEWORK_COMPONENT_ALL_SUBDIRS="$MCA_prte_FRAMEWORK_COMPONENT_ALL_SUBDIRS [\$(MCA_prte_]mca_framework[_ALL_SUBDIRS)]"
                                  MCA_prte_FRAMEWORK_COMPONENT_DSO_SUBDIRS="$MCA_prte_FRAMEWORK_COMPONENT_DSO_SUBDIRS [\$(MCA_]prte[_]mca_framework[_DSO_SUBDIRS)]"
                                  MCA_prte_FRAMEWORK_COMPONENT_STATIC_SUBDIRS="$MCA_prte_FRAMEWORK_COMPONENT_STATIC_SUBDIRS [\$(MCA_prte_]mca_framework[_STATIC_SUBDIRS)]"
-                                 MCA_prte_FRAMEWORK_LIBS="$MCA_prte_FRAMEWORK_LIBS [mca/]mca_framework[/libmca_]mca_framework[.la]"])
+                                 MCA_prte_FRAMEWORK_LIBS="$MCA_prte_FRAMEWORK_LIBS [mca/]mca_framework[/libprtemca_]mca_framework[.la]"])
                           MCA_prte_FRAMEWORK_LIBS="$MCA_prte_FRAMEWORK_LIBS [\$(MCA_prte_]mca_framework[_STATIC_LTLIBS)]"
                           m4_ifdef([MCA_prte_]mca_framework[_CONFIG],
                                    [MCA_prte_]mca_framework[_CONFIG](mca_framework),
@@ -395,7 +395,7 @@ extern "C" {
 
 `cat $outfile.extern`
 
-const prte_mca_base_component_t *prte_$1_base_static_components[[]] = {
+const pmix_mca_base_component_t *prte_$1_base_static_components[[]] = {
 `cat $outfile.struct`
   NULL
 };
@@ -662,10 +662,10 @@ AC_DEFUN([MCA_PROCESS_COMPONENT],[
         else
             # Other frameworks do not have to obey the
             # $FRAMEWORK_LIB_PREFIX prefix.
-            $6="mca/$1/$2/libmca_$1_$2.la $$6"
+            $6="mca/$1/$2/libprtemca_$1_$2.la $$6"
         fi
-        echo "extern const prte_mca_base_component_t prte_$1_$2_component;" >> $outfile.extern
-        echo "  &prte_$1_$2_component, " >> $outfile.struct
+        echo "extern const pmix_mca_base_component_t prte_mca_$1_$2_component;" >> $outfile.extern
+        echo "  &prte_mca_$1_$2_component, " >> $outfile.struct
         $4="$$4 $2"
     fi
 

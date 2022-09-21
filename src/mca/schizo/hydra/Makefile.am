@@ -2,7 +2,7 @@
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2021      Nanook Consulting  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -24,18 +24,18 @@ sources = \
 
 if MCA_BUILD_prte_schizo_hydra_DSO
 component_noinst =
-component_install = mca_schizo_hydra.la
+component_install = prte_mca_schizo_hydra.la
 else
-component_noinst = libmca_schizo_hydra.la
+component_noinst = libprtemca_schizo_hydra.la
 component_install =
 endif
 
 mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
-mca_schizo_hydra_la_SOURCES = $(sources)
-mca_schizo_hydra_la_LDFLAGS = -module -avoid-version
-mca_schizo_hydra_la_LIBADD = $(top_builddir)/src/libprrte.la
+prte_mca_schizo_hydra_la_SOURCES = $(sources)
+prte_mca_schizo_hydra_la_LDFLAGS = -module -avoid-version
+prte_mca_schizo_hydra_la_LIBADD = $(top_builddir)/src/libprrte.la
 
 noinst_LTLIBRARIES = $(component_noinst)
-libmca_schizo_hydra_la_SOURCES = $(sources)
-libmca_schizo_hydra_la_LDFLAGS = -module -avoid-version
+libprtemca_schizo_hydra_la_SOURCES = $(sources)
+libprtemca_schizo_hydra_la_LDFLAGS = -module -avoid-version

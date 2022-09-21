@@ -37,7 +37,7 @@
 
 #include <lsf/lsbatch.h>
 
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "plm_lsf.h"
 #include "src/mca/plm/base/base.h"
@@ -47,7 +47,7 @@
 /*
  * Public string showing the plm lsf component version number
  */
-const char *prte_plm_lsf_component_version_string
+const char *prte_mca_plm_lsf_component_version_string
     = "PRTE lsf plm MCA component version " PRTE_VERSION;
 
 /*
@@ -55,35 +55,28 @@ const char *prte_plm_lsf_component_version_string
  */
 static int plm_lsf_open(void);
 static int plm_lsf_close(void);
-static int prte_plm_lsf_component_query(prte_mca_base_module_t **module, int *priority);
+static int prte_mca_plm_lsf_component_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Instantiate the public struct with all of our public information
  * and pointers to our public functions in it
  */
 
-prte_plm_lsf_component_t prte_plm_lsf_component = {
-    {
-        /* First, the mca_component_t struct containing meta information
-           about the component itself */
+prte_mca_plm_lsf_component_t prte_mca_plm_lsf_component = {
+    .super = {
+        PRTE_PLM_BASE_VERSION_2_0_0,
 
-        .base_version = {
-            PRTE_PLM_BASE_VERSION_2_0_0,
+        /* Component name and version */
+        .pmix_mca_component_name = "lsf",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
 
-            /* Component name and version */
-            .mca_component_name = "lsf",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-
-            /* Component open and close functions */
-            .mca_open_component = plm_lsf_open,
-            .mca_close_component = plm_lsf_close,
-            .mca_query_component = prte_plm_lsf_component_query,
-        },
-        .base_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        /* Component open and close functions */
+        .pmix_mca_open_component = plm_lsf_open,
+        .pmix_mca_close_component = plm_lsf_close,
+        .pmix_mca_query_component = prte_mca_plm_lsf_component_query,
     }
 };
 
@@ -97,20 +90,20 @@ static int plm_lsf_close(void)
     return PRTE_SUCCESS;
 }
 
-static int prte_plm_lsf_component_query(prte_mca_base_module_t **module, int *priority)
+static int prte_mca_plm_lsf_component_query(pmix_mca_base_module_t **module, int *priority)
 {
 
     /* check if lsf is running here and make sure IBM CSM is NOT enabled */
     if (NULL == getenv("LSB_JOBID") || getenv("CSM_ALLOCATION_ID")
         || lsb_init("PRTE launcher") < 0) {
         /* nope, not here */
-        prte_output_verbose(10, prte_plm_base_framework.framework_output,
+        pmix_output_verbose(10, prte_plm_base_framework.framework_output,
                             "plm:lsf: NOT available for selection");
         *module = NULL;
         return PRTE_ERROR;
     }
 
     *priority = 75;
-    *module = (prte_mca_base_module_t *) &prte_plm_lsf_module;
+    *module = (pmix_mca_base_module_t *) &prte_plm_lsf_module;
     return PRTE_SUCCESS;
 }

@@ -118,7 +118,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
     char *shortname;
     char *rawname;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s dashhost: parsing args %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          hosts));
 
@@ -247,7 +247,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
         add them to the host list. If they're not unique, then
         bump the slots count for each duplicate */
     for (i = 0; NULL != mini_map[i]; i++) {
-        PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s dashhost: working node %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              mini_map[i]));
@@ -302,7 +302,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
                 ++node->slots;
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             }
-            PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: node %s already on list - slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->slots));
             if (NULL != shortname) {
@@ -335,7 +335,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
                 node->rawname = rawname;
                 rawname = NULL;
             }
-            PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: added node %s to list - slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, slots));
             node->state = PRTE_NODE_STATE_UP;
@@ -376,7 +376,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
         if (needcheck) {
             node = prte_node_match(nodes, nd->name);
             if (NULL != node) {
-                PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                      "%s dashhost: found existing node %s on input list - adding slots",
                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
                 if (PRTE_FLAG_TEST(nd, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
@@ -386,13 +386,13 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
                 }
                 PMIX_RELEASE(item);
            } else {
-                PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                      "%s dashhost: adding node %s with %d slots to final list",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nd->name, nd->slots));
                 pmix_list_append(nodes, &nd->super);
             }
         } else {
-            PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s dashhost: adding node %s with %d slots to final list",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nd->name, nd->slots));
             pmix_list_append(nodes, &nd->super);

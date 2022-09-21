@@ -30,12 +30,12 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
@@ -61,17 +61,15 @@ prte_iof_base_module_t prte_iof = {0};
 
 int prte_iof_base_output_limit = 0;
 
-static int prte_iof_base_register(prte_mca_base_register_flag_t flags)
+static int prte_iof_base_register(pmix_mca_base_register_flag_t flags)
 {
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     /* check for maximum number of pending output messages */
     prte_iof_base_output_limit = (size_t) INT_MAX;
-    (void) prte_mca_base_var_register("prte", "iof", "base", "output_limit",
+    (void) pmix_mca_base_var_register("prte", "iof", "base", "output_limit",
                                       "Maximum backlog of output messages [default: unlimited]",
-                                      PRTE_MCA_BASE_VAR_TYPE_INT, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_iof_base_output_limit);
 
     return PRTE_SUCCESS;
@@ -83,24 +81,24 @@ static int prte_iof_base_close(void)
     if (NULL != prte_iof.finalize) {
         prte_iof.finalize();
     }
-    return prte_mca_base_framework_components_close(&prte_iof_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_iof_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components, or the one
  * that was specifically requested via a MCA parameter.
  */
-static int prte_iof_base_open(prte_mca_base_open_flag_t flags)
+static int prte_iof_base_open(pmix_mca_base_open_flag_t flags)
 {
     /* Open up all available components */
-    return prte_mca_base_framework_components_open(&prte_iof_base_framework, flags);
+    return pmix_mca_base_framework_components_open(&prte_iof_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, iof, "PRTE I/O Forwarding",
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, iof, "PRTE I/O Forwarding",
                                 prte_iof_base_register,
                                 prte_iof_base_open, prte_iof_base_close,
                                 prte_iof_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 
 static void lkcbfunc(pmix_status_t status, void *cbdata)
@@ -169,7 +167,7 @@ static void prte_iof_base_sink_construct(prte_iof_sink_t *ptr)
 static void prte_iof_base_sink_destruct(prte_iof_sink_t *ptr)
 {
     if (NULL != ptr->wev) {
-        PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                              "%s iof: closing sink for process %s on fd %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&ptr->name),
                              ptr->wev->fd));
@@ -198,7 +196,7 @@ static void prte_iof_base_read_event_destruct(prte_iof_read_event_t *rev)
 
     if (0 <= rev->fd) {
         prte_event_free(rev->ev);
-        PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                              "%s iof: closing fd %d for process %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), rev->fd,
                              (NULL == proct) ? "UNKNOWN" : PRTE_NAME_PRINT(&proct->name)));
@@ -236,7 +234,7 @@ static void prte_iof_base_write_event_destruct(prte_iof_write_event_t *wev)
         free(wev->ev);
     }
     if (2 < wev->fd) {
-        PRTE_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((20, prte_iof_base_framework.framework_output,
                              "%s iof: closing fd %d for write event",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
         close(wev->fd);

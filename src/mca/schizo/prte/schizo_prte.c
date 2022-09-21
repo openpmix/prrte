@@ -51,7 +51,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
-#include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/rmaps/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/pmix_init_util.h"
 
@@ -65,6 +65,8 @@ static void allow_run_as_root(pmix_cli_result_t *results);
 static int setup_fork(prte_job_t *jdata, prte_app_context_t *context);
 static void job_info(pmix_cli_result_t *results,
                      void *jobinfo);
+static int set_default_rto(prte_job_t *jdata,
+                           prte_rmaps_options_t *options);
 
 prte_schizo_base_module_t prte_schizo_prte_module = {
     .name = "prte",
@@ -73,7 +75,8 @@ prte_schizo_base_module_t prte_schizo_prte_module = {
     .setup_fork = setup_fork,
     .detect_proxy = detect_proxy,
     .allow_run_as_root = allow_run_as_root,
-    .job_info = job_info
+    .job_info = job_info,
+    .set_default_rto = set_default_rto
 };
 
 static struct option prteoptions[] = {
@@ -122,7 +125,6 @@ static struct option prteoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_RTOS, PMIX_ARG_REQD),
 
     // output options
-    PMIX_OPTION_DEFINE(PRTE_CLI_STREAM_BUF, PMIX_ARG_REQD),
 
     /* developer options */
     PMIX_OPTION_DEFINE(PRTE_CLI_DISPLAY, PMIX_ARG_REQD),
@@ -195,7 +197,6 @@ static struct option prterunoptions[] = {
 
     // output options
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE(PRTE_CLI_STREAM_BUF, PMIX_ARG_REQD),
 
     // input options
     PMIX_OPTION_DEFINE(PRTE_CLI_STDIN, PMIX_ARG_REQD),
@@ -306,7 +307,6 @@ static struct option prunoptions[] = {
 
     // output options
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE(PRTE_CLI_STREAM_BUF, PMIX_ARG_REQD),
 
     // input options
     PMIX_OPTION_DEFINE(PRTE_CLI_STDIN, PMIX_ARG_REQD),
@@ -326,12 +326,10 @@ static struct option prunoptions[] = {
     /* display options */
     PMIX_OPTION_DEFINE(PRTE_CLI_DISPLAY, PMIX_ARG_REQD),
 
-#if PRTE_ENABLE_FT
     PMIX_OPTION_DEFINE(PRTE_CLI_ENABLE_RECOVERY, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_MAX_RESTARTS, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_DISABLE_RECOVERY, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_CONTINUOUS, PMIX_ARG_NONE),
-#endif
 
     // deprecated options
     PMIX_OPTION_DEFINE("mca", PMIX_ARG_REQD),
@@ -523,7 +521,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
     if (silent) {
         warn = false;
     } else {
-        warn = prte_schizo_prte_component.warn_deprecations;
+        warn = prte_mca_schizo_prte_component.warn_deprecations;
     }
 
     PMIX_LIST_FOREACH_SAFE(opt, nxt, &results->instances, pmix_cli_item_t) {
@@ -885,7 +883,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     char *param, *value;
     pmix_cli_item_t *opt;
 
-    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:prte: parse_env",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -1115,7 +1113,7 @@ static int detect_proxy(char *personalities)
 {
     char *evar;
 
-    prte_output_verbose(2, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(2, prte_schizo_base_framework.framework_output,
                         "%s[%s]: detect proxy with %s (%s)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__,
                         (NULL == personalities) ? "NULL" : personalities,
@@ -1127,7 +1125,7 @@ static int detect_proxy(char *personalities)
          * if it contains "prte", then we are available but
          * at a low priority */
         if (NULL != strstr(personalities, "prte")) {
-            return prte_schizo_prte_component.priority;
+            return prte_mca_schizo_prte_component.priority;
         }
         return 0;
     }
@@ -1144,7 +1142,7 @@ static int detect_proxy(char *personalities)
     }
 
     /* if neither of those were true, then just use our default */
-    return prte_schizo_prte_component.priority;
+    return prte_mca_schizo_prte_component.priority;
 }
 
 static void allow_run_as_root(pmix_cli_result_t *cli)
@@ -1171,4 +1169,10 @@ static void job_info(pmix_cli_result_t *results,
                      void *jobinfo)
 {
     return;
+}
+
+static int set_default_rto(prte_job_t *jdata,
+                           prte_rmaps_options_t *options)
+{
+    return prte_rmaps_base_set_runtime_options(jdata, NULL);
 }

@@ -29,11 +29,11 @@
 #include <string.h>
 
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/threads/pmix_tsd.h"
 #include "src/util/pmix_if.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"

@@ -66,7 +66,7 @@
 #endif
 
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/pmix_mutex.h"
@@ -74,7 +74,7 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/prte_cmd_line.h"
 #include "src/util/pmix_fd.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
@@ -147,7 +147,7 @@ static void infocb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *
     PMIX_ACQUIRE_OBJECT(lock);
 
     if (verbose) {
-        prte_output(0, "PTERM: INFOCB");
+        pmix_output(0, "PTERM: INFOCB");
     }
 
     if (NULL != release_fn) {
@@ -175,7 +175,7 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
     char *msg = NULL;
 
     if (verbose) {
-        prte_output(0, "PRUN: EVHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
+        pmix_output(0, "PRUN: EVHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
     }
 
     /* we should always have info returned to us - if not, there is
@@ -193,7 +193,7 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
             }
         }
         if (verbose && PMIX_CHECK_NSPACE(jobid, myjobid)) {
-            prte_output(0, "JOB %s COMPLETED WITH STATUS %d", PRTE_JOBID_PRINT(jobid), jobstatus);
+            pmix_output(0, "JOB %s COMPLETED WITH STATUS %d", PRTE_JOBID_PRINT(jobid), jobstatus);
         }
     }
     if (NULL != lock) {
@@ -256,8 +256,8 @@ int main(int argc, char *argv[])
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
 
     /* open the SCHIZO framework */
-    rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                      PRTE_MCA_BASE_OPEN_DEFAULT);
+    rc = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                      PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;

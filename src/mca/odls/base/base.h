@@ -31,7 +31,7 @@
 #include "prte_config.h"
 
 #include "src/mca/mca.h"
-#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/base/pmix_mca_base_framework.h"
 #include "src/mca/odls/odls.h"
 
 BEGIN_C_DECLS
@@ -39,7 +39,7 @@ BEGIN_C_DECLS
 /*
  * MCA framework
  */
-PRTE_EXPORT extern prte_mca_base_framework_t prte_odls_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_odls_base_framework;
 /*
  * Select an available component.
  */

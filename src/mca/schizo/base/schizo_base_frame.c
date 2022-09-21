@@ -16,9 +16,9 @@
 
 #include <string.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
@@ -33,7 +33,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prte_mca_base_component_t struct.
+ * component's public pmix_mca_base_component_t struct.
  */
 
 #include "src/mca/schizo/base/static-components.h"
@@ -46,15 +46,14 @@ prte_schizo_base_t prte_schizo_base = {
     .test_proxy_launch = false
 };
 
-static int prte_schizo_base_register(prte_mca_base_register_flag_t flags)
+static int prte_schizo_base_register(pmix_mca_base_register_flag_t flags)
 {
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     /* test proxy launch */
     prte_schizo_base.test_proxy_launch = false;
-    prte_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch", "Test proxy launches",
-                               PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE,
-                               PRTE_INFO_LVL_9, PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+    pmix_mca_base_var_register("prte", "schizo", "base", "test_proxy_launch", "Test proxy launches",
+                               PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                &prte_schizo_base.test_proxy_launch);
     return PRTE_SUCCESS;
 }
@@ -64,14 +63,14 @@ static int prte_schizo_base_close(void)
     /* cleanup globals */
     PMIX_LIST_DESTRUCT(&prte_schizo_base.active_modules);
 
-    return prte_mca_base_framework_components_close(&prte_schizo_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_schizo_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components, or the one
  * that was specifically requested via a MCA parameter.
  */
-static int prte_schizo_base_open(prte_mca_base_open_flag_t flags)
+static int prte_schizo_base_open(pmix_mca_base_open_flag_t flags)
 {
     int rc;
 
@@ -79,16 +78,16 @@ static int prte_schizo_base_open(prte_mca_base_open_flag_t flags)
     PMIX_CONSTRUCT(&prte_schizo_base.active_modules, pmix_list_t);
 
     /* Open up all available components */
-    rc = prte_mca_base_framework_components_open(&prte_schizo_base_framework, flags);
+    rc = pmix_mca_base_framework_components_open(&prte_schizo_base_framework, flags);
 
     /* All done */
     return rc;
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, schizo, "PRTE Schizo Subsystem", prte_schizo_base_register,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, schizo, "PRTE Schizo Subsystem", prte_schizo_base_register,
                                 prte_schizo_base_open, prte_schizo_base_close,
                                 prte_schizo_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 void prte_schizo_base_expose(char *param, char *prefix)
 {
@@ -399,6 +398,19 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_ABORT_NZ,
         PRTE_CLI_NOLAUNCH,
         PRTE_CLI_SHOW_PROGRESS,
+        PRTE_CLI_RECOVER,
+        PRTE_CLI_CONTINUOUS,
+        PRTE_CLI_MAX_RESTARTS,
+        PRTE_CLI_EXEC_AGENT,
+        PRTE_CLI_STOP_ON_EXEC,
+        PRTE_CLI_STOP_IN_INIT,
+        PRTE_CLI_STOP_IN_APP,
+        PRTE_CLI_TIMEOUT,
+        PRTE_CLI_SPAWN_TIMEOUT,
+        PRTE_CLI_REPORT_STATE,
+        PRTE_CLI_STACK_TRACES,
+        PRTE_CLI_REPORT_CHILD_SEP,
+        PRTE_CLI_AGG_HELP,
         NULL
     };
 
@@ -514,7 +526,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
         targv = pmix_argv_split(opt->values[n], ',');
         for (idx = 0; idx < pmix_argv_count(targv); idx++) {
 
-            if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_ALLOC)) {
+            if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_ALLOC)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_ALLOCATION, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
@@ -522,7 +534,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAP)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAP)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
@@ -530,7 +542,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAPDEV)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MAPDEV)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP_DETAILED, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
@@ -538,7 +550,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_BIND)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_BIND)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REPORT_BINDINGS, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
@@ -546,7 +558,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TOPO)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TOPO)) {
                 ptr = strchr(targv[idx], '=');
                 if (NULL == ptr) {
                     /* missing the value or value is invalid */
@@ -597,7 +609,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 options = pmix_argv_split(cptr, ',');
                 for (m=0; NULL != options[m]; m++) {
 
-                    if (PRTE_CHECK_CLI_OPTION(options[m], PRTE_CLI_NOCOPY)) {
+                    if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_NOCOPY)) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
                         if (PMIX_SUCCESS != ret) {
                             PMIX_ERROR_LOG(ret);
@@ -606,7 +618,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                             return ret;
                         }
 
-                    } else if (PRTE_CHECK_CLI_OPTION(options[m], PRTE_CLI_PATTERN)) {
+                    } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_PATTERN)) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
                         if (PMIX_SUCCESS != ret) {
                             PMIX_ERROR_LOG(ret);
@@ -615,7 +627,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                             return ret;
                         }
 
-                    } else if (PRTE_CHECK_CLI_OPTION(options[m], PRTE_CLI_RAW)) {
+                    } else if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_RAW)) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_RAW, NULL, PMIX_BOOL);
                     }
                     if (PMIX_SUCCESS != ret) {
@@ -636,7 +648,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 *ptr = '\0';
                 ++ptr; // step over '=' sign
             }
-            if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG)) {
+            if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
@@ -644,7 +656,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG_DET)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG_DET)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_DETAILED_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
@@ -652,7 +664,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG_FULL)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TAG_FULL)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_FULLNAME_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
@@ -660,7 +672,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_RANK)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_RANK)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_RANK_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
@@ -668,7 +680,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TIMESTAMP)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TIMESTAMP)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
@@ -676,7 +688,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_XML)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_XML)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
@@ -684,7 +696,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MERGE_ERROUT)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_MERGE_ERROUT)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
@@ -692,7 +704,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_DIR)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_DIR)) {
                 if (NULL == ptr || '\0' == *ptr) {
                     pmix_show_help("help-prte-rmaps-base.txt",
                                    "missing-qualifier", true,
@@ -727,7 +739,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     return ret;
                 }
 
-            } else if (PRTE_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_FILE)) {
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_FILE)) {
                 if (NULL == ptr || '\0' == *ptr) {
                     pmix_show_help("help-prte-rmaps-base.txt",
                                    "missing-qualifier", true,

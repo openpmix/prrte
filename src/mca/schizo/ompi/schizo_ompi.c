@@ -17,7 +17,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2018-2021 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2018-2022 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
@@ -53,7 +53,7 @@
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
 
-#include "src/mca/base/prte_mca_base_vari.h"
+#include "src/mca/base/pmix_mca_base_vari.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/rmaps/base/base.h"
@@ -140,7 +140,6 @@ static struct option ompioptions[] = {
 
     /* output options */
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE(PRTE_CLI_STREAM_BUF, PMIX_ARG_REQD),
 
     /* input options */
     PMIX_OPTION_DEFINE(PRTE_CLI_STDIN, PMIX_ARG_REQD),
@@ -177,13 +176,11 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_LAUNCH, PMIX_ARG_NONE),
 
 
-#if PRTE_ENABLE_FT
     PMIX_OPTION_DEFINE(PRTE_CLI_ENABLE_RECOVERY, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_MAX_RESTARTS, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_DISABLE_RECOVERY, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_CONTINUOUS, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("with-ft", PMIX_ARG_REQD),
-#endif
 
     /* mpiexec mandated form launch key parameters */
     PMIX_OPTION_DEFINE("initial-errhandler", PMIX_ARG_REQD),
@@ -234,6 +231,7 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE("rankfile", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("output-proctable", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("stream-buffering", PMIX_ARG_REQD),
 
     PMIX_OPTION_END
 };
@@ -414,7 +412,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     if (silent) {
         warn = false;
     } else {
-        warn = prte_schizo_ompi_component.warn_deprecations;
+        warn = prte_mca_schizo_ompi_component.warn_deprecations;
     }
 
     if(warn) {
@@ -554,7 +552,6 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
                 p1 = opt->values[n];
                 prte_schizo_base_expose(p1, "OMPI_MCA_");
             }
-#if PRTE_ENABLE_FT
         } else if (0 == strcmp(opt->key, "with-ft")) {
             if (NULL == opt->values || NULL == opt->values[0]) {
                 /* this is an error */
@@ -567,24 +564,23 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
                         /* push it into our environment */
                     char *tmp = strdup("prte_enable_ft=1");
                     prte_schizo_base_expose(tmp, "PRTE_MCA_");
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:ompi:parse_cli pushing PRTE_MCA_prte_enable_ft=1 into environment",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                     prte_enable_recovery = true;
                     free(tmp);
                     tmp = strdup("mpi_ft_enable=1");
-                    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+                    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                                         "%s schizo:ompi:parse_cli pushing OMPI_MCA_mpi_ft_enable into environment",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                     prte_schizo_base_expose(tmp, "OMPI_MCA_");
                     free(tmp);
                 }
                 else {
-                    prte_output(0, "UNRECOGNIZED OPTION: --with-ft %s", p1);
+                    pmix_output(0, "UNRECOGNIZED OPTION: --with-ft %s", p1);
                     return PRTE_ERR_FATAL;
                 }
             }
-#endif
         }
     }
 
@@ -616,7 +612,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
     if (silent) {
         warn = false;
     } else {
-        warn = prte_schizo_ompi_component.warn_deprecations;
+        warn = prte_mca_schizo_ompi_component.warn_deprecations;
     }
 
     PMIX_LIST_FOREACH_SAFE(opt, nxt, &results->instances, pmix_cli_item_t) {
@@ -1460,7 +1456,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     pmix_cli_item_t *opt;
     int i, j, rc;
 
-    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:ompi: parse_env",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -1517,6 +1513,22 @@ static int parse_env(char **srcenv, char ***dstenv,
         pmix_setenv("OMPI_MCA_ompi_display_comm", "mpi_init", true, dstenv);
     } else if (pmix_cmd_line_is_taken(results, "display-comm-finalize")) {
         pmix_setenv("OMPI_MCA_ompi_display_comm", "mpi_finalize", true, dstenv);
+    }
+
+    /* --stream-buffering will be deprecated starting with Open MPI v5 */
+    if (NULL != (opt = pmix_cmd_line_get_param(results, "stream-buffering"))) {
+        uint16_t u16;
+        if (prte_mca_schizo_ompi_component.warn_deprecations) {
+            pmix_show_help("help-schizo-base.txt", "deprecated-inform", true, "stream-buffering",
+                           "This CLI option will be deprecated starting in Open MPI v5. "
+                           "If you need this functionality use the Open MPI MCA option: ompi_stream_buffering");
+        }
+        u16 = strtol(opt->values[0], NULL, 10);
+        if (0 != u16 && 1 != u16 && 2 != u16) {
+            /* bad value */
+            pmix_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, u16);
+        }
+        pmix_setenv("OMPI_MCA_ompi_stream_buffering", opt->values[0], true, dstenv);
     }
 
     /* now look for any "--mca" options - note that it is an error
@@ -1797,14 +1809,6 @@ static bool check_pmix_overlap(char *var, char *value)
         setenv(tmp, value, false);
         free(tmp);
         return true;
-    } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
-        // need to convert reachable to preachable
-        pmix_asprintf(&tmp, "PMIX_MCA_preachable_%s", &var[strlen("reachable")]);
-        // set it, but don't overwrite if they already
-        // have a value in our environment
-        setenv(tmp, value, false);
-        free(tmp);
-        return true;
     }
     return false;
 }
@@ -1960,11 +1964,11 @@ static int detect_proxy(char *personalities)
     char *file;
     const char *home;
     pmix_list_t params;
-    prte_mca_base_var_file_value_t *fv;
+    pmix_mca_base_var_file_value_t *fv;
     uid_t uid;
     int n, len;
 
-    prte_output_verbose(2, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(2, prte_schizo_base_framework.framework_output,
                         "%s[%s]: detect proxy with %s (%s)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__,
                         (NULL == personalities) ? "NULL" : personalities,
@@ -2050,9 +2054,9 @@ weareit:
     if (NULL != home) {
         file = pmix_os_path(false, home, ".openmpi", "mca-params.conf", NULL);
         PMIX_CONSTRUCT(&params, pmix_list_t);
-        prte_mca_base_parse_paramfile(file, &params);
+        pmix_mca_base_parse_paramfile(file, &params);
         free(file);
-        PMIX_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+        PMIX_LIST_FOREACH (fv, &params, pmix_mca_base_var_file_value_t) {
             // see if this param relates to PRRTE
             if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
@@ -2082,9 +2086,9 @@ weareit:
         /* look for the default MCA param file */
         file = pmix_os_path(false, evar, "etc", "openmpi-mca-params.conf", NULL);
         PMIX_CONSTRUCT(&params, pmix_list_t);
-        prte_mca_base_parse_paramfile(file, &params);
+        pmix_mca_base_parse_paramfile(file, &params);
         free(file);
-        PMIX_LIST_FOREACH (fv, &params, prte_mca_base_var_file_value_t) {
+        PMIX_LIST_FOREACH (fv, &params, pmix_mca_base_var_file_value_t) {
             // see if this param relates to PRRTE
             if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
                 check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
@@ -2153,20 +2157,5 @@ static int set_default_ranking(prte_job_t *jdata,
 static void job_info(pmix_cli_result_t *results,
                      void *jobinfo)
 {
-    pmix_cli_item_t *opt;
-    uint16_t u16;
-    pmix_status_t rc;
-
-    if (NULL != (opt = pmix_cmd_line_get_param(results, "stream-buffering"))) {
-        u16 = strtol(opt->values[0], NULL, 10);
-        if (0 != u16 && 1 != u16 && 2 != u16) {
-            /* bad value */
-            pmix_show_help("help-schizo-base.txt", "bad-stream-buffering-value", true, u16);
-            return;
-        }
-        PMIX_INFO_LIST_ADD(rc, jobinfo, "OMPI_STREAM_BUFFERING", &u16, PMIX_UINT16);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-        }
-    }
+    ;
 }

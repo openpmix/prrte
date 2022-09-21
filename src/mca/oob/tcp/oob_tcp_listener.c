@@ -57,7 +57,7 @@
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -101,9 +101,9 @@ int prte_oob_tcp_start_listening(void)
     prte_oob_tcp_listener_t *listener;
 
     /* if we don't have any TCP interfaces, we shouldn't be here */
-    if (NULL == prte_oob_tcp_component.ipv4conns
+    if (NULL == prte_mca_oob_tcp_component.ipv4conns
 #if PRTE_ENABLE_IPV6
-        && NULL == prte_oob_tcp_component.ipv6conns
+        && NULL == prte_mca_oob_tcp_component.ipv6conns
 #endif
     ) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
@@ -128,34 +128,34 @@ int prte_oob_tcp_start_listening(void)
      * harvest connection requests as rapidly as possible
      */
     if (PRTE_PROC_IS_MASTER) {
-        if (0 > pipe(prte_oob_tcp_component.stop_thread)) {
+        if (0 > pipe(prte_mca_oob_tcp_component.stop_thread)) {
             PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
 
         /* Make sure the pipe FDs are set to close-on-exec so that
            they don't leak into children */
-        if (pmix_fd_set_cloexec(prte_oob_tcp_component.stop_thread[0]) != PRTE_SUCCESS
-            || pmix_fd_set_cloexec(prte_oob_tcp_component.stop_thread[1]) != PRTE_SUCCESS) {
-            close(prte_oob_tcp_component.stop_thread[0]);
-            close(prte_oob_tcp_component.stop_thread[1]);
+        if (pmix_fd_set_cloexec(prte_mca_oob_tcp_component.stop_thread[0]) != PRTE_SUCCESS
+            || pmix_fd_set_cloexec(prte_mca_oob_tcp_component.stop_thread[1]) != PRTE_SUCCESS) {
+            close(prte_mca_oob_tcp_component.stop_thread[0]);
+            close(prte_mca_oob_tcp_component.stop_thread[1]);
             PRTE_ERROR_LOG(PRTE_ERR_IN_ERRNO);
             return PRTE_ERR_IN_ERRNO;
         }
 
-        prte_oob_tcp_component.listen_thread_active = true;
-        prte_oob_tcp_component.listen_thread.t_run = listen_thread;
-        prte_oob_tcp_component.listen_thread.t_arg = NULL;
-        if (PRTE_SUCCESS != (rc = pmix_thread_start(&prte_oob_tcp_component.listen_thread))) {
+        prte_mca_oob_tcp_component.listen_thread_active = true;
+        prte_mca_oob_tcp_component.listen_thread.t_run = listen_thread;
+        prte_mca_oob_tcp_component.listen_thread.t_arg = NULL;
+        if (PRTE_SUCCESS != (rc = pmix_thread_start(&prte_mca_oob_tcp_component.listen_thread))) {
             PRTE_ERROR_LOG(rc);
-            prte_output(0, "%s Unable to start listen thread", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+            pmix_output(0, "%s Unable to start listen thread", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         }
         return rc;
     }
 
     /* otherwise, setup to listen via the event lib */
 
-    PMIX_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
+    PMIX_LIST_FOREACH(listener, &prte_mca_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
     {
         listener->ev_active = true;
         prte_event_set(prte_event_base, &listener->event, listener->sd,
@@ -192,16 +192,16 @@ static int create_listen(void)
      * port in the range.  Otherwise, tcp_port_min will be 0, which
      * means "pick any port"
      */
-    if (NULL != prte_oob_tcp_component.tcp_static_ports) {
+    if (NULL != prte_mca_oob_tcp_component.tcp_static_ports) {
         /* if static ports were provided, take the
          * first entry in the list
          */
-        pmix_argv_append_nosize(&ports, prte_oob_tcp_component.tcp_static_ports[0]);
+        pmix_argv_append_nosize(&ports, prte_mca_oob_tcp_component.tcp_static_ports[0]);
         /* flag that we are using static ports */
         prte_static_ports = true;
-    } else if (NULL != prte_oob_tcp_component.tcp_dyn_ports) {
+    } else if (NULL != prte_mca_oob_tcp_component.tcp_dyn_ports) {
         /* take the entire range */
-        ports = pmix_argv_copy(prte_oob_tcp_component.tcp_dyn_ports);
+        ports = pmix_argv_copy(prte_mca_oob_tcp_component.tcp_dyn_ports);
         prte_static_ports = false;
     } else {
         /* flag the system to dynamically take any available port */
@@ -226,7 +226,7 @@ static int create_listen(void)
      * sockets to support more flexible wireup protocols
      */
     for (i = 0; i < pmix_argv_count(ports); i++) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s attempting to bind to IPv4 port %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ports[i]);
         /* get the port number */
@@ -240,7 +240,7 @@ static int create_listen(void)
         sd = socket(AF_INET, SOCK_STREAM, 0);
         if (sd < 0) {
             if (EAFNOSUPPORT != prte_socket_errno) {
-                prte_output(0, "prte_oob_tcp_component_init: socket() failed: %s (%d)",
+                pmix_output(0, "prte_mca_oob_tcp_component_init: socket() failed: %s (%d)",
                             strerror(prte_socket_errno), prte_socket_errno);
             }
             pmix_argv_free(ports);
@@ -254,7 +254,7 @@ static int create_listen(void)
             flags = 0;
         }
         if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, (const char *) &flags, sizeof(flags)) < 0) {
-            prte_output(0,
+            pmix_output(0,
                         "prte_oob_tcp_create_listen: unable to set the "
                         "SO_REUSEADDR option (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
@@ -266,7 +266,7 @@ static int create_listen(void)
         /* Set the socket to close-on-exec so that no children inherit
            this FD */
         if (pmix_fd_set_cloexec(sd) != PRTE_SUCCESS) {
-            prte_output(0,
+            pmix_output(0,
                         "prte_oob_tcp_create_listen: unable to set the "
                         "listening socket to CLOEXEC (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
@@ -279,7 +279,7 @@ static int create_listen(void)
             if ((EADDRINUSE == prte_socket_errno) || (EADDRNOTAVAIL == prte_socket_errno)) {
                 continue;
             }
-            prte_output(0, "%s bind() failed for port %d: %s (%d)",
+            pmix_output(0, "%s bind() failed for port %d: %s (%d)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) ntohs(port),
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -288,7 +288,7 @@ static int create_listen(void)
         }
         /* resolve assigned port */
         if (getsockname(sd, (struct sockaddr *) &inaddr, &addrlen) < 0) {
-            prte_output(0, "prte_oob_tcp_create_listen: getsockname(): %s (%d)",
+            pmix_output(0, "prte_oob_tcp_create_listen: getsockname(): %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
             pmix_argv_free(ports);
@@ -297,7 +297,7 @@ static int create_listen(void)
 
         /* setup listen backlog to maximum allowed by kernel */
         if (listen(sd, SOMAXCONN) < 0) {
-            prte_output(0, "prte_oob_tcp_component_init: listen(): %s (%d)",
+            pmix_output(0, "prte_mca_oob_tcp_component_init: listen(): %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
             pmix_argv_free(ports);
@@ -306,7 +306,7 @@ static int create_listen(void)
 
         /* set socket up to be non-blocking, otherwise accept could block */
         if ((flags = fcntl(sd, F_GETFL, 0)) < 0) {
-            prte_output(0, "prte_oob_tcp_component_init: fcntl(F_GETFL) failed: %s (%d)",
+            pmix_output(0, "prte_mca_oob_tcp_component_init: fcntl(F_GETFL) failed: %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
             pmix_argv_free(ports);
@@ -314,7 +314,7 @@ static int create_listen(void)
         }
         flags |= O_NONBLOCK;
         if (fcntl(sd, F_SETFL, flags) < 0) {
-            prte_output(0, "prte_oob_tcp_component_init: fcntl(F_SETFL) failed: %s (%d)",
+            pmix_output(0, "prte_mca_oob_tcp_component_init: fcntl(F_SETFL) failed: %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
             pmix_argv_free(ports);
@@ -329,15 +329,15 @@ static int create_listen(void)
             /* save the first one */
             prte_process_info.my_port = conn->port;
         }
-        pmix_list_append(&prte_oob_tcp_component.listeners, &conn->item);
+        pmix_list_append(&prte_mca_oob_tcp_component.listeners, &conn->item);
         /* and to our ports */
         pmix_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in *) &inaddr)->sin_port));
-        pmix_argv_append_nosize(&prte_oob_tcp_component.ipv4ports, tconn);
+        pmix_argv_append_nosize(&prte_mca_oob_tcp_component.ipv4ports, tconn);
         free(tconn);
         if (OOB_TCP_DEBUG_CONNECT
-            <= prte_output_get_verbosity(prte_oob_base_framework.framework_output)) {
+            <= pmix_output_get_verbosity(prte_oob_base_framework.framework_output)) {
             port = ntohs(((struct sockaddr_in *) &inaddr)->sin_port);
-            prte_output(0, "%s assigned IPv4 port %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), port);
+            pmix_output(0, "%s assigned IPv4 port %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), port);
         }
 
         if (!PRTE_PROC_IS_MASTER) {
@@ -348,7 +348,7 @@ static int create_listen(void)
     /* done with this, so release it */
     pmix_argv_free(ports);
 
-    if (0 == pmix_list_get_size(&prte_oob_tcp_component.listeners)) {
+    if (0 == pmix_list_get_size(&prte_mca_oob_tcp_component.listeners)) {
         /* cleanup */
         if (0 <= sd) {
             CLOSE_THE_SOCKET(sd);
@@ -385,16 +385,16 @@ static int create_listen6(void)
      * means "pick any port"
      */
     if (PRTE_PROC_IS_DAEMON) {
-        if (NULL != prte_oob_tcp_component.tcp6_static_ports) {
+        if (NULL != prte_mca_oob_tcp_component.tcp6_static_ports) {
             /* if static ports were provided, take the
              * first entry in the list
              */
-            pmix_argv_append_nosize(&ports, prte_oob_tcp_component.tcp6_static_ports[0]);
+            pmix_argv_append_nosize(&ports, prte_mca_oob_tcp_component.tcp6_static_ports[0]);
             /* flag that we are using static ports */
             prte_static_ports = true;
-        } else if (NULL != prte_oob_tcp_component.tcp6_dyn_ports) {
+        } else if (NULL != prte_mca_oob_tcp_component.tcp6_dyn_ports) {
             /* take the entire range */
-            ports = pmix_argv_copy(prte_oob_tcp_component.tcp6_dyn_ports);
+            ports = pmix_argv_copy(prte_mca_oob_tcp_component.tcp6_dyn_ports);
             prte_static_ports = false;
         } else {
             /* flag the system to dynamically take any available port */
@@ -402,16 +402,16 @@ static int create_listen6(void)
             prte_static_ports = false;
         }
     } else {
-        if (NULL != prte_oob_tcp_component.tcp6_static_ports) {
+        if (NULL != prte_mca_oob_tcp_component.tcp6_static_ports) {
             /* if static ports were provided, take the
              * first entry in the list
              */
-            pmix_argv_append_nosize(&ports, prte_oob_tcp_component.tcp6_static_ports[0]);
+            pmix_argv_append_nosize(&ports, prte_mca_oob_tcp_component.tcp6_static_ports[0]);
             /* flag that we are using static ports */
             prte_static_ports = true;
-        } else if (NULL != prte_oob_tcp_component.tcp6_dyn_ports) {
+        } else if (NULL != prte_mca_oob_tcp_component.tcp6_dyn_ports) {
             /* take the entire range */
-            ports = pmix_argv_copy(prte_oob_tcp_component.tcp6_dyn_ports);
+            ports = pmix_argv_copy(prte_mca_oob_tcp_component.tcp6_dyn_ports);
             prte_static_ports = false;
         } else {
             /* flag the system to dynamically take any available port */
@@ -437,7 +437,7 @@ static int create_listen6(void)
      * sockets to support more flexible wireup protocols
      */
     for (i = 0; i < pmix_argv_count(ports); i++) {
-        prte_output_verbose(5, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s attempting to bind to IPv6 port %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ports[i]);
         /* get the port number */
@@ -451,7 +451,7 @@ static int create_listen6(void)
         sd = socket(AF_INET6, SOCK_STREAM, 0);
         if (sd < 0) {
             if (EAFNOSUPPORT != prte_socket_errno) {
-                prte_output(0, "prte_oob_tcp_component_init: socket() failed: %s (%d)",
+                pmix_output(0, "prte_mca_oob_tcp_component_init: socket() failed: %s (%d)",
                             strerror(prte_socket_errno), prte_socket_errno);
             }
             return PRTE_ERR_IN_ERRNO;
@@ -459,7 +459,7 @@ static int create_listen6(void)
         /* Set the socket to close-on-exec so that no children inherit
            this FD */
         if (pmix_fd_set_cloexec(sd) != PRTE_SUCCESS) {
-            prte_output(0,
+            pmix_output(0,
                         "prte_oob_tcp_create_listen6: unable to set the "
                         "listening socket to CLOEXEC (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
@@ -475,7 +475,7 @@ static int create_listen6(void)
             flags = 0;
         }
         if (setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, (const char *) &flags, sizeof(flags)) < 0) {
-            prte_output(0,
+            pmix_output(0,
                         "prte_oob_tcp_create_listen: unable to set the "
                         "SO_REUSEADDR option (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
@@ -488,7 +488,7 @@ static int create_listen6(void)
             if ((EADDRINUSE == prte_socket_errno) || (EADDRNOTAVAIL == prte_socket_errno)) {
                 continue;
             }
-            prte_output(0, "%s bind() failed for port %d: %s (%d)",
+            pmix_output(0, "%s bind() failed for port %d: %s (%d)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) ntohs(port),
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
@@ -497,7 +497,7 @@ static int create_listen6(void)
         }
         /* resolve assigned port */
         if (getsockname(sd, (struct sockaddr *) &inaddr, &addrlen) < 0) {
-            prte_output(0, "prte_oob_tcp_create_listen: getsockname(): %s (%d)",
+            pmix_output(0, "prte_oob_tcp_create_listen: getsockname(): %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
             return PRTE_ERROR;
@@ -505,20 +505,20 @@ static int create_listen6(void)
 
         /* setup listen backlog to maximum allowed by kernel */
         if (listen(sd, SOMAXCONN) < 0) {
-            prte_output(0, "prte_oob_tcp_component_init: listen(): %s (%d)",
+            pmix_output(0, "prte_mca_oob_tcp_component_init: listen(): %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             return PRTE_ERROR;
         }
 
         /* set socket up to be non-blocking, otherwise accept could block */
         if ((flags = fcntl(sd, F_GETFL, 0)) < 0) {
-            prte_output(0, "prte_oob_tcp_component_init: fcntl(F_GETFL) failed: %s (%d)",
+            pmix_output(0, "prte_mca_oob_tcp_component_init: fcntl(F_GETFL) failed: %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             return PRTE_ERROR;
         }
         flags |= O_NONBLOCK;
         if (fcntl(sd, F_SETFL, flags) < 0) {
-            prte_output(0, "prte_oob_tcp_component_init: fcntl(F_SETFL) failed: %s (%d)",
+            pmix_output(0, "prte_mca_oob_tcp_component_init: fcntl(F_SETFL) failed: %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             return PRTE_ERROR;
         }
@@ -528,14 +528,14 @@ static int create_listen6(void)
         conn->tcp6 = true;
         conn->sd = sd;
         conn->port = ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port);
-        pmix_list_append(&prte_oob_tcp_component.listeners, &conn->item);
+        pmix_list_append(&prte_mca_oob_tcp_component.listeners, &conn->item);
         /* and to our ports */
         pmix_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port));
-        pmix_argv_append_nosize(&prte_oob_tcp_component.ipv6ports, tconn);
+        pmix_argv_append_nosize(&prte_mca_oob_tcp_component.ipv6ports, tconn);
         free(tconn);
         if (OOB_TCP_DEBUG_CONNECT
-            <= prte_output_get_verbosity(prte_oob_base_framework.framework_output)) {
-            prte_output(0, "%s assigned IPv6 port %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+            <= pmix_output_get_verbosity(prte_oob_base_framework.framework_output)) {
+            pmix_output(0, "%s assigned IPv6 port %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         (int) ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port));
         }
 
@@ -544,7 +544,7 @@ static int create_listen6(void)
             break;
         }
     }
-    if (0 == pmix_list_get_size(&prte_oob_tcp_component.listeners)) {
+    if (0 == pmix_list_get_size(&prte_mca_oob_tcp_component.listeners)) {
         /* cleanup */
         CLOSE_THE_SOCKET(sd);
         pmix_argv_free(ports);
@@ -579,28 +579,28 @@ static void *listen_thread(pmix_object_t *obj)
      * to the event method for handling any further connections
      * so as to minimize overhead
      */
-    while (prte_oob_tcp_component.listen_thread_active) {
+    while (prte_mca_oob_tcp_component.listen_thread_active) {
         FD_ZERO(&readfds);
         max = -1;
-        PMIX_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
+        PMIX_LIST_FOREACH(listener, &prte_mca_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
         {
             FD_SET(listener->sd, &readfds);
             max = (listener->sd > max) ? listener->sd : max;
         }
         /* add the stop_thread fd */
-        FD_SET(prte_oob_tcp_component.stop_thread[0], &readfds);
-        max = (prte_oob_tcp_component.stop_thread[0] > max) ? prte_oob_tcp_component.stop_thread[0]
+        FD_SET(prte_mca_oob_tcp_component.stop_thread[0], &readfds);
+        max = (prte_mca_oob_tcp_component.stop_thread[0] > max) ? prte_mca_oob_tcp_component.stop_thread[0]
                                                             : max;
 
         /* set timeout interval */
-        timeout.tv_sec = prte_oob_tcp_component.listen_thread_tv.tv_sec;
-        timeout.tv_usec = prte_oob_tcp_component.listen_thread_tv.tv_usec;
+        timeout.tv_sec = prte_mca_oob_tcp_component.listen_thread_tv.tv_sec;
+        timeout.tv_usec = prte_mca_oob_tcp_component.listen_thread_tv.tv_usec;
 
         /* Block in a select to avoid hammering the cpu.  If a connection
          * comes in, we'll get woken up right away.
          */
         rc = select(max + 1, &readfds, NULL, NULL, &timeout);
-        if (!prte_oob_tcp_component.listen_thread_active) {
+        if (!prte_mca_oob_tcp_component.listen_thread_active) {
             /* we've been asked to terminate */
             return NULL;
         }
@@ -617,7 +617,7 @@ static void *listen_thread(pmix_object_t *obj)
          */
         do {
             accepted_connections = 0;
-            PMIX_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
+            PMIX_LIST_FOREACH(listener, &prte_mca_oob_tcp_component.listeners, prte_oob_tcp_listener_t)
             {
                 sd = listener->sd;
 
@@ -678,7 +678,7 @@ static void *listen_thread(pmix_object_t *obj)
                     }
                 }
 
-                prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                                     "%s prte_oob_tcp_listen_thread: incoming connection: "
                                     "(%d, %d) %s:%d\n",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), pending_connection->fd,
@@ -726,11 +726,11 @@ done:
      * a separate connection harvesting thread. So switch over to the event
      * lib handler now
      */
-    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s prte_oob_tcp_listen_thread: switching to event lib",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     /* setup to listen via event library */
-    PMIX_LIST_FOREACH(listener, &prte_oob_tcp_component.listeners, prte_oob_tcp_listener_t) {
+    PMIX_LIST_FOREACH(listener, &prte_mca_oob_tcp_component.listeners, prte_oob_tcp_listener_t) {
         prte_event_set(prte_event_base, listener->event,
                    listener->sd,
                    PRTE_EV_READ|PRTE_EV_PERSIST,
@@ -754,7 +754,7 @@ static void connection_handler(int sd, short flags, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(new_connection);
 
-    prte_output_verbose(4, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(4, prte_oob_base_framework.framework_output,
                         "%s connection_handler: working connection "
                         "(%d, %d) %s:%d\n",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), new_connection->fd, prte_socket_errno,
@@ -778,7 +778,7 @@ static void connection_event_handler(int incoming_sd, short flags, void *cbdata)
     int sd;
 
     sd = accept(incoming_sd, (struct sockaddr *) &addr, &addrlen);
-    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s connection_event_handler: working connection "
                         "(%d, %d) %s:%d\n",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), sd, prte_socket_errno,

@@ -12,6 +12,7 @@
 # Copyright (c) 2012-2013 Los Alamos National Security, Inc.  All rights reserved.
 # Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -25,7 +26,7 @@ headers += \
         base/errmgr_private.h \
         base/base.h
 
-libmca_errmgr_la_SOURCES += \
+libprtemca_errmgr_la_SOURCES += \
         base/errmgr_base_select.c \
         base/errmgr_base_frame.c \
         base/errmgr_base_fns.c

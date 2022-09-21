@@ -14,7 +14,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2017      IBM Corporation. All rights reserved.
+ * Copyright (c) 2017-2022 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -85,21 +85,15 @@ BEGIN_C_DECLS
 #define PRTE_CLI_NOPREFIX               "noprefix"                  // none
 #define PRTE_CLI_FWD_SIGNALS            "forward-signals"           // required
 #define PRTE_CLI_RUN_AS_ROOT            "allow-run-as-root"         // none
+#define PRTE_CLI_STREAM_BUF             "stream-buffering"          // required
 
 // Application options
 #define PRTE_CLI_NP                     "np"                        // required
 #define PRTE_CLI_NPERNODE               "N"                         // required
 #define PRTE_CLI_APPFILE                "app"                       // required
-#define PRTE_CLI_TIMEOUT                "timeout"                   // required
-#define PRTE_CLI_SPAWN_TIMEOUT          "spawn-timeout"             // required
-#define PRTE_CLI_REPORT_STATE           "report-state-on-timeout"   // none
-#define PRTE_CLI_STACK_TRACES           "get-stack-traces"          // none
 #define PRTE_CLI_FWD_ENVAR              "x"                         // required
-#define PRTE_CLI_SHOW_PROGRESS          "show-progress"             // none
 #define PRTE_CLI_HOSTFILE               "hostfile"                  // required
 #define PRTE_CLI_HOST                   "host"                      // required
-#define PRTE_CLI_STREAM_BUF             "stream-buffering"          // required
-#define PRTE_CLI_REPORT_CHILD_SEP       "report-child-jobs-separately"  // none
 #define PRTE_CLI_PATH                   "path"                      // required
 #define PRTE_CLI_PSET                   "pset"                      // required
 #define PRTE_CLI_PRELOAD_FILES          "preload-files"             // required
@@ -109,10 +103,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_WDIR                   "wdir"                      // required
 #define PRTE_CLI_SET_CWD_SESSION        "set-cwd-to-session-dir"    // none
 #define PRTE_CLI_ENABLE_RECOVERY        "enable-recovery"           // none
-#define PRTE_CLI_MAX_RESTARTS           "max-restarts"              // required
 #define PRTE_CLI_DISABLE_RECOVERY       "disable-recovery"          // none
-#define PRTE_CLI_CONTINUOUS             "continuous"                // none
-#define PRTE_CLI_EXEC_AGENT             "exec-agent"                // required
 
 // Placement options
 #define PRTE_CLI_MAPBY                  "map-by"                    // required
@@ -126,9 +117,6 @@ BEGIN_C_DECLS
 #define PRTE_CLI_DO_NOT_LAUNCH          "do-not-launch"             // none
 #define PRTE_CLI_DISPLAY                "display"                   // required
 #define PRTE_CLI_XTERM                  "xterm"                     // none
-#define PRTE_CLI_STOP_ON_EXEC           "stop-on-exec"              // none
-#define PRTE_CLI_STOP_IN_INIT           "stop-in-init"              // required
-#define PRTE_CLI_STOP_IN_APP            "stop-in-app"               // required
 #define PRTE_CLI_DO_NOT_AGG_HELP        "no-aggregate-help"         // none
 
 // Tool connection options
@@ -201,8 +189,22 @@ BEGIN_C_DECLS
 #define PRTE_CLI_TOPO       "topo="
 
 // Runtime directives
-#define PRTE_CLI_ABORT_NZ   "abort-nonzero-status"
-#define PRTE_CLI_NOLAUNCH   "donotlaunch"
+#define PRTE_CLI_ABORT_NZ           "abort-nonzero-status"          // optional arg
+#define PRTE_CLI_NOLAUNCH           "donotlaunch"                   // no arg
+#define PRTE_CLI_SHOW_PROGRESS      "show-progress"                 // optional arg
+#define PRTE_CLI_RECOVER            "recover"                       // optional arg
+#define PRTE_CLI_CONTINUOUS         "continuous"                    // optional arg
+#define PRTE_CLI_MAX_RESTARTS       "max-restarts"                  // reqd arg
+#define PRTE_CLI_EXEC_AGENT         "exec-agent"                    // reqd arg
+#define PRTE_CLI_STOP_ON_EXEC       "stop-on-exec"                  // optional arg
+#define PRTE_CLI_STOP_IN_INIT       "stop-in-init"                  // optional arg
+#define PRTE_CLI_STOP_IN_APP        "stop-in-app"                   // optional arg
+#define PRTE_CLI_TIMEOUT            "timeout"                       // reqd arg
+#define PRTE_CLI_SPAWN_TIMEOUT      "spawn-timeout"                 // reqd arg
+#define PRTE_CLI_REPORT_STATE       "report-state-on-timeout"       // optional arg
+#define PRTE_CLI_STACK_TRACES       "get-stack-traces"              // optional arg
+#define PRTE_CLI_REPORT_CHILD_SEP   "report-child-jobs-separately"  // optional arg
+#define PRTE_CLI_AGG_HELP           "aggregate-help"                // optional arg
 
 
 /* define the command line qualifiers PRRTE recognizes */
@@ -233,86 +235,6 @@ BEGIN_C_DECLS
 #define PRTE_CLI_NOCOPY     "nocopy"
 #define PRTE_CLI_RAW        "raw"
 #define PRTE_CLI_PATTERN    "pattern"
-
-/* USAGE:
- *  param "a" is the input command line string
- *  param "b" is the defined CLI option
- */
-static inline bool prte_check_cli_option(char *a, char *b)
-{
-    size_t len1, len2, len, n;
-    char **asplit, **bsplit;
-    bool match;
-
-    /* if there exists a '-' in b, then we are
-     * dealing with a multi-word option. Parse
-     * those by checking each word segment
-     * individually for a match so the user
-     * doesn't have to spell it all out
-     * unless necessary */
-    if (NULL != strchr(b, '-')) {
-        asplit = pmix_argv_split(a, '-');
-        bsplit = pmix_argv_split(b, '-');
-        match = false;
-        for (n=0; NULL != asplit[n] && NULL != bsplit[n]; n++) {
-            len1 = strlen(asplit[n]);
-            len2 = strlen(bsplit[n]);
-            len = len1 < len2 ? len1 : len2;
-            if (0 == strncasecmp(asplit[n], bsplit[n], len)) {
-                match = true;
-            } else {
-                pmix_argv_free(asplit);
-                pmix_argv_free(bsplit);
-                return false;
-            }
-        }
-        pmix_argv_free(asplit);
-        pmix_argv_free(bsplit);
-        return match;
-    }
-
-    /* if this is not a multi-word option, we just
-     * check the strings */
-    len1 = strlen(a);
-    len2 = strlen(b);
-    len = (len1 < len2) ? len1 : len2;
-    if (0 == strncasecmp(a, b, len)) {
-        return true;
-    }
-
-    return false;
-}
-
-#define PRTE_CHECK_CLI_OPTION(a, b) \
-    prte_check_cli_option(a, b)
-
-/* check if an option is "true" */
-static inline bool prte_check_true(char *a)
-{
-    int n;
-    size_t len1, len;
-    char *negs[] = {
-        "false",
-        "0",
-        "no",
-        NULL
-    };
-
-    if (NULL == a) {
-        return true;  // default
-    }
-    len1 = strlen(a);
-
-    for (n=0; NULL != negs[n]; n++) {
-        len = (len1 < strlen(negs[n])) ? len1 : strlen(negs[n]);
-        if (0 == strncasecmp(a, negs[n], len)) {
-            return false;
-        }
-    }
-    return true;
-}
-#define PRTE_CHECK_TRUE(a) \
-    prte_check_true(a)
 
 END_C_DECLS
 

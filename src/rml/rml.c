@@ -20,9 +20,9 @@
 
 #include <string.h>
 
-#include "src/mca/base/prte_mca_base_component_repository.h"
+#include "src/mca/base/pmix_mca_base_component_repository.h"
 #include "src/mca/mca.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml.h"
@@ -49,39 +49,35 @@ void prte_rml_register(void)
 {
 
     prte_rml_base.max_retries = 3;
-    prte_mca_base_var_register("prte", "rml", "base", "max_retries",
+    pmix_mca_base_var_register("prte", "rml", "base", "max_retries",
                                "Max #times to retry sending a message",
-                               PRTE_MCA_BASE_VAR_TYPE_INT,
-                               NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                               PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_rml_base.max_retries);
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_rml_base.max_retries);
 
     verbosity = 0;
-    prte_mca_base_var_register("prte", "rml", "base", "verbose",
+    pmix_mca_base_var_register("prte", "rml", "base", "verbose",
                                "Debug verbosity of the RML subsystem",
-                               PRTE_MCA_BASE_VAR_TYPE_INT,
-                               NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                               PRTE_MCA_BASE_VAR_SCOPE_READONLY, &verbosity);
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &verbosity);
     if (0 < verbosity) {
-        prte_rml_base.rml_output = prte_output_open(NULL);
-        prte_output_set_verbosity(prte_rml_base.rml_output, verbosity);
+        prte_rml_base.rml_output = pmix_output_open(NULL);
+        pmix_output_set_verbosity(prte_rml_base.rml_output, verbosity);
     }
 
     verbosity = 0;
-    prte_mca_base_var_register("prte", "routed", "base", "verbose",
+    pmix_mca_base_var_register("prte", "routed", "base", "verbose",
                                "Debug verbosity of the Routed subsystem",
-                               PRTE_MCA_BASE_VAR_TYPE_INT,
-                               NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                               PRTE_MCA_BASE_VAR_SCOPE_READONLY, &verbosity);
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &verbosity);
     if (0 < verbosity) {
-        prte_rml_base.routed_output = prte_output_open(NULL);
-        prte_output_set_verbosity(prte_rml_base.routed_output, verbosity);
+        prte_rml_base.routed_output = pmix_output_open(NULL);
+        pmix_output_set_verbosity(prte_rml_base.routed_output, verbosity);
     }
 
-    prte_mca_base_var_register("prte", "rml", "base", "radix",
+    pmix_mca_base_var_register("prte", "rml", "base", "radix",
                                "Radix to be used for routing tree",
-                               PRTE_MCA_BASE_VAR_TYPE_INT,
-                               NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                               PRTE_MCA_BASE_VAR_SCOPE_READONLY, &prte_rml_base.radix);
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &prte_rml_base.radix);
 }
 
 void prte_rml_close(void)
@@ -90,7 +86,7 @@ void prte_rml_close(void)
     PMIX_LIST_DESTRUCT(&prte_rml_base.unmatched_msgs);
     PMIX_LIST_DESTRUCT(&prte_rml_base.children);
     if (0 <= prte_rml_base.rml_output) {
-        prte_output_close(prte_rml_base.rml_output);
+        pmix_output_close(prte_rml_base.rml_output);
     }
 }
 
@@ -115,7 +111,7 @@ void prte_rml_send_callback(int status, pmix_proc_t *peer,
     PRTE_HIDE_UNUSED_PARAMS(buffer, cbdata);
 
     if (PRTE_SUCCESS != status) {
-        prte_output_verbose(2, prte_rml_base.rml_output,
+        pmix_output_verbose(2, prte_rml_base.rml_output,
                             "%s UNABLE TO SEND MESSAGE TO %s TAG %d: %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(peer), tag,
                             PRTE_ERROR_NAME(status));

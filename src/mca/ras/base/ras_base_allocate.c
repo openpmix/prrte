@@ -31,7 +31,7 @@
 #include "types.h"
 
 #include "src/class/pmix_list.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/pmix/pmix-internal.h"
 
@@ -48,7 +48,7 @@
 #include "src/util/hostfile/hostfile.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_net.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
@@ -151,9 +151,9 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
         }
     }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
-        prte_output(prte_clean_output, "%s</allocation>\n", tmp);
+        pmix_output(prte_clean_output, "%s</allocation>\n", tmp);
     } else {
-        prte_output(prte_clean_output,
+        pmix_output(prte_clean_output,
                     "%s=================================================================\n", tmp);
     }
     free(tmp);
@@ -179,7 +179,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(caddy);
 
-    PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output, "%s ras:base:allocate",
+    PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output, "%s ras:base:allocate",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* convenience */
@@ -194,7 +194,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
      */
     if (prte_ras_base.allocation_read) {
 
-        PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                              "%s ras:base:allocate allocation already read",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         goto next_state;
@@ -307,7 +307,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         return;
     }
 
-    PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                          "%s ras:base:allocate nothing found in module - proceeding to hostfile",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -315,7 +315,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
      * if we were given a rank/seqfile - if so, use it as the hosts will be
      * taken from the mapping */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, (void **) &hosts, PMIX_STRING)) {
-        PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                              "%s ras:base:allocate parsing rank/seqfile %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
 
@@ -363,7 +363,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
             continue;
         }
         if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING)) {
-            PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding dash_hosts",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             if (PRTE_SUCCESS != (rc = prte_util_add_dash_host_nodes(&nodes, hosts, true))) {
@@ -415,7 +415,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
             continue;
         }
         if (prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, (void **) &hosts, PMIX_STRING)) {
-            PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:allocate adding hostfile %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
 
@@ -456,7 +456,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
 
     /* if nothing was found so far, then look for a default hostfile */
     if (NULL != prte_default_hostfile) {
-        PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                              "%s ras:base:allocate parsing default hostfile %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_default_hostfile));
 
@@ -487,7 +487,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
         goto DISPLAY;
     }
 
-    PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                          "%s ras:base:allocate nothing found in hostfiles - inserting current node",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -529,7 +529,7 @@ addlocal:
 
 DISPLAY:
     /* shall we display the results? */
-    if (4 < prte_output_get_verbosity(prte_ras_base_framework.framework_output)) {
+    if (4 < pmix_output_get_verbosity(prte_ras_base_framework.framework_output)) {
         prte_ras_base_display_alloc(jdata);
     }
 
@@ -560,13 +560,13 @@ next_state:
             if (NULL == node) {
                 continue;
             }
-            prte_output(prte_clean_output,
+            pmix_output(prte_clean_output,
                         "=================================================================\n");
-            prte_output(prte_clean_output, "TOPOLOGY FOR NODE %s", node->name);
+            pmix_output(prte_clean_output, "TOPOLOGY FOR NODE %s", node->name);
             prte_hwloc_print(&ptr, NULL, node->topology->topo);
-            prte_output(prte_clean_output, ptr);
+            pmix_output(prte_clean_output, "%s", ptr);
             free(ptr);
-            prte_output(prte_clean_output,
+            pmix_output(prte_clean_output,
                         "=================================================================\n");
         }
         pmix_argv_free(hostlist);
@@ -610,7 +610,7 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
         }
         if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, (void **) &hosts,
                                PMIX_STRING)) {
-            PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:add_hosts checking add-hostfile %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
 
@@ -644,7 +644,7 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
         }
         if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, (void **) &hosts,
                                PMIX_STRING)) {
-            prte_output_verbose(5, prte_ras_base_framework.framework_output,
+            pmix_output_verbose(5, prte_ras_base_framework.framework_output,
                                 "%s ras:base:add_hosts checking add-host %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts);
             if (PRTE_SUCCESS != (rc = prte_util_add_dash_host_nodes(&nodes, hosts, true))) {
@@ -696,7 +696,7 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
     PMIX_LIST_DESTRUCT(&nodes);
 
     /* shall we display the results? */
-    if (0 < prte_output_get_verbosity(prte_ras_base_framework.framework_output)) {
+    if (0 < pmix_output_get_verbosity(prte_ras_base_framework.framework_output)) {
         prte_ras_base_display_alloc(jdata);
     }
 

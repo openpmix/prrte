@@ -38,8 +38,6 @@
 #    include <unistd.h>
 #endif
 
-#include "src/mca/propagate/base/base.h"
-
 #include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
@@ -53,7 +51,7 @@
 #include "src/util/pmix_if.h"
 #include "src/util/malloc.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_environ.h"
 
 #include "src/mca/errmgr/base/base.h"
@@ -130,8 +128,8 @@ static int rte_init(int argc, char **argv)
 
     /* open and setup the state machine */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_state_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_state_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_state_base_open";
         goto error;
     }
@@ -142,21 +140,11 @@ static int rte_init(int argc, char **argv)
 
     /* open the errmgr */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_errmgr_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_errmgr_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_errmgr_base_open";
         goto error;
     }
-
-#if PRTE_ENABLE_FT
-    /* open the propagator */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        error = "prte_propagate_base_open";
-        goto error;
-    }
-#endif
 
     /* Since we are the HNP, then responsibility for
      * defining the name falls to the PLM component for our
@@ -164,8 +152,8 @@ static int rte_init(int argc, char **argv)
      * first and select that component.
      */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_plm_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_plm_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_plm_base_open";
         goto error;
     }
@@ -183,29 +171,27 @@ static int rte_init(int argc, char **argv)
     }
 
     /* setup my session directory here as the OOB may need it */
-    if (prte_create_session_dirs) {
-        PRTE_OUTPUT_VERBOSE(
-            (2, prte_debug_output, "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
-             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-             (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
-             prte_process_info.nodename));
-        /* take a pass thru the session directory code to fillin the
-         * tmpdir names - don't create anything yet
-         */
-        if (PRTE_SUCCESS != (ret = prte_session_dir(false, PRTE_PROC_MY_NAME))) {
-            error = "prte_session_dir define";
-            goto error;
-        }
-        /* clear the session directory just in case there are
-         * stale directories laying around
-         */
-        prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+    PMIX_OUTPUT_VERBOSE(
+        (2, prte_debug_output, "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
+         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+         (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
+         prte_process_info.nodename));
+    /* take a pass thru the session directory code to fillin the
+     * tmpdir names - don't create anything yet
+     */
+    if (PRTE_SUCCESS != (ret = prte_session_dir(false, PRTE_PROC_MY_NAME))) {
+        error = "prte_session_dir define";
+        goto error;
+    }
+    /* clear the session directory just in case there are
+     * stale directories laying around
+     */
+    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
 
-        /* now actually create the directory tree */
-        if (PRTE_SUCCESS != (ret = prte_session_dir(true, PRTE_PROC_MY_NAME))) {
-            error = "prte_session_dir";
-            goto error;
-        }
+    /* now actually create the directory tree */
+    if (PRTE_SUCCESS != (ret = prte_session_dir(true, PRTE_PROC_MY_NAME))) {
+        error = "prte_session_dir";
+        goto error;
     }
 
     /* setup the PMIx server - we need this here in case the
@@ -219,8 +205,8 @@ static int rte_init(int argc, char **argv)
     }
     /* Setup the communication infrastructure */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_prtereachable_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_prtereachable_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_prtereachable_base_open";
         goto error;
@@ -234,8 +220,8 @@ static int rte_init(int argc, char **argv)
      * OOB Layer
      */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_oob_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_oob_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         error = "prte_oob_base_open";
         goto error;
     }
@@ -256,8 +242,8 @@ static int rte_init(int argc, char **argv)
      * Group communications
      */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_grpcomm_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_grpcomm_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_grpcomm_base_open";
         goto error;
@@ -273,13 +259,7 @@ static int rte_init(int argc, char **argv)
         error = "prte_errmgr_base_select";
         goto error;
     }
-#if PRTE_ENABLE_FT
-    /* setup the propagate */
-    if (PRTE_SUCCESS != (ret = prte_propagate_base_select())) {
-        error = "prte_propagate_base_select";
-        goto error;
-    }
-#endif
+
     /* get the job data object for the daemons */
     jdata = PMIX_NEW(prte_job_t);
     PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
@@ -355,11 +335,11 @@ static int rte_init(int argc, char **argv)
     jdata->num_reported = 1;
     jdata->num_daemons_reported = 1;
 
-    if (0 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
-        prte_output(0, "ALIASES FOR %s", node->name);
+    if (0 < pmix_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+        pmix_output(0, "ALIASES FOR %s", node->name);
         if (NULL != node->aliases) {
             for (idx=0; NULL != node->aliases[idx]; idx++) {
-                prte_output(0, "\tALIAS: %s", node->aliases[idx]);
+                pmix_output(0, "\tALIAS: %s", node->aliases[idx]);
             }
         }
     }
@@ -381,8 +361,8 @@ static int rte_init(int argc, char **argv)
      * the hnp proxy support in the PLM framework.
      */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_ras_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_ras_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_ras_base_open";
         goto error;
@@ -393,8 +373,8 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rmaps_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_rmaps_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rmaps_base_open";
         goto error;
@@ -414,54 +394,18 @@ static int rte_init(int argc, char **argv)
     pmix_pointer_array_add(prte_node_topologies, t);
     node->topology = t;
     node->available = prte_hwloc_base_filter_cpus(prte_hwloc_topology);
-    if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+    if (15 < pmix_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         char *output = NULL;
-        prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        pmix_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         prte_hwloc_print(&output, "\t", prte_hwloc_topology);
-        prte_output(0, "%s", output);
+        pmix_output(0, "%s", output);
         free(output);
     }
 
-    /* init the hash table, if necessary */
-    if (NULL == prte_coprocessors) {
-        prte_coprocessors = PMIX_NEW(pmix_hash_table_t);
-        pmix_hash_table_init(prte_coprocessors, prte_process_info.num_daemons);
-    }
-    /* detect and add any coprocessors */
-    coprocessors = prte_hwloc_base_find_coprocessors(prte_hwloc_topology);
-    if (NULL != coprocessors) {
-        /* separate the serial numbers of the coprocessors
-         * on this host
-         */
-        sns = pmix_argv_split(coprocessors, ',');
-        for (idx = 0; NULL != sns[idx]; idx++) {
-            /* compute the hash */
-            PRTE_HASH_STR(sns[idx], h);
-            /* mark that this coprocessor is hosted by this node */
-            pmix_hash_table_set_value_uint32(prte_coprocessors, h,
-                                             (void *) &(PRTE_PROC_MY_NAME->rank));
-        }
-        pmix_argv_free(sns);
-        free(coprocessors);
-        prte_coprocessors_detected = true;
-    }
-    /* see if I am on a coprocessor */
-    coprocessors = prte_hwloc_base_check_on_coprocessor();
-    if (NULL != coprocessors) {
-        /* compute the hash */
-        PRTE_HASH_STR(coprocessors, h);
-        /* mark that I am on this coprocessor */
-        pmix_hash_table_set_value_uint32(prte_coprocessors, h, (void *) &(PRTE_PROC_MY_NAME->rank));
-        prte_set_attribute(&node->attributes, PRTE_NODE_SERIAL_NUMBER, PRTE_ATTR_LOCAL,
-                           coprocessors, PMIX_STRING);
-        free(coprocessors);
-        prte_coprocessors_detected = true;
-    }
-
     /* Open/select the odls */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_odls_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    ret = pmix_mca_base_framework_open(&prte_odls_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         error = "prte_odls_base_open";
         goto error;
@@ -472,9 +416,9 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
     /* Open/select the rtc */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rtc_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+    ret = pmix_mca_base_framework_open(&prte_rtc_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rtc_base_open";
         goto error;
@@ -485,22 +429,20 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
-    if (prte_create_session_dirs) {
-        /* set the prte_output hnp file location to be in the
-         * proc-specific session directory. */
-        prte_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
-        /* save my contact info in a file for others to find */
-        if (NULL == prte_process_info.jobfam_session_dir) {
-            /* has to be set here! */
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            goto error;
-        }
+    /* set the pmix_output hnp file location to be in the
+     * proc-specific session directory. */
+    pmix_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
+    /* save my contact info in a file for others to find */
+    if (NULL == prte_process_info.jobfam_session_dir) {
+        /* has to be set here! */
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        goto error;
     }
 
     /* setup I/O forwarding system - must come after we init routes */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_iof_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_iof_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_iof_base_open";
         goto error;
@@ -512,8 +454,8 @@ static int rte_init(int argc, char **argv)
     }
     /* setup the FileM */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_filem_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_filem_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_filem_base_open";
         goto error;
@@ -552,9 +494,6 @@ static int rte_finalize(void)
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
     prte_errmgr.finalize();
-#if PRTE_ENABLE_FT
-    (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
-#endif
 
     /* remove my contact info file, if we have session directories */
     if (NULL != prte_process_info.jobfam_session_dir) {
@@ -565,19 +504,19 @@ static int rte_finalize(void)
     }
 
     /* close frameworks */
-    (void) prte_mca_base_framework_close(&prte_filem_base_framework);
-    (void) prte_mca_base_framework_close(&prte_grpcomm_base_framework);
-    (void) prte_mca_base_framework_close(&prte_iof_base_framework);
-    (void) prte_mca_base_framework_close(&prte_plm_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_filem_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_iof_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_plm_base_framework);
     /* make sure our local procs are dead */
     prte_odls.kill_local_procs(NULL);
-    (void) prte_mca_base_framework_close(&prte_rtc_base_framework);
-    (void) prte_mca_base_framework_close(&prte_odls_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_rtc_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
     prte_rml_close();
-    (void) prte_mca_base_framework_close(&prte_oob_base_framework);
-    (void) prte_mca_base_framework_close(&prte_prtereachable_base_framework);
-    (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);
-    (void) prte_mca_base_framework_close(&prte_state_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_oob_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_prtereachable_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_state_base_framework);
 
     /* remove our use of the session directory tree */
     prte_session_dir_finalize(PRTE_PROC_MY_NAME);
@@ -597,7 +536,7 @@ static int rte_finalize(void)
 
 static void rte_abort(int status, bool report)
 {
-    prte_output(0, "ABORT");
+    pmix_output(0, "ABORT");
     /* do NOT do a normal finalize as this will very likely
      * hang the process. We are aborting due to an abnormal condition
      * that precludes normal cleanup

@@ -9,7 +9,7 @@
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2015      IBM Corporation.  All rights reserved.
 #
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -281,7 +281,7 @@ sub mca_generate_framework_header(\$\@) {
         if ($framework ne "common" and $framework ne "src") {
             my $framework_name = "prte_${framework}_base_framework";
             $framework_array_output .= "    &$framework_name,\n";
-            $framework_decl_output .= "extern prte_mca_base_framework_t $framework_name;\n";
+            $framework_decl_output .= "extern pmix_mca_base_framework_t $framework_name;\n";
         }
     }
 
@@ -293,10 +293,10 @@ sub mca_generate_framework_header(\$\@) {
 #ifndef $ifdef_string
 #define $ifdef_string
 
-#include \"src/mca/base/prte_mca_base_framework.h\"
+#include \"src/mca/base/pmix_mca_base_framework.h\"
 
 $framework_decl_output
-static prte_mca_base_framework_t *prte_frameworks[] = {
+static pmix_mca_base_framework_t *prte_frameworks[] = {
 $framework_array_output    NULL
 };
 
@@ -887,6 +887,45 @@ $step. Checking tool versions\n\n";
 
 #---------------------------------------------------------------------------
 
+++$step;
+verbose "\n$step. Checking for git submodules\n\n";
+
+# Make sure we got a submodule-full clone.  If not, abort and let a
+# human figure it out.
+if (-f ".gitmodules") {
+    open(IN, "git submodule status|")
+        || die "Can't run \"git submodule status\"";
+    while (<IN>) {
+        $_ =~ m/^(.)[0-9a-f]{40}\s+(\S+)/;
+        my $status = $1;
+        my $path   = $2;
+
+        print("=== Submodule: $path\n");
+        # Make sure the submodule is there
+        if ($status eq "-") {
+            print("    ==> ERROR: Missing
+
+The submodule \"$path\" is missing.
+
+Perhaps you forgot to \"git clone --recursive ...\", or you need to
+\"git submodule update --init --recursive\"...?\n\n");
+            exit(1);
+        }
+
+        # See if the commit in the submodule is not the same as the
+        # commit that the git submodule thinks it should be.
+        elsif ($status eq "+") {
+            print("    ==> WARNING: Submodule hash is different than upstream.
+If this is not intentional, you may want to run:
+\"git submodule update --init --recursive\"\n");
+        } else {
+            print("    Local hash is what is expected by the submodule (good!)\n");
+        }
+    }
+}
+
+#---------------------------------------------------------------------------
+
 # No platform file -- write an empty list
 $m4 .= "m4_define([autogen_platform_file], [])\n\n";
 
@@ -973,7 +1012,7 @@ close(M4);
 
 # Run autoreconf
 verbose "==> Running autoreconf\n";
-my $cmd = "autoreconf -ivf --warnings=all,no-obsolete,no-override -I config";
+my $cmd = "autoreconf -ivf --warnings=all,no-obsolete,no-override -I config -I config/oac";
 safe_system($cmd);
 
 patch_autotools_output(".");

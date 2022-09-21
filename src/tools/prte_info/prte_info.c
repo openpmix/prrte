@@ -43,7 +43,7 @@
 
 #include "src/class/pmix_object.h"
 #include "src/class/pmix_pointer_array.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/prted/pmix/pmix_server.h"
@@ -108,8 +108,8 @@ int main(int argc, char *argv[])
     }
 
     /* open the SCHIZO framework */
-    ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                       PRTE_MCA_BASE_OPEN_DEFAULT);
+    ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         return ret;
@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
     /* All done */
     prte_info_components_close();
     PMIX_DESTRUCT(&mca_types);
-    prte_mca_base_close();
+    pmix_mca_base_close();
 
     return 0;
 }

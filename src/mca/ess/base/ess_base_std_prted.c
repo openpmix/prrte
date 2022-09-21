@@ -38,7 +38,6 @@
 #    include <unistd.h>
 #endif
 
-#include "src/mca/propagate/base/base.h"
 #include "src/util/proc_info.h"
 
 #include "src/event/event-internal.h"
@@ -175,8 +174,8 @@ int prte_ess_base_prted_setup(void)
 
     /* open and setup the state machine */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_state_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_state_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_state_base_open";
         goto error;
@@ -188,35 +187,21 @@ int prte_ess_base_prted_setup(void)
     }
     /* open the errmgr */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_errmgr_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_errmgr_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_errmgr_base_open";
         goto error;
     }
-#if PRTE_ENABLE_FT
-    /* open the propagate */
-    if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_propagate_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_propagate_base_open";
-        goto error;
-    }
-#endif
     /* some environments allow remote launches - e.g., ssh - so
      * open and select something -only- if we are given
      * a specific module to use
      */
-    (void) prte_mca_base_var_env_name("plm", &param);
-    if (NULL != getenv(param)) {
+    if (NULL != getenv("PRTE_MCA_plm")) {
         plm_in_use = true;
-    }
-    free(param);
-    if (plm_in_use) {
         if (PRTE_SUCCESS
-            != (ret = prte_mca_base_framework_open(&prte_plm_base_framework,
-                                                   PRTE_MCA_BASE_OPEN_DEFAULT))) {
+            != (ret = pmix_mca_base_framework_open(&prte_plm_base_framework,
+                                                   PMIX_MCA_BASE_OPEN_DEFAULT))) {
             PRTE_ERROR_LOG(ret);
             error = "prte_plm_base_open";
             goto error;
@@ -228,61 +213,60 @@ int prte_ess_base_prted_setup(void)
         }
     }
     /* setup my session directory here as the OOB may need it */
-    if (prte_create_session_dirs) {
-        PRTE_OUTPUT_VERBOSE(
-            (2, prte_ess_base_framework.framework_output,
-             "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
-             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-             (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
-             prte_process_info.nodename));
+    PMIX_OUTPUT_VERBOSE(
+        (2, prte_ess_base_framework.framework_output,
+         "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
+         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+         (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
+         prte_process_info.nodename));
 
-        /* take a pass thru the session directory code to fillin the
-         * tmpdir names - don't create anything yet
+    /* take a pass thru the session directory code to fillin the
+     * tmpdir names - don't create anything yet
+     */
+    if (PRTE_SUCCESS != (ret = prte_session_dir(false, PRTE_PROC_MY_NAME))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_session_dir define";
+        goto error;
+    }
+    /* clear the session directory just in case there are
+     * stale directories laying around
+     */
+    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+    /* now actually create the directory tree */
+    if (PRTE_SUCCESS != (ret = prte_session_dir(true, PRTE_PROC_MY_NAME))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_session_dir";
+        goto error;
+    }
+    /* set the pmix_output env file location to be in the
+     * proc-specific session directory. */
+    pmix_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
+    /* setup stdout/stderr */
+    if (prte_debug_daemons_file_flag) {
+        /* if we are debugging to a file, then send stdout/stderr to
+         * the prted log file
          */
-        if (PRTE_SUCCESS != (ret = prte_session_dir(false, PRTE_PROC_MY_NAME))) {
-            PRTE_ERROR_LOG(ret);
-            error = "prte_session_dir define";
-            goto error;
-        }
-        /* clear the session directory just in case there are
-         * stale directories laying around
-         */
-        prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
-        /* now actually create the directory tree */
-        if (PRTE_SUCCESS != (ret = prte_session_dir(true, PRTE_PROC_MY_NAME))) {
-            PRTE_ERROR_LOG(ret);
-            error = "prte_session_dir";
-            goto error;
-        }
-        /* set the prte_output env file location to be in the
-         * proc-specific session directory. */
-        prte_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
-        /* setup stdout/stderr */
-        if (prte_debug_daemons_file_flag) {
-            /* if we are debugging to a file, then send stdout/stderr to
-             * the prted log file
+
+        /* define a log file name in the session directory */
+        snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log", prte_process_info.myproc.nspace,
+                 prte_process_info.nodename);
+        log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
+
+        fd = open(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
+        if (fd < 0) {
+            /* couldn't open the file for some reason, so
+             * just connect everything to /dev/null
              */
-
-            /* define a log file name in the session directory */
-            snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log", prte_process_info.myproc.nspace,
-                     prte_process_info.nodename);
-            log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
-
-            fd = open(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
-            if (fd < 0) {
-                /* couldn't open the file for some reason, so
-                 * just connect everything to /dev/null
-                 */
-                fd = open("/dev/null", O_RDWR | O_CREAT | O_TRUNC, 0666);
-            } else {
-                dup2(fd, STDOUT_FILENO);
-                dup2(fd, STDERR_FILENO);
-                if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
-                    close(fd);
-                }
+            fd = open("/dev/null", O_RDWR | O_CREAT | O_TRUNC, 0666);
+        } else {
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+            if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+                close(fd);
             }
         }
     }
+
     /* Setup the job data object for the daemons */
     /* create and store the job data object */
     jdata = PMIX_NEW(prte_job_t);
@@ -328,8 +312,8 @@ int prte_ess_base_prted_setup(void)
 
     /* Setup the communication infrastructure */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_prtereachable_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_prtereachable_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_prtereachable_base_open";
         goto error;
@@ -340,8 +324,8 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_oob_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_oob_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_oob_base_open";
         goto error;
@@ -388,20 +372,12 @@ int prte_ess_base_prted_setup(void)
         error = "prte_errmgr_base_select";
         goto error;
     }
-#if PRTE_ENABLE_FT
-    /* select the propagate */
-    if (PRTE_SUCCESS != (ret = prte_propagate_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_propagate_base_select";
-        goto error;
-    }
-#endif
     /*
      * Group communications
      */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_grpcomm_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_grpcomm_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_grpcomm_base_open";
         goto error;
@@ -413,8 +389,8 @@ int prte_ess_base_prted_setup(void)
     }
     /* Open/select the odls */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_odls_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_odls_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_odls_base_open";
         goto error;
@@ -426,8 +402,8 @@ int prte_ess_base_prted_setup(void)
     }
     /* Open/select the rtc */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rtc_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_rtc_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rtc_base_open";
         goto error;
@@ -438,8 +414,8 @@ int prte_ess_base_prted_setup(void)
         goto error;
     }
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_rmaps_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_rmaps_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_rmaps_base_open";
         goto error;
@@ -461,10 +437,10 @@ int prte_ess_base_prted_setup(void)
     /* save the topology - note that this may have to be moved later
      * to ensure a common array position with the DVM master */
     pmix_pointer_array_add(prte_node_topologies, t);
-    if (15 < prte_output_get_verbosity(prte_ess_base_framework.framework_output)) {
+    if (15 < pmix_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         char *output = NULL;
         pmix_topology_t topo;
-        prte_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        pmix_output(0, "%s Topology Info:", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         topo.source = "hwloc";
         topo.topology = prte_hwloc_topology;
         ret = PMIx_Data_print(&output, NULL, &topo, PMIX_TOPO);
@@ -493,8 +469,8 @@ int prte_ess_base_prted_setup(void)
 
     /* setup I/O forwarding system - must come after we init routes */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_iof_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_iof_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_iof_base_open";
         goto error;
@@ -506,8 +482,8 @@ int prte_ess_base_prted_setup(void)
     }
     /* setup the FileM */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_filem_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_filem_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         error = "prte_filem_base_open";
         goto error;
@@ -556,33 +532,27 @@ int prte_ess_base_prted_finalize(void)
         unlink(log_path);
     }
 
-#if PRTE_ENABLE_FT
-    if (NULL != prte_propagate.finalize) {
-        prte_propagate.finalize();
-    }
-    (void) prte_mca_base_framework_close(&prte_propagate_base_framework);
-#endif
 
     if (NULL != prte_errmgr.finalize) {
         prte_errmgr.finalize();
     }
 
     /* close frameworks */
-    (void) prte_mca_base_framework_close(&prte_filem_base_framework);
-    (void) prte_mca_base_framework_close(&prte_grpcomm_base_framework);
-    (void) prte_mca_base_framework_close(&prte_iof_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_filem_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_iof_base_framework);
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
-    (void) prte_mca_base_framework_close(&prte_plm_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_plm_base_framework);
     /* make sure our local procs are dead */
     prte_odls.kill_local_procs(NULL);
-    (void) prte_mca_base_framework_close(&prte_rtc_base_framework);
-    (void) prte_mca_base_framework_close(&prte_odls_base_framework);
-    (void) prte_mca_base_framework_close(&prte_errmgr_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_rtc_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
     prte_rml_close();
-    (void) prte_mca_base_framework_close(&prte_oob_base_framework);
-    (void) prte_mca_base_framework_close(&prte_prtereachable_base_framework);
-    (void) prte_mca_base_framework_close(&prte_state_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_oob_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_prtereachable_base_framework);
+    (void) pmix_mca_base_framework_close(&prte_state_base_framework);
     /* remove our use of the session directory tree */
     prte_session_dir_finalize(PRTE_PROC_MY_NAME);
     /* ensure we scrub the session directory tree */

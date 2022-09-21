@@ -1,6 +1,7 @@
 # -*- text -*-
 #
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -169,8 +170,6 @@ option to the help request as "--help <option>".
    --set-cwd-to-session-dir          Set the working directory of the started processes to their session
                                      directory
    --show-progress                   Output a brief periodic report on launch progress
-   --stream-buffering <arg0>         Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2
-                                     fully buffered]
    --wd <arg0>                       Synonym for --wdir
    --wdir <arg0>                     Set the working directory of the started processes
 -x <arg0>                            Export an environment variable, optionally specifying a value (e.g., "-x

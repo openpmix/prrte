@@ -68,7 +68,7 @@
 #endif
 
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/pmix_mutex.h"
@@ -79,7 +79,7 @@
 #include "src/util/pmix_fd.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
@@ -346,8 +346,8 @@ int main(int argc, char *argv[])
     signal(SIGHUP, abort_signal_callback);
 
     /* open the SCHIZO framework */
-    rc = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                      PRTE_MCA_BASE_OPEN_DEFAULT);
+    rc = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                      PMIX_MCA_BASE_OPEN_DEFAULT);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;
@@ -767,7 +767,7 @@ int main(int argc, char *argv[])
                 FILE *fp;
                 fp = fopen(opt->values[0], "w");
                 if (NULL == fp) {
-                    prte_output(0, "Impossible to open the file %s in write mode\n", opt->values[0]);
+                    pmix_output(0, "Impossible to open the file %s in write mode\n", opt->values[0]);
                     PRTE_UPDATE_EXIT_STATUS(1);
                     goto DONE;
                 }
@@ -943,7 +943,7 @@ int main(int argc, char *argv[])
     ret = PMIx_server_setup_application(prte_process_info.myproc.nspace, iptr, ninfo, setupcbfunc,
                                         &mylock);
     if (PMIX_SUCCESS != ret) {
-        prte_output(0, "Error setting up application: %s", PMIx_Error_string(ret));
+        pmix_output(0, "Error setting up application: %s", PMIx_Error_string(ret));
         PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
         PRTE_UPDATE_EXIT_STATUS(ret);
         goto DONE;
@@ -951,7 +951,7 @@ int main(int argc, char *argv[])
     PRTE_PMIX_WAIT_THREAD(&mylock.lock);
     PMIX_INFO_FREE(iptr, ninfo);
     if (PMIX_SUCCESS != mylock.status) {
-        prte_output(0, "Error setting up application: %s", PMIx_Error_string(mylock.status));
+        pmix_output(0, "Error setting up application: %s", PMIx_Error_string(mylock.status));
         PRTE_UPDATE_EXIT_STATUS(mylock.status);
         PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
         goto DONE;
@@ -1015,7 +1015,7 @@ int main(int argc, char *argv[])
     }
 
     if (verbose) {
-        prte_output(0, "Spawning job");
+        pmix_output(0, "Spawning job");
     }
 
     /* let the PMIx server handle it for us so that all the job infos
@@ -1023,7 +1023,7 @@ int main(int argc, char *argv[])
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
     ret = PMIx_Spawn_nb(iptr, ninfo, papps, napps, spcbfunc, &lock);
     if (PRTE_SUCCESS != ret) {
-        prte_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
+        pmix_output(0, "PMIx_Spawn failed (%d): %s", ret, PMIx_Error_string(ret));
         rc = ret;
         PRTE_UPDATE_EXIT_STATUS(rc);
         goto DONE;
@@ -1042,7 +1042,7 @@ int main(int argc, char *argv[])
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
 
     if (verbose) {
-        prte_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(spawnednspace));
+        pmix_output(0, "JOB %s EXECUTING", PRTE_JOBID_PRINT(spawnednspace));
     }
 
     /* check what user wants us to do with stdin */
@@ -1065,7 +1065,7 @@ int main(int argc, char *argv[])
         PRTE_PMIX_CONSTRUCT_LOCK(&lock);
         ret = PMIx_IOF_push(&pname, 1, NULL, iptr, 1, opcbfunc, &lock);
         if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
-            prte_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
+            pmix_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
         } else if (PMIX_SUCCESS == ret) {
             PRTE_PMIX_WAIT_THREAD(&lock);
         }
@@ -1086,7 +1086,7 @@ proceed:
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
     ret = PMIx_IOF_push(NULL, 0, NULL, &info, 1, opcbfunc, &lock);
     if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
-        prte_output(0, "IOF close of stdin failed: %s", PMIx_Error_string(ret));
+        pmix_output(0, "IOF close of stdin failed: %s", PMIx_Error_string(ret));
     } else if (PMIX_SUCCESS == ret) {
         PRTE_PMIX_WAIT_THREAD(&lock);
     }
@@ -1319,7 +1319,7 @@ static void epipe_signal_callback(int fd, short args, void *cbdata)
 
     if (10 < sigpipe_error_count) {
         /* time to abort */
-        prte_output(0, "%s: SIGPIPE detected - aborting", prte_tool_basename);
+        pmix_output(0, "%s: SIGPIPE detected - aborting", prte_tool_basename);
         clean_abort(0, 0, NULL);
     }
 

@@ -35,10 +35,10 @@
 #endif
 
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/runtime/prte_globals.h"
@@ -54,7 +54,7 @@ void prte_rml_recv_buffer_nb(pmix_proc_t *peer,
 {
     prte_rml_recv_request_t *req;
 
-    prte_output_verbose(10, prte_rml_base.rml_output,
+    pmix_output_verbose(10, prte_rml_base.rml_output,
                         "%s rml_recv_buffer_nb for peer %s tag %d",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(peer), tag);
@@ -73,7 +73,7 @@ void prte_rml_recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
 {
     prte_rml_recv_request_t *req;
 
-    prte_output_verbose(10, prte_rml_base.rml_output,
+    pmix_output_verbose(10, prte_rml_base.rml_output,
                         "%s rml_recv_cancel for peer %s tag %d",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(peer), tag);

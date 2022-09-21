@@ -47,11 +47,11 @@
 #include <time.h>
 
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 
@@ -139,7 +139,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
     }
 
     cmd_str = get_prted_comm_cmd_str(command);
-    PRTE_OUTPUT_VERBOSE((1, prte_debug_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_debug_output,
                          "%s prted:comm:process_commands() Processing Command: %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cmd_str));
     free(cmd_str);
@@ -221,7 +221,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         /* Convert SIGTSTP to SIGSTOP so we can suspend a.out */
         if (SIGTSTP == signal) {
             if (prte_debug_daemons_flag) {
-                prte_output(0, "%s prted_cmd: converted SIGTSTP to SIGSTOP before delivering",
+                pmix_output(0, "%s prted_cmd: converted SIGTSTP to SIGSTOP before delivering",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             }
             signal = SIGSTOP;
@@ -233,7 +233,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         }
 
         if (prte_debug_daemons_flag) {
-            prte_output(0, "%s prted_cmd: received signal_local_procs, delivering signal %d",
+            pmix_output(0, "%s prted_cmd: received signal_local_procs, delivering signal %d",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signal);
         }
 
@@ -247,13 +247,13 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
     case PRTE_DAEMON_ADD_LOCAL_PROCS:
     case PRTE_DAEMON_DVM_ADD_PROCS:
         if (prte_debug_daemons_flag) {
-            prte_output(0, "%s prted_cmd: received add_local_procs",
+            pmix_output(0, "%s prted_cmd: received add_local_procs",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         }
 
         /* launch the processes */
         if (PRTE_SUCCESS != (ret = prte_odls.launch_local_procs(buffer))) {
-            PRTE_OUTPUT_VERBOSE((1, prte_debug_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_debug_output,
                                  "%s prted:comm:add_procs failed to launch on error %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(ret)));
         }
@@ -261,7 +261,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
 
     case PRTE_DAEMON_ABORT_PROCS_CALLED:
         if (prte_debug_daemons_flag) {
-            prte_output(0, "%s prted_cmd: received abort_procs report",
+            pmix_output(0, "%s prted_cmd: received abort_procs report",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         }
 
@@ -310,7 +310,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                 }
             }
 
-            PRTE_OUTPUT_VERBOSE(
+            PMIX_OUTPUT_VERBOSE(
                 (2, prte_debug_output,
                  "%s prted:comm:abort_procs Application %s requests term. of %s (%2d of %2d) %3s.",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender),
@@ -329,13 +329,13 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
          * Send the request to terminate
          */
         if (num_new_procs > 0) {
-            PRTE_OUTPUT_VERBOSE((2, prte_debug_output,
+            PMIX_OUTPUT_VERBOSE((2, prte_debug_output,
                                  "%s prted:comm:abort_procs Terminating application requested "
                                  "processes (%2d / %2d).",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_new_procs, num_procs));
             prte_plm.terminate_procs(procs_to_kill);
         } else {
-            PRTE_OUTPUT_VERBOSE((2, prte_debug_output,
+            PMIX_OUTPUT_VERBOSE((2, prte_debug_output,
                                  "%s prted:comm:abort_procs No new application processes to "
                                  "terminating from request (%2d / %2d).",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_new_procs, num_procs));
@@ -346,7 +346,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         /****    EXIT COMMAND    ****/
     case PRTE_DAEMON_EXIT_CMD:
         if (prte_debug_daemons_flag) {
-            prte_output(0, "%s prted_cmd: received exit cmd", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+            pmix_output(0, "%s prted_cmd: received exit cmd", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         }
         jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
@@ -364,7 +364,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                 if (NULL != proct && PRTE_FLAG_TEST(proct, PRTE_PROC_FLAG_ALIVE)) {
                     /* at least one is still alive */
                     if (prte_debug_daemons_flag) {
-                        prte_output(0, "%s prted_cmd: exit cmd, but proc %s is alive",
+                        pmix_output(0, "%s prted_cmd: exit cmd, but proc %s is alive",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                     PRTE_NAME_PRINT(&proct->name));
                     }
@@ -373,12 +373,12 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
             }
             /* call our appropriate exit procedure */
             if (prte_debug_daemons_flag) {
-                prte_output(0, "%s prted_cmd: all routes and children gone - exiting",
+                pmix_output(0, "%s prted_cmd: all routes and children gone - exiting",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             }
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
         } else if (prte_debug_daemons_flag) {
-            prte_output(0, "%s prted_cmd: exit cmd, %d routes still exist",
+            pmix_output(0, "%s prted_cmd: exit cmd, %d routes still exist",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret);
         }
         return;
@@ -386,7 +386,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         /****    HALT VM COMMAND    ****/
     case PRTE_DAEMON_HALT_VM_CMD:
         if (prte_debug_daemons_flag) {
-            prte_output(0, "%s prted_cmd: received halt_vm cmd",
+            pmix_output(0, "%s prted_cmd: received halt_vm cmd",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         }
         /* this is an abnormal termination */
@@ -424,7 +424,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                 }
                 /* call our appropriate exit procedure */
                 if (prte_debug_daemons_flag) {
-                    prte_output(0, "%s prted_cmd: all routes and children gone - exiting",
+                    pmix_output(0, "%s prted_cmd: all routes and children gone - exiting",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                 }
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);

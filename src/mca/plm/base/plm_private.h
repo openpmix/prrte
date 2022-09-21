@@ -40,7 +40,7 @@
 
 #include "src/class/pmix_list.h"
 #include "src/class/pmix_pointer_array.h"
-#include "src/mca/base/prte_mca_base_framework.h"
+#include "src/mca/base/pmix_mca_base_framework.h"
 
 #include "src/mca/odls/odls_types.h"
 #include "src/mca/plm/plm_types.h"
@@ -49,7 +49,7 @@
 
 BEGIN_C_DECLS
 
-PRTE_EXPORT extern prte_mca_base_framework_t prte_plm_base_framework;
+PRTE_EXPORT extern pmix_mca_base_framework_t prte_plm_base_framework;
 
 /* globals for use solely within PLM framework */
 typedef struct {
@@ -65,6 +65,8 @@ typedef struct {
     bool daemon_nodes_assigned_at_launch;
     size_t node_regex_threshold;
     pmix_list_t daemon_cache;
+    bool daemon1_has_reported;
+    char **cache;
 } prte_plm_globals_t;
 /**
  * Global instance of PLM framework data

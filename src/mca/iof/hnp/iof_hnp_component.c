@@ -28,8 +28,8 @@
 #include "prte_config.h"
 
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
-#include "src/util/output.h"
+#include "src/mca/base/pmix_base.h"
+#include "src/util/pmix_output.h"
 
 #include "src/util/proc_info.h"
 
@@ -41,35 +41,28 @@
  */
 static int prte_iof_hnp_open(void);
 static int prte_iof_hnp_close(void);
-static int prte_iof_hnp_query(prte_mca_base_module_t **module, int *priority);
+static int prte_iof_hnp_query(pmix_mca_base_module_t **module, int *priority);
 
 /*
  * Public string showing the iof hnp component version number
  */
-const char *prte_iof_hnp_component_version_string
+const char *prte_mca_iof_hnp_component_version_string
     = "PRTE hnp iof MCA component version " PRTE_VERSION;
 
-prte_iof_hnp_component_t prte_iof_hnp_component = {
+prte_mca_iof_hnp_component_t prte_mca_iof_hnp_component = {
     {
-        /* First, the prte_mca_base_component_t struct containing meta
-         information about the component itself */
+        PRTE_IOF_BASE_VERSION_2_0_0,
 
-        .iof_version = {
-            PRTE_IOF_BASE_VERSION_2_0_0,
+        .pmix_mca_component_name = "hnp",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
 
-            .mca_component_name = "hnp",
-            PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                        PMIX_RELEASE_VERSION),
-
-            /* Component open, close, and query functions */
-            .mca_open_component = prte_iof_hnp_open,
-            .mca_close_component = prte_iof_hnp_close,
-            .mca_query_component = prte_iof_hnp_query,
-        },
-        .iof_data = {
-            /* The component is checkpoint ready */
-            PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-        },
+        /* Component open, close, and query functions */
+        .pmix_mca_open_component = prte_iof_hnp_open,
+        .pmix_mca_close_component = prte_iof_hnp_close,
+        .pmix_mca_query_component = prte_iof_hnp_query,
     }
 };
 
@@ -91,7 +84,7 @@ static int prte_iof_hnp_close(void)
  * Module query
  */
 
-static int prte_iof_hnp_query(prte_mca_base_module_t **module, int *priority)
+static int prte_iof_hnp_query(pmix_mca_base_module_t **module, int *priority)
 {
     /* if we are not the HNP, then don't use this module */
     if (!PRTE_PROC_IS_MASTER && !PRTE_PROC_IS_MASTER) {
@@ -101,7 +94,7 @@ static int prte_iof_hnp_query(prte_mca_base_module_t **module, int *priority)
     }
 
     *priority = 100;
-    *module = (prte_mca_base_module_t *) &prte_iof_hnp_module;
+    *module = (pmix_mca_base_module_t *) &prte_iof_hnp_module;
 
     return PRTE_SUCCESS;
 }

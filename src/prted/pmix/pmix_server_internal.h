@@ -42,7 +42,7 @@
 
 #include "src/class/pmix_hotel.h"
 #include "src/event/event-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/include/pmix_atomic.h"
 #include "src/util/pmix_printf.h"
@@ -349,6 +349,8 @@ PRTE_EXPORT extern void pmix_server_jobid_return(int status, pmix_proc_t *sender
                                            void *cbdata);
 
 PRTE_EXPORT extern int prte_pmix_server_register_tool(pmix_nspace_t nspace);
+
+PRTE_EXPORT extern int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info);
 
 /* exposed shared variables */
 typedef struct {

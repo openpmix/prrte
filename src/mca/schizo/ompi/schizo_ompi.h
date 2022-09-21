@@ -18,7 +18,7 @@
 
 #include "types.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/schizo/schizo.h"
 
 BEGIN_C_DECLS
@@ -29,7 +29,7 @@ typedef struct {
     bool warn_deprecations;
 } prte_schizo_ompi_component_t;
 
-PRTE_MODULE_EXPORT extern prte_schizo_ompi_component_t prte_schizo_ompi_component;
+PRTE_MODULE_EXPORT extern prte_schizo_ompi_component_t prte_mca_schizo_ompi_component;
 extern prte_schizo_base_module_t prte_schizo_ompi_module;
 
 END_C_DECLS

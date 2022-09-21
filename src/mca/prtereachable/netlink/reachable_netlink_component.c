@@ -23,7 +23,7 @@
 /*
  * Public string showing the reachable netlink component version number
  */
-const char *prte_prtereachable_netlink_component_version_string
+const char *prte_mca_prtereachable_netlink_component_version_string
     = "PRTE netlink prtereachable MCA component version " PRTE_VERSION;
 
 /*
@@ -31,7 +31,7 @@ const char *prte_prtereachable_netlink_component_version_string
  */
 static int reachable_netlink_open(void);
 static int reachable_netlink_close(void);
-static int reachable_netlink_component_query(prte_mca_base_module_t **module, int *priority);
+static int reachable_netlink_component_query(pmix_mca_base_module_t **module, int *priority);
 static int component_register(void);
 
 /*
@@ -39,10 +39,7 @@ static int component_register(void);
  * and pointers to our public functions in it
  */
 
-prte_reachable_base_component_t prte_prtereachable_netlink_component = {
-
-    /* First, the mca_component_t struct containing meta information
-       about the component itself */
+prte_reachable_base_component_t prte_mca_prtereachable_netlink_component = {
 
     .base_version = {
         /* Indicate that we are a reachable v1.1.0 component (which also
@@ -52,21 +49,18 @@ prte_reachable_base_component_t prte_prtereachable_netlink_component = {
 
         /* Component name and version */
 
-        .mca_component_name = "netlink",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PMIX_RELEASE_VERSION),
+        .pmix_mca_component_name = "netlink",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
 
         /* Component open and close functions */
 
-        .mca_open_component = reachable_netlink_open,
-        .mca_close_component = reachable_netlink_close,
-        .mca_query_component = reachable_netlink_component_query,
-        .mca_register_component_params = component_register,
-    },
-    /* Next the MCA v1.0.0 component meta data */
-    .base_data = {
-        /* The component is checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
+        .pmix_mca_open_component = reachable_netlink_open,
+        .pmix_mca_close_component = reachable_netlink_close,
+        .pmix_mca_query_component = reachable_netlink_component_query,
+        .pmix_mca_register_component_params = component_register,
     }
 };
 
@@ -87,9 +81,9 @@ static int component_register(void)
     return PRTE_SUCCESS;
 }
 
-static int reachable_netlink_component_query(prte_mca_base_module_t **module, int *priority)
+static int reachable_netlink_component_query(pmix_mca_base_module_t **module, int *priority)
 {
     *priority = 50;
-    *module = (prte_mca_base_module_t *) &prte_prtereachable_netlink_module;
+    *module = (pmix_mca_base_module_t *) &prte_prtereachable_netlink_module;
     return PRTE_SUCCESS;
 }

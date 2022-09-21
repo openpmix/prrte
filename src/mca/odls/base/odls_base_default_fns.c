@@ -379,7 +379,7 @@ int prte_odls_base_default_get_add_procs_data(pmix_data_buffer_t *buffer, pmix_n
     ret = PMIx_server_setup_application(jdata->nspace, cd.info, cd.ninfo,
                                         setup_cbfunc, &cd);
     if (PMIX_SUCCESS != ret) {
-        prte_output(0, "[%s:%d] PMIx_server_setup_application failed: %s", __FILE__, __LINE__,
+        pmix_output(0, "[%s:%d] PMIx_server_setup_application failed: %s", __FILE__, __LINE__,
                     PMIx_Error_string(ret));
         rc = PRTE_ERROR;
     } else {
@@ -418,7 +418,7 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
     pmix_envar_t envt;
     char *tmp;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                          "%s odls:constructing child list", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* set a default response */
@@ -543,7 +543,7 @@ next:
     }
     PMIX_LOAD_NSPACE(*job, jdata->nspace);
 
-    PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                          "%s odls:construct_child_list unpacking data to launch job %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(*job)));
 
@@ -565,6 +565,11 @@ next:
             rc = PRTE_ERR_NOT_FOUND;
             goto REPORT_ERROR;
         }
+        if (NULL == jdata->schizo) {
+            pmix_show_help("help-schizo-base.txt", "no-proxy", true,
+                           prte_tool_basename, "NULL");
+            return 1;
+        }
     } else {
         prte_set_job_data_object(jdata);
 
@@ -572,24 +577,24 @@ next:
         if (NULL == jdata->map) {
             jdata->map = PMIX_NEW(prte_job_map_t);
         }
-    }
-    /* get the associated schizo module */
-    if (NULL != jdata->personality) {
-        tmp = pmix_argv_join(jdata->personality, ',');
-    } else {
-        tmp = NULL;
-    }
-    jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
-    if (NULL == jdata->schizo) {
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true,
-                       prte_tool_basename, (NULL == tmp) ? "NULL" : tmp);
+        /* get the associated schizo module */
+        if (NULL != jdata->personality) {
+            tmp = pmix_argv_join(jdata->personality, ',');
+        } else {
+            tmp = NULL;
+        }
+        jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
+        if (NULL == jdata->schizo) {
+            pmix_show_help("help-schizo-base.txt", "no-proxy", true,
+                           prte_tool_basename, (NULL == tmp) ? "NULL" : tmp);
+            if (NULL != tmp) {
+                free(tmp);
+            }
+            return 1;
+        }
         if (NULL != tmp) {
             free(tmp);
         }
-        return 1;
-    }
-    if (NULL != tmp) {
-        free(tmp);
     }
 
     /* unpack the byte object containing any application setup info - there
@@ -671,7 +676,7 @@ next:
         }
         if (!PRTE_PROC_IS_MASTER) {
             /* connect the proc to its node here */
-            prte_output_verbose(5, prte_odls_base_framework.framework_output,
+            pmix_output_verbose(5, prte_odls_base_framework.framework_output,
                                 "%s GETTING DAEMON FOR PROC %s WITH PARENT %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&pptr->name),
                                 PRTE_VPID_PRINT(pptr->parent));
@@ -712,7 +717,7 @@ next:
             /* is this child on our current list of children */
             if (!PRTE_FLAG_TEST(pptr, PRTE_PROC_FLAG_LOCAL)) {
                 /* not on the local list */
-                PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s[%s:%d] adding proc %s to my local list",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,
                                      PRTE_NAME_PRINT(&pptr->name)));
@@ -1060,15 +1065,15 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
         cd->argv[0] = param;
     }
 
-    prte_output_verbose(5, prte_odls_base_framework.framework_output,
+    pmix_output_verbose(5, prte_odls_base_framework.framework_output,
                         "%s odls:launch spawning child %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PRTE_NAME_PRINT(&child->name));
 
-    if (15 < prte_output_get_verbosity(prte_odls_base_framework.framework_output)) {
+    if (15 < pmix_output_get_verbosity(prte_odls_base_framework.framework_output)) {
         /* dump what is going to be exec'd */
         char *output = NULL;
         prte_app_print(&output, jobdat, app);
-        prte_output(prte_odls_base_framework.framework_output, "%s", output);
+        pmix_output(prte_odls_base_framework.framework_output, "%s", output);
         free(output);
     }
 
@@ -1120,7 +1125,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(caddy);
 
-    prte_output_verbose(5, prte_odls_base_framework.framework_output,
+    pmix_output_verbose(5, prte_odls_base_framework.framework_output,
                         "%s local:launch",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -1146,7 +1151,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     /* do we have any local procs to launch? */
     if (0 == jobdat->num_local_procs) {
         /* indicate that we are done trying to launch them */
-        prte_output_verbose(5, prte_odls_base_framework.framework_output,
+        pmix_output_verbose(5, prte_odls_base_framework.framework_output,
                             "%s local:launch no local procs",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         goto GETOUT;
@@ -1164,7 +1169,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
      * no limit, so treat it as unlimited here.
      */
     if (0 < prte_sys_limits.num_procs) {
-        PRTE_OUTPUT_VERBOSE((10, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((10, prte_odls_base_framework.framework_output,
                              "%s checking limit on num procs %d #children needed %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_sys_limits.num_procs,
                              total_num_local_procs));
@@ -1192,7 +1197,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     if (0 < prte_sys_limits.num_files) {
         int limit;
         limit = 4 * total_num_local_procs + 6 * jobdat->num_local_procs;
-        PRTE_OUTPUT_VERBOSE((10, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((10, prte_odls_base_framework.framework_output,
                              "%s checking limit on file descriptors %d need %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), prte_sys_limits.num_files, limit));
         if (prte_sys_limits.num_files < limit) {
@@ -1216,7 +1221,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
 
         /* if this app isn't being used on our node, skip it */
         if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_USED_ON_NODE)) {
-            prte_output_verbose(5, prte_odls_base_framework.framework_output,
+            pmix_output_verbose(5, prte_odls_base_framework.framework_output,
                                 "%s app %d not used on node",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), j);
             continue;
@@ -1226,7 +1231,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
          * to that directory
          */
         if (PRTE_SUCCESS != (rc = setup_path(app, &app->cwd))) {
-            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s odls:launch:setup_path failed with error %s(%d)",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc), rc));
             /* do not ERROR_LOG this failure - it will be reported
@@ -1244,7 +1249,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
         /* setup the environment for this app */
         if (PRTE_SUCCESS != (rc = schizo->setup_fork(jobdat, app))) {
 
-            PRTE_OUTPUT_VERBOSE((10, prte_odls_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((10, prte_odls_base_framework.framework_output,
                                  "%s odls:launch:setup_fork failed with error %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
 
@@ -1350,7 +1355,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
              */
             if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE)) {
 
-                PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:launch child %s has already been launched",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&child->name)));
@@ -1370,7 +1375,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
              */
             if (!PMIX_CHECK_NSPACE(job, child->name.nspace)) {
 
-                PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:launch child %s is not in job %s being launched",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&child->name), PRTE_JOBID_PRINT(job)));
@@ -1378,7 +1383,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                 continue;
             }
 
-            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s odls:launch working child %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&child->name)));
@@ -1430,7 +1435,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                     goto GETOUT;
                 }
             }
-            prte_output_verbose(1, prte_odls_base_framework.framework_output,
+            pmix_output_verbose(1, prte_odls_base_framework.framework_output,
                                 "%s odls:dispatch %s to thread %d",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
                                 prte_odls_globals.next_base);
@@ -1461,7 +1466,7 @@ int prte_odls_base_default_signal_local_procs(const pmix_proc_t *proc, int32_t s
     int rc, i;
     prte_proc_t *child;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                          "%s odls: signaling proc %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          (NULL == proc) ? "NULL" : PRTE_NAME_PRINT(proc)));
@@ -1524,7 +1529,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
     bool *fptr = &flag;
     PRTE_HIDE_UNUSED_PARAMS(fd, sd);
 
-    prte_output_verbose(5, prte_odls_base_framework.framework_output,
+    pmix_output_verbose(5, prte_odls_base_framework.framework_output,
                         "%s odls:wait_local_proc child process %s pid %ld terminated",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                         (long) proc->pid);
@@ -1535,7 +1540,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
      * don't forget to check if the process was signaled.
      */
     if (!PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_ALIVE)) {
-        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child %s was already dead exit code %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                              proc->exit_code));
@@ -1559,7 +1564,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         /* even though the process exited "normally", it happened
          * via an prte_abort call
          */
-        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child %s died by call to abort",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
         state = PRTE_PROC_STATE_CALLED_ABORT;
@@ -1577,7 +1582,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
      * so we don't hang
      */
     if (PRTE_PROC_STATE_KILLED_BY_CMD == proc->state) {
-        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child %s was ordered to die",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
         PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
@@ -1590,13 +1595,14 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         /* set the exit status appropriately */
         proc->exit_code = WEXITSTATUS(proc->exit_code);
 
-        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child %s exit code %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                              proc->exit_code));
 
         /* provide a default state */
         state = PRTE_PROC_STATE_WAITPID_FIRED;
+        flag = prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL);
 
         /* check to see if a sync was required and if it was received */
         if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_REG)) {
@@ -1609,16 +1615,14 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                  * felt it was non-normal - in this latter case, we do not
                  * require that the proc deregister before terminating
                  */
-                flag = false;
-                prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void**)&fptr, PMIX_BOOL);
                 if (0 != proc->exit_code && flag) {
-                    state = PRTE_PROC_STATE_TERM_NON_ZERO;
-                    PRTE_OUTPUT_VERBOSE(
+                    PMIX_OUTPUT_VERBOSE(
                         (5, prte_odls_base_framework.framework_output,
                          "%s odls:waitpid_fired child process %s terminated normally "
                          "but with a non-zero exit status - it "
                          "will be treated as an abnormal termination",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
+                    state = PRTE_PROC_STATE_TERM_NON_ZERO;
                 } else {
                     /* indicate the waitpid fired */
                     state = PRTE_PROC_STATE_WAITPID_FIRED;
@@ -1628,7 +1632,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                  * is considered an abnormal termination and treated accordingly
                  */
                 state = PRTE_PROC_STATE_TERM_WO_SYNC;
-                PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:waitpid_fired child process %s terminated normally "
                                      "but did not provide a required finalize sync - it "
                                      "will be treated as an abnormal termination",
@@ -1652,7 +1656,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                      */
                     if (0 != proc->exit_code) {
                         state = PRTE_PROC_STATE_TERM_NON_ZERO;
-                        PRTE_OUTPUT_VERBOSE(
+                        PMIX_OUTPUT_VERBOSE(
                             (5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child process %s terminated normally "
                              "but with a non-zero exit status - it "
@@ -1660,7 +1664,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
                     } else {
                         state = PRTE_PROC_STATE_TERM_WO_SYNC;
-                        PRTE_OUTPUT_VERBOSE(
+                        PMIX_OUTPUT_VERBOSE(
                             (5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child process %s terminated normally "
                              "but did not provide a required init sync - it "
@@ -1674,8 +1678,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
              * none of them will. This is considered acceptable. Still
              * flag it as abnormal if the exit code was non-zero
              */
-            flag = false;
-            prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void**)&fptr, PMIX_BOOL);
             if (0 != proc->exit_code && flag) {
                 state = PRTE_PROC_STATE_TERM_NON_ZERO;
             } else {
@@ -1683,7 +1685,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
             }
         }
 
-        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child process %s terminated %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                              (0 == proc->exit_code) ? "normally" : "with non-zero status"));
@@ -1701,36 +1703,11 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
          * the termination code to exit status translation the
          * same way
          */
-        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child process %s terminated with signal %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
                              strsignal(WTERMSIG(proc->exit_code))));
         proc->exit_code = WTERMSIG(proc->exit_code) + 128;
-
-#if PRTE_ENABLE_FT
-        if (prte_enable_ft) {
-            /* register an event handler for the PRTE_ERR_PROC_ABORTED event */
-            int rc;
-            pmix_status_t pcode = prte_pmix_convert_rc(PRTE_ERR_PROC_ABORTED);
-            pmix_info_t *pinfo;
-            PMIX_INFO_CREATE(pinfo, 2);
-            PMIX_INFO_LOAD(&pinfo[0], PMIX_EVENT_AFFECTED_PROC, &proc->name, PMIX_PROC);
-            PMIX_INFO_LOAD(&pinfo[1], "prte.notify.donotloop", NULL, PMIX_BOOL);
-
-            rc = PMIx_Notify_event(pcode, PRTE_PROC_MY_NAME, PMIX_RANGE_LOCAL, pinfo, 2, NULL,  NULL);
-            if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-                PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                                     "%s odls:notify failed, release pinfo",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-            }
-            PMIX_INFO_FREE(pinfo, 2);
-
-            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
-                                 "%s odls:event notify in odls proc %s gone",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
-            PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
-        }
-#endif
 
         /* Do not decrement the number of local procs here. That is handled in the errmgr */
     }
@@ -1775,7 +1752,7 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
 
     /* if the pointer array is NULL, then just kill everything */
     if (NULL == procs) {
-        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:kill_local_proc working on WILDCARD",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PMIX_CONSTRUCT(&procarray, pmix_pointer_array_t);
@@ -1786,7 +1763,7 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
         procptr = &procarray;
         do_cleanup = true;
     } else {
-        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:kill_local_proc working on provided array",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         procptr = procs;
@@ -1804,7 +1781,7 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
                 continue;
             }
 
-            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s odls:kill_local_proc checking child process %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&child->name)));
@@ -1816,7 +1793,7 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
             if (!PMIX_NSPACE_INVALID(proc->name.nspace)
                 && !PMIX_CHECK_NSPACE(proc->name.nspace, child->name.nspace)) {
 
-                PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:kill_local_proc child %s is not part of job %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&child->name),
@@ -1829,7 +1806,7 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
              */
             if (PMIX_RANK_WILDCARD != proc->name.rank && proc->name.rank != child->name.rank) {
 
-                PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:kill_local_proc child %s is not covered by rank %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&child->name),
@@ -1842,7 +1819,7 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
              */
             if (!PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_ALIVE) || 0 == child->pid) {
 
-                PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:kill_local_proc child %s is not alive",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&child->name)));
@@ -1884,7 +1861,7 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
                If it is in a stopped state and we do not first change it to
                running, then SIGTERM will not get delivered.  Ignore return
                value. */
-            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s SENDING SIGCONT TO %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&child->name)));
@@ -1913,7 +1890,7 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
     if (0 < pmix_list_get_size(&procs_killed)) {
         /* Wait a little. Do so in nanosleep() - can be interrupted by a
          * signal. Most likely SIGCHLD in this case */
-        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s Sleep %ld nsec",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              (long)tp.tv_nsec));
@@ -1921,13 +1898,13 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
         /* issue a SIGTERM to all */
         PMIX_LIST_FOREACH(cd, &procs_killed, prte_odls_quick_caddy_t)
         {
-            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s SENDING SIGTERM TO %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&cd->child->name)));
             kill_local(cd->child->pid, SIGTERM);
         }
-        PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s Sleep %ld nsec",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              (long)tp.tv_nsec));
@@ -1938,7 +1915,7 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
         /* issue a SIGKILL to all */
         PMIX_LIST_FOREACH(cd, &procs_killed, prte_odls_quick_caddy_t)
         {
-            PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                  "%s SENDING SIGKILL TO %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&cd->child->name)));
@@ -1991,7 +1968,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     prte_odls_spawn_caddy_t *cd;
     prte_event_base_t *evb;
 
-    PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                          "%s odls:restart_proc for proc %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(&child->name)));
 
@@ -2078,7 +2055,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     evb = prte_odls_globals.ev_bases[prte_odls_globals.next_base];
     prte_wait_cb(child, prte_odls_base_default_wait_local_proc, evb, NULL);
 
-    PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output, "%s restarting app %s",
+    PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output, "%s restarting app %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), app->app));
 
     prte_event_set(evb, &cd->ev, -1, PRTE_EV_WRITE, prte_odls_base_spawn_proc, cd);
@@ -2086,7 +2063,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
 
 CLEANUP:
-    PRTE_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                          "%s odls:restart of proc %s %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_NAME_PRINT(&child->name),
                          (PRTE_SUCCESS == rc) ? "succeeded" : "failed"));

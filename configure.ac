@@ -83,11 +83,6 @@ PRTE_LOAD_PLATFORM
 
 PRTE_CONFIGURE_SETUP
 
-# compatability for oac_check_package
-m4_copy([PRTE_LOG_COMMAND], [OAC_LOG_COMMAND])
-m4_copy([PRTE_LOG_MSG], [OAC_LOG_MSG])
-m4_copy([PRTE_APPEND], [OAC_APPEND])
-
 prte_show_title "Configuring PRTE"
 
 #
@@ -627,16 +622,14 @@ AC_PROG_LEX(noyywrap)
 # required for developers, we decided that it really was not worth it
 # to be portable between different versions of lex ;-).
 
-if test -z "$LEX" || \
-   test -n "`echo $LEX | $GREP missing`" || \
-   test "`basename $LEX`" != "flex"; then
-    if test ! -f "$srcdir/src/util/show_help_lex.c"; then
-        AC_MSG_WARN([*** Could not find Flex on your system.])
-        AC_MSG_WARN([*** Flex is required for developer builds of PRTE.])
-        AC_MSG_WARN([*** Other versions of Lex are not supported.])
-        AC_MSG_WARN([*** NOTE: If you are building from a tarball downloaded from the PRTE web site, you do not need Flex.])
-        AC_MSG_ERROR([Cannot continue])
-    fi
+if test "x$LEX" != xflex && test ! -e $PRTE_TOP_SRCDIR/src/util/hostfile/hostfile_lex.c; then
+    AC_MSG_WARN([*** Could not find Flex on your system.])
+    AC_MSG_WARN([*** Flex is required for developer builds of PRRTE.])
+    AC_MSG_WARN([*** Other versions of Lex are not supported.])
+    AC_MSG_WARN([*** NOTE: If you are building from an official tarball])
+    AC_MSG_WARN([*** (not the ones made by GitHub!) downloaded from the])
+    AC_MSG_WARN([*** PRRTE web site, you do not need Flex.])
+    AC_MSG_ERROR([Cannot continue])
 fi
 
 #
@@ -970,9 +963,6 @@ prteincludedir='${includedir}/prte'
 AC_SUBST(prtedatadir)
 AC_SUBST(prtelibdir)
 AC_SUBST(prteincludedir)
-
-PRTE_SET_MCA_PREFIX([PRTE_MCA_])
-PRTE_SET_MCA_CMD_LINE_ID([mca])
 
 prte_want_prd=0
 

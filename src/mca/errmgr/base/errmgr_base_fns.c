@@ -49,13 +49,13 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
@@ -89,7 +89,7 @@ void prte_errmgr_base_log(int error_code, char *filename, int line)
         return;
     }
 
-    prte_output(0, "%s PRTE_ERROR_LOG: %s in file %s at line %d",
+    pmix_output(0, "%s PRTE_ERROR_LOG: %s in file %s at line %d",
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), errstring, filename, line);
 }
 
@@ -102,7 +102,7 @@ void prte_errmgr_base_abort(int error_code, char *fmt, ...)
     if (NULL != fmt) {
         char *buffer = NULL;
         pmix_vasprintf(&buffer, fmt, arglist);
-        prte_output(0, "%s", buffer);
+        pmix_output(0, "%s", buffer);
         free(buffer);
     }
     va_end(arglist);

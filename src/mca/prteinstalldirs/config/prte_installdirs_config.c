@@ -18,21 +18,36 @@
 #include "src/mca/prteinstalldirs/config/install_dirs.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 
-const prte_prteinstalldirs_base_component_t prte_prteinstalldirs_config_component = {
-    /* First, the mca_component_t struct containing meta information
-       about the component itself */
-    {PRTE_INSTALLDIRS_BASE_VERSION_2_0_0,
+const prte_prteinstalldirs_base_component_t prte_mca_prteinstalldirs_config_component = {
+    .component = {
+        PRTE_INSTALLDIRS_BASE_VERSION_2_0_0,
 
-     /* Component name and version */
-     "config", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PMIX_RELEASE_VERSION,
+        /* Component name and version */
+        .pmix_mca_component_name = "config",
+        PMIX_MCA_BASE_MAKE_VERSION(component,
+                                   PRTE_MAJOR_VERSION,
+                                   PRTE_MINOR_VERSION,
+                                   PMIX_RELEASE_VERSION),
 
-     /* Component open and close functions */
-     NULL, NULL},
-    {/* This component is Checkpointable */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT,
-        .reserved[0] = '\0'},
+    },
 
-    {PRTE_PREFIX, PRTE_EXEC_PREFIX, PRTE_BINDIR, PRTE_SBINDIR, PRTE_LIBEXECDIR, PRTE_DATAROOTDIR,
-     PRTE_DATADIR, PRTE_SYSCONFDIR, PRTE_SHAREDSTATEDIR, PRTE_LOCALSTATEDIR, PRTE_LIBDIR,
-     PRTE_INCLUDEDIR, PRTE_INFODIR, PRTE_MANDIR, PRTE_PKGDATADIR, PRTE_PKGLIBDIR,
-     PRTE_PKGINCLUDEDIR}};
+    {
+        PRTE_PREFIX,
+        PRTE_EXEC_PREFIX,
+        PRTE_BINDIR,
+        PRTE_SBINDIR,
+        PRTE_LIBEXECDIR,
+        PRTE_DATAROOTDIR,
+        PRTE_DATADIR,
+        PRTE_SYSCONFDIR,
+        PRTE_SHAREDSTATEDIR,
+        PRTE_LOCALSTATEDIR,
+        PRTE_LIBDIR,
+        PRTE_INCLUDEDIR,
+        PRTE_INFODIR,
+        PRTE_MANDIR,
+        PRTE_PKGDATADIR,
+        PRTE_PKGLIBDIR,
+        PRTE_PKGINCLUDEDIR
+    }
+};

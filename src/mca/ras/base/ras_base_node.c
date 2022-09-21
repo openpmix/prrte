@@ -61,7 +61,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
         return PRTE_SUCCESS; /* nothing to do */
     }
 
-    PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                          "%s ras:base:node_insert inserting %ld nodes",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (long) num_nodes));
 
@@ -120,7 +120,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
          * if this node is the same as the HNP's node so we don't double-enter it
          */
         if (!skiphnp && NULL != hnp_node && prte_check_host_is_local(node->name)) {
-            PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:node_insert updating HNP [%s] info to %ld slots",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name,
                                  (long) node->slots));
@@ -168,7 +168,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
             }
         } else {
             /* insert the object onto the prte_nodes global array */
-            PRTE_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((5, prte_ras_base_framework.framework_output,
                                  "%s ras:base:node_insert node %s slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  (NULL == node->name) ? "NULL" : node->name, node->slots));

@@ -34,13 +34,13 @@
 #include <sys/stat.h>
 
 #include "src/class/pmix_list.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ras/base/base.h"
@@ -136,7 +136,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             username = strdup(argv[0]);
             node_name = strdup(argv[1]);
         } else {
-            prte_output(0, "WARNING: Unhandled user@host-combination\n"); /* XXX */
+            pmix_output(0, "WARNING: Unhandled user@host-combination\n"); /* XXX */
         }
         pmix_argv_free(argv);
 
@@ -161,7 +161,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             }
             node_name[len - 1] = '\0'; /* truncate */
 
-            PRTE_OUTPUT_VERBOSE((3, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((3, prte_ras_base_framework.framework_output,
                                  "%s hostfile: node %s is being excluded",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node_name));
 
@@ -213,7 +213,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
          * add it to the "include" list.
          */
 
-        PRTE_OUTPUT_VERBOSE((3, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((3, prte_ras_base_framework.framework_output,
                              "%s hostfile: node %s is being included - keep all is %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node_name,
                              keep_all ? "TRUE" : "FALSE"));
@@ -307,7 +307,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             username = strdup(argv[0]);
             node_name = strdup(argv[1]);
         } else {
-            prte_output(0, "WARNING: Unhandled user@host-combination\n"); /* XXX */
+            pmix_output(0, "WARNING: Unhandled user@host-combination\n"); /* XXX */
         }
         pmix_argv_free(argv);
 
@@ -344,7 +344,7 @@ static int hostfile_parse_line(int token, pmix_list_t *updates,
             free(alias);
             node->rawname = strdup(node_name);
         }
-        PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                              "%s hostfile: node %s slots %d nodes-given %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name, node->slots,
                              PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN) ? "TRUE" : "FALSE"));
@@ -567,7 +567,7 @@ int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile)
     prte_node_t *nd, *node;
     bool found;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s hostfile: checking hostfile %s for nodes",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hostfile));
 
@@ -625,7 +625,7 @@ int prte_util_add_hostfile_nodes(pmix_list_t *nodes, char *hostfile)
            PMIX_RELEASE(item);
         } else {
             pmix_list_append(nodes, &nd->super);
-            PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                                  "%s hostfile: adding node %s slots %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nd->name, nd->slots));
         }
@@ -654,7 +654,7 @@ int prte_util_filter_hostfile_nodes(pmix_list_t *nodes, char *hostfile, bool rem
     pmix_list_t keep;
     bool found;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s hostfile: filtering nodes through hostfile %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hostfile));
 
@@ -890,7 +890,7 @@ int prte_util_get_ordered_host_list(pmix_list_t *nodes, char *hostfile)
     prte_node_t *node_from_pool, *newnode;
     int rc;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s hostfile: creating ordered list of hosts from hostfile %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hostfile));
 

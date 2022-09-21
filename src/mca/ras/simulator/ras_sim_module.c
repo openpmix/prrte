@@ -57,17 +57,17 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     hwloc_obj_t root;
     hwloc_cpuset_t available, mycpus;
 
-    node_cnt = pmix_argv_split(prte_ras_simulator_component.num_nodes, ',');
-    if (NULL != prte_ras_simulator_component.slots) {
-        slot_cnt = pmix_argv_split(prte_ras_simulator_component.slots, ',');
+    node_cnt = pmix_argv_split(prte_mca_ras_simulator_component.num_nodes, ',');
+    if (NULL != prte_mca_ras_simulator_component.slots) {
+        slot_cnt = pmix_argv_split(prte_mca_ras_simulator_component.slots, ',');
         /* backfile the slot_cnt so every topology has a cnt */
         tmp = slot_cnt[pmix_argv_count(slot_cnt) - 1];
         for (n = pmix_argv_count(slot_cnt); n < pmix_argv_count(node_cnt); n++) {
             pmix_argv_append_nosize(&slot_cnt, tmp);
         }
     }
-    if (NULL != prte_ras_simulator_component.slots_max) {
-        max_slot_cnt = pmix_argv_split(prte_ras_simulator_component.slots_max, ',');
+    if (NULL != prte_mca_ras_simulator_component.slots_max) {
+        max_slot_cnt = pmix_argv_split(prte_mca_ras_simulator_component.slots_max, ',');
         /* backfill the max_slot_cnt as reqd */
         tmp = max_slot_cnt[pmix_argv_count(slot_cnt) - 1];
         for (n = pmix_argv_count(max_slot_cnt); n < pmix_argv_count(max_slot_cnt); n++) {
@@ -136,7 +136,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
             }
             PMIX_RETAIN(t);
             node->topology = t;
-            prte_output_verbose(1, prte_ras_base_framework.framework_output,
+            pmix_output_verbose(1, prte_ras_base_framework.framework_output,
                                 "Created Node <%10s> [%3d : %3d]", node->name, node->slots,
                                 node->slots_max);
             node->available = hwloc_bitmap_dup(available);

@@ -91,13 +91,13 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
     int rc = PRTE_ERROR;
     char *msg;
 
-    prte_output_verbose(2, prte_rtc_base_framework.framework_output, "%s hwloc:set on child %s",
+    pmix_output_verbose(2, prte_rtc_base_framework.framework_output, "%s hwloc:set on child %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         (NULL == child) ? "NULL" : PRTE_NAME_PRINT(&child->name));
 
     if (NULL == jobdat || NULL == child) {
         /* nothing for us to do */
-        prte_output_verbose(2, prte_rtc_base_framework.framework_output,
+        pmix_output_verbose(2, prte_rtc_base_framework.framework_output,
                             "%s hwloc:set jobdat %s child %s - nothing to do",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             (NULL == jobdat) ? "NULL" : PRTE_JOBID_PRINT(jobdat->nspace),
@@ -154,14 +154,14 @@ static void set(prte_odls_spawn_caddy_t *cd, int write_fd)
                 if (0 == rc) {
                     report_binding(jobdat, child->name.rank);
                 } else {
-                    prte_output(0,
+                    pmix_output(0,
                                 "Rank %d is not bound (or bound to all available processors)",
                                 child->name.rank);
                 }
             }
         } else if (prte_get_attribute(&jobdat->attributes, PRTE_JOB_REPORT_BINDINGS, NULL,
                                       PMIX_BOOL)) {
-            prte_output(0, "Rank %d is not bound (or bound to all available processors)",
+            pmix_output(0, "Rank %d is not bound (or bound to all available processors)",
                         child->name.rank);
         }
     } else {
@@ -278,10 +278,10 @@ static void report_binding(prte_job_t *jobdat, int rank)
     /* get the cpus we are bound to */
     mycpus = hwloc_bitmap_alloc();
     if (hwloc_get_cpubind(prte_hwloc_topology, mycpus, HWLOC_CPUBIND_PROCESS) < 0) {
-        prte_output(0, "Rank %d is not bound", rank);
+        pmix_output(0, "Rank %d is not bound", rank);
     } else {
         tmp1 = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus, prte_hwloc_topology);
-        prte_output(0, "Rank %d bound to %s", rank, tmp1);
+        pmix_output(0, "Rank %d bound to %s", rank, tmp1);
         free(tmp1);
     }
     hwloc_bitmap_free(mycpus);

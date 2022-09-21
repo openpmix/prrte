@@ -11,6 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2015 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
+# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,7 +22,7 @@
 headers += \
         base/base.h
 
-libmca_filem_la_SOURCES += \
+libprtemca_filem_la_SOURCES += \
         base/filem_base_frame.c \
         base/filem_base_select.c \
         base/filem_base_receive.c \

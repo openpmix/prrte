@@ -86,7 +86,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         if (NULL != node && 0 == strcmp(nodelist[i], node->name)) {
             /* it is a repeat - just bump the slot count */
             ++node->slots;
-            prte_output_verbose(10, prte_ras_base_framework.framework_output,
+            pmix_output_verbose(10, prte_ras_base_framework.framework_output,
                                 "ras/lsf: +++ Node (%s) [slots=%d]", node->name, node->slots);
             continue;
         }
@@ -100,7 +100,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
         node->state = PRTE_NODE_STATE_UP;
         pmix_list_append(nodes, &node->super);
 
-        prte_output_verbose(10, prte_ras_base_framework.framework_output,
+        pmix_output_verbose(10, prte_ras_base_framework.framework_output,
                             "ras/lsf: New Node (%s) [slots=%d]", node->name, node->slots);
     }
 
@@ -172,7 +172,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
             prte_default_hostfile = NULL;
         }
         prte_default_hostfile = strdup(affinity_file);
-        prte_output_verbose(10, prte_ras_base_framework.framework_output,
+        pmix_output_verbose(10, prte_ras_base_framework.framework_output,
                             "ras/lsf: Set default_hostfile to %s", prte_default_hostfile);
 #endif
         return PRTE_SUCCESS;

@@ -35,7 +35,7 @@
 #include "constants.h"
 #include "types.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
 #include "src/class/pmix_object.h"
@@ -338,14 +338,7 @@ typedef int (*prte_filem_base_link_local_files_fn_t)(prte_job_t *jdata, prte_app
 /**
  * Structure for FILEM components.
  */
-struct prte_filem_base_component_2_0_0_t {
-    /** MCA base component */
-    prte_mca_base_component_t base_version;
-    /** MCA base data */
-    prte_mca_base_component_data_t base_data;
-};
-typedef struct prte_filem_base_component_2_0_0_t prte_filem_base_component_2_0_0_t;
-typedef struct prte_filem_base_component_2_0_0_t prte_filem_base_component_t;
+typedef pmix_mca_base_component_t prte_filem_base_component_t;
 
 /**
  * Structure for FILEM  modules
@@ -384,7 +377,7 @@ PRTE_EXPORT extern prte_filem_base_module_t prte_filem;
 /**
  * Macro for use in components that are of type FILEM
  */
-#define PRTE_FILEM_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_2_1_0("filem", 2, 0, 0)
+#define PRTE_FILEM_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("filem", 2, 0, 0)
 
 END_C_DECLS
 

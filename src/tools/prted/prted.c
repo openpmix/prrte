@@ -62,8 +62,8 @@
 
 #include "src/event/event-internal.h"
 #include "src/hwloc/hwloc-internal.h"
-#include "src/mca/base/base.h"
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_base.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
@@ -73,7 +73,7 @@
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_os_path.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 
@@ -257,8 +257,8 @@ int main(int argc, char *argv[])
 
     /* open the SCHIZO framework */
     if (PRTE_SUCCESS
-        != (ret = prte_mca_base_framework_open(&prte_schizo_base_framework,
-                                               PRTE_MCA_BASE_OPEN_DEFAULT))) {
+        != (ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
         PRTE_ERROR_LOG(ret);
         return ret;
     }
@@ -383,7 +383,7 @@ int main(int argc, char *argv[])
                 (void) hwloc_set_cpubind(prte_hwloc_topology, ours, 0);
                 if (prte_debug_daemons_flag) {
                     tmp = prte_hwloc_base_cset2str(ours, false, prte_hwloc_topology);
-                    prte_output(0, "Daemon %s is bound to cores %s",
+                    pmix_output(0, "Daemon %s is bound to cores %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), tmp);
                     free(tmp);
                 }
@@ -414,7 +414,7 @@ int main(int argc, char *argv[])
                 PRTE_TIMER_EVENT(prted_debug_failure_delay, 0, shutdown_callback, PRTE_SYS_PRI);
 
             } else {
-                prte_output(0, "%s is executing clean %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                pmix_output(0, "%s is executing clean %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             prted_abort ? "abort" : "abnormal termination");
 
                 /* do -not- call finalize as this will send a message to the HNP
@@ -465,11 +465,10 @@ int main(int argc, char *argv[])
      * any messages we send can flow thru him.
      */
     prte_parent_uri = NULL;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "parent_uri",
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "parent_uri",
                                       "URI for the parent if tree launch is enabled.",
-                                      PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_INTERNAL, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_CONSTANT, &prte_parent_uri);
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &prte_parent_uri);
     if (NULL != prte_parent_uri) {
         /* set the contact info into our local database */
         ret = prte_rml_parse_uris(prte_parent_uri, PRTE_PROC_MY_PARENT, NULL);
@@ -580,8 +579,6 @@ int main(int argc, char *argv[])
     }
     pmix_argv_free(nonlocal);
 
-    /* always send back our topology signature - this is a small string
-     * and won't hurt anything */
     prc = PMIx_Data_pack(NULL, &buffer, &prte_topo_signature, 1, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
@@ -762,7 +759,7 @@ int main(int argc, char *argv[])
     }
 
     if (prte_debug_flag) {
-        prte_output(0, "%s prted: up and running - waiting for commands!",
+        pmix_output(0, "%s prted: up and running - waiting for commands!",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     }
     ret = PRTE_SUCCESS;
@@ -808,7 +805,7 @@ static void shutdown_callback(int fd, short flags, void *arg)
         if (pmix_cmd_line_is_taken(&results, PRTE_CLI_TEST_SUICIDE)) {
             suicide = true;
         }
-        prte_output(0, "%s is executing %s abort", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+        pmix_output(0, "%s is executing %s abort", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     suicide ? "suicide" : "clean");
         /* do -not- call finalize as this will send a message to the HNP
          * indicating clean termination! Instead, just kill our
@@ -821,7 +818,7 @@ static void shutdown_callback(int fd, short flags, void *arg)
         prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
         abort();
     }
-    prte_output(0, "%s is executing clean abnormal termination",
+    pmix_output(0, "%s is executing clean abnormal termination",
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     /* do -not- call finalize as this will send a message to the HNP
      * indicating clean termination! Instead, just forcibly cleanup

@@ -26,7 +26,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/nidmap.h"
 #include "src/util/pmix_os_dirpath.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/proc_info.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -205,7 +205,7 @@ static int init(void)
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
-    if (5 < prte_output_get_verbosity(prte_state_base_framework.framework_output)) {
+    if (5 < pmix_output_get_verbosity(prte_state_base_framework.framework_output)) {
         prte_state_base_print_job_state_machine();
     }
 
@@ -219,7 +219,7 @@ static int init(void)
             PRTE_ERROR_LOG(rc);
         }
     }
-    if (5 < prte_output_get_verbosity(prte_state_base_framework.framework_output)) {
+    if (5 < pmix_output_get_verbosity(prte_state_base_framework.framework_output)) {
         prte_state_base_print_proc_state_machine();
     }
 
@@ -526,7 +526,7 @@ static void check_complete(int fd, short args, void *cbdata)
     PMIX_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
 
-    prte_output_verbose(2, prte_state_base_framework.framework_output,
+    pmix_output_verbose(2, prte_state_base_framework.framework_output,
                         "%s state:dvm:check_job_complete on job %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         (NULL == jdata) ? "NULL" : PRTE_JOBID_PRINT(jdata->nspace));
@@ -541,13 +541,13 @@ static void check_complete(int fd, short args, void *cbdata)
 
     if (NULL == jdata || PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
         /* just check to see if the daemons are complete */
-        PRTE_OUTPUT_VERBOSE(
+        PMIX_OUTPUT_VERBOSE(
             (2, prte_state_base_framework.framework_output,
              "%s state:dvm:check_job_complete - received NULL job, checking daemons",
              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         if (0 == pmix_list_get_size(&prte_rml_base.children)) {
             /* orteds are done! */
-            PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                  "%s prteds complete - exiting",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             if (NULL == jdata) {
@@ -662,7 +662,7 @@ static void check_complete(int fd, short args, void *cbdata)
 
         /* Let the tools know that a job terminated before we shutdown */
         if (jdata->state != PRTE_JOB_STATE_NOTIFIED) {
-            PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                  "%s state:dvm:check_job_completed state is terminated - activating notify",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             terminate_dvm = true;  // flag that the DVM is to terminate
@@ -738,7 +738,7 @@ release:
             if (NULL == node) {
                 continue;
             }
-            PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                  "%s state:dvm releasing procs from node %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name));
             for (i = 0; i < node->procs->size; i++) {
@@ -761,7 +761,7 @@ release:
                  * cpu in the proc's cpuset was used to mark usage */
                 if (NULL != proc->cpuset) {
                     if (0 != (rc = hwloc_bitmap_list_sscanf(boundcpus, proc->cpuset))) {
-                        prte_output(0, "hwloc_bitmap_sscanf returned %s for the string %s",
+                        pmix_output(0, "hwloc_bitmap_sscanf returned %s for the string %s",
                                     prte_strerror(rc), proc->cpuset);
                         continue;
                     }
@@ -777,7 +777,7 @@ release:
                         obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo,
                                                                   prte_rmaps_base.available, type, 0);
                         if (NULL == obj) {
-                            prte_output(0, "COULD NOT GET BOUND CPU FOR RESOURCE RELEASE");
+                            pmix_output(0, "COULD NOT GET BOUND CPU FOR RESOURCE RELEASE");
                             continue;
                         }
 #if HWLOC_API_VERSION < 0x20000
@@ -789,7 +789,7 @@ release:
                     hwloc_bitmap_or(node->available, node->available, tgt);
                 }
 
-                PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                                      "%s state:dvm releasing proc %s from node %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&proc->name), node->name));
@@ -845,7 +845,7 @@ release:
     }
 
     if (jdata->state != PRTE_JOB_STATE_NOTIFIED) {
-        PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                              "%s state:dvm:check_job_completed state is terminated - activating notify",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NOTIFY_COMPLETED);
@@ -889,7 +889,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
     pmix_status_t code, ret;
     char *errmsg = NULL;
 
-    PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                          "%s state:dvm:dvm_notify called",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -917,7 +917,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
     }
 
     if (notify) {
-        PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                              "%s state:dvm:dvm_notify notification requested",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         /* if it was an abnormal termination, then construct an appropriate
@@ -1024,7 +1024,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
             PMIX_PROC_FREE(sig.signature, 1);
             return;
         }
-        PRTE_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                              "%s state:dvm:dvm_notify notification sent",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PMIX_DATA_BUFFER_RELEASE(reply);

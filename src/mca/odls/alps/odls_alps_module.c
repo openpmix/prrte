@@ -177,13 +177,13 @@ static int odls_alps_kill_local(pid_t pid, int signum)
 #endif
     if (0 != kill(pid, signum)) {
         if (ESRCH != errno) {
-            PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                                  "%s odls:alps:SENT KILL %d TO PID %d GOT ERRNO %d",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int) pid, errno));
             return errno;
         }
     }
-    PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                          "%s odls:alps:SENT KILL %d TO PID %d SUCCESS",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), signum, (int) pid));
     return 0;
@@ -428,15 +428,15 @@ static int do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
 
     /* Exec the new executable */
 
-    if (10 < prte_output_get_verbosity(prte_odls_base_framework.framework_output)) {
+    if (10 < pmix_output_get_verbosity(prte_odls_base_framework.framework_output)) {
         int jout;
-        prte_output(0, "%s STARTING %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cd->app->app);
+        pmix_output(0, "%s STARTING %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cd->app->app);
         for (jout = 0; NULL != cd->argv[jout]; jout++) {
-            prte_output(0, "%s\tARGV[%d]: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), jout,
+            pmix_output(0, "%s\tARGV[%d]: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), jout,
                         cd->argv[jout]);
         }
         for (jout = 0; NULL != cd->env[jout]; jout++) {
-            prte_output(0, "%s\tENVIRON[%d]: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), jout,
+            pmix_output(0, "%s\tENVIRON[%d]: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), jout,
                         cd->env[jout]);
         }
     }
@@ -634,7 +634,7 @@ int prte_odls_alps_launch_local_procs(pmix_data_buffer_t *data)
     /* construct the list of children we are to launch */
     rc = prte_odls_base_default_construct_child_list(data, &job);
     if (PRTE_SUCCESS != rc) {
-        PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                              "%s odls:alps:launch:local failed to construct child list on error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
         return rc;
@@ -644,7 +644,7 @@ int prte_odls_alps_launch_local_procs(pmix_data_buffer_t *data)
 
     rc = prte_odls_alps_get_rdma_creds();
     if (PRTE_SUCCESS != rc) {
-        PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                              "%s odls:alps:launch:failed to get GNI rdma credentials %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
         return rc;
@@ -664,7 +664,7 @@ static int send_signal(pid_t pid, int signal)
 {
     int rc = PRTE_SUCCESS;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_odls_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_odls_base_framework.framework_output,
                          "%s sending signal %d to pid %ld", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          signal, (long) pid));
 
@@ -710,7 +710,7 @@ static int prte_odls_alps_restart_proc(prte_proc_t *child)
     /* restart the local proc */
     rc = prte_odls_base_default_restart_proc(child, odls_alps_fork_local_proc);
     if (PRTE_SUCCESS != rc) {
-        PRTE_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_odls_base_framework.framework_output,
                              "%s odls:alps:restart_proc failed to launch on error %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_ERROR_NAME(rc)));
     }

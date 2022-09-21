@@ -61,7 +61,7 @@
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_show_help.h"
@@ -232,7 +232,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
         return;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output, "%s plm:tm: launching vm",
+    PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output, "%s plm:tm: launching vm",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* Allocate a bunch of TM events to use for tm_spawn()ing */
@@ -255,9 +255,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* Add basic orted command line options */
     prte_plm_base_prted_append_basic_args(&argc, &argv, "tm", &proc_vpid_index);
 
-    if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
+    if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
         param = pmix_argv_join(argv, ' ');
-        PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:tm: final top-level argv:\n\t%s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == param) ? "NULL" : param));
         if (NULL != param)
@@ -321,7 +321,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             /* Reset PATH */
             if (0 == strncmp("PATH=", env[i], 5)) {
                 pmix_asprintf(&newenv, "%s/%s:%s", prefix_dir, bin_base, env[i] + 5);
-                PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:tm: resetting PATH: %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
                 pmix_setenv("PATH", newenv, true, &env);
@@ -331,7 +331,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
             /* Reset LD_LIBRARY_PATH */
             else if (0 == strncmp("LD_LIBRARY_PATH=", env[i], 16)) {
                 pmix_asprintf(&newenv, "%s/%s:%s", prefix_dir, lib_base, env[i] + 16);
-                PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:tm: resetting LD_LIBRARY_PATH: %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
                 pmix_setenv("LD_LIBRARY_PATH", newenv, true, &env);
@@ -354,14 +354,14 @@ static void launch_daemons(int fd, short args, void *cbdata)
             continue;
         }
 
-        PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:tm: launching on node %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              node->name));
 
         /* setup process name */
         rc = prte_util_convert_vpid_to_string(&vpid_string, node->daemon->name.rank);
         if (PRTE_SUCCESS != rc) {
-            prte_output(0, "plm:tm: unable to get daemon vpid as string");
+            pmix_output(0, "plm:tm: unable to get daemon vpid as string");
             exit(-1);
         }
         free(argv[proc_vpid_index]);
@@ -369,9 +369,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
         free(vpid_string);
 
         /* exec the daemon */
-        if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
+        if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
             param = pmix_argv_join(argv, ' ');
-            PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:tm: executing:\n\t%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  (NULL == param) ? "NULL" : param));
             if (NULL != param)
@@ -403,7 +403,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* flag that launch was successful, so far as we currently know */
     failed_launch = false;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                          "%s plm:tm:launch: finished spawning orteds",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -431,11 +431,11 @@ static void poll_spawns(int fd, short args, void *cbdata)
     for (i = 0; i < launched; ++i) {
         rc = tm_poll(TM_NULL_EVENT, &event, 1, &local_err);
         if (TM_SUCCESS != rc) {
-            prte_output(0, "plm:tm: failed to poll for a spawned daemon, return status = %d", rc);
+            pmix_output(0, "plm:tm: failed to poll for a spawned daemon, return status = %d", rc);
             goto cleanup;
         }
         if (TM_SUCCESS != local_err) {
-            prte_output(0, "plm:tm: failed to spawn daemon, error code = %d", local_err);
+            pmix_output(0, "plm:tm: failed to spawn daemon, error code = %d", local_err);
             goto cleanup;
         }
     }

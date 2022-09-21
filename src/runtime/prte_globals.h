@@ -63,7 +63,6 @@ BEGIN_C_DECLS
 PRTE_EXPORT extern int prte_debug_verbosity;           /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern char *prte_prohibited_session_dirs; /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern char *prte_job_ident;           /* instantiated in src/runtime/prte_globals.c */
-PRTE_EXPORT extern bool prte_create_session_dirs;  /* instantiated in src/runtime/prte_init.c */
 PRTE_EXPORT extern bool prte_execute_quiet;        /* instantiated in src/runtime/prte_globals.c */
 PRTE_EXPORT extern bool prte_report_silent_errors; /* instantiated in src/runtime/prte_globals.c */
 PRTE_EXPORT extern bool prte_event_base_active;    /* instantiated in src/runtime/prte_init.c */
@@ -73,6 +72,8 @@ PRTE_EXPORT extern char *prte_tool_basename;       // argv[0] of prun or one of 
 PRTE_EXPORT extern char *prte_tool_actual;         // actual tool executable
 PRTE_EXPORT extern char *prte_progress_thread_cpus;
 PRTE_EXPORT extern bool prte_bind_progress_thread_reqd;
+PRTE_EXPORT extern bool prte_show_launch_progress;
+PRTE_EXPORT extern bool prte_continuous_op;
 
 /**
  * Global indicating where this process was bound to at launch (will
@@ -173,7 +174,7 @@ PRTE_EXPORT extern int prte_clean_output;
 #define PRTE_UPDATE_EXIT_STATUS(newstatus)                                                     \
     do {                                                                                       \
         if (0 == prte_exit_status && 0 != newstatus) {                                         \
-            PRTE_OUTPUT_VERBOSE((1, prte_debug_output, "%s:%s(%d) updating exit status to %d", \
+            PMIX_OUTPUT_VERBOSE((1, prte_debug_output, "%s:%s(%d) updating exit status to %d", \
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,       \
                                  newstatus));                                                  \
             prte_exit_status = newstatus;                                                      \
@@ -185,7 +186,7 @@ PRTE_EXPORT extern int prte_clean_output;
  */
 #define PRTE_RESET_EXIT_STATUS()                                                       \
     do {                                                                               \
-        PRTE_OUTPUT_VERBOSE((1, prte_debug_output, "%s:%s(%d) reseting exit status",   \
+        PMIX_OUTPUT_VERBOSE((1, prte_debug_output, "%s:%s(%d) reseting exit status",   \
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__)); \
         prte_exit_status = 0;                                                          \
     } while (0);
@@ -508,8 +509,6 @@ PRTE_EXPORT bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2);
 PRTE_EXPORT extern bool prte_debug_daemons_flag;
 PRTE_EXPORT extern bool prte_debug_daemons_file_flag;
 PRTE_EXPORT extern bool prte_leave_session_attached;
-PRTE_EXPORT extern bool prte_coprocessors_detected;
-PRTE_EXPORT extern pmix_hash_table_t *prte_coprocessors;
 PRTE_EXPORT extern char *prte_topo_signature;
 PRTE_EXPORT extern char *prte_data_server_uri;
 PRTE_EXPORT extern bool prte_dvm_ready;
@@ -624,14 +623,11 @@ extern char *prte_set_max_sys_limits;
 extern char *prte_if_include;
 extern char *prte_if_exclude;
 
-/* Enable/disable ft */
-PRTE_EXPORT extern bool prte_enable_ft;
-
 #if PRTE_PICKY_COMPILERS
 #define PRTE_HIDE_UNUSED_PARAMS(...)                \
-do {                                            \
-int __x = 3;                                \
-prte_hide_unused_params(__x, __VA_ARGS__);  \
+    do {                                            \
+        int __x = 3;                                \
+        prte_hide_unused_params(__x, __VA_ARGS__);  \
 } while(0)
 
 PMIX_EXPORT void prte_hide_unused_params(int x, ...);

@@ -129,11 +129,11 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
     pmix_list_t default_seq_list;
     pmix_list_t node_list, *seq_list, sq_list;
     prte_proc_t *proc;
-    prte_mca_base_component_t *c = &prte_rmaps_seq_component.base_version;
+    pmix_mca_base_component_t *c = &prte_mca_rmaps_seq_component;
     char *hosts = NULL;
     bool match;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_rmaps_base_framework.framework_output,
                          "%s rmaps:seq called on job %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_JOBID_PRINT(jdata->nspace)));
 
@@ -142,15 +142,15 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
      * restarting of failed apps
      */
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:seq: job %s is being restarted - seq cannot map",
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
     if (NULL != jdata->map->req_mapper) {
-        if (0 != strcasecmp(jdata->map->req_mapper, c->mca_component_name)) {
+        if (0 != strcasecmp(jdata->map->req_mapper, c->pmix_mca_component_name)) {
             /* a mapper has been specified, and it isn't me */
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: job %s not using sequential mapper",
                                 PRTE_JOBID_PRINT(jdata->nspace));
             return PRTE_ERR_TAKE_NEXT_OPTION;
@@ -158,13 +158,13 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
     }
     if (PRTE_MAPPING_SEQ != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
         /* I don't know how to do these - defer */
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:seq: job %s not using seq mapper",
                             PRTE_JOBID_PRINT(jdata->nspace));
         return PRTE_ERR_TAKE_NEXT_OPTION;
     }
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:seq: mapping job %s",
                         PRTE_JOBID_PRINT(jdata->nspace));
 
@@ -172,7 +172,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
     if (NULL != jdata->map->last_mapper) {
         free(jdata->map->last_mapper);
     }
-    jdata->map->last_mapper = strdup(c->mca_component_name);
+    jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
 
     /* convenience def */
     map = jdata->map;
@@ -208,7 +208,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
                 rc = PRTE_ERR_NOT_FOUND;
                 goto error;
             }
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts,
                                 app->app);
             PMIX_CONSTRUCT(&sq_list, pmix_list_t);
@@ -220,7 +220,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             seq_list = &sq_list;
         } else if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts,
                                       PMIX_STRING)) {
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using dash-host nodes on app %s", app->app);
             PMIX_CONSTRUCT(&node_list, pmix_list_t);
             /* dash host entries cannot specify cpusets, so used the std function to retrieve the
@@ -245,7 +245,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
                 rc = PRTE_ERR_NOT_FOUND;
                 goto error;
             }
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using hostfile %s nodes on app %s", hosts,
                                 app->app);
             PMIX_CONSTRUCT(&sq_list, pmix_list_t);
@@ -256,7 +256,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             }
             seq_list = &sq_list;
         } else if (0 < pmix_list_get_size(&default_seq_list)) {
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: using default hostfile nodes on app %s", app->app);
             seq_list = &default_seq_list;
             hosts = strdup(prte_default_hostfile);
@@ -278,7 +278,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
                  * by gethostname may have been (or vice versa)
                  */
                 if (prte_check_host_is_local(seq->hostname)) {
-                    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                         "mca:rmaps:seq: removing head node %s", seq->hostname);
                     pmix_list_remove_item(seq_list, item);
                     PMIX_RELEASE(item); /* "un-retain" it */
@@ -296,7 +296,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
         /* set #procs to the number of entries */
         if (0 == app->num_procs) {
             app->num_procs = num_nodes;
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: setting num procs to %s for app %s",
                                 PRTE_VPID_PRINT(app->num_procs), app->app);
         } else if (num_nodes < app->num_procs) {
@@ -356,13 +356,13 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
             if (PMIX_SUCCESS != rc) {
                 PMIX_RELEASE(proc);
-                return rc;
+                goto error;
             }
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
             if (PRTE_SUCCESS != rc) {
-                return rc;
+                goto error;
             }
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps:seq: assigned proc %s to node %s for app %s",
                                 PRTE_VPID_PRINT(proc->name.rank), sq->hostname, app->app);
 
@@ -392,7 +392,16 @@ error:
     if (NULL != hosts) {
         free(hosts);
     }
-    return rc;
+    if (PRTE_ERR_SILENT != rc) {
+        pmix_show_help("help-prte-rmaps-base.txt",
+                       "failed-map", true,
+                       PRTE_ERROR_NAME(rc),
+                       (NULL == app) ? "N/A" : app->app,
+                       (NULL == app) ? -1 : app->num_procs,
+                       prte_rmaps_base_print_mapping(options->map),
+                       prte_hwloc_base_print_binding(options->bind));
+    }
+    return PRTE_ERR_SILENT;
 }
 
 static char *prte_getline(FILE *fp)

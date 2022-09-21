@@ -23,7 +23,7 @@
 #include "libnl_utils.h"
 #include "reachable_netlink.h"
 #include "src/mca/prtereachable/base/base.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_string_copy.h"
@@ -180,7 +180,7 @@ static int get_weights(pmix_pif_t *local_if, pmix_pif_t *remote_if)
     }
 
 out:
-    prte_output_verbose(20, prte_prtereachable_base_framework.framework_output,
+    pmix_output_verbose(20, prte_prtereachable_base_framework.framework_output,
                         "reachable:netlink: path from %s to %s: %s", str_local, str_remote,
                         conn_type);
 

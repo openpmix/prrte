@@ -380,7 +380,7 @@ static int define_cli(prte_cmd_line_t *cli)
 {
     int rc;
 
-    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:hydra: define_cli", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* protect against bozo error */
@@ -697,7 +697,7 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
 {
     int i;
 
-    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:hydra: parse_cli",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -733,7 +733,7 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
     prte_value_t *pval;
     int i, j;
 
-    prte_output_verbose(1, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:hydra: parse_env",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -764,7 +764,7 @@ static int detect_proxy(char *personalities)
 {
     char *evar;
 
-    prte_output_verbose(2, prte_schizo_base_framework.framework_output,
+    pmix_output_verbose(2, prte_schizo_base_framework.framework_output,
                         "%s[%s]: detect proxy with %s (%s)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__,
                         (NULL == personalities) ? "NULL" : personalities,

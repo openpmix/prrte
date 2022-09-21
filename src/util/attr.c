@@ -19,7 +19,7 @@
 #include "types.h"
 
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_string_copy.h"
 
@@ -52,7 +52,7 @@ bool prte_get_attribute(pmix_list_t *attributes, prte_attribute_key_t key, void 
         if (key == kv->key) {
             if (kv->data.type != type) {
                 PRTE_ERROR_LOG(PRTE_ERR_TYPE_MISMATCH);
-                prte_output(0, "KV %s TYPE %s", PMIx_Data_type_string(kv->data.type), PMIx_Data_type_string(type));
+                pmix_output(0, "KV %s TYPE %s", PMIx_Data_type_string(kv->data.type), PMIx_Data_type_string(type));
                 return false;
             }
             if (NULL != data) {
@@ -134,23 +134,6 @@ prte_attribute_t *prte_fetch_attribute(pmix_list_t *attributes, prte_attribute_t
 
     /* if we get here, then no matching key was found */
     return NULL;
-}
-
-int prte_add_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local, void *data,
-                       pmix_data_type_t type)
-{
-    prte_attribute_t *kv;
-    int rc;
-
-    kv = PMIX_NEW(prte_attribute_t);
-    kv->key = key;
-    kv->local = local;
-    if (PRTE_SUCCESS != (rc = prte_attr_load(kv, data, type))) {
-        PMIX_RELEASE(kv);
-        return rc;
-    }
-    pmix_list_append(attributes, &kv->super);
-    return PRTE_SUCCESS;
 }
 
 int prte_prepend_attribute(pmix_list_t *attributes, prte_attribute_key_t key, bool local,
@@ -485,6 +468,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "JOB CONTROLS";
         case PRTE_JOB_SHOW_PROGRESS:
             return "SHOW LAUNCH PROGRESS";
+        case PRTE_JOB_RECOVERABLE:
+            return "JOB IS RECOVERABLE";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

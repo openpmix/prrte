@@ -24,7 +24,7 @@
 #include <stddef.h>
 
 #include "src/class/pmix_bitmap.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
@@ -74,7 +74,7 @@ pmix_rank_t prte_rml_get_route(pmix_rank_t target)
     ret = PRTE_PROC_MY_PARENT->rank;
 
 found:
-    PRTE_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_rml_base.routed_output,
                          "%s routed_radix_get(%s) --> %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_VPID_PRINT(target),
@@ -87,7 +87,7 @@ int prte_rml_route_lost(pmix_rank_t route)
 {
     prte_routed_tree_t *child;
 
-    PRTE_OUTPUT_VERBOSE((2, prte_rml_base.routed_output,
+    PMIX_OUTPUT_VERBOSE((2, prte_rml_base.routed_output,
                          "%s route to %s lost",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          PRTE_VPID_PRINT(route)));
@@ -98,7 +98,7 @@ int prte_rml_route_lost(pmix_rank_t route)
      * release a thread-lock - otherwise, we will hang!!
      */
     if (!prte_finalizing && route == prte_rml_base.lifeline) {
-        PRTE_OUTPUT_VERBOSE((2, prte_rml_base.routed_output,
+        PMIX_OUTPUT_VERBOSE((2, prte_rml_base.routed_output,
                              "%s routed:radix: Connection to lifeline %s lost",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                              PRTE_VPID_PRINT(prte_rml_base.lifeline)));
@@ -152,7 +152,7 @@ static void radix_tree(int rank,
             } else {
                 /* we are recording someone's relatives - set the bit */
                 if (PRTE_SUCCESS != pmix_bitmap_set_bit(relatives, peer)) {
-                    prte_output(0, "%s Error: could not set relations bit!",
+                    pmix_output(0, "%s Error: could not set relations bit!",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                 }
                 /* point to this relations */
@@ -203,8 +203,8 @@ void prte_rml_compute_routing_tree(void)
      */
     radix_tree(Ii, &prte_rml_base.children, NULL);
 
-    if (0 < prte_output_get_verbosity(prte_rml_base.routed_output)) {
-        prte_output(0, "%s: parent %d num_children %d",
+    if (0 < pmix_output_get_verbosity(prte_rml_base.routed_output)) {
+        pmix_output(0, "%s: parent %d num_children %d",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     PRTE_PROC_MY_PARENT->rank,
                     (int)pmix_list_get_size(&prte_rml_base.children));
@@ -212,11 +212,11 @@ void prte_rml_compute_routing_tree(void)
         PMIX_LIST_FOREACH(child, &prte_rml_base.children, prte_routed_tree_t)
         {
             d = (prte_proc_t *) pmix_pointer_array_get_item(dmns->procs, child->rank);
-            prte_output(0, "%s: \tchild %d node %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+            pmix_output(0, "%s: \tchild %d node %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         child->rank, d->node->name);
             for (j = 0; j < (int) prte_process_info.num_daemons; j++) {
                 if (pmix_bitmap_is_set_bit(&child->relatives, j)) {
-                    prte_output(0, "%s: \t\trelation %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), j);
+                    pmix_output(0, "%s: \t\trelation %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), j);
                 }
             }
         }

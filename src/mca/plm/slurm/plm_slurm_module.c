@@ -52,11 +52,11 @@
 #    include <fcntl.h>
 #endif
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
 
@@ -193,7 +193,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(state);
 
-    PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                          "%s plm:slurm: LAUNCH DAEMONS CALLED",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
@@ -231,7 +231,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
          * will trigger the daemons_reported event and cause the
          * job to move to the following step
          */
-        PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:slurm: no new daemons to launch",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
@@ -256,8 +256,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* start one orted on each node */
     pmix_argv_append(&argc, &argv, "--ntasks-per-node=1");
 
-    if (!prte_enable_recovery) {
-        /* kill the job if any orteds die */
+    if (!PRTE_FLAG_TEST(state->jdata, PRTE_JOB_FLAG_RECOVERABLE)) {
+        /* kill the job if any prteds die */
         pmix_argv_append(&argc, &argv, "--kill-on-bad-exit");
     }
 
@@ -293,8 +293,8 @@ static void launch_daemons(int fd, short args, void *cbdata)
 #endif
 
     /* Append user defined arguments to srun */
-    if (NULL != prte_plm_slurm_component.custom_args) {
-        custom_strings = pmix_argv_split(prte_plm_slurm_component.custom_args, ' ');
+    if (NULL != prte_mca_plm_slurm_component.custom_args) {
+        custom_strings = pmix_argv_split(prte_mca_plm_slurm_component.custom_args, ' ');
         num_args = pmix_argv_count(custom_strings);
         for (i = 0; i < num_args; ++i) {
             pmix_argv_append(&argc, &argv, custom_strings[i]);
@@ -347,7 +347,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     pmix_argv_append(&argc, &argv, tmp);
     free(tmp);
 
-    PRTE_OUTPUT_VERBOSE((2, prte_plm_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((2, prte_plm_base_framework.framework_output,
                          "%s plm:slurm: launching on nodes %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                          nodelist_flat));
     free(nodelist_flat);
@@ -367,7 +367,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
      */
     rc = prte_util_convert_vpid_to_string(&name_string, map->daemon_vpid_start);
     if (PRTE_SUCCESS != rc) {
-        prte_output(0, "plm_slurm: unable to get daemon vpid as string");
+        pmix_output(0, "plm_slurm: unable to get daemon vpid as string");
         goto cleanup;
     }
 
@@ -404,7 +404,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
              */
             if (NULL == cur_prefix) {
                 cur_prefix = strdup(app_prefix_dir);
-                PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+                PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:slurm: Set prefix:%s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), cur_prefix));
             }
@@ -421,9 +421,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
     /* protect the args in case someone has a script wrapper around srun */
     prte_plm_base_wrap_args(argv);
 
-    if (0 < prte_output_get_verbosity(prte_plm_base_framework.framework_output)) {
+    if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
         param = pmix_argv_join(argv, ' ');
-        prte_output(prte_plm_base_framework.framework_output,
+        pmix_output(prte_plm_base_framework.framework_output,
                     "%s plm:slurm: final top-level argv:\n\t%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     (NULL == param) ? "NULL" : param);
         if (NULL != param)
@@ -477,7 +477,7 @@ static int plm_slurm_terminate_prteds(void)
             PRTE_ERROR_LOG(rc);
         }
     } else {
-        PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:slurm: primary daemons complete!",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
@@ -593,7 +593,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
         /* an orted must have died unexpectedly - report
          * that the daemon has failed so we exit
          */
-        PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:slurm: srun returned non-zero exit status (%d) from launching "
                              "the per-node daemon",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), proc->exit_code));
@@ -604,7 +604,7 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
             /* in this case, we just want to fire the proper trigger so
              * mpirun can exit
              */
-            PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:slurm: primary daemons complete!",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             /* need to set the #terminated value to avoid an incorrect error msg */
@@ -697,7 +697,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
                 pmix_asprintf(&newenv, "%s/%s", prefix, bin_base);
             }
             setenv("PATH", newenv, true);
-            PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:slurm: reset PATH: %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  newenv));
             free(newenv);
@@ -710,7 +710,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
                 pmix_asprintf(&newenv, "%s/%s", prefix, lib_base);
             }
             setenv("LD_LIBRARY_PATH", newenv, true);
-            PRTE_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
+            PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:slurm: reset LD_LIBRARY_PATH: %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
             free(newenv);
@@ -723,7 +723,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
              * tie stdout/stderr to dev null so we don't see messages from orted
              * EXCEPT if the user has requested that we leave sessions attached
              */
-            if (0 > prte_output_get_verbosity(prte_plm_base_framework.framework_output)
+            if (0 > pmix_output_get_verbosity(prte_plm_base_framework.framework_output)
                 && !prte_debug_daemons_flag && !prte_leave_session_attached) {
                 dup2(fd, 1);
                 dup2(fd, 2);
@@ -742,7 +742,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
 
         execvp(exec_argv, argv);
 
-        prte_output(0, "plm:slurm:start_proc: exec failed");
+        pmix_output(0, "plm:slurm:start_proc: exec failed");
         /* don't return - need to exit - returning would be bad -
            we're not in the calling process anymore */
         exit(1);

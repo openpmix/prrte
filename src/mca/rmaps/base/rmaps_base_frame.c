@@ -28,10 +28,11 @@
 
 #include <string.h>
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/prte_cmd_line.h"
 
@@ -44,7 +45,7 @@
 /*
  * The following file was created by configure.  It contains extern
  * statements and the definition of an array of pointers to each
- * component's public prte_mca_base_component_t struct.
+ * component's public pmix_mca_base_component_t struct.
  */
 
 #include "src/mca/rmaps/base/static-components.h"
@@ -72,48 +73,44 @@ static char *rmaps_base_ranking_policy = NULL;
 static bool rmaps_base_inherit = false;
 static bool rmaps_base_abort_non_zero_exit = true;
 
-static int prte_rmaps_base_register(prte_mca_base_register_flag_t flags)
+static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
 {
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     /* define default mapping policy */
     rmaps_base_mapping_policy = NULL;
-    (void) prte_mca_base_var_register(
-        "prte", "rmaps", "default", "mapping_policy",
-        "Default mapping Policy [slot | hwthread | core | l1cache | "
-        "l2cache | l3cache | numa | package | node | seq | dist | ppr | "
-        "rankfile | pe-list=a,b (comma-delimited ranges of cpus to use for this job)],"
-        " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
-        "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
-        "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, ORDERED, FILE=%s (path to file containing sequential "
-        "or rankfile entries)",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_mapping_policy);
+    (void) pmix_mca_base_var_register("prte", "rmaps", "default", "mapping_policy",
+                                      "Default mapping Policy [slot | hwthread | core | l1cache | "
+                                      "l2cache | l3cache | numa | package | node | seq | dist | ppr | "
+                                      "rankfile | pe-list=a,b (comma-delimited ranges of cpus to use for this job)],"
+                                      " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
+                                      "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
+                                      "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, ORDERED, FILE=%s (path to file containing sequential "
+                                      "or rankfile entries)",
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &rmaps_base_mapping_policy);
 
     /* define default ranking policy */
     rmaps_base_ranking_policy = NULL;
-    (void) prte_mca_base_var_register(
-        "prte", "rmaps", "default", "ranking_policy",
-        "Default ranking Policy [slot | node | span | fill]",
-        PRTE_MCA_BASE_VAR_TYPE_STRING, NULL, 0, PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-        PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_ranking_policy);
+    (void) pmix_mca_base_var_register("prte", "rmaps", "default", "ranking_policy",
+                                      "Default ranking Policy [slot | node | span | fill]",
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                      &rmaps_base_ranking_policy);
 
     rmaps_base_inherit = false;
-    (void) prte_mca_base_var_register("prte", "rmaps", "default", "inherit",
+    (void) pmix_mca_base_var_register("prte", "rmaps", "default", "inherit",
                                       "Whether child jobs shall inherit mapping/ranking/binding "
                                       "directives from their parent by default",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_inherit);
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &rmaps_base_inherit);
 
     /* set some default job controls - since they get resolved in
      prte_rmaps_base_map_job, we put them here */
     rmaps_base_abort_non_zero_exit = true;
-    (void) prte_mca_base_var_register("prte", "prte", NULL, "abort_on_non_zero_status",
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "abort_on_non_zero_status",
                                       "Set default policy for aborting the job if any process returns a non-zero exit status",
-                                      PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                      PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                      PRTE_MCA_BASE_VAR_SCOPE_READONLY, &rmaps_base_abort_non_zero_exit);
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &rmaps_base_abort_non_zero_exit);
 
     return PRTE_SUCCESS;
 }
@@ -130,14 +127,14 @@ static int prte_rmaps_base_close(void)
     hwloc_bitmap_free(prte_rmaps_base.available);
     hwloc_bitmap_free(prte_rmaps_base.baseset);
 
-    return prte_mca_base_framework_components_close(&prte_rmaps_base_framework, NULL);
+    return pmix_mca_base_framework_components_close(&prte_rmaps_base_framework, NULL);
 }
 
 /**
  * Function for finding and opening either all MCA components, or the one
  * that was specifically requested via a MCA parameter.
  */
-static int prte_rmaps_base_open(prte_mca_base_open_flag_t flags)
+static int prte_rmaps_base_open(pmix_mca_base_open_flag_t flags)
 {
     int rc;
 
@@ -170,13 +167,13 @@ static int prte_rmaps_base_open(prte_mca_base_open_flag_t flags)
     }
 
     /* Open up all available components */
-    return prte_mca_base_framework_components_open(&prte_rmaps_base_framework, flags);
+    return pmix_mca_base_framework_components_open(&prte_rmaps_base_framework, flags);
 }
 
-PRTE_MCA_BASE_FRAMEWORK_DECLARE(prte, rmaps, "PRTE Mapping Subsystem", prte_rmaps_base_register,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, rmaps, "PRTE Mapping Subsystem", prte_rmaps_base_register,
                                 prte_rmaps_base_open, prte_rmaps_base_close,
                                 prte_rmaps_base_static_components,
-                                PRTE_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+                                PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
 PMIX_CLASS_INSTANCE(prte_rmaps_base_selected_module_t, pmix_list_item_t, NULL, NULL);
 
@@ -192,7 +189,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
     bool oversubscribe_given = false;
     bool nooversubscribe_given = false;
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "%s rmaps:base check modifiers with %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         (NULL == ck) ? "NULL" : ck);
@@ -203,11 +200,11 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
 
     ck2 = pmix_argv_split(ck, ':');
     for (i = 0; NULL != ck2[i]; i++) {
-        if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_SPAN)) {
+        if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_SPAN)) {
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_SPAN);
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_GIVEN);
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_OVERSUB)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_OVERSUB)) {
             if (nooversubscribe_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -219,7 +216,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_SUBSCRIBE_GIVEN);
             oversubscribe_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOOVER)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOOVER)) {
             if (oversubscribe_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -231,10 +228,10 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_SUBSCRIBE_GIVEN);
             nooversubscribe_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOLOCAL)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOLOCAL)) {
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_NO_USE_LOCAL);
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_ORDERED)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_ORDERED)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -242,7 +239,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_ORDERED);
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_PE)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_PE)) {
             if (NULL == jdata) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
                                "mapping policy", ck2[i]);
@@ -260,7 +257,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL,
                                &u16, PMIX_UINT16);
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_INHERIT)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_INHERIT)) {
             if (noinherit_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -276,7 +273,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             inherit_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOINHERIT)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_NOINHERIT)) {
             if (inherit_given) {
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
@@ -292,7 +289,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             noinherit_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_HWTCPUS)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_HWTCPUS)) {
             if (core_cpus_given) {
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "HWTCPUS", "CORECPUS");
@@ -307,7 +304,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             hwthread_cpus_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_CORECPUS)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_CORECPUS)) {
             if (hwthread_cpus_given) {
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "HWTCPUS", "CORECPUS");
@@ -322,7 +319,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             }
             core_cpus_given = true;
 
-        } else if (PRTE_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_QFILE)) {
+        } else if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_QFILE)) {
             if ('\0' == ck2[i][5]) {
                 /* missing the value */
                 pmix_show_help("help-prte-rmaps-base.txt", "missing-value", true, "mapping policy",
@@ -357,21 +354,21 @@ int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
              * objects that have multiple cpus in them, so default
              * to byslot if nothing else was specified by the user.
              */
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps[%d] mapping not given - using byslot", __LINE__);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
         } else if (options->use_hwthreads) {
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps[%d] mapping not given - using byhwthread",
                                 __LINE__);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
         } else {
             if (PRTE_BIND_TO_NONE != PRTE_GET_BINDING_POLICY(jdata->map->binding)) {
-                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps[%d] mapping not given - using bycore", __LINE__);
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
             } else {
-                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps[%d] mapping not given - using byslot (bind = NONE)",
                                     __LINE__);
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
@@ -380,17 +377,17 @@ int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
     } else {
         /* if NUMA is available, map by that */
         if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps[%d] mapping not set by user - using bynuma", __LINE__);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
         } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
             /* if package is available, map by that */
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps[%d] mapping not set by user - using bypackage", __LINE__);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
         } else {
             /* if we have neither, then just do by slot */
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps[%d] mapping not given and no packages - using byslot",
                                 __LINE__);
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
@@ -413,7 +410,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
     /* set defaults */
     tmp = 0;
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "%s rmaps:base set policy with %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         (NULL == inspec) ? "NULL" : inspec);
@@ -428,7 +425,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
     if (NULL != ck) {
         *ck = '\0'; // terminate spec where the colon was
         ck++;       // step past the colon
-        prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                             "%s rmaps:base policy %s modifiers %s provided",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), spec, ck);
 
@@ -501,37 +498,37 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         }
     }
 
-    if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
+    if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYSLOT);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYNODE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_SEQ)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SEQ)) {
         /* there are several mechanisms by which the file specifying
          * the sequence can be passed, so not really feasible to check
          * it here */
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_SEQ);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_CORE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_CORE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYCORE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_L1CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_L1CACHE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL1CACHE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_L2CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_L2CACHE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL2CACHE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_L3CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_L3CACHE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL3CACHE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_NUMA)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_NUMA)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYNUMA);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_PACKAGE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_PACKAGE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYPACKAGE);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_RANKFILE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_RANKFILE)) {
         /* check that the file was given */
         if ((NULL == jdata && NULL == prte_rmaps_base.file) ||
             (NULL != jdata && !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING))) {
@@ -555,7 +552,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         }
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYUSER);
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_HWT)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_HWT)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
         /* if we are mapping processes to individual hwthreads, then
          * we need to treat those hwthreads as separate cpus
@@ -567,7 +564,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                                NULL, PMIX_BOOL);
         }
 
-    } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_PELIST)) {
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_PELIST)) {
         if (NULL == jdata) {
             pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-policy", true,
                            "mapping policy", spec);
@@ -634,46 +631,60 @@ int prte_rmaps_base_set_default_ranking(prte_job_t *jdata,
 int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
 {
     prte_ranking_policy_t tmp;
+    prte_mapping_policy_t mapping;
+    char **ck, *jobppr;
+    size_t len;
 
     /* set default */
     tmp = 0;
 
     if (NULL == spec) {
+        if (NULL == jdata) {
+            return PRTE_SUCCESS;
+        }
+        if (NULL == jdata->map) {
+            jdata->map = PMIX_NEW(prte_job_map_t);
+        }
+        if (PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
+            return PRTE_SUCCESS;
+        }
+        mapping = PRTE_GET_MAPPING_POLICY(jdata->map->mapping);
         /* if mapping by-node, then default to rank-by node */
-        if (PRTE_MAPPING_BYNODE == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        if (PRTE_MAPPING_BYNODE == mapping) {
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NODE);
 
-        } else if (PRTE_MAPPING_PPR != PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+        } else if (PRTE_MAPPING_PPR != mapping) {
             /* default to by-slot */
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
         }
-    } else {
-        if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
-            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
-
-        } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
-            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NODE);
-
-        } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_FILL)) {
-            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_FILL);
-
-        } else if (PRTE_CHECK_CLI_OPTION(spec, PRTE_CLI_SPAN)) {
-            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SPAN);
-
-        } else {
-            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
-                           "ranking", spec);
-            return PRTE_ERR_SILENT;
-        }
-        PRTE_SET_RANKING_DIRECTIVE(tmp, PRTE_RANKING_GIVEN);
+        jdata->map->ranking = tmp;
+        return PRTE_SUCCESS;
     }
+
+    if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
+
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NODE);
+
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_FILL)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_FILL);
+
+    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SPAN)) {
+        PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SPAN);
+
+    } else {
+        pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
+                       "ranking", spec);
+        return PRTE_ERR_SILENT;
+    }
+    PRTE_SET_RANKING_DIRECTIVE(tmp, PRTE_RANKING_GIVEN);
 
     if (NULL == jdata) {
         prte_rmaps_base.ranking = tmp;
     } else {
         if (NULL == jdata->map) {
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            return PRTE_ERR_BAD_PARAM;
+            jdata->map = PMIX_NEW(prte_job_map_t);
         }
         jdata->map->ranking = tmp;
     }
@@ -691,17 +702,101 @@ int prte_rmaps_base_set_default_rto(prte_job_t *jdata,
     return rc;
 }
 
+/* this function is called if pmix_server_dyn receives a
+ * PMIX_RUNTIME_OPTIONS info struct */
 int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
 {
-    char **options, *ptr;
+    char **options, **tmp, *ptr;
     int n;
-    bool flag;
+    bool flag, *fptr = &flag;
+    int32_t i32;
     prte_job_t *djob;
+    prte_app_context_t *app;
+    pmix_rank_t rank;
+    pmix_info_t info;
+    pmix_value_t value;
 
     if (NULL == spec) {
-        /* set everything to the defaults */
-        prte_add_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, PRTE_ATTR_GLOBAL,
-                           &prte_rmaps_base.abort_non_zero_exit, PMIX_BOOL);
+        /* set everything to the defaults if not already set. We don't want to
+         * have to check the value of BOOL settings everywhere we use them, so
+         * we translate them here by removing the attribute if it is set to false,
+         * and leaving it if it is set to true. If it isn't present, then it wasn't
+         * provided via PMIx_Spawn and we instead set it based on the defaults
+         */
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, (void**)&fptr, PMIX_BOOL)) {
+            /* it is present - check the value */
+            if (!flag) {
+                /* remove the attribute */
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT);
+            }
+        } else {
+            /* set it based on default value */
+            if (prte_rmaps_base.abort_non_zero_exit) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            }
+        }
+
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, (void**)&fptr, PMIX_BOOL)) {
+            /* it is present - check the value */
+            if (!flag) {
+                /* remove the attribute */
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS);
+            }
+        } else {
+            /* set it based on default value */
+            if (prte_show_launch_progress) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            }
+        }
+
+        /* if recovery has been defined, leave it and the recoverable flag alone */
+       if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVER_DEFINED, NULL, PMIX_BOOL)) {
+           /* not defined, so use the defaults */
+            if (prte_enable_recovery) {
+                PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
+            } else {
+                PRTE_FLAG_UNSET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
+            }
+        }
+
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS_OP, (void**)&fptr, PMIX_BOOL)) {
+            /* it is present - check the value */
+            if (!flag) {
+                /* remove the attribute */
+                prte_remove_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS_OP);
+            }
+        } else {
+            /* set it based on default value */
+            if (prte_continuous_op) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS_OP,
+                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+            }
+        }
+
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT, NULL, PMIX_STRING)) {
+            if (NULL != prte_fork_agent_string) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT,
+                                   PRTE_ATTR_GLOBAL,
+                                   prte_fork_agent_string, PMIX_STRING);
+            }
+        }
+
+        /* check the apps for max restarts */
+        if (0 < prte_max_restarts) {
+            for (n = 0; n < jdata->apps->size; n++) {
+                app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+                if (NULL == app) {
+                    continue;
+                }
+                if (!prte_get_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, NULL, PMIX_INT32)) {
+                    prte_set_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, PRTE_ATTR_GLOBAL,
+                                       &prte_max_restarts, PMIX_INT32);
+                }
+            }
+        }
+
     } else {
         options = pmix_argv_split(spec, ',');
         for (n=0; NULL != options[n]; n++) {
@@ -718,27 +813,164 @@ int prte_rmaps_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 pmix_argv_free(options);
                 return PRTE_ERR_BAD_PARAM;
             }
+            PMIX_VALUE_LOAD(&value, ptr, PMIX_STRING);
             /* check the options */
-            if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_ABORT_NZ)) {
-                flag = PRTE_CHECK_TRUE(ptr);
-                prte_add_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOLAUNCH)) {
-                flag = PRTE_CHECK_TRUE(ptr);
-                prte_add_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
-                /* if we are not in a persistent DVM, then make sure we also
-                 * apply this to the daemons */
-                if (!prte_persistent) {
-                    djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-                    prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
-                                       &flag, PMIX_BOOL);
+            if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_ABORT_NZ)) {
+                flag = PMIX_CHECK_TRUE(&value);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                } else {
+                    /* ensure this attribute is not present */
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_TERM_NONZERO_EXIT);
                 }
-            } else if (PRTE_CHECK_CLI_OPTION(options[n], PRTE_CLI_SHOW_PROGRESS)) {
-                flag = PRTE_CHECK_TRUE(ptr);
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, PRTE_ATTR_GLOBAL,
-                                   &flag, PMIX_BOOL);
-            } else {
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_NOLAUNCH)) {
+                flag = PMIX_CHECK_TRUE(&value);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
+                                       NULL, PMIX_BOOL);
+                    /* if we are not in a persistent DVM, then make sure we also
+                     * apply this to the daemons */
+                    if (!prte_persistent) {
+                        djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                        prte_set_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
+                                           NULL, PMIX_BOOL);
+                    }
+                } else {
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH);
+                    if (!prte_persistent) {
+                        djob = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                        prte_remove_attribute(&djob->attributes, PRTE_JOB_DO_NOT_LAUNCH);
+                    }
+                }
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_SHOW_PROGRESS)) {
+                flag = PMIX_CHECK_TRUE(&value);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS, PRTE_ATTR_GLOBAL,
+                                       NULL, PMIX_BOOL);
+                } else {
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_SHOW_PROGRESS);
+                }
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_RECOVER)) {
+                flag = PMIX_CHECK_TRUE(&value);
+                if (flag) {
+                    PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
+                } else {
+                    PRTE_FLAG_UNSET(jdata, PRTE_JOB_FLAG_RECOVERABLE);
+                }
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_MAX_RESTARTS)) {
+                i32 = strtol(ptr, NULL, 10);
+                for (n = 0; n < jdata->apps->size; n++) {
+                    app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+                    if (NULL == app) {
+                        continue;
+                    }
+                    prte_set_attribute(&app->attributes, PRTE_APP_MAX_RESTARTS, PRTE_ATTR_GLOBAL,
+                                       &i32, PMIX_INT32);
+                }
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_ON_EXEC)) {
+                if (PMIX_CHECK_BOOL(&value)) {
+                    flag = PMIX_CHECK_TRUE(&value);
+                    if (flag) {
+                        rank = PMIX_RANK_WILDCARD;
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL,
+                                           &rank, PMIX_PROC_RANK);
+                    } else {
+                        prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC);
+                    }
+                } else {
+                    tmp = pmix_argv_split(ptr, ',');
+                    if (1 == pmix_argv_count(tmp)) {
+                        rank = strtoul(tmp[0], NULL, 10);
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL,
+                                           &rank, PMIX_PROC_RANK);
+                    } else {
+                        pmix_argv_free(tmp);
+                        pmix_argv_free(options);
+                        return PMIX_ERR_NOT_SUPPORTED;
+                    }
+                    pmix_argv_free(tmp);
+                }
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_INIT)) {
+                if (PMIX_CHECK_BOOL(&value)) {
+                    flag = PMIX_CHECK_TRUE(&value);
+                    if (flag) {
+                        rank = PMIX_RANK_WILDCARD;
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
+                                           &rank, PMIX_PROC_RANK);
+                        /* also must add to job-level cache */
+                        PMIX_INFO_LOAD(&info, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);
+                        pmix_server_cache_job_info(jdata, &info);
+                    } else {
+                        prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT);
+                    }
+                } else {
+                    tmp = pmix_argv_split(ptr, ',');
+                    if (1 == pmix_argv_count(tmp)) {
+                        rank = strtoul(tmp[0], NULL, 10);
+                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
+                                           &rank, PMIX_PROC_RANK);
+                        /* also must add to job-level cache */
+                        PMIX_INFO_LOAD(&info, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);
+                        pmix_server_cache_job_info(jdata, &info);
+                    } else {
+                        pmix_argv_free(tmp);
+                        pmix_argv_free(options);
+                        return PMIX_ERR_NOT_SUPPORTED;
+                    }
+                    pmix_argv_free(tmp);
+                }
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_APP)) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, PRTE_ATTR_GLOBAL,
+                                   ptr, PMIX_STRING);
+                /* also must add to job-level cache */
+                pmix_server_cache_job_info(jdata, &info);
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_TIMEOUT)) {
+                n = PMIX_CONVERT_TIME(ptr);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT, PRTE_ATTR_GLOBAL,
+                                   &n, PMIX_INT);
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_SPAWN_TIMEOUT)) {
+                n = PMIX_CONVERT_TIME(ptr);
+                prte_set_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT, PRTE_ATTR_GLOBAL,
+                                   &n, PMIX_INT);
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STACK_TRACES)) {
+                flag = PMIX_CHECK_TRUE(&value);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES, PRTE_ATTR_GLOBAL,
+                                       NULL, PMIX_BOOL);
+                } else {
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_STACKTRACES);
+                }
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_REPORT_STATE)) {
+                flag = PMIX_CHECK_TRUE(&value);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE, PRTE_ATTR_GLOBAL,
+                                       NULL, PMIX_BOOL);
+                } else {
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_REPORT_STATE);
+                }
+
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_AGG_HELP)) {
+                flag = PMIX_CHECK_TRUE(&value);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
+                                       NULL, PMIX_BOOL);
+                } else {
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP);
+                }
+
+           } else {
                 pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
                                "runtime options", spec);
                 return PRTE_ERR_SILENT;

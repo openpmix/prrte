@@ -52,7 +52,7 @@
 #include "src/util/error.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -91,7 +91,7 @@ static void recv_handler(int sd, short flags, void *user);
  */
 static void accept_connection(const int accepted_fd, const struct sockaddr *addr)
 {
-    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s accept_connection: %s:%d\n", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         pmix_net_get_hostname(addr), pmix_net_get_port(addr));
 
@@ -109,7 +109,7 @@ static void ping(const pmix_proc_t *proc)
 {
     prte_oob_tcp_peer_t *peer;
 
-    prte_output_verbose(2, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                         "%s:[%s:%d] processing ping to peer %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         __FILE__, __LINE__, PRTE_NAME_PRINT(proc));
 
@@ -120,16 +120,16 @@ static void ping(const pmix_proc_t *proc)
          * module can be found, the component can push back
          * to the framework so another component can try
          */
-        prte_output_verbose(2, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                             "%s:[%s:%d] hop %s unknown", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             __FILE__, __LINE__, PRTE_NAME_PRINT(proc));
-        PRTE_ACTIVATE_TCP_MSG_ERROR(NULL, NULL, proc, prte_oob_tcp_component_hop_unknown);
+        PRTE_ACTIVATE_TCP_MSG_ERROR(NULL, NULL, proc, prte_mca_oob_tcp_component_hop_unknown);
         return;
     }
 
     /* if we are already connected, there is nothing to do */
     if (MCA_OOB_TCP_CONNECTED == peer->state) {
-        prte_output_verbose(2, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                             "%s:[%s:%d] already connected to peer %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,
                             PRTE_NAME_PRINT(proc));
@@ -138,7 +138,7 @@ static void ping(const pmix_proc_t *proc)
 
     /* if we are already connecting, there is nothing to do */
     if (MCA_OOB_TCP_CONNECTING == peer->state || MCA_OOB_TCP_CONNECT_ACK == peer->state) {
-        prte_output_verbose(2, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                             "%s:[%s:%d] already connecting to peer %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,
                             PRTE_NAME_PRINT(proc));
@@ -165,16 +165,16 @@ static void send_nb(prte_rml_send_t *msg)
          * module can be found, the component can push back
          * to the framework so another component can try
          */
-        prte_output_verbose(2, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                             "%s:[%s:%d] processing send to peer %s:%d seq_num = %d hop %s unknown",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,
                             PRTE_NAME_PRINT(&msg->dst), msg->tag, msg->seq_num,
                             PRTE_NAME_PRINT(&hop));
-        PRTE_ACTIVATE_TCP_NO_ROUTE(msg, &hop, prte_oob_tcp_component_no_route);
+        PRTE_ACTIVATE_TCP_NO_ROUTE(msg, &hop, prte_mca_oob_tcp_component_no_route);
         return;
     }
 
-    prte_output_verbose(2, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                         "%s:[%s:%d] processing send to peer %s:%d seq_num = %d via %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,
                         PRTE_NAME_PRINT(&msg->dst), msg->tag, msg->seq_num,
@@ -182,7 +182,7 @@ static void send_nb(prte_rml_send_t *msg)
 
     /* add the msg to the hop's send queue */
     if (MCA_OOB_TCP_CONNECTED == peer->state) {
-        prte_output_verbose(2, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                             "%s tcp:send_nb: already connected to %s - queueing for send",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name));
         MCA_OOB_TCP_QUEUE_SEND(msg, peer);
@@ -200,7 +200,7 @@ static void send_nb(prte_rml_send_t *msg)
          * So throw us into an event that will create
          * the connection via a mini-state-machine :-)
          */
-        prte_output_verbose(2, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                             "%s tcp:send_nb: initiating connection to %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name));
         peer->state = MCA_OOB_TCP_CONNECTING;
@@ -224,7 +224,7 @@ static void recv_handler(int sd, short flg, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(op);
 
-    prte_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
                         "%s:tcp:recv:handler called", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* get the handshake */
@@ -241,13 +241,13 @@ static void recv_handler(int sd, short flg, void *cbdata)
         }
         /* set socket up to be non-blocking */
         if ((flags = fcntl(sd, F_GETFL, 0)) < 0) {
-            prte_output(0, "%s prte_oob_tcp_recv_connect: fcntl(F_GETFL) failed: %s (%d)",
+            pmix_output(0, "%s prte_oob_tcp_recv_connect: fcntl(F_GETFL) failed: %s (%d)",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), strerror(prte_socket_errno),
                         prte_socket_errno);
         } else {
             flags |= O_NONBLOCK;
             if (fcntl(sd, F_SETFL, flags) < 0) {
-                prte_output(0, "%s prte_oob_tcp_recv_connect: fcntl(F_SETFL) failed: %s (%d)",
+                pmix_output(0, "%s prte_oob_tcp_recv_connect: fcntl(F_SETFL) failed: %s (%d)",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), strerror(prte_socket_errno),
                             prte_socket_errno);
             }
@@ -256,8 +256,8 @@ static void recv_handler(int sd, short flg, void *cbdata)
         peer->sd = sd;
         if (prte_oob_tcp_peer_accept(peer) == false) {
             if (OOB_TCP_DEBUG_CONNECT
-                <= prte_output_get_verbosity(prte_oob_base_framework.framework_output)) {
-                prte_output(0,
+                <= pmix_output_get_verbosity(prte_oob_base_framework.framework_output)) {
+                pmix_output(0,
                             "%s-%s prte_oob_tcp_recv_connect: "
                             "rejected connection from %s connection state %d",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),

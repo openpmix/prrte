@@ -38,11 +38,11 @@
 #include "src/event/event-internal.h"
 #include "src/pmix/pmix-internal.h"
 
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/malloc.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/base/base.h"
@@ -138,7 +138,7 @@ static int env_set_name(void)
     vpid = strtoul(prte_ess_base_vpid, NULL, 10);
     PRTE_PROC_MY_NAME->rank = vpid;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:env set name to %s",
+    PMIX_OUTPUT_VERBOSE((1, prte_ess_base_framework.framework_output, "ess:env set name to %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     prte_process_info.num_daemons = prte_ess_base_num_procs;

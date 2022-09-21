@@ -12,7 +12,7 @@
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,14 +25,14 @@
 
 #include "prte_config.h"
 
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 BEGIN_C_DECLS
 
 #define PRTE_ERROR_LOG(r)                                                                        \
     do {                                                                                         \
         if (PRTE_ERR_SILENT != (r)) {                                                            \
-            prte_output(0, "PRTE ERROR: %s in file %s at line %d", prte_strerror((r)), __FILE__, \
+            pmix_output(0, "PRTE ERROR: %s in file %s at line %d", prte_strerror((r)), __FILE__, \
                         __LINE__);                                                               \
         }                                                                                        \
     } while (0)

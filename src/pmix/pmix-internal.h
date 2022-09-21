@@ -221,7 +221,7 @@ static inline __prte_attribute_always_inline__ void pmix_proc_hton_intr(pmix_pro
         pmix_value_t *_kv = NULL;                                                      \
         pmix_info_t _info;                                                             \
         size_t _sz;                                                                    \
-        PRTE_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,                              \
+        PMIX_OUTPUT_VERBOSE((1, prte_pmix_verbose_output,                              \
                              "%s[%s:%d] MODEX RECV VALUE OPTIONAL FOR PROC %s KEY %s", \
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,   \
                              PRTE_NAME_PRINT((p)), (s)));                              \

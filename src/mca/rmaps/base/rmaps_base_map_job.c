@@ -32,10 +32,10 @@
 
 #include "src/hwloc/hwloc-internal.h"
 #include "src/pmix/pmix-internal.h"
-#include "src/mca/base/base.h"
+#include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_argv.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 #include "src/util/pmix_string_copy.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -94,14 +94,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     memset(&options, 0, sizeof(prte_rmaps_options_t));
     options.stream = prte_rmaps_base_framework.framework_output;
     options.verbosity = 5;  // usual value for base-level functions
-    if (!jdata->map->rtos_set) {
-        /* set the runtime options first */
-        if (NULL != schizo->set_default_rto) {
-            rc = schizo->set_default_rto(jdata, &options);
-        } else {
-            rc = prte_rmaps_base_set_default_rto(jdata, &options);
-        }
-    }
+
     /* check and set some general options */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         options.donotlaunch = true;
@@ -112,7 +105,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         options.dobind = true;
     }
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: mapping job %s",
                         PRTE_JOBID_PRINT(jdata->nspace));
 
@@ -122,7 +115,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_NODE, (void **) &u16ptr, PMIX_UINT16)) {
         procs_per_target = u16;
         if (procs_per_target == 0) {
-            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_NODE value %u == 0\n", procs_per_target);
+            pmix_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_NODE value %u == 0\n", procs_per_target);
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -133,7 +126,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_DAEMONS_PER_PROC, (void **) &u16ptr, PMIX_UINT16)) {
         if (procs_per_target > 0) {
-            prte_output(0, "Error: Both PRTE_JOB_DEBUG_DAEMONS_PER_PROC and "
+            pmix_output(0, "Error: Both PRTE_JOB_DEBUG_DAEMONS_PER_PROC and "
                            "PRTE_JOB_DEBUG_DAEMONS_PER_NODE provided.");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
@@ -142,7 +135,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
         procs_per_target = u16;
         if (procs_per_target == 0) {
-            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC value %u == 0\n", procs_per_target);
+            pmix_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC value %u == 0\n", procs_per_target);
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -153,7 +146,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
     if (colocate_daemons) {
         if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DEBUG_TARGET, (void **) &target_proc, PMIX_PROC)) {
-            prte_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC/NODE provided without a Debug Target\n");
+            pmix_output(0, "Error: PRTE_JOB_DEBUG_DAEMONS_PER_PROC/NODE provided without a Debug Target\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -167,14 +160,14 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_PROCS, (void**)&darray, PMIX_DATA_ARRAY)) {
         if (colocate_daemons) {
-            prte_output(0, "Error: Both colocate daemons and colocate procs were provided\n");
+            pmix_output(0, "Error: Both colocate daemons and colocate procs were provided\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
             goto cleanup;
         }
         if (NULL == darray) {
-            prte_output(0, "Error: Colocate failed to provide procs\n");
+            pmix_output(0, "Error: Colocate failed to provide procs\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -185,7 +178,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_NPERNODE, (void **) &u16ptr, PMIX_UINT16)) {
         procs_per_target = u16;
         if (procs_per_target == 0) {
-            prte_output(0, "Error: PRTE_JOB_COLOCATE_NUM_PROC WITH ZERO PROCS/TARGET\n");
+            pmix_output(0, "Error: PRTE_JOB_COLOCATE_NUM_PROC WITH ZERO PROCS/TARGET\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -195,7 +188,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_COLOCATE_NPERPROC, (void **) &u16ptr, PMIX_UINT16)) {
         if (procs_per_target > 0) {
-            prte_output(0, "Error: Both PRTE_JOB_COLOCATE_NUM_PROC and "
+            pmix_output(0, "Error: Both PRTE_JOB_COLOCATE_NUM_PROC and "
                         "PRTE_JOB_COLOCATE_NUM_NODE provided.");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
@@ -204,7 +197,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         }
         procs_per_target = u16;
         if (procs_per_target == 0) {
-            prte_output(0, "Error: PRTE_JOB_COLOCATE_NUM_PROC WITH ZERO PROCS/TARGET\n");
+            pmix_output(0, "Error: PRTE_JOB_COLOCATE_NUM_PROC WITH ZERO PROCS/TARGET\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -236,7 +229,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             } else {
                 inherit = prte_rmaps_base.inherit;
             }
-            prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "mca:rmaps: dynamic job %s %s inherit launch directives - parent %s",
                                 PRTE_JOBID_PRINT(jdata->nspace), inherit ? "will" : "will not",
                                 (NULL == parent) ? "N/A" : PRTE_JOBID_PRINT((parent->nspace)));
@@ -318,7 +311,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         options.use_hwthreads = true;
     }
 
-    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: setting mapping policies for job %s inherit %s hwtcpus %s",
                         PRTE_JOBID_PRINT(jdata->nspace),
                         inherit ? "TRUE" : "FALSE",
@@ -332,7 +325,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 jdata->map->mapping = parent->map->mapping;
                 did_map = true;
             } else if (PRTE_MAPPING_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping)) {
-                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps mapping given by MCA param");
                 jdata->map->mapping = prte_rmaps_base.mapping;
                 did_map = true;
@@ -453,7 +446,7 @@ ranking:
                     jdata->map->ranking = parent->map->ranking;
                     did_map = true;
                 } else if (PRTE_RANKING_GIVEN & PRTE_GET_RANKING_DIRECTIVE(prte_rmaps_base.ranking)) {
-                    prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                         "mca:rmaps ranking given by MCA param");
                     jdata->map->ranking = prte_rmaps_base.ranking;
                     did_map = true;
@@ -503,7 +496,7 @@ ranking:
                 /* if the user specified a default binding policy via
                  * MCA param, then we use it - this can include a directive
                  * to overload */
-                prte_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps[%d] default binding policy given", __LINE__);
                 jdata->map->binding = prte_hwloc_default_binding_policy;
                 did_map = true;
@@ -627,7 +620,7 @@ ranking:
     if (colocate_daemons || colocate) {
         /* This is a colocation request, so we don't run any mapping modules */
         if (procs_per_target == 0) {
-            prte_output(0, "Error: COLOCATION REQUESTED WITH ZERO PROCS/TARGET\n");
+            pmix_output(0, "Error: COLOCATION REQUESTED WITH ZERO PROCS/TARGET\n");
             jdata->exit_code = PRTE_ERR_BAD_PARAM;
             PRTE_ERROR_LOG(jdata->exit_code);
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
@@ -651,7 +644,7 @@ ranking:
             /* forced selection */
             mod = (prte_rmaps_base_selected_module_t *) pmix_list_get_first(
                 &prte_rmaps_base.selected_modules);
-            jdata->map->req_mapper = strdup(mod->component->mca_component_name);
+            jdata->map->req_mapper = strdup(mod->component->pmix_mca_component_name);
         }
         PMIX_LIST_FOREACH(mod, &prte_rmaps_base.selected_modules, prte_rmaps_base_selected_module_t)
         {
@@ -801,7 +794,7 @@ static int map_colocate(prte_job_t *jdata,
     prte_proc_t *proc;
     prte_node_t *node, *nptr, *n2;
 
-    if (4 < prte_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
+    if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
         rc = PMIx_Data_print(&tmp, NULL, darray, PMIX_DATA_ARRAY);
         if (PMIX_SUCCESS != rc) {
             pmix_output(0, "%s rmaps: mapping job %s: Colocate with UNPRINTABLE (%s)",
@@ -832,7 +825,7 @@ static int map_colocate(prte_job_t *jdata,
         if (PMIX_RANK_WILDCARD == procs[n].rank) {
             target_jdata = prte_get_job_data_object(procs[n].nspace);
             if (NULL == target_jdata) {
-                prte_output(0, "Unable to find app job %s\n", procs[n].nspace);
+                pmix_output(0, "Unable to find app job %s\n", procs[n].nspace);
                 ret = PRTE_ERR_BAD_PARAM;
                 goto done;
             }
@@ -853,12 +846,12 @@ static int map_colocate(prte_job_t *jdata,
         /* not a wildcard rank */
         proc = prte_get_proc_object(&procs[n]);
         if (NULL == proc) {
-            prte_output(0, "Unable to find target process %s\n", PMIX_NAME_PRINT(&procs[n]));
+            pmix_output(0, "Unable to find target process %s\n", PMIX_NAME_PRINT(&procs[n]));
             ret = PRTE_ERR_BAD_PARAM;
             goto done;
         }
         if (NULL == proc->node) {
-            prte_output(0, "Target process %s has not been mapped to a node\n", PMIX_NAME_PRINT(&procs[n]));
+            pmix_output(0, "Target process %s has not been mapped to a node\n", PMIX_NAME_PRINT(&procs[n]));
             ret = PRTE_ERR_BAD_PARAM;
             goto done;
         }

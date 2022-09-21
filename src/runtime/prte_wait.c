@@ -55,7 +55,7 @@
 #include "src/class/pmix_object.h"
 #include "src/event/event-internal.h"
 #include "src/threads/pmix_mutex.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "constants.h"
 #include "src/mca/errmgr/errmgr.h"

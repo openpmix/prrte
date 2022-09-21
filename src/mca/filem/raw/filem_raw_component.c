@@ -16,7 +16,7 @@
 
 #include "prte_config.h"
 #include "constants.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include "filem_raw.h"
 #include "src/mca/filem/base/base.h"
@@ -25,7 +25,7 @@
 /*
  * Public string for version number
  */
-const char *prte_filem_raw_component_version_string
+const char *prte_mca_filem_raw_component_version_string
     = "PRTE FILEM raw MCA component version " PRTE_VERSION;
 
 /*
@@ -34,41 +34,35 @@ const char *prte_filem_raw_component_version_string
 static int filem_raw_register(void);
 static int filem_raw_open(void);
 static int filem_raw_close(void);
-static int filem_raw_query(prte_mca_base_module_t **module, int *priority);
+static int filem_raw_query(pmix_mca_base_module_t **module, int *priority);
 
 bool prte_filem_raw_flatten_trees = false;
 
-prte_filem_base_component_t prte_filem_raw_component = {
-    .base_version = {
-        PRTE_FILEM_BASE_VERSION_2_0_0,
-        /* Component name and version */
-        .mca_component_name = "raw",
-        PRTE_MCA_BASE_MAKE_VERSION(component, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
-                                    PMIX_RELEASE_VERSION),
+prte_filem_base_component_t prte_mca_filem_raw_component = {
+    PRTE_FILEM_BASE_VERSION_2_0_0,
+    /* Component name and version */
+    .pmix_mca_component_name = "raw",
+    PMIX_MCA_BASE_MAKE_VERSION(component,
+                               PRTE_MAJOR_VERSION,
+                               PRTE_MINOR_VERSION,
+                               PMIX_RELEASE_VERSION),
 
-        /* Component open and close functions */
-        .mca_open_component = filem_raw_open,
-        .mca_close_component = filem_raw_close,
-        .mca_query_component = filem_raw_query,
-        .mca_register_component_params = filem_raw_register,
-    },
-    .base_data = {
-        /* The component is checkpoint ready */
-        PRTE_MCA_BASE_METADATA_PARAM_CHECKPOINT
-    },
+    /* Component open and close functions */
+    .pmix_mca_open_component = filem_raw_open,
+    .pmix_mca_close_component = filem_raw_close,
+    .pmix_mca_query_component = filem_raw_query,
+    .pmix_mca_register_component_params = filem_raw_register,
 };
 
 static int filem_raw_register(void)
 {
-    prte_mca_base_component_t *c = &prte_filem_raw_component.base_version;
+    pmix_mca_base_component_t *c = &prte_mca_filem_raw_component;
 
     prte_filem_raw_flatten_trees = false;
-    (void) prte_mca_base_component_var_register(c, "flatten_directory_trees",
+    (void) pmix_mca_base_component_var_register(c, "flatten_directory_trees",
                                                 "Put all files in the working directory instead of "
                                                 "creating their respective directory trees",
-                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_9,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_filem_raw_flatten_trees);
 
     return PRTE_SUCCESS;
@@ -84,9 +78,9 @@ static int filem_raw_close(void)
     return PRTE_SUCCESS;
 }
 
-static int filem_raw_query(prte_mca_base_module_t **module, int *priority)
+static int filem_raw_query(pmix_mca_base_module_t **module, int *priority)
 {
     *priority = 0;
-    *module = (prte_mca_base_module_t *) &prte_filem_raw_module;
+    *module = (pmix_mca_base_module_t *) &prte_filem_raw_module;
     return PRTE_SUCCESS;
 }

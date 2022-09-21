@@ -26,7 +26,7 @@
 
 #include "prte_config.h"
 #include "constants.h"
-#include "src/util/output.h"
+#include "src/util/pmix_output.h"
 
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
@@ -98,8 +98,8 @@ static int init(void)
                   PRTE_RML_PERSISTENT, prte_iof_prted_recv, NULL);
 
     /* setup the local global variables */
-    PMIX_CONSTRUCT(&prte_iof_prted_component.procs, pmix_list_t);
-    prte_iof_prted_component.xoff = false;
+    PMIX_CONSTRUCT(&prte_mca_iof_prted_component.procs, pmix_list_t);
+    prte_mca_iof_prted_component.xoff = false;
 
     return PRTE_SUCCESS;
 }
@@ -115,7 +115,7 @@ static int prted_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
     prte_iof_proc_t *proct;
     prte_job_t *jobdat = NULL;
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:prted pushing fd %d for process %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fd, PRTE_NAME_PRINT(dst_name)));
 
@@ -123,7 +123,7 @@ static int prted_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
      * and activate the read event in case it fires right away
      */
     if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-        prte_output(prte_iof_base_framework.framework_output,
+        pmix_output(prte_iof_base_framework.framework_output,
                     "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
@@ -131,7 +131,7 @@ static int prted_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
     }
 
     /* do we already have this process in our list? */
-    PMIX_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_mca_iof_prted_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, dst_name)) {
             /* found it */
@@ -141,7 +141,7 @@ static int prted_push(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
     /* if we get here, then we don't yet have this proc in our list */
     proct = PMIX_NEW(prte_iof_proc_t);
     PMIX_XFER_PROCID(&proct->name, dst_name);
-    pmix_list_append(&prte_iof_prted_component.procs, &proct->super);
+    pmix_list_append(&prte_mca_iof_prted_component.procs, &proct->super);
 
 SETUP:
     /* get the local jobdata for this proc */
@@ -197,7 +197,7 @@ static int prted_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
         return PRTE_ERR_NOT_SUPPORTED;
     }
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s iof:prted pulling fd %d for process %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), fd, PRTE_NAME_PRINT(dst_name)));
 
@@ -205,7 +205,7 @@ static int prted_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
      * the sink in case it fires right away
      */
     if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-        prte_output(prte_iof_base_framework.framework_output,
+        pmix_output(prte_iof_base_framework.framework_output,
                     "[%s:%d]: fcntl(F_GETFL) failed with errno=%d\n", __FILE__, __LINE__, errno);
     } else {
         flags |= O_NONBLOCK;
@@ -213,7 +213,7 @@ static int prted_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
     }
 
     /* do we already have this process in our list? */
-    PMIX_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_mca_iof_prted_component.procs, prte_iof_proc_t)
     {
         if (PRTE_EQUAL == prte_util_compare_name_fields(mask, &proct->name, dst_name)) {
             /* found it */
@@ -223,7 +223,7 @@ static int prted_pull(const pmix_proc_t *dst_name, prte_iof_tag_t src_tag, int f
     /* if we get here, then we don't yet have this proc in our list */
     proct = PMIX_NEW(prte_iof_proc_t);
     PMIX_XFER_PROCID(&proct->name, dst_name);
-    pmix_list_append(&prte_iof_prted_component.procs, &proct->super);
+    pmix_list_append(&prte_mca_iof_prted_component.procs, &proct->super);
 
 SETUP:
     PRTE_IOF_SINK_DEFINE(&proct->stdinev, dst_name, fd, PRTE_IOF_STDIN, stdin_write_handler);
@@ -240,7 +240,7 @@ static int prted_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag)
 {
     prte_iof_proc_t *proct;
 
-    PMIX_LIST_FOREACH(proct, &prte_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH(proct, &prte_mca_iof_prted_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_PROCID(&proct->name, peer)) {
             if (PRTE_IOF_STDIN & source_tag) {
@@ -263,7 +263,7 @@ static int prted_close(const pmix_proc_t *peer, prte_iof_tag_t source_tag)
             }
             /* if we closed them all, then remove this proc */
             if (NULL == proct->stdinev && NULL == proct->revstdout && NULL == proct->revstderr) {
-                pmix_list_remove_item(&prte_iof_prted_component.procs, &proct->super);
+                pmix_list_remove_item(&prte_mca_iof_prted_component.procs, &proct->super);
                 PMIX_RELEASE(proct);
             }
             break;
@@ -278,10 +278,10 @@ static void prted_complete(const prte_job_t *jdata)
     prte_iof_proc_t *proct, *next;
 
     /* cleanout any lingering sinks */
-    PMIX_LIST_FOREACH_SAFE(proct, next, &prte_iof_prted_component.procs, prte_iof_proc_t)
+    PMIX_LIST_FOREACH_SAFE(proct, next, &prte_mca_iof_prted_component.procs, prte_iof_proc_t)
     {
         if (PMIX_CHECK_NSPACE(jdata->nspace, proct->name.nspace)) {
-            pmix_list_remove_item(&prte_iof_prted_component.procs, &proct->super);
+            pmix_list_remove_item(&prte_mca_iof_prted_component.procs, &proct->super);
             PMIX_RELEASE(proct);
         }
     }
@@ -289,7 +289,7 @@ static void prted_complete(const prte_job_t *jdata)
 
 static int finalize(void)
 {
-    PMIX_LIST_DESTRUCT(&prte_iof_prted_component.procs);
+    PMIX_LIST_DESTRUCT(&prte_mca_iof_prted_component.procs);
 
     /* Cancel the RML receive */
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_IOF_PROXY);
@@ -306,7 +306,7 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(sink);
 
-    PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+    PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s prted:stdin:write:handler writing data to %d",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
 
@@ -318,7 +318,7 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
             /* this indicates we are to close the fd - there is
              * nothing to write
              */
-            PRTE_OUTPUT_VERBOSE(
+            PMIX_OUTPUT_VERBOSE(
                 (20, prte_iof_base_framework.framework_output,
                  "%s iof:prted closing fd %d on write event due to zero bytes output",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
@@ -327,7 +327,7 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
             return;
         }
         num_written = write(wev->fd, output->data, output->numbytes);
-        PRTE_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
+        PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                              "%s prted:stdin:write:handler wrote %d bytes",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_written));
         if (num_written < 0) {
@@ -344,20 +344,20 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
              * error and abort
              */
             PMIX_RELEASE(output);
-            PRTE_OUTPUT_VERBOSE(
+            PMIX_OUTPUT_VERBOSE(
                 (20, prte_iof_base_framework.framework_output,
                  "%s iof:prted closing fd %d on write event due to negative bytes written",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), wev->fd));
             PMIX_RELEASE(wev);
             sink->wev = NULL;
             /* tell the HNP to stop sending us stuff */
-            if (!prte_iof_prted_component.xoff) {
-                prte_iof_prted_component.xoff = true;
+            if (!prte_mca_iof_prted_component.xoff) {
+                prte_mca_iof_prted_component.xoff = true;
                 prte_iof_prted_send_xonxoff(PRTE_IOF_XOFF);
             }
             return;
         } else if (num_written < output->numbytes) {
-            PRTE_OUTPUT_VERBOSE(
+            PMIX_OUTPUT_VERBOSE(
                 (1, prte_iof_base_framework.framework_output,
                  "%s prted:stdin:write:handler incomplete write %d - adjusting data",
                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_written));
@@ -375,7 +375,7 @@ static void stdin_write_handler(int _fd, short event, void *cbdata)
     }
 
 CHECK:
-    if (prte_iof_prted_component.xoff) {
+    if (prte_mca_iof_prted_component.xoff) {
         /* if we have told the HNP to stop reading stdin, see if
          * the proc has absorbed enough to justify restart
          *
@@ -387,7 +387,7 @@ CHECK:
          */
         if (pmix_list_get_size(&wev->outputs) < PRTE_IOF_MAX_INPUT_BUFFERS) {
             /* restart the read */
-            prte_iof_prted_component.xoff = false;
+            prte_mca_iof_prted_component.xoff = false;
             prte_iof_prted_send_xonxoff(PRTE_IOF_XON);
         }
     }
