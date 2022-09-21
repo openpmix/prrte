@@ -72,6 +72,8 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *context);
 static void job_info(pmix_cli_result_t *results,
                      void *jobinfo);
 static int setup_app(prte_pmix_app_t *app);
+static int set_default_rto(prte_job_t *jdata,
+                           prte_rmaps_options_t *options);
 
 prte_schizo_base_module_t prte_schizo_ompi_module = {
     .name = "ompi",
@@ -82,7 +84,8 @@ prte_schizo_base_module_t prte_schizo_ompi_module = {
     .detect_proxy = detect_proxy,
     .allow_run_as_root = allow_run_as_root,
     .set_default_ranking = set_default_ranking,
-    .job_info = job_info
+    .job_info = job_info,
+    .set_default_rto = set_default_rto
 };
 
 static struct option ompioptions[] = {
@@ -2168,5 +2171,11 @@ static int set_default_ranking(prte_job_t *jdata,
 static void job_info(pmix_cli_result_t *results,
                      void *jobinfo)
 {
-    ;
+    return;
+}
+
+static int set_default_rto(prte_job_t *jdata,
+                           prte_rmaps_options_t *options)
+{
+    return prte_rmaps_base_set_runtime_options(jdata, NULL);
 }
