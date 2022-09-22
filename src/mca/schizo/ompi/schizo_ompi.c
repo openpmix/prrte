@@ -319,7 +319,7 @@ static int setup_app(prte_pmix_app_t *app)
         free(value);
     }
 
-    /* see if we were given a class path 
+    /* see if we were given a class path
      * See https://docs.oracle.com/javase/8/docs/technotes/tools/findingclasses.html
      * for more info about rules for the ways to set the class path
      */
@@ -475,7 +475,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         return prte_pmix_convert_status(rc);
     }
 
-    /* 
+    /*
      * If warning is enabled, list all offending
      * single dash params are before the last found
      * argument by the parser (results -> tail).
