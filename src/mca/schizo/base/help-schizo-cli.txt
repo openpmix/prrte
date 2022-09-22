@@ -589,10 +589,19 @@ the cause of the event to the extent to which this is known.
 
 Supported job events include:
 
--   PMIX_READY_FOR_DEBUG
--   PMIX_LAUNCH_COMPLETE
--   PMIX_ERR_JOB_CANCELED
--   PMIX_ERR_JOB_FAILED_TO_LAUNCH
+-   PMIX_READY_FOR_DEBUG indicates that all processes in the reported nspace have
+    reached the specified debug stopping point.
+
+-   PMIX_LAUNCH_COMPLETE indicates that the reported nspace has been launched - i.e.,
+    the involved PRRTE daemons all report that their respective child processes
+    have completed fork/exec.
+
+-   PMIX_ERR_JOB_CANCELED indicates that the job was cancelled by user command, usually
+    issued via an appropriate PMIx-enabled tool.
+
+-   PMIX_ERR_JOB_FAILED_TO_LAUNCH indicates that the specified job failed to launch.
+    This can be due to a variety of factors that include inability to find the
+    executable on at least one involved node.
 
 
 Supported process events include:
@@ -604,17 +613,34 @@ Supported process events include:
     shutdown of the process. Notification will include the process ID that exited
     in this manner.
 
--   PMIX_EVENT_PROC_TERMINATED
+-   PMIX_EVENT_PROC_TERMINATED indicates that the reported process terminated normally.
+    Notification will include the process ID that exited and its exit status.
 
--   PMIX_ERR_PROC_KILLED_BY_CMD
+-   PMIX_ERR_PROC_KILLED_BY_CMD indicates that the reported process was killed by
+    PRRTE command. This typically occurs in response to a Ctrl-C (or equivalent)
+    being applied to the PRRTE launcher, thereby instructing PRRTE to forcibly
+    terminate its processes. The event currently will only be issued in the
+    case where forcible termination is commanded via a tool that can pass the
+    process IDs that are specifically to be terminated - otherwise, in the case
+    of the Ctrl-C event previously described, all processes in the job will be
+    terminated, leaving none to be notified. Notification will include the process
+    ID that was terminated.
 
--   PMIX_ERR_PROC_FAILED_TO_START
+-   PMIX_ERR_PROC_SENSOR_BOUND_EXCEEDED indicates that the specified process
+    exceeded a previously-set sensor boundary - e.g., it may have grown beyond
+    a defined memory limit. Such events may or may not automatically trigger
+    termination by command, depending upon the behavior of the sensor. Notification
+    will include the process ID that exceeded the sensor boundary plus whatever
+    information the sensor provides regarding measurements and bounds.
 
--   PMIX_ERR_PROC_SENSOR_BOUND_EXCEEDED
+-   PMIX_ERR_PROC_ABORTED_BY_SIG indicates that the specified process was killed
+    by a signal - e.g., a segmentation fault/violation or an externally applied
+    signal. Notifications will include the process ID that was killed and the
+    corresponding reported signal.
 
--   PMIX_ERR_PROC_ABORTED
-
--   PMIX_ERR_PROC_REQUESTED_ABORT
+-   PMIX_ERR_PROC_REQUESTED_ABORT indicates that the specified process has aborted
+    by calling the PMIx_Abort function. Notification will include the process ID
+    that called abort and its exit status.
 
 -   PMIX_ERR_EXIT_NONZERO_TERM indicates that the specified process terminated with
     a non-zero exit status. This notification is only generated in the case where
