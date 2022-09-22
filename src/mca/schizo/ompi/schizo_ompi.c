@@ -1372,7 +1372,12 @@ static int process_tune_files(char *filename, char ***dstenv, char sep)
 
 // These frameworks are current as of 16 Sep, 2022, and are the list
 // of frameworks that are planned to be in Open MPI v5.0.0.
-static char *ompi_frameworks[] = {
+static char *ompi_frameworks_static_5_0_0[] = {
+    // Generic prefixes used by OMPI
+    "mca",
+    "opal",
+    "ompi",
+
     /* OPAL frameworks */
     "allocator",
     "backtrace",
@@ -1417,23 +1422,38 @@ static char *ompi_frameworks[] = {
     "sshmem",
     NULL,
 };
+static char **ompi_frameworks = ompi_frameworks_static_5_0_0;
+static bool ompi_frameworks_setup = false;
+
+static void setup_ompi_frameworks(void)
+{
+    if (ompi_frameworks_setup) {
+        return;
+    }
+    ompi_frameworks_setup = true;
+
+    char *env = getenv("OMPI_MCA_PREFIXES");
+    if (NULL == env) {
+        return;
+    }
+
+    // If we found the env variable, it will be a comma-delimited list
+    // of values.  Split it into an argv-style array.
+    char **tmp = pmix_argv_split(env, ',');
+    if (NULL != tmp) {
+        ompi_frameworks = tmp;
+    }
+}
 
 static bool check_generic(char *p1)
 {
-    int j;
+    setup_ompi_frameworks();
 
-    /* this is a generic MCA designation, so see if the parameter it
-     * refers to belongs to a project base or one of our frameworks */
-    if (0 == strncmp("opal_", p1, strlen("opal_")) ||
-        0 == strncmp("ompi_", p1, strlen("ompi_"))) {
-        return true;
-    } else if (0 == strcmp(p1, "mca_base_env_list")) {
-        return true;
-    } else {
-        for (j = 0; NULL != ompi_frameworks[j]; j++) {
-            if (0 == strncmp(p1, ompi_frameworks[j], strlen(ompi_frameworks[j]))) {
-                return true;
-            }
+    /* See if the parameter we were passed belongs to one of the OMPI
+       frameworks or prefixes */
+    for (int j = 0; NULL != ompi_frameworks[j]; j++) {
+        if (0 == strncmp(p1, ompi_frameworks[j], strlen(ompi_frameworks[j]))) {
+            return true;
         }
     }
 
