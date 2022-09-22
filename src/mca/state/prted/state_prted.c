@@ -37,8 +37,6 @@
 #include "src/util/session_dir.h"
 
 #include "src/mca/state/base/base.h"
-#include "src/mca/state/base/state_private.h"
-#include "src/mca/state/state.h"
 #include "state_prted.h"
 
 /*
@@ -617,7 +615,7 @@ static void track_procs(int fd, short argc, void *cbdata)
             }
 
             /* if requested, check fd status for leaks */
-            if (prte_state_base_run_fdcheck) {
+            if (prte_state_base.run_fdcheck) {
                 prte_state_base_check_fds(jdata);
             }
 

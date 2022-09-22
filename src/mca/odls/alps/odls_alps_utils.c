@@ -45,7 +45,6 @@
 
 #include "src/mca/odls/alps/odls_alps.h"
 #include "src/mca/odls/base/base.h"
-#include "src/mca/odls/base/odls_private.h"
 #include "src/mca/odls/odls.h"
 
 int prte_odls_alps_get_rdma_creds(void)

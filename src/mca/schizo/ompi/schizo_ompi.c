@@ -57,6 +57,7 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/rmaps/base/base.h"
+#include "src/mca/state/base/base.h"
 #include "src/runtime/prte_globals.h"
 
 #include "schizo_ompi.h"
@@ -177,6 +178,9 @@ static struct option ompioptions[] = {
 
     /* developer options */
     PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_LAUNCH, PMIX_ARG_NONE),
+
+    // Runtime options
+    PMIX_OPTION_DEFINE(PRTE_CLI_RTOS, PMIX_ARG_REQD),
 
 
     PMIX_OPTION_DEFINE(PRTE_CLI_ENABLE_RECOVERY, PMIX_ARG_NONE),
@@ -554,35 +558,6 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
             for (n=0; NULL != opt->values[n]; n++) {
                 p1 = opt->values[n];
                 prte_schizo_base_expose(p1, "OMPI_MCA_");
-            }
-        } else if (0 == strcmp(opt->key, "with-ft")) {
-            if (NULL == opt->values || NULL == opt->values[0]) {
-                /* this is an error */
-                return PRTE_ERR_FATAL;
-            }
-            p1 = opt->values[0];
-            if (0 != strcmp("no", p1) && 0 != strcmp("false", p1) && 0 != strcmp("0", p1)) {
-                if (0 == strcmp("yes", p1) || 0 == strcmp("true", p1) || 0 == strcmp("1", p1)
-                    || 0 == strcmp("ulfm", p1) || 0 == strcmp("mpi", p1)) {
-                        /* push it into our environment */
-                    char *tmp = strdup("prte_enable_ft=1");
-                    prte_schizo_base_expose(tmp, "PRTE_MCA_");
-                    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
-                                        "%s schizo:ompi:parse_cli pushing PRTE_MCA_prte_enable_ft=1 into environment",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-                    prte_enable_recovery = true;
-                    free(tmp);
-                    tmp = strdup("mpi_ft_enable=1");
-                    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
-                                        "%s schizo:ompi:parse_cli pushing OMPI_MCA_mpi_ft_enable into environment",
-                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-                    prte_schizo_base_expose(tmp, "OMPI_MCA_");
-                    free(tmp);
-                }
-                else {
-                    pmix_output(0, "UNRECOGNIZED OPTION: --with-ft %s", p1);
-                    return PRTE_ERR_FATAL;
-                }
             }
         }
     }
@@ -966,6 +941,31 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                 free(opt->values[0]);
                 opt->values[0] = tmp;
             }
+
+        } else if (0 == strcmp(option, "with-ft")) {
+            p1 = opt->values[0];
+            if (0 != strcmp("no", p1) && 0 != strcmp("false", p1) && 0 != strcmp("0", p1)) {
+                if (0 == strcmp("yes", p1) || 0 == strcmp("true", p1) || 0 == strcmp("1", p1) ||
+                    0 == strcmp("ulfm", p1) || 0 == strcmp("mpi", p1)) {
+                    rc = prte_schizo_base_add_directive(results, option,
+                                                        PRTE_CLI_RTOS, PRTE_CLI_RECOVERABLE,
+                                                        warn);
+                    rc = prte_schizo_base_add_directive(results, option,
+                                                        PRTE_CLI_RTOS, PRTE_CLI_NOTIFY_ERRORS,
+                                                        warn);
+                    tmp = strdup("mpi_ft_enable=1");
+                    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
+                                        "%s schizo:ompi:parse_cli pushing OMPI_MCA_mpi_ft_enable into environment",
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+                    prte_schizo_base_expose(tmp, "OMPI_MCA_");
+                    free(tmp);
+                }
+                else {
+                    pmix_show_help("help-schizo-ompi.txt", "with-ft-bad-option", true, p1);
+                    return PRTE_ERR_SILENT;
+                }
+            }
+            PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
     }
 
@@ -2166,5 +2166,5 @@ static void job_info(pmix_cli_result_t *results,
 static int set_default_rto(prte_job_t *jdata,
                            prte_rmaps_options_t *options)
 {
-    return prte_rmaps_base_set_runtime_options(jdata, NULL);
+    return prte_state_base_set_runtime_options(jdata, NULL);
 }

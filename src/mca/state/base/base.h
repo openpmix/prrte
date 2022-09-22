@@ -28,9 +28,27 @@
 #include "src/util/pmix_printf.h"
 
 #include "src/mca/mca.h"
+#include "src/mca/rmaps/rmaps_types.h"
 #include "src/mca/state/state.h"
 
 BEGIN_C_DECLS
+
+/**
+ * Struct to hold data global to the state framework
+ */
+typedef struct {
+    int parent_fd;
+    bool ready_msg;
+    bool run_fdcheck;
+    bool recoverable;
+    int max_restarts;
+    bool continuous;
+    bool error_non_zero_exit;
+    bool show_launch_progress;
+    bool notifyerrors;
+    bool autorestart;
+} prte_state_base_t;
+PRTE_EXPORT extern prte_state_base_t prte_state_base;
 
 /* select a component */
 PRTE_EXPORT int prte_state_base_select(void);
@@ -40,8 +58,50 @@ PRTE_EXPORT void prte_state_base_print_job_state_machine(void);
 
 PRTE_EXPORT void prte_state_base_print_proc_state_machine(void);
 
-PRTE_EXPORT extern int prte_state_base_parent_fd;
-PRTE_EXPORT extern bool prte_state_base_ready_msg;
+PRTE_EXPORT int prte_state_base_set_default_rto(prte_job_t *jdata,
+                                                prte_rmaps_options_t *options);
+
+PRTE_EXPORT int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec);
+
+/*
+ * Base functions
+ */
+PRTE_EXPORT void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t state);
+
+PRTE_EXPORT int prte_state_base_add_job_state(prte_job_state_t state, prte_state_cbfunc_t cbfunc,
+                                              int priority);
+
+PRTE_EXPORT int prte_state_base_set_job_state_callback(prte_job_state_t state,
+                                                       prte_state_cbfunc_t cbfunc);
+
+PRTE_EXPORT int prte_state_base_set_job_state_priority(prte_job_state_t state, int priority);
+
+PRTE_EXPORT int prte_state_base_remove_job_state(prte_job_state_t state);
+
+PRTE_EXPORT void prte_util_print_job_state_machine(void);
+
+PRTE_EXPORT void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t state);
+
+PRTE_EXPORT int prte_state_base_add_proc_state(prte_proc_state_t state, prte_state_cbfunc_t cbfunc,
+                                               int priority);
+
+PRTE_EXPORT int prte_state_base_set_proc_state_callback(prte_proc_state_t state,
+                                                        prte_state_cbfunc_t cbfunc);
+
+PRTE_EXPORT int prte_state_base_set_proc_state_priority(prte_proc_state_t state, int priority);
+
+PRTE_EXPORT int prte_state_base_remove_proc_state(prte_proc_state_t state);
+
+PRTE_EXPORT void prte_util_print_proc_state_machine(void);
+
+/* common state processing functions */
+PRTE_EXPORT void prte_state_base_local_launch_complete(int fd, short argc, void *cbdata);
+PRTE_EXPORT void prte_state_base_cleanup_job(int fd, short argc, void *cbdata);
+PRTE_EXPORT void prte_state_base_report_progress(int fd, short argc, void *cbdata);
+PRTE_EXPORT void prte_state_base_track_procs(int fd, short argc, void *cbdata);
+PRTE_EXPORT void prte_state_base_check_all_complete(int fd, short args, void *cbdata);
+PRTE_EXPORT void prte_state_base_check_fds(prte_job_t *jdata);
+PRTE_EXPORT void prte_state_base_notify_data_server(pmix_proc_t *target);
 
 END_C_DECLS
 

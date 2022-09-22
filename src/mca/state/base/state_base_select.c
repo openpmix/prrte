@@ -22,7 +22,6 @@
 #include "src/util/pmix_output.h"
 
 #include "src/mca/state/base/base.h"
-#include "src/mca/state/base/state_private.h"
 
 int prte_state_base_select(void)
 {

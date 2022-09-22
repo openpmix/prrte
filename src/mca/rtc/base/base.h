@@ -23,7 +23,7 @@
 
 #include "src/class/pmix_list.h"
 #include "src/mca/mca.h"
-#include "src/mca/odls/base/odls_private.h"
+#include "src/mca/odls/base/base.h"
 #include "src/util/pmix_printf.h"
 
 #include "src/mca/rtc/rtc.h"

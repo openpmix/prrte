@@ -90,9 +90,7 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/grpcomm/grpcomm.h"
-#include "src/mca/odls/base/odls_private.h"
-#include "src/mca/odls/odls.h"
-#include "src/mca/oob/base/base.h"
+#include "src/mca/odls/base/base.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/ras/ras.h"
 #include "src/mca/rmaps/rmaps_types.h"
@@ -330,7 +328,7 @@ int main(int argc, char *argv[])
      */
     if (!prte_leave_session_attached && !prte_debug_daemons_flag) {
         pipe(wait_pipe);
-        prte_state_base_parent_fd = wait_pipe[1];
+        prte_state_base.parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
         close(wait_pipe[0]);
     }

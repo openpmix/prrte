@@ -40,8 +40,6 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
-#include "src/mca/odls/base/odls_private.h"
-#include "src/mca/odls/odls.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/rml/rml.h"
 #include "src/mca/state/state.h"

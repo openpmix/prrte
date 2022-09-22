@@ -86,7 +86,6 @@
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/odls/base/base.h"
-#include "src/mca/odls/base/odls_private.h"
 
 typedef struct {
     prte_job_t *jdata;
@@ -1038,9 +1037,9 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
             goto errorout;
         }
         free(ptr);
-    } else if (NULL != prte_fork_agent_string) {
+    } else if (NULL != prte_odls_globals.exec_agent) {
         /* we were given a fork agent - use it */
-        cd->argv = pmix_argv_split(prte_fork_agent_string, ' ');
+        cd->argv = pmix_argv_split(prte_odls_globals.exec_agent, ' ');
         /* add in the argv from the app */
         for (i = 0; NULL != app->argv[i]; i++) {
             pmix_argv_append_nosize(&cd->argv, app->argv[i]);
@@ -1602,7 +1601,7 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
 
         /* provide a default state */
         state = PRTE_PROC_STATE_WAITPID_FIRED;
-        flag = prte_get_attribute(&jobdat->attributes, PRTE_JOB_TERM_NONZERO_EXIT, NULL, PMIX_BOOL);
+        flag = prte_get_attribute(&jobdat->attributes, PRTE_JOB_ERROR_NONZERO_EXIT, NULL, PMIX_BOOL);
 
         /* check to see if a sync was required and if it was received */
         if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_REG)) {

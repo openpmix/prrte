@@ -130,7 +130,6 @@
 
 #include "src/mca/odls/alps/odls_alps.h"
 #include "src/mca/odls/base/base.h"
-#include "src/mca/odls/base/odls_private.h"
 #include "src/prted/pmix/pmix_server.h"
 
 /*
