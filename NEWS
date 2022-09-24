@@ -52,18 +52,100 @@ may (likely) impact users. These include:
     is detected by PRRTE thru the environment.
   * a more extensive "--help" support system.
   * reduction in the "--rank-by" options.
-  * addition of new "--output" options
+  * addition of new "--output", "--display", and "--runtime-options"
+    command line directives
   * removal of the "mindist" mapper due to lack of a maintainer
+  * remove of man pages for PRRTE tools - this has been replaced
+    with a hierarchical help system. Thus, the command "prun --help"
+    will output the former man page for the prun command. Users
+    can then access more detailed help on any command line option
+    by simply adding it to the help command - i.e., "prun --help <option>"
 There are quite a few more changes than listed here, but they mostly
 pertain to code internals. However, these dictate that PRRTE v3.0.0
-require use of PMIx v4.2 or above to compile. Note that this doesn't
+require use of PMIx v4.2.2 or above to compile. Note that this doesn't
 impact the PMIx level associated with any applications executed by
 PRRTE - the only requirement is that applications link against a
 PMIx version that meets the PMIx cross-version requirements (i.e., a
 minimum of PMIx v2.5).
 
 Detailed changes:
-
+PR #1522: Roll version to rc2
+PR #1518: schizo_ompi: use the OMPI_MCA_PREFIXES env var
+PR #1517: Multiple commits
+  - Remove the --with-ft configure option
+  - Replace prte_output with pmix_output
+  - Cleanup code clause identification
+  - Fix a few minor things
+  - Fix setting of runtime options
+  - Update the schizo/ompi component
+  - ompi/schizo: Fix --do-not-launch and --show-progress
+  - schizo/ompi: Fix --display topo
+  - schizo/ompi: Remove --display-devel-allocation
+  - Added specfile BuildRequires
+  - Add action to check commits on pull requests
+  - Restore the PRRTE application-level fault tolerance modes
+  - Update minimum PMIx version to v4.2.2
+PR #1501: Multiple commits
+  - Delete PRRTE MCA infrastructure
+  - Remove stale m4
+  - Handle default MCA params
+  - Rename component libraries and component struct names
+PR #1498: Remove leftover BINDTONONE SET debug code
+PR #1495: Multiple commits
+  - Revise passing of runtime options
+  - Add/modify some spawn-related tests
+  - Update to use PMIx CLI option macro and "check true"
+PR #1491: Multiple commits
+  - stream-buffering is an OMPI option, so make it an MCA
+  - Deprecated the --stream-buffering CLI option
+  - Fix hetero topology operations
+PR #1487: Use correct target path for Flex check
+PR #1485: Fix bug in not updating cached daemon topologies
+PR #1483: Fix oversubscription to not require binding
+PR #1481: Multiple commits
+  - Add support for querying process group attributes
+  - Initial work on --enable-devel-check
+  - Fix free in hostfile
+  - Continue progress on enable-devel-check
+PR #1474: Multiple commits
+  - Upgrade the cmd line option checker
+  - Enable the "show-progress" runtime option
+  - Fix the stack trace handshake
+  - Add more debug to the node list construction procedure
+PR #1469: Multiple commits
+  - Raise the minimum required PMIx level to v4.2.1
+  - Separate out the runtime controls options
+PR #1466: Multiple commits
+  - Ensure tools get string explanation for non-norm term
+  - stop-in-app does not require an argument
+  - Fix compile error with FT enabled
+  - schizo/ompi: Fix --do-not-launch
+  - Fix typo in help message
+  - schizo/ompi: Add translation for --merge-stderr-to-stdout
+  - java: add ease-of-use feature for ompi java apps
+  - Fix second pass on map-by obj
+  - Remove stale references to alloc-dev as display options
+  - Get the "--display topo" option to work
+PR #1456: Multiple commits
+  - Fix synthetic topo support and too early sanity check
+  - Correct the support check logic
+  - Remove the "report" qualifier from "--bind-to"
+  - Fix bind-upward check and cleanup bind output
+PR #1450: Update current state of PRRTE help docs
+PR #1448: Provide upgrade warning for ancient Slurm versions
+PR #1447: Fix app/local rank computation
+PR #1444: Fix keepalive CLI option
+PR #1441: Include the PMIx libdir in the ssh prefix operation
+PR #1440: Do not error out if lib is symlinked to lib64
+PR #1437: Avoid loopback interfaces if not needed
+PR #1433: Update the job object's binding policy
+PR #1431: Fix the tm configure logic
+PR #1429: Update help docs
+PR #1427: Cleanup the PRRTE rpm spec file
+PR #1423: Fix typo in ppr mapper
+PR #1417: Remove stale file reference
+PR #1415: Update release files for rc1
+PR #1414: Remove stale files
 PR #1412: Restrict PRRTE to PMIx v4.2+
 PR #1410: Remove schizo/hydra component
 PR #1409: Add new output options to help string
