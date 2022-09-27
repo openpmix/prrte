@@ -221,6 +221,12 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_FILES, opt->values[0], PMIX_STRING);
     }
 
+    /* check for preload binary */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_PRELOAD_BIN);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_PRELOAD_BIN, NULL, PMIX_BOOL);
+    }
+
     /* Do not try to find argv[0] here -- the starter is responsible
      for that because it may not be relevant to try to find it on
      the node where prun is executing.  So just strdup() argv[0]
