@@ -166,7 +166,7 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
     default:
         map = "UNKNOWN";
     }
-    pmix_asprintf(&mymap, "%s:", map);
+
     if (PRTE_MAPPING_NO_USE_LOCAL & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
         pmix_argv_append_nosize(&qls, "NO_USE_LOCAL");
     }
