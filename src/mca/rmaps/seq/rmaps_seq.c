@@ -360,6 +360,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
             }
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
             if (PRTE_SUCCESS != rc) {
+                PMIX_RELEASE(proc);
                 goto error;
             }
             pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
@@ -368,6 +369,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
 
             /* move to next node */
             sq = (seq_node_t *) pmix_list_get_next(&sq->super);
+            PMIX_RELEASE(proc);
         }
 
         /** track the total number of processes we mapped */
