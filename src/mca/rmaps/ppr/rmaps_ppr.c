@@ -281,11 +281,14 @@ static int ppr_mapper(prte_job_t *jdata,
                     rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
                     if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
                         /* move to next node */
+                        PMIX_RELEASE(proc);
                         break;
                     } else if (PRTE_SUCCESS != rc) {
                         /* got an error */
+                        PMIX_RELEASE(proc);
                         return rc;
                     }
+                    PMIX_RELEASE(proc);
                 }
             } else {
                 /* get the number of resources on this node */
@@ -324,11 +327,14 @@ static int ppr_mapper(prte_job_t *jdata,
                         rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
                         if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
                             /* move to next node */
+                            PMIX_RELEASE(proc);
                             break;
                         } else if (PRTE_SUCCESS != rc) {
                             /* got an error */
+                            PMIX_RELEASE(proc);
                             return rc;
                         }
+                        PMIX_RELEASE(proc);
                     }
                 }
             }

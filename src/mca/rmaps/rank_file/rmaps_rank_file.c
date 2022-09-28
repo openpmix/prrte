@@ -322,17 +322,21 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
             /* check if we are oversubscribed */
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
             if (PRTE_SUCCESS != rc) {
+                PMIX_RELEASE(proc);
                 goto error;
             }
-          /* set the vpid */
+            /* set the vpid */
             proc->name.rank = rank;
             /* insert the proc into the proper place */
+            PMIX_RETAIN(proc);
             rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
+                PMIX_RELEASE(proc);
                 goto error;
             }
             jdata->num_procs++;
+            PMIX_RELEASE(proc);
         }
         /* update the starting point */
         vpid_start += app->num_procs;
