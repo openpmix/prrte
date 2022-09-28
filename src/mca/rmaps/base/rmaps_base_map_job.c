@@ -897,6 +897,7 @@ static int map_colocate(prte_job_t *jdata,
                     }
                     jdata->num_procs += 1;
                     app->num_procs += 1;
+                    PMIX_RELEASE(proc); 
                 }
             }
         }
@@ -956,6 +957,7 @@ static int map_colocate(prte_job_t *jdata,
                 }
                 jdata->num_procs += 1;
                 app->num_procs += 1;
+                PMIX_RELEASE(proc);
             }
         }
     }

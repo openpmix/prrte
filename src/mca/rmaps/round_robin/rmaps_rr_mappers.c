@@ -150,11 +150,14 @@ pass:
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
             if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
                 /* move to next node */
+                PMIX_RELEASE(proc);
                 break;
             } else if (PRTE_SUCCESS != rc) {
                 /* got an error */
+                PMIX_RELEASE(proc);
                 goto errout;
             }
+            PMIX_RELEASE(proc);
         }
 
         if (nprocs_mapped == app->num_procs) {
@@ -304,11 +307,14 @@ pass:
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
             if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
                 /* move to next node */
+                PMIX_RELEASE(proc);
                 break;
             } else if (PRTE_SUCCESS != rc) {
                 /* got an error */
+                PMIX_RELEASE(proc);
                 goto errout;
             }
+            PMIX_RELEASE(proc);
         }
         if (nprocs_mapped == app->num_procs) {
             return PRTE_SUCCESS;
@@ -441,11 +447,14 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
             if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
                 /* move to next node */
+                PMIX_RELEASE(proc);
                 break;
             } else if (PRTE_SUCCESS != rc) {
                 /* got an error */
+                PMIX_RELEASE(proc);
                 goto errout;
             }
+            PMIX_RELEASE(proc);
         }
         if (nprocs_mapped == app->num_procs) {
             return PRTE_SUCCESS;
@@ -681,11 +690,14 @@ pass:
                     if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
                         /* move to next node */
                         nodefull = true;
+                        PMIX_RELEASE(proc);
                         break;
                     } else if (PRTE_SUCCESS != rc) {
                         /* got an error */
+                        PMIX_RELEASE(proc);
                         goto errout;
                     }
+                    PMIX_RELEASE(proc);
                 }
             }
         } else {
@@ -720,11 +732,14 @@ pass:
                     if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
                         /* move to next node */
                         nodefull = true;
+                        PMIX_RELEASE(proc);
                         break;
                     } else if (PRTE_SUCCESS != rc) {
                         /* got an error */
+                        PMIX_RELEASE(proc);
                         goto errout;
                     }
+                    PMIX_RELEASE(proc);
                 }
             }
         }
