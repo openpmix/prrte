@@ -533,12 +533,14 @@ static void interim(int sd, short args, void *cbdata)
             if (PMIX_PROC_RANK == info->value.type) {
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
                                    &info->value.data.rank, PMIX_PROC_RANK);
+                PMIX_INFO_LOAD(info, PMIX_DEBUG_STOP_IN_INIT, &info->value.data.rank, PMIX_PROC_RANK);
             } else if (PMIX_BOOL == info->value.type) {
                 flag = PMIX_INFO_TRUE(info);
                 if (flag) {
                     rank = PMIX_RANK_WILDCARD;
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
                                        &rank, PMIX_PROC_RANK);
+                    PMIX_INFO_LOAD(info, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);
                 }
             } else {
                 /* we cannot support the request at this time */
@@ -549,9 +551,11 @@ static void interim(int sd, short args, void *cbdata)
             pmix_server_cache_job_info(jdata, info);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_IN_APP)) {
+            rank = PMIX_RANK_WILDCARD;
             prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, PRTE_ATTR_GLOBAL,
-                               info->value.data.string, PMIX_STRING);
+                              &rank, PMIX_PROC_RANK);
             /* also must add to job-level cache */
+            PMIX_INFO_LOAD(info, PMIX_DEBUG_STOP_IN_APP, &rank, PMIX_PROC_RANK);
             pmix_server_cache_job_info(jdata, info);
 
             /***   CPUS/RANK   ***/

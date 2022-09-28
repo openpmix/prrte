@@ -885,6 +885,14 @@ int main(int argc, char *argv[])
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);
     }
 
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_STOP_IN_INIT)) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);
+    }
+
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_STOP_IN_APP)) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_IN_APP, NULL, PMIX_BOOL);
+    }
+
     /* check for a job timeout specification, to be provided in seconds
      * as that is what MPICH used
      */
