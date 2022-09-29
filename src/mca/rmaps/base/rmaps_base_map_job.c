@@ -719,7 +719,12 @@ cleanup:
         }
     }
     if (NULL != options.job_cpuset) {
-        free(options.job_cpuset);
+        hwloc_bitmap_free(options.job_cpuset);
+        options.job_cpuset = NULL;
+    }
+    if (NULL != options.target) {
+        hwloc_bitmap_free(options.target);
+        options.target = NULL;
     }
     /* cleanup */
     PMIX_RELEASE(caddy);
