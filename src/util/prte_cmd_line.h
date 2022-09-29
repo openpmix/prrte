@@ -208,6 +208,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_REPORT_CHILD_SEP   "report-child-jobs-separately"  // optional arg
 #define PRTE_CLI_AGG_HELP           "aggregate-help"                // optional arg
 #define PRTE_CLI_NOTIFY_ERRORS      "notifyerrors"                  // optional flag
+#define PRTE_CLI_OUTPUT_PROCTABLE   "output-proctable"              // optional arg
 
 
 /* define the command line qualifiers PRRTE recognizes */

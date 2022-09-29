@@ -1000,10 +1000,14 @@ int prte_plm_base_spawn_response(int32_t status, prte_job_t *jdata)
 
 void prte_plm_base_post_launch(int fd, short args, void *cbdata)
 {
-    int32_t rc;
-    prte_job_t *jdata;
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    int32_t rc, n;
+    prte_job_t *jdata;
+    prte_proc_t *proc;
+    prte_app_context_t *app;
     prte_timer_t *timer;
+    char *file = NULL;
+    FILE *fp;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
@@ -1034,6 +1038,36 @@ void prte_plm_base_post_launch(int fd, short args, void *cbdata)
                          "%s plm:base:launch wiring up iof for job %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace)));
 
+    /* if requested, output the proctable */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_PROCTABLE, (void**)&file, PMIX_STRING)) {
+        /* if file="-", then output to stdout */
+        if (0 == strcmp(file, "-")) {
+            fp = stdout;
+        } else if (0 == strcmp(file, "+")) {
+            fp = stderr;
+        } else {
+            /* attempt to open the specified file */
+            fp = fopen(file, "w");
+            if (NULL == fp) {
+                pmix_output(0, "Unable to open file %s for output of proctable", file);
+                goto next;
+            }
+        }
+        for (n=0; n < jdata->procs->size; n++) {
+            proc = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, n);
+            if (NULL == proc) {
+                continue;
+            }
+            app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, proc->app_idx);
+            fprintf(fp, "(rank, host, exe, pid) = (%u, %s, %s, %d)\n",
+                    proc->name.rank, proc->node->name, app->app, proc->pid);
+        }
+        if (stdout != fp && stderr != fp) {
+            fclose(fp);
+        }
+    }
+
+next:
     /* notify the spawn requestor */
     rc = prte_plm_base_spawn_response(PRTE_SUCCESS, jdata);
     if (PRTE_SUCCESS != rc) {
