@@ -164,6 +164,11 @@ pass:
             return PRTE_SUCCESS;
         }
         options->bind = savebind;
+        if(NULL != options->target)
+        {
+            hwloc_bitmap_free(options->target);
+            options->target = NULL;
+        }
     }
 
     if (second_pass) {
@@ -320,6 +325,11 @@ pass:
             return PRTE_SUCCESS;
         }
         options->bind = savebind;
+        if(NULL != options->target)
+        {
+            hwloc_bitmap_free(options->target);
+            options->target = NULL;
+        }
     }
 
     if (second_pass) {
@@ -458,6 +468,11 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
         }
         if (nprocs_mapped == app->num_procs) {
             return PRTE_SUCCESS;
+        }
+        if(NULL != options->target)
+        {
+            hwloc_bitmap_free(options->target);
+            options->target = NULL;
         }
     }
 
@@ -686,6 +701,11 @@ pass:
                     }
                     options->nobjs++;
                     nprocs_mapped++;
+                    if(NULL != options->target)
+                    {
+                        hwloc_bitmap_free(options->target);
+                        options->target = NULL;
+                    }
                     rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
                     if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
                         /* move to next node */
@@ -740,6 +760,11 @@ pass:
                         goto errout;
                     }
                     PMIX_RELEASE(proc);
+                }
+                if(NULL != options->target)
+                {
+                    hwloc_bitmap_free(options->target);
+                    options->target = NULL;
                 }
             }
         }
