@@ -250,6 +250,7 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_DEFINE("ppr", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("do-not-launch", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT_PROCTABLE, PMIX_ARG_OPTIONAL),
 
     PMIX_OPTION_END
 };
@@ -365,6 +366,7 @@ static struct option prunoptions[] = {
     PMIX_OPTION_DEFINE("ppr", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE("do-not-launch", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT_PROCTABLE, PMIX_ARG_OPTIONAL),
 
     PMIX_OPTION_END
 };
@@ -719,11 +721,17 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
-        /* --output-proctable  ->  --display map-devel */
-        else if (0 == strcmp(option, "output-proctable")) {
+        /* --output-proctable  ->  --runtime-options output-proctable */
+        else if (0 == strcmp(option, PRTE_CLI_OUTPUT_PROCTABLE)) {
+            if (NULL != opt->values && NULL != opt->values[0]) {
+                pmix_asprintf(&p2, "%s=%s", PRTE_CLI_OUTPUT_PROCTABLE, opt->values[0]);
+            } else {
+                p2 = strdup(PRTE_CLI_OUTPUT_PROCTABLE);
+            }
             rc = prte_schizo_base_add_directive(results, option,
-                                                PRTE_CLI_DISPLAY, PRTE_CLI_MAPDEV,
+                                                PRTE_CLI_RTOS, p2,
                                                 warn);
+            free(p2);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
         /* --display-map  ->  --display map */

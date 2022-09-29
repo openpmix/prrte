@@ -484,6 +484,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "NOTIFY ERRORS";
         case PRTE_JOB_AUTORESTART:
             return "AUTORESTART";
+        case PRTE_JOB_OUTPUT_PROCTABLE:
+            return "OUTPUT PROCTABLE";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

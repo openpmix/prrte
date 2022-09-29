@@ -531,7 +531,13 @@ Supported values include:
 -   DEFAULT-EXEC-AGENT directs the runtime to use the system default exec
     agent to start an application process. No value need be passed as this is
     not an option that can be set by default in PRRTE.
-    
+
+-   OUTPUT-PROCTABLE[(=channel)] directs the runtime to report the convential
+    debugger process table (includes PID and host location of each process in
+    the application). Output is directed to stdout if the channel is "-",
+    stderr if "+", or into the specified file otherwise. If no channel is
+    specified, output will be directed to stdout.
+
 -   STOP-ON-EXEC[(=<bool or ranks>)] directs the runtime to stop the indicated
     application process(es) immediately upon exec'ing it. If a boolean value is
     provided, then the directive will apply to all processes in the job. Otherwise,
