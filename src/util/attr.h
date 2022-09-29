@@ -213,6 +213,8 @@ typedef uint16_t prte_job_flags_t;
                                                                        //        process failure
 #define PRTE_JOB_NOTIFY_ERRORS              (PRTE_JOB_START_KEY + 106) // bool - provide PMIx events on errors
 #define PRTE_JOB_AUTORESTART                (PRTE_JOB_START_KEY + 107) // bool - automatically restart failed processes
+#define PRTE_JOB_OUTPUT_PROCTABLE           (PRTE_JOB_START_KEY + 108) // char* - string specifying where the output is to go, with a '-'
+                                                                       //         indicating stdout, '+' indicating stderr, else path
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

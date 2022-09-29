@@ -357,6 +357,14 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
                                    &flag, PMIX_BOOL);
 
+            } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_OUTPUT_PROCTABLE)) {
+                if (NULL == ptr || '\0' == *ptr) {
+                    /* no value provided, so assume stdout */
+                    ptr = "-";
+                }
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_OUTPUT_PROCTABLE,
+                                    PRTE_ATTR_GLOBAL, ptr, PMIX_STRING);
+
             } else {
                 pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy", true,
                                "runtime options", spec);
