@@ -69,6 +69,12 @@ PMIx version that meets the PMIx cross-version requirements (i.e., a
 minimum of PMIx v2.5).
 
 Detailed changes:
+PR #1528: Add missing commits and new additions
+  - Complete help text on notifications
+  - BuildRequires: gcc
+  - Plug a memory leak
+  - schizo/ompi: Fix --use-hwthead-cpus option
+  - Fix --preload-binary
 PR #1522: Roll version to rc2
 PR #1518: schizo_ompi: use the OMPI_MCA_PREFIXES env var
 PR #1517: Multiple commits
