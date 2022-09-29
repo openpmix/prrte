@@ -53,7 +53,7 @@ void prte_job_print(char **output, prte_job_t *src)
 
     tmp2 = pmix_argv_join(src->personality, ',');
     pmix_asprintf(&tmp,
-                  "\nData for job: %s\tPersonality: %s\tRecovery: %s(%s)\n\tNum apps: %ld\tStdin "
+                  "\nData for job: %s\tPersonality: %s\tRecovery: %s\n\tNum apps: %ld\tStdin "
                   "target: %s\tState: %s\tAbort: %s",
                   PRTE_JOBID_PRINT(src->nspace), tmp2,
                   (prte_get_attribute(&src->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL)) ? "ENABLED" : "DISABLED",
