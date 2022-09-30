@@ -192,6 +192,7 @@ static int bind_to_cpuset(prte_job_t *jdata,
     } else {
         type = HWLOC_OBJ_CORE;
     }
+
     /* the CPU numbers would have been given to us based on the total
      * available CPUs on the machine. Thus, we cannot use the node->available
      * CPU set as we are removing CPUs for accounting purposes there.
@@ -253,10 +254,6 @@ static int bind_to_cpuset(prte_job_t *jdata,
         hwloc_bitmap_andnot(node->available, node->available, obj->cpuset);
 #endif
     }
-    char *tmp;
-    hwloc_bitmap_list_asprintf(&tmp, node->available);
-
-    free(tmp);
     return PRTE_SUCCESS;
 }
 
