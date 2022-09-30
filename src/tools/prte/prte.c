@@ -464,6 +464,12 @@ int main(int argc, char *argv[])
         prte_pmix_server_globals.report_uri = strdup(opt->values[0]);
     }
 
+    /* if we were given a launch agent, set the MCA param for it */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_LAUNCH_AGENT);
+    if (NULL != opt) {
+        setenv("PRTE_MCA_prte_launch_agent", opt->values[0], true); // cmd line overrides all
+    }
+
     /* if we are supporting a singleton, push its ID into the environ
      * so it can get picked up and registered by server init */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_SINGLETON);
