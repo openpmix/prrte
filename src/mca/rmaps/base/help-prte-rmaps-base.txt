@@ -75,6 +75,7 @@ no nodes were found or all the available nodes were already used.
 
 Note that since the -nolocal option was given no processes can be
 launched on the local node.
+#
 [prte-rmaps-base:no-available-resources]
 No nodes are available for this job, either due to a failure to
 allocate nodes to the job, or allocated nodes being marked

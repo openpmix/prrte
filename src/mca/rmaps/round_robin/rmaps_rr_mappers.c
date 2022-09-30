@@ -370,6 +370,10 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     prte_proc_t *proc;
     char **tmp;
     int ntomap;
+    bool second_pass = false;
+    int extra_procs_to_assign = 0, nxtra_nodes = 0;
+    float balance;
+    char *savecpuset = NULL;
     prte_binding_policy_t savebind = options->bind;
 
     pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
@@ -397,7 +401,11 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     tmp = pmix_argv_split(options->cpuset, ',');
     ntomap = pmix_argv_count(tmp);
     pmix_argv_free(tmp);
+    if (NULL != options->cpuset) {
+        savecpuset = strdup(options->cpuset);
+    }
 
+pass:
     PMIX_LIST_FOREACH_SAFE(node, nd, node_list, prte_node_t)
     {
         pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
@@ -405,7 +413,15 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
 
         prte_rmaps_base_get_cpuset(jdata, node, options);
 
-        if (options->ordered || !options->overload) {
+        if (second_pass) {
+            options->nprocs = extra_procs_to_assign;
+            if (0 < nxtra_nodes) {
+                --nxtra_nodes;
+                if (0 == nxtra_nodes) {
+                    --extra_procs_to_assign;
+                }
+            }
+        } else  if (options->ordered || !options->overload) {
             options->nprocs = ntomap;
         } else {
             /* assign a number of procs equal to the number of available slots */
@@ -467,25 +483,67 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
             PMIX_RELEASE(proc);
         }
         if (nprocs_mapped == app->num_procs) {
+            if (NULL != options->target) {
+                hwloc_bitmap_free(options->target);
+                options->target = NULL;
+            }
+            if (NULL != options->job_cpuset) {
+                hwloc_bitmap_free(options->job_cpuset);
+                options->job_cpuset = NULL;
+            }
+            if (NULL != savecpuset) {
+                free(savecpuset);
+            }
             return PRTE_SUCCESS;
         }
-        if(NULL != options->target)
-        {
+        if (NULL != options->target) {
             hwloc_bitmap_free(options->target);
             options->target = NULL;
         }
+        if (NULL != options->job_cpuset) {
+            hwloc_bitmap_free(options->job_cpuset);
+            options->job_cpuset = NULL;
+        }
+    } // next node
+
+    /* second pass: if we haven't mapped everyone yet, it is
+     * because we are oversubscribed. All of the nodes that are
+     * at max_slots have been removed from the list as that specifies
+     * a hard boundary, so the nodes remaining are available for
+     * handling the oversubscription. Figure out how many procs
+     * to add to each of them.
+     */
+    if (options->oversubscribe && !second_pass) {
+        balance = (float) ((int) app->num_procs - nprocs_mapped)
+        / (float) pmix_list_get_size(node_list);
+        extra_procs_to_assign = (int) balance;
+        if (0 < (balance - (float) extra_procs_to_assign)) {
+            /* compute how many nodes need an extra proc */
+            nxtra_nodes = app->num_procs - nprocs_mapped
+            - (extra_procs_to_assign * pmix_list_get_size(node_list));
+            /* add one so that we add an extra proc to the first nodes
+             * until all procs are mapped
+             */
+            extra_procs_to_assign++;
+        }
+        /* restore the cpuset */
+        options->cpuset = savecpuset;
+        // Rescan the nodes
+        second_pass = true;
+        goto pass;
     }
 
 errout:
     /* if we get here, then we were unable to map all the procs */
     if (PRTE_ERR_SILENT != rc) {
-        pmix_show_help("help-prte-rmaps-base.txt",
-                       "failed-map", true,
-                       PRTE_ERROR_NAME(rc),
+        pmix_show_help("help-prte-rmaps-rr.txt",
+                       "prte-rmaps-rr:not-enough-cpus", true,
                        (NULL == app) ? "N/A" : app->app,
                        (NULL == app) ? -1 : app->num_procs,
-                       prte_rmaps_base_print_mapping(options->map),
-                       prte_hwloc_base_print_binding(options->bind));
+                       savecpuset);
+    }
+    if (NULL != savecpuset) {
+        free(savecpuset);
     }
     return PRTE_ERR_SILENT;
 }

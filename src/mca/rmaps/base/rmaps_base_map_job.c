@@ -488,7 +488,11 @@ ranking:
      * override it */
     if (!PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
         did_map = false;
-        if (inherit) {
+        if (options.oversubscribe) {
+            /* if we are oversubscribing, then do not bind */
+            jdata->map->binding = PRTE_BIND_TO_NONE;
+            did_map = true;
+        } else if (inherit) {
             if (NULL != parent) {
                 jdata->map->binding = parent->map->binding;
                 did_map = true;
