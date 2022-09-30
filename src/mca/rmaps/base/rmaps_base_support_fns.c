@@ -739,7 +739,11 @@ bool prte_rmaps_base_check_avail(prte_job_t *jdata,
     }
 
     if (PRTE_BIND_TO_NONE == options->bind) {
-        options->target = NULL;
+        if (NULL != options->job_cpuset) {
+            options->target = hwloc_bitmap_dup(options->job_cpuset);
+        } else {
+            options->target = NULL;
+        }
         avail = true;
         goto done;
     }
@@ -860,6 +864,10 @@ int prte_rmaps_base_check_oversubscribed(prte_job_t *jdata,
          */
         PRTE_FLAG_SET(node, PRTE_NODE_FLAG_OVERSUBSCRIBED);
         PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_OVERSUBSCRIBED);
+        if (options->oversubscribe) {
+            return PRTE_SUCCESS;
+        }
+
         /* check for permission */
         if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
             /* if we weren't given a directive either way, then we will error out
