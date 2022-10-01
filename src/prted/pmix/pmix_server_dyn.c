@@ -550,7 +550,7 @@ static void interim(int sd, short args, void *cbdata)
 
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_IN_APP)) {
             prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, PRTE_ATTR_GLOBAL,
-                               info->value.data.string, PMIX_STRING);
+                               &info->value.data.rank, PMIX_PROC_RANK);
             /* also must add to job-level cache */
             pmix_server_cache_job_info(jdata, info);
 

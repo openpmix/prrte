@@ -50,6 +50,7 @@ EXTRA_DIST += \
         examples/debugger/indirect-multi.c \
         examples/debugger/hello.c \
         examples/debugger/stdincheck.c \
+        examples/debugger/mpihello.c \
         examples/dmodex.c \
         examples/dynamic.c \
         examples/error_notify.c \
