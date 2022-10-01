@@ -130,6 +130,7 @@ examples/debugger/hello
 examples/debugger/direct-multi
 examples/debugger/indirect-multi
 examples/debugger/stdincheck
+examples/debugger/mpihello
 examples/legacy
 examples/colocate
 

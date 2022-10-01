@@ -172,7 +172,10 @@ int main(int argc, char **argv)
         }
     }
     if (!found) {
-        fprintf(stderr, "Wrong test, dude\n");
+        char *tmp = pmix_argv_join(launchers, ',');
+        fprintf(stderr, "Wrong test, dude - unknown launcher\n");
+        fprintf(stderr, "Known launchers: %s\n", tmp);
+        free(tmp);
         exit(1);
     }
 
@@ -273,7 +276,11 @@ int main(int argc, char **argv)
      * to do with the app it is going to spawn for us */
     PMIX_INFO_LIST_START(linfo);
     rank = PMIX_RANK_WILDCARD;
-    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);  // stop all procs in init
+    if (NULL != strstr(argv[1], "mpi")) {
+        PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_APP, &rank, PMIX_PROC_RANK); // stop all procs in MPI_Init
+    } else {
+        PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);  // stop all procs in PMIx_Init
+    }
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_NOTIFY_JOB_EVENTS, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me
@@ -364,7 +371,7 @@ int main(int argc, char **argv)
         struct timespec tp = {0, 500000000};
         nanosleep(&tp, NULL);
         ++icount;
-        if (icount > 10) {
+        if (icount > 20) {
             fprintf(stderr, "Error: Failed to launch by the timeout\n");
             goto done;
         }
