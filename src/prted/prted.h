@@ -30,6 +30,7 @@
 #include "src/class/pmix_pointer_array.h"
 #include "src/rml/rml_types.h"
 #include "src/mca/schizo/schizo.h"
+#include "src/util/prte_cmd_line.h"
 
 BEGIN_C_DECLS
 
@@ -47,6 +48,10 @@ PRTE_EXPORT int prte_daemon_process_commands(pmix_proc_t *sender, pmix_data_buff
 
 PRTE_EXPORT int prte_parse_locals(prte_schizo_base_module_t *schizo, pmix_list_t *jdata,
                                   char **argv, char ***hostfiles, char ***hosts);
+
+PRTE_EXPORT int prun_common(pmix_cli_result_t *cli,
+                            prte_schizo_base_module_t *schizo,
+                            int argc, char **argv);
 
 END_C_DECLS
 
