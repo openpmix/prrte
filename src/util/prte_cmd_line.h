@@ -128,6 +128,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_PID                    "pid"                       // required
 #define PRTE_CLI_NAMESPACE              "namespace"                 // required
 #define PRTE_CLI_DVM_URI                "dvm-uri"                   // required
+#define PRTE_CLI_DVM                    "dvm"                       // optional
 
 // Daemon-specific CLI options
 #define PRTE_CLI_PUBSUB_SERVER          "prte-server"               // required
