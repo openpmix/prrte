@@ -30,6 +30,7 @@ headers += \
 
 libprrte_la_SOURCES += \
         prted/prted_comm.c \
-        prted/prte_app_parse.c
+        prted/prte_app_parse.c \
+        prted/prun_common.c
 
 include prted/pmix/Makefile.am

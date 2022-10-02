@@ -381,7 +381,8 @@ int main(int argc, char *argv[])
          * are not actually running as "prte" or are actively
          * testing the proxy capability , then we are acting
          * as a proxy */
-        if (0 != strcmp(prte_tool_basename, "prte") || prte_schizo_base.test_proxy_launch) {
+        if (0 != strcmp(prte_tool_basename, "prte") ||
+            prte_schizo_base.test_proxy_launch) {
             proxyrun = true;
         }
     }
@@ -413,6 +414,42 @@ int main(int argc, char *argv[])
     if (0 == geteuid()) {
         schizo->allow_run_as_root(&results); // will exit us if not allowed
     }
+
+    /* decide if we are to use a persistent DVM, or act alone */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DVM);
+    if (NULL != opt && proxyrun) {
+        /* use a persistent DVM - act like prun */
+        if (NULL != opt->values && NULL != opt->values[0]) {
+            /* they provided a directive on how to find the DVM */
+            if (0 == strncasecmp(opt->values[0], "file:", 5)) {
+                /* change the key to match what prun expects */
+                free(opt->key);
+                opt->key = strdup(PRTE_CLI_DVM_URI);
+            } else if (0 == strncasecmp(opt->values[0], "uri:", 4)) {
+                free(opt->key);
+                opt->key = strdup(PRTE_CLI_DVM_URI);
+                /* must remove the "uri:" prefix */
+                cptr = strdup(&opt->values[0][4]);
+                free(opt->values[0]);
+                opt->values[0] = cptr;
+            } else if (0 == strncasecmp(opt->values[0], "pid:", 4)) {
+                free(opt->key);
+                opt->key = strdup(PRTE_CLI_PID);
+                /* must remove the "pid:" prefix */
+                cptr = strdup(&opt->values[0][4]);
+                free(opt->values[0]);
+                opt->values[0] = cptr;
+            } else {
+                /* must be a namespace */
+                free(opt->key);
+                opt->key = strdup(PRTE_CLI_NAMESPACE);
+            }
+        }
+        rc = prun_common(&results, schizo, argc, argv);
+        exit(rc);
+    }
+
+    /** RUN INDEPENDENTLY */
 
     /* if we were given a keepalive pipe, set up to monitor it now */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_KEEPALIVE);

@@ -169,6 +169,9 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --system-server                   Start the DVM as the system server
    --tmpdir <arg0>                   Set the root for the session directory tree
    --tune <arg0>                     File(s) containing MCA params for tuning DVM operations
+   --dvm[=<arg0>]                    Use a persistent DVM instead of instantiating independent runtime
+                                     infrastructure. Optional arguments can be passed to indicate the
+                                     pid, uri, file containing the uri, or namespace of the DVM.
 
 
 
@@ -191,6 +194,35 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
 
 %s
+#
+[dvm]
+Utilize an existing persistent DVM instead of instantiating an
+independent runtime infrastructure. This is provided as a convenience
+option for those wanting to embed "mpirun" in a script that can be
+optionally used to run either independently or under a persistent DVM.
+
+Optional arguments are passed by appending an equal ('=') sign to
+the "--dvm" directive followed by the option (e.g., "--dvm=pid:12345").
+Supported options include:
+
+pid:<arg>   provides the PID of the target DVM controller. This can
+            be given as either the PID itself (arg = int) or the path
+            to a file that contains the PID (arg = file:<path>)
+
+file:<path> provides the path to a PMIx rendezvous file that is
+            output by PMIx servers - the file contains all the
+            required information for completing the connection
+
+uri:<arg>   specifies the URI of the DVM controller, or the name of
+            the file (specified as file:filename) that contains that
+            info
+
+<arg>       an unprefixed argument is taken to be the namespace of
+            the DVM controller to which we should connect
+
+Specifying the "--dvm" directive without any arguments directs
+"mpirun" to search for available DVM controllers it is authorized
+to use, connecting to the first such candidate it finds.
 #
 [prtemca]
 Syntax: --prtemca <arg0> <arg1>
