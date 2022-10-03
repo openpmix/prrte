@@ -58,7 +58,7 @@ prte_odls_base_component_t prte_mca_odls_alps_component = {
     PRTE_ODLS_BASE_VERSION_2_0_0,
     /* Component name and version */
     .pmix_mca_component_name = "alps",
-    PRTE_MCA_BASE_MAKE_VERSION(component,
+    PMIX_MCA_BASE_MAKE_VERSION(component,
                                PRTE_MAJOR_VERSION,
                                PRTE_MINOR_VERSION,
                                PMIX_RELEASE_VERSION),
