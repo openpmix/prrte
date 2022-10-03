@@ -95,12 +95,10 @@ static int prte_ras_lsf_close(void)
 static int prte_ras_lsf_register(void)
 {
     prte_ras_lsf_skip_affinity_file = false;
-    (void) prte_mca_base_component_var_register(&prte_mca_ras_lsf_component.base_version,
+    (void) pmix_mca_base_component_var_register(&prte_mca_ras_lsf_component,
                                                 "skip_affinity_file",
                                                 "Skip processing the LSB_AFFINITY_HOSTFILE.",
-                                                PRTE_MCA_BASE_VAR_TYPE_BOOL, NULL, 0,
-                                                PRTE_MCA_BASE_VAR_FLAG_NONE, PRTE_INFO_LVL_3,
-                                                PRTE_MCA_BASE_VAR_SCOPE_READONLY,
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                                 &prte_ras_lsf_skip_affinity_file);
 
     return PRTE_SUCCESS;
