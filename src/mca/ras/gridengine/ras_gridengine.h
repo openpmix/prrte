@@ -38,13 +38,13 @@ BEGIN_C_DECLS
 /**
  * RAS Component
  */
-struct prte_mca_ras_gridengine_component_t {
+struct prte_ras_base_component_t {
     prte_ras_base_component_t super;
     int verbose;
     int priority;
     bool show_jobid;
 };
-typedef struct prte_mca_ras_gridengine_component_t prte_mca_ras_gridengine_component_t;
+typedef struct prte_ras_base_component_t prte_mca_ras_gridengine_component_t;
 
 PRTE_EXPORT extern prte_mca_ras_gridengine_component_t prte_mca_ras_gridengine_component;
 PRTE_EXPORT extern prte_ras_base_module_t prte_ras_gridengine_module;
