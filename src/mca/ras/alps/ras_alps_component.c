@@ -32,7 +32,7 @@
 #include "constants.h"
 #include "ras_alps.h"
 #include "src/mca/base/pmix_base.h"
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/util/pmix_output.h"
 #include "src/util/proc_info.h"
 
@@ -148,24 +148,28 @@ static unsigned long int get_res_id(void)
     return jid;
 }
 
+
 static int ras_alps_register(void)
 {
     param_priority = 75;
-    (void) prte_mca_base_component_var_register(&prte_mca_ras_alps_component, "priority",
+    (void) pmix_mca_base_component_var_register(&prte_mca_ras_alps_component, "priority",
                                                 "Priority of the alps ras component",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                                 &param_priority);
 
     ras_alps_read_attempts = 10;
-    (void) prte_mca_base_component_var_register(&prte_mca_ras_alps_component,
+    (void) pmix_mca_base_component_var_register(&prte_mca_ras_alps_component,
                                                 "appinfo_read_attempts",
                                                 "Maximum number of attempts to read ALPS "
                                                 "appinfo file",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                                 &ras_alps_read_attempts);
 
     ras_alps_apstat_cmd = "apstat"; /* by default apstat is in a user's path on a Cray XE/XC if
                                        alps is the site's job launcher  */
-    (void) prte_mca_base_component_var_register(&prte_mca_ras_alps_component, "apstat_cmd",
+    (void) pmix_mca_base_component_var_register(&prte_mca_ras_alps_component, "apstat_cmd",
                                                 "Location of the apstat command",
+						PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &ras_alps_apstat_cmd);
 
     return PRTE_SUCCESS;
