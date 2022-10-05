@@ -167,25 +167,24 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
     /* if this message is just to warmup the connection, then drop it */
     if (PRTE_RML_TAG_WARMUP_CONNECTION == msg->tag) {
         if (!prte_nidmap_communicated) {
-            pmix_data_buffer_t buffer;
+            pmix_data_buffer_t *buffer;
             int rc;
 
-            PMIX_DATA_BUFFER_CONSTRUCT(&buffer);
+            PMIX_DATA_BUFFER_CREATE(buffer);
 
-            if (PRTE_SUCCESS != (rc = prte_util_nidmap_create(prte_node_pool, &buffer))) {
+            if (PRTE_SUCCESS != (rc = prte_util_nidmap_create(prte_node_pool, buffer))) {
                 PRTE_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+                PMIX_DATA_BUFFER_RELEASE(buffer);
                 return;
             }
 
-            PRTE_RML_SEND(rc, msg->sender.rank, &buffer,
+            PRTE_RML_SEND(rc, msg->sender.rank, buffer,
                           PRTE_RML_TAG_NODE_REGEX_REPORT);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+                PMIX_DATA_BUFFER_RELEASE(buffer);
                 return;
             }
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
             PMIX_RELEASE(msg);
             return;
         }
@@ -199,14 +198,14 @@ void prte_rml_base_process_msg(int fd, short flags, void *cbdata)
          */
         if (PMIX_CHECK_PROCID(&msg->sender, &post->peer) && msg->tag == post->tag) {
             /* deliver the data to this location */
-            post->cbfunc(PRTE_SUCCESS, &msg->sender, &msg->dbuf, msg->tag, post->cbdata);
+            post->cbfunc(PRTE_SUCCESS, &msg->sender, msg->dbuf, msg->tag, post->cbdata);
             /* the user must have unloaded the buffer if they wanted
              * to retain ownership of it, so release whatever remains
              */
             PMIX_OUTPUT_VERBOSE((5, prte_rml_base.rml_output,
                                  "%s message received %" PRIsize_t
                                  " bytes from %s for tag %d called callback",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), msg->dbuf.bytes_used,
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), msg->dbuf->bytes_used,
                                  PRTE_NAME_PRINT(&msg->sender), msg->tag));
             /* release the message */
             PMIX_RELEASE(msg);

@@ -111,7 +111,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
         /* point to the actual message */                                                      \
         _s->msg = (m);                                                                         \
         /* set the total number of bytes to be sent */                                         \
-        _s->hdr.nbytes = (m)->dbuf.bytes_used;                                                 \
+        _s->hdr.nbytes = (m)->dbuf->bytes_used;                                                 \
         /* prep header for xmission */                                                         \
         MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                                        \
         /* start the send with the header */                                                   \
@@ -143,7 +143,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
         /* point to the actual message */                                                         \
         _s->msg = (m);                                                                            \
         /* set the total number of bytes to be sent */                                            \
-        _s->hdr.nbytes = (m)->dbuf.bytes_used;                                                    \
+        _s->hdr.nbytes = (m)->dbuf->bytes_used;                                                    \
         /* prep header for xmission */                                                            \
         MCA_OOB_TCP_HDR_HTON(&_s->hdr);                                                           \
         /* start the send with the header */                                                      \

@@ -304,7 +304,6 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             }
             /* send the release via xcast */
             (void) prte_grpcomm.xcast(&sig, PRTE_RML_TAG_COLL_RELEASE, reply);
-            PMIX_DATA_BUFFER_RELEASE(reply);
         } else {
             PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:direct allgather rollup complete - sending to %s",

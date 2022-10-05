@@ -130,12 +130,13 @@ static void send_cons(prte_rml_send_t *ptr)
 {
     ptr->retries = 0;
     ptr->cbdata = NULL;
-    PMIX_DATA_BUFFER_CONSTRUCT(&ptr->dbuf);
+    ptr->dbuf = NULL;
     ptr->seq_num = 0xFFFFFFFF;
 }
 static void send_des(prte_rml_send_t *ptr)
 {
-    PMIX_DATA_BUFFER_DESTRUCT(&ptr->dbuf);
+    if (ptr->dbuf != NULL)
+        PMIX_DATA_BUFFER_RELEASE(ptr->dbuf);
 }
 PMIX_CLASS_INSTANCE(prte_rml_send_t, pmix_list_item_t, send_cons, send_des);
 
@@ -151,11 +152,12 @@ PMIX_CLASS_INSTANCE(prte_rml_send_request_t, pmix_object_t, send_req_cons, send_
 
 static void recv_cons(prte_rml_recv_t *ptr)
 {
-    PMIX_DATA_BUFFER_CONSTRUCT(&ptr->dbuf);
+    ptr->dbuf = NULL;
 }
 static void recv_des(prte_rml_recv_t *ptr)
 {
-    PMIX_DATA_BUFFER_DESTRUCT(&ptr->dbuf);
+    if (ptr->dbuf != NULL)
+        PMIX_DATA_BUFFER_RELEASE(ptr->dbuf);
 }
 PMIX_CLASS_INSTANCE(prte_rml_recv_t, pmix_list_item_t, recv_cons, recv_des);
 
