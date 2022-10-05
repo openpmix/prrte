@@ -972,7 +972,8 @@ void prte_mca_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
     snd->seq_num = mop->snd->hdr.seq_num;
     bo.bytes = mop->snd->data;
     bo.size = mop->snd->hdr.nbytes;
-    rc = PMIx_Data_load(&snd->dbuf, &bo);
+    PMIX_DATA_BUFFER_CREATE(snd->dbuf);
+    rc = PMIx_Data_load(snd->dbuf, &bo);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
     }

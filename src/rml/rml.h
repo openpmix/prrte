@@ -183,8 +183,9 @@ PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
         msg->tag = (t);                                                                         \
         msg->seq_num = (s);                                                                     \
         _bo.bytes = (char *) (b);                                                               \
-        _bo.size = (l);                                                                         \
-        _rc = PMIx_Data_load(&msg->dbuf, &_bo);                                                 \
+        _bo.size = (l);                                                                        \
+        PMIX_DATA_BUFFER_CREATE(msg->dbuf);                                                     \
+        _rc = PMIx_Data_load(msg->dbuf, &_bo);                                                 \
         if (PMIX_SUCCESS != _rc) {                                                              \
             PMIX_ERROR_LOG(_rc);                                                                \
         }                                                                                       \
@@ -212,7 +213,7 @@ PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
                             __FILE__, __LINE__);                                              \
             /* non-blocking buffer send */                                                    \
         prte_rml_send_callback((m)->status, &((m)->dst),                                      \
-                               &(m)->dbuf, (m)->tag, (m)->cbdata);                            \
+                               (m)->dbuf, (m)->tag, (m)->cbdata);                            \
         PMIX_RELEASE(m);                                                                      \
     } while (0);
 

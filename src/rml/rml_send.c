@@ -73,12 +73,7 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
         rcv = PMIX_NEW(prte_rml_recv_t);
         PMIX_LOAD_PROCID(&rcv->sender, PRTE_PROC_MY_NAME->nspace, rank);
         rcv->tag = tag;
-        rc = PMIx_Data_copy_payload(&rcv->dbuf, buffer);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_RELEASE(rcv);
-            return prte_pmix_convert_status(rc);
-        }
+        rcv->dbuf = buffer;
         /* post the message for receipt - since the send callback was posted
          * first and has the same priority, it will execute first
          */
@@ -90,12 +85,7 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
     PMIX_LOAD_PROCID(&snd->dst, PRTE_PROC_MY_NAME->nspace, rank);
     snd->origin = *PRTE_PROC_MY_NAME;
     snd->tag = tag;
-    rc = PMIx_Data_copy_payload(&snd->dbuf, buffer);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(snd);
-        return prte_pmix_convert_status(rc);
-    }
+    snd->dbuf = buffer;
 
     /* activate the OOB send state */
     PRTE_OOB_SEND(snd);

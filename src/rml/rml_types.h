@@ -261,7 +261,7 @@ typedef struct {
     void *cbdata;
 
     /* data buffer */
-    pmix_data_buffer_t dbuf;
+    pmix_data_buffer_t *dbuf;
     /* msg seq number */
     uint32_t seq_num;
 } prte_rml_send_t;
@@ -282,7 +282,7 @@ typedef struct {
     pmix_proc_t sender;      // sender
     prte_rml_tag_t tag;      // targeted tag
     uint32_t seq_num;        // sequence number
-    pmix_data_buffer_t dbuf; // the recvd data
+    pmix_data_buffer_t *dbuf; // the recvd data
 } prte_rml_recv_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_rml_recv_t);
 

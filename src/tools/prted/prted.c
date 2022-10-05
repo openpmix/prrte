@@ -183,12 +183,12 @@ int main(int argc, char *argv[])
 {
     int ret = 0;
     int i;
-    pmix_data_buffer_t buffer;
+    pmix_data_buffer_t *buffer;
     pmix_value_t val;
     pmix_proc_t proc;
     pmix_status_t prc;
     myxfer_t xfer;
-    pmix_data_buffer_t pbuf;
+    pmix_data_buffer_t pbuf, *wbuf;
     pmix_byte_object_t pbo;
     pmix_proc_t target;
     char *myuri;
@@ -497,18 +497,17 @@ int main(int argc, char *argv[])
          * their rollup info before sending to our parent, save
          * a little time in the launch phase by "warming up" the
          * connection to our parent while we wait for our children */
-        PMIX_DATA_BUFFER_CONSTRUCT(&pbuf); // zero-byte message
+        PMIX_DATA_BUFFER_CREATE(wbuf); // zero-byte message
         PRTE_RML_RECV(PRTE_PROC_MY_PARENT, PRTE_RML_TAG_NODE_REGEX_REPORT,
                       PRTE_RML_PERSISTENT, node_regex_report, &node_regex_waiting);
         node_regex_waiting = true;
-        PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT->rank, &pbuf,
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_PARENT->rank, wbuf,
                       PRTE_RML_TAG_WARMUP_CONNECTION);
         if (PRTE_SUCCESS != ret) {
             PRTE_ERROR_LOG(ret);
-            PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
+            PMIX_DATA_BUFFER_RELEASE(wbuf);
             goto DONE;
         }
-        PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
     }
 
     /* send the information to the orted report-back point - this function
@@ -518,12 +517,12 @@ int main(int argc, char *argv[])
      * can turn right around and begin issuing orders to us
      */
 
-    PMIX_DATA_BUFFER_CONSTRUCT(&buffer); // zero-byte message
+    PMIX_DATA_BUFFER_CREATE(buffer); // zero-byte message
     /* insert our name for rollup purposes */
-    prc = PMIx_Data_pack(NULL, &buffer, PRTE_PROC_MY_NAME, 1, PMIX_PROC);
+    prc = PMIx_Data_pack(NULL, buffer, PRTE_PROC_MY_NAME, 1, PMIX_PROC);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+        PMIX_DATA_BUFFER_RELEASE(buffer);
         goto DONE;
     }
 
@@ -531,22 +530,22 @@ int main(int argc, char *argv[])
     prc = PMIx_Get(&prte_process_info.myproc, PMIX_PROC_URI, NULL, 0, &vptr);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+        PMIX_DATA_BUFFER_RELEASE(buffer);
         goto DONE;
     }
-    prc = PMIx_Data_pack(NULL, &buffer, &vptr->data.string, 1, PMIX_STRING);
+    prc = PMIx_Data_pack(NULL, buffer, &vptr->data.string, 1, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         ret = PRTE_ERROR;
-        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+        PMIX_DATA_BUFFER_RELEASE(buffer);
         goto DONE;
     }
 
     /* include our node name */
-    prc = PMIx_Data_pack(NULL, &buffer, &prte_process_info.nodename, 1, PMIX_STRING);
+    prc = PMIx_Data_pack(NULL, buffer, &prte_process_info.nodename, 1, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+        PMIX_DATA_BUFFER_RELEASE(buffer);
         goto DONE;
     }
 
@@ -559,28 +558,28 @@ int main(int argc, char *argv[])
         }
     }
     naliases = pmix_argv_count(nonlocal);
-    prc = PMIx_Data_pack(NULL, &buffer, &naliases, 1, PMIX_UINT8);
+    prc = PMIx_Data_pack(NULL, buffer, &naliases, 1, PMIX_UINT8);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+        PMIX_DATA_BUFFER_RELEASE(buffer);
         pmix_argv_free(nonlocal);
         goto DONE;
     }
     for (ni = 0; ni < naliases; ni++) {
-        prc = PMIx_Data_pack(NULL, &buffer, &nonlocal[ni], 1, PMIX_STRING);
+        prc = PMIx_Data_pack(NULL, buffer, &nonlocal[ni], 1, PMIX_STRING);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             pmix_argv_free(nonlocal);
             goto DONE;
         }
     }
     pmix_argv_free(nonlocal);
 
-    prc = PMIx_Data_pack(NULL, &buffer, &prte_topo_signature, 1, PMIX_STRING);
+    prc = PMIx_Data_pack(NULL, buffer, &prte_topo_signature, 1, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+        PMIX_DATA_BUFFER_RELEASE(buffer);
         goto DONE;
     }
 
@@ -599,7 +598,7 @@ int main(int argc, char *argv[])
         prc = PMIx_Data_pack(NULL, &data, &ptopo, 1, PMIX_TOPO);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             PMIX_DATA_BUFFER_DESTRUCT(&data);
             goto DONE;
         }
@@ -615,18 +614,18 @@ int main(int argc, char *argv[])
             data.bytes_used = 0;
         }
         PMIX_DATA_BUFFER_DESTRUCT(&data);
-        prc = PMIx_Data_pack(NULL, &buffer, &compressed, 1, PMIX_BOOL);
+        prc = PMIx_Data_pack(NULL, buffer, &compressed, 1, PMIX_BOOL);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             goto DONE;
         }
         /* pack the data */
-        prc = PMIx_Data_pack(NULL, &buffer, &pbo, 1, PMIX_BYTE_OBJECT);
+        prc = PMIx_Data_pack(NULL, buffer, &pbo, 1, PMIX_BYTE_OBJECT);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
             goto DONE;
         }
@@ -645,38 +644,38 @@ int main(int argc, char *argv[])
     if (NULL != xfer.info) {
         /* pack a flag indicating that the inventory is included */
         flag = 1;
-        prc = PMIx_Data_pack(NULL, &buffer, &flag, 1, PMIX_INT8);
+        prc = PMIx_Data_pack(NULL, buffer, &flag, 1, PMIX_INT8);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             goto DONE;
         }
         PMIX_DATA_BUFFER_CONSTRUCT(&pbuf);
         if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, &pbuf, &xfer.ninfo, 1, PMIX_SIZE))) {
             PMIX_ERROR_LOG(prc);
             ret = PRTE_ERROR;
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
             goto DONE;
         }
         if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, &pbuf, xfer.info, xfer.ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(prc);
             ret = PRTE_ERROR;
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
             goto DONE;
         }
         prc = PMIx_Data_unload(&pbuf, &pbo);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
             goto DONE;
         }
-        prc = PMIx_Data_pack(NULL, &buffer, &pbo, 1, PMIX_BYTE_OBJECT);
+        prc = PMIx_Data_pack(NULL, buffer, &pbo, 1, PMIX_BYTE_OBJECT);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             PMIX_DATA_BUFFER_DESTRUCT(&pbuf);
             goto DONE;
         }
@@ -684,19 +683,19 @@ int main(int argc, char *argv[])
     } else {
         /* pack a flag indicating no inventory was provided */
         flag = 0;
-        prc = PMIx_Data_pack(NULL, &buffer, &flag, 1, PMIX_INT8);
+        prc = PMIx_Data_pack(NULL, buffer, &flag, 1, PMIX_INT8);
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
             goto DONE;
         }
     }
 
     /* start by sending it to ourselves */
-    PRTE_RML_SEND(ret, PRTE_PROC_MY_NAME->rank, &buffer, PRTE_RML_TAG_PRTED_CALLBACK);
+    PRTE_RML_SEND(ret, PRTE_PROC_MY_NAME->rank, buffer, PRTE_RML_TAG_PRTED_CALLBACK);
     if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
-        PMIX_DATA_BUFFER_DESTRUCT(&buffer);
+        PMIX_DATA_BUFFER_RELEASE(buffer);
         goto DONE;
     }
 
