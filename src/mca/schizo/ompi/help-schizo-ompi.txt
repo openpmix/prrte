@@ -1,4 +1,4 @@
-# -*- text -*-
+	# -*- text -*-
 #
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2022      Cisco Systems, Inc.  All rights reserved.
@@ -36,30 +36,30 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --debug-daemons-file              Enable debugging of any PRTE daemons used by this application, storing
                                      their verbose output in files
    --display <arg0>                  Comma-delimited list of options for displaying information about the
-                                     allocation and job. Allowed values: allocation, bind, map, map-devel,
-                                     topo
+                                     allocation and job. Allowed values for <arg0>:
+                                       allocation, bind, map, map-devel, topo
    --get-stack-traces                Get stack traces of all application procs on timeout
    --leave-session-attached          Do not discard stdout/stderr of remote PRTE daemons
    --report-state-on-timeout         Report all job and process states upon timeout
    --spawn-timeout <arg0>            Timeout the job if spawn takes more than the specified number of seconds
-   --stop-on-exec                    If supported, stop each specified process at start of execution
-   --stop-in-init                    Direct the specified processes to stop in PMIx_Init
-   --stop-in-app                     Direct the specified processes to stop at an application-controlled location
    --test-suicide <arg0>             Suicide instead of clean abort after delay
    --timeout <arg0>                  Timeout the job after the specified number of seconds
-   --output-proctable <arg0>         Print the complete proctable to stdout [-], stderr [+], or a file
-                                     [anything else] after launch
+   --output-proctable <arg0>         Print the complete proctable to stdout after launch, allowed <arg0>
+                                     values are '+', '-', or a filename.
 
 
 /*****      Output Options       *****/
 
    --output <arg0>                   Comma-delimited list of options that control how output is
-                                     generated.Allowed values: tag, timestamp, xml, merge-stderr-to-stdout,
-                                     dir=DIRNAME, file=filename. The dir option redirects output from
-                                     application processes into DIRNAME/job/rank/std[out,err,diag]. The file
-                                     option redirects output from application processes into filename.rank. In
-                                     both cases, the provided name will be converted to an absolute path.
-                                     Supported qualifiers include NOCOPY (do not copy the output to the
+                                     generated.
+                                       Allowed values for <arg0>:
+                                     tag, timestamp, xml, merge-stderr-to-stdout, dir=DIRNAME, file=filename.
+                                       The dir option redirects output from application processes into
+                                     DIRNAME/job/rank/std[out,err,diag].
+                                       The file option redirects output from application processes into
+                                     filename.rank. In both cases, the provided name will be converted to an
+                                     absolute path.
+                                       Supported qualifiers include NOCOPY (do not copy the output to the
                                      stdout/err streams).
    --report-child-jobs-separately    Return the exit status of the primary job only
    --xterm <arg0>                    Create a new xterm window and display output from the specified ranks
@@ -78,8 +78,9 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
    --map-by <arg0>                   Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache
                                      | l2cache | l3cache | numa (default:np>2) | package | node | seq | dist |
-                                     ppr |,rankfile] with supported colon-delimited modifiers: PE=y (for
-                                     multiple cpus/proc), SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL,
+                                     ppr |,rankfile].
+                                       Supported colon-delimited modifiers are: PE=y
+                                     (for multiple cpus/proc), SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL,
                                      HWTCPUS, CORECPUS, DEVICE(for dist policy), INHERIT, NOINHERIT,
                                      PE-LIST=a,b (comma-delimited ranges of cpus to use for this job),
                                      FILE=<path> for seq and rankfile options
@@ -96,11 +97,11 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
 /*****      Binding Options      *****/
 
-   --bind-to <arg0>                  Binding policy for job. Allowed values: none, hwthread, core, l1cache,
-                                     l2cache, l3cache, numa, package, ("none" is the default when
-                                     oversubscribed, "core" is the default when np<=2, and "numa" is the
-                                     default when np>2). Allowed colon-delimited qualifiers: overload-allowed,
-                                     if-supported
+   --bind-to <arg0>                  Binding policy for job. Allowed values for <arg0>:
+                                       none, hwthread, core, l1cache, l2cache, l3cache, numa, package,
+                                       ("none" is the default when oversubscribed.
+                                       "core" is the default when np<=2, and "numa" is the default when np>2).
+                                     Allowed colon-delimited qualifiers: overload-allowed, if-supported
 
 
 
@@ -125,8 +126,6 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --path <arg0>                     PATH to be used to look for executables to start processes
    --pmixmca <arg0> <arg1>           Pass context-specific PMIx MCA parameters; they are considered global if
                                      only one context is specified (arg0 is the parameter name; arg1 is the parameter value)
-   --gpmixmca <arg0> <arg1>          Pass global PMIx MCA parameters that are applicable to all contexts (arg0
-                                     is the parameter name; arg1 is the parameter value)
    --preload-files <arg0>            Preload the comma separated list of files to the remote machines current
                                      working directory before starting the remote process.
    --prtemca <arg0> <arg1>           Pass context-specific PRTE MCA parameters to the DVM
@@ -152,21 +151,16 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --allow-run-as-root               Allow execution as root (STRONGLY DISCOURAGED)
    --daemonize                       Daemonize the DVM daemons into the background
    --forward-signals <arg0>          Comma-delimited list of additional signals (names or integers) to forward
-                                     to application processes ["none" => forward nothing]. Signals provided by
+                                     to application processes ("none" => forward nothing). Signals provided by
                                      default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT
-   --keepalive <arg0>                Pipe to monitor - DVM will terminate upon closure
    --launch-agent <arg0>             Name of daemon executable used to start processes on remote nodes
                                      (default: prted)
    --max-vm-size <arg0>              Number of daemons to start
-   --no-ready-msg                    Do not print a DVM ready message
    --noprefix                        Disable automatic --prefix behavior
    --personality <arg0>              Specify the personality to be used
    --prefix <arg0>                   Prefix to be used to look for RTE executables
-   --report-pid <arg0>               Printout pid on stdout [-], stderr [+], or a file [anything else]
-   --report-uri <arg0>               Printout URI on stdout [-], stderr [+], or a file [anything else]
    --set-sid                         Direct the DVM daemons to separate from the current session
    --singleton <arg0>                ID of the singleton process that started us
-   --system-server                   Start the DVM as the system server
    --tmpdir <arg0>                   Set the root for the session directory tree
    --tune <arg0>                     File(s) containing MCA params for tuning DVM operations
    --dvm[=<arg0>]                    Use a persistent DVM instead of instantiating independent runtime
@@ -176,7 +170,7 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
 
 /*****    Fault Tolerance Options (if enabled)    *****/
-   --enable-recovery                 Enable recovery from process failure [Default = disabled]
+   --enable-recovery                 Enable recovery from process failure (Default = disabled)
    --max-restarts                    Max number of times to restart a failed process
    --disable-recovery                Disable recovery (resets all recovery options to off)
    --continuous                      Job is to run until explicitly terminated
@@ -192,6 +186,13 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --arch <arg0>                     This option is unsupported, but mandated by the MPI standard
    --file <arg0>                     This option is unsupported, but mandated by the MPI standard
 
+/*****    Options for debugger/tools use   *****/
+   --keepalive <arg0>                Pipe to monitor - DVM will terminate upon closure
+   --report-pid <arg0>               Printout pid on stdout (-), stderr (+), or a file (anything else)
+   --report-uri <arg0>               Printout URI on stdout (-), stderr (+), or a file (anything else)
+   --stop-on-exec <arg0>             If supported, stop each specified process at start of execution
+   --stop-in-init <arg0>             Direct the specified processes to stop in PMIx_Init
+   --stop-in-app <arg0>              Direct the specified processes to stop at an application-controlled location
 
 %s
 #
@@ -236,12 +237,6 @@ where arg0 is the parameter name and arg1 is the parameter value
 
 Pass a PMIx MCA parameter
 #
-[gpmixmca]
-Syntax: --gpmixmca <arg0> <arg1>
-where arg0 is the parameter name and arg1 is the parameter value. The "g" prefix
-indicates that this PMIx parameter is to be applied to _all_ application contexts and
-not just the one in which the directive appears.
-#
 [tune]
 File(s) containing PRRTE and PMIx MCA params for tuning DVM and/or application operations.
 Parameters in the file will be treated as _generic_ parameters and subject to the
@@ -249,40 +244,51 @@ translation rules/uncertainties. See "--help mca" for more information.
 
 Syntax in the file is:
 
-param = value
+param=value
 
 with one parameter and its associated value per line. Empty lines and lines beginning
 with the '#' character are ignored.
-#
-[no-ready-msg]
-Do not print a DVM ready message
+
+There must not be any whitespace characters before or after the '=' in the param/value
+specification.
 #
 [daemonize]
 Daemonize the DVM daemons into the background
-#
-[system-server]
-Start the DVM as the system server
 #
 [set-sid]
 Direct the DVM daemons to separate from the current session
 #
 [report-pid]
-Printout PID on stdout [-], stderr [+], or a file [anything else]
+Display the PID a tool can use to connect to the mpirun process on stdout (-), stderr (+), or write it to
+the specified file if anything else is specified.
 #
 [report-uri]
-Printout URI on stdout [-], stderr [+], or a file [anything else]
+Display the URI that a tool can use to connect to the mpirun process on stdout (-), stderr (+), or write
+it to a file if anything else is specified.
 #
 [test-suicide]
 Suicide instead of clean abort after delay
 #
 [default-hostfile]
-Provide a default hostfile
+This option specifies a default set of nodes that are to be used.
+
+If neither the --hostfile or --host options are specified, this will be the set of nodes used.
+
+The --hostfile and --host options can be used to select a subset of nodes from the default set to be used.
+
+If both the --hostfile and --host options are specified, then the --hostfile option specifies the 
+initial subset of nodes used from the default-hostfile set, and the --host option specifies what subset of
+nodes from that second subset will be used as the final subset of nodes used.
+
+If a resource manager is used, the resource manager determines the initial set of nodes. Then the
+specifications for the --default-hostfile, --hostfile, and --host optons, in that order, are used to determine
+the final subset of nodes that are used.
 #
 [singleton]
 ID of the singleton process that started us
 #
 [keepalive]
-Pipe to monitor - DVM will terminate upon closure
+Pipe to monitor - DVM will terminate upon closure of this pipe.
 #
 [launch-agent]
 Name of daemon executable used to start processes on remote nodes (default: prted)
@@ -297,16 +303,19 @@ Debug daemon output enabled
 Enable debugging of any PRTE daemons used by this application, storing output in files
 #
 [leave-session-attached]
-Do not discard stdout/stderr of remote PRTE daemons
+Do not discard stdout/stderr of remote PRTE daemons, mostly used when debugging the
+application launcher.
 #
 [tmpdir]
 Set the root for the session directory tree
 #
 [prefix]
-Prefix to be used to look for RTE executables
+This option specifies the path to be used as a prefix when resolving the path to Open MPI
+executables.
 #
 [noprefix]
-Disable automatic --prefix behavior
+Ignores the path specified if Open MPI was configured with the --prefix option when built
+from source code.
 #
 [forward-signals]
 Comma-delimited list of additional signals (names or integers) to forward to application
@@ -350,18 +359,39 @@ or as "all"."
 #
 [stop-on-exec]
 If supported, stop each process at start of execution
+This option accepts an optional argument to specify which ranks are to stop.
+Ranks are specified as a comma-delimited list of ranges - e.g., "1,3-6,9",
+or as "all".
+
+For instance, --stop-on-exec=1,3-6,9.
+
+If the optional argument is not specified, all ranks stop.
 #
 [stop-in-init]
 Include the PMIX_DEBUG_STOP_IN_INIT attribute in the application's
 job info directing that the specified ranks stop in PMIx_Init pending
-release. Ranks are specified as a comma-delimited list of ranges - e.g., "1,3-6,9",
+release.
+
+This option accepts an optional argument to specify which ranks are to stop.
+Ranks are specified as a comma-delimited list of ranges - e.g., "1,3-6,9",
 or as "all".
+
+For instance, --stop-in-init=1,3-6,9.
+
+If the optional argument is not specified, all ranks stop.
 #
 [stop-in-app]
 Include the PMIX_DEBUG_STOP_IN_APP attribute in the application's
 job info directing that the specified ranks stop at an application-determined
-point pending release. Ranks are specified as a comma-delimited list of
-ranges - e.g., "1,3-6,9", or as "all".
+point pending release.
+
+This option accepts an optional argument to specify which ranks are to stop.
+Ranks are specified as a comma-delimited list of ranges - e.g., "1,3-6,9",
+or as "all".
+
+For instance, --stop-in-app=1,3-6,9.
+
+If the optional argument is not specified, all ranks stop.
 #
 [x]
 Export an environment variable, optionally specifying a value (e.g., "-x foo" exports the
@@ -412,7 +442,7 @@ Preload the binary on the remote machine before starting the
 remote process.
 #
 [output]
-Comma-delimited list of options that control how output is generated.
+Comma-delimited list of case-insensitive options that control how output is generated.
 Allowed values:
     tag                         Mark each output line with the [job,rank] of the
                                 process that generated it
@@ -430,6 +460,10 @@ Allowed values:
 In both the "dir" and "file" cases, the provided name will be converted to an absolute path.
 Supported qualifiers include NOCOPY (i.e., output shall go only into the files - do not copy
 the output to the stdout/err streams).
+
+Only enough characters are required to uniquely identify the option.
+For example, TI is sufficient to identify TIMESTAMP option, while T cannot be used
+since it does not uniquely identify an option.
 #
 [stream-buffering]
 Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]
@@ -500,13 +534,17 @@ with supported colon-delimited qualifiers:
 Name of file to specify explicit task mapping
 #
 [display]
-Comma-delimited list of options for displaying information about the allocation and job.
+Comma-delimited list of case-insensitive options for displaying information about
+the allocation and job.
 Allowed values:
     allocation
     bind
     map
     map-devel
     topo
+Only enough characters are required to uniquely identify the option.
+For example, A is sufficient to identify ALLOCATION option, while MAP cannot be used
+to specify the MAP-DEVEL option since there is also a MAP option.
 #
 [do-not-launch]
 Perform all necessary operations to prepare to launch the application, but do not actually
@@ -527,6 +565,14 @@ Job is to run until explicitly terminated
 An internal Open MPI environment variable needed for Java support was not set.
 Open MPI 5.0.0 or newer is required for this support.
 #
+[output-proctable]
+Print the complete proctable to stdout after launch. This option accepts an optional argument, 
+which must be + to print to stdout, - to print to stderr, or a valid filename to print to
+a file. For instance --output-proctable=+
+
+If the optional argument is omitted, then the table is printed to stdout.
+
+The table includes rank, hostname, executable name and pid.
 #
 #  DEPRECATED OPTIONS
 #
