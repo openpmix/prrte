@@ -124,7 +124,7 @@ static int send_msg(prte_oob_tcp_peer_t *peer, prte_oob_tcp_send_t *msg)
             iov[1].iov_base = msg->data;
         } else {
             /* buffer send */
-            iov[1].iov_base = msg->msg->dbuf.base_ptr;
+            iov[1].iov_base = msg->msg->dbuf->base_ptr;
         }
         iov[1].iov_len = ntohl(msg->hdr.nbytes);
         remain += ntohl(msg->hdr.nbytes);
@@ -532,7 +532,8 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                     snd->tag = peer->recv_msg->hdr.tag;
                     bo.bytes = peer->recv_msg->data;
                     bo.size = peer->recv_msg->hdr.nbytes;
-                    rc = PMIx_Data_load(&snd->dbuf, &bo);
+                    PMIX_DATA_BUFFER_CREATE(snd->dbuf);
+                    rc = PMIx_Data_load(snd->dbuf, &bo);
                     if (PMIX_SUCCESS != rc) {
                         PMIX_ERROR_LOG(rc);
                     }
@@ -542,6 +543,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                     /* activate the OOB send state */
                     PRTE_OOB_SEND(snd);
                     /* cleanup */
+                    peer->recv_msg->data = NULL;
                     PMIX_RELEASE(peer->recv_msg);
                 }
                 peer->recv_msg = NULL;
