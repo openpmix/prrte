@@ -122,7 +122,6 @@ int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig, prte_rml_tag_t tag,
             }
         }
     }
-    PMIX_DATA_BUFFER_RELEASE(buf); // if the module needs to keep the buf, it should PMIX_RETAIN it
     if (NULL != dmns) {
         free(dmns);
     }

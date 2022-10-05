@@ -200,7 +200,6 @@ static void execute(int sd, short args, void *cbdata)
         return;
     }
     PRTE_ERROR_LOG(rc);
-    PMIX_DATA_BUFFER_RELEASE(xfer);
     rc = prte_pmix_convert_rc(rc);
 
 callback:

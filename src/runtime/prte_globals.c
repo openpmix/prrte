@@ -507,6 +507,8 @@ static void prte_job_destruct(prte_job_t *job)
     int n;
     prte_timer_t *evtimer;
     prte_job_t *child_jdata = NULL;
+    pmix_list_t *cache = NULL;
+    prte_info_item_t *kv = NULL;
 
     if (NULL == job) {
         /* probably just a race condition - just return */
@@ -551,6 +553,11 @@ static void prte_job_destruct(prte_job_t *job)
         PMIX_RELEASE(proc);
     }
 
+    if (prte_get_attribute(&job->attributes, PRTE_JOB_INFO_CACHE, (void **) &cache, PMIX_POINTER))
+    {
+        prte_remove_attribute(&job->attributes, PRTE_JOB_INFO_CACHE);
+        PMIX_LIST_RELEASE(cache);
+    }
     if (NULL != job->map) {
         PMIX_RELEASE(job->map);
         job->map = NULL;
