@@ -618,8 +618,6 @@ giveup:
 void prte_plm_base_setup_job(int fd, short args, void *cbdata)
 {
     int rc;
-    int i;
-    prte_app_context_t *app;
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_timer_t *timer = NULL;
     int time, *tp;
@@ -700,11 +698,6 @@ void prte_plm_base_complete_setup(int fd, short args, void *cbdata)
 {
     prte_job_t *jdata;
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
-    prte_node_t *node;
-    uint32_t h;
-    pmix_rank_t *vptr;
-    int i, rc;
-    char *serial_number;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
@@ -1119,11 +1112,10 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender,
 {
     hwloc_topology_t topo;
     int rc, idx;
-    char *sig, *coprocessors, **sns;
+    char *sig;
     prte_proc_t *daemon = NULL, *dptr, *dnxt;
     prte_topology_t *t, *t2;
     int i;
-    uint32_t h;
     prte_job_t *jdata;
     uint8_t flag;
     pmix_data_buffer_t datbuf, *data;
