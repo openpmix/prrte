@@ -103,7 +103,6 @@ int prte_ess_base_prted_setup(void)
     prte_job_t *jdata;
     prte_proc_t *proc;
     prte_app_context_t *app;
-    char *param;
     hwloc_obj_t obj;
     unsigned i, j;
     prte_topology_t *t;

@@ -224,7 +224,7 @@ static void proc_errors(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     prte_job_t *jdata;
     prte_proc_t *pptr, *proct;
-    pmix_proc_t *proc = &caddy->name, parent;
+    pmix_proc_t *proc = &caddy->name;
     prte_proc_state_t state = caddy->proc_state;
     int i;
     int32_t i32, *i32ptr;
@@ -580,7 +580,6 @@ static void check_send_notification(prte_job_t *jdata,
     pmix_proc_t target;
     pmix_data_buffer_t pbkt;
     pmix_data_range_t range = PMIX_RANGE_CUSTOM;
-    pmix_status_t cret;
 
     pmix_output_verbose(5, prte_state_base_framework.framework_output,
                         "%s errmgr:dvm:sending notification %s affected proc %s",

@@ -81,6 +81,7 @@ static int rte_init(int argc, char **argv)
 {
     int ret;
     char *error = NULL;
+    PRTE_HIDE_UNUSED_PARAMS(argc, argv);
 
     /* run the prolog */
     if (PRTE_SUCCESS != (ret = prte_ess_base_std_prolog())) {

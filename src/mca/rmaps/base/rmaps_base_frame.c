@@ -622,8 +622,6 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
 {
     prte_ranking_policy_t tmp;
     prte_mapping_policy_t mapping;
-    char **ck, *jobppr;
-    size_t len;
 
     /* set default */
     tmp = 0;

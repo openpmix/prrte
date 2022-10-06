@@ -105,12 +105,11 @@ static int rte_init(int argc, char **argv)
     prte_node_t *node;
     prte_proc_t *proc;
     prte_app_context_t *app;
-    char *coprocessors, **sns;
-    uint32_t h;
     int idx;
     prte_topology_t *t;
     pmix_value_t pval;
     pmix_status_t pret;
+    PRTE_HIDE_UNUSED_PARAMS(argc);
 
     /* run the prolog */
     if (PRTE_SUCCESS != (ret = prte_ess_base_std_prolog())) {
@@ -536,6 +535,8 @@ static int rte_finalize(void)
 
 static void rte_abort(int status, bool report)
 {
+    PRTE_HIDE_UNUSED_PARAMS(report);
+
     pmix_output(0, "ABORT");
     /* do NOT do a normal finalize as this will very likely
      * hang the process. We are aborting due to an abnormal condition

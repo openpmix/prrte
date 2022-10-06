@@ -1525,7 +1525,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
     prte_proc_state_t state = PRTE_PROC_STATE_WAITPID_FIRED;
     prte_proc_t *cptr;
     bool flag = false;
-    bool *fptr = &flag;
     PRTE_HIDE_UNUSED_PARAMS(fd, sd);
 
     pmix_output_verbose(5, prte_odls_base_framework.framework_output,
