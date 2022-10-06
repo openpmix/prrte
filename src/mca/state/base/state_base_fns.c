@@ -468,7 +468,7 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
     prte_job_t *jdata;
     prte_proc_t *pdata;
     int i;
-    pmix_proc_t parent, target;
+    pmix_proc_t target;
     prte_pmix_lock_t lock;
     pmix_rank_t threshold;
     PRTE_HIDE_UNUSED_PARAMS(fd, argc);

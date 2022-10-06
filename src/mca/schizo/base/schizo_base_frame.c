@@ -302,7 +302,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 {
     pmix_cli_item_t *opt, *newopt;
     int n, rc;
-    const char *tgt, **dirs;
+    const char *tgt;
     char **vtmp;
 
     char *mappers[] = {
