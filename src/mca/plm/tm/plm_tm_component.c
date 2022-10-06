@@ -6,7 +6,7 @@
  * Copyright (c) 2004-2005 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
+ * Copyright (c) 2004-2022 High Performance Computing Center Stuttgart,
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
@@ -33,7 +33,7 @@
 #include "prte_config.h"
 #include "constants.h"
 
-#include "src/mca/base/prte_mca_base_var.h"
+#include "src/mca/base/pmix_mca_base_var.h"
 #include "src/util/pmix_argv.h"
 
 #include "plm_tm.h"
@@ -66,7 +66,7 @@ prte_mca_plm_tm_component_t prte_mca_plm_tm_component = {
 
         /* Component name and version */
         .pmix_mca_component_name = "tm",
-        PRTE_MCA_BASE_MAKE_VERSION(component,
+        PMIX_MCA_BASE_MAKE_VERSION(component,
                                    PRTE_MAJOR_VERSION,
                                    PRTE_MINOR_VERSION,
                                    PMIX_RELEASE_VERSION),
@@ -84,11 +84,11 @@ static int plm_tm_register(void)
     pmix_mca_base_component_t *comp = &prte_mca_plm_tm_component.super;
 
     prte_mca_plm_tm_component.want_path_check = true;
-    (void) prte_mca_base_component_var_register(comp, "want_path_check",
+    (void) pmix_mca_base_component_var_register(comp, "want_path_check",
                                                 "Whether the launching process should check for the plm_tm_orted executable in the PATH "
                                                 "before launching (the TM API does not give an indication of failure; this is a "
                                                 "somewhat-lame workaround; non-zero values enable this check)",
-                                                &prte_mca_plm_tm_component.want_path_check);
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL, &prte_mca_plm_tm_component.want_path_check);
 
     return PRTE_SUCCESS;
 }
