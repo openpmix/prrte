@@ -79,6 +79,8 @@ static void finalize(void)
 
 static void assign(prte_job_t *jdata)
 {
+    PRTE_HIDE_UNUSED_PARAMS(jdata);
+    return;
 }
 
 static void set(prte_odls_spawn_caddy_t *cd, int write_fd)

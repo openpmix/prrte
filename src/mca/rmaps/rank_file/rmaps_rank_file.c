@@ -80,7 +80,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     prte_app_context_t *app = NULL;
     int32_t i, k;
     pmix_list_t node_list;
-    pmix_list_item_t *item;
     prte_node_t *node, *nd, *root_node;
     pmix_rank_t rank, vpid_start;
     int32_t num_slots;
@@ -92,7 +91,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     char *slots;
     bool initial_map = true;
     char *rankfile = NULL;
-    prte_binding_policy_t bind;
 
     /* only handle initial launch of rf job */
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {

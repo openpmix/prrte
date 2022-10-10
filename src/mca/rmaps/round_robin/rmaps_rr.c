@@ -50,7 +50,6 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
     prte_app_context_t *app;
     int i;
     pmix_list_t node_list;
-    pmix_list_item_t *item;
     int32_t num_slots;
     int rc;
     pmix_mca_base_component_t *c = &prte_mca_rmaps_round_robin_component;
@@ -98,8 +97,6 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
 
     /* cycle through the app_contexts, mapping them sequentially */
     for (i = 0; i < jdata->apps->size; i++) {
-        hwloc_obj_type_t target;
-        unsigned cache_level;
         app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i);
         if (NULL == app) {
             continue;
