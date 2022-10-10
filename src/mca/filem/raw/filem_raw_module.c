@@ -180,6 +180,7 @@ static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer
     prte_filem_raw_xfer_t *xfer;
     char *file;
     int st, n, rc;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     /* unpack the file */
     n = 1;
@@ -732,6 +733,7 @@ static void send_chunk(int xxx, short argc, void *cbdata)
     int rc;
     pmix_data_buffer_t chunk;
     prte_grpcomm_signature_t *sig;
+    PRTE_HIDE_UNUSED_PARAMS(xxx, argc);
 
     PMIX_ACQUIRE_OBJECT(rev);
 
@@ -930,6 +932,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     pmix_list_item_t *item;
     int32_t type;
     char *cptr;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     /* unpack the data */
     n = 1;
@@ -1086,6 +1089,7 @@ static void write_handler(int fd, short event, void *cbdata)
     char *dirname, *cmd;
     char homedir[MAXPATHLEN];
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(fd, event);
 
     PMIX_ACQUIRE_OBJECT(sink);
 

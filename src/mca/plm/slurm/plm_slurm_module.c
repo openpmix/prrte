@@ -190,6 +190,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     bool failed_launch = true;
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(state);
 
@@ -523,8 +524,9 @@ static void srun_wait_cb(int sd, short fd, void *cbdata)
     prte_proc_t *proc = t2->child;
     prte_job_t *jdata;
     FILE *fp;
-    char version[1024], *cptr, *endptr;
-    int major, minor;
+    char version[1024], *cptr;
+    int major=0, minor=0;
+    PRTE_HIDE_UNUSED_PARAMS(sd, fd);
 
     jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
 
@@ -626,6 +628,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
     char **tmp = NULL, *p;
     char *exec_argv = pmix_path_findv(argv[0], 0, environ, NULL);
     prte_proc_t *dummy;
+    PRTE_HIDE_UNUSED_PARAMS(argc);
 
     if (NULL == exec_argv) {
         pmix_show_help("help-plm-slurm.txt", "no-srun", true);

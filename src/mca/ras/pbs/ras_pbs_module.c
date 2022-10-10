@@ -67,6 +67,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     int ret;
     char *pbs_jobid;
+    PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     /* get our PBS jobid from the environment */
     if (NULL == (pbs_jobid = getenv("PBS_JOBID"))) {
@@ -127,6 +128,7 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
     char *hostname, *cppn;
     int ppn;
     bool found;
+    PRTE_HIDE_UNUSED_PARAMS(pbs_jobid);
 
     /* Ignore anything that the user already specified -- we're
        getting nodes only from PBS. */

@@ -347,6 +347,8 @@ static int prte_ras_slurm_allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
 static void deallocate(prte_job_t *jdata, prte_app_context_t *app)
 {
+    PRTE_HIDE_UNUSED_PARAMS(jdata, app);
+    return;
 }
 
 static int prte_ras_slurm_finalize(void)
@@ -733,6 +735,7 @@ static void timeout(int fd, short args, void *cbdata)
 {
     local_jobtracker_t *jtrk = (local_jobtracker_t *) cbdata;
     prte_job_t *jdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     pmix_show_help("help-ras-slurm.txt", "slurm-dyn-alloc-timeout", true);
     pmix_output_verbose(2, prte_ras_base_framework.framework_output,
@@ -758,6 +761,7 @@ static void recv_data(int fd, short args, void *cbdata)
     pmix_nspace_t jobid;
     prte_job_t *jdata;
     char **dash_host = NULL;
+    PRTE_HIDE_UNUSED_PARAMS(args, cbdata);
 
     pmix_output_verbose(2, prte_ras_base_framework.framework_output,
                         "%s ras:slurm: dynamic allocation - data recvd",

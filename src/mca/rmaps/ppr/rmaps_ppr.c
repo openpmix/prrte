@@ -43,19 +43,19 @@ prte_rmaps_base_module_t prte_rmaps_ppr_module = {
 static int ppr_mapper(prte_job_t *jdata,
                       prte_rmaps_options_t *options)
 {
-    int rc = PRTE_SUCCESS, j, n, ppr, idx, ncpus;
+    int rc = PRTE_SUCCESS, j, ppr, idx, ncpus;
     prte_proc_t *proc;
     pmix_mca_base_component_t *c = &prte_mca_rmaps_ppr_component;
     prte_node_t *node, *nd;
     prte_app_context_t *app;
-    pmix_rank_t total_procs, nprocs_mapped;
+    pmix_rank_t nprocs_mapped;
     prte_mapping_policy_t mapping = 0;
     prte_ranking_policy_t ranking;
     hwloc_obj_t obj;
     unsigned int nobjs, i, num_available;
     pmix_list_t node_list;
     int32_t num_slots;
-    char **ppr_req, **ck, *jobppr = NULL;
+    char **ck, *jobppr = NULL;
     size_t len;
     bool initial_map = true;
     prte_binding_policy_t savebind = options->bind;

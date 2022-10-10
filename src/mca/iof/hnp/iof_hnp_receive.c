@@ -76,6 +76,7 @@ void prte_iof_hnp_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
     pmix_iof_channel_t pchan;
     prte_iof_deliver_t *p;
     pmix_status_t prc;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((1, prte_iof_base_framework.framework_output,
                          "%s received IOF msg from proc %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
