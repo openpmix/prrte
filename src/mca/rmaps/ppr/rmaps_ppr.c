@@ -52,7 +52,7 @@ static int ppr_mapper(prte_job_t *jdata,
     prte_mapping_policy_t mapping = 0;
     prte_ranking_policy_t ranking;
     hwloc_obj_t obj;
-    unsigned int nobjs, i, num_available;
+    unsigned int nobjs, i;
     pmix_list_t node_list;
     int32_t num_slots;
     char **ck, *jobppr = NULL;
