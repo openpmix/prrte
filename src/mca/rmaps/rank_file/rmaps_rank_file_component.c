@@ -47,7 +47,7 @@
 static int prte_rmaps_rank_file_query(pmix_mca_base_module_t **module, int *priority);
 
 prte_rmaps_rf_component_t prte_mca_rmaps_rank_file_component = {
-    {
+    .super = {
         PRTE_RMAPS_BASE_VERSION_4_0_0,
 
         .pmix_mca_component_name = "rank_file",
