@@ -256,6 +256,7 @@ static void ssh_wait_daemon(int sd, short flags, void *cbdata)
     prte_plm_ssh_caddy_t *caddy = (prte_plm_ssh_caddy_t *) t2->cbdata;
     prte_proc_t *daemon = caddy->daemon;
     pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, flags);
 
     if (prte_prteds_term_ordered || prte_abnormal_term_ordered) {
         /* ignore any such report - it will occur if we left the
@@ -696,6 +697,7 @@ static void ssh_child(int argc, char **argv)
     char **exec_argv;
     int fdin;
     sigset_t sigs;
+    PRTE_HIDE_UNUSED_PARAMS(argc);
 
     /* setup environment */
     env = pmix_argv_copy(prte_launch_environ);
@@ -915,6 +917,7 @@ static void process_launch_list(int fd, short args, void *cbdata)
     pmix_list_item_t *item;
     pid_t pid;
     prte_plm_ssh_caddy_t *caddy;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args, cbdata);
 
     PMIX_ACQUIRE_OBJECT(caddy);
 
@@ -1008,10 +1011,10 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_job_t *daemons;
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
     prte_plm_ssh_caddy_t *caddy;
-    pmix_list_t coll;
     char *username, *nname;
     int port, *portptr;
     prte_routed_tree_t *child;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(state);
 

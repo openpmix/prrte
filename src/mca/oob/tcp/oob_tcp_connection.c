@@ -160,6 +160,7 @@ void prte_oob_tcp_peer_try_connect(int fd, short args, void *cbdata)
     bool connected = false;
     pmix_pif_t *intf;
     char *host;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     remote_list = PMIX_NEW(pmix_list_t);
     if (NULL == remote_list) {

@@ -405,6 +405,7 @@ static void stdin_write_handler(int fd, short event, void *cbdata)
     pmix_list_item_t *item;
     prte_iof_write_output_t *output;
     int num_written, total_written = 0;
+    PRTE_HIDE_UNUSED_PARAMS(fd, event);
 
     PMIX_ACQUIRE_OBJECT(sink);
 

@@ -573,6 +573,7 @@ static void *listen_thread(pmix_object_t *obj)
     struct timeval timeout;
     fd_set readfds;
     prte_oob_tcp_listener_t *listener;
+    PRTE_HIDE_UNUSED_PARAMS(obj);
 
     /* only execute during the initial VM startup stage - once
      * all the initial daemons have reported in, we will revert
@@ -749,6 +750,7 @@ done:
 static void connection_handler(int sd, short flags, void *cbdata)
 {
     prte_oob_tcp_pending_connection_t *new_connection;
+    PRTE_HIDE_UNUSED_PARAMS(sd, flags);
 
     new_connection = (prte_oob_tcp_pending_connection_t *) cbdata;
 
@@ -776,6 +778,7 @@ static void connection_event_handler(int incoming_sd, short flags, void *cbdata)
     struct sockaddr addr;
     prte_socklen_t addrlen = sizeof(struct sockaddr);
     int sd;
+    PRTE_HIDE_UNUSED_PARAMS(flags, cbdata);
 
     sd = accept(incoming_sd, (struct sockaddr *) &addr, &addrlen);
     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
