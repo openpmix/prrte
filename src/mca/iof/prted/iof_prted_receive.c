@@ -90,6 +90,7 @@ void prte_iof_prted_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *bu
     pmix_proc_t target;
     prte_iof_proc_t *proct;
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     /* see what stream generated this data */
     count = 1;

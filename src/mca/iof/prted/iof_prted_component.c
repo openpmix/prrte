@@ -46,7 +46,7 @@ const char *prte_mca_iof_prted_component_version_string
     = "PRTE prted iof MCA component version " PRTE_VERSION;
 
 prte_mca_iof_prted_component_t prte_mca_iof_prted_component = {
-    {
+    .super = {
         PRTE_IOF_BASE_VERSION_2_0_0,
 
         .pmix_mca_component_name = "prted",
