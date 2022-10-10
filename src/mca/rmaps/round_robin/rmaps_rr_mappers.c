@@ -220,9 +220,8 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
                          pmix_rank_t num_procs,
                          prte_rmaps_options_t *options)
 {
-    int rc, j, nprocs_mapped, nnode, ncpus;
+    int rc, j, nprocs_mapped, ncpus;
     prte_node_t *node, *nd;
-    float balance;
     bool second_pass = false;
     prte_proc_t *proc;
     prte_binding_policy_t savebind = options->bind;
@@ -375,6 +374,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     float balance;
     char *savecpuset = NULL;
     prte_binding_policy_t savebind = options->bind;
+    PRTE_HIDE_UNUSED_PARAMS(num_procs);
 
     pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr: mapping by cpu for job %s slots %d num_procs %lu",
@@ -558,7 +558,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                         prte_rmaps_options_t *options)
 {
     int i, rc, nprocs_mapped, nprocs;
-    prte_node_t *node, *nd;
+    prte_node_t *node;
     int extra_procs_to_assign = 0, nxtra_nodes = 0;
     int navg, nxtra_objs = 0, ncpus;
     float balance;
