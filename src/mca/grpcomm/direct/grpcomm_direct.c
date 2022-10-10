@@ -94,6 +94,7 @@ static void finalize(void)
 static int xcast(pmix_rank_t *vpids, size_t nprocs, pmix_data_buffer_t *buf)
 {
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(vpids, nprocs);
 
     /* send it to the HNP (could be myself) for relay */
     PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_XCAST);
@@ -179,6 +180,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     pmix_data_buffer_t *reply;
     prte_grpcomm_coll_t *coll;
     pmix_status_t local_status;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct allgather recvd from %s",
@@ -370,14 +372,14 @@ static void xcast_recv(int status, pmix_proc_t *sender,
     pmix_data_buffer_t *relay = NULL, *rly, *rlycopy;
     pmix_data_buffer_t datbuf, *data;
     bool compressed;
-    prte_job_t *jdata, *daemons;
-    prte_proc_t *rec;
+    prte_job_t *daemons;
     pmix_list_t coll;
     prte_grpcomm_signature_t sig;
     prte_rml_tag_t tag;
     pmix_byte_object_t bo, pbo;
     pmix_value_t val;
     pmix_proc_t dmn;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct:xcast:recv: with %d bytes",
@@ -610,6 +612,7 @@ static void barrier_release(int status, pmix_proc_t *sender, pmix_data_buffer_t 
     int rc, ret, mode;
     prte_grpcomm_signature_t sig;
     prte_grpcomm_coll_t *coll;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct: barrier release called with %d bytes",

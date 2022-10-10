@@ -68,6 +68,7 @@ void prte_iof_prted_read_handler(int fd, short event, void *cbdata)
     prte_iof_deliver_t *p;
     pmix_iof_channel_t pchan;
     pmix_status_t prc;
+    PRTE_HIDE_UNUSED_PARAMS(event);
 
     PMIX_ACQUIRE_OBJECT(rev);
 

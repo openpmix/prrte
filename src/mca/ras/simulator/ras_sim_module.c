@@ -54,8 +54,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     char *tmp, *job_cpuset = NULL;
     char prefix[6];
     bool use_hwthread_cpus = false;
-    hwloc_obj_t root;
-    hwloc_cpuset_t available, mycpus;
+    hwloc_cpuset_t available;
 
     node_cnt = pmix_argv_split(prte_mca_ras_simulator_component.num_nodes, ',');
     if (NULL != prte_mca_ras_simulator_component.slots) {

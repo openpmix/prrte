@@ -816,6 +816,8 @@ static int component_set_addr(pmix_proc_t *peer, char **uris)
 
 static bool component_is_reachable(pmix_proc_t *peer)
 {
+    PRTE_HIDE_UNUSED_PARAMS(peer);
+
     /* assume we can reach the hop - the module will tell us if it can't
      * when we try to send the first time, and then we'll correct it */
     return true;
@@ -825,6 +827,7 @@ void prte_mca_oob_tcp_component_set_module(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
     prte_oob_base_peer_t *bpr;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(pop);
 
@@ -852,6 +855,7 @@ void prte_mca_oob_tcp_component_lost_connection(int fd, short args, void *cbdata
 {
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
     prte_oob_base_peer_t *bpr;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(pop);
 
@@ -882,6 +886,7 @@ void prte_mca_oob_tcp_component_no_route(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_msg_error_t *mop = (prte_oob_tcp_msg_error_t *) cbdata;
     prte_oob_base_peer_t *bpr;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(mop);
 
@@ -914,6 +919,7 @@ void prte_mca_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
     prte_oob_base_peer_t *bpr;
     pmix_status_t rc;
     pmix_byte_object_t bo;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(mop);
 
@@ -990,6 +996,7 @@ void prte_mca_oob_tcp_component_hop_unknown(int fd, short args, void *cbdata)
 void prte_mca_oob_tcp_component_failed_to_connect(int fd, short args, void *cbdata)
 {
     prte_oob_tcp_peer_op_t *pop = (prte_oob_tcp_peer_op_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(pop);
 

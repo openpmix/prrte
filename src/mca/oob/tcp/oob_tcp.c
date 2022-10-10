@@ -221,6 +221,7 @@ static void recv_handler(int sd, short flg, void *cbdata)
     int flags;
     prte_oob_tcp_hdr_t hdr;
     prte_oob_tcp_peer_t *peer;
+    PRTE_HIDE_UNUSED_PARAMS(flg);
 
     PMIX_ACQUIRE_OBJECT(op);
 

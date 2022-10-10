@@ -83,6 +83,7 @@ void prte_oob_tcp_queue_msg(int sd, short args, void *cbdata)
 {
     prte_oob_tcp_send_t *snd = (prte_oob_tcp_send_t *) cbdata;
     prte_oob_tcp_peer_t *peer;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(snd);
     peer = (prte_oob_tcp_peer_t *) snd->peer;
@@ -199,6 +200,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
     prte_oob_tcp_peer_t *peer = (prte_oob_tcp_peer_t *) cbdata;
     prte_oob_tcp_send_t *msg;
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, flags);
 
     PMIX_ACQUIRE_OBJECT(peer);
     msg = peer->send_msg;
@@ -384,6 +386,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
     int rc;
     prte_rml_send_t *snd;
     pmix_byte_object_t bo;
+    PRTE_HIDE_UNUSED_PARAMS(sd, flags);
 
     PMIX_ACQUIRE_OBJECT(peer);
 
