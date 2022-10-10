@@ -121,7 +121,7 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
     int i, n;
     int32_t j;
     pmix_list_item_t *item;
-    prte_node_t *node, *nd, *nsave = NULL;
+    prte_node_t *node, *nd;
     seq_node_t *sq, *save = NULL, *seq;
     pmix_rank_t vpid, apprank;
     int32_t num_nodes;
