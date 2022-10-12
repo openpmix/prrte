@@ -67,4 +67,5 @@ EXTRA_DIST += \
         examples/showkeys.c \
         examples/target.c \
         examples/tool.c \
-	examples/colocate.c
+        examples/colocate.c \
+        examples/pset.c
