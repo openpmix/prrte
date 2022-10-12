@@ -582,8 +582,7 @@ static void check_send_notification(prte_job_t *jdata,
     pmix_data_range_t range = PMIX_RANGE_CUSTOM;
     pmix_status_t cret;
 
-  //  pmix_output_verbose(5, prte_state_base_framework.framework_output,
-    pmix_output(0,
+    pmix_output_verbose(5, prte_state_base_framework.framework_output,
                         "%s errmgr:dvm:sending notification %s affected proc %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         PMIx_Error_string(event),
@@ -591,7 +590,6 @@ static void check_send_notification(prte_job_t *jdata,
 
     if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_NOTIFY_ERRORS, NULL, PMIX_BOOL) ||
         prte_dvm_abort_ordered) {
-        pmix_output(0, "NOT NOTIFYING");
         return;
     }
     /* we checked for termination due to the specific error we encountered, but
@@ -601,7 +599,6 @@ static void check_send_notification(prte_job_t *jdata,
     if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_ABORTED)) {
         /* this job has already been aborted, so we don't need to notify
          * about the fate of any proc within it */
-        pmix_output(0, "JOB ABORTED");
         return;
     }
     /* notify the other procs of the termination */

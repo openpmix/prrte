@@ -82,11 +82,12 @@ static void _query(int sd, short args, void *cbdata)
     char **nspaces, *hostname, *uri;
     char *cmdline;
     char **ans, *tmp;
+    char *psetname;
     prte_app_context_t *app;
     int matched;
     pmix_proc_info_t *procinfo;
     pmix_info_t *info;
-    pmix_data_array_t *darray;
+    pmix_data_array_t *darray, dry;
     prte_proc_t *proct;
     pmix_proc_t *proc;
     size_t sz;
@@ -104,6 +105,7 @@ static void _query(int sd, short args, void *cbdata)
         q = &cd->queries[m];
         hostname = NULL;
         nodeid = UINT32_MAX;
+        psetname = NULL;
         /* default to the requestor's jobid */
         PMIX_LOAD_NSPACE(jobid, cd->proct.nspace);
         /* see if they provided any qualifiers */
@@ -115,6 +117,7 @@ static void _query(int sd, short args, void *cbdata)
                                     (q->qualifiers[n].value.type == PMIX_STRING
                                          ? q->qualifiers[n].value.data.string
                                          : "(not a string)"));
+
                 if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_NSPACE)) {
                     /* Never trust the namespace string that is provided.
                      * First check to see if we know about this namespace. If
@@ -145,6 +148,7 @@ static void _query(int sd, short args, void *cbdata)
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
+
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_GROUP_ID)) {
                     /* Never trust the group string that is provided.
                      * First check to see if we know about this group. If
@@ -173,17 +177,24 @@ static void _query(int sd, short args, void *cbdata)
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
                     }
+
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_HOSTNAME)) {
                     hostname = q->qualifiers[n].value.data.string;
+
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_NODEID)) {
                     PMIX_VALUE_GET_NUMBER(rc, &q->qualifiers[n].value, nodeid, uint32_t);
+
+                } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_PSET_NAME)) {
+                    psetname = q->qualifiers[n].value.data.string;
                 }
+
             }
         }
         for (n = 0; NULL != q->keys[n]; n++) {
             pmix_output_verbose(2, prte_pmix_server_globals.output,
                                 "%s processing key %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), q->keys[n]);
+
             if (0 == strcmp(q->keys[n], PMIX_QUERY_NAMESPACES)) {
                 /* get the current jobids */
                 nspaces = NULL;
@@ -205,6 +216,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_NAMESPACES, tmp, PMIX_STRING);
                 free(tmp);
                 pmix_list_append(&results, &kv->super);
+
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NAMESPACE_INFO)) {
                 /* get the current jobids */
                 PMIX_CONSTRUCT(&stack, pmix_list_t);
@@ -252,6 +264,7 @@ static void _query(int sd, short args, void *cbdata)
                     ++p;
                 }
                 PMIX_LIST_DESTRUCT(&stack);
+
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_SPAWN_SUPPORT)) {
                 ans = NULL;
                 pmix_argv_append_nosize(&ans, PMIX_HOST);
@@ -330,6 +343,7 @@ static void _query(int sd, short args, void *cbdata)
                     pmix_list_append(&results, &kv->super);
                 }
 #endif
+
             } else if (0 == strcmp(q->keys[n], PMIX_PROC_URI)) {
                 /* they want our URI */
                 kv = PMIX_NEW(prte_info_item_t);
@@ -394,6 +408,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_SERVER_URI, uri, PMIX_STRING);
                 free(uri);
                 pmix_list_append(&results, &kv->super);
+
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PROC_TABLE)) {
                 /* construct a list of values with prte_proc_info_t
                  * entries for each proc in the indicated job */
@@ -440,6 +455,7 @@ static void _query(int sd, short args, void *cbdata)
                     procinfo[p].state = prte_pmix_convert_state(proct->state);
                     ++p;
                 }
+
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_LOCAL_PROC_TABLE)) {
                 /* construct a list of values with prte_proc_info_t
                  * entries for each LOCAL proc in the indicated job */
@@ -488,11 +504,13 @@ static void _query(int sd, short args, void *cbdata)
                         ++p;
                     }
                 }
+
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NUM_PSETS)) {
                 kv = PMIX_NEW(prte_info_item_t);
                 sz = pmix_list_get_size(&prte_pmix_server_globals.psets);
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_NUM_PSETS, &sz, PMIX_SIZE);
                 pmix_list_append(&results, &kv->super);
+
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PSET_NAMES)) {
                 pmix_server_pset_t *ps;
                 ans = NULL;
@@ -507,6 +525,36 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_PSET_NAMES, tmp, PMIX_STRING);
                 pmix_list_append(&results, &kv->super);
                 free(tmp);
+
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PSET_MEMBERSHIP)) {
+                pmix_server_pset_t *ps, *psptr;
+                /* must have provided us with a pset name qualifier */
+                if (NULL == psetname) {
+                    ret = PRTE_ERR_BAD_PARAM;
+                    goto done;
+                }
+                ans = NULL;
+                /* find the referenced pset */
+                psptr = NULL;
+                PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.psets, pmix_server_pset_t) {
+                    if (0 == strcmp(psetname, ps->name)) {
+                        psptr = ps;
+                        break;
+                    }
+                }
+                if (NULL == psptr) {
+                    /* we don't know that pset */
+                    ret = PRTE_ERR_NOT_FOUND;
+                    goto done;
+                }
+                /* define the array that holds the membership - no need to allocate anything */
+                dry.array = psptr->members;
+                dry.type = PMIX_PROC_RANK;
+                dry.size = psptr->num_members;
+                kv = PMIX_NEW(prte_info_item_t);
+                PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_PSET_MEMBERSHIP, &dry, PMIX_DATA_ARRAY);
+                pmix_list_append(&results, &kv->super);
+
             } else if (0 == strcmp(q->keys[n], PMIX_JOB_SIZE)) {
                 jdata = prte_get_job_data_object(jobid);
                 if (NULL == jdata) {
@@ -519,11 +567,13 @@ static void _query(int sd, short args, void *cbdata)
                 key = jdata->num_procs;
                 PMIX_INFO_LOAD(&kv->info, PMIX_JOB_SIZE, &key, PMIX_UINT32);
                 pmix_list_append(&results, &kv->super);
+
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_NUM_GROUPS)) {
                 kv = PMIX_NEW(prte_info_item_t);
                 sz = pmix_list_get_size(&prte_pmix_server_globals.groups);
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_NUM_GROUPS, &sz, PMIX_SIZE);
                 pmix_list_append(&results, &kv->super);
+
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_GROUP_NAMES)) {
                 pmix_server_pset_t *ps;
                 ans = NULL;
@@ -538,6 +588,7 @@ static void _query(int sd, short args, void *cbdata)
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_GROUP_NAMES, tmp, PMIX_STRING);
                 pmix_list_append(&results, &kv->super);
                 free(tmp);
+
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_GROUP_MEMBERSHIP)) {
                 /* construct a list of values with pmix_proc_t
                  * entries for each proc in the indicated group */
@@ -570,6 +621,7 @@ static void _query(int sd, short args, void *cbdata)
                 for (k = 0; k < grp->num_members; k++) {
                     PMIX_LOAD_PROCID(&proc[k], grp->members[k].nspace, grp->members[k].rank);
                 }
+
             } else {
                 fprintf(stderr, "Query for unrecognized attribute: %s\n", q->keys[n]);
             }

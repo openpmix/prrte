@@ -73,12 +73,12 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     gid_t gid;
     pmix_list_t *cache;
     hwloc_obj_t machine;
-    pmix_proc_t pproc, *parentproc;
+    pmix_proc_t pproc, *parentproc, *procptr;
     pmix_status_t ret;
     pmix_info_t *pinfo, devinfo[2];
     size_t ninfo;
     prte_pmix_lock_t lock;
-    pmix_list_t local_procs;
+    pmix_list_t local_procs, members;
     prte_namelist_t *nm;
     size_t nmsize;
     pmix_server_pset_t *pset;
@@ -374,7 +374,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         }
         PMIX_INFO_LIST_START(iarray);
         /* start with the app number */
-        PMIX_INFO_LIST_ADD(ret, iarray, PMIX_APPNUM, &n, PMIX_UINT32);
+        PMIX_INFO_LIST_ADD(ret, iarray, PMIX_APPNUM, &app->idx, PMIX_UINT32);
         /* add the app size */
         PMIX_INFO_LIST_ADD(ret, iarray, PMIX_APP_SIZE, &app->num_procs, PMIX_UINT32);
         /* add the app leader */
@@ -395,6 +395,31 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             pset->name = strdup(tmp);
             pmix_list_append(&prte_pmix_server_globals.psets, &pset->super);
             free(tmp);
+            /* and its membership */
+            PMIX_CONSTRUCT(&members, pmix_list_t);
+            for (k = 0; k < jdata->procs->size; k++) {
+                pptr = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, k);
+                if (NULL == pptr) {
+                    continue;
+                }
+                if (app->idx == pptr->app_idx) {
+                    nm = PMIX_NEW(prte_namelist_t);
+                    PMIX_LOAD_PROCID(&nm->name, pptr->name.nspace, pptr->name.rank);
+                    pmix_list_append(&members, &nm->super);
+                }
+            }
+            if (0 < (i = pmix_list_get_size(&members))) {
+                PMIX_DATA_ARRAY_CONSTRUCT(&darray, i, PMIX_PROC);
+                procptr = (pmix_proc_t*)darray.array;
+                k = 0;
+                PMIX_LIST_FOREACH(nm, &members, prte_namelist_t) {
+                    PMIX_LOAD_PROCID(&procptr[k], nm->name.nspace, nm->name.rank);
+                    ++k;
+                }
+                PMIX_INFO_LIST_ADD(ret, iarray, PMIX_PSET_MEMBERS, &darray, PMIX_DATA_ARRAY);
+                PMIX_DATA_ARRAY_DESTRUCT(&darray);
+            }
+            PMIX_LIST_DESTRUCT(&members);
         }
         /* add to the main payload */
         PMIX_INFO_LIST_CONVERT(ret, iarray, &darray);
