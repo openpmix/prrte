@@ -133,6 +133,7 @@ examples/debugger/stdincheck
 examples/debugger/mpihello
 examples/legacy
 examples/colocate
+examples/pset
 
 src/sys/powerpc/atomic-32.s
 src/sys/powerpc/atomic-64.s

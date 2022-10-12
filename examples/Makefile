@@ -59,7 +59,8 @@ EXAMPLES = \
 	launcher \
 	showkeys \
 	legacy \
-	colocate
+	colocate \
+	pset
 
 all: $(EXAMPLES)
 
