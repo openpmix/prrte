@@ -513,44 +513,18 @@ static void interim(int sd, short args, void *cbdata)
 
             /***   STOP ON EXEC FOR DEBUGGER   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_ON_EXEC)) {
-            if (PMIX_PROC_RANK == info->value.type) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL,
-                                   &info->value.data.rank, PMIX_PROC_RANK);
-            } else if (PMIX_BOOL == info->value.type) {
-                flag = PMIX_INFO_TRUE(info);
-                if (flag) {
-                    rank = PMIX_RANK_WILDCARD;
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL,
-                                       &rank, PMIX_PROC_RANK);
-                }
-            } else {
-                /* we cannot support the request at this time */
-                rc = PRTE_ERR_NOT_SUPPORTED;
-                goto complete;
-            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC,
+                               PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_IN_INIT)) {
-            if (PMIX_PROC_RANK == info->value.type) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
-                                   &info->value.data.rank, PMIX_PROC_RANK);
-            } else if (PMIX_BOOL == info->value.type) {
-                flag = PMIX_INFO_TRUE(info);
-                if (flag) {
-                    rank = PMIX_RANK_WILDCARD;
-                    prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
-                                       &rank, PMIX_PROC_RANK);
-                }
-            } else {
-                /* we cannot support the request at this time */
-                rc = PRTE_ERR_NOT_SUPPORTED;
-                goto complete;
-            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT,
+                               PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
             /* also must add to job-level cache */
             pmix_server_cache_job_info(jdata, info);
 
         } else if (PMIX_CHECK_KEY(info, PMIX_DEBUG_STOP_IN_APP)) {
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, PRTE_ATTR_GLOBAL,
-                               &info->value.data.rank, PMIX_PROC_RANK);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP,
+                               PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
             /* also must add to job-level cache */
             pmix_server_cache_job_info(jdata, info);
 

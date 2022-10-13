@@ -300,7 +300,7 @@ static pmix_status_t spawn_app(char *myuri, int argc, char **argv,
      * to do with the app it is going to spawn for us */
     PMIX_INFO_LIST_START(linfo);
     rank = PMIX_RANK_WILDCARD;
-    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);  // stop all procs in init
+    PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // stop all procs in PMIx_Init
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_NOTIFY_JOB_EVENTS, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_FWD_STDERR, NULL, PMIX_BOOL); // forward stderr to me

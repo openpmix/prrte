@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -370,12 +370,10 @@ static int cospawn_launch(myrel_t *myrel)
         n = 0;
         if (stop_on_exec) {
             /* Stop application at first instruction */
-            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_ON_EXEC, &all_ranks,
-                           PMIX_PROC_RANK);
+            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);
         } else if (stop_in_init) {
             /* Stop application in PMIx_Init */
-            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_IN_INIT, &all_ranks,
-                           PMIX_PROC_RANK);
+            PMIX_INFO_LOAD(&app[n].info[0], PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);
         }
     } else {
         app[0].ninfo = 0;
@@ -583,9 +581,8 @@ int main(int argc, char **argv)
             printf("$ %s [OPTIONS]\n", argv[0]);
             printf("\n");
             printf(" -c | --cospawn   Test Cospawn\n");
-            printf(" --stop-in-init   Stop application in init (Default)\n");
+            printf(" --stop-in-init   Stop application in PMIx_Init (Default)\n");
             printf(" --stop-on-exec   Stop application on exec\n");
-            printf(" --stop-in-init   Stop application in init (Default)\n");
             printf(" --app-npernode   Number of processes per node (Default: 2)\n");
             printf(" --app-np         Number of total processes. Must be multiple of "
                    "--app-npernode (Default: 2)\n");
@@ -816,12 +813,10 @@ int main(int argc, char **argv)
         PMIX_INFO_LIST_START(dirs);
         if (stop_on_exec) {
             // procs are to stop on first instruction
-            PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_STOP_ON_EXEC, &all_ranks,
-                           PMIX_PROC_RANK);
+            PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);
         } else {
             // procs are to pause in PMIx_Init for debugger attach
-            PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_STOP_IN_INIT, &all_ranks,
-                           PMIX_PROC_RANK);
+            PMIX_INFO_LIST_ADD(rc, dirs, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);
         }
         sprintf(map_str, "ppr:%d:node", app_npernode);
         PMIX_INFO_LIST_ADD(rc, dirs, PMIX_MAPBY, map_str, PMIX_STRING); // 1 per node
