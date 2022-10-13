@@ -63,6 +63,7 @@ static void _client_conn(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     prte_proc_t *p;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
 
@@ -94,6 +95,7 @@ static void _client_finalized(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     prte_proc_t *p;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
 
@@ -125,6 +127,7 @@ static void _client_abort(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     prte_proc_t *p;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
 
@@ -155,6 +158,7 @@ pmix_status_t pmix_server_abort_fn(const pmix_proc_t *proc, void *server_object,
 static void _register_events(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
 
@@ -194,6 +198,7 @@ pmix_status_t pmix_server_register_events_fn(pmix_status_t *codes, size_t ncodes
 static void _deregister_events(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
 
@@ -227,6 +232,7 @@ pmix_status_t pmix_server_deregister_events_fn(pmix_status_t *codes, size_t ncod
 static void _notify_release(int status, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status);
 
     PMIX_ACQUIRE_OBJECT(cd);
 
@@ -248,6 +254,7 @@ void pmix_server_notify(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     pmix_status_t code, ret;
     size_t ninfo;
     pmix_rank_t vpid;
+    PRTE_HIDE_UNUSED_PARAMS(status, tg, cbdata);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s PRTE Notification received from %s",
@@ -343,6 +350,7 @@ pmix_status_t pmix_server_notify_event(pmix_status_t code, const pmix_proc_t *so
     pmix_data_buffer_t pbkt;
     pmix_status_t ret;
     size_t n;
+    PRTE_HIDE_UNUSED_PARAMS(cbfunc, cbdata);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s local process %s generated event code %s range %s",
@@ -457,6 +465,7 @@ void pmix_server_jobid_return(int status, pmix_proc_t *sender,
     int32_t ret, cnt;
     pmix_nspace_t jobid;
     pmix_proc_t proc;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
 
     /* unpack the status - this is already a PMIx value */
     cnt = 1;
@@ -517,6 +526,7 @@ static void _toolconn(int sd, short args, void *cbdata)
     pmix_data_buffer_t *buf;
     prte_plm_cmd_flag_t command = PRTE_PLM_ALLOC_JOBID_CMD;
     pmix_status_t xrc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
 
@@ -652,6 +662,7 @@ void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo, pmix_tool_connectio
 static void lgcbfn(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     if (NULL != cd->cbfunc) {
         cd->cbfunc(cd->status, cd->cbdata);
@@ -765,6 +776,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
     prte_daemon_cmd_flag_t cmmnd;
     prte_grpcomm_signature_t *sig;
     pmix_proc_t *proct;
+    PRTE_HIDE_UNUSED_PARAMS(cbfunc, cbdata);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s job control request from %s:%d",
@@ -1054,6 +1066,7 @@ pmix_status_t pmix_server_iof_pull_fn(const pmix_proc_t procs[], size_t nprocs,
     prte_iof_sink_t *sink;
     size_t i;
     bool stop = false;
+    PRTE_HIDE_UNUSED_PARAMS(cbfunc, cbdata);
 
     /* no really good way to do this - we have to search the directives to
      * see if we are being asked to stop the specified channels before
@@ -1095,6 +1108,7 @@ static void pmix_server_stdin_push(int sd, short args, void *cbdata)
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     pmix_byte_object_t *bo = (pmix_byte_object_t *) cd->server_object;
     size_t n;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     for (n = 0; n < cd->nprocs; n++) {
         PMIX_OUTPUT_VERBOSE((1, prte_pmix_server_globals.output,
@@ -1119,6 +1133,8 @@ pmix_status_t pmix_server_stdin_fn(const pmix_proc_t *source, const pmix_proc_t 
                                    const pmix_byte_object_t *bo, pmix_op_cbfunc_t cbfunc,
                                    void *cbdata)
 {
+    PRTE_HIDE_UNUSED_PARAMS(source, directives, ndirs);
+
     // Note: We are ignoring the directives / ndirs at the moment
     PRTE_IO_OP(targets, ntargets, bo, pmix_server_stdin_push, cbfunc, cbdata);
 

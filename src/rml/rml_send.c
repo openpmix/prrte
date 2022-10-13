@@ -43,8 +43,6 @@ int prte_rml_send_buffer_nb(pmix_rank_t rank,
 {
     prte_rml_recv_t *rcv;
     prte_rml_send_t *snd;
-    pmix_status_t rc;
-    pmix_proc_t peer;
 
     PMIX_OUTPUT_VERBOSE((1, prte_rml_base.rml_output,
          "%s rml_send_buffer to peer %s at tag %d",

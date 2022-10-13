@@ -271,7 +271,7 @@ static void set_classpath_jar_file(prte_pmix_app_t *app, int index, char *jarfil
 static int setup_app(prte_pmix_app_t *app)
 {
     bool found;
-    int i,n,java_pos,rc;
+    int i,rc;
     char *value;
 
     /* if this is a Java application, we have a bit more work to do. Such
@@ -584,10 +584,9 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
 static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent)
 {
-    char *option, *p1, *p2, *tmp, *tmp2, *output, *modifier;
+    char *option, *p1, *p2, *tmp, *tmp2, *output;
     int rc = PRTE_SUCCESS;
     pmix_cli_item_t *opt, *nxt;
-    prte_value_t *pval, val;
     bool warn;
 
     if (silent) {
@@ -1486,6 +1485,7 @@ static int parse_env(char **srcenv, char ***dstenv,
     char **envlist = NULL, **envtgt = NULL;
     pmix_cli_item_t *opt;
     int i, j, rc;
+    PRTE_HIDE_UNUSED_PARAMS(srcenv);
 
     pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:ompi: parse_env",
@@ -2188,11 +2188,13 @@ static int set_default_ranking(prte_job_t *jdata,
 static void job_info(pmix_cli_result_t *results,
                      void *jobinfo)
 {
+    PRTE_HIDE_UNUSED_PARAMS(results, jobinfo);
     return;
 }
 
 static int set_default_rto(prte_job_t *jdata,
                            prte_rmaps_options_t *options)
 {
+    PRTE_HIDE_UNUSED_PARAMS(options);
     return prte_state_base_set_runtime_options(jdata, NULL);
 }

@@ -170,7 +170,6 @@ void prte_rml_compute_routing_tree(void)
 {
     prte_routed_tree_t *child;
     int j;
-    pmix_list_item_t *item;
     int Level, Sum, NInLevel, Ii;
     int NInPrevLevel;
     prte_job_t *dmns;
