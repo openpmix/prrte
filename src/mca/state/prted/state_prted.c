@@ -161,6 +161,7 @@ static void track_jobs(int fd, short argc, void *cbdata)
     int rc, i;
     prte_proc_state_t running = PRTE_PROC_STATE_RUNNING;
     prte_proc_t *child;
+    PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
     PMIX_ACQUIRE_OBJECT(caddy);
 
@@ -331,6 +332,7 @@ static void track_procs(int fd, short argc, void *cbdata)
     pmix_proc_t target;
     prte_pmix_lock_t lock;
     prte_app_context_t *app;
+    PRTE_HIDE_UNUSED_PARAMS(fd, argc);
 
     PMIX_ACQUIRE_OBJECT(caddy);
     proc = &caddy->name;
