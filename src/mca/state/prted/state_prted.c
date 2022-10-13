@@ -349,26 +349,23 @@ static void track_procs(int fd, short argc, void *cbdata)
         goto cleanup;
     }
     if (PRTE_PROC_STATE_READY_FOR_DEBUG == state) {
-        tptr = &tgt;
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, (void**)&tptr, PMIX_PROC_RANK)
-            || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, (void**)&tptr, PMIX_PROC_RANK)
-            || prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, (void**)&tptr, PMIX_PROC_RANK)) {
-            if (PMIX_CHECK_RANK(proc->rank, tgt)) {
-                if (PMIX_RANK_LOCAL_PEERS == proc->rank) {
-                    jdata->num_ready_for_debug += jdata->num_local_procs;
-                } else {
-                    jdata->num_ready_for_debug++;
-                }
-                if (PMIX_RANK_WILDCARD == tgt && jdata->num_ready_for_debug < jdata->num_local_procs) {
-                    goto cleanup;
-                }
-                PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
-                                     "%s state:prted all local %s procs on node %s ready for debug",
-                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                                     proc->nspace, prte_process_info.nodename));
-                /* let the DVM master know we are ready */
-                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_READY_FOR_DEBUG);
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL) ||
+            prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, NULL, PMIX_BOOL) ||
+            prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL)) {
+            if (PMIX_RANK_LOCAL_PEERS == proc->rank) {
+                jdata->num_ready_for_debug += jdata->num_local_procs;
+            } else {
+                jdata->num_ready_for_debug++;
             }
+            if (jdata->num_ready_for_debug < jdata->num_local_procs) {
+                goto cleanup;
+            }
+            PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
+                                 "%s state:prted all local %s procs on node %s ready for debug",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                 proc->nspace, prte_process_info.nodename));
+            /* let the DVM master know we are ready */
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_READY_FOR_DEBUG);
         }
         goto cleanup;
     }

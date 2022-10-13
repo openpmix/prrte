@@ -277,9 +277,9 @@ int main(int argc, char **argv)
     PMIX_INFO_LIST_START(linfo);
     rank = PMIX_RANK_WILDCARD;
     if (NULL != strstr(argv[1], "mpi")) {
-        PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_APP, &rank, PMIX_PROC_RANK); // stop all procs in MPI_Init
+        PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_APP, NULL, PMIX_BOOL); // stop all procs in MPI_Init
     } else {
-        PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);  // stop all procs in PMIx_Init
+        PMIX_INFO_LIST_ADD(rc, linfo, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);  // stop all procs in PMIx_Init
     }
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_NOTIFY_JOB_EVENTS, NULL, PMIX_BOOL);
     PMIX_INFO_LIST_ADD(rc, linfo, PMIX_FWD_STDOUT, NULL, PMIX_BOOL); // forward stdout to me

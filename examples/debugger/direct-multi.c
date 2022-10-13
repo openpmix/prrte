@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -305,9 +305,8 @@ int parse_command_line(int argc, char **argv)
             printf("$ prte --daemonize\n");
             printf("$ %s [OPTIONS]\n", argv[0]);
             printf("\n");
-            printf(" --stop-in-init   Stop application in init (Default)\n");
+            printf(" --stop-in-init   Stop application in PMIx_Init (Default)\n");
             printf(" --stop-on-exec   Stop application on exec\n");
-            printf(" --stop-in-init   Stop application in init (Default)\n");
             printf(" --app-npernode   Number of processes per node (Default: 2)\n");
             printf(" --app-np         Number of total processes. Must be multiple of "
                    "--app-npernode (Default: 2)\n");
@@ -559,11 +558,9 @@ static pmix_status_t spawn_app(void)
     /* Provide job-level directives so the apps do what the user requested */
     PMIX_INFO_LIST_START(tinfo);
     if (stop_on_exec) {
-        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_DEBUG_STOP_ON_EXEC, &all_ranks,
-                           PMIX_PROC_RANK); // All procs stop at first instruction
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL); // All procs stop at first instruction
     } else {
-        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_DEBUG_STOP_IN_INIT, &all_ranks,
-                           PMIX_PROC_RANK); // All procs stop in PMIx_Init
+        PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL); // All procs stop in PMIx_Init
     }
     sprintf(map_str, "ppr:%d:node", app_npernode);
     PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_MAPBY, map_str, PMIX_STRING); // app procs/node

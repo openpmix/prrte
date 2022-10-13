@@ -625,7 +625,7 @@ int prun_common(pmix_cli_result_t *results,
 #endif
     /* if stop-on-exec was specified */
     if (pmix_cmd_line_is_taken(results, PRTE_CLI_STOP_ON_EXEC)) {
-        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_ON_EXEC, &flag, PMIX_BOOL);
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DEBUG_STOP_ON_EXEC, NULL, PMIX_BOOL);
     }
 
     /* check for a job timeout specification, to be provided in seconds
