@@ -430,6 +430,7 @@ static void cleanup_cbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo
                            pmix_release_cbfunc_t release_fn, void *release_cbdata)
 {
     prte_pmix_lock_t *lk = (prte_pmix_lock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(info, ninfo);
 
     PMIX_POST_OBJECT(lk);
 

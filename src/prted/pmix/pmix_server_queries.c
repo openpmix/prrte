@@ -91,6 +91,7 @@ static void _query(int sd, short args, void *cbdata)
     prte_proc_t *proct;
     pmix_proc_t *proc;
     size_t sz;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
 

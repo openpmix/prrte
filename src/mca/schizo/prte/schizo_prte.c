@@ -511,15 +511,14 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         }
     }
     return PRTE_SUCCESS;
-};
+}
 
 static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent)
 {
-    char *option, *p1, *p2, *tmp, *tmp2, *output, *modifier;
+    char *option, *p1, *p2, *tmp, *tmp2, *output;
     int rc = PRTE_SUCCESS;
     pmix_cli_item_t *opt, *nxt;
-    prte_value_t *pval, val;
     bool warn;
 
     if (silent) {
@@ -888,10 +887,10 @@ static int parse_env(char **srcenv, char ***dstenv,
     int i, j, n;
     char *p1, *p2;
     char **env;
-    prte_value_t *pval;
     char **xparams = NULL, **xvals = NULL;
     char *param, *value;
     pmix_cli_item_t *opt;
+    PRTE_HIDE_UNUSED_PARAMS(srcenv);
 
     pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
                         "%s schizo:prte: parse_env",
@@ -1178,11 +1177,13 @@ static void allow_run_as_root(pmix_cli_result_t *cli)
 static void job_info(pmix_cli_result_t *results,
                      void *jobinfo)
 {
+    PRTE_HIDE_UNUSED_PARAMS(results, jobinfo);
     return;
 }
 
 static int set_default_rto(prte_job_t *jdata,
                            prte_rmaps_options_t *options)
 {
+    PRTE_HIDE_UNUSED_PARAMS(options);
     return prte_state_base_set_runtime_options(jdata, NULL);
 }

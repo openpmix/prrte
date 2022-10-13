@@ -152,6 +152,7 @@ static prte_state_cbfunc_t proc_callbacks[] = {
 
 static void force_quit(int fd, short args, void *cbdata)
 {
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
 
     /* give us a chance to stop the orteds */
@@ -246,6 +247,7 @@ static void files_ready(int status, void *cbdata)
 
 static void init_complete(int sd, short args, void *cbdata)
 {
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
 
     PMIX_ACQUIRE_OBJECT(caddy);
@@ -267,6 +269,7 @@ static void vm_ready(int fd, short args, void *cbdata)
     int32_t v;
     pmix_value_t *val;
     pmix_status_t ret;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args, cbdata);
 
     PMIX_ACQUIRE_OBJECT(caddy);
     /* if this is my job, then we are done */
@@ -374,6 +377,7 @@ static void job_started(int fd, short args, void *cbdata)
     pmix_info_t *iptr;
     time_t timestamp;
     pmix_proc_t *nptr;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     /* if there is an originator for this job, notify them
      * that the first process of the job has been started */
@@ -420,6 +424,7 @@ static void ready_for_debug(int fd, short args, void *cbdata)
     int n;
     char *name;
     prte_app_context_t *app;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     /* launch was requested by a TOOL, so we notify the launch proxy
      * and NOT the originator (as that would be us) */
@@ -517,9 +522,8 @@ static void check_complete(int fd, short args, void *cbdata)
     hwloc_obj_t obj;
     hwloc_obj_type_t type;
     hwloc_cpuset_t boundcpus, tgt;
-    unsigned n;
-    uint16_t u16, *u16ptr = &u16;
     bool takeall;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
     jdata = caddy->jdata;
@@ -857,6 +861,7 @@ release:
 static void cleanup_job(int sd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
 
@@ -886,6 +891,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
     pmix_data_range_t range = PMIX_RANGE_SESSION;
     pmix_status_t code, ret;
     char *errmsg = NULL;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                          "%s state:dvm:dvm_notify called",
