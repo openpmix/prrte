@@ -85,13 +85,9 @@ int main(int argc, char *argv[])
     int i;
     char *str;
     int option_index = 0;   /* getopt_long stores the option index here. */
-    int n, opt, rc;
-    bool found;
     char *ptr;
-    prte_info_item_t *instance;
     char *personality;
     prte_schizo_base_module_t *schizo;
-    pmix_cli_result_t results;
 
     /* protect against problems if someone passes us thru a pipe
      * and then abnormally terminates the pipe early */
@@ -145,11 +141,11 @@ int main(int argc, char *argv[])
     ret = schizo->parse_cli(argv, &prte_info_cmd_line, PMIX_CLI_SILENT);
     if (PRTE_SUCCESS != ret) {
         PMIX_DESTRUCT(&prte_info_cmd_line);
-        if (PRTE_OPERATION_SUCCEEDED == rc) {
+        if (PRTE_OPERATION_SUCCEEDED == ret) {
             return PRTE_SUCCESS;
         }
         if (PRTE_ERR_SILENT != ret) {
-            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
+            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(ret));
         }
         return ret;
     }
