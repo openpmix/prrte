@@ -128,59 +128,6 @@ int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig, prte_rml_tag_t tag,
     return rc;
 }
 
-int prte_grpcomm_API_rbcast(prte_grpcomm_signature_t *sig, prte_rml_tag_t tag,
-                            pmix_data_buffer_t *msg)
-{
-    int rc = PRTE_ERROR;
-    pmix_data_buffer_t *buf;
-    prte_grpcomm_base_active_t *active;
-
-    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                         "%s grpcomm:base:rbcast sending %u bytes to tag %ld",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                         (NULL == msg) ? 0 : (unsigned int) msg->bytes_used, (long) tag));
-
-    /* this function does not access any framework-global data, and
-     * so it does not require us to push it into the event library */
-
-    /* prep the output buffer */
-    PMIX_DATA_BUFFER_CREATE(buf);
-
-    /* setup the payload */
-    if (PRTE_SUCCESS != (rc = pack_xcast(sig, buf, msg, tag))) {
-        PRTE_ERROR_LOG(rc);
-        PMIX_RELEASE(buf);
-        return rc;
-    }
-    /* cycle thru the actives and see who can send it */
-    PMIX_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t)
-    {
-        if (NULL != active->module->rbcast) {
-            if (PRTE_SUCCESS == (rc = active->module->rbcast(buf))) {
-                break;
-            }
-        }
-    }
-
-    return rc;
-}
-
-int prte_grpcomm_API_register_cb(prte_grpcomm_rbcast_cb_t callback)
-{
-    int rc = PRTE_ERROR;
-    prte_grpcomm_base_active_t *active;
-
-    PMIX_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t)
-    {
-        if (NULL != active->module->register_cb) {
-            if (PRTE_ERROR != (rc = active->module->register_cb(callback))) {
-                break;
-            }
-        }
-    }
-    return rc;
-}
-
 static void allgather_stub(int fd, short args, void *cbdata)
 {
     prte_grpcomm_caddy_t *cd = (prte_grpcomm_caddy_t *) cbdata;
@@ -366,8 +313,8 @@ static int create_dmns(prte_grpcomm_signature_t *sig, pmix_rank_t **dmns, size_t
 
     /* if NULL == procs, or the target jobid is our own,
      * then all daemons are participating */
-    if (NULL == sig->signature
-        || PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, sig->signature[0].nspace)) {
+    if (NULL == sig->signature ||
+        PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, sig->signature[0].nspace)) {
         *ndmns = prte_process_info.num_daemons;
         *dmns = NULL;
         return PRTE_SUCCESS;
@@ -431,9 +378,9 @@ static int create_dmns(prte_grpcomm_signature_t *sig, pmix_rank_t **dmns, size_t
                                  "%s sign: GETTING PROC OBJECT FOR %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_NAME_PRINT(&sig->signature[n])));
-            if (NULL
-                == (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs,
-                                                                       sig->signature[n].rank))) {
+            proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs,
+                                                               sig->signature[n].rank);
+            if (NULL == proc) {
                 PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                 rc = PRTE_ERR_NOT_FOUND;
                 goto done;
@@ -551,17 +498,5 @@ static int pack_xcast(prte_grpcomm_signature_t *sig, pmix_data_buffer_t *buffer,
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&bo);
 
-    PMIX_OUTPUT_VERBOSE(
-        (1, prte_grpcomm_base_framework.framework_output, "MSG SIZE: %lu", buffer->bytes_used));
     return PRTE_SUCCESS;
-}
-
-void prte_grpcomm_base_mark_distance_recv(prte_grpcomm_coll_t *coll, uint32_t distance)
-{
-    pmix_bitmap_set_bit(&coll->distance_mask_recv, distance);
-}
-
-unsigned int prte_grpcomm_base_check_distance_recv(prte_grpcomm_coll_t *coll, uint32_t distance)
-{
-    return pmix_bitmap_is_set_bit(&coll->distance_mask_recv, distance);
 }
