@@ -86,6 +86,7 @@ int main(int argc, char *argv[])
     char *ptr;
     char *personality;
     prte_schizo_base_module_t *schizo;
+
     PRTE_HIDE_UNUSED_PARAMS(argc);
 
     /* protect against problems if someone passes us thru a pipe
