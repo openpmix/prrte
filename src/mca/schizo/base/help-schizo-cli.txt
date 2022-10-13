@@ -538,21 +538,15 @@ Supported values include:
     stderr if "+", or into the specified file otherwise. If no channel is
     specified, output will be directed to stdout.
 
--   STOP-ON-EXEC[(=<bool or ranks>)] directs the runtime to stop the indicated
-    application process(es) immediately upon exec'ing it. If a boolean value is
-    provided, then the directive will apply to all processes in the job. Otherwise,
-    a comma-delimited list of rank ranges can be specified. Used for debugging.
-    This option defaults to a true value if the option is given without a value.
+-   STOP-ON-EXEC directs the runtime to stop the application process(es) immediately
+    upon exec'ing them. The directive will apply to all processes in the job.
 
--   STOP-IN-INIT[(=<bool or ranks>)] indicates that the runtime should direct the
-    indicated application process(es) to stop in PMIx_Init. If a boolean value is
-    provided, then the directive will apply to all processes in the job. Otherwise,
-    a comma-delimited list of rank ranges can be specified. Used for debugging.
-    This option defaults to a true value if the option is given without a value.
+-   STOP-IN-INIT indicates that the runtime should direct the application process(es)
+    to stop in PMIx_Init. The directive will apply to all processes in the job.
 
--   STOP-IN-APP=<label> indicates that the runtime should direct application processes
-    to stop at some pre-defined place in the application corresponding to the provided
-    label (see the PMIx Standard for a more detailed explanation). Used for debugging.
+-   STOP-IN-APP indicates that the runtime should direct application processes to
+    stop at some application-defined place and notify they are ready-to-debug. The
+    directive will apply to all processes in the job.
 
 -   TIMEOUT=<string> directs the runtime to terminate the job after it has executed for
     the specified time. Time is specified in colon-delimited format - e.g.,
