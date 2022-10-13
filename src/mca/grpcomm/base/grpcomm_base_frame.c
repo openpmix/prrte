@@ -56,10 +56,7 @@ prte_grpcomm_base_t prte_grpcomm_base = {
 
 prte_grpcomm_API_module_t prte_grpcomm = {
     .xcast = prte_grpcomm_API_xcast,
-    .allgather = prte_grpcomm_API_allgather,
-    .rbcast = prte_grpcomm_API_rbcast,
-    .register_cb = prte_grpcomm_API_register_cb,
-    .unregister_cb = NULL
+    .allgather = prte_grpcomm_API_allgather
 };
 
 static int base_register(pmix_mca_base_register_flag_t flags)
@@ -143,7 +140,6 @@ static void ccon(prte_grpcomm_coll_t *p)
     p->sig = NULL;
     p->status = PMIX_SUCCESS;
     PMIX_DATA_BUFFER_CONSTRUCT(&p->bucket);
-    PMIX_CONSTRUCT(&p->distance_mask_recv, pmix_bitmap_t);
     p->dmns = NULL;
     p->ndmns = 0;
     p->nexpected = 0;
@@ -158,7 +154,6 @@ static void cdes(prte_grpcomm_coll_t *p)
         PMIX_RELEASE(p->sig);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&p->bucket);
-    PMIX_DESTRUCT(&p->distance_mask_recv);
     free(p->dmns);
     free(p->buffers);
 }
