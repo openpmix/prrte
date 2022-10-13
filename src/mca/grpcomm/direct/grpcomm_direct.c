@@ -49,10 +49,7 @@ prte_grpcomm_base_module_t prte_grpcomm_direct_module = {
     .init = init,
     .finalize = finalize,
     .xcast = xcast,
-    .allgather = allgather,
-    .rbcast = NULL,
-    .register_cb = NULL,
-    .unregister_cb = NULL
+    .allgather = allgather
 };
 
 /* internal functions */
