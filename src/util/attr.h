@@ -166,7 +166,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_ADD_ENVAR                  (PRTE_JOB_START_KEY +  59) // prte_envar_t - add envar, do not override pre-existing one
 #define PRTE_JOB_APP_SETUP_DATA             (PRTE_JOB_START_KEY +  60) // pmix_byte_object_t - blob containing app setup data
 #define PRTE_JOB_OUTPUT_TO_DIRECTORY        (PRTE_JOB_START_KEY +  61) // string - path of directory to which stdout/err is to be directed
-#define PRTE_JOB_STOP_ON_EXEC               (PRTE_JOB_START_KEY +  62) // pmix_rank_t of procs to stop on first instruction for debugger attach
+#define PRTE_JOB_STOP_ON_EXEC               (PRTE_JOB_START_KEY +  62) // bool - stop on first instruction for debugger attach
 #define PRTE_JOB_SPAWN_NOTIFIED             (PRTE_JOB_START_KEY +  63) // bool - process requesting a spawn operation has been notified of result
 #define PRTE_JOB_DISPLAY_MAP                (PRTE_JOB_START_KEY +  64) // bool - display job map
 #define PRTE_JOB_DISPLAY_DEVEL_MAP          (PRTE_JOB_START_KEY +  65) // bool - display devel level job map
@@ -192,8 +192,8 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_DEBUG_TARGET               (PRTE_JOB_START_KEY +  85) // pmix_proc_t - application proc to co-locate daemons with
 #define PRTE_JOB_DEBUG_DAEMONS_PER_NODE     (PRTE_JOB_START_KEY +  86) // uint16_t - Number of debug daemons per node
 #define PRTE_JOB_DEBUG_DAEMONS_PER_PROC     (PRTE_JOB_START_KEY +  87) // uint16_t - Number of debug daemons per application proc
-#define PRTE_JOB_STOP_IN_INIT               (PRTE_JOB_START_KEY +  88) // pmix_rank_t of procs to stop
-#define PRTE_JOB_STOP_IN_APP                (PRTE_JOB_START_KEY +  89) // char* of application label where the procs are to stop
+#define PRTE_JOB_STOP_IN_INIT               (PRTE_JOB_START_KEY +  88) // bool - stop in PMIx_Init
+#define PRTE_JOB_STOP_IN_APP                (PRTE_JOB_START_KEY +  89) // bool - stop at app-determined location
 #define PRTE_JOB_ENVARS_HARVESTED           (PRTE_JOB_START_KEY +  90) // envars have already been harvested
 #define PRTE_JOB_OUTPUT_NOCOPY              (PRTE_JOB_START_KEY +  91) // bool - do not copy output to stdout/err
 #define PRTE_JOB_RANK_OUTPUT                (PRTE_JOB_START_KEY +  92) // bool - tag stdout/stderr with rank

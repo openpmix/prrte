@@ -273,64 +273,37 @@ int prte_state_base_set_runtime_options(prte_job_t *jdata, char *spec)
                 prte_remove_attribute(&jdata->attributes, PRTE_JOB_EXEC_AGENT);
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_ON_EXEC)) {
-                if (PMIX_CHECK_BOOL(&value)) {
-                    flag = PMIX_CHECK_TRUE(&value);
-                    if (flag) {
-                        rank = PMIX_RANK_WILDCARD;
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL,
-                                           &rank, PMIX_PROC_RANK);
-                    } else {
-                        prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC);
-                    }
+                flag = PMIX_CHECK_TRUE(&value);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
                 } else {
-                    tmp = pmix_argv_split(ptr, ',');
-                    if (1 == pmix_argv_count(tmp)) {
-                        rank = strtoul(tmp[0], NULL, 10);
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, PRTE_ATTR_GLOBAL,
-                                           &rank, PMIX_PROC_RANK);
-                    } else {
-                        pmix_argv_free(tmp);
-                        pmix_argv_free(options);
-                        return PMIX_ERR_NOT_SUPPORTED;
-                    }
-                    pmix_argv_free(tmp);
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC);
                 }
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_INIT)) {
-                if (PMIX_CHECK_BOOL(&value)) {
-                    flag = PMIX_CHECK_TRUE(&value);
-                    if (flag) {
-                        rank = PMIX_RANK_WILDCARD;
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
-                                           &rank, PMIX_PROC_RANK);
-                        /* also must add to job-level cache */
-                        PMIX_INFO_LOAD(&info, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);
-                        pmix_server_cache_job_info(jdata, &info);
-                    } else {
-                        prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT);
-                    }
+                flag = PMIX_CHECK_TRUE(&value);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    /* also must add to job-level cache */
+                    PMIX_INFO_LOAD(&info, PMIX_DEBUG_STOP_IN_INIT, NULL, PMIX_BOOL);
+                    pmix_server_cache_job_info(jdata, &info);
                 } else {
-                    tmp = pmix_argv_split(ptr, ',');
-                    if (1 == pmix_argv_count(tmp)) {
-                        rank = strtoul(tmp[0], NULL, 10);
-                        prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, PRTE_ATTR_GLOBAL,
-                                           &rank, PMIX_PROC_RANK);
-                        /* also must add to job-level cache */
-                        PMIX_INFO_LOAD(&info, PMIX_DEBUG_STOP_IN_INIT, &rank, PMIX_PROC_RANK);
-                        pmix_server_cache_job_info(jdata, &info);
-                    } else {
-                        pmix_argv_free(tmp);
-                        pmix_argv_free(options);
-                        return PMIX_ERR_NOT_SUPPORTED;
-                    }
-                    pmix_argv_free(tmp);
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT);
                 }
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_STOP_IN_APP)) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, PRTE_ATTR_GLOBAL,
-                                   ptr, PMIX_STRING);
-                /* also must add to job-level cache */
-                pmix_server_cache_job_info(jdata, &info);
+                flag = PMIX_CHECK_TRUE(&value);
+                if (flag) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                    /* also must add to job-level cache */
+                    PMIX_INFO_LOAD(&info, PMIX_DEBUG_STOP_IN_APP, NULL, PMIX_BOOL);
+                    pmix_server_cache_job_info(jdata, &info);
+                } else {
+                    prte_remove_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP);
+                }
 
             } else if (PMIX_CHECK_CLI_OPTION(options[n], PRTE_CLI_TIMEOUT)) {
                 n = PMIX_CONVERT_TIME(ptr);

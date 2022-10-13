@@ -454,11 +454,10 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
             PMIX_LOAD_NSPACE(name.nspace, job);
             /* get the job object */
             jdata = prte_get_job_data_object(job);
-            tptr = &tgt;
             debugging = false;
-            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, (void**)&tptr, PMIX_PROC_RANK) ||
-                prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, (void**)&tptr, PMIX_PROC_RANK) ||
-                prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, (void**)&tptr, PMIX_PROC_RANK)) {
+            if (prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_ON_EXEC, NULL, PMIX_BOOL) ||
+                prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_INIT, NULL, PMIX_BOOL) ||
+                prte_get_attribute(&jdata->attributes, PRTE_JOB_STOP_IN_APP, NULL, PMIX_BOOL)) {
                 debugging = true;
             }
             count = 1;
@@ -494,19 +493,13 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                 proc->pid = pid;
                 tptr = &tgt;
                 if (debugging) {
-                    if (PMIX_CHECK_RANK(proc->rank, tgt)) {
-                        jdata->num_ready_for_debug++;
-                    }
+                    jdata->num_ready_for_debug++;
                 }
                 /* get entry from next rank */
                 rc = PMIx_Data_unpack(NULL, buffer, &vpid, &count, PMIX_PROC_RANK);
             }
-            if (debugging) {
-                if ((PMIX_RANK_WILDCARD == tgt && jdata->num_ready_for_debug == jdata->num_procs) ||
-                    (PMIX_RANK_LOCAL_PEERS == tgt && jdata->num_ready_for_debug == jdata->num_local_procs) ||
-                    (PMIX_RANK_WILDCARD != tgt && 1 == jdata->num_ready_for_debug)) {
-                    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_READY_FOR_DEBUG);
-                }
+            if (debugging && jdata->num_ready_for_debug == jdata->num_procs) {
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_READY_FOR_DEBUG);
             }
             /* prepare for next job */
             count = 1;

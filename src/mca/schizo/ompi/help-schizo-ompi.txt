@@ -359,39 +359,16 @@ or as "all"."
 #
 [stop-on-exec]
 If supported, stop each process at start of execution
-This option accepts an optional argument to specify which ranks are to stop.
-Ranks are specified as a comma-delimited list of ranges - e.g., "1,3-6,9",
-or as "all".
-
-For instance, --stop-on-exec=1,3-6,9.
-
-If the optional argument is not specified, all ranks stop.
 #
 [stop-in-init]
 Include the PMIX_DEBUG_STOP_IN_INIT attribute in the application's
-job info directing that the specified ranks stop in PMIx_Init pending
+job info directing that the ranks stop in PMIx_Init pending
 release.
-
-This option accepts an optional argument to specify which ranks are to stop.
-Ranks are specified as a comma-delimited list of ranges - e.g., "1,3-6,9",
-or as "all".
-
-For instance, --stop-in-init=1,3-6,9.
-
-If the optional argument is not specified, all ranks stop.
 #
 [stop-in-app]
 Include the PMIX_DEBUG_STOP_IN_APP attribute in the application's
-job info directing that the specified ranks stop at an application-determined
+job info directing that the ranks stop at an application-determined
 point pending release.
-
-This option accepts an optional argument to specify which ranks are to stop.
-Ranks are specified as a comma-delimited list of ranges - e.g., "1,3-6,9",
-or as "all".
-
-For instance, --stop-in-app=1,3-6,9.
-
-If the optional argument is not specified, all ranks stop.
 #
 [x]
 Export an environment variable, optionally specifying a value (e.g., "-x foo" exports the
