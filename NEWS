@@ -36,7 +36,7 @@ bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
 
-3.0.0: TBD
+3.0.0 -- 25 Oct 2022
 ------------------------------------
 **** NOTE: This release represents a major update to the PRRTE
 code base from prior releases. Many of the changes will be
@@ -69,6 +69,35 @@ PMIx version that meets the PMIx cross-version requirements (i.e., a
 minimum of PMIx v2.5).
 
 Detailed changes:
+PR #1557: Update NEWS
+PR #1556: Multiple commits
+  - Support query of pset membership
+  - Cleanup grpcomm cruft
+  - remove some unused vars
+  - squash warnings
+  - unused var
+  - more unused vars
+  - remove unused vars and fix rc/ret typo
+  - misc unused var cleanups
+  - Reduce debugger confusion
+  - Pickup missing changes
+PR #1548: Multiple commits
+  - alps fixes for mca move
+  - schizo/ompi: Fix --report-pid/sid.
+  - Change --stop-in-* to take optional arguments.
+  - Update Open MPI mpirun help text
+  - Fix memory leaks in RML and at job termination.
+  - plm/tm: Fix build breakage
+PR #1539: Multiple commits
+  - Fix a typo and expand debugger example range to cover MPI
+  - ras/lsf: Fix build breakage
+  - Catch some more component updates
+  - Allow prterun to act as prun
+PR #1534: Multiple commits
+  - Fix print statement
+  - Push launch-agent CLI into the env
+  - Fix mapping by pe-list when oversubscribed
+PR #1530: Actually support the output-proctable option
 PR #1528: Add missing commits and new additions
   - Complete help text on notifications
   - BuildRequires: gcc
