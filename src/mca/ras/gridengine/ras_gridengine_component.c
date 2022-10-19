@@ -57,7 +57,7 @@ prte_mca_ras_gridengine_component_t prte_mca_ras_gridengine_component = {
     .super = {
         PRTE_RAS_BASE_VERSION_2_0_0,
         .pmix_mca_component_name = "gridengine",
-        PRTE_MCA_BASE_MAKE_VERSION(component,
+        PMIX_MCA_BASE_MAKE_VERSION(component,
                                    PRTE_MAJOR_VERSION,
                                    PRTE_MINOR_VERSION,
                                    PMIX_RELEASE_VERSION),
@@ -73,19 +73,21 @@ static int prte_ras_gridengine_register(void)
     pmix_mca_base_component_t *c = &prte_mca_ras_gridengine_component.super;
 
     prte_mca_ras_gridengine_component.priority = 100;
-    (void) prte_mca_base_component_var_register(c, "priority",
+    (void) pmix_mca_base_component_var_register(c, "priority",
                                                 "Priority of the gridengine ras component",
+                                                PMIX_MCA_BASE_VAR_TYPE_INT,
                                                 &prte_mca_ras_gridengine_component.priority);
 
     prte_ras_gridengine_verbose = 0;
-    (void) prte_mca_base_component_var_register(c, "verbose",
-                                                "Enable verbose output for the gridengine ras component",
-                                                &prte_ras_gridengine_verbose);
+    (void) pmix_mca_base_component_var_register(
+        c, "verbose", "Enable verbose output for the gridengine ras component",
+        PMIX_MCA_BASE_VAR_TYPE_INT, &prte_ras_gridengine_verbose);
 
     prte_mca_ras_gridengine_component.show_jobid = false;
-    (void) prte_mca_base_component_var_register(c, "show_jobid",
+    (void) pmix_mca_base_component_var_register(c, "show_jobid",
                                                 "Show the JOB_ID of the Grid Engine job",
-                                                 &prte_mca_ras_gridengine_component.show_jobid);
+                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                                &prte_mca_ras_gridengine_component.show_jobid);
 
     return PRTE_SUCCESS;
 }
