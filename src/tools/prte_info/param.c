@@ -354,7 +354,6 @@ void prte_info_do_config(bool want_all)
     char *prun_prefix_by_default;
     char *symbol_visibility;
     char *manpages;
-    char *resilience;
 
     /* setup the strings that don't require allocations*/
     debug = PRTE_ENABLE_DEBUG ? "yes" : "no";
@@ -414,5 +413,4 @@ void prte_info_do_config(bool want_all)
     prte_info_out("prun default --prefix", "prun:prefix_by_default", prun_prefix_by_default);
     prte_info_out("Symbol vis. support", "options:visibility", symbol_visibility);
     prte_info_out("Manpages built", "options:man-pages", manpages);
-    prte_info_out("Resilience support", "options:ft", resilience);
 }
