@@ -69,6 +69,8 @@ PMIx version that meets the PMIx cross-version requirements (i.e., a
 minimum of PMIx v2.5).
 
 Detailed changes:
+
+PR #1562: Remove check for resilience that caused a segfault
 PR #1557: Update NEWS
 PR #1556: Multiple commits
   - Support query of pset membership
