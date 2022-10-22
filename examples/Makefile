@@ -60,7 +60,8 @@ EXAMPLES = \
 	showkeys \
 	legacy \
 	colocate \
-	pset
+	pset \
+	nodeid
 
 all: $(EXAMPLES)
 
