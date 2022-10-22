@@ -134,6 +134,7 @@ examples/debugger/mpihello
 examples/legacy
 examples/colocate
 examples/pset
+examples/nodeid
 
 src/sys/powerpc/atomic-32.s
 src/sys/powerpc/atomic-64.s
