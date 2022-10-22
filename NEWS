@@ -86,6 +86,7 @@ PR #1570: Multiple commits
   - rmaps/base: Fix segv on failed-map
   - ompi/schizo: Fix deprecated message for rankfile
   - Rankfile slots fix and LSF support fix for LSB_AFFINITY_HOSTFILE
+PR #1564: Add an example that retrieves node IDs
 PR #1562: Remove check for resilience that caused a segfault
 PR #1557: Update NEWS
 PR #1556: Multiple commits
