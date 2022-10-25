@@ -304,6 +304,12 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_add_pid_to_session_dirname);
 
+    prte_fwd_environment = false;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "fwd_environment",
+                                      "Forward the entire local environment",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_fwd_environment);
+
     prte_execute_quiet = false;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "execute_quiet",
                                       "Do not output error and help messages",

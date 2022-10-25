@@ -92,6 +92,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_NPERNODE               "N"                         // required
 #define PRTE_CLI_APPFILE                "app"                       // required
 #define PRTE_CLI_FWD_ENVAR              "x"                         // required
+#define PRTE_CLI_FWD_ENVIRON            "fwd-environment"           // optional
 #define PRTE_CLI_HOSTFILE               "hostfile"                  // required
 #define PRTE_CLI_HOST                   "host"                      // required
 #define PRTE_CLI_PATH                   "path"                      // required
