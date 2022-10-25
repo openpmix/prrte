@@ -577,6 +577,10 @@ Supported values include:
     that reported it. This option defaults to a true value if the option is given
     without a value.
 
+-   FWD-ENVIRONMENT[(=bool)] directs the runtime to forward the entire local environment
+    in support of the application. This option defaults to a true value if the option is
+    given without a value.
+
 The runtime-options command line option has no qualifiers. Note that directives
 are case-insensitive.
 #

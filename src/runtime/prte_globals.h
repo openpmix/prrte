@@ -515,6 +515,7 @@ PRTE_EXPORT extern pmix_pointer_array_t *prte_cache;
 PRTE_EXPORT extern bool prte_persistent;
 PRTE_EXPORT extern bool prte_add_pid_to_session_dirname;
 PRTE_EXPORT extern bool prte_allow_run_as_root;
+PRTE_EXPORT extern bool prte_fwd_environment;
 
 /* PRTE OOB port flags */
 PRTE_EXPORT extern bool prte_static_ports;

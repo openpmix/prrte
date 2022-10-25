@@ -165,6 +165,7 @@ static struct option ompioptions[] = {
     PMIX_OPTION_DEFINE("machinefile", PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_DEFAULT_HOSTFILE, PMIX_ARG_REQD),
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_HOST, PMIX_ARG_REQD, 'H'),
+    PMIX_OPTION_DEFINE(PRTE_CLI_FWD_ENVIRON, PMIX_ARG_OPTIONAL),
 
     /* placement options */
     /* Mapping options */
