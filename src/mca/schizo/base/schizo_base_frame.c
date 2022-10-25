@@ -409,6 +409,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_AGG_HELP,
         PRTE_CLI_NOTIFY_ERRORS,
         PRTE_CLI_OUTPUT_PROCTABLE,
+        PRTE_CLI_FWD_ENVIRON,
         NULL
     };
 
