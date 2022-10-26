@@ -751,7 +751,7 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
         }
         /* --rankfile X -> map-by rankfile:file=X */
         else if (0 == strcmp(option, "rankfile")) {
-            pmix_asprintf(&p2, "%s%s", PRTE_CLI_QFILE, opt->values[0]);
+            pmix_asprintf(&p2, "%s:%s%s", PRTE_CLI_RANKFILE, PRTE_CLI_QFILE, opt->values[0]);
             rc = prte_schizo_base_add_directive(results, option, PRTE_CLI_MAPBY, p2, true);
             free(p2);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
