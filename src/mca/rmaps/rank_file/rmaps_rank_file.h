@@ -15,6 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,6 +39,8 @@
 
 BEGIN_C_DECLS
 
+#define RMAPS_RANK_FILE_MAX_SLOTS 64
+
 int prte_rmaps_rank_file_lex_destroy(void);
 
 struct prte_rmaps_rf_component_t {
@@ -54,7 +57,7 @@ typedef struct cpu_package_t cpu_package_t;
 struct prte_rmaps_rank_file_map_t {
     pmix_object_t super;
     char *node_name;
-    char slot_list[64];
+    char slot_list[RMAPS_RANK_FILE_MAX_SLOTS];
 };
 typedef struct prte_rmaps_rank_file_map_t prte_rmaps_rank_file_map_t;
 
