@@ -18,6 +18,7 @@
  * Copyright (c) 2019      UT-Battelle, LLC. All rights reserved.
  *
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -683,7 +684,11 @@ ranking:
      */
     if (!did_map || 0 == jdata->num_procs || 0 == jdata->map->num_nodes) {
         pmix_show_help("help-prte-rmaps-base.txt", "failed-map", true,
-                       did_map ? "mapped" : "unmapped", jdata->num_procs, jdata->map->num_nodes);
+                       PRTE_ERROR_NAME(rc),
+                       "N/A",
+                       jdata->num_procs,
+                       prte_rmaps_base_print_mapping(options.map),
+                       prte_hwloc_base_print_binding(options.bind));
         jdata->exit_code = -PRTE_JOB_STATE_MAP_FAILED;
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
         goto cleanup;
