@@ -751,7 +751,7 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
 }
 
 int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
-                                   hwloc_cpuset_t cpumask)
+                                   bool use_hwthread_cpus, hwloc_cpuset_t cpumask)
 {
     char **item, **rngs, *lst;
     int rc, i, j, k;
@@ -825,7 +825,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                     for (j = 0; NULL != list[j]; j++) {
                         core_id = atoi(list[j]);
                         /* find the specified available cpu */
-                        if (NULL == (pu = prte_hwloc_base_get_pu(topo, false, core_id))) {
+                        if (NULL == (pu = prte_hwloc_base_get_pu(topo, use_hwthread_cpus, core_id))) {
                             pmix_argv_free(range);
                             pmix_argv_free(item);
                             pmix_argv_free(rngs);
@@ -843,7 +843,7 @@ int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
                     upper_range = atoi(range[1]);
                     for (core_id = lower_range; core_id <= upper_range; core_id++) {
                         /* find the specified logical available cpu */
-                        if (NULL == (pu = prte_hwloc_base_get_pu(topo, false, core_id))) {
+                        if (NULL == (pu = prte_hwloc_base_get_pu(topo, use_hwthread_cpus, core_id))) {
                             pmix_argv_free(range);
                             pmix_argv_free(item);
                             pmix_argv_free(rngs);
