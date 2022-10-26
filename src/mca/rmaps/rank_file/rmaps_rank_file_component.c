@@ -61,7 +61,13 @@ prte_rmaps_rf_component_t prte_mca_rmaps_rank_file_component = {
 
 static int prte_rmaps_rank_file_query(pmix_mca_base_module_t **module, int *priority)
 {
-    *priority = 0;
+    /*
+     * Set the rankfile priority to the highest:
+     * - If we are in an LSF environment with affinity information (LSB_AFFINITY_HOSTFILE)
+     *   then we need to force this component.
+     * - If the user did not explicitly request this component, then it is skipped.
+     */
+    *priority = 100;
     *module = (pmix_mca_base_module_t *) &prte_rmaps_rank_file_module;
     return PRTE_SUCCESS;
 }
@@ -69,7 +75,7 @@ static int prte_rmaps_rank_file_query(pmix_mca_base_module_t **module, int *prio
 static void rf_map_construct(prte_rmaps_rank_file_map_t *ptr)
 {
     ptr->node_name = NULL;
-    memset(ptr->slot_list, (char) 0x00, 64);
+    memset(ptr->slot_list, (char) 0x00, RMAPS_RANK_FILE_MAX_SLOTS);
 }
 static void rf_map_destruct(prte_rmaps_rank_file_map_t *ptr)
 {
