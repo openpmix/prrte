@@ -312,7 +312,7 @@ PRTE_EXPORT bool prte_hwloc_base_single_cpu(hwloc_cpuset_t cpuset);
  * cpus of given type, and produce a cpuset for the described binding
  */
 PRTE_EXPORT int prte_hwloc_base_cpu_list_parse(const char *slot_str, hwloc_topology_t topo,
-                                               hwloc_cpuset_t cpumask);
+                                                bool use_hwthread_cpus, hwloc_cpuset_t cpumask);
 
 PRTE_EXPORT char *prte_hwloc_base_find_coprocessors(hwloc_topology_t topo);
 PRTE_EXPORT char *prte_hwloc_base_check_on_coprocessor(void);

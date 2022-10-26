@@ -77,3 +77,28 @@ a non-existent CPU:
   Available CPUs: %s
 
 Please correct the line and try again.
+[lsf-affinity-file-not-found]
+The affinity file provided in LSB_AFFINITY_HOSTFILE could not be found:
+
+  File:  %s
+
+We cannot continue.
+[lsf-affinity-file-failed-convert]
+The affinity file provided in LSB_AFFINITY_HOSTFILE could not be converted
+to a rankfile:
+
+  File:  %s
+
+We cannot continue.
+[rmaps:proc-slots-overloaded]
+A process attempted to bind to resources already allocated on a node
+to a different process.
+ Process : %s
+ Node    : %s
+ Process Requested CPU Set : %s
+ Node Available CPU Set    : %s
+ Overlapping CPU Set       : %s
+
+If this is intentional then you must pass the "overload-allowed"
+qualifier to the --bind-to option.
+  --bind-to :overload-allowed
