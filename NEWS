@@ -36,7 +36,7 @@ bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
 
-3.0.0 -- 25 Oct 2022
+3.0.0 -- 31 Oct 2022
 ------------------------------------
 **** NOTE: This release represents a major update to the PRRTE
 code base from prior releases. Many of the changes will be
@@ -70,6 +70,10 @@ minimum of PMIx v2.5).
 
 Detailed changes:
 
+PR #1570: Multiple commits
+  - rmaps/base: Fix segv on failed-map
+  - ompi/schizo: Fix deprecated message for rankfile
+  - Rankfile slots fix and LSF support fix for LSB_AFFINITY_HOSTFILE
 PR #1562: Remove check for resilience that caused a segfault
 PR #1557: Update NEWS
 PR #1556: Multiple commits
