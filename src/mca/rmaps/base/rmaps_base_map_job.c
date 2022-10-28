@@ -63,9 +63,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_node_t *node;
     pmix_proc_t *pptr;
     int rc = PRTE_SUCCESS;
+    int n;
     bool did_map, pernode = false;
     prte_rmaps_base_selected_module_t *mod;
     prte_job_t *parent = NULL;
+    prte_app_context_t *app;
     bool inherit = false;
     pmix_proc_t *nptr, *target_proc;
     char *tmp;
@@ -95,6 +97,13 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     memset(&options, 0, sizeof(prte_rmaps_options_t));
     options.stream = prte_rmaps_base_framework.framework_output;
     options.verbosity = 5;  // usual value for base-level functions
+    /* add up all the expected procs */
+    for (n=0; n < jdata->apps->size; n++) {
+        app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, n);
+        if (NULL != app) {
+            options.nprocs += app->num_procs;
+        }
+    }
 
     /* check and set some general options */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
