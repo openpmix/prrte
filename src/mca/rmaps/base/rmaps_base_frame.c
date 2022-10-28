@@ -641,8 +641,21 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
         if (PRTE_MAPPING_BYNODE == mapping) {
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_NODE);
 
-        } else if (PRTE_MAPPING_PPR != mapping) {
+        } else if (PRTE_MAPPING_BYSLOT == mapping) {
             /* default to by-slot */
+            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
+
+        } else if (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
+            /* default to by-span */
+            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SPAN);
+
+        } else if (PRTE_MAPPING_BYHWTHREAD >= mapping &&
+                   PRTE_MAPPING_BYNUMA <= mapping) {
+            /* default to by-slot */
+            PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_FILL);
+
+        } else {
+            /* default to slot */
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
         }
         jdata->map->ranking = tmp;
