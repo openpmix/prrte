@@ -1709,6 +1709,14 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
             t->sig = sig;
             t->index = pmix_pointer_array_add(prte_node_topologies, t);
             daemon->node->topology = t;
+            if (NULL != topo) {
+                t->topo = topo;
+                /* update the node's available processors */
+                if (NULL != daemon->node->available) {
+                    hwloc_bitmap_free(daemon->node->available);
+                }
+                daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
+            }
         }
         if (!prte_plm_globals.daemon1_has_reported) {
             if (NULL == daemon->node->topology->topo) {

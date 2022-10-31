@@ -70,6 +70,7 @@ minimum of PMIx v2.5).
 
 Detailed changes:
 
+PR #1575: Ensure we init the available node bit tracker
 PR #1572: Fix some default map/rank policy settings
 PR #1570: Multiple commits
   - rmaps/base: Fix segv on failed-map
