@@ -558,14 +558,13 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                         prte_rmaps_options_t *options)
 {
     int i, rc, nprocs_mapped, nprocs;
-    prte_node_t *node;
+    prte_node_t *node, *nnext;
     int extra_procs_to_assign = 0, nxtra_nodes = 0;
     int navg, nxtra_objs = 0, ncpus;
     float balance;
     prte_proc_t *proc;
     bool second_pass = false;
-    bool span = false;
-    bool nodefull;
+    bool nodefull, allfull;
     hwloc_obj_t obj = NULL;
     unsigned j, total_nobjs, nobjs;
     prte_binding_policy_t savebind = options->bind;
@@ -607,35 +606,87 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
      * list of nodes, as opposed to being "load balanced" in the span mode
      */
     if (options->mapspan) {
-        /* we know we have enough slots, or that oversubscrption is allowed, so
-         * next determine how many total objects we have to work with
-         */
-        total_nobjs = 0;
-        PMIX_LIST_FOREACH(node, node_list, prte_node_t)
-        {
-            /* get the number of objects of this type on this node */
-            total_nobjs += prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                              options->maptype, options->cmaplvl);
-        }
+        allfull = true;
+        nprocs_mapped = 0;
+        do {
+            allfull = true;
+            PMIX_LIST_FOREACH_SAFE(node, nnext, node_list, prte_node_t)
+            {
+                prte_rmaps_base_get_cpuset(jdata, node, options);
+                options->nobjs = 0;
+                /* have to delay checking for availability until we have the object */
 
-        if (0 == total_nobjs) {
-            return PRTE_ERR_NOT_FOUND;
-        }
-        /* divide the procs evenly across all objects */
-        navg = app->num_procs / total_nobjs;
-        if (0 == navg) {
-            /* if there are less procs than objects, we have to
-             * place at least one/obj
-             */
-            navg = 1;
-        }
+                /* get the number of objects of this type on this node */
+                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                           options->maptype, options->cmaplvl);
+                if (0 == nobjs) {
+                    /* this node doesn't have any objects of this type, so
+                     * we might as well drop it from consideration */
+                    pmix_list_remove_item(node_list, &node->super);
+                    PMIX_RELEASE(node);
+                    continue;
+                }
+                pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps:rr: found %u %s objects on node %s",
+                                    nobjs, hwloc_obj_type_string(options->maptype),
+                                    node->name);
 
-        /* compute how many objs need an extra proc */
-        nxtra_objs = app->num_procs - (navg * total_nobjs);
-        if (0 > nxtra_objs) {
-            nxtra_objs = 0;
+                nodefull = false;
+                for (j=0; j < nobjs && nprocs_mapped < app->num_procs && !nodefull; j++) {
+                    pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps:rr: assigning proc to object %d", j);
+                    /* get the hwloc object */
+                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
+                                                          options->maptype, options->cmaplvl, j);
+                    if (NULL == obj) {
+                        /* out of objects on this node */
+                        break;
+                    }
+                    options->nprocs = 1;
+                    if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, obj, options)) {
+                        rc = PRTE_ERR_OUT_OF_RESOURCE;
+                        continue;
+                    }
+                    proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, obj, options);
+                    if (NULL == proc) {
+                        rc = PRTE_ERR_OUT_OF_RESOURCE;
+                        goto errout;
+                    }
+                    nprocs_mapped++;
+                    if (NULL != options->target) {
+                        hwloc_bitmap_free(options->target);
+                        options->target = NULL;
+                    }
+                    rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
+                    if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
+                        /* move to next node */
+                        pmix_list_remove_item(node_list, &node->super);
+                        PMIX_RELEASE(node);
+                        nodefull = true;
+                        PMIX_RELEASE(proc);
+                        break;
+                    } else if (PRTE_SUCCESS != rc) {
+                        /* got an error */
+                        PMIX_RELEASE(proc);
+                        goto errout;
+                    }
+                    PMIX_RELEASE(proc);
+                    allfull = false;
+                }
+            }
+        } while (nprocs_mapped < app->num_procs && !allfull);
+
+        if (nprocs_mapped == app->num_procs) {
+            return PRTE_SUCCESS;
         }
-        span = true;
+        pmix_show_help("help-prte-rmaps-base.txt",
+                       "failed-map", true,
+                       PRTE_ERROR_NAME(rc),
+                       (NULL == app) ? "N/A" : app->app,
+                       (NULL == app) ? -1 : app->num_procs,
+                       prte_rmaps_base_print_mapping(options->map),
+                       prte_hwloc_base_print_binding(options->bind));
+        return PRTE_ERR_SILENT;
     }
 
     /* we know we have enough slots, or that oversubscrption is allowed, so
@@ -682,23 +733,11 @@ pass:
                     goto errout;
                 }
             }
-            if (span) {
-                if (navg <= node->slots_available) {
-                    nprocs = navg;
-                } else {
-                    nprocs = node->slots_available;
-                }
-                if (0 < nxtra_objs) {
-                    nprocs++;
-                    nxtra_objs--;
-                }
+            /* assign a number of procs equal to the number of available slots */
+            if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
+                nprocs = node->slots_available;
             } else {
-                /* assign a number of procs equal to the number of available slots */
-                if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
-                    nprocs = node->slots_available;
-                } else {
-                    nprocs = node->slots;
-                }
+                nprocs = node->slots;
             }
         }
 
@@ -727,63 +766,13 @@ pass:
                             "mca:rmaps:rr: assigning nprocs %d", nprocs);
 
         nodefull = false;
-        if (span) {
-            /* if we are mapping spanned, then we loop over
-             * procs as the outer loop and loop over objects
-             * as the inner loop so we balance procs across
-             * all the objects on the node */
-            for (i=0; i < nprocs && nprocs_mapped < app->num_procs && !nodefull; i++) {
-                for (j=0; j < nobjs && nprocs_mapped < app->num_procs; j++) {
-                    pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps:rr: assigning proc to object %d", j);
-                    /* get the hwloc object */
-                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                          options->maptype, options->cmaplvl, j);
-                    if (NULL == obj) {
-                        /* out of objects on this node */
-                        break;
-                    }
-                    options->nprocs = nprocs;
-                    if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, obj, options)) {
-                        rc = PRTE_ERR_OUT_OF_RESOURCE;
-                        continue;
-                    }
-                    proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, obj, options);
-                    if (NULL == proc) {
-                        rc = PRTE_ERR_OUT_OF_RESOURCE;
-                        goto errout;
-                    }
-                    /* setup_proc removes any node at max_slots */
-                    if (0 == i) {
-                        options->total_nobjs++;
-                    }
-                    options->nobjs++;
-                    nprocs_mapped++;
-                    if(NULL != options->target)
-                    {
-                        hwloc_bitmap_free(options->target);
-                        options->target = NULL;
-                    }
-                    rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
-                    if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
-                        /* move to next node */
-                        nodefull = true;
-                        PMIX_RELEASE(proc);
-                        break;
-                    } else if (PRTE_SUCCESS != rc) {
-                        /* got an error */
-                        PMIX_RELEASE(proc);
-                        goto errout;
-                    }
-                    PMIX_RELEASE(proc);
-                }
-            }
-        } else {
-            /* if we are not mapping spanned, then we loop over
-             * objects as the outer loop and loop over procs
-             * as the inner loop so that procs fill a given
-             * object before moving to the next one on the node */
-            for (j=0; j < nobjs && nprocs_mapped < app->num_procs && !nodefull; j++) {
+        /* loop over procs as the outer loop and loop over objects
+         * as the inner loop so we balance procs across
+         * all the objects on the node */
+        for (i=0; i < nprocs && nprocs_mapped < app->num_procs && !nodefull; i++) {
+            for (j=0; j < nobjs && nprocs_mapped < app->num_procs; j++) {
+                pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps:rr: assigning proc to object %d", j);
                 /* get the hwloc object */
                 obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
                                                       options->maptype, options->cmaplvl, j);
@@ -796,34 +785,33 @@ pass:
                     rc = PRTE_ERR_OUT_OF_RESOURCE;
                     continue;
                 }
-                options->total_nobjs++;
-                options->nobjs++;
-                for (i=0; i < options->nprocs && nprocs_mapped < app->num_procs; i++) {
-                    proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, obj, options);
-                    if (NULL == proc) {
-                        rc = PRTE_ERR_OUT_OF_RESOURCE;
-                        goto errout;
-                    }
-                    /* setup_proc removes any node at max_slots */
-                    nprocs_mapped++;
-                    rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
-                    if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
-                        /* move to next node */
-                        nodefull = true;
-                        PMIX_RELEASE(proc);
-                        break;
-                    } else if (PRTE_SUCCESS != rc) {
-                        /* got an error */
-                        PMIX_RELEASE(proc);
-                        goto errout;
-                    }
-                    PMIX_RELEASE(proc);
+                proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, obj, options);
+                if (NULL == proc) {
+                    rc = PRTE_ERR_OUT_OF_RESOURCE;
+                    goto errout;
                 }
-                if(NULL != options->target)
-                {
+                /* setup_proc removes any node at max_slots */
+                if (0 == i) {
+                    options->total_nobjs++;
+                }
+                options->nobjs++;
+                nprocs_mapped++;
+                if (NULL != options->target) {
                     hwloc_bitmap_free(options->target);
                     options->target = NULL;
                 }
+                rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
+                if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
+                    /* move to next node */
+                    nodefull = true;
+                    PMIX_RELEASE(proc);
+                    break;
+                } else if (PRTE_SUCCESS != rc) {
+                    /* got an error */
+                    PMIX_RELEASE(proc);
+                    goto errout;
+                }
+                PMIX_RELEASE(proc);
             }
         }
         if (nprocs_mapped == app->num_procs) {
