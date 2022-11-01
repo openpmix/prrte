@@ -132,6 +132,8 @@ static int prep_singleton(const char *name);
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status);
+
     PMIX_ACQUIRE_OBJECT(lock);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
@@ -180,6 +182,7 @@ static void parent_died_fn(size_t evhdlr_registration_id, pmix_status_t status,
                            pmix_info_t results[], size_t nresults,
                            pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status, source, info, ninfo, results, nresults);
     clean_abort(0, 0, NULL);
     cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
 }
@@ -187,6 +190,7 @@ static void parent_died_fn(size_t evhdlr_registration_id, pmix_status_t status,
 static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbdata)
 {
     mylock_t *lock = (mylock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(evhandler_ref);
 
     lock->status = status;
     PRTE_PMIX_WAKEUP_THREAD(&lock->lock);
@@ -225,8 +229,8 @@ static void setup_sighandler(int signal, prte_event_t *ev, prte_event_cbfunc_t c
 
 int main(int argc, char *argv[])
 {
-    int rc = 1, i, j;
-    char *param, *timeoutenv, *ptr, *tpath, *cptr;
+    int rc = 1, i;
+    char *param, *timeoutenv, *tpath, *cptr;
     prte_pmix_lock_t lock;
     pmix_list_t apps;
     prte_pmix_app_t *app;
@@ -251,7 +255,6 @@ int main(int argc, char *argv[])
     char **hosts = NULL;
     prte_schizo_base_module_t *schizo;
     prte_ess_base_signal_t *sig;
-    char **targv, **options;
     pmix_status_t code;
     char *personality;
     pmix_cli_result_t results;
@@ -1156,6 +1159,8 @@ DONE:
 
 static void clean_abort(int fd, short flags, void *arg)
 {
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags, arg);
+
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
      */
@@ -1236,6 +1241,7 @@ static void abort_signal_callback(int fd)
 {
     uint8_t foo = 1;
     char *msg = "Abort is in progress...hit ctrl-c again to forcibly terminate\n\n";
+    PRTE_HIDE_UNUSED_PARAMS(fd);
 
     /* if this is the first time thru, just get
      * the current time
@@ -1341,6 +1347,7 @@ static void signal_forward_callback(int signum, short args, void *cbdata)
     pmix_status_t rc;
     pmix_proc_t proc;
     pmix_info_t info;
+    PRTE_HIDE_UNUSED_PARAMS(args, cbdata);
 
     if (verbose) {
         fprintf(stderr, "%s: Forwarding signal %d to job\n", prte_tool_basename, signum);
@@ -1362,6 +1369,8 @@ static void signal_forward_callback(int signum, short args, void *cbdata)
 static int sigpipe_error_count = 0;
 static void epipe_signal_callback(int fd, short args, void *cbdata)
 {
+    PRTE_HIDE_UNUSED_PARAMS(fd, args, cbdata);
+
     sigpipe_error_count++;
 
     if (10 < sigpipe_error_count) {

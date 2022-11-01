@@ -106,35 +106,13 @@ static bool verbose = false;
 int prun(int argc, char *argv[])
 {
     int rc = 1, i;
-    char *param, *ptr, *cptr, **options;
-    prte_pmix_lock_t lock, rellock;
     pmix_list_t apps;
-    prte_pmix_app_t *app;
-    void *tinfo, *jinfo;
-    pmix_info_t info, *iptr;
-    pmix_proc_t pname;
-    pmix_status_t ret;
-    bool flag;
-    size_t n, ninfo;
-    pmix_app_t *papps = NULL;
-    size_t napps;
-    mylock_t mylock;
-    uint32_t ui32;
-    pid_t pid;
-    char **pargv, **targv;
+    char **pargv;
     int pargc;
-    prte_ess_base_signal_t *sig;
-    prte_event_list_item_t *evitm;
-    pmix_value_t *val;
-    pmix_data_array_t darray;
     prte_schizo_base_module_t *schizo;
     char hostname[PRTE_PATH_MAX];
-    pmix_rank_t rank;
-    pmix_status_t code;
     char *personality;
-    pmix_proc_t parent;
     pmix_cli_result_t results;
-    pmix_cli_item_t *opt;
 
     /* init the globals */
     PMIX_CONSTRUCT(&apps, pmix_list_t);
