@@ -645,7 +645,7 @@ int prte_rmaps_base_set_ranking_policy(prte_job_t *jdata, char *spec)
             /* default to by-slot */
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SLOT);
 
-        } else if (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
+        } else if (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping)) {
             /* default to by-span */
             PRTE_SET_RANKING_POLICY(tmp, PRTE_RANK_BY_SPAN);
 

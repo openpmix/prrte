@@ -137,6 +137,7 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
             }
             if (NULL == node->topology) {
                 node->topology = t;
+                node->available = prte_hwloc_base_filter_cpus(node->topology->topo);
             }
             node->state = PRTE_NODE_STATE_UP;
         }
