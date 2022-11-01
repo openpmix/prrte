@@ -140,6 +140,7 @@ static void infocbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo, vo
 {
     myxfer_t *xfer = (myxfer_t *) cbdata;
     size_t n;
+    PRTE_HIDE_UNUSED_PARAMS(status);
 
     if (NULL != info) {
         xfer->ninfo = ninfo;
@@ -190,16 +191,11 @@ int main(int argc, char *argv[])
     myxfer_t xfer;
     pmix_data_buffer_t pbuf, *wbuf;
     pmix_byte_object_t pbo;
-    pmix_proc_t target;
-    char *myuri;
-    prte_value_t *pval;
     int8_t flag;
     uint8_t naliases, ni;
     char **nonlocal = NULL, *personality;
     int n;
-    pmix_info_t info;
     pmix_value_t *vptr;
-    int32_t one = 1;
     char **pargv;
     int pargc;
     prte_schizo_base_module_t *schizo;
@@ -704,7 +700,7 @@ int main(int argc, char *argv[])
      * otherwise, only the first layer of daemons will ever see them
      */
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_TREE_SPAWN)) {
-        int j, k;
+        int k;
         bool ignore;
         char *no_keep[] = {
             "prte_hnp_uri",
@@ -791,6 +787,7 @@ static void shutdown_callback(int fd, short flags, void *arg)
 {
     prte_timer_t *tm = (prte_timer_t *) arg;
     bool suicide = false;
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags);
 
     if (NULL != tm) {
         /* release the timer */
@@ -831,11 +828,11 @@ static void rollup(int status, pmix_proc_t *sender,
                    void *cbdata)
 {
     pmix_proc_t child;
-    int32_t flag, cnt;
-    pmix_byte_object_t bo;
+    int32_t cnt;
     pmix_value_t val;
     pmix_proc_t proc;
     pmix_status_t prc;
+    PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     ncollected++;
 
@@ -912,6 +909,7 @@ static void node_regex_report(int status, pmix_proc_t *sender, pmix_data_buffer_
 {
     int rc;
     bool *active = (bool *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tag);
 
     /* extract the node info if needed, and update the routing tree */
     if (PRTE_SUCCESS != (rc = prte_util_decode_nidmap(buffer))) {
