@@ -121,6 +121,8 @@ static void epipe_signal_callback(int signal);
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status);
+
     PMIX_ACQUIRE_OBJECT(lock);
     evid = ref;
     PRTE_PMIX_WAKEUP_THREAD(lock);
@@ -129,6 +131,8 @@ static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status);
+
     PMIX_ACQUIRE_OBJECT(lock);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
@@ -141,6 +145,7 @@ static void defhandler(size_t evhdlr_registration_id, pmix_status_t status,
     prte_pmix_lock_t *lock = NULL;
     size_t n;
     pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, source, results, nresults);
 
     if (verbose) {
         pmix_output(0, "PRUN: DEFHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
@@ -199,6 +204,7 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
     pmix_nspace_t jobid = {0};
     size_t n;
     char *msg = NULL;
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, source, results, nresults);
 
     if (verbose) {
         pmix_output(0, "PRUN: EVHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
@@ -244,6 +250,8 @@ static void debug_cbfunc(size_t evhdlr_registration_id, pmix_status_t status,
                          pmix_info_t *results, size_t nresults,
                          pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status, source, info, ninfo, results, nresults);
+
     /* we _always_ have to execute the evhandler callback or
      * else the event progress engine will hang */
     if (NULL != cbfunc) {
@@ -256,6 +264,7 @@ static void setupcbfunc(pmix_status_t status, pmix_info_t info[], size_t ninfo,
 {
     mylock_t *mylock = (mylock_t *) provided_cbdata;
     size_t n;
+    PRTE_HIDE_UNUSED_PARAMS(status);
 
     if (NULL != info) {
         mylock->ninfo = ninfo;
@@ -306,7 +315,7 @@ int prun_common(pmix_cli_result_t *results,
                 int pargc, char **pargv)
 {
     int rc = 1, i;
-    char *param, *ptr, *cptr, **options;
+    char *param, *ptr;
     prte_pmix_lock_t lock, rellock;
     pmix_list_t apps;
     prte_pmix_app_t *app;
@@ -321,7 +330,6 @@ int prun_common(pmix_cli_result_t *results,
     mylock_t mylock;
     uint32_t ui32;
     pid_t pid;
-    char **targv;
     prte_ess_base_signal_t *sig;
     prte_event_list_item_t *evitm;
     pmix_value_t *val;
@@ -331,6 +339,7 @@ int prun_common(pmix_cli_result_t *results,
     pmix_status_t code;
     pmix_proc_t parent;
     pmix_cli_item_t *opt;
+    PRTE_HIDE_UNUSED_PARAMS(pargc);
 
     /* init the globals */
     PMIX_CONSTRUCT(&apps, pmix_list_t);
@@ -876,6 +885,7 @@ static void clean_abort(int fd, short flags, void *arg)
     pmix_proc_t target;
     pmix_info_t directive;
     pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags, arg);
 
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
@@ -917,6 +927,7 @@ static void abort_signal_callback(int fd)
     uint8_t foo = 1;
     char *msg
         = "Abort is in progress...hit ctrl-c again within 5 seconds to forcibly terminate\n\n";
+    PRTE_HIDE_UNUSED_PARAMS(fd);
 
     /* if this is the first time thru, just get
      * the current time
@@ -973,6 +984,7 @@ static int sigpipe_error_count = 0;
 static void epipe_signal_callback(int signal)
 {
     sigpipe_error_count++;
+    PRTE_HIDE_UNUSED_PARAMS(signal);
 
     if (10 < sigpipe_error_count) {
         /* time to abort */

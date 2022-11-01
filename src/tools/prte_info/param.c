@@ -228,7 +228,7 @@ void prte_info_show_mca_params(const char *type, const char *component, bool wan
 
 void prte_info_do_path(bool want_all)
 {
-    int i, count;
+    int i;
     char *scope;
     pmix_cli_item_t *opt;
 

@@ -96,7 +96,6 @@ void prte_info_show_prte_version(const char *scope)
  */
 void prte_info_do_version(bool want_all)
 {
-    size_t i, n;
     char *arg1, *scope, **tmp;
     char *pos = NULL;
     int j;

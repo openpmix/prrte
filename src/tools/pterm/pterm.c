@@ -137,6 +137,8 @@ static void infocb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *
                    pmix_release_cbfunc_t release_fn, void *release_cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(info, ninfo);
+
 #if PMIX_VERSION_MAJOR == 3 && PMIX_VERSION_MINOR == 0 && PMIX_VERSION_RELEASE < 3
     /* The callback should likely not have been called
      * see the comment below */
@@ -159,6 +161,8 @@ static void infocb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status, ref);
+
     PMIX_ACQUIRE_OBJECT(lock);
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
@@ -173,6 +177,7 @@ static void evhandler(size_t evhdlr_registration_id, pmix_status_t status,
     pmix_nspace_t jobid = {0};
     size_t n;
     char *msg = NULL;
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, source, results, nresults);
 
     if (verbose) {
         pmix_output(0, "PRUN: EVHANDLER WITH STATUS %s(%d)", PMIx_Error_string(status), status);
@@ -479,6 +484,8 @@ int main(int argc, char *argv[])
 
 static void clean_abort(int fd, short flags, void *arg)
 {
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags, arg);
+
     /* if we have already ordered this once, don't keep
      * doing it to avoid race conditions
      */
@@ -509,6 +516,7 @@ static void abort_signal_callback(int fd)
     uint8_t foo = 1;
     char *msg
         = "Abort is in progress...hit ctrl-c again within 5 seconds to forcibly terminate\n\n";
+    PRTE_HIDE_UNUSED_PARAMS(fd);
 
     /* if this is the first time thru, just get
      * the current time
