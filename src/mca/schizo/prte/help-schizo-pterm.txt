@@ -106,9 +106,7 @@ option to the help request as "--help <option>".
 
 /*****      Ranking Options      *****/
 
-   --rank-by <arg0>                  Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache
-                                     | l2cache | l3cache | numa (default:np>2) | package | node], with
-                                     modifier :SPAN or :FILL
+   --rank-by <arg0>                  Ranking Policy for job
 
 
 
