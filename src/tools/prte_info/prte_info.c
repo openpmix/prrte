@@ -78,8 +78,6 @@ pmix_pointer_array_t mca_types = {{0}};
 int main(int argc, char *argv[])
 {
     int ret = 0;
-    bool want_help = false;
-    bool cmd_error = false;
     bool acted = false;
     bool want_all = false;
     int i;
@@ -88,6 +86,7 @@ int main(int argc, char *argv[])
     char *ptr;
     char *personality;
     prte_schizo_base_module_t *schizo;
+    PRTE_HIDE_UNUSED_PARAMS(argc);
 
     /* protect against problems if someone passes us thru a pipe
      * and then abnormally terminates the pipe early */
