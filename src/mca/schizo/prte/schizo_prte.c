@@ -773,10 +773,10 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
             }
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
-        /* --do-not-launch  ->  --map-by :donotlaunch */
+        /* --do-not-launch  ->  --runtime-options donotlaunch */
         else if (0 == strcmp(option, "do-not-launch")) {
-            rc = prte_schizo_base_add_qualifier(results, option,
-                                                PRTE_CLI_MAPBY, PRTE_CLI_NOLAUNCH,
+            rc = prte_schizo_base_add_directive(results, option,
+                                                PRTE_CLI_RTOS, PRTE_CLI_NOLAUNCH,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
