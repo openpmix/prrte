@@ -228,6 +228,15 @@ uri:<arg>   specifies the URI of the DVM controller, or the name of
 Specifying "--dvm search" directs "mpirun" to search for available
 DVM controllers it is authorized to use, connecting to the first such
 candidate it finds.
+
+Examples:
+  mpirun --dvm file:dvm.uri --np 4 ./a.out
+
+  mpirun --dvm pid:12345 --np 4 ./a.out
+
+  mpirun --dvm search --np 4 ./a.out
+
+  mpirun --dvm pid:file:prte_pid.txt --np 4 ./a.out
 #
 [prtemca]
 Syntax: --prtemca <arg0> <arg1>
