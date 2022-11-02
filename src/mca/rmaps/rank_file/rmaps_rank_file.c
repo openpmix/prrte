@@ -713,6 +713,12 @@ static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata,
     PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYUSER);
     jdata->map->req_mapper = strdup("rank_file");
 
+    /*
+     * Ranking is also determined by the rank file that we generate
+     */
+    options->userranked = true;
+    PRTE_SET_MAPPING_POLICY(jdata->map->ranking, PRTE_RANKING_BYUSER);
+
     /* Setup a temporary hostfile with logical cpu-ids converted from the the physical
      * cpu-ids provided by LSF. Further convert the format to match the rankfile
      *  - https://github.com/openpmix/prrte/pull/580 removed support for Physical CPU IDs
@@ -732,7 +738,7 @@ static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata,
     prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL, aff_rankfile, PMIX_STRING);
 
     /* LSF provides its info as hwthreads, so set the hwthread-as-cpus flag */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, true, NULL, PMIX_BOOL);
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
     options->use_hwthreads = true;
     /* don't override something provided by the user, but default to bind-to hwthread */
     if (!PRTE_BINDING_POLICY_IS_SET(prte_hwloc_default_binding_policy)) {
