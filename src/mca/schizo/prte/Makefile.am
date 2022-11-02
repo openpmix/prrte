@@ -10,6 +10,9 @@
 # $HEADER$
 #
 
+AM_CFLAGS = \
+    -DPRTE_GREEK_VERSION="\"@PRTE_GREEK_VERSION@\""
+
 dist_prtedata_DATA = \
     help-schizo-prte.txt \
     help-schizo-prted.txt \

@@ -106,5 +106,8 @@ PRTE_EXPORT int prte_util_convert_process_name_to_string(char **name_string,
 PRTE_EXPORT int prte_util_compare_name_fields(prte_ns_cmp_bitmask_t fields,
                                               const pmix_proc_t *name1, const pmix_proc_t *name2);
 
+PRTE_EXPORT char *prte_util_make_version_string(const char *scope, int major, int minor, int release,
+                                                const char *greek, const char *repo);
+
 END_C_DECLS
 #endif

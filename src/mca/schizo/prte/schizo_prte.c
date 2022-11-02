@@ -390,13 +390,12 @@ static struct option prtedoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_CONTROLLER_URI, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_PARENT_URI, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_TREE_SPAWN, PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE(PRTE_CLI_DAEMONIZE, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_SYSTEM_SERVER, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_SET_SID, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS_FILE, PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE(PRTE_CLI_LEAVE_SESSION_ATTACHED, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_TEST_SUICIDE, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_LEAVE_SESSION_ATTACHED, PMIX_ARG_NONE),
 
     PMIX_OPTION_END
 };
@@ -409,7 +408,6 @@ static struct option ptermoptions[] = {
     PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_VERBOSE, PMIX_ARG_NONE, 'v'),
 
     // MCA parameters
-    PMIX_OPTION_DEFINE(PRTE_CLI_PRTEMCA, PMIX_ARG_REQD),
     PMIX_OPTION_DEFINE(PRTE_CLI_PMIXMCA, PMIX_ARG_REQD),
 
     // DVM options
@@ -480,6 +478,9 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         helpfile = "help-schizo-pinfo.txt";
     }
     pmix_tool_msg = "Report bugs to: https://github.com/openpmix/prrte";
+    pmix_tool_org = "PRRTE";
+    pmix_tool_version = prte_util_make_version_string("all", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                                      PRTE_RELEASE_VERSION, PRTE_GREEK_VERSION, NULL);
 
     rc = pmix_cmd_line_parse(argv, shorts, myoptions, NULL,
                              results, helpfile);
