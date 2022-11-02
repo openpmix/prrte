@@ -236,6 +236,11 @@ int main(int argc, char *argv[])
     /* init the globals */
     PMIX_CONSTRUCT(&job_info, pmix_list_t);
 
+    prte_tool_basename = pmix_basename(argv[0]);
+    prte_tool_actual = "pterm";
+    gethostname(hostname, sizeof(hostname));
+    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
+
     /* we always need the prrte and pmix params */
     rc = prte_schizo_base_parse_prte(argc, 0, argv, NULL);
     if (PRTE_SUCCESS != rc) {
@@ -249,11 +254,6 @@ int main(int argc, char *argv[])
 
     /* init the tiny part of PRTE we use */
     prte_init_util(PRTE_PROC_MASTER);
-
-    prte_tool_basename = pmix_basename(argv[0]);
-    prte_tool_actual = "pterm";
-    gethostname(hostname, sizeof(hostname));
-    PMIX_CONSTRUCT(&results, pmix_cli_result_t);
 
     /* open the SCHIZO framework */
     rc = pmix_mca_base_framework_open(&prte_schizo_base_framework,
@@ -288,6 +288,9 @@ int main(int argc, char *argv[])
     rc = schizo->parse_cli(argv, &results, PMIX_CLI_WARN);
     if (PRTE_SUCCESS != rc) {
         PMIX_DESTRUCT(&results);
+        if (PRTE_OPERATION_SUCCEEDED == rc) {
+            return PRTE_SUCCESS;
+        }
         if (PRTE_ERR_SILENT != rc) {
             fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
         } else {

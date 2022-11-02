@@ -28,12 +28,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "pmix.h"
 #include "src/include/version.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_printf.h"
-
-#include "pmix.h"
+#include "src/util/name_fns.h"
 #include "src/tools/prte_info/pinfo.h"
 
 /*
@@ -62,16 +62,15 @@ static const char *prte_info_ver_component = "component";
 
 static void show_mca_version(const pmix_mca_base_component_t *component, const char *scope,
                              const char *ver_type);
-static char *make_version_str(const char *scope, int major, int minor, int release,
-                              const char *greek, const char *repo);
 
 void prte_info_show_prte_version(const char *scope)
 {
     char *tmp, *tmp2;
 
     pmix_asprintf(&tmp, "%s:version:full", prte_info_type_prte);
-    tmp2 = make_version_str(scope, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, PMIX_RELEASE_VERSION,
-                            PRTE_GREEK_VERSION, PRTE_REPO_REV);
+    tmp2 = prte_util_make_version_string(scope, PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION,
+                                         PRTE_RELEASE_VERSION,
+                                         PRTE_GREEK_VERSION, PRTE_REPO_REV);
     prte_info_out("PRTE", tmp, tmp2);
     free(tmp);
     free(tmp2);
@@ -250,16 +249,16 @@ static void show_mca_version(const pmix_mca_base_component_t *component, const c
         want_component = true;
     }
 
-    mca_version = make_version_str(scope, component->pmix_mca_major_version,
-                                   component->pmix_mca_minor_version,
-                                   component->pmix_mca_release_version, "",
-                                   "");
-    api_version = make_version_str(scope, component->pmix_mca_type_major_version,
-                                   component->pmix_mca_type_minor_version,
-                                   component->pmix_mca_type_release_version, "", "");
-    component_version = make_version_str(scope, component->pmix_mca_component_major_version,
-                                         component->pmix_mca_component_minor_version,
-                                         component->pmix_mca_component_release_version, "", "");
+    mca_version = prte_util_make_version_string(scope, component->pmix_mca_major_version,
+                                                component->pmix_mca_minor_version,
+                                                component->pmix_mca_release_version, "",
+                                                "");
+    api_version = prte_util_make_version_string(scope, component->pmix_mca_type_major_version,
+                                                component->pmix_mca_type_minor_version,
+                                                component->pmix_mca_type_release_version, "", "");
+    component_version = prte_util_make_version_string(scope, component->pmix_mca_component_major_version,
+                                                      component->pmix_mca_component_minor_version,
+                                                      component->pmix_mca_component_release_version, "", "");
 
     if (prte_info_pretty) {
         pmix_asprintf(&message, "MCA %s", component->pmix_mca_type_name);
@@ -332,49 +331,4 @@ static void show_mca_version(const pmix_mca_base_component_t *component, const c
     free(mca_version);
     free(api_version);
     free(component_version);
-}
-
-static char *make_version_str(const char *scope, int major, int minor, int release,
-                              const char *greek, const char *repo)
-{
-    char *str = NULL, *tmp;
-    char temp[BUFSIZ];
-
-    temp[BUFSIZ - 1] = '\0';
-    if (0 == strcmp(scope, prte_info_ver_full) || 0 == strcmp(scope, prte_info_ver_all)) {
-        snprintf(temp, BUFSIZ - 1, "%d.%d", major, minor);
-        str = strdup(temp);
-        if (release > 0) {
-            snprintf(temp, BUFSIZ - 1, ".%d", release);
-            pmix_asprintf(&tmp, "%s%s", str, temp);
-            free(str);
-            str = tmp;
-        }
-        if (NULL != greek) {
-            pmix_asprintf(&tmp, "%s%s", str, greek);
-            free(str);
-            str = tmp;
-        }
-        if (NULL != repo) {
-            pmix_asprintf(&tmp, "%s%s", str, repo);
-            free(str);
-            str = tmp;
-        }
-    } else if (0 == strcmp(scope, prte_info_ver_major)) {
-        snprintf(temp, BUFSIZ - 1, "%d", major);
-    } else if (0 == strcmp(scope, prte_info_ver_minor)) {
-        snprintf(temp, BUFSIZ - 1, "%d", minor);
-    } else if (0 == strcmp(scope, prte_info_ver_release)) {
-        snprintf(temp, BUFSIZ - 1, "%d", release);
-    } else if (0 == strcmp(scope, prte_info_ver_greek)) {
-        str = strdup(greek);
-    } else if (0 == strcmp(scope, prte_info_ver_repo)) {
-        str = strdup(repo);
-    }
-
-    if (NULL == str) {
-        str = strdup(temp);
-    }
-
-    return str;
 }
