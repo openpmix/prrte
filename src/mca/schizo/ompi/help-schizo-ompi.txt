@@ -161,9 +161,10 @@ Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
    --singleton <arg0>                ID of the singleton process that started us
    --tmpdir <arg0>                   Set the root for the session directory tree
    --tune <arg0>                     File(s) containing MCA params for tuning DVM operations
-   --dvm[=<arg0>]                    Use a persistent DVM instead of instantiating independent runtime
-                                     infrastructure. Optional arguments can be passed to indicate the
+   --dvm  <arg0>                     Use a persistent DVM instead of instantiating independent runtime
+                                     infrastructure. Required argument passed to indicate the
                                      pid, uri, file containing the uri, or namespace of the DVM.
+                                     Specify "--dvm search" to search for DVM controller, using first found.
 
 
 
@@ -200,9 +201,14 @@ independent runtime infrastructure. This is provided as a convenience
 option for those wanting to embed "mpirun" in a script that can be
 optionally used to run either independently or under a persistent DVM.
 
-Optional arguments are passed by appending an equal ('=') sign to
-the "--dvm" directive followed by the option (e.g., "--dvm=pid:12345").
+A required argument is passed to the "--dvm" directive to specify the
+location of the DVM controller (e.g., "--dvm pid:12345") or by passing
+the string "search" to instead search for an existing controller.
+
 Supported options include:
+
+search      directs "mpirun" to search for available DVM controllers it
+            is authorized to use, connecting to the first candidate it finds.
 
 pid:<arg>   provides the PID of the target DVM controller. This can
             be given as either the PID itself (arg = int) or the path
@@ -219,9 +225,9 @@ uri:<arg>   specifies the URI of the DVM controller, or the name of
 <arg>       an unprefixed argument is taken to be the namespace of
             the DVM controller to which we should connect
 
-Specifying the "--dvm" directive without any arguments directs
-"mpirun" to search for available DVM controllers it is authorized
-to use, connecting to the first such candidate it finds.
+Specifying "--dvm search" directs "mpirun" to search for available
+DVM controllers it is authorized to use, connecting to the first such
+candidate it finds.
 #
 [prtemca]
 Syntax: --prtemca <arg0> <arg1>
