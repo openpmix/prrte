@@ -416,3 +416,48 @@ char *prte_pretty_print_timing(int64_t secs, int64_t usecs)
 
     return timestring;
 }
+
+char *prte_util_make_version_string(const char *scope, int major, int minor, int release,
+                                    const char *greek, const char *repo)
+{
+    char *str = NULL, *tmp;
+    char temp[BUFSIZ];
+
+    temp[BUFSIZ - 1] = '\0';
+    if (0 == strcmp(scope, "full") || 0 == strcmp(scope, "all")) {
+        snprintf(temp, BUFSIZ - 1, "%d.%d", major, minor);
+        str = strdup(temp);
+        if (release >= 0) {
+            snprintf(temp, BUFSIZ - 1, ".%d", release);
+            pmix_asprintf(&tmp, "%s%s", str, temp);
+            free(str);
+            str = tmp;
+        }
+        if (NULL != greek) {
+            pmix_asprintf(&tmp, "%s%s", str, greek);
+            free(str);
+            str = tmp;
+        }
+        if (NULL != repo) {
+            pmix_asprintf(&tmp, "%s%s", str, repo);
+            free(str);
+            str = tmp;
+        }
+    } else if (0 == strcmp(scope, "major")) {
+        snprintf(temp, BUFSIZ - 1, "%d", major);
+    } else if (0 == strcmp(scope, "minor")) {
+        snprintf(temp, BUFSIZ - 1, "%d", minor);
+    } else if (0 == strcmp(scope, "release")) {
+        snprintf(temp, BUFSIZ - 1, "%d", release);
+    } else if (0 == strcmp(scope, "greek")) {
+        str = strdup(greek);
+    } else if (0 == strcmp(scope, "repo")) {
+        str = strdup(repo);
+    }
+
+    if (NULL == str) {
+        str = strdup(temp);
+    }
+
+    return str;
+}
