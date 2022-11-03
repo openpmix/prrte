@@ -631,6 +631,10 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                                                 PRTE_CLI_MAPBY, PRTE_CLI_HWTCPUS,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+            if (NULL != prte_set_slots) {
+                free(prte_set_slots);
+            }
+            prte_set_slots = strdup("hwthreads");
         }
         /* --do-not-launch -> --runtime-options do-not-launch */
         else if(0 == strcmp(option, "do-not-launch")) {
