@@ -565,6 +565,10 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                                                 PRTE_CLI_BINDTO, PRTE_CLI_HWT,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
+            if (NULL != prte_set_slots) {
+                free(prte_set_slots);
+            }
+            prte_set_slots = strdup("hwthreads");
         }
         /* --cpu-set and --cpu-list -> --map-by pe-list:X
          */
