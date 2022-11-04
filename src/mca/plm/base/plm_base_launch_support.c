@@ -99,13 +99,13 @@ void prte_plm_base_set_slots(prte_node_t *node)
         }
     } else if (0 == strncmp(prte_set_slots, "numas", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
-            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_NUMANODE,
-                                                             0);
+            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                             HWLOC_OBJ_NUMANODE, 0);
         }
     } else if (0 == strncmp(prte_set_slots, "hwthreads", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
-            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PU,
-                                                             0L);
+            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                             HWLOC_OBJ_PU, 0);
         }
     } else {
         /* must be a number */
@@ -146,24 +146,21 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
     /* if this is an unmanaged allocation, then set the default
      * slots on each node as directed or using default
      */
-    if (!prte_managed_allocation) {
-        if (NULL != prte_set_slots
-            && 0 != strncmp(prte_set_slots, "none", strlen(prte_set_slots))) {
-            caddy->jdata->total_slots_alloc = 0;
-            for (i = 0; i < prte_node_pool->size; i++) {
-                if (NULL
-                    == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
-                    continue;
-                }
-                if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
-                    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                                         "%s plm:base:setting slots for node %s by %s",
-                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name,
-                                         prte_set_slots));
-                    prte_plm_base_set_slots(node);
-                }
-                caddy->jdata->total_slots_alloc += node->slots;
+    if (!prte_managed_allocation || prte_set_slots_override) {
+        caddy->jdata->total_slots_alloc = 0;
+        for (i = 0; i < prte_node_pool->size; i++) {
+            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
+            if (NULL == node) {
+                continue;
             }
+            if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
+                PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                                     "%s plm:base:setting slots for node %s by %s",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), node->name,
+                                     prte_set_slots));
+                prte_plm_base_set_slots(node);
+            }
+            caddy->jdata->total_slots_alloc += node->slots;
         }
     } else {
         /* for managed allocations, the total slots allocated is fixed at time of allocation */

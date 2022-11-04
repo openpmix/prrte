@@ -135,9 +135,6 @@ static int prte_rmaps_base_open(pmix_mca_base_open_flag_t flags)
     prte_rmaps_base.ranking = 0;
     prte_rmaps_base.inherit = rmaps_base_inherit;
     prte_rmaps_base.hwthread_cpus = false;
-    if (NULL == prte_set_slots) {
-        prte_set_slots = strdup("core");
-    }
     prte_rmaps_base.available = hwloc_bitmap_alloc();
     prte_rmaps_base.baseset = hwloc_bitmap_alloc();
 

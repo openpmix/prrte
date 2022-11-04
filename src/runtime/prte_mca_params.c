@@ -56,6 +56,7 @@ static char *prte_local_tmpdir_base = NULL;
 static char *prte_remote_tmpdir_base = NULL;
 static char *prte_top_session_dir = NULL;
 static char *prte_jobfam_session_dir = NULL;
+static char *local_setup_slots = NULL;
 
 char *prte_signal_string = NULL;
 char *prte_stacktrace_output_filename = NULL;
@@ -434,13 +435,28 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_max_vm_size);
 
+    local_setup_slots = NULL;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "set_default_slots",
                                       "Set the number of slots on nodes that lack such info to the"
                                       " number of specified objects [a number, \"cores\" (default),"
-                                      " \"packages\", \"hwthreads\" (default if hwthreads_as_cpus is set),"
-                                      " or \"none\" to skip this option]",
+                                      " \"packages\", or \"hwthreads\" (default if hwthreads_as_cpus"
+                                      " is set), or a fixed number to be applied to all nodes",
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                      &prte_set_slots);
+                                      &local_setup_slots);
+    if (NULL == local_setup_slots) {
+        prte_set_slots = strdup("core");
+    } else {
+        prte_set_slots = strdup(local_setup_slots);
+    }
+
+    prte_set_slots_override = false;
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "set_default_slots_override",
+                                      "Set the number of slots on nodes to the number of "
+                                      "objects specified by prte_set_default_slots regardless "
+                                      "whather we are in a managed allocation or specifications "
+                                      "were given in a hostfile",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_set_slots_override);
 
     /* allow specification of the cores to be used by daemons */
     prte_daemon_cores = NULL;
