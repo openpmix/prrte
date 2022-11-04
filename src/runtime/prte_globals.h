@@ -542,6 +542,7 @@ PRTE_EXPORT extern bool prte_hnp_is_allocated;
 PRTE_EXPORT extern bool prte_allocation_required;
 PRTE_EXPORT extern bool prte_managed_allocation;
 PRTE_EXPORT extern char *prte_set_slots;
+PRTE_EXPORT extern bool prte_set_slots_override;
 PRTE_EXPORT extern bool prte_hnp_connected;
 PRTE_EXPORT extern bool prte_nidmap_communicated;
 PRTE_EXPORT extern bool prte_node_info_communicated;
