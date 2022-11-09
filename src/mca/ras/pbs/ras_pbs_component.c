@@ -99,8 +99,12 @@ static int prte_mca_ras_pbs_component_query(pmix_mca_base_module_t **module, int
         *priority = param_priority;
         *module = (pmix_mca_base_module_t *) &prte_ras_pbs_module;
         return PRTE_SUCCESS;
+    } else if (NULL != getenv("COBALT_JOBID")) {
+        /* we are running under Argonne's Cobalt variant */
+        *priority = param_priority;
+        *module = (pmix_mca_base_module_t *) &prte_ras_pbs_module;
+        return PRTE_SUCCESS;
     }
-
     /* Sadly, no */
     *module = NULL;
     return PRTE_ERROR;
