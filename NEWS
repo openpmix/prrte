@@ -70,6 +70,16 @@ minimum of PMIx v2.5).
 
 Detailed changes:
 
+PR #1586: Multiple commits
+  - Extend PBS allocation detection to cover Cobalt
+  - Broaden ability to require PRRTE to discover slots
+  - Fix default slots count when using --use-hwthread-cpus
+  - Cleanup schizo/prte help files
+  - schizo-ompi: add examples for verbose [dvm] block
+  - schizo:ompi: require arg when specifying dvm
+  - rank_file/LSF: Fix LSB_AFFINITY_HOSTFILE ranking policy
+  - Fix the load-balancing and span round-robin mappers
+  - doc: Fix --rank-by help output
 PR #1575: Ensure we init the available node bit tracker
 PR #1572: Fix some default map/rank policy settings
 PR #1570: Multiple commits
