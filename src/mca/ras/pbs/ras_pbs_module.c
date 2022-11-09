@@ -56,7 +56,10 @@ static char *filename;
 /*
  * Global variable
  */
-prte_ras_base_module_t prte_ras_pbs_module = {NULL, allocate, NULL, finalize};
+prte_ras_base_module_t prte_ras_pbs_module = {
+    .allocate = allocate,
+    .finalize = finalize
+};
 
 /**
  * Discover available (pre-allocated) nodes and report
@@ -71,8 +74,11 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     /* get our PBS jobid from the environment */
     if (NULL == (pbs_jobid = getenv("PBS_JOBID"))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        return PRTE_ERR_NOT_FOUND;
+        /* see if we are in Argonne's Cobalt variant */
+        if (NULL == (pbs_jobid = getenv("COBALT_JOBID"))) {
+            PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+            return PRTE_ERR_NOT_FOUND;
+        }
     }
 
     /* save that value in the global job ident string for
@@ -156,8 +162,12 @@ static int discover(pmix_list_t *nodelist, char *pbs_jobid)
     /* setup the full path to the PBS file */
     filename = getenv("PBS_NODEFILE");
     if (NULL == filename) {
-        pmix_show_help("help-ras-pbs.txt", "no-nodefile", true);
-        return PRTE_ERR_NOT_FOUND;
+        /* try the Cobalt variant */
+        filename = getenv("COBALT_NODEFILE");
+        if (NULL == filename) {
+            pmix_show_help("help-ras-pbs.txt", "no-nodefile", true);
+            return PRTE_ERR_NOT_FOUND;
+        }
     }
     fp = fopen(filename, "r");
     if (NULL == fp) {
