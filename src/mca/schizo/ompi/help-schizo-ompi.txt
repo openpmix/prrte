@@ -219,24 +219,26 @@ file:<path> provides the path to a PMIx rendezvous file that is
             required information for completing the connection
 
 uri:<arg>   specifies the URI of the DVM controller, or the name of
-            the file (specified as file:filename) that contains that
-            info
+            the file (specified as file:filename) that contains that info
 
-<arg>       an unprefixed argument is taken to be the namespace of
-            the DVM controller to which we should connect
+ns:<arg>    specifies the namespace of the DVM controller
 
 Specifying "--dvm search" directs "mpirun" to search for available
 DVM controllers it is authorized to use, connecting to the first such
 candidate it finds.
 
 Examples:
-  mpirun --dvm file:dvm.uri --np 4 ./a.out
+  mpirun --dvm file:dvm_uri.txt --np 4 ./a.out
 
   mpirun --dvm pid:12345 --np 4 ./a.out
 
-  mpirun --dvm search --np 4 ./a.out
+  mpirun --dvm uri:file:dvm_uri.txt --np 4 ./a.out
+
+  mpirun --dvm ns:prte-node1-2095 --np 4 ./a.out
 
   mpirun --dvm pid:file:prte_pid.txt --np 4 ./a.out
+
+  mpirun --dvm search --np 4 ./a.out
 #
 [prtemca]
 Syntax: --prtemca <arg0> <arg1>
