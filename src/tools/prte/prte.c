@@ -449,15 +449,15 @@ int main(int argc, char *argv[])
                 cptr = strdup(&opt->values[0][3]);
                 free(opt->values[0]);
                 opt->values[0] = cptr;
-            } else if (0 == strncasecmp(opt->values[0], "search", 6)) {
-                free(opt->key);
-                opt->key = strdup(PRTE_CLI_DVM);
-                /* intend to just use first found DVM controller */
-            } else {
-                /* treat like "search" */
-                /* use first found DVM controller */
-                free(opt->key);
-                opt->key = strdup(PRTE_CLI_DVM);
+            } else if (0 != strncasecmp(opt->values[0], "search", 6)) {
+                /* "search" would mean to look for first available DVM,
+                 * so we wouldn't have to adjust anything as the opt
+                 * key is already set to PRTE_CLI_DVM. However, if
+                 * this is not "search", then this is an unknown option
+                 * and must be reported to the user as an error */
+                pmix_show_help("help-prun.txt", "bad-dvm-option", true,
+                               opt->values[0], prte_tool_basename);
+                return 1;
             }
         }
         rc = prun_common(&results, schizo, argc, argv);
