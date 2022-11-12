@@ -717,3 +717,12 @@ Please correct the option and try again.
   file: %s
 
 Please correct the option or the file and try again.
+#
+[bad-dvm-option]
+The --dvm <arg> option was provided, but the argument
+is one not recognized:
+
+  arg: %s
+
+Please see "%s --help dvm" for a list of recognized
+options and examples
