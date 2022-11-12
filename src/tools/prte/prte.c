@@ -442,14 +442,22 @@ int main(int argc, char *argv[])
                 cptr = strdup(&opt->values[0][4]);
                 free(opt->values[0]);
                 opt->values[0] = cptr;
+            } else if (0 == strncasecmp(opt->values[0], "ns:", 3)) {
+                free(opt->key);
+                opt->key = strdup(PRTE_CLI_NAMESPACE);
+                /* must remove the "ns:" prefix */
+                cptr = strdup(&opt->values[0][3]);
+                free(opt->values[0]);
+                opt->values[0] = cptr;
             } else if (0 == strncasecmp(opt->values[0], "search", 6)) {
                 free(opt->key);
                 opt->key = strdup(PRTE_CLI_DVM);
                 /* intend to just use first found DVM controller */
             } else {
-                /* must be a namespace */
+                /* treat like "search" */
+                /* use first found DVM controller */
                 free(opt->key);
-                opt->key = strdup(PRTE_CLI_NAMESPACE);
+                opt->key = strdup(PRTE_CLI_DVM);
             }
         }
         rc = prun_common(&results, schizo, argc, argv);
