@@ -126,9 +126,9 @@ option to the help request as "--help <option>".
    --singleton <arg0>                ID of the singleton process that started us
    --tmpdir <arg0>                   Set the root for the session directory tree
    --tune <arg0>                     File(s) containing MCA params for tuning DVM operations
-   --dvm[=<arg0>]                    Use a persistent DVM instead of instantiating independent runtime
-                                     infrastructure. Optional arguments can be passed to indicate the
-                                     pid, uri, file containing the uri, or namespace of the DVM.
+   --dvm  <arg0>                     Use a persistent DVM instead of instantiating independent runtime
+                                     infrastructure. The argument indicates the pid, uri,
+                                     file containing the uri, or namespace of the DVM.
 
 Report bugs to %s
 #
@@ -139,9 +139,15 @@ but is provided as a convenience option for those wanting to embed
 the "prterun" command in a script that can be optionally used to
 run either independently or under a persistent DVM.
 
-Optional arguments are passed by appending an equal ('=') sign to
-the "--dvm" directive followed by the option (e.g., "--dvm=pid:12345").
+A required argument are passed to the "--dvm" directive to specify the
+location of the DVM controller (e.g., "--dvm pid:12345") or by passing
+the string "search" to instead search for an existing controller.
+
 Supported options include:
+
+search      directs "prterun" to search for available DVM controllers it
+            is authorized to use, connecting to the first candidate it
+            finds
 
 pid:<arg>   provides the PID of the target DVM controller. This can
             be given as either the PID itself (arg = int) or the path
@@ -152,15 +158,26 @@ file:<path> provides the path to a PMIx rendezvous file that is
             required information for completing the connection
 
 uri:<arg>   specifies the URI of the DVM controller, or the name of
-            the file (specified as file:filename) that contains that
-            info
+            the file (specified as file:filename) that contains that info
 
-<arg>       an unprefixed argument is taken to be the namespace of
-            the DVM controller to which we should connect
+ns:<arg>    specifies the namespace of the DVM controller
 
-Specifying the "--dvm" directive without any arguments directs
-"prterun" to search for available DVM controllers it is authorized
-to use, connecting to the first such candidate it finds.
+Specifying "--dvm search" directs "prterun" to search for available
+DVM controllers it is authorized to use, connecting to the first such
+candidate it finds.
+
+Examples:
+  prterun --dvm file:dvm_uri.txt --np 4 ./a.out
+
+  prterun --dvm pid:12345 --np 4 ./a.out
+
+  prterun --dvm uri:file:dvm_uri.txt --np 4 ./a.out
+
+  prterun --dvm ns:prte-node1-2095 --np 4 ./a.out
+
+  prterun --dvm pid:file:prte_pid.txt --np 4 ./a.out
+
+  prterun --dvm search --np 4 ./a.out
 #
 [prtemca]
 #include#help-schizo-cli#prtemca
