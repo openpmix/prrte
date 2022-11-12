@@ -70,6 +70,12 @@ minimum of PMIx v2.5).
 
 Detailed changes:
 
+PR #1591: Multiple commits
+  - fix conflict
+  - remove unused vars in tools area
+  - adjust prterun to prefix ns: for dvm option
+  - Cleanup the --dvm option a bit
+  - Some more minor cleanups of --dvm
 PR #1586: Multiple commits
   - Extend PBS allocation detection to cover Cobalt
   - Broaden ability to require PRRTE to discover slots

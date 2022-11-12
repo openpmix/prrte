@@ -449,12 +449,24 @@ int main(int argc, char *argv[])
                 cptr = strdup(&opt->values[0][3]);
                 free(opt->values[0]);
                 opt->values[0] = cptr;
+            } else if (0 == strncasecmp(opt->values[0], "system", 6)) {
+                /* direct to search for a system server */
+                free(opt->key);
+                opt->key = strdup(PRTE_CLI_SYS_SERVER_ONLY);
+            } else if (0 == strncasecmp(opt->values[0], "system-first", 6)) {
+                /* direct to search for a system server first, and then
+                 * take the first available DVM */
+                free(opt->key);
+                opt->key = strdup(PRTE_CLI_NAMESPACE);
             } else if (0 != strncasecmp(opt->values[0], "search", 6)) {
                 /* "search" would mean to look for first available DVM,
                  * so we wouldn't have to adjust anything as the opt
-                 * key is already set to PRTE_CLI_DVM. However, if
-                 * this is not "search", then this is an unknown option
-                 * and must be reported to the user as an error */
+                 * key is already set to PRTE_CLI_DVM, which will be
+                 * ignored so that the PMIx_tool_init in prun_common
+                 * will conduct its standard server search.
+                 * However, if this is not "search", then this is an
+                 * unknown option and must be reported to the user as
+                 * an error */
                 pmix_show_help("help-prun.txt", "bad-dvm-option", true,
                                opt->values[0], prte_tool_basename);
                 return 1;
