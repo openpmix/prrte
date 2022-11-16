@@ -37,7 +37,7 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
     prte_check_hwloc_save_LIBS="$LIBS"
     prte_have_topology_dup=0
 
-    if test "$with_hwloc" == "no"; then
+    if test "$with_hwloc" = "no"; then
         AC_MSG_WARN([PRRTE requires HWLOC topology library support.])
         AC_MSG_WARN([Please reconfigure so we can find the library.])
         AC_MSG_ERROR([Cannot continue.])

@@ -32,7 +32,7 @@ AC_DEFUN([PRTE_CHECK_PTRACE],[
                   [prte_have_ptrace=yes],
                   [prte_have_ptrace=no])
 
-    if test "$prte_have_ptrace_header" == "1" && test "$prte_have_ptrace" == "yes"; then
+    if test "$prte_have_ptrace_header" = "1" && test "$prte_have_ptrace" = "yes"; then
         AC_MSG_CHECKING([PTRACE_TRACEME])
         AC_EGREP_CPP([yes],
                      [#include <sys/ptrace.h>
@@ -106,7 +106,7 @@ AC_DEFUN([PRTE_CHECK_PTRACE],[
     fi
 
     AC_MSG_CHECKING(ptrace stop-on-exec will be supported)
-    AS_IF([test "$prte_have_ptrace_traceme" == "yes" && test "$prte_have_ptrace_detach" == "yes"],
+    AS_IF([test "$prte_have_ptrace_traceme" = "yes" && test "$prte_have_ptrace_detach" = "yes"],
           [AC_MSG_RESULT(yes)
            prte_want_stop_on_exec=1],
           [AC_MSG_RESULT(no)
