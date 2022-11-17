@@ -119,3 +119,4 @@ $ ../configure --prefix=<path> |& tee config.out
 ===========================================================================
 
 Make today a PRRTE day!
+Testing
