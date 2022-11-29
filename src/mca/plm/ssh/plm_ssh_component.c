@@ -298,7 +298,8 @@ lookup:
     if (PRTE_SUCCESS != ssh_launch_agent_lookup(NULL, NULL)) {
         /* if the user specified an agent and we couldn't find it,
          * then we want to error out and not continue */
-        if (NULL != prte_mca_plm_ssh_component.agent) {
+        if (NULL != prte_mca_plm_ssh_component.agent &&
+            0 != strcmp(prte_mca_plm_ssh_component.agent, "ssh : rsh")) {
             pmix_show_help("help-plm-ssh.txt", "agent-not-found", true,
                            prte_mca_plm_ssh_component.agent);
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_NEVER_LAUNCHED);
