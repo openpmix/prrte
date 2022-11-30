@@ -113,20 +113,18 @@ typedef struct {
 
 static pmix_nspace_t spawnednspace;
 static pmix_proc_t myproc;
-static bool signals_set = false;
 static bool forcibly_die = false;
 static prte_event_t term_handler;
 static prte_event_t epipe_handler;
 static int term_pipe[2];
 static pmix_mutex_t prun_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
-static prte_event_t *forward_signals_events = NULL;
 static char *mypidfile = NULL;
 static bool verbose = false;
 static bool want_prefix_by_default = (bool) PRTE_WANT_PRTE_PREFIX_BY_DEFAULT;
 static void abort_signal_callback(int signal);
 static void clean_abort(int fd, short flags, void *arg);
-static void signal_forward_callback(int fd, short args, void *cbdata);
-static void epipe_signal_callback(int fd, short args, void *cbdata);
+static void signal_forward_callback(int signum);
+static void epipe_signal_callback(int signum);
 static int prep_singleton(const char *name);
 
 static void opcbfunc(pmix_status_t status, void *cbdata)
@@ -219,12 +217,6 @@ static int wait_dvm(pid_t pid)
         }
     }
     return 255;
-}
-
-static void setup_sighandler(int signal, prte_event_t *ev, prte_event_cbfunc_t cbfunc)
-{
-    prte_event_signal_set(prte_event_base, ev, signal, cbfunc, ev);
-    prte_event_signal_add(ev, NULL);
 }
 
 int main(int argc, char *argv[])
@@ -341,7 +333,7 @@ int main(int argc, char *argv[])
     }
 
     /* setup callback for SIGPIPE */
-    setup_sighandler(SIGPIPE, &epipe_handler, epipe_signal_callback);
+    signal(SIGPIPE, epipe_signal_callback);
 
     /* point the signal trap to a function that will activate that event */
     signal(SIGTERM, abort_signal_callback);
@@ -606,21 +598,10 @@ int main(int argc, char *argv[])
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
     }
-    if (0 < (i = pmix_list_get_size(&prte_ess_base_signals))) {
-        forward_signals_events = (prte_event_t *) malloc(sizeof(prte_event_t) * i);
-        if (NULL == forward_signals_events) {
-            ret = PRTE_ERR_OUT_OF_RESOURCE;
-            PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-            goto DONE;
-        }
-        i = 0;
-        PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
-        {
-            setup_sighandler(sig->signal, forward_signals_events + i, signal_forward_callback);
-            ++i;
-        }
+    PMIX_LIST_FOREACH(sig, &prte_ess_base_signals, prte_ess_base_signal_t)
+    {
+        signal(sig->signal, signal_forward_callback);
     }
-    signals_set = true;
 
     /* if we are supporting a singleton, add it to our jobs */
     if (NULL != prte_pmix_server_globals.singleton) {
@@ -1362,12 +1343,11 @@ static int prep_singleton(const char *name)
     return PRTE_SUCCESS;
 }
 
-static void signal_forward_callback(int signum, short args, void *cbdata)
+static void signal_forward_callback(int signum)
 {
     pmix_status_t rc;
     pmix_proc_t proc;
     pmix_info_t info;
-    PRTE_HIDE_UNUSED_PARAMS(args, cbdata);
 
     if (verbose) {
         fprintf(stderr, "%s: Forwarding signal %d to job\n", prte_tool_basename, signum);
@@ -1387,10 +1367,8 @@ static void signal_forward_callback(int signum, short args, void *cbdata)
  * Deal with sigpipe errors
  */
 static int sigpipe_error_count = 0;
-static void epipe_signal_callback(int fd, short args, void *cbdata)
+static void epipe_signal_callback(int signum)
 {
-    PRTE_HIDE_UNUSED_PARAMS(fd, args, cbdata);
-
     sigpipe_error_count++;
 
     if (10 < sigpipe_error_count) {

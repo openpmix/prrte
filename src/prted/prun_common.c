@@ -111,7 +111,6 @@ static prte_event_t term_handler;
 static int term_pipe[2];
 static pmix_mutex_t prun_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static bool verbose = false;
-static pmix_list_t forwarded_signals;
 
 static void abort_signal_callback(int signal);
 static void clean_abort(int fd, short flags, void *arg);
@@ -343,7 +342,6 @@ int prun_common(pmix_cli_result_t *results,
 
     /* init the globals */
     PMIX_CONSTRUCT(&apps, pmix_list_t);
-    PMIX_CONSTRUCT(&forwarded_signals, pmix_list_t);
     gethostname(hostname, sizeof(hostname));
 
     /* detach from controlling terminal
@@ -861,11 +859,6 @@ int prun_common(pmix_cli_result_t *results,
     PMIX_INFO_DESTRUCT(&info);
 
 DONE:
-    PMIX_LIST_FOREACH(evitm, &forwarded_signals, prte_event_list_item_t)
-    {
-        prte_event_signal_del(&evitm->ev);
-    }
-    PMIX_LIST_DESTRUCT(&forwarded_signals);
     if (NULL != papps) {
         PMIX_APP_FREE(papps, napps);
     }
