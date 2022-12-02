@@ -333,9 +333,7 @@ static void _query(int sd, short args, void *cbdata)
                     char *xmlbuffer = NULL;
                     int len;
                     kv = PMIX_NEW(prte_info_item_t);
-                    if (0
-                        != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len,
-                                                           0)) {
+                    if (0 != hwloc_topology_export_xmlbuffer(prte_hwloc_topology, &xmlbuffer, &len, 0)) {
                         PMIX_RELEASE(kv);
                         continue;
                     }
@@ -519,19 +517,24 @@ static void _query(int sd, short args, void *cbdata)
                 {
                     pmix_argv_append_nosize(&ans, ps->name);
                 }
-                tmp = pmix_argv_join(ans, ',');
-                pmix_argv_free(ans);
-                ans = NULL;
-                kv = PMIX_NEW(prte_info_item_t);
-                PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_PSET_NAMES, tmp, PMIX_STRING);
-                pmix_list_append(&results, &kv->super);
-                free(tmp);
+                if (NULL == ans) {
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                } else {
+                    tmp = pmix_argv_join(ans, ',');
+                    pmix_argv_free(ans);
+                    ans = NULL;
+                    kv = PMIX_NEW(prte_info_item_t);
+                    PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_PSET_NAMES, tmp, PMIX_STRING);
+                    pmix_list_append(&results, &kv->super);
+                    free(tmp);
+                }
 
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PSET_MEMBERSHIP)) {
                 pmix_server_pset_t *ps, *psptr;
                 /* must have provided us with a pset name qualifier */
                 if (NULL == psetname) {
-                    ret = PRTE_ERR_BAD_PARAM;
+                    ret = PMIX_ERR_BAD_PARAM;
                     goto done;
                 }
                 ans = NULL;
@@ -545,7 +548,7 @@ static void _query(int sd, short args, void *cbdata)
                 }
                 if (NULL == psptr) {
                     /* we don't know that pset */
-                    ret = PRTE_ERR_NOT_FOUND;
+                    ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }
                 /* define the array that holds the membership - no need to allocate anything */
@@ -559,7 +562,7 @@ static void _query(int sd, short args, void *cbdata)
             } else if (0 == strcmp(q->keys[n], PMIX_JOB_SIZE)) {
                 jdata = prte_get_job_data_object(jobid);
                 if (NULL == jdata) {
-                    ret = PRTE_ERR_NOT_FOUND;
+                    ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }
                 /* setup the reply */
@@ -623,6 +626,39 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_LOAD_PROCID(&proc[k], grp->members[k].nspace, grp->members[k].rank);
                 }
 
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_ALLOCATION)) {
+                /* collect all the node info */
+                void *nodelist, *nodeinfolist;
+                pmix_output(0, "PROCESSING ALLOCATION");
+                PMIX_INFO_LIST_START(nodelist);
+                p = 0;
+                for (k=0; k < prte_node_pool->size; k++) {
+                    node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, k);
+                    if (NULL == node) {
+                        continue;
+                    }
+                    PMIX_INFO_LIST_START(nodeinfolist);
+                    /* start with the node name */
+                    PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_HOSTNAME, node->name, PMIX_STRING);
+                    /* convert to array */
+                    PMIX_INFO_LIST_CONVERT(rc, nodeinfolist, &dry);
+                    PMIX_INFO_LIST_RELEASE(nodeinfolist);
+                    /* now add the entry to the main list */
+                    PMIX_INFO_LIST_ADD(rc, nodelist, PMIX_NODE_INFO, &dry, PMIX_DATA_ARRAY);
+                    ++p;
+                    PMIX_DATA_ARRAY_DESTRUCT(&dry);
+                }
+                /* convert list to array */
+                PMIX_DATA_ARRAY_CREATE(darray, p, PMIX_INFO);
+                PMIX_INFO_LIST_CONVERT(rc, nodelist, darray);
+                PMIX_INFO_LIST_RELEASE(nodelist);
+                /* add to results */
+                kv = PMIX_NEW(prte_info_item_t);
+                (void) strncpy(kv->info.key, PMIX_QUERY_ALLOCATION, PMIX_MAX_KEYLEN);
+                kv->info.value.type = PMIX_DATA_ARRAY;
+                kv->info.value.data.darray = darray;
+                pmix_list_append(&results, &kv->super);
+                pmix_output(0, "ALLOC DATA COMPLETE");
             } else {
                 fprintf(stderr, "Query for unrecognized attribute: %s\n", q->keys[n]);
             }
