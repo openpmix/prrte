@@ -77,7 +77,8 @@ prte_schizo_base_module_t prte_schizo_prte_module = {
     .detect_proxy = detect_proxy,
     .allow_run_as_root = allow_run_as_root,
     .job_info = job_info,
-    .set_default_rto = set_default_rto
+    .set_default_rto = set_default_rto,
+    .check_sanity = prte_schizo_base_sanity
 };
 
 static struct option prteoptions[] = {
