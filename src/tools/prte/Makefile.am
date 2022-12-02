@@ -50,6 +50,7 @@ prte_LDADD = \
 
 install-exec-hook:
 	(cd $(DESTDIR)$(bindir); rm -f prterun$(EXEEXT); $(LN_S) prte$(EXEEXT) prterun$(EXEEXT))
+	(cd $(DESTDIR)$(bindir); rm -f srun$(EXEEXT); $(LN_S) prte$(EXEEXT) srun$(EXEEXT))
 
 uninstall-local:
 	rm -f $(DESTDIR)$(bindir)/prterun$(EXEEXT)

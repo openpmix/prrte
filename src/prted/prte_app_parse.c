@@ -108,7 +108,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
         return rc;
     }
     // sanity check the results
-    rc = prte_schizo_base_sanity(&results);
+    rc = schizo->check_sanity(&results);
     if (PRTE_SUCCESS != rc) {
         // sanity checker prints the reason
         PMIX_DESTRUCT(&results);
