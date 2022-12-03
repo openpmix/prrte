@@ -435,7 +435,7 @@ int prte_ess_base_prted_setup(void)
     t->sig = strdup(prte_topo_signature);
     /* save the topology - note that this may have to be moved later
      * to ensure a common array position with the DVM master */
-    pmix_pointer_array_add(prte_node_topologies, t);
+    t->index = pmix_pointer_array_add(prte_node_topologies, t);
     if (15 < pmix_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         char *output = NULL;
         pmix_topology_t topo;
