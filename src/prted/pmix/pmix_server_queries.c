@@ -629,6 +629,10 @@ static void _query(int sd, short args, void *cbdata)
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_ALLOCATION)) {
                 /* collect all the node info */
                 void *nodelist, *nodeinfolist;
+                char *str;
+                prte_topology_t *topo;
+                int len;
+
                 PMIX_INFO_LIST_START(nodelist);
                 p = 0;
                 for (k=0; k < prte_node_pool->size; k++) {
@@ -639,6 +643,14 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_INFO_LIST_START(nodeinfolist);
                     /* start with the node name */
                     PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_HOSTNAME, node->name, PMIX_STRING);
+                    /* add any aliases */
+                    if (NULL != node->aliases) {
+                        str = pmix_argv_join(node->aliases, ',');
+                        PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_HOSTNAME_ALIASES, str, PMIX_STRING);
+                        free(str);
+                    }
+                    /* add topology index */
+                    PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_TOPOLOGY_INDEX, &node->topology->index, PMIX_INT);
                     /* convert to array */
                     PMIX_INFO_LIST_CONVERT(rc, nodeinfolist, &dry);
                     PMIX_INFO_LIST_RELEASE(nodeinfolist);
@@ -646,6 +658,27 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_INFO_LIST_ADD(rc, nodelist, PMIX_NODE_INFO, &dry, PMIX_DATA_ARRAY);
                     ++p;
                     PMIX_DATA_ARRAY_DESTRUCT(&dry);
+                }
+                /* add topology info */
+                for (k=0; k < prte_node_topologies->size; k++) {
+                    topo = (prte_topology_t*)pmix_pointer_array_get_item(prte_node_topologies, k);
+                    if (NULL == topo) {
+                        continue;
+                    }
+                    /* convert the topology to XML representation */
+#if HWLOC_API_VERSION < 0x20000
+                    /* get this from the v1.x API */
+                    if (0 != hwloc_topology_export_xmlbuffer(topo->topo, &str, &len)) {
+                        continue;
+                    }
+                    PMIX_INFO_LIST_ADD(rc, nodelist, PMIX_HWLOC_XML_V1, str, PMIX_STRING);
+#else
+                    if (0 != hwloc_topology_export_xmlbuffer(topo->topo, &str, &len, 0)) {
+                        continue;
+                    }
+                    PMIX_INFO_LIST_ADD(rc, nodelist, PMIX_HWLOC_XML_V2, str, PMIX_STRING);
+#endif
+                    free(str);
                 }
                 /* convert list to array */
                 PMIX_DATA_ARRAY_CREATE(darray, p, PMIX_INFO);

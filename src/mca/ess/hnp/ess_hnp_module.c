@@ -390,7 +390,7 @@ static int rte_init(int argc, char **argv)
     /* generate the signature */
     prte_topo_signature = prte_hwloc_base_get_topo_signature(prte_hwloc_topology);
     t->sig = strdup(prte_topo_signature);
-    pmix_pointer_array_add(prte_node_topologies, t);
+    t->index = pmix_pointer_array_add(prte_node_topologies, t);
     node->topology = t;
     node->available = prte_hwloc_base_filter_cpus(prte_hwloc_topology);
     if (15 < pmix_output_get_verbosity(prte_ess_base_framework.framework_output)) {
