@@ -629,7 +629,6 @@ static void _query(int sd, short args, void *cbdata)
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_ALLOCATION)) {
                 /* collect all the node info */
                 void *nodelist, *nodeinfolist;
-                pmix_output(0, "PROCESSING ALLOCATION");
                 PMIX_INFO_LIST_START(nodelist);
                 p = 0;
                 for (k=0; k < prte_node_pool->size; k++) {
@@ -658,7 +657,6 @@ static void _query(int sd, short args, void *cbdata)
                 kv->info.value.type = PMIX_DATA_ARRAY;
                 kv->info.value.data.darray = darray;
                 pmix_list_append(&results, &kv->super);
-                pmix_output(0, "ALLOC DATA COMPLETE");
             } else {
                 fprintf(stderr, "Query for unrecognized attribute: %s\n", q->keys[n]);
             }
