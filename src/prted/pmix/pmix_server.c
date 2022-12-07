@@ -110,11 +110,12 @@ static pmix_server_module_t pmix_server = {
     .query = pmix_server_query_fn,
     .tool_connected = pmix_tool_connected_fn,
     .log = pmix_server_log_fn,
-    .allocate = pmix_server_alloc_fn,
     .job_control = pmix_server_job_ctrl_fn,
     .iof_pull = pmix_server_iof_pull_fn,
     .push_stdin = pmix_server_stdin_fn,
-    .group = pmix_server_group_fn
+    .group = pmix_server_group_fn,
+    .allocate = pmix_server_alloc_fn,
+    .session_control = pmix_server_session_ctrl_fn
 };
 
 typedef struct {
@@ -299,6 +300,8 @@ static prte_regattr_input_t prte_attributes[] = {
                          "PMIX_QUERY_NUM_GROUPS",
                          "PMIX_QUERY_GROUP_NAMES",
                          "PMIX_QUERY_GROUP_MEMBERSHIP",
+                         "PMIX_QUERY_ALLOCATION",
+                         "PMIX_QUERY_ALLOC_STATUS",
                          NULL}},
     {.function = "PMIx_Log", .attrs = (char *[]){"NONE", NULL}},
     {.function = "PMIx_Log_nb", .attrs = (char *[]){"NONE", NULL}},
@@ -333,6 +336,29 @@ static prte_regattr_input_t prte_attributes[] = {
     {.function = "PMIx_Register_event_handler", .attrs = (char *[]){"NONE", NULL}},
     {.function = "PMIx_Deregister_event_handler", .attrs = (char *[]){"N/A", NULL}},
     {.function = "PMIx_Notify_event", .attrs = (char *[]){"NONE", NULL}},
+    {.function = "PMIx_Allocate_resources",
+     .attrs = (char *[]){"PMIX_ALLOC_REQ_ID",
+                         "PMIX_ALLOC_NUM_NODES",
+                         "PMIX_ALLOC_NODE_LIST",
+                         "PMIX_ALLOC_NUM_CPUS",
+                         "PMIX_ALLOC_NUM_CPU_LIST",
+                         "PMIX_ALLOC_CPU_LIST",
+                         "PMIX_ALLOC_MEM_SIZE",
+                         "PMIX_ALLOC_TIME",
+                         "PMIX_ALLOC_QUEUE",
+                         "PMIX_ALLOC_PREEMPTIBLE",
+                         NULL}},
+    {.function = "PMIx_Session_control",
+     .attrs = (char *[]){"PMIX_SESSION_CTRL_ID",
+                         "PMIX_SESSION_APP",
+                         "PMIX_SESSION_PAUSE",
+                         "PMIX_SESSION_RESUME",
+                         "PMIX_SESSION_TERMINATE",
+                         "PMIX_SESSION_PREEMPT",
+                         "PMIX_SESSION_RESTORE",
+                         "PMIX_SESSION_SIGNAL",
+                         "PMIX_SESSION_COMPLETE",
+                         NULL}},
     {.function = ""},
 };
 

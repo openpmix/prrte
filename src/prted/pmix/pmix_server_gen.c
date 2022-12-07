@@ -569,6 +569,8 @@ static void _toolconn(int sd, short args, void *cbdata)
                 cd->cmdline = strdup(cd->info[n].value.data.string);
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_LAUNCHER)) {
                 cd->launcher = PMIX_INFO_TRUE(&cd->info[n]);
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_SERVER_SCHEDULER)) {
+                cd->scheduler = PMIX_INFO_TRUE(&cd->info[n]);
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PROC_PID)) {
                 PMIX_VALUE_GET_NUMBER(xrc, &cd->info[n].value, cd->pid, pid_t);
                 if (PMIX_SUCCESS != xrc) {
@@ -583,8 +585,9 @@ static void _toolconn(int sd, short args, void *cbdata)
     }
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s TOOL CONNECTION FROM UID %d GID %d NSPACE %s",
+                        "%s %s CONNECTION FROM UID %d GID %d NSPACE %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        cd->launcher ? "LAUNCHER" : (cd->scheduler ? "SCHEDULER" : "TOOL"),
                         cd->uid, cd->gid, cd->target.nspace);
 
     /* if we are not the HNP or master, and the tool doesn't
@@ -643,7 +646,8 @@ void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo, pmix_tool_connectio
 {
     pmix_server_req_t *cd;
 
-    pmix_output_verbose(2, prte_pmix_server_globals.output, "%s TOOL CONNECTION REQUEST RECVD",
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s TOOL CONNECTION REQUEST RECVD",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* need to threadshift this request */
