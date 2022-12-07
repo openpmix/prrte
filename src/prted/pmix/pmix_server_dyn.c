@@ -1266,12 +1266,3 @@ pmix_status_t pmix_server_disconnect_fn(const pmix_proc_t procs[], size_t nprocs
 
     return rc;
 }
-
-pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client, pmix_alloc_directive_t directive,
-                                   const pmix_info_t data[], size_t ndata,
-                                   pmix_info_cbfunc_t cbfunc, void *cbdata)
-{
-    /* PRTE currently has no way of supporting allocation requests */
-    PRTE_HIDE_UNUSED_PARAMS(client, directive, data, ndata, cbfunc, cbdata);
-    return PMIX_ERR_NOT_SUPPORTED;
-}
