@@ -22,6 +22,7 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
     /* we are the DVM controller, so pass it down so PMIx can
      * send it to the scheduler */
 
+    return PMIX_ERR_NOT_SUPPORTED;
 }
 
 pmix_status_t pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
@@ -34,4 +35,5 @@ pmix_status_t pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
     /* we are the DVM controller, so pass it down so PMIx can
      * send it to the scheduler */
 
+    return PMIX_ERR_NOT_SUPPORTED;
 }
