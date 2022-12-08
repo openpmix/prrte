@@ -110,7 +110,6 @@ int main(int argc, char **argv)
     pmix_value_t value;
     pmix_value_t *val = &value;
     pmix_proc_t proc;
-    uint32_t nprocs;
     pmix_info_t *info;
     mylock_t mylock;
     myrel_t myrel;
@@ -118,7 +117,8 @@ int main(int argc, char **argv)
         PMIX_ERR_PROC_ABORTED,
         PMIX_ERR_EXIT_NONZERO_TERM,
         PMIX_ERR_PROC_ABORTED_BY_SIG,
-        PMIX_EVENT_JOB_END};
+        PMIX_EVENT_JOB_END
+    };
 
     /* init us */
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
@@ -132,16 +132,7 @@ int main(int argc, char **argv)
     (void) strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
     proc.rank = PMIX_RANK_WILDCARD;
 
-    /* get our universe size */
-    if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_UNIV_SIZE, NULL, 0, &val))) {
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Get universe size failed: %d\n", myproc.nspace,
-                myproc.rank, rc);
-        goto done;
-    }
-    nprocs = val->data.uint32;
-    PMIX_VALUE_RELEASE(val);
-
-    /* register another handler specifically for when the target
+    /* register a handler specifically for when the target
      * job completes */
     DEBUG_CONSTRUCT_MYREL(&myrel);
     PMIX_INFO_CREATE(info, 2);
