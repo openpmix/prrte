@@ -278,39 +278,40 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
 
     /* setup the global job and node arrays */
     prte_job_data = PMIX_NEW(pmix_pointer_array_t);
-    if (PRTE_SUCCESS
-        != (ret = pmix_pointer_array_init(prte_job_data, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
-        PRTE_ERROR_LOG(ret);
+    ret = pmix_pointer_array_init(prte_job_data,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         error = "setup job array";
         goto error;
     }
     prte_node_pool = PMIX_NEW(pmix_pointer_array_t);
-    if (PRTE_SUCCESS
-        != (ret = pmix_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
-        PRTE_ERROR_LOG(ret);
+    ret = pmix_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         error = "setup node array";
         goto error;
     }
     prte_node_topologies = PMIX_NEW(pmix_pointer_array_t);
-    if (PRTE_SUCCESS
-        != (ret = pmix_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
-                                          PRTE_GLOBAL_ARRAY_MAX_SIZE,
-                                          PRTE_GLOBAL_ARRAY_BLOCK_SIZE))) {
-        PRTE_ERROR_LOG(ret);
+    ret = pmix_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         error = "setup node topologies array";
         goto error;
     }
 
     /* open the SCHIZO framework as everyone needs it, and the
      * ess will use it to help select its component */
-    if (PRTE_SUCCESS
-        != (ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
-                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
+    ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         error = "prte_schizo_base_open";
         goto error;
     }
@@ -321,10 +322,10 @@ int prte_init(int *pargc, char ***pargv, prte_proc_type_t flags)
     }
 
     /* open the ESS and select the correct module for this environment */
-    if (PRTE_SUCCESS
-        != (ret = pmix_mca_base_framework_open(&prte_ess_base_framework,
-                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
+    ret = pmix_mca_base_framework_open(&prte_ess_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
         error = "prte_ess_base_open";
         goto error;
     }

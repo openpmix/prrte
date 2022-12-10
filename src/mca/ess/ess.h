@@ -34,6 +34,7 @@
 #include "types.h"
 
 #include "src/hwloc/hwloc-internal.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/mca.h"
 
 #include "src/runtime/runtime.h"
@@ -87,7 +88,7 @@ typedef pmix_mca_base_component_t prte_ess_base_component_t;
 /*
  * Macro for use in components that are of type ess
  */
-#define PRTE_ESS_BASE_VERSION_3_0_0 PMIX_MCA_BASE_VERSION_1_0_0("ess", 3, 0, 0)
+#define PRTE_ESS_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_3_0_0("ess", 3, 0, 0)
 
 /* Global structure for accessing ESS functions */
 PRTE_EXPORT extern prte_ess_base_module_t prte_ess; /* holds selected module's function pointers */
