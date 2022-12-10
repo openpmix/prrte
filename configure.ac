@@ -10,7 +10,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2006-2022 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2006-2023 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2006-2008 Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2006-2017 Los Alamos National Security, LLC.  All rights
 #                         reserved.
@@ -54,6 +54,8 @@ AC_INIT([prte],
 AC_PREREQ(2.69)
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
+
+OAC_PUSH_PREFIX([PRTE])
 
 # autotools expects to perform tests without interference
 # from user-provided CFLAGS, particularly -Werror flags.
@@ -702,6 +704,20 @@ AC_INCLUDES_DEFAULT
 #include <sys/resource.h>
 #endif])
 
+#
+# Setup HTML and man page processing
+#
+
+OAC_SETUP_SPHINX([$srcdir/docs/_build/html/index.html], [])
+
+AS_IF([test -n "$OAC_MAKEDIST_DISABLE"],
+      [AS_IF([test -n "$PRTE_MAKEDIST_DISABLE"],
+             [PRTE_MAKEDIST_DISABLE="$PRTE_MAKEDIST_DISABLE $OAC_MAKEDIST_DISABLE"],
+             [PRTE_MAKEDIST_DISABLE=$OAC_MAKEDIST_DISABLE])])
+AS_IF([test -n "$PRTE_MAKEDIST_DISABLE"],
+      [AC_MSG_WARN(["make dist" will be disabled due to: $PRTE_MAKEDIST_DISABLE])])
+AC_SUBST([PRTE_MAKEDIST_DISABLE])
+
 # checkpoint results
 AC_CACHE_SAVE
 
@@ -974,6 +990,7 @@ AC_CONFIG_FILES([
     contrib/Makefile
     include/Makefile
     include/prte_version.h
+    docs/Makefile
 ])
 
 PRTE_CONFIG_FILES
