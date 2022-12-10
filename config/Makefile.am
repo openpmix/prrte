@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2006-2022 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2010      Oracle and/or its affiliates.  All rights
 #                         reserved.
 # Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
@@ -22,6 +22,19 @@
 #
 # $HEADER$
 #
+
+# This is a weird place for this, but config/ is the first directory that
+# is entered, and the dist-hook runs at the end of the current directory,
+# so this is the earliest we can run this test.
+dist-hook:
+	@if test -n "$(PRTE_MAKEDIST_DISABLE)" ; then \
+		echo "#########################################################################"; \
+		echo "#"; \
+		echo "# make dist is disabled due to the following packages: $(PRTE_MAKEDIST_DISABLE)"; \
+		echo "#"; \
+		echo "#########################################################################"; \
+		exit 1; \
+	fi
 
 EXTRA_DIST = \
         distscript.sh \
