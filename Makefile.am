@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2006-2022 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2012-2015 Los Alamos National Security, Inc.  All rights reserved.
 # Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017-2018 Amazon.com, Inc. or its affiliates.
@@ -22,9 +22,8 @@
 # $HEADER$
 #
 
-SUBDIRS = config contrib src include
-DIST_SUBDIRS = config contrib src include
-EXTRA_DIST = README INSTALL VERSION Doxyfile LICENSE autogen.pl
+SUBDIRS = config contrib src include docs
+EXTRA_DIST = README.md VERSION LICENSE autogen.pl
 
 include examples/Makefile.include
 

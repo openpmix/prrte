@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 #
-# Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2009-2022 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2010      Oracle and/or its affiliates.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.
 #                         All rights reserved.
@@ -36,7 +36,7 @@ my $sentinel;
 my $m4_output_file = "config/autogen_found_items.m4";
 my $m4;
 # Sanity check file
-my $topdir_file = "INSTALL";
+my $topdir_file = "docs/index.rst";
 my $dnl_line = "dnl ---------------------------------------------------------------------------";
 # The text file we'll write at the end that will contain
 # all the mca component directory paths

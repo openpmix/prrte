@@ -182,3 +182,11 @@ test/qspawn
 test/filegen
 test/iostress
 
+docs/_build
+docs/_static
+docs/_static/css/custom.css
+docs/_templates
+
+# Common Python virtual environment directory names
+venv
+py??
