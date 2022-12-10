@@ -51,6 +51,7 @@
 #include "constants.h"
 #include "types.h"
 
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
@@ -159,7 +160,7 @@ typedef prte_errmgr_base_component_3_0_0_t prte_errmgr_base_component_t;
 /*
  * Macro for use in components that are of type errmgr
  */
-#define PRTE_ERRMGR_BASE_VERSION_3_0_0 PMIX_MCA_BASE_VERSION_1_0_0("errmgr", 3, 0, 0)
+#define PRTE_ERRMGR_BASE_VERSION_3_0_0 PRTE_MCA_BASE_VERSION_3_0_0("errmgr", 3, 0, 0)
 
 END_C_DECLS
 

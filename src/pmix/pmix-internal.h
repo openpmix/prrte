@@ -273,6 +273,10 @@ PRTE_EXPORT int prte_pmix_register_cleanup(char *path, bool directory, bool igno
     }
 #endif
 
+#define PRTE_MCA_BASE_VERSION_3_0_0(type, type_major, type_minor, type_release) \
+    PMIX_MCA_BASE_VERSION_2_1_0("prte", PRTE_MAJOR_VERSION, PRTE_MINOR_VERSION, \
+                                PRTE_RELEASE_VERSION, type, type_major, type_minor, type_release)
+
 END_C_DECLS
 
 #endif

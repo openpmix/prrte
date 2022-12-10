@@ -17,6 +17,7 @@
 
 #include "prte_config.h"
 
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
@@ -89,7 +90,7 @@ typedef struct prte_prteinstalldirs_base_component_2_0_0_t prte_prteinstalldirs_
 /*
  * Macro for use in components that are of type prteinstalldirs
  */
-#define PRTE_INSTALLDIRS_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("prteinstalldirs", 2, 0, 0)
+#define PRTE_INSTALLDIRS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("prteinstalldirs", 2, 0, 0)
 
 END_C_DECLS
 

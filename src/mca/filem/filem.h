@@ -35,6 +35,7 @@
 #include "constants.h"
 #include "types.h"
 
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
@@ -377,7 +378,7 @@ PRTE_EXPORT extern prte_filem_base_module_t prte_filem;
 /**
  * Macro for use in components that are of type FILEM
  */
-#define PRTE_FILEM_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("filem", 2, 0, 0)
+#define PRTE_FILEM_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("filem", 2, 0, 0)
 
 END_C_DECLS
 

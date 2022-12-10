@@ -120,6 +120,7 @@
 #include "types.h"
 
 #include "src/mca/mca.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -188,6 +189,6 @@ END_C_DECLS
 /*
  * Macro for use in components that are of type iof
  */
-#define PRTE_IOF_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("iof", 2, 0, 0)
+#define PRTE_IOF_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("iof", 2, 0, 0)
 
 #endif /* PRTE_IOF_H */
