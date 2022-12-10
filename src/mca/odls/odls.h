@@ -36,6 +36,7 @@
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/mca/mca.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/rml/rml_types.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
@@ -105,7 +106,7 @@ typedef pmix_mca_base_component_t prte_odls_base_component_t;
 /**
  * Macro for use in modules that are of type odls
  */
-#define PRTE_ODLS_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("odls", 2, 0, 0)
+#define PRTE_ODLS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("odls", 2, 0, 0)
 
 /* Global structure for accessing ODLS functions
  */

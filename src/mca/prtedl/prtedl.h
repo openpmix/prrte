@@ -51,6 +51,7 @@
 
 #include "prte_config.h"
 
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 
@@ -175,7 +176,7 @@ typedef struct prte_prtedl_base_module_1_0_0_t prte_prtedl_base_module_t;
 /**
  * Macro for use in components that are of type DL
  */
-#define PRTE_DL_BASE_VERSION_1_0_0 PMIX_MCA_BASE_VERSION_1_0_0("prtedl", 1, 0, 0)
+#define PRTE_DL_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_3_0_0("prtedl", 1, 0, 0)
 
 END_C_DECLS
 

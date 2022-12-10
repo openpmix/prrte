@@ -18,6 +18,8 @@
 #define PRTE_REACHABLE_H
 
 #include "prte_config.h"
+
+#include "src/pmix/pmix-internal.h"
 #include "src/class/pmix_list.h"
 #include "src/include/types.h"
 
@@ -98,7 +100,7 @@ typedef struct {
 /*
  * Macro for use in components that are of type reachable
  */
-#define PRTE_REACHABLE_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("prtereachable", 2, 0, 0)
+#define PRTE_REACHABLE_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("prtereachable", 2, 0, 0)
 
 /* Global structure for accessing reachability functions */
 PRTE_EXPORT extern prte_reachable_base_module_t prte_reachable;

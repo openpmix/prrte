@@ -50,6 +50,7 @@
 #include "types.h"
 
 #include "src/mca/mca.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/runtime/prte_globals.h"
 

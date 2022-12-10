@@ -49,6 +49,7 @@
 
 #include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/plm/plm_types.h"
@@ -299,7 +300,7 @@ typedef pmix_mca_base_component_t prte_state_base_component_t;
 /*
  * Macro for use in components that are of type state
  */
-#define PRTE_STATE_BASE_VERSION_1_0_0 PMIX_MCA_BASE_VERSION_1_0_0("state", 1, 0, 0)
+#define PRTE_STATE_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_3_0_0("state", 1, 0, 0)
 
 END_C_DECLS
 #endif
