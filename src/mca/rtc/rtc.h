@@ -26,6 +26,7 @@
 #include "src/class/pmix_list.h"
 #include "src/mca/mca.h"
 #include "src/mca/odls/base/base.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/runtime/prte_globals.h"
 
 BEGIN_C_DECLS
@@ -100,7 +101,7 @@ PRTE_EXPORT extern prte_rtc_API_module_t prte_rtc;
 /*
  * Macro for use in components that are of type rtc
  */
-#define PRTE_RTC_BASE_VERSION_1_0_0 PMIX_MCA_BASE_VERSION_1_0_0("rtc", 1, 0, 0)
+#define PRTE_RTC_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_3_0_0("rtc", 1, 0, 0)
 
 END_C_DECLS
 

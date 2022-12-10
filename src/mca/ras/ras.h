@@ -62,6 +62,7 @@
 #include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
 #include "src/mca/mca.h"
+#include "src/pmix/pmix-internal.h"
 
 #include "src/runtime/prte_globals.h"
 
@@ -120,7 +121,7 @@ typedef pmix_mca_base_component_t prte_ras_base_component_t;
 /**
  * Macro for use in components that are of type ras
  */
-#define PRTE_RAS_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("ras", 2, 0, 0)
+#define PRTE_RAS_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("ras", 2, 0, 0)
 
 END_C_DECLS
 

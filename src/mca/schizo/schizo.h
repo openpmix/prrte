@@ -32,6 +32,7 @@
 #include "src/class/pmix_list.h"
 #include "src/hwloc/hwloc-internal.h"
 #include "src/mca/rmaps/rmaps_types.h"
+#include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_cmd_line.h"
 
 #include "src/mca/mca.h"
@@ -145,7 +146,7 @@ typedef pmix_mca_base_component_t prte_schizo_base_component_t;
 /**
  * Macro for use in components that are of type schizo
  */
-#define PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0 PMIX_MCA_BASE_VERSION_1_0_0("schizo", 1, 0, 0)
+#define PRTE_MCA_SCHIZO_BASE_VERSION_1_0_0 PRTE_MCA_BASE_VERSION_3_0_0("schizo", 1, 0, 0)
 
 END_C_DECLS
 

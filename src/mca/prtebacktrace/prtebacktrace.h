@@ -28,6 +28,7 @@
 
 #include "prte_config.h"
 
+#include "src/pmix/pmix-internal.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
 #include "src/util/stacktrace.h"
@@ -67,7 +68,7 @@ typedef pmix_mca_base_component_t prte_backtrace_base_component_t;
 /*
  * Macro for use in components that are of type backtrace
  */
-#define PRTE_BACKTRACE_BASE_VERSION_2_0_0 PMIX_MCA_BASE_VERSION_1_0_0("backtrace", 2, 0, 0)
+#define PRTE_BACKTRACE_BASE_VERSION_2_0_0 PRTE_MCA_BASE_VERSION_3_0_0("backtrace", 2, 0, 0)
 
 END_C_DECLS
 
