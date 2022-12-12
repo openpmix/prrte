@@ -211,9 +211,9 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
 
         /* assign a schizo module */
         if (NULL == jdata->personality) {
-            pmix_argv_append_nosize(&jdata->personality, "prte");
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&jdata->personality, "prte");
         }
-        tmp = pmix_argv_join(jdata->personality, ',');
+        tmp = PMIX_ARGV_JOIN_COMPAT(jdata->personality, ',');
         jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(tmp);
         if (NULL == jdata->schizo) {
             pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, tmp);
@@ -278,7 +278,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
                     continue;
                 }
                 env = pmix_environ_merge(prte_forwarded_envars, app->env);
-                pmix_argv_free(app->env);
+                PMIX_ARGV_FREE_COMPAT(app->env);
                 app->env = env;
             }
         }

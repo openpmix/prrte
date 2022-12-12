@@ -168,23 +168,23 @@ char *prte_rmaps_base_print_mapping(prte_mapping_policy_t mapping)
     }
 
     if (PRTE_MAPPING_NO_USE_LOCAL & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        pmix_argv_append_nosize(&qls, "NO_USE_LOCAL");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&qls, "NO_USE_LOCAL");
     }
     if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        pmix_argv_append_nosize(&qls, "NOOVERSUBSCRIBE");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&qls, "NOOVERSUBSCRIBE");
     } else if (PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        pmix_argv_append_nosize(&qls, "OVERSUBSCRIBE");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&qls, "OVERSUBSCRIBE");
     }
     if (PRTE_MAPPING_SPAN & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        pmix_argv_append_nosize(&qls, "SPAN");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&qls, "SPAN");
     }
     if (PRTE_MAPPING_ORDERED & PRTE_GET_MAPPING_DIRECTIVE(mapping)) {
-        pmix_argv_append_nosize(&qls, "ORDERED");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&qls, "ORDERED");
     }
 
     if (NULL != qls) {
-        tmp = pmix_argv_join(qls, ':');
-        pmix_argv_free(qls);
+        tmp = PMIX_ARGV_JOIN_COMPAT(qls, ':');
+        PMIX_ARGV_FREE_COMPAT(qls);
         pmix_asprintf(&mymap, "%s:%s", map, tmp);
         free(tmp);
     } else {

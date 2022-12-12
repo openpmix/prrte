@@ -104,11 +104,11 @@ static int ppr_mapper(prte_job_t *jdata,
     jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
 
         /* split on the colon */
-    ck = pmix_argv_split(jobppr, ':');
-    if (2 != pmix_argv_count(ck)) {
+    ck = PMIX_ARGV_SPLIT_COMPAT(jobppr, ':');
+    if (2 != PMIX_ARGV_COUNT_COMPAT(ck)) {
         /* must provide a specification */
         pmix_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, jobppr);
-        pmix_argv_free(ck);
+        PMIX_ARGV_FREE_COMPAT(ck);
         free(jobppr);
         return PRTE_ERR_SILENT;
     }
@@ -145,11 +145,11 @@ static int ppr_mapper(prte_job_t *jdata,
         /* unknown spec */
         pmix_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true, ck[1],
                        jobppr);
-        pmix_argv_free(ck);
+        PMIX_ARGV_FREE_COMPAT(ck);
         free(jobppr);
         return PRTE_ERR_SILENT;
     }
-    pmix_argv_free(ck);
+    PMIX_ARGV_FREE_COMPAT(ck);
 
     /* if nothing was given, that's an error */
     if (0 == mapping) {

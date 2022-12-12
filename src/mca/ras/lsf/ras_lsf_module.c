@@ -102,7 +102,7 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     }
 
     /* release the nodelist from lsf */
-    pmix_argv_free(nodelist);
+    PMIX_ARGV_FREE_COMPAT(nodelist);
 
     return PRTE_SUCCESS;
 }

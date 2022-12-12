@@ -438,12 +438,12 @@ static void prte_app_context_destructor(prte_app_context_t *app_context)
 
     /* argv and env lists created by util/argv copy functions */
     if (NULL != app_context->argv) {
-        pmix_argv_free(app_context->argv);
+        PMIX_ARGV_FREE_COMPAT(app_context->argv);
         app_context->argv = NULL;
     }
 
     if (NULL != app_context->env) {
-        pmix_argv_free(app_context->env);
+        PMIX_ARGV_FREE_COMPAT(app_context->env);
         app_context->env = NULL;
     }
 
@@ -522,7 +522,7 @@ static void prte_job_destruct(prte_job_t *job)
     }
 
     if (NULL != job->personality) {
-        pmix_argv_free(job->personality);
+        PMIX_ARGV_FREE_COMPAT(job->personality);
     }
     for (n = 0; n < job->apps->size; n++) {
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(job->apps, n))) {
@@ -590,7 +590,7 @@ static void prte_job_destruct(prte_job_t *job)
         pmix_pointer_array_set_item(prte_job_data, job->index, NULL);
     }
     if (NULL != job->traces) {
-        pmix_argv_free(job->traces);
+        PMIX_ARGV_FREE_COMPAT(job->traces);
     }
     PMIX_DESTRUCT(&job->cli);
 }
@@ -640,7 +640,7 @@ static void prte_node_destruct(prte_node_t *node)
         node->rawname = NULL;
     }
     if (NULL != node->aliases) {
-        pmix_argv_free(node->aliases);
+        PMIX_ARGV_FREE_COMPAT(node->aliases);
         node->aliases = NULL;
     }
     if (NULL != node->daemon) {

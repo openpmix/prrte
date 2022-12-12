@@ -148,7 +148,7 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                 PRTE_FLAG_UNSET(hnp_node, PRTE_NODE_FLAG_SLOTS_GIVEN);
             }
             /* if the node name is different, store it as an alias */
-            pmix_argv_append_unique_nosize(&hnp_node->aliases, node->name);
+            PMIX_ARGV_APPEND_UNIQUE_COMPAT(&hnp_node->aliases, node->name);
             if (NULL != node->rawname) {
                 if (NULL != hnp_node->rawname) {
                     free(hnp_node->rawname);

@@ -150,7 +150,7 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
             PMIX_RELEASE(jptr);
             return prte_pmix_convert_status(rc);
         }
-        pmix_argv_append_nosize(&jptr->personality, tmp);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&jptr->personality, tmp);
         free(tmp);
     }
 
@@ -561,7 +561,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
             PMIX_RELEASE(app);
             return prte_pmix_convert_status(rc);
         }
-        pmix_argv_append_nosize(&app->argv, tmp);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&app->argv, tmp);
         free(tmp);
     }
 
@@ -581,7 +581,7 @@ int prte_app_unpack(pmix_data_buffer_t *bkt, prte_app_context_t **ap)
             PMIX_RELEASE(app);
             return prte_pmix_convert_status(rc);
         }
-        pmix_argv_append_nosize(&app->env, tmp);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&app->env, tmp);
         free(tmp);
     }
 

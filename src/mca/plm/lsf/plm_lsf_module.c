@@ -290,7 +290,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_base_wrap_args(argv);
 
     if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-        param = pmix_argv_join(argv, ' ');
+        param = PMIX_ARGV_JOIN_COMPAT(argv, ' ');
         if (NULL != param) {
             pmix_output(0, "plm:lsf: final top-level argv:");
             pmix_output(0, "plm:lsf:     %s", param);
@@ -341,7 +341,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     }
 
     /* setup environment */
-    env = pmix_argv_copy(prte_launch_environ);
+    env = PMIX_ARGV_COPY_COMPAT(prte_launch_environ);
 
     /* lsb_launch tampers with SIGCHLD.
      * After the call to lsb_launch, the signal handler for SIGCHLD is NULL.
@@ -359,9 +359,9 @@ static void launch_daemons(int fd, short args, void *cbdata)
     if ((rc = lsb_launch(nodelist_argv, argv, LSF_DJOB_REPLACE_ENV | LSF_DJOB_NOWAIT, env)) < 0) {
         PRTE_ERROR_LOG(PRTE_ERR_FAILED_TO_START);
         char *flattened_nodelist = NULL;
-        flattened_nodelist = pmix_argv_join(nodelist_argv, '\n');
+        flattened_nodelist = PMIX_ARGV_JOIN_COMPAT(nodelist_argv, '\n');
         pmix_show_help("help-plm-lsf.txt", "lsb_launch-failed", true, rc, lsberrno, lsb_sysmsg(),
-                       pmix_argv_count(nodelist_argv), flattened_nodelist);
+                       PMIX_ARGV_COUNT_COMPAT(nodelist_argv), flattened_nodelist);
         free(flattened_nodelist);
         rc = PRTE_ERR_FAILED_TO_START;
         prte_wait_enable(); /* re-enable our SIGCHLD handler */
@@ -378,10 +378,10 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
 cleanup:
     if (NULL != argv) {
-        pmix_argv_free(argv);
+        PMIX_ARGV_FREE_COMPAT(argv);
     }
     if (NULL != env) {
-        pmix_argv_free(env);
+        PMIX_ARGV_FREE_COMPAT(env);
     }
 
     /* check for failed launch - if so, force terminate */
