@@ -184,7 +184,7 @@ static int bind_to_cpuset(prte_job_t *jdata,
         /* not enough cpus were specified */
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
-    cpus = pmix_argv_split(options->cpuset, ',');
+    cpus = PMIX_ARGV_SPLIT_COMPAT(options->cpuset, ',');
     /* take the first one */
     idx = strtoul(cpus[0], NULL, 10);
     if (options->use_hwthreads) {
@@ -211,7 +211,7 @@ static int bind_to_cpuset(prte_job_t *jdata,
 #endif
         obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo, tset, type, idx);
         if (NULL == obj) {
-            pmix_argv_free(cpus);
+            PMIX_ARGV_FREE_COMPAT(cpus);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
 #if HWLOC_API_VERSION < 0x20000
@@ -232,9 +232,9 @@ static int bind_to_cpuset(prte_job_t *jdata,
     if (NULL == cpus[1]) {
         options->cpuset = NULL;
     } else {
-        options->cpuset = pmix_argv_join(&cpus[1], ',');
+        options->cpuset = PMIX_ARGV_JOIN_COMPAT(&cpus[1], ',');
     }
-    pmix_argv_free(cpus);
+    PMIX_ARGV_FREE_COMPAT(cpus);
 
     /* mark that we used ONE of these cpus - we do this each time we
      * the cpuset is assigned to a proc. When all the cpus in the

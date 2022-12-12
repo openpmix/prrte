@@ -785,15 +785,15 @@ void prte_rmaps_base_report_bindings(prte_job_t *jdata,
                           proc->node->name, tmp);
             free(tmp);
         }
-        pmix_argv_append_nosize(&cache, out);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cache, out);
         free(out);
     }
     if (NULL == cache) {
         out = strdup("Error: job has no procs");
     } else {
         /* add a blank line with \n on it so IOF will output the last line */
-        pmix_argv_append_nosize(&cache, "");
-        out = pmix_argv_join(cache, '\n');
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cache, "");
+        out = PMIX_ARGV_JOIN_COMPAT(cache, '\n');
     }
     PMIX_LOAD_PROCID(&source, jdata->nspace, PMIX_RANK_WILDCARD);
     prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, out);

@@ -115,7 +115,9 @@ static pmix_server_module_t pmix_server = {
     .push_stdin = pmix_server_stdin_fn,
     .group = pmix_server_group_fn,
     .allocate = pmix_server_alloc_fn,
+#if PMIX_NUMERIC_VERSION >= 0x00050000
     .session_control = pmix_server_session_ctrl_fn
+#endif
 };
 
 typedef struct {
@@ -427,7 +429,7 @@ void pmix_server_register_params(void)
                                       &generate_dist);
     prte_pmix_server_globals.generate_dist = 0;
     if (NULL != generate_dist) {
-        tmp = pmix_argv_split(generate_dist, ',');
+        tmp = PMIX_ARGV_SPLIT_COMPAT(generate_dist, ',');
         for (i=0; NULL != tmp[i]; i++) {
             if (0 == strcasecmp(tmp[i], "fabric")) {
                 prte_pmix_server_globals.generate_dist |= PMIX_DEVTYPE_OPENFABRICS;
@@ -863,7 +865,7 @@ int pmix_server_init(void)
 
     // check for aliases
     if (NULL != prte_process_info.aliases) {
-        tmp = pmix_argv_join(prte_process_info.aliases, ',');
+        tmp = PMIX_ARGV_JOIN_COMPAT(prte_process_info.aliases, ',');
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_HOSTNAME_ALIASES, tmp, PMIX_STRING);
         free(tmp);
         if (PMIX_SUCCESS != rc) {

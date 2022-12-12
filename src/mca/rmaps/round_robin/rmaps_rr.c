@@ -131,9 +131,9 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
 
         if (0 == app->num_procs) {
             if (NULL != options->cpuset && !options->overload) {
-                tmp = pmix_argv_split(options->cpuset, ',');
-                app->num_procs = pmix_argv_count(tmp);
-                pmix_argv_free(tmp);
+                tmp = PMIX_ARGV_SPLIT_COMPAT(options->cpuset, ',');
+                app->num_procs = PMIX_ARGV_COUNT_COMPAT(tmp);
+                PMIX_ARGV_FREE_COMPAT(tmp);
             } else {
                 /* set the num_procs to equal the number of slots on these
                  * mapped nodes, taking into account the number of cpus/rank

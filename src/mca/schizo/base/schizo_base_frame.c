@@ -116,7 +116,7 @@ bool prte_schizo_base_check_qualifiers(char *directive,
             return true;
         }
     }
-    v = pmix_argv_join(valid, ',');
+    v = PMIX_ARGV_JOIN_COMPAT(valid, ',');
     pmix_show_help("help-prte-rmaps-base.txt",
                    "unrecognized-qualifier", true,
                    directive, qual, v);
@@ -147,14 +147,14 @@ bool prte_schizo_base_check_directives(char *directive,
 
     /* if it starts with a ':', then these are just qualifiers */
     if (':' == dir[0]) {
-        qls = pmix_argv_split(&dir[1], ':');
+        qls = PMIX_ARGV_SPLIT_COMPAT(&dir[1], ':');
         for (m=0; NULL != qls[m]; m++) {
             if (!prte_schizo_base_check_qualifiers(directive, quals, qls[m])) {
-                pmix_argv_free(qls);
+                PMIX_ARGV_FREE_COMPAT(qls);
                 return false;
             }
         }
-        pmix_argv_free(qls);
+        PMIX_ARGV_FREE_COMPAT(qls);
         return true;
     }
 
@@ -165,7 +165,7 @@ bool prte_schizo_base_check_directives(char *directive,
         return true;
     }
 
-    args = pmix_argv_split(dir, ':');
+    args = PMIX_ARGV_SPLIT_COMPAT(dir, ':');
     /* remove any '=' in the directive */
     if (NULL != (v = strchr(args[0], '='))) {
         *v = '\0';
@@ -188,7 +188,7 @@ bool prte_schizo_base_check_directives(char *directive,
                                        "unrecognized-qualifier", true,
                                        directive, dir, v);
                         free(v);
-                        pmix_argv_free(args);
+                        PMIX_ARGV_FREE_COMPAT(args);
                         return false;
                     }
                     found = false;
@@ -199,45 +199,45 @@ bool prte_schizo_base_check_directives(char *directive,
                         }
                     }
                     if (!found) {
-                        v = pmix_argv_join(pproptions, ':');
+                        v = PMIX_ARGV_JOIN_COMPAT(pproptions, ':');
                         pmix_asprintf(&q, "ppr:%s:[%s]", args[1], v);
                         free(v);
                         pmix_show_help("help-prte-rmaps-base.txt",
                                        "unrecognized-qualifier", true,
                                        directive, dir, q);
                         free(q);
-                        pmix_argv_free(args);
+                        PMIX_ARGV_FREE_COMPAT(args);
                         return false;
                     }
                     if (NULL != args[3]) {
-                        qls = pmix_argv_split(args[3], ':');
+                        qls = PMIX_ARGV_SPLIT_COMPAT(args[3], ':');
                     } else {
-                        pmix_argv_free(args);
+                        PMIX_ARGV_FREE_COMPAT(args);
                         return true;
                     }
                 } else {
-                    qls = pmix_argv_split(args[1], ':');
+                    qls = PMIX_ARGV_SPLIT_COMPAT(args[1], ':');
                 }
                for (m=0; NULL != qls[m]; m++) {
                     if (!prte_schizo_base_check_qualifiers(directive, quals, qls[m])) {
-                        pmix_argv_free(qls);
-                        pmix_argv_free(args);
+                        PMIX_ARGV_FREE_COMPAT(qls);
+                        PMIX_ARGV_FREE_COMPAT(args);
                         return false;
                     }
                 }
-                pmix_argv_free(qls);
-                pmix_argv_free(args);
+                PMIX_ARGV_FREE_COMPAT(qls);
+                PMIX_ARGV_FREE_COMPAT(args);
                 return true;
             }
-            pmix_argv_free(args);
+            PMIX_ARGV_FREE_COMPAT(args);
             return true;
         }
     }
-    v = pmix_argv_join(valid, ':');
+    v = PMIX_ARGV_JOIN_COMPAT(valid, ':');
     pmix_show_help("help-prte-rmaps-base.txt",
                    "unrecognized-directive", true,
                    directive, dir, v);
-    pmix_argv_free(args);
+    PMIX_ARGV_FREE_COMPAT(args);
     return false;
 }
 
@@ -280,9 +280,9 @@ static int check_ndirs(pmix_cli_item_t *opt)
 
     for (n=0; NULL != limits[n]; n++) {
         if (0 == strcmp(opt->key, limits[n])) {
-            count = pmix_argv_count(opt->values);
+            count = PMIX_ARGV_COUNT_COMPAT(opt->values);
             if (1 > count) {
-                param = pmix_argv_join(opt->values, ' ');
+                param = PMIX_ARGV_JOIN_COMPAT(opt->values, ' ');
                 pmix_show_help("help-schizo-base.txt", "too-many-instances", true,
                                param, opt->key, count, 1);
                 return PRTE_ERR_SILENT;
@@ -481,35 +481,35 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     /* the following have multiple directives */
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_OUTPUT);
     if (NULL != opt) {
-        vtmp = pmix_argv_split(opt->values[0], ',');
+        vtmp = PMIX_ARGV_SPLIT_COMPAT(opt->values[0], ',');
         for (n=0; NULL != vtmp[n]; n++) {
             if (!prte_schizo_base_check_directives(PRTE_CLI_OUTPUT, outputs, outquals, vtmp[n])) {
                 return PRTE_ERR_SILENT;
             }
         }
-        pmix_argv_free(vtmp);
+        PMIX_ARGV_FREE_COMPAT(vtmp);
     }
 
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_DISPLAY);
     if (NULL != opt) {
-        vtmp = pmix_argv_split(opt->values[0], ',');
+        vtmp = PMIX_ARGV_SPLIT_COMPAT(opt->values[0], ',');
         for (n=0; NULL != vtmp[n]; n++) {
             if (!prte_schizo_base_check_directives(PRTE_CLI_DISPLAY, displays, NULL, vtmp[n])) {
                 return PRTE_ERR_SILENT;
             }
         }
-        pmix_argv_free(vtmp);
+        PMIX_ARGV_FREE_COMPAT(vtmp);
     }
 
     opt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_RTOS);
     if (NULL != opt) {
-        vtmp = pmix_argv_split(opt->values[0], ',');
+        vtmp = PMIX_ARGV_SPLIT_COMPAT(opt->values[0], ',');
         for (n=0; NULL != vtmp[n]; n++) {
             if (!prte_schizo_base_check_directives(PRTE_CLI_RTOS, rtos, NULL, vtmp[n])) {
                 return PRTE_ERR_SILENT;
             }
         }
-        pmix_argv_free(vtmp);
+        PMIX_ARGV_FREE_COMPAT(vtmp);
     }
 
     // check too many values given to a single command line option
@@ -530,14 +530,14 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
     char **targv, *ptr;
 
     for (n=0; NULL != opt->values[n]; n++) {
-        targv = pmix_argv_split(opt->values[n], ',');
-        for (idx = 0; idx < pmix_argv_count(targv); idx++) {
+        targv = PMIX_ARGV_SPLIT_COMPAT(opt->values[n], ',');
+        for (idx = 0; idx < PMIX_ARGV_COUNT_COMPAT(targv); idx++) {
 
             if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_ALLOC)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_ALLOCATION, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -545,7 +545,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP_DETAILED, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -553,7 +553,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_MAP, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -561,7 +561,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_REPORT_BINDINGS, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -571,7 +571,7 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                     /* missing the value or value is invalid */
                     pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                    "display", "TOPO", targv[idx]);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return PRTE_ERR_FATAL;
                 }
                 ++ptr;
@@ -579,18 +579,18 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                     /* missing the value or value is invalid */
                     pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                    "display", "TOPO", targv[idx]);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return PRTE_ERR_FATAL;
                 }
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_TOPOLOGY, ptr, PMIX_STRING);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
             }
         }
-        pmix_argv_free(targv);
+        PMIX_ARGV_FREE_COMPAT(targv);
     }
 
     return PRTE_SUCCESS;
@@ -605,7 +605,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
     pmix_status_t ret;
 
     for (n=0; NULL != opt->values[n]; n++) {
-        targv = pmix_argv_split(opt->values[0], ',');
+        targv = PMIX_ARGV_SPLIT_COMPAT(opt->values[0], ',');
         for (idx = 0; NULL != targv[idx]; idx++) {
             /* check for qualifiers */
             cptr = strchr(targv[idx], ':');
@@ -613,15 +613,15 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 *cptr = '\0';
                 ++cptr;
                 /* could be multiple qualifiers, so separate them */
-                options = pmix_argv_split(cptr, ',');
+                options = PMIX_ARGV_SPLIT_COMPAT(cptr, ',');
                 for (m=0; NULL != options[m]; m++) {
 
                     if (PMIX_CHECK_CLI_OPTION(options[m], PRTE_CLI_NOCOPY)) {
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_ONLY, NULL, PMIX_BOOL);
                         if (PMIX_SUCCESS != ret) {
                             PMIX_ERROR_LOG(ret);
-                            pmix_argv_free(targv);
-                            pmix_argv_free(options);
+                            PMIX_ARGV_FREE_COMPAT(targv);
+                            PMIX_ARGV_FREE_COMPAT(options);
                             return ret;
                         }
 
@@ -629,8 +629,8 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_FILE_PATTERN, NULL, PMIX_BOOL);
                         if (PMIX_SUCCESS != ret) {
                             PMIX_ERROR_LOG(ret);
-                            pmix_argv_free(targv);
-                            pmix_argv_free(options);
+                            PMIX_ARGV_FREE_COMPAT(targv);
+                            PMIX_ARGV_FREE_COMPAT(options);
                             return ret;
                         }
 
@@ -639,12 +639,12 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     }
                     if (PMIX_SUCCESS != ret) {
                         PMIX_ERROR_LOG(ret);
-                        pmix_argv_free(targv);
-                        pmix_argv_free(options);
+                        PMIX_ARGV_FREE_COMPAT(targv);
+                        PMIX_ARGV_FREE_COMPAT(options);
                         return ret;
                     }
                 }
-                pmix_argv_free(options);
+                PMIX_ARGV_FREE_COMPAT(options);
             }
             if (0 == strlen(targv[idx])) {
                 // only qualifiers were given
@@ -659,7 +659,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -667,7 +667,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_DETAILED_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -675,7 +675,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TAG_FULLNAME_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -683,7 +683,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_RANK_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -691,7 +691,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_TIMESTAMP_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -699,7 +699,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_XML_OUTPUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -707,7 +707,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_MERGE_STDERR_STDOUT, NULL, PMIX_BOOL);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -716,12 +716,12 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     pmix_show_help("help-prte-rmaps-base.txt",
                                    "missing-qualifier", true,
                                    "output", "directory", "directory");
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return PRTE_ERR_FATAL;
                 }
                 if (NULL != outfile) {
                     pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, outfile, ptr);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     free(outfile);
                     return PRTE_ERR_FATAL;
                 }
@@ -732,7 +732,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 if (!pmix_path_is_absolute(ptr)) {
                     char cwd[PRTE_PATH_MAX];
                     if (NULL == getcwd(cwd, sizeof(cwd))) {
-                        pmix_argv_free(targv);
+                        PMIX_ARGV_FREE_COMPAT(targv);
                         return PRTE_ERR_FATAL;
                     }
                     outdir = pmix_os_path(false, cwd, ptr, NULL);
@@ -742,7 +742,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_DIRECTORY, outdir, PMIX_STRING);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
 
@@ -751,12 +751,12 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                     pmix_show_help("help-prte-rmaps-base.txt",
                                    "missing-qualifier", true,
                                    "output", "filename", "filename");
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return PRTE_ERR_FATAL;
                 }
                 if (NULL != outdir) {
                     pmix_show_help("help-prted.txt", "both-file-and-dir-set", true, ptr, outdir);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return PRTE_ERR_FATAL;
                 }
                 /* If the given filename isn't an absolute path, then
@@ -766,7 +766,7 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 if (!pmix_path_is_absolute(ptr)) {
                     char cwd[PRTE_PATH_MAX];
                     if (NULL == getcwd(cwd, sizeof(cwd))) {
-                        pmix_argv_free(targv);
+                        PMIX_ARGV_FREE_COMPAT(targv);
                         return PRTE_ERR_FATAL;
                     }
                     outfile = pmix_os_path(false, cwd, ptr, NULL);
@@ -776,12 +776,12 @@ int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo)
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_IOF_OUTPUT_TO_FILE, outfile, PMIX_STRING);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
-                    pmix_argv_free(targv);
+                    PMIX_ARGV_FREE_COMPAT(targv);
                     return ret;
                 }
             }
         }
-        pmix_argv_free(targv);
+        PMIX_ARGV_FREE_COMPAT(targv);
     }
     if (NULL != outdir) {
         free(outdir);

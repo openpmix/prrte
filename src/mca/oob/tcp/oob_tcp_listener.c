@@ -196,16 +196,16 @@ static int create_listen(void)
         /* if static ports were provided, take the
          * first entry in the list
          */
-        pmix_argv_append_nosize(&ports, prte_mca_oob_tcp_component.tcp_static_ports[0]);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ports, prte_mca_oob_tcp_component.tcp_static_ports[0]);
         /* flag that we are using static ports */
         prte_static_ports = true;
     } else if (NULL != prte_mca_oob_tcp_component.tcp_dyn_ports) {
         /* take the entire range */
-        ports = pmix_argv_copy(prte_mca_oob_tcp_component.tcp_dyn_ports);
+        ports = PMIX_ARGV_COPY_COMPAT(prte_mca_oob_tcp_component.tcp_dyn_ports);
         prte_static_ports = false;
     } else {
         /* flag the system to dynamically take any available port */
-        pmix_argv_append_nosize(&ports, "0");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ports, "0");
         prte_static_ports = false;
     }
 
@@ -225,7 +225,7 @@ static int create_listen(void)
      * one socket, but that prun and daemons will have multiple
      * sockets to support more flexible wireup protocols
      */
-    for (i = 0; i < pmix_argv_count(ports); i++) {
+    for (i = 0; i < PMIX_ARGV_COUNT_COMPAT(ports); i++) {
         pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s attempting to bind to IPv4 port %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ports[i]);
@@ -243,7 +243,7 @@ static int create_listen(void)
                 pmix_output(0, "prte_mca_oob_tcp_component_init: socket() failed: %s (%d)",
                             strerror(prte_socket_errno), prte_socket_errno);
             }
-            pmix_argv_free(ports);
+            PMIX_ARGV_FREE_COMPAT(ports);
             return PRTE_ERR_IN_ERRNO;
         }
 
@@ -259,7 +259,7 @@ static int create_listen(void)
                         "SO_REUSEADDR option (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
-            pmix_argv_free(ports);
+            PMIX_ARGV_FREE_COMPAT(ports);
             return PRTE_ERROR;
         }
 
@@ -271,7 +271,7 @@ static int create_listen(void)
                         "listening socket to CLOEXEC (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
-            pmix_argv_free(ports);
+            PMIX_ARGV_FREE_COMPAT(ports);
             return PRTE_ERROR;
         }
 
@@ -283,7 +283,7 @@ static int create_listen(void)
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) ntohs(port),
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
-            pmix_argv_free(ports);
+            PMIX_ARGV_FREE_COMPAT(ports);
             return PRTE_ERROR;
         }
         /* resolve assigned port */
@@ -291,7 +291,7 @@ static int create_listen(void)
             pmix_output(0, "prte_oob_tcp_create_listen: getsockname(): %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
-            pmix_argv_free(ports);
+            PMIX_ARGV_FREE_COMPAT(ports);
             return PRTE_ERROR;
         }
 
@@ -300,7 +300,7 @@ static int create_listen(void)
             pmix_output(0, "prte_mca_oob_tcp_component_init: listen(): %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
-            pmix_argv_free(ports);
+            PMIX_ARGV_FREE_COMPAT(ports);
             return PRTE_ERROR;
         }
 
@@ -309,7 +309,7 @@ static int create_listen(void)
             pmix_output(0, "prte_mca_oob_tcp_component_init: fcntl(F_GETFL) failed: %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
-            pmix_argv_free(ports);
+            PMIX_ARGV_FREE_COMPAT(ports);
             return PRTE_ERROR;
         }
         flags |= O_NONBLOCK;
@@ -317,7 +317,7 @@ static int create_listen(void)
             pmix_output(0, "prte_mca_oob_tcp_component_init: fcntl(F_SETFL) failed: %s (%d)",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
-            pmix_argv_free(ports);
+            PMIX_ARGV_FREE_COMPAT(ports);
             return PRTE_ERROR;
         }
 
@@ -332,7 +332,7 @@ static int create_listen(void)
         pmix_list_append(&prte_mca_oob_tcp_component.listeners, &conn->item);
         /* and to our ports */
         pmix_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in *) &inaddr)->sin_port));
-        pmix_argv_append_nosize(&prte_mca_oob_tcp_component.ipv4ports, tconn);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_mca_oob_tcp_component.ipv4ports, tconn);
         free(tconn);
         if (OOB_TCP_DEBUG_CONNECT
             <= pmix_output_get_verbosity(prte_oob_base_framework.framework_output)) {
@@ -346,7 +346,7 @@ static int create_listen(void)
         }
     }
     /* done with this, so release it */
-    pmix_argv_free(ports);
+    PMIX_ARGV_FREE_COMPAT(ports);
 
     if (0 == pmix_list_get_size(&prte_mca_oob_tcp_component.listeners)) {
         /* cleanup */
@@ -389,16 +389,16 @@ static int create_listen6(void)
             /* if static ports were provided, take the
              * first entry in the list
              */
-            pmix_argv_append_nosize(&ports, prte_mca_oob_tcp_component.tcp6_static_ports[0]);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ports, prte_mca_oob_tcp_component.tcp6_static_ports[0]);
             /* flag that we are using static ports */
             prte_static_ports = true;
         } else if (NULL != prte_mca_oob_tcp_component.tcp6_dyn_ports) {
             /* take the entire range */
-            ports = pmix_argv_copy(prte_mca_oob_tcp_component.tcp6_dyn_ports);
+            ports = PMIX_ARGV_COPY_COMPAT(prte_mca_oob_tcp_component.tcp6_dyn_ports);
             prte_static_ports = false;
         } else {
             /* flag the system to dynamically take any available port */
-            pmix_argv_append_nosize(&ports, "0");
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ports, "0");
             prte_static_ports = false;
         }
     } else {
@@ -406,16 +406,16 @@ static int create_listen6(void)
             /* if static ports were provided, take the
              * first entry in the list
              */
-            pmix_argv_append_nosize(&ports, prte_mca_oob_tcp_component.tcp6_static_ports[0]);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ports, prte_mca_oob_tcp_component.tcp6_static_ports[0]);
             /* flag that we are using static ports */
             prte_static_ports = true;
         } else if (NULL != prte_mca_oob_tcp_component.tcp6_dyn_ports) {
             /* take the entire range */
-            ports = pmix_argv_copy(prte_mca_oob_tcp_component.tcp6_dyn_ports);
+            ports = PMIX_ARGV_COPY_COMPAT(prte_mca_oob_tcp_component.tcp6_dyn_ports);
             prte_static_ports = false;
         } else {
             /* flag the system to dynamically take any available port */
-            pmix_argv_append_nosize(&ports, "0");
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ports, "0");
             prte_static_ports = false;
         }
     }
@@ -436,7 +436,7 @@ static int create_listen6(void)
      * one socket, but that prun and daemons will have multiple
      * sockets to support more flexible wireup protocols
      */
-    for (i = 0; i < pmix_argv_count(ports); i++) {
+    for (i = 0; i < PMIX_ARGV_COUNT_COMPAT(ports); i++) {
         pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                             "%s attempting to bind to IPv6 port %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ports[i]);
@@ -464,7 +464,7 @@ static int create_listen6(void)
                         "listening socket to CLOEXEC (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
-            pmix_argv_free(ports);
+            PMIX_ARGV_FREE_COMPAT(ports);
             return PRTE_ERROR;
         }
 
@@ -480,7 +480,7 @@ static int create_listen6(void)
                         "SO_REUSEADDR option (%s:%d)\n",
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
-            pmix_argv_free(ports);
+            PMIX_ARGV_FREE_COMPAT(ports);
             return PRTE_ERROR;
         }
 
@@ -492,7 +492,7 @@ static int create_listen6(void)
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) ntohs(port),
                         strerror(prte_socket_errno), prte_socket_errno);
             CLOSE_THE_SOCKET(sd);
-            pmix_argv_free(ports);
+            PMIX_ARGV_FREE_COMPAT(ports);
             return PRTE_ERROR;
         }
         /* resolve assigned port */
@@ -531,7 +531,7 @@ static int create_listen6(void)
         pmix_list_append(&prte_mca_oob_tcp_component.listeners, &conn->item);
         /* and to our ports */
         pmix_asprintf(&tconn, "%d", ntohs(((struct sockaddr_in6 *) &inaddr)->sin6_port));
-        pmix_argv_append_nosize(&prte_mca_oob_tcp_component.ipv6ports, tconn);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_mca_oob_tcp_component.ipv6ports, tconn);
         free(tconn);
         if (OOB_TCP_DEBUG_CONNECT
             <= pmix_output_get_verbosity(prte_oob_base_framework.framework_output)) {
@@ -547,12 +547,12 @@ static int create_listen6(void)
     if (0 == pmix_list_get_size(&prte_mca_oob_tcp_component.listeners)) {
         /* cleanup */
         CLOSE_THE_SOCKET(sd);
-        pmix_argv_free(ports);
+        PMIX_ARGV_FREE_COMPAT(ports);
         return PRTE_ERR_SOCKET_NOT_AVAILABLE;
     }
 
     /* done with this, so release it */
-    pmix_argv_free(ports);
+    PMIX_ARGV_FREE_COMPAT(ports);
 
     return PRTE_SUCCESS;
 }

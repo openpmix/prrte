@@ -353,11 +353,13 @@ PRTE_EXPORT extern int prte_pmix_server_register_tool(pmix_nspace_t nspace);
 
 PRTE_EXPORT extern int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info);
 
+#if PMIX_NUMERIC_VERSION >= 0x00050000
 PRTE_EXPORT extern pmix_status_t
 pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
                             uint32_t sessionID,
                             const pmix_info_t directives[], size_t ndirs,
                             pmix_info_cbfunc_t cbfunc, void *cbdata);
+#endif
 
 /* exposed shared variables */
 typedef struct {

@@ -51,7 +51,7 @@ void prte_job_print(char **output, prte_job_t *src)
     /* set default result */
     *output = NULL;
 
-    tmp2 = pmix_argv_join(src->personality, ',');
+    tmp2 = PMIX_ARGV_JOIN_COMPAT(src->personality, ',');
     pmix_asprintf(&tmp,
                   "\nData for job: %s\tPersonality: %s\tRecovery: %s\n\tNum apps: %ld\tStdin "
                   "target: %s\tState: %s\tAbort: %s",
@@ -328,14 +328,14 @@ void prte_app_print(char **output, prte_job_t *jdata, prte_app_context_t *src)
                   (unsigned long) src->idx, (NULL == src->app) ? "NULL" : src->app,
                   (unsigned long) src->num_procs, PRTE_VPID_PRINT(src->first_rank));
 
-    count = pmix_argv_count(src->argv);
+    count = PMIX_ARGV_COUNT_COMPAT(src->argv);
     for (i = 0; i < count; i++) {
         pmix_asprintf(&tmp2, "%s\n\tArgv[%d]: %s", tmp, i, src->argv[i]);
         free(tmp);
         tmp = tmp2;
     }
 
-    count = pmix_argv_count(src->env);
+    count = PMIX_ARGV_COUNT_COMPAT(src->env);
     for (i = 0; i < count; i++) {
         pmix_asprintf(&tmp2, "%s\n\tEnv[%lu]: %s", tmp, (unsigned long) i, src->env[i]);
         free(tmp);

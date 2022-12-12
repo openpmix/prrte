@@ -452,7 +452,7 @@ static void ready_for_debug(int fd, short args, void *cbdata)
            free(name);
         }
         /* pass the argv from each app */
-        name = pmix_argv_join(app->argv, ' ');
+        name = PMIX_ARGV_JOIN_COMPAT(app->argv, ' ');
         PMIX_INFO_LIST_ADD(rc, tinfo, PMIX_APP_ARGV, name, PMIX_STRING);
         free(name);
     }

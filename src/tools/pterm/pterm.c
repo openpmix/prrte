@@ -306,7 +306,7 @@ int main(int argc, char *argv[])
 
     // we do NOT accept arguments other than our own
     if (NULL != results.tail) {
-        param = pmix_argv_join(results.tail, ' ');
+        param = PMIX_ARGV_JOIN_COMPAT(results.tail, ' ');
         ptr = pmix_show_help_string("help-pterm.txt", "no-args", false,
                                     prte_tool_basename, param, prte_tool_basename);
         if (NULL != ptr) {

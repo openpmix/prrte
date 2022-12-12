@@ -18,6 +18,7 @@
 #include "constants.h"
 #include "types.h"
 
+#include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
@@ -204,11 +205,11 @@ char *prte_attr_print_list(pmix_list_t *attributes)
 
     PMIX_LIST_FOREACH(attr, attributes, prte_attribute_t)
     {
-        pmix_argv_append_nosize(&cache, prte_attr_key_to_str(attr->key));
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&cache, prte_attr_key_to_str(attr->key));
     }
     if (NULL != cache) {
-        out1 = pmix_argv_join(cache, '\n');
-        pmix_argv_free(cache);
+        out1 = PMIX_ARGV_JOIN_COMPAT(cache, '\n');
+        PMIX_ARGV_FREE_COMPAT(cache);
     } else {
         out1 = NULL;
     }

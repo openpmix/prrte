@@ -282,8 +282,8 @@ int prte_session_setup_base(pmix_proc_t *proc)
         /* break the string into tokens - it should be
          * separated by ','
          */
-        list = pmix_argv_split(prte_prohibited_session_dirs, ',');
-        len = pmix_argv_count(list);
+        list = PMIX_ARGV_SPLIT_COMPAT(prte_prohibited_session_dirs, ',');
+        len = PMIX_ARGV_COUNT_COMPAT(list);
         /* cycle through the list */
         for (i = 0; i < len; i++) {
             /* check if prefix matches */
@@ -291,11 +291,11 @@ int prte_session_setup_base(pmix_proc_t *proc)
                 /* this is a prohibited location */
                 pmix_show_help("help-prte-runtime.txt", "prte:session:dir:prohibited", true,
                                prte_process_info.tmpdir_base, prte_prohibited_session_dirs);
-                pmix_argv_free(list);
+                PMIX_ARGV_FREE_COMPAT(list);
                 return PRTE_ERR_FATAL;
             }
         }
-        pmix_argv_free(list); /* done with this */
+        PMIX_ARGV_FREE_COMPAT(list); /* done with this */
     }
     return PRTE_SUCCESS;
 }

@@ -65,28 +65,28 @@ char *prte_ras_base_flag_string(prte_node_t *node)
     }
 
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
-        pmix_argv_append_nosize(&t2, "DAEMON_LAUNCHED");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&t2, "DAEMON_LAUNCHED");
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_LOC_VERIFIED)) {
-        pmix_argv_append_nosize(&t2, "LOCATION_VERIFIED");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&t2, "LOCATION_VERIFIED");
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_OVERSUBSCRIBED)) {
-        pmix_argv_append_nosize(&t2, "OVERSUBSCRIBED");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&t2, "OVERSUBSCRIBED");
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_MAPPED)) {
-        pmix_argv_append_nosize(&t2, "MAPPED");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&t2, "MAPPED");
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
-        pmix_argv_append_nosize(&t2, "SLOTS_GIVEN");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&t2, "SLOTS_GIVEN");
     }
     if (PRTE_FLAG_TEST(node, PRTE_NODE_NON_USABLE)) {
-        pmix_argv_append_nosize(&t2, "NONUSABLE");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&t2, "NONUSABLE");
     }
     if (NULL != t2) {
-        t3 = pmix_argv_join(t2, ':');
+        t3 = PMIX_ARGV_JOIN_COMPAT(t2, ':');
         pmix_asprintf(&tmp, "Flags: %s", t3);
         free(t3);
-        pmix_argv_free(t2);
+        PMIX_ARGV_FREE_COMPAT(t2);
     } else {
         tmp = strdup("Flags: NONE");
     }
@@ -127,7 +127,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
             flgs = prte_ras_base_flag_string(alloc);
             /* build the aliases string */
             if (NULL != alloc->aliases) {
-                aliases = pmix_argv_join(alloc->aliases, ',');
+                aliases = PMIX_ARGV_JOIN_COMPAT(alloc->aliases, ',');
             } else {
                 aliases = NULL;
             }
@@ -274,11 +274,11 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                 if (prte_keep_fqdn_hostnames) {
                     /* retain the non-fqdn name as an alias */
                     *ptr = '\0';
-                    pmix_argv_append_unique_nosize(&node->aliases, node->name);
+                    PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, node->name);
                     *ptr = '.';
                 } else {
                     /* add the fqdn name as an alias */
-                    pmix_argv_append_unique_nosize(&node->aliases, node->name);
+                    PMIX_ARGV_APPEND_UNIQUE_COMPAT(&node->aliases, node->name);
                     /* retain the non-fqdn name as the node's name */
                     *ptr = '\0';
                 }
@@ -420,11 +420,11 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), hosts));
 
             /* hostfile was specified - parse it and add it to the list */
-            hostlist = pmix_argv_split(hosts, ',');
+            hostlist = PMIX_ARGV_SPLIT_COMPAT(hosts, ',');
             free(hosts);
             for (j=0; NULL != hostlist[j]; j++) {
                 if (PRTE_SUCCESS != (rc = prte_util_add_hostfile_nodes(&nodes, hostlist[j]))) {
-                    pmix_argv_free(hostlist);
+                    PMIX_ARGV_FREE_COMPAT(hostlist);
                     PMIX_DESTRUCT(&nodes);
                     /* set an error event */
                     PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOC_FAILED);
@@ -432,7 +432,7 @@ void prte_ras_base_allocate(int fd, short args, void *cbdata)
                     return;
                 }
             }
-            pmix_argv_free(hostlist);
+            PMIX_ARGV_FREE_COMPAT(hostlist);
         }
     }
 
@@ -553,7 +553,7 @@ next_state:
     jdata->total_slots_alloc = prte_ras_base.total_slots_alloc;
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO, (void**)&hosts, PMIX_STRING)) {
-        hostlist = pmix_argv_split(hosts, ',');
+        hostlist = PMIX_ARGV_SPLIT_COMPAT(hosts, ',');
         free(hosts);
         for (j=0; NULL != hostlist[j]; j++) {
             node = prte_node_match(NULL, hostlist[j]);
@@ -569,7 +569,7 @@ next_state:
             pmix_output(prte_clean_output,
                         "=================================================================\n");
         }
-        pmix_argv_free(hostlist);
+        PMIX_ARGV_FREE_COMPAT(hostlist);
     }
 
     /* set the job state to the next position */
