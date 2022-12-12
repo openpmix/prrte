@@ -231,7 +231,7 @@ int main(int argc, char *argv[])
     for (i=0; NULL != environ[i]; i++) {
         if (0 != strncmp(environ[i], "PMIX_", 5) &&
             0 != strncmp(environ[i], "PRTE_", 5)) {
-            pmix_argv_append_nosize(&prte_launch_environ, environ[i]);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_launch_environ, environ[i]);
         }
     }
 
@@ -336,7 +336,7 @@ int main(int argc, char *argv[])
 #endif
 
     /* ensure we silence any compression warnings */
-    pmix_setenv("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
+    PMIX_SETENV_COMPAT("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
 
     if (PRTE_SUCCESS != (ret = prte_init(&argc, &argv, PRTE_PROC_DAEMON))) {
         PRTE_ERROR_LOG(ret);
@@ -385,7 +385,7 @@ int main(int argc, char *argv[])
             /* cleanup */
             hwloc_bitmap_free(ours);
             hwloc_bitmap_free(res);
-            pmix_argv_free(cores);
+            PMIX_ARGV_FREE_COMPAT(cores);
         }
     }
 
@@ -550,15 +550,15 @@ int main(int argc, char *argv[])
         if (0 != strcmp(prte_process_info.aliases[n], "localhost")
             && 0 != strcmp(prte_process_info.aliases[n], "127.0.0.1")
             && 0 != strcmp(prte_process_info.aliases[n], prte_process_info.nodename)) {
-            pmix_argv_append_nosize(&nonlocal, prte_process_info.aliases[n]);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nonlocal, prte_process_info.aliases[n]);
         }
     }
-    naliases = pmix_argv_count(nonlocal);
+    naliases = PMIX_ARGV_COUNT_COMPAT(nonlocal);
     prc = PMIx_Data_pack(NULL, buffer, &naliases, 1, PMIX_UINT8);
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(buffer);
-        pmix_argv_free(nonlocal);
+        PMIX_ARGV_FREE_COMPAT(nonlocal);
         goto DONE;
     }
     for (ni = 0; ni < naliases; ni++) {
@@ -566,11 +566,11 @@ int main(int argc, char *argv[])
         if (PMIX_SUCCESS != prc) {
             PMIX_ERROR_LOG(prc);
             PMIX_DATA_BUFFER_RELEASE(buffer);
-            pmix_argv_free(nonlocal);
+            PMIX_ARGV_FREE_COMPAT(nonlocal);
             goto DONE;
         }
     }
-    pmix_argv_free(nonlocal);
+    PMIX_ARGV_FREE_COMPAT(nonlocal);
 
     prc = PMIx_Data_pack(NULL, buffer, &prte_topo_signature, 1, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
@@ -727,9 +727,9 @@ int main(int argc, char *argv[])
                     }
                 }
                 if (!ignore) {
-                    pmix_argv_append_nosize(&prted_cmd_line, "--"PRTE_CLI_PRTEMCA);
-                    pmix_argv_append_nosize(&prted_cmd_line, opt->values[i]);
-                    pmix_argv_append_nosize(&prted_cmd_line, t);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, "--"PRTE_CLI_PRTEMCA);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, opt->values[i]);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, t);
                 }
                 --t;
                 *t = '=';
@@ -742,9 +742,9 @@ int main(int argc, char *argv[])
                 char *t = strchr(opt->values[i], '=');
                 *t = '\0';
                 ++t;
-                pmix_argv_append_nosize(&prted_cmd_line, "--"PRTE_CLI_PMIXMCA);
-                pmix_argv_append_nosize(&prted_cmd_line, opt->values[i]);
-                pmix_argv_append_nosize(&prted_cmd_line, t);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, "--"PRTE_CLI_PMIXMCA);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, opt->values[i]);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prted_cmd_line, t);
                 --t;
                 *t = '=';
             }

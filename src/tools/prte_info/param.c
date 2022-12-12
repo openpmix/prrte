@@ -98,7 +98,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
          */
         if (NULL != opt) {
             /* split the arguments at the colon */
-            args = pmix_argv_split(opt->values[0], ':');
+            args = PMIX_ARGV_SPLIT_COMPAT(opt->values[0], ':');
             if (0 == strcmp(args[0], "all")) {
                 want_all = true;
             }
@@ -117,7 +117,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
         if (NULL != opt && NULL != args) {
             type = args[0];
             if (NULL != args[1]) {
-                tmp = pmix_argv_split(args[1], ',');
+                tmp = PMIX_ARGV_SPLIT_COMPAT(args[1], ',');
 
                 for (j=0; NULL != tmp[j]; j++) {
                     for (found = false, i = 0; i < mca_types.size; ++i) {
@@ -138,14 +138,14 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
 
                     prte_info_show_mca_params(type, tmp[j], want_internal);
                 }
-                pmix_argv_free(tmp);
+                PMIX_ARGV_FREE_COMPAT(tmp);
             } else {
                 prte_info_show_mca_params(type, "*", want_internal);
             }
         }
     }
     if (NULL != args) {
-        pmix_argv_free(args);
+        PMIX_ARGV_FREE_COMPAT(args);
     }
 }
 

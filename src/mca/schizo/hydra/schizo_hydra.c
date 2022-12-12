@@ -708,16 +708,16 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
                 && NULL == strcasestr(argv[i + 1], "noinherit")) {
                 if (NULL == target) {
                     /* push it into our environment */
-                    pmix_setenv("PRTE_MCA_rmaps_default_inherit", "1", true, &environ);
-                    pmix_setenv("PRTE_MCA_rmaps_default_mapping_policy", argv[i + 1], true,
+                    PMIX_SETENV_COMPAT("PRTE_MCA_rmaps_default_inherit", "1", true, &environ);
+                    PMIX_SETENV_COMPAT("PRTE_MCA_rmaps_default_mapping_policy", argv[i + 1], true,
                                 &environ);
                 } else {
-                    pmix_argv_append_nosize(target, "--prtemca");
-                    pmix_argv_append_nosize(target, "rmaps_default_inherit");
-                    pmix_argv_append_nosize(target, "1");
-                    pmix_argv_append_nosize(target, "--prtemca");
-                    pmix_argv_append_nosize(target, "rmaps_default_mapping_policy");
-                    pmix_argv_append_nosize(target, argv[i + 1]);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, "--prtemca");
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, "rmaps_default_inherit");
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, "1");
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, "--prtemca");
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, "rmaps_default_mapping_policy");
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, argv[i + 1]);
                 }
             }
              break;
@@ -751,7 +751,7 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
             /* next value on the list is the value */
             pval = pmix_cmd_line_get_param(cmd_line, "genv", i, 1);
             p2 = prte_schizo_base_strip_quotes(pval->value.data.string);
-            pmix_setenv(p1, p2, true, dstenv);
+            PMIX_SETENV_COMPAT(p1, p2, true, dstenv);
             free(p1);
             free(p2);
         }

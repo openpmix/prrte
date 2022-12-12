@@ -224,7 +224,7 @@ static void interim(int sd, short args, void *cbdata)
      * option parsing */
     for (n=0; n < cd->ninfo; n++) {
         if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PERSONALITY)) {
-            jdata->personality = pmix_argv_split(cd->info[n].value.data.string, ',');
+            jdata->personality = PMIX_ARGV_SPLIT_COMPAT(cd->info[n].value.data.string, ',');
             jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(cd->info[n].value.data.string);
             pmix_server_cache_job_info(jdata, &cd->info[n]);
             break;
@@ -252,10 +252,10 @@ static void interim(int sd, short args, void *cbdata)
             app->app = strdup(papp->argv[0]);
         }
         if (NULL != papp->argv) {
-            app->argv = pmix_argv_copy(papp->argv);
+            app->argv = PMIX_ARGV_COPY_COMPAT(papp->argv);
         }
         if (NULL != papp->env) {
-            app->env = pmix_argv_copy(papp->env);
+            app->env = PMIX_ARGV_COPY_COMPAT(papp->env);
         }
         if (NULL != papp->cwd) {
             app->cwd = strdup(papp->cwd);
@@ -1073,7 +1073,7 @@ static void _cnct(int sd, short args, void *cbdata)
             }
             /* ask the global data server for the data - if we get it,
              * then we can complete the request */
-            pmix_argv_append_nosize(&keys, cd->procs[n].nspace);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&keys, cd->procs[n].nspace);
             /* we have to add the user's id to the directives */
             cd->ndirs = 1;
             PMIX_INFO_CREATE(cd->directives, cd->ndirs);
@@ -1082,11 +1082,11 @@ static void _cnct(int sd, short args, void *cbdata)
             if (PRTE_SUCCESS
                 != (rc = pmix_server_lookup_fn(&cd->procs[n], keys, cd->directives, cd->ndirs,
                                                _cnlk, cd))) {
-                pmix_argv_free(keys);
+                PMIX_ARGV_FREE_COMPAT(keys);
                 PMIX_INFO_FREE(cd->directives, cd->ndirs);
                 goto release;
             }
-            pmix_argv_free(keys);
+            PMIX_ARGV_FREE_COMPAT(keys);
             /* the callback function on this lookup will return us to this
              * routine so we can continue the process */
             return;

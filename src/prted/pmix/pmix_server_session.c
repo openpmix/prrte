@@ -25,6 +25,8 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
     return PMIX_ERR_NOT_SUPPORTED;
 }
 
+#if PMIX_NUMERIC_VERSION >= 0x00050000
+
 pmix_status_t pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
                                           uint32_t sessionID,
                                           const pmix_info_t directives[], size_t ndirs,
@@ -37,3 +39,5 @@ pmix_status_t pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
 
     return PMIX_ERR_NOT_SUPPORTED;
 }
+
+#endif

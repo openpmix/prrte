@@ -79,7 +79,7 @@ static int dlopen_component_register(void)
         return ret;
     }
     prte_mca_prtedl_dlopen_component.filename_suffixes
-        = pmix_argv_split(prte_mca_prtedl_dlopen_component.filename_suffixes_mca_storage, ',');
+        = PMIX_ARGV_SPLIT_COMPAT(prte_mca_prtedl_dlopen_component.filename_suffixes_mca_storage, ',');
 
     return PRTE_SUCCESS;
 }
@@ -92,7 +92,7 @@ static int dlopen_component_open(void)
 static int dlopen_component_close(void)
 {
     if (NULL != prte_mca_prtedl_dlopen_component.filename_suffixes) {
-        pmix_argv_free(prte_mca_prtedl_dlopen_component.filename_suffixes);
+        PMIX_ARGV_FREE_COMPAT(prte_mca_prtedl_dlopen_component.filename_suffixes);
         prte_mca_prtedl_dlopen_component.filename_suffixes = NULL;
     }
 

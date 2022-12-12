@@ -512,7 +512,7 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
     if (NULL != ptr) {
         *ptr = '\0';
         ++ptr;
-        quals = pmix_argv_split(ptr, ':');
+        quals = PMIX_ARGV_SPLIT_COMPAT(ptr, ':');
         for (i = 0; NULL != quals[i]; i++) {
             if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_IF_SUPP)) {
                 tmp |= PRTE_BIND_IF_SUPPORTED;
@@ -537,12 +537,12 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
             } else {
                 /* unknown option */
                 pmix_show_help("help-prte-hwloc-base.txt", "unrecognized-modifier", true, spec);
-                pmix_argv_free(quals);
+                PMIX_ARGV_FREE_COMPAT(quals);
                 free(myspec);
                 return PRTE_ERR_BAD_PARAM;
             }
         }
-        pmix_argv_free(quals);
+        PMIX_ARGV_FREE_COMPAT(quals);
     }
 
     if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_NONE)) {

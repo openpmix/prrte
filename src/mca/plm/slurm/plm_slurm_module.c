@@ -296,12 +296,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* Append user defined arguments to srun */
     if (NULL != prte_mca_plm_slurm_component.custom_args) {
-        custom_strings = pmix_argv_split(prte_mca_plm_slurm_component.custom_args, ' ');
-        num_args = pmix_argv_count(custom_strings);
+        custom_strings = PMIX_ARGV_SPLIT_COMPAT(prte_mca_plm_slurm_component.custom_args, ' ');
+        num_args = PMIX_ARGV_COUNT_COMPAT(custom_strings);
         for (i = 0; i < num_args; ++i) {
             pmix_argv_append(&argc, &argv, custom_strings[i]);
         }
-        pmix_argv_free(custom_strings);
+        PMIX_ARGV_FREE_COMPAT(custom_strings);
     }
 
     /* create nodelist */
@@ -321,15 +321,15 @@ static void launch_daemons(int fd, short args, void *cbdata)
         /* otherwise, add it to the list of nodes upon which
          * we need to launch a daemon
          */
-        pmix_argv_append_nosize(&nodelist_argv, node->name);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nodelist_argv, node->name);
     }
-    if (0 == pmix_argv_count(nodelist_argv)) {
+    if (0 == PMIX_ARGV_COUNT_COMPAT(nodelist_argv)) {
         pmix_show_help("help-plm-slurm.txt", "no-hosts-in-list", true);
         rc = PRTE_ERR_FAILED_TO_START;
         goto cleanup;
     }
-    nodelist_flat = pmix_argv_join(nodelist_argv, ',');
-    pmix_argv_free(nodelist_argv);
+    nodelist_flat = PMIX_ARGV_JOIN_COMPAT(nodelist_argv, ',');
+    PMIX_ARGV_FREE_COMPAT(nodelist_argv);
 
     /* if we are using all allocated nodes, then srun doesn't
      * require any further arguments
@@ -424,7 +424,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_base_wrap_args(argv);
 
     if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-        param = pmix_argv_join(argv, ' ');
+        param = PMIX_ARGV_JOIN_COMPAT(argv, ' ');
         pmix_output(prte_plm_base_framework.framework_output,
                     "%s plm:slurm: final top-level argv:\n\t%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                     (NULL == param) ? "NULL" : param);
@@ -447,7 +447,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
 cleanup:
     if (NULL != argv) {
-        pmix_argv_free(argv);
+        PMIX_ARGV_FREE_COMPAT(argv);
     }
     if (NULL != cur_prefix) {
         free(cur_prefix);
@@ -668,7 +668,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
         for (n=0; NULL != environ[n]; n++) {
             if (0 == strncmp(environ[n], "PMIX_", 5) ||
                 0 == strncmp(environ[n], "PRTE_", 5)) {
-                pmix_argv_append_nosize(&tmp, environ[n]);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, environ[n]);
             }
         }
         if (NULL != tmp) {
@@ -677,7 +677,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
                 *p = '\0';
                 unsetenv(tmp[n]);
             }
-            pmix_argv_free(tmp);
+            PMIX_ARGV_FREE_COMPAT(tmp);
         }
 
         /* Figure out the basenames for the libdir and bindir.  There

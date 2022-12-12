@@ -172,7 +172,7 @@ int main(int argc, char **argv)
         }
     }
     if (!found) {
-        char *tmp = pmix_argv_join(launchers, ',');
+        char *tmp = PMIX_ARGV_JOIN_COMPAT(launchers, ',');
         fprintf(stderr, "Wrong test, dude - unknown launcher\n");
         fprintf(stderr, "Known launchers: %s\n", tmp);
         free(tmp);

@@ -255,12 +255,12 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* Append user defined arguments to aprun */
     if (NULL != prte_mca_plm_alps_component.custom_args) {
-        custom_strings = pmix_argv_split(prte_mca_plm_alps_component.custom_args, ' ');
-        num_args = pmix_argv_count(custom_strings);
+        custom_strings = PMIX_ARGV_SPLIT_COMPAT(prte_mca_plm_alps_component.custom_args, ' ');
+        num_args = PMIX_ARGV_COUNT_COMPAT(custom_strings);
         for (i = 0; i < num_args; ++i) {
             pmix_argv_append(&argc, &argv, custom_strings[i]);
         }
-        pmix_argv_free(custom_strings);
+        PMIX_ARGV_FREE_COMPAT(custom_strings);
     }
 
     /* number of processors needed */
@@ -313,13 +313,13 @@ static void launch_daemons(int fd, short args, void *cbdata)
              */
             pmix_argv_append(&nodelist_argc, &nodelist_argv, node->name);
         }
-        if (0 == pmix_argv_count(nodelist_argv)) {
+        if (0 == PMIX_ARGV_COUNT_COMPAT(nodelist_argv)) {
             pmix_show_help("help-plm-alps.txt", "no-hosts-in-list", true);
             rc = PRTE_ERR_FAILED_TO_START;
             goto cleanup;
         }
-        nodelist_flat = pmix_argv_join(nodelist_argv, ',');
-        pmix_argv_free(nodelist_argv);
+        nodelist_flat = PMIX_ARGV_JOIN_COMPAT(nodelist_argv, ',');
+        PMIX_ARGV_FREE_COMPAT(nodelist_argv);
 
         pmix_argv_append(&argc, &argv, "-L");
         pmix_argv_append(&argc, &argv, nodelist_flat);
@@ -350,7 +350,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     free(vpid_string);
 
     if (prte_mca_plm_alps_component.debug) {
-        param = pmix_argv_join(argv, ' ');
+        param = PMIX_ARGV_JOIN_COMPAT(argv, ' ');
         if (NULL != param) {
             pmix_output(0, "plm:alps: final top-level argv:");
             pmix_output(0, "plm:alps:     %s", param);
@@ -398,10 +398,10 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_base_wrap_args(argv);
 
     /* setup environment */
-    env = pmix_argv_copy(prte_launch_environ);
+    env = PMIX_ARGV_COPY_COMPAT(prte_launch_environ);
 
     if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-        param = pmix_argv_join(argv, ' ');
+        param = PMIX_ARGV_JOIN_COMPAT(argv, ' ');
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:alps: final top-level argv:\n\t%s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == param) ? "NULL" : param));
@@ -424,10 +424,10 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
 cleanup:
     if (NULL != argv) {
-        pmix_argv_free(argv);
+        PMIX_ARGV_FREE_COMPAT(argv);
     }
     if (NULL != env) {
-        pmix_argv_free(env);
+        PMIX_ARGV_FREE_COMPAT(env);
     }
 
     /* check for failed launch - if so, force terminate */
@@ -584,7 +584,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
             } else {
                 pmix_asprintf(&newenv, "%s/%s", prefix, bin_base);
             }
-            pmix_setenv("PATH", newenv, true, &env);
+            PMIX_SETENV_COMPAT("PATH", newenv, true, &env);
             if (prte_mca_plm_alps_component.debug) {
                 pmix_output(0, "plm:alps: reset PATH: %s", newenv);
             }
@@ -597,7 +597,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
             } else {
                 pmix_asprintf(&newenv, "%s/%s", prefix, lib_base);
             }
-            pmix_setenv("LD_LIBRARY_PATH", newenv, true, &env);
+            PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
             if (prte_mca_plm_alps_component.debug) {
                 pmix_output(0, "plm:alps: reset LD_LIBRARY_PATH: %s", newenv);
             }

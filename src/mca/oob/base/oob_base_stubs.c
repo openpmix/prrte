@@ -324,7 +324,7 @@ static prte_oob_base_peer_t* process_uri(char *uri)
     }
 
     /* split the rest of the uri into component parts */
-    uris = pmix_argv_split(cptr, ';');
+    uris = PMIX_ARGV_SPLIT_COMPAT(cptr, ';');
 
     /* get the peer object for this process */
     pr = prte_oob_base_get_peer(&peer);
@@ -364,7 +364,7 @@ static prte_oob_base_peer_t* process_uri(char *uri)
             }
         }
     }
-    pmix_argv_free(uris);
+    PMIX_ARGV_FREE_COMPAT(uris);
     return pr;
 }
 

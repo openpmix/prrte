@@ -185,7 +185,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
         return PRTE_SUCCESS;
     }
 
-    ck2 = pmix_argv_split(ck, ':');
+    ck2 = PMIX_ARGV_SPLIT_COMPAT(ck, ':');
     for (i = 0; NULL != ck2[i]; i++) {
         if (PMIX_CHECK_CLI_OPTION(ck2[i], PRTE_CLI_SPAN)) {
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_SPAN);
@@ -196,7 +196,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "OVERSUBSCRIBE", "NOOVERSUBSCRIBE");
-                pmix_argv_free(ck2);
+                PMIX_ARGV_FREE_COMPAT(ck2);
                 return PRTE_ERR_SILENT;
             }
             PRTE_UNSET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_NO_OVERSUBSCRIBE);
@@ -208,7 +208,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "OVERSUBSCRIBE", "NOOVERSUBSCRIBE");
-                pmix_argv_free(ck2);
+                PMIX_ARGV_FREE_COMPAT(ck2);
                 return PRTE_ERR_SILENT;
             }
             PRTE_SET_MAPPING_DIRECTIVE(*tmp, PRTE_MAPPING_NO_OVERSUBSCRIBE);
@@ -238,7 +238,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 /* missing the value or value is invalid */
                 pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true, "mapping policy",
                                "PE", ck2[i]);
-                pmix_argv_free(ck2);
+                PMIX_ARGV_FREE_COMPAT(ck2);
                 return PRTE_ERR_SILENT;
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, PRTE_ATTR_GLOBAL,
@@ -249,7 +249,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "INHERIT", "NOINHERIT");
-                pmix_argv_free(ck2);
+                PMIX_ARGV_FREE_COMPAT(ck2);
                 return PRTE_ERR_SILENT;
             }
             if (NULL == jdata) {
@@ -265,7 +265,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 /* conflicting directives */
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "INHERIT", "NOINHERIT");
-                pmix_argv_free(ck2);
+                PMIX_ARGV_FREE_COMPAT(ck2);
                 return PRTE_ERR_SILENT;
             }
             if (NULL == jdata) {
@@ -280,7 +280,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             if (core_cpus_given) {
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "HWTCPUS", "CORECPUS");
-                pmix_argv_free(ck2);
+                PMIX_ARGV_FREE_COMPAT(ck2);
                 return PRTE_ERR_SILENT;
             }
             if (NULL == jdata) {
@@ -295,7 +295,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
             if (hwthread_cpus_given) {
                 pmix_show_help("help-prte-rmaps-base.txt", "conflicting-directives", true,
                                "HWTCPUS", "CORECPUS");
-                pmix_argv_free(ck2);
+                PMIX_ARGV_FREE_COMPAT(ck2);
                 return PRTE_ERR_SILENT;
             }
             if (NULL == jdata) {
@@ -311,7 +311,7 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 /* missing the value */
                 pmix_show_help("help-prte-rmaps-base.txt", "missing-value", true, "mapping policy",
                                "FILE", ck2[i]);
-                pmix_argv_free(ck2);
+                PMIX_ARGV_FREE_COMPAT(ck2);
                 return PRTE_ERR_SILENT;
             }
             if (NULL == jdata) {
@@ -323,11 +323,11 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
 
         } else {
             /* unrecognized modifier */
-            pmix_argv_free(ck2);
+            PMIX_ARGV_FREE_COMPAT(ck2);
             return PRTE_ERR_BAD_PARAM;
         }
     }
-    pmix_argv_free(ck2);
+    PMIX_ARGV_FREE_COMPAT(ck2);
     return PRTE_SUCCESS;
 }
 

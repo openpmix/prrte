@@ -169,7 +169,7 @@ static int dlopen_foreachfile(const char *search_path,
     char **dirs = NULL;
     char **good_files = NULL;
 
-    dirs = pmix_argv_split(search_path, PRTE_ENV_SEP);
+    dirs = PMIX_ARGV_SPLIT_COMPAT(search_path, PRTE_ENV_SEP);
     for (int i = 0; NULL != dirs && NULL != dirs[i]; ++i) {
 
         dp = opendir(dirs[i]);
@@ -227,7 +227,7 @@ static int dlopen_foreachfile(const char *search_path,
             }
 
             if (!found) {
-                pmix_argv_append_nosize(&good_files, abs_name);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&good_files, abs_name);
             }
             free(abs_name);
         }
@@ -252,10 +252,10 @@ error:
         closedir(dp);
     }
     if (NULL != dirs) {
-        pmix_argv_free(dirs);
+        PMIX_ARGV_FREE_COMPAT(dirs);
     }
     if (NULL != good_files) {
-        pmix_argv_free(good_files);
+        PMIX_ARGV_FREE_COMPAT(good_files);
     }
 
     return ret;

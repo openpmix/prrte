@@ -122,7 +122,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     }
     /* Setup application context */
     app = PMIX_NEW(prte_pmix_app_t);
-    app->app.argv = pmix_argv_copy(results.tail);
+    app->app.argv = PMIX_ARGV_COPY_COMPAT(results.tail);
     app->app.cmd = strdup(app->app.argv[0]);
 
     /* see if we are to forward the environment */
@@ -139,7 +139,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
         }
     }
     if (fwd) {
-        app->app.env = pmix_argv_copy(environ);
+        app->app.env = PMIX_ARGV_COPY_COMPAT(environ);
     }
 
     /* get the cwd - we may need it in several places */
@@ -194,13 +194,13 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     /* Did the user specify a hostfile? */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOSTFILE);
     if (NULL != opt) {
-        tval = pmix_argv_join(opt->values, ',');
+        tval = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE,
                            tval, PMIX_STRING);
         free(tval);
         if (NULL != hostfiles) {
             for (i=0; NULL != opt->values[i]; i++) {
-                pmix_argv_append_nosize(hostfiles, opt->values[i]);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(hostfiles, opt->values[i]);
             }
         }
     }
@@ -208,12 +208,12 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     /* Did the user specify any hosts? */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOST);
     if (NULL != opt) {
-        tval = pmix_argv_join(opt->values, ',');
+        tval = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOST, tval, PMIX_STRING);
         free(tval);
         if (NULL != hosts) {
             for (i=0; NULL != opt->values[i]; i++) {
-                pmix_argv_append_nosize(hosts, opt->values[i]);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(hosts, opt->values[i]);
             }
         }
     }
@@ -304,7 +304,7 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
 
     /* Make the apps */
     temp_argv = NULL;
-    pmix_argv_append_nosize(&temp_argv, argv[0]);
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&temp_argv, argv[0]);
 
     /* NOTE: This bogus env variable is necessary in the calls to
      create_app(), below.  See comment immediately before the
@@ -314,9 +314,9 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
     for (i = 1; NULL != argv[i]; ++i) {
         if (0 == strcmp(argv[i], ":")) {
             /* Make an app with this argv */
-            if (pmix_argv_count(temp_argv) > 1) {
+            if (PMIX_ARGV_COUNT_COMPAT(temp_argv) > 1) {
                 if (NULL != env) {
-                    pmix_argv_free(env);
+                    PMIX_ARGV_FREE_COMPAT(env);
                     env = NULL;
                 }
                 app = NULL;
@@ -325,7 +325,7 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
                 if (PRTE_SUCCESS != rc) {
                     /* Assume that the error message has already been
                      printed; */
-                    pmix_argv_free(temp_argv);
+                    PMIX_ARGV_FREE_COMPAT(temp_argv);
                     return rc;
                 }
                 if (made_app) {
@@ -333,16 +333,16 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
                 }
 
                 /* Reset the temps */
-                pmix_argv_free(temp_argv);
+                PMIX_ARGV_FREE_COMPAT(temp_argv);
                 temp_argv = NULL;
-                pmix_argv_append_nosize(&temp_argv, argv[0]);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&temp_argv, argv[0]);
             }
         } else {
-            pmix_argv_append_nosize(&temp_argv, argv[i]);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&temp_argv, argv[i]);
         }
     }
 
-    if (pmix_argv_count(temp_argv) > 1) {
+    if (PMIX_ARGV_COUNT_COMPAT(temp_argv) > 1) {
         app = NULL;
         rc = create_app(schizo, temp_argv, jdata, &app, &made_app, &env,
                         hostfiles, hosts);
@@ -354,9 +354,9 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
         }
     }
     if (NULL != env) {
-        pmix_argv_free(env);
+        PMIX_ARGV_FREE_COMPAT(env);
     }
-    pmix_argv_free(temp_argv);
+    PMIX_ARGV_FREE_COMPAT(temp_argv);
 
     /* All done */
 

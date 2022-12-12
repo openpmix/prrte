@@ -264,7 +264,7 @@ static int start_progress_engine(prte_progress_tracker_t *trk)
     if (NULL != prte_progress_thread_cpus) {
         CPU_ZERO(&cpuset);
         // comma-delimited list of cpu ranges
-        ranges = pmix_argv_split(prte_progress_thread_cpus, ',');
+        ranges = PMIX_ARGV_SPLIT_COMPAT(prte_progress_thread_cpus, ',');
         for (n=0; NULL != ranges[n]; n++) {
             // look for '-'
             start = strtoul(ranges[n], &dash, 10);

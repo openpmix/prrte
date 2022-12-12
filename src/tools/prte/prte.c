@@ -285,7 +285,7 @@ int main(int argc, char *argv[])
     for (i=0; NULL != environ[i]; i++) {
         if (0 != strncmp(environ[i], "PMIX_", 5) &&
             0 != strncmp(environ[i], "PRTE_", 5)) {
-            pmix_argv_append_nosize(&prte_launch_environ, environ[i]);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_launch_environ, environ[i]);
         }
     }
 
@@ -481,7 +481,7 @@ int main(int argc, char *argv[])
     /* if we were given a keepalive pipe, set up to monitor it now */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_KEEPALIVE);
     if (NULL != opt) {
-        pmix_setenv("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
+        PMIX_SETENV_COMPAT("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
     }
 
     /* check for debug options */
@@ -518,10 +518,10 @@ int main(int argc, char *argv[])
 
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SYSTEM_SERVER)) {
         /* we should act as system-level PMIx server */
-        pmix_setenv("PRTE_MCA_pmix_system_server", "1", true, &environ);
+        PMIX_SETENV_COMPAT("PRTE_MCA_pmix_system_server", "1", true, &environ);
     }
     /* always act as session-level PMIx server */
-    pmix_setenv("PRTE_MCA_pmix_session_server", "1", true, &environ);
+    PMIX_SETENV_COMPAT("PRTE_MCA_pmix_session_server", "1", true, &environ);
     /* if we were asked to report a uri, set the MCA param to do so */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_REPORT_URI);
     if (NULL != opt) {
@@ -761,7 +761,7 @@ int main(int argc, char *argv[])
     if (prte_persistent) {
         opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOSTFILE);
         if (NULL != opt) {
-            tpath = pmix_argv_join(opt->values, ',');
+            tpath = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE,
                                PRTE_ATTR_GLOBAL, tpath, PMIX_STRING);
             free(tpath);
@@ -771,7 +771,7 @@ int main(int argc, char *argv[])
         opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOST);
         if (NULL != opt) {
             char *tval;
-            tval = pmix_argv_join(opt->values, ',');
+            tval = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST,
                                PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
             free(tval);
@@ -780,19 +780,19 @@ int main(int argc, char *argv[])
         /* the directives might be in the app(s) */
         if (NULL != hostfiles) {
             char *tval;
-            tval = pmix_argv_join(hostfiles, ',');
+            tval = PMIX_ARGV_JOIN_COMPAT(hostfiles, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_HOSTFILE,
                                PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
             free(tval);
-            pmix_argv_free(hostfiles);
+            PMIX_ARGV_FREE_COMPAT(hostfiles);
         }
         if (NULL != hosts) {
             char *tval;
-            tval = pmix_argv_join(hosts, ',');
+            tval = PMIX_ARGV_JOIN_COMPAT(hosts, ',');
             prte_set_attribute(&dapp->attributes, PRTE_APP_DASH_HOST,
                                PRTE_ATTR_GLOBAL, tval, PMIX_STRING);
             free(tval);
-            pmix_argv_free(hosts);
+            PMIX_ARGV_FREE_COMPAT(hosts);
         }
     }
 
@@ -1063,8 +1063,8 @@ int main(int argc, char *argv[])
     PMIX_LIST_FOREACH(app, &apps, prte_pmix_app_t)
     {
         papps[n].cmd = strdup(app->app.cmd);
-        papps[n].argv = pmix_argv_copy(app->app.argv);
-        papps[n].env = pmix_argv_copy(app->app.env);
+        papps[n].argv = PMIX_ARGV_COPY_COMPAT(app->app.argv);
+        papps[n].env = PMIX_ARGV_COPY_COMPAT(app->app.env);
         papps[n].cwd = strdup(app->app.cwd);
         papps[n].maxprocs = app->app.maxprocs;
         PMIX_INFO_LIST_CONVERT(ret, app->info, &darray);
@@ -1314,7 +1314,7 @@ static int prep_singleton(const char *name)
     app = PMIX_NEW(prte_app_context_t);
     app->app = strdup(jdata->nspace);
     app->num_procs = 1;
-    pmix_argv_append_nosize(&app->argv, app->app);
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&app->argv, app->app);
     getcwd(cwd, sizeof(cwd));
     app->cwd = strdup(cwd);
     pmix_pointer_array_set_item(jdata->apps, 0, app);

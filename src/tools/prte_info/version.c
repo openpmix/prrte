@@ -114,7 +114,7 @@ void prte_info_do_version(bool want_all)
     } else {
         opt = pmix_cmd_line_get_param(&prte_info_cmd_line, "show-version");
         if (NULL != opt) {
-            tmp = pmix_argv_split(opt->values[0], ':');
+            tmp = PMIX_ARGV_SPLIT_COMPAT(opt->values[0], ':');
             arg1 = tmp[0];
             if (NULL == tmp[1]) {
                 scope = (char*)prte_info_ver_all;
@@ -147,7 +147,7 @@ void prte_info_do_version(bool want_all)
                 prte_info_show_component_version(arg1, prte_info_component_all, scope,
                                                  prte_info_ver_all);
             }
-            pmix_argv_free(tmp);
+            PMIX_ARGV_FREE_COMPAT(tmp);
         }
     }
 }

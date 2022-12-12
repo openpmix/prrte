@@ -126,7 +126,7 @@ int prte_job_pack(pmix_data_buffer_t *bkt, prte_job_t *job)
     }
 
     /* pack the personality */
-    count = pmix_argv_count(job->personality);
+    count = PMIX_ARGV_COUNT_COMPAT(job->personality);
     rc = PMIx_Data_pack(NULL, bkt, (void *) &count, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -470,7 +470,7 @@ int prte_app_pack(pmix_data_buffer_t *bkt, prte_app_context_t *app)
     }
 
     /* pack the number of entries in the argv array */
-    count = pmix_argv_count(app->argv);
+    count = PMIX_ARGV_COUNT_COMPAT(app->argv);
     rc = PMIx_Data_pack(NULL, bkt, &count, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
@@ -487,7 +487,7 @@ int prte_app_pack(pmix_data_buffer_t *bkt, prte_app_context_t *app)
     }
 
     /* pack the number of entries in the enviro array */
-    count = pmix_argv_count(app->env);
+    count = PMIX_ARGV_COUNT_COMPAT(app->env);
     rc = PMIx_Data_pack(NULL, bkt, &count, 1, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);

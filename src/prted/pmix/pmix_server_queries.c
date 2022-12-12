@@ -207,13 +207,13 @@ static void _query(int sd, short args, void *cbdata)
                     }
                     /* don't show the requestor's job */
                     if (!PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace)) {
-                        pmix_argv_append_nosize(&nspaces, jdata->nspace);
+                        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&nspaces, jdata->nspace);
                     }
                 }
                 /* join the results into a single comma-delimited string */
                 kv = PMIX_NEW(prte_info_item_t);
-                tmp = pmix_argv_join(nspaces, ',');
-                pmix_argv_free(nspaces);
+                tmp = PMIX_ARGV_JOIN_COMPAT(nspaces, ',');
+                PMIX_ARGV_FREE_COMPAT(nspaces);
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_NAMESPACES, tmp, PMIX_STRING);
                 free(tmp);
                 pmix_list_append(&results, &kv->super);
@@ -244,7 +244,7 @@ static void _query(int sd, short args, void *cbdata)
                             ret = PMIX_ERR_NOT_FOUND;
                             goto done;
                         }
-                        cmdline = pmix_argv_join(app->argv, ' ');
+                        cmdline = PMIX_ARGV_JOIN_COMPAT(app->argv, ' ');
                         PMIX_INFO_LOAD(&info[1], PMIX_CMD_LINE, cmdline, PMIX_STRING);
                         free(cmdline);
                     }
@@ -268,37 +268,37 @@ static void _query(int sd, short args, void *cbdata)
 
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_SPAWN_SUPPORT)) {
                 ans = NULL;
-                pmix_argv_append_nosize(&ans, PMIX_HOST);
-                pmix_argv_append_nosize(&ans, PMIX_HOSTFILE);
-                pmix_argv_append_nosize(&ans, PMIX_ADD_HOST);
-                pmix_argv_append_nosize(&ans, PMIX_ADD_HOSTFILE);
-                pmix_argv_append_nosize(&ans, PMIX_PREFIX);
-                pmix_argv_append_nosize(&ans, PMIX_WDIR);
-                pmix_argv_append_nosize(&ans, PMIX_MAPPER);
-                pmix_argv_append_nosize(&ans, PMIX_PPR);
-                pmix_argv_append_nosize(&ans, PMIX_MAPBY);
-                pmix_argv_append_nosize(&ans, PMIX_RANKBY);
-                pmix_argv_append_nosize(&ans, PMIX_BINDTO);
-                pmix_argv_append_nosize(&ans, PMIX_COSPAWN_APP);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_HOST);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_HOSTFILE);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_ADD_HOST);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_ADD_HOSTFILE);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_PREFIX);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_WDIR);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_MAPPER);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_PPR);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_MAPBY);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_RANKBY);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_BINDTO);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_COSPAWN_APP);
                 /* create the return kv */
                 kv = PMIX_NEW(prte_info_item_t);
-                tmp = pmix_argv_join(ans, ',');
-                pmix_argv_free(ans);
+                tmp = PMIX_ARGV_JOIN_COMPAT(ans, ',');
+                PMIX_ARGV_FREE_COMPAT(ans);
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_SPAWN_SUPPORT, tmp, PMIX_STRING);
                 free(tmp);
                 pmix_list_append(&results, &kv->super);
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_DEBUG_SUPPORT)) {
                 ans = NULL;
-                pmix_argv_append_nosize(&ans, PMIX_DEBUG_STOP_IN_INIT);
-                pmix_argv_append_nosize(&ans, PMIX_DEBUG_STOP_IN_APP);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_DEBUG_STOP_IN_INIT);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_DEBUG_STOP_IN_APP);
 #if PRTE_HAVE_STOP_ON_EXEC
-                pmix_argv_append_nosize(&ans, PMIX_DEBUG_STOP_ON_EXEC);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_DEBUG_STOP_ON_EXEC);
 #endif
-                pmix_argv_append_nosize(&ans, PMIX_DEBUG_TARGET);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, PMIX_DEBUG_TARGET);
                 /* create the return kv */
                 kv = PMIX_NEW(prte_info_item_t);
-                tmp = pmix_argv_join(ans, ',');
-                pmix_argv_free(ans);
+                tmp = PMIX_ARGV_JOIN_COMPAT(ans, ',');
+                PMIX_ARGV_FREE_COMPAT(ans);
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_DEBUG_SUPPORT, tmp, PMIX_STRING);
                 free(tmp);
                 pmix_list_append(&results, &kv->super);
@@ -515,14 +515,14 @@ static void _query(int sd, short args, void *cbdata)
                 ans = NULL;
                 PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.psets, pmix_server_pset_t)
                 {
-                    pmix_argv_append_nosize(&ans, ps->name);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, ps->name);
                 }
                 if (NULL == ans) {
                     ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 } else {
-                    tmp = pmix_argv_join(ans, ',');
-                    pmix_argv_free(ans);
+                    tmp = PMIX_ARGV_JOIN_COMPAT(ans, ',');
+                    PMIX_ARGV_FREE_COMPAT(ans);
                     ans = NULL;
                     kv = PMIX_NEW(prte_info_item_t);
                     PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_PSET_NAMES, tmp, PMIX_STRING);
@@ -583,10 +583,10 @@ static void _query(int sd, short args, void *cbdata)
                 ans = NULL;
                 PMIX_LIST_FOREACH(ps, &prte_pmix_server_globals.groups, pmix_server_pset_t)
                 {
-                    pmix_argv_append_nosize(&ans, ps->name);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, ps->name);
                 }
-                tmp = pmix_argv_join(ans, ',');
-                pmix_argv_free(ans);
+                tmp = PMIX_ARGV_JOIN_COMPAT(ans, ',');
+                PMIX_ARGV_FREE_COMPAT(ans);
                 ans = NULL;
                 kv = PMIX_NEW(prte_info_item_t);
                 PMIX_INFO_LOAD(&kv->info, PMIX_QUERY_GROUP_NAMES, tmp, PMIX_STRING);
@@ -626,6 +626,7 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_LOAD_PROCID(&proc[k], grp->members[k].nspace, grp->members[k].rank);
                 }
 
+#if PMIX_NUMERIC_VERSION >= 0x00050000
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_ALLOCATION)) {
                 /* collect all the node info */
                 void *nodelist, *nodeinfolist;
@@ -645,7 +646,7 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_HOSTNAME, node->name, PMIX_STRING);
                     /* add any aliases */
                     if (NULL != node->aliases) {
-                        str = pmix_argv_join(node->aliases, ',');
+                        str = PMIX_ARGV_JOIN_COMPAT(node->aliases, ',');
                         PMIX_INFO_LIST_ADD(rc, nodeinfolist, PMIX_HOSTNAME_ALIASES, str, PMIX_STRING);
                         free(str);
                     }
@@ -690,6 +691,7 @@ static void _query(int sd, short args, void *cbdata)
                 kv->info.value.type = PMIX_DATA_ARRAY;
                 kv->info.value.data.darray = darray;
                 pmix_list_append(&results, &kv->super);
+#endif
             } else {
                 fprintf(stderr, "Query for unrecognized attribute: %s\n", q->keys[n]);
             }
