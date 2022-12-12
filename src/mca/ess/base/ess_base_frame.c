@@ -229,7 +229,7 @@ int prte_ess_base_setup_signals(char *mysignals)
      * have asked for some we already cover, and so we ignore any duplicates */
     if (NULL != mysignals) {
         /* if they told us "none", then dump the list */
-        signals = pmix_argv_split(mysignals, ',');
+        signals = PMIX_ARGV_SPLIT_COMPAT(mysignals, ',');
         for (i = 0; NULL != signals[i]; i++) {
             sval = 0;
             if (0 != strncmp(signals[i], "SIG", 3)) {
@@ -239,7 +239,7 @@ int prte_ess_base_setup_signals(char *mysignals)
                 if (0 != errno || '\0' != *tmp) {
                     pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
                                    forwarded_signals);
-                    pmix_argv_free(signals);
+                    PMIX_ARGV_FREE_COMPAT(signals);
                     return PRTE_ERR_SILENT;
                 }
             }
@@ -267,7 +267,7 @@ int prte_ess_base_setup_signals(char *mysignals)
                     if (!known_signals[j].can_forward) {
                         pmix_show_help("help-ess-base.txt", "ess-base:cannot-forward", true,
                                        known_signals[j].signame, forwarded_signals);
-                        pmix_argv_free(signals);
+                        PMIX_ARGV_FREE_COMPAT(signals);
                         return PRTE_ERR_SILENT;
                     }
                     found = true;
@@ -280,14 +280,14 @@ int prte_ess_base_setup_signals(char *mysignals)
                 if (0 == strncmp(signals[i], "SIG", 3)) {
                     pmix_show_help("help-ess-base.txt", "ess-base:unknown-signal", true, signals[i],
                                    forwarded_signals);
-                    pmix_argv_free(signals);
+                    PMIX_ARGV_FREE_COMPAT(signals);
                     return PRTE_ERR_SILENT;
                 }
 
                 ESS_ADDSIGNAL(sval, signals[i]);
             }
         }
-        pmix_argv_free(signals);
+        PMIX_ARGV_FREE_COMPAT(signals);
     }
     return PRTE_SUCCESS;
 }

@@ -256,7 +256,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     prte_plm_base_prted_append_basic_args(&argc, &argv, "tm", &proc_vpid_index);
 
     if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-        param = pmix_argv_join(argv, ' ');
+        param = PMIX_ARGV_JOIN_COMPAT(argv, ' ');
         PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                              "%s plm:tm: final top-level argv:\n\t%s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (NULL == param) ? "NULL" : param));
@@ -286,16 +286,16 @@ static void launch_daemons(int fd, short args, void *cbdata)
     bin_base = pmix_basename(prte_install_dirs.bindir);
 
     /* setup environment */
-    env = pmix_argv_copy(prte_launch_environ);
+    env = PMIX_ARGV_COPY_COMPAT(prte_launch_environ);
 
     /* enable local launch by the orteds */
-    pmix_setenv("PRTE_MCA_plm", "ssh", true, &env);
+    PMIX_SETENV_COMPAT("PRTE_MCA_plm", "ssh", true, &env);
 
     /* add our umask -- see big note in orted.c */
     current_umask = umask(0);
     umask(current_umask);
     pmix_asprintf(&var, "0%o", current_umask);
-    pmix_setenv("PRTE_DAEMON_UMASK_VALUE", var, true, &env);
+    PMIX_SETENV_COMPAT("PRTE_DAEMON_UMASK_VALUE", var, true, &env);
     free(var);
 
     /* If we have a prefix, then modify the PATH and
@@ -322,7 +322,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                 PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:tm: resetting PATH: %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
-                pmix_setenv("PATH", newenv, true, &env);
+                PMIX_SETENV_COMPAT("PATH", newenv, true, &env);
                 free(newenv);
             }
 
@@ -332,7 +332,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
                 PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                      "%s plm:tm: resetting LD_LIBRARY_PATH: %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), newenv));
-                pmix_setenv("LD_LIBRARY_PATH", newenv, true, &env);
+                PMIX_SETENV_COMPAT("LD_LIBRARY_PATH", newenv, true, &env);
                 free(newenv);
             }
         }
@@ -368,7 +368,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
         /* exec the daemon */
         if (0 < pmix_output_get_verbosity(prte_plm_base_framework.framework_output)) {
-            param = pmix_argv_join(argv, ' ');
+            param = PMIX_ARGV_JOIN_COMPAT(argv, ' ');
             PMIX_OUTPUT_VERBOSE((1, prte_plm_base_framework.framework_output,
                                  "%s plm:tm: executing:\n\t%s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  (NULL == param) ? "NULL" : param));

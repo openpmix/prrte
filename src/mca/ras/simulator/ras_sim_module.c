@@ -56,21 +56,21 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     bool use_hwthread_cpus = false;
     hwloc_cpuset_t available;
 
-    node_cnt = pmix_argv_split(prte_mca_ras_simulator_component.num_nodes, ',');
+    node_cnt = PMIX_ARGV_SPLIT_COMPAT(prte_mca_ras_simulator_component.num_nodes, ',');
     if (NULL != prte_mca_ras_simulator_component.slots) {
-        slot_cnt = pmix_argv_split(prte_mca_ras_simulator_component.slots, ',');
+        slot_cnt = PMIX_ARGV_SPLIT_COMPAT(prte_mca_ras_simulator_component.slots, ',');
         /* backfile the slot_cnt so every topology has a cnt */
-        tmp = slot_cnt[pmix_argv_count(slot_cnt) - 1];
-        for (n = pmix_argv_count(slot_cnt); n < pmix_argv_count(node_cnt); n++) {
-            pmix_argv_append_nosize(&slot_cnt, tmp);
+        tmp = slot_cnt[PMIX_ARGV_COUNT_COMPAT(slot_cnt) - 1];
+        for (n = PMIX_ARGV_COUNT_COMPAT(slot_cnt); n < PMIX_ARGV_COUNT_COMPAT(node_cnt); n++) {
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&slot_cnt, tmp);
         }
     }
     if (NULL != prte_mca_ras_simulator_component.slots_max) {
-        max_slot_cnt = pmix_argv_split(prte_mca_ras_simulator_component.slots_max, ',');
+        max_slot_cnt = PMIX_ARGV_SPLIT_COMPAT(prte_mca_ras_simulator_component.slots_max, ',');
         /* backfill the max_slot_cnt as reqd */
-        tmp = max_slot_cnt[pmix_argv_count(slot_cnt) - 1];
-        for (n = pmix_argv_count(max_slot_cnt); n < pmix_argv_count(max_slot_cnt); n++) {
-            pmix_argv_append_nosize(&max_slot_cnt, tmp);
+        tmp = max_slot_cnt[PMIX_ARGV_COUNT_COMPAT(slot_cnt) - 1];
+        for (n = PMIX_ARGV_COUNT_COMPAT(max_slot_cnt); n < PMIX_ARGV_COUNT_COMPAT(max_slot_cnt); n++) {
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&max_slot_cnt, tmp);
         }
     }
 
@@ -148,13 +148,13 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     prte_num_allocated_nodes = pmix_list_get_size(nodes);
 
     if (NULL != max_slot_cnt) {
-        pmix_argv_free(max_slot_cnt);
+        PMIX_ARGV_FREE_COMPAT(max_slot_cnt);
     }
     if (NULL != slot_cnt) {
-        pmix_argv_free(slot_cnt);
+        PMIX_ARGV_FREE_COMPAT(slot_cnt);
     }
     if (NULL != node_cnt) {
-        pmix_argv_free(node_cnt);
+        PMIX_ARGV_FREE_COMPAT(node_cnt);
     }
     if (NULL != job_cpuset) {
         free(job_cpuset);

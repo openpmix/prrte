@@ -118,15 +118,15 @@ int prte_util_init_sys_limits(char **errmsg)
     }
 
     /* parse the requested limits to set */
-    lims = pmix_argv_split(prte_set_max_sys_limits, ',');
+    lims = PMIX_ARGV_SPLIT_COMPAT(prte_set_max_sys_limits, ',');
     if (NULL == lims) {
         return PRTE_ERR_OUT_OF_RESOURCE;
     }
 
     /* each limit is expressed as a "param:value" pair */
     for (i = 0; NULL != lims[i]; i++) {
-        lim = pmix_argv_split(lims[i], ':');
-        if (1 == pmix_argv_count(lim)) {
+        lim = PMIX_ARGV_SPLIT_COMPAT(lims[i], ':');
+        if (1 == PMIX_ARGV_COUNT_COMPAT(lim)) {
             setlim = "max";
         } else {
             setlim = lim[1];
@@ -224,7 +224,7 @@ int prte_util_init_sys_limits(char **errmsg)
                                             lim[0], setlim);
             goto out;
         }
-        pmix_argv_free(lim);
+        PMIX_ARGV_FREE_COMPAT(lim);
         lim = NULL;
     }
 
@@ -234,9 +234,9 @@ int prte_util_init_sys_limits(char **errmsg)
     rc = PRTE_SUCCESS;
 
 out:
-    pmix_argv_free(lims);
+    PMIX_ARGV_FREE_COMPAT(lims);
     if (NULL != lim) {
-        pmix_argv_free(lim);
+        PMIX_ARGV_FREE_COMPAT(lim);
     }
 
     return rc;

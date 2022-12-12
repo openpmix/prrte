@@ -570,8 +570,8 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                 } else {
                     value = prte_rmaps_rank_file_value.sval;
                 }
-                argv = pmix_argv_split(value, '@');
-                cnt = pmix_argv_count(argv);
+                argv = PMIX_ARGV_SPLIT_COMPAT(value, '@');
+                cnt = PMIX_ARGV_COUNT_COMPAT(argv);
                 if (NULL != node_name) {
                     free(node_name);
                 }
@@ -583,11 +583,11 @@ static int prte_rmaps_rank_file_parse(const char *rankfile)
                     pmix_show_help("help-rmaps_rank_file.txt", "bad-syntax", true, rankfile);
                     rc = PRTE_ERR_BAD_PARAM;
                     PRTE_ERROR_LOG(rc);
-                    pmix_argv_free(argv);
+                    PMIX_ARGV_FREE_COMPAT(argv);
                     node_name = NULL;
                     goto unlock;
                 }
-                pmix_argv_free(argv);
+                PMIX_ARGV_FREE_COMPAT(argv);
 
                 // Strip off the FQDN if present, ignore IP addresses
                 if (!prte_keep_fqdn_hostnames && !pmix_net_isaddr(node_name)) {
@@ -843,7 +843,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
         pmix_output_verbose(20, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rf: (lsf) Convert Physical CPUSET from <%s>", sep);
         my_topo = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, 0);
-        cpus = pmix_argv_split(sep, ',');
+        cpus = PMIX_ARGV_SPLIT_COMPAT(sep, ',');
         for(i = 0; NULL != cpus[i]; ++i) {
             // assume HNP has the same topology as other nodes
             obj = hwloc_get_pu_obj_by_os_index(my_topo->topo, strtol(cpus[i], NULL, 10)) ;
@@ -853,8 +853,8 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
             cpus[i] = (char*)malloc(sizeof(char) * 10);
             sprintf(cpus[i], "%d", obj->logical_index);
         }
-        sep = pmix_argv_join(cpus, ',');
-        pmix_argv_free(cpus);
+        sep = PMIX_ARGV_JOIN_COMPAT(cpus, ',');
+        PMIX_ARGV_FREE_COMPAT(cpus);
         pmix_output_verbose(20, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rf: (lsf) Convert Physical CPUSET to   <%s>", sep);
 

@@ -87,18 +87,18 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
             continue;
         }
         /* add the hostname to the argv */
-        pmix_argv_append_nosize(&names, nptr->name);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&names, nptr->name);
         als = NULL;
         if (NULL != nptr->aliases) {
             for (m=0; NULL != nptr->aliases[m]; m++) {
-                pmix_argv_append_nosize(&als, nptr->aliases[m]);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&als, nptr->aliases[m]);
             }
-            raw = pmix_argv_join(als, ',');
-            pmix_argv_free(als);
-            pmix_argv_append_nosize(&aliases, raw);
+            raw = PMIX_ARGV_JOIN_COMPAT(als, ',');
+            PMIX_ARGV_FREE_COMPAT(als);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&aliases, raw);
             free(raw);
         } else {
-            pmix_argv_append_nosize(&aliases, "PRTENONE");
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&aliases, "PRTENONE");
         }
         /* store the vpid */
         if (NULL == nptr->daemon) {
@@ -117,8 +117,8 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
     }
 
     /* construct the string of node names for compression */
-    raw = pmix_argv_join(names, ',');
-    pmix_argv_free(names);
+    raw = PMIX_ARGV_JOIN_COMPAT(names, ',');
+    PMIX_ARGV_FREE_COMPAT(names);
     if (PMIx_Data_compress((uint8_t *) raw, strlen(raw) + 1, (uint8_t **) &bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
@@ -149,8 +149,8 @@ int prte_util_nidmap_create(pmix_pointer_array_t *pool, pmix_data_buffer_t *buff
     free(bo.bytes);
 
     /* construct the string of aliases for compression */
-    raw = pmix_argv_join(aliases, ';');
-    pmix_argv_free(aliases);
+    raw = PMIX_ARGV_JOIN_COMPAT(aliases, ';');
+    PMIX_ARGV_FREE_COMPAT(aliases);
     if (PMIx_Data_compress((uint8_t *) raw, strlen(raw) + 1, (uint8_t **) &bo.bytes, &sz)) {
         /* mark that this was compressed */
         compressed = true;
@@ -282,7 +282,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         pbo.size = 0;
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-    names = pmix_argv_split(raw, ',');
+    names = PMIX_ARGV_SPLIT_COMPAT(raw, ',');
     free(raw);
 
     /* unpack compression flag for node aliases */
@@ -315,7 +315,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         pbo.size = 0;
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&pbo);
-    aliases = pmix_argv_split(raw, ';');
+    aliases = PMIX_ARGV_SPLIT_COMPAT(raw, ';');
     free(raw);
 
     /* unpack compression flag for daemon vpids */
@@ -380,9 +380,9 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
             }
             if (0 != strcmp(aliases[n], "PRTENONE")) {
                 if (NULL != nd->aliases) {
-                    pmix_argv_free(nd->aliases);
+                    PMIX_ARGV_FREE_COMPAT(nd->aliases);
                 }
-                nd->aliases = pmix_argv_split(aliases[n], ',');
+                nd->aliases = PMIX_ARGV_SPLIT_COMPAT(aliases[n], ',');
             }
             continue;
         }
@@ -393,7 +393,7 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         pmix_pointer_array_set_item(prte_node_pool, n, nd);
         /* add any aliases */
         if (0 != strcmp(aliases[n], "PRTENONE")) {
-            nd->aliases = pmix_argv_split(aliases[n], ',');
+            nd->aliases = PMIX_ARGV_SPLIT_COMPAT(aliases[n], ',');
         }
         /* set the topology - always default to homogeneous
          * as that is the most common scenario */
@@ -427,7 +427,7 @@ cleanup:
         free(vpid);
     }
     if (NULL != names) {
-        pmix_argv_free(names);
+        PMIX_ARGV_FREE_COMPAT(names);
     }
     return rc;
 }

@@ -942,8 +942,8 @@ static int parse_env(char **srcenv, char ***dstenv,
                         pmix_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
                                        value);
                         free(param);
-                        pmix_argv_free(xparams);
-                        pmix_argv_free(xvals);
+                        PMIX_ARGV_FREE_COMPAT(xparams);
+                        PMIX_ARGV_FREE_COMPAT(xvals);
                         return PRTE_ERR_BAD_PARAM;
                     }
                 }
@@ -957,26 +957,26 @@ static int parse_env(char **srcenv, char ***dstenv,
                         /* this is an error - different values */
                         pmix_show_help("help-schizo-base.txt", "duplicate-mca-value", true, p1, p2,
                                        xvals[i]);
-                        pmix_argv_free(xparams);
-                        pmix_argv_free(xvals);
+                        PMIX_ARGV_FREE_COMPAT(xparams);
+                        PMIX_ARGV_FREE_COMPAT(xvals);
                         return PRTE_ERR_BAD_PARAM;
                     }
                 }
             }
 
             /* cache this for later inclusion - do not modify dstenv in this loop */
-            pmix_argv_append_nosize(&xparams, p1);
-            pmix_argv_append_nosize(&xvals, p2);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&xparams, p1);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&xvals, p2);
         }
     }
 
     /* add the -x values */
     if (NULL != xparams) {
         for (i = 0; NULL != xparams[i]; i++) {
-            pmix_setenv(xparams[i], xvals[i], true, dstenv);
+            PMIX_SETENV_COMPAT(xparams[i], xvals[i], true, dstenv);
         }
-        pmix_argv_free(xparams);
-        pmix_argv_free(xvals);
+        PMIX_ARGV_FREE_COMPAT(xparams);
+        PMIX_ARGV_FREE_COMPAT(xvals);
     }
 
     return PRTE_SUCCESS;
@@ -990,7 +990,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     int i;
 
     /* flag that we started this job */
-    pmix_setenv("PRTE_LAUNCHED", "1", true, &app->env);
+    PMIX_SETENV_COMPAT("PRTE_LAUNCHED", "1", true, &app->env);
 
     /* now process any envar attributes - we begin with the job-level
      * ones as the app-specific ones can override them. We have to
@@ -999,9 +999,9 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     PMIX_LIST_FOREACH(attr, &jdata->attributes, prte_attribute_t)
     {
         if (PRTE_JOB_SET_ENVAR == attr->key) {
-            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
+            PMIX_SETENV_COMPAT(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
         } else if (PRTE_JOB_ADD_ENVAR == attr->key) {
-            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
+            PMIX_SETENV_COMPAT(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
         } else if (PRTE_JOB_UNSET_ENVAR == attr->key) {
             pmix_unsetenv(attr->data.data.string, &app->env);
         } else if (PRTE_JOB_PREPEND_ENVAR == attr->key) {
@@ -1017,7 +1017,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
-                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    PMIX_SETENV_COMPAT(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1027,7 +1027,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                PMIX_SETENV_COMPAT(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         } else if (PRTE_JOB_APPEND_ENVAR == attr->key) {
@@ -1043,7 +1043,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
-                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    PMIX_SETENV_COMPAT(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1053,7 +1053,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                PMIX_SETENV_COMPAT(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         }
@@ -1063,9 +1063,9 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
     PMIX_LIST_FOREACH(attr, &app->attributes, prte_attribute_t)
     {
         if (PRTE_APP_SET_ENVAR == attr->key) {
-            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
+            PMIX_SETENV_COMPAT(attr->data.data.envar.envar, attr->data.data.envar.value, true, &app->env);
         } else if (PRTE_APP_ADD_ENVAR == attr->key) {
-            pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
+            PMIX_SETENV_COMPAT(attr->data.data.envar.envar, attr->data.data.envar.value, false, &app->env);
         } else if (PRTE_APP_UNSET_ENVAR == attr->key) {
             pmix_unsetenv(attr->data.data.string, &app->env);
         } else if (PRTE_APP_PREPEND_ENVAR == attr->key) {
@@ -1081,7 +1081,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", attr->data.data.envar.value,
                                   attr->data.data.envar.separator, param);
                     *saveptr = '='; // restore the current envar setting
-                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    PMIX_SETENV_COMPAT(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1091,7 +1091,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                PMIX_SETENV_COMPAT(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         } else if (PRTE_APP_APPEND_ENVAR == attr->key) {
@@ -1107,7 +1107,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
                     pmix_asprintf(&p2, "%s%c%s", param, attr->data.data.envar.separator,
                                   attr->data.data.envar.value);
                     *saveptr = '='; // restore the current envar setting
-                    pmix_setenv(attr->data.data.envar.envar, p2, true, &app->env);
+                    PMIX_SETENV_COMPAT(attr->data.data.envar.envar, p2, true, &app->env);
                     free(p2);
                     exists = true;
                     break;
@@ -1117,7 +1117,7 @@ static int setup_fork(prte_job_t *jdata, prte_app_context_t *app)
             }
             if (!exists) {
                 /* just insert it */
-                pmix_setenv(attr->data.data.envar.envar, attr->data.data.envar.value, true,
+                PMIX_SETENV_COMPAT(attr->data.data.envar.envar, attr->data.data.envar.value, true,
                             &app->env);
             }
         }

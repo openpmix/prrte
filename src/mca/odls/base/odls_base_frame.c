@@ -140,7 +140,7 @@ void prte_odls_base_harvest_threads(void)
         prte_odls_globals.ev_bases[0] = prte_event_base;
         prte_odls_globals.num_threads = 0;
         if (NULL != prte_odls_globals.ev_threads) {
-            pmix_argv_free(prte_odls_globals.ev_threads);
+            PMIX_ARGV_FREE_COMPAT(prte_odls_globals.ev_threads);
             prte_odls_globals.ev_threads = NULL;
         }
     }
@@ -199,7 +199,7 @@ startup:
         for (i = 0; i < prte_odls_globals.num_threads; i++) {
             pmix_asprintf(&tmp, "PRTE-ODLS-%d", i);
             prte_odls_globals.ev_bases[i] = prte_progress_thread_init(tmp);
-            pmix_argv_append_nosize(&prte_odls_globals.ev_threads, tmp);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_odls_globals.ev_threads, tmp);
             free(tmp);
         }
     }
@@ -276,7 +276,7 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
         /* construct a list of ranks to be displayed */
         xterm_hold = false;
         pmix_util_parse_range_options(prte_xterm, &ranks);
-        for (i = 0; i < pmix_argv_count(ranks); i++) {
+        for (i = 0; i < PMIX_ARGV_COUNT_COMPAT(ranks); i++) {
             if (0 == strcmp(ranks[i], "BANG")) {
                 xterm_hold = true;
                 continue;
@@ -300,21 +300,21 @@ static int prte_odls_base_open(pmix_mca_base_open_flag_t flags)
             }
             pmix_list_append(&prte_odls_globals.xterm_ranks, &nm->super);
         }
-        pmix_argv_free(ranks);
+        PMIX_ARGV_FREE_COMPAT(ranks);
         /* construct the xtermcmd */
         prte_odls_globals.xtermcmd = NULL;
         tmp = pmix_find_absolute_path("xterm");
         if (NULL == tmp) {
             return PRTE_ERROR;
         }
-        pmix_argv_append_nosize(&prte_odls_globals.xtermcmd, tmp);
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_odls_globals.xtermcmd, tmp);
         free(tmp);
-        pmix_argv_append_nosize(&prte_odls_globals.xtermcmd, "-T");
-        pmix_argv_append_nosize(&prte_odls_globals.xtermcmd, "save");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_odls_globals.xtermcmd, "-T");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_odls_globals.xtermcmd, "save");
         if (xterm_hold) {
-            pmix_argv_append_nosize(&prte_odls_globals.xtermcmd, "-hold");
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_odls_globals.xtermcmd, "-hold");
         }
-        pmix_argv_append_nosize(&prte_odls_globals.xtermcmd, "-e");
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_odls_globals.xtermcmd, "-e");
     }
 
     /* Open up all available components */
@@ -356,10 +356,10 @@ static void scdes(prte_odls_spawn_caddy_t *p)
         free(p->wdir);
     }
     if (NULL != p->argv) {
-        pmix_argv_free(p->argv);
+        PMIX_ARGV_FREE_COMPAT(p->argv);
     }
     if (NULL != p->env) {
-        pmix_argv_free(p->env);
+        PMIX_ARGV_FREE_COMPAT(p->env);
     }
 }
 PMIX_CLASS_INSTANCE(prte_odls_spawn_caddy_t, pmix_object_t, sccon, scdes);

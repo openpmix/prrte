@@ -952,13 +952,13 @@ void prte_state_base_check_fds(prte_job_t *jdata)
         }
         /* construct the list of capabilities */
         if (fdflags & FD_CLOEXEC) {
-            pmix_argv_append_nosize(&list, "cloexec");
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "cloexec");
         }
         if (flflags & O_APPEND) {
-            pmix_argv_append_nosize(&list, "append");
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "append");
         }
         if (flflags & O_NONBLOCK) {
-            pmix_argv_append_nosize(&list, "nonblock");
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "nonblock");
         }
         /* from the man page:
          *  Unlike the other values that can be specified in flags,
@@ -967,22 +967,22 @@ void prte_state_base_check_fds(prte_job_t *jdata)
          * the low order two bits of flags, and defined respectively
          * as 0, 1, and 2. */
         if (O_RDONLY == (flflags & 3)) {
-            pmix_argv_append_nosize(&list, "rdonly");
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "rdonly");
         } else if (O_WRONLY == (flflags & 3)) {
-            pmix_argv_append_nosize(&list, "wronly");
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "wronly");
         } else {
-            pmix_argv_append_nosize(&list, "rdwr");
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "rdwr");
         }
         if (flk && F_UNLCK != fl.l_type) {
             if (F_WRLCK == fl.l_type) {
-                pmix_argv_append_nosize(&list, "wrlock");
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "wrlock");
             } else {
-                pmix_argv_append_nosize(&list, "rdlock");
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&list, "rdlock");
             }
         }
         if (NULL != list) {
-            status = pmix_argv_join(list, ' ');
-            pmix_argv_free(list);
+            status = PMIX_ARGV_JOIN_COMPAT(list, ' ');
+            PMIX_ARGV_FREE_COMPAT(list);
             list = NULL;
             if (NULL == result) {
                 pmix_asprintf(&result, "    %d\t(%s)\t%s\n", i, info, status);

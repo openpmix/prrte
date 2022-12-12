@@ -57,7 +57,7 @@ int prte_rml_parse_uris(const char *uri, pmix_proc_t *peer, char ***uris)
 
     if (NULL != uris) {
         /* parse the remainder of the string into an array of uris */
-        *uris = pmix_argv_split(ptr, ';');
+        *uris = PMIX_ARGV_SPLIT_COMPAT(ptr, ';');
     }
     free(cinfo);
     return PRTE_SUCCESS;

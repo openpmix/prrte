@@ -106,7 +106,7 @@ static void rqcon(prte_data_req_t *p)
 }
 static void rqdes(prte_data_req_t *p)
 {
-    pmix_argv_free(p->keys);
+    PMIX_ARGV_FREE_COMPAT(p->keys);
     PMIX_LIST_DESTRUCT(&p->answers);
 }
 static PMIX_CLASS_INSTANCE(prte_data_req_t, pmix_list_item_t, rqcon, rqdes);
@@ -385,7 +385,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                     goto SEND_ERROR;
                 }
                 /* if we found all of the requested keys, then indicate so */
-                if (n == (size_t) pmix_argv_count(req->keys)) {
+                if (n == (size_t) PMIX_ARGV_COUNT_COMPAT(req->keys)) {
                     i = PRTE_SUCCESS;
                 } else {
                     i = (uint32_t) PRTE_ERR_PARTIAL_SUCCESS;
@@ -495,10 +495,10 @@ void prte_data_server(int status, pmix_proc_t *sender,
             if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &str, &count, PMIX_STRING))) {
                 PMIX_ERROR_LOG(ret);
                 rc = PRTE_ERR_UNPACK_FAILURE;
-                pmix_argv_free(keys);
+                PMIX_ARGV_FREE_COMPAT(keys);
                 goto SEND_ERROR;
             }
-            pmix_argv_append_nosize(&keys, str);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&keys, str);
             free(str);
         }
 
@@ -592,7 +592,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                 PMIX_ERROR_LOG(ret);
                 rc = PRTE_ERR_PACK_FAILURE;
                 PMIX_LIST_DESTRUCT(&answers);
-                pmix_argv_free(keys);
+                PMIX_ARGV_FREE_COMPAT(keys);
                 goto SEND_ERROR;
             }
             /* loop thru and pack the individual responses - this is somewhat less
@@ -607,7 +607,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                     PMIX_ERROR_LOG(ret);
                     rc = PRTE_ERR_PACK_FAILURE;
                     PMIX_LIST_DESTRUCT(&answers);
-                    pmix_argv_free(keys);
+                    PMIX_ARGV_FREE_COMPAT(keys);
                     goto SEND_ERROR;
                 }
                 if (PMIX_SUCCESS
@@ -615,7 +615,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                     PMIX_ERROR_LOG(ret);
                     rc = PRTE_ERR_PACK_FAILURE;
                     PMIX_LIST_DESTRUCT(&answers);
-                    pmix_argv_free(keys);
+                    PMIX_ARGV_FREE_COMPAT(keys);
                     goto SEND_ERROR;
                 }
                 if (PMIX_PERSIST_FIRST_READ == rinfo->persistence) {
@@ -629,13 +629,13 @@ void prte_data_server(int status, pmix_proc_t *sender,
         }
         PMIX_LIST_DESTRUCT(&answers);
 
-        if (nanswers == (size_t) pmix_argv_count(keys)) {
+        if (nanswers == (size_t) PMIX_ARGV_COUNT_COMPAT(keys)) {
             rc = PRTE_SUCCESS;
         } else {
             pmix_output_verbose(1, prte_data_server_output,
                                 "%s data server:lookup: at least some data not found %d vs %d",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) nanswers,
-                                (int) pmix_argv_count(keys));
+                                (int) PMIX_ARGV_COUNT_COMPAT(keys));
 
             /* if we were told to wait for the data, then queue this up
              * for later processing */
@@ -660,14 +660,14 @@ void prte_data_server(int status, pmix_proc_t *sender,
             if (0 == nanswers) {
                 /* nothing was found - indicate that situation */
                 rc = PRTE_ERR_NOT_FOUND;
-                pmix_argv_free(keys);
+                PMIX_ARGV_FREE_COMPAT(keys);
                 PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
                 goto SEND_ERROR;
             } else {
                 rc = PRTE_ERR_PARTIAL_SUCCESS;
             }
         }
-        pmix_argv_free(keys);
+        PMIX_ARGV_FREE_COMPAT(keys);
         pmix_output_verbose(1, prte_data_server_output, "%s data server:lookup: data found",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         /* pack the status */
@@ -723,10 +723,10 @@ void prte_data_server(int status, pmix_proc_t *sender,
             if (PMIX_SUCCESS != (ret = PMIx_Data_unpack(NULL, buffer, &str, &count, PMIX_STRING))) {
                 PMIX_ERROR_LOG(ret);
                 rc = PRTE_ERR_UNPACK_FAILURE;
-                pmix_argv_free(keys);
+                PMIX_ARGV_FREE_COMPAT(keys);
                 goto SEND_ERROR;
             }
-            pmix_argv_append_nosize(&keys, str);
+            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&keys, str);
             free(str);
         }
 
@@ -801,7 +801,7 @@ void prte_data_server(int status, pmix_proc_t *sender,
                 }
             }
         }
-        pmix_argv_free(keys);
+        PMIX_ARGV_FREE_COMPAT(keys);
 
         /* tell the sender this succeeded */
         ret = PRTE_SUCCESS;

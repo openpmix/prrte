@@ -398,9 +398,9 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     }
 
     nprocs_mapped = 0;
-    tmp = pmix_argv_split(options->cpuset, ',');
-    ntomap = pmix_argv_count(tmp);
-    pmix_argv_free(tmp);
+    tmp = PMIX_ARGV_SPLIT_COMPAT(options->cpuset, ',');
+    ntomap = PMIX_ARGV_COUNT_COMPAT(tmp);
+    PMIX_ARGV_FREE_COMPAT(tmp);
     if (NULL != options->cpuset) {
         savecpuset = strdup(options->cpuset);
     }

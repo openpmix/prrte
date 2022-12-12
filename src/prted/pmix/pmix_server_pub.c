@@ -291,7 +291,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     size_t m, n;
     pmix_status_t rc;
 
-    if (NULL == keys || 0 == pmix_argv_count(keys)) {
+    if (NULL == keys || 0 == PMIX_ARGV_COUNT_COMPAT(keys)) {
         return PMIX_ERR_BAD_PARAM;
     }
 
@@ -326,7 +326,7 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
     }
 
     /* pack the number of keys */
-    n = pmix_argv_count(keys);
+    n = PMIX_ARGV_COUNT_COMPAT(keys);
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &n, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(req);
@@ -408,7 +408,7 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
     }
 
     /* pack the number of keys */
-    n = pmix_argv_count(keys);
+    n = PMIX_ARGV_COUNT_COMPAT(keys);
     if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, &req->msg, &n, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(req);

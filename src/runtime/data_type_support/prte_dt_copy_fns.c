@@ -96,8 +96,8 @@ int prte_app_copy(prte_app_context_t **dest, prte_app_context_t *src)
         (*dest)->app = strdup(src->app);
     }
     (*dest)->num_procs = src->num_procs;
-    (*dest)->argv = pmix_argv_copy(src->argv);
-    (*dest)->env = pmix_argv_copy(src->env);
+    (*dest)->argv = PMIX_ARGV_COPY_COMPAT(src->argv);
+    (*dest)->env = PMIX_ARGV_COPY_COMPAT(src->env);
     if (NULL != src->cwd) {
         (*dest)->cwd = strdup(src->cwd);
     }

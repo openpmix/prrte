@@ -179,10 +179,10 @@ int prte_odls_alps_get_rdma_creds(void)
         ptr += len;
     }
     sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].ptag);
-    ret = pmix_setenv("PMI_GNI_PTAG", env_buffer, false, &prte_launch_environ);
+    ret = PMIX_SETENV_COMPAT("PMI_GNI_PTAG", env_buffer, false, &prte_launch_environ);
     if (ret != PMIX_SUCCESS) {
         PMIX_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
-                             "%s odls:alps: pmix_setenv for PMI_GNI_TAG failed - returned %d",
+                             "%s odls:alps: PMIX_SETENV_COMPAT for PMI_GNI_TAG failed - returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
         ret = prte_pmix_convert_status(ret);
         goto fn_exit;
@@ -204,10 +204,10 @@ int prte_odls_alps_get_rdma_creds(void)
         ptr += len;
     }
     sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].cookie);
-    ret = pmix_setenv("PMI_GNI_COOKIE", env_buffer, false, &prte_launch_environ);
+    ret = PMIX_SETENV_COMPAT("PMI_GNI_COOKIE", env_buffer, false, &prte_launch_environ);
     if (ret != PMIX_SUCCESS) {
         PMIX_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
-                             "%s odls:alps: pmix_setenv for PMI_GNI_COOKIE returned %d",
+                             "%s odls:alps: PMIX_SETENV_COMPAT for PMI_GNI_COOKIE returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
         ret = prte_pmix_convert_status(ret);
         goto fn_exit;
@@ -229,10 +229,10 @@ int prte_odls_alps_get_rdma_creds(void)
         ptr += len;
     }
     sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].local_addr);
-    ret = pmix_setenv("PMI_GNI_LOC_ADDR", env_buffer, false, &prte_launch_environ);
+    ret = PMIX_SETENV_COMPAT("PMI_GNI_LOC_ADDR", env_buffer, false, &prte_launch_environ);
     if (ret != PMIX_SUCCESS) {
         PMIX_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
-                             "%s odls:alps: pmix_setenv for PMI_GNI_LOC_ADDR returned %d",
+                             "%s odls:alps: PMIX_SETENV_COMPAT for PMI_GNI_LOC_ADDR returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
         ret = prte_pmix_convert_status(ret);
         goto fn_exit;
@@ -254,10 +254,10 @@ int prte_odls_alps_get_rdma_creds(void)
         ptr += len;
     }
     sprintf(ptr, "%d", rdmacred_buf[num_creds - 1].device_id);
-    ret = pmix_setenv("PMI_GNI_DEV_ID", env_buffer, false, &prte_launch_environ);
+    ret = PMIX_SETENV_COMPAT("PMI_GNI_DEV_ID", env_buffer, false, &prte_launch_environ);
     if (ret != PMIX_SUCCESS) {
         PMIX_OUTPUT_VERBOSE((20, prte_odls_base_framework.framework_output,
-                             "%s odls:alps: pmix_setenv for PMI_GNI_DEV_ID returned %d",
+                             "%s odls:alps: PMIX_SETENV_COMPAT for PMI_GNI_DEV_ID returned %d",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ret));
         ret = prte_pmix_convert_status(ret);
         goto fn_exit;

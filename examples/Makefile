@@ -22,7 +22,7 @@
 # $HEADER$
 #
 
-# Use the PSRVR-provided wrapper compiler
+# Use the PRRTE-provided wrapper compiler
 
 CC = pcc
 

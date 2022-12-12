@@ -103,7 +103,7 @@ static int plm_tm_open(void)
 static int plm_tm_close(void)
 {
     if (NULL != prte_mca_plm_tm_component.checked_paths) {
-        pmix_argv_free(prte_mca_plm_tm_component.checked_paths);
+        PMIX_ARGV_FREE_COMPAT(prte_mca_plm_tm_component.checked_paths);
     }
 
     return PRTE_SUCCESS;

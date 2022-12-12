@@ -858,10 +858,10 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
             }
             /* pack the target jobid */
             if (NULL == targets) {
-                PMIX_LOAD_NSPACE(&jobid, NULL);
+                PMIX_LOAD_NSPACE(jobid, NULL);
             } else {
                 proct = (pmix_proc_t *) &targets[0];
-                PMIX_LOAD_NSPACE(&jobid, proct->nspace);
+                PMIX_LOAD_NSPACE(jobid, proct->nspace);
             }
             rc = PMIx_Data_pack(NULL, cmd, &jobid, 1, PMIX_PROC_NSPACE);
             if (PMIX_SUCCESS != rc) {
