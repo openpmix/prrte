@@ -179,3 +179,6 @@ test/loop_spawn
 test/reinit
 test/cmspawn
 test/qspawn
+test/filegen
+test/iostress
+
