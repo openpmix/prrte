@@ -647,12 +647,14 @@ int pmix_server_init(void)
         return rc;
     }
 
+#ifdef PMIX_EXTERNAL_AUX_EVENT_BASE
     /* give the server our event base to use for signal trapping */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_EXTERNAL_AUX_EVENT_BASE, prte_event_base, PMIX_POINTER);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
         return rc;
     }
+#endif
 
     /* if PMIx is version 4 or higher, then we can pass our
      * topology object down to the server library for its use
