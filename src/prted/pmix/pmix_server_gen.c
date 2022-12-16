@@ -919,6 +919,10 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(cd);
 
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s group request complete",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+
     if (PRTE_SUCCESS != status) {
         rc = status;
         goto complete;
@@ -982,7 +986,13 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
     size_t i, mode = 0;
     pmix_server_pset_t *pset;
     bool fence = false;
+    bool force_local = false;
     pmix_byte_object_t *bo = NULL;
+    struct timeval tv = {0, 0};
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s group request recvd",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* they are required to pass us an id */
     if (NULL == gpid) {
@@ -1000,6 +1010,10 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
             fence = PMIX_INFO_TRUE(&directives[i]);
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ENDPT_DATA)) {
             bo = (pmix_byte_object_t *) &directives[i].value.data.bo;
+        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_TIMEOUT)) {
+            tv.tv_sec = directives[i].value.data.uint32;
+        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_LOCAL_ONLY)) {
+            force_local = PMIX_INFO_TRUE(&directives[i]);
         }
     }
 
@@ -1012,7 +1026,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         memcpy(pset->members, procs, nprocs * sizeof(pmix_proc_t));
         pmix_list_append(&prte_pmix_server_globals.groups, &pset->super);
     } else if (PMIX_GROUP_DESTRUCT == op) {
-        /* find this process set on our list of groups */
+        /* find this group ID on our list of groups */
         PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, pmix_server_pset_t)
         {
             if (0 == strcmp(pset->name, gpid)) {
@@ -1025,7 +1039,10 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
 
     /* if they don't want us to do a fence and they don't want a
      * context id assigned, then we are done */
-    if (!fence && 0 == mode) {
+    if (!fence && 0 == mode || force_local) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s group request - purely local",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         return PMIX_OPERATION_SUCCEEDED;
     }
 
