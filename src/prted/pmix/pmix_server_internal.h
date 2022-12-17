@@ -384,6 +384,9 @@ typedef struct {
     bool pubsub_init;
     bool session_server;
     bool system_server;
+    bool scheduler_connected;
+    pmix_proc_t scheduler;
+    bool scheduler_set_as_server;
     char *report_uri;
     char *singleton;
     pmix_device_type_t generate_dist;
