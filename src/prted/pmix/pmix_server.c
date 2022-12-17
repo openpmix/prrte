@@ -1616,6 +1616,7 @@ static void rqcon(pmix_server_req_t *p)
     p->key = NULL;
     p->flag = true;
     p->launcher = false;
+    p->scheduler = false;
     p->remote_room_num = -1;
     p->uid = 0;
     p->gid = 0;

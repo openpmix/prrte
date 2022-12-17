@@ -1234,7 +1234,8 @@ static void build_map(hwloc_topology_t topo, hwloc_cpuset_t avail, bool use_hwth
  * Make a prettyprint string for a hwloc_cpuset_t
  */
 char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
-                               bool use_hwthread_cpus, hwloc_topology_t topo)
+                               bool use_hwthread_cpus,
+                               hwloc_topology_t topo)
 {
     int n, npkgs, npus, ncores;
     char tmp[2048], ans[4096];
@@ -1248,11 +1249,15 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
         return strdup("NOT MAPPED");
     }
 
-    /* if the cpuset includes all available cpus, then we are unbound
-     * or bound to all available cpus - the caller will know the diff */
-    if (hwloc_bitmap_isfull(cpuset)) {
-        return strdup("UNBOUND/BOUND TO ALL");
+    /* if the cpuset includes all available cpus, and
+     * the available cpus were not externally constrained,
+     * then we are unbound */
+    avail = prte_hwloc_base_filter_cpus(topo);
+    if (hwloc_bitmap_isequal(cpuset, avail) &&
+        hwloc_bitmap_isfull(avail)) {
+        return strdup("UNBOUND");
     }
+    hwloc_bitmap_free(avail);
 
     /* get the number of packages in the topology */
     npkgs = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);

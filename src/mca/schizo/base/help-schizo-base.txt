@@ -164,3 +164,14 @@ command line option has more than one value:
 
 The resolution function cannot handle this scenario - please
 notify the developers
+#
+[binding-pe-conflict]
+The PE=<list> mapping directive cannot be combined with a
+binding directive as it already mandates that we bind to
+the specified cpu(s). The conflicting directives that were
+given are:
+
+  map-by:  %s
+  bind-to: %s
+
+Please resolve the conflict and try again.
