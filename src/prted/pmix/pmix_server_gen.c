@@ -590,6 +590,22 @@ static void _toolconn(int sd, short args, void *cbdata)
                         cd->launcher ? "LAUNCHER" : (cd->scheduler ? "SCHEDULER" : "TOOL"),
                         cd->uid, cd->gid, cd->target.nspace);
 
+    /* if this is the scheduler and we are not the DVM master, then
+     * this is not allowed */
+    if (cd->scheduler && !PRTE_PROC_IS_MASTER) {
+        cd->toolcbfunc(PMIX_ERR_NOT_SUPPORTED, NULL, cd->cbdata);
+        PMIX_RELEASE(cd);
+        return;
+    } else {
+        /* mark that the scheduler has attached to us */
+        prte_pmix_server_globals.scheduler_connected = true;
+        PMIX_LOAD_PROCID(&prte_pmix_server_globals.scheduler,
+                         cd->target.nspace, cd->target.rank);
+        /* we cannot immediately set the scheduler to be our
+         * PMIx server as the PMIx library hasn't finished
+         * recording it */
+    }
+
     /* if we are not the HNP or master, and the tool doesn't
      * already have a self-assigned name, then
      * we need to ask the master for one */
@@ -641,7 +657,8 @@ static void _toolconn(int sd, short args, void *cbdata)
     PMIX_RELEASE(cd);
 }
 
-void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo, pmix_tool_connection_cbfunc_t cbfunc,
+void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo,
+                            pmix_tool_connection_cbfunc_t cbfunc,
                             void *cbdata)
 {
     pmix_server_req_t *cd;
@@ -656,6 +673,7 @@ void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo, pmix_tool_connectio
     cd->ninfo = ninfo;
     cd->toolcbfunc = cbfunc;
     cd->cbdata = cbdata;
+    cd->target.rank = 0; // set default for tool
 
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _toolconn, cd);
     prte_event_set_priority(&(cd->ev), PRTE_MSG_PRI);
