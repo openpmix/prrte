@@ -17,7 +17,7 @@
 
 major=3
 minor=0
-release=0
+release=1
 
 # greek is generally used for alpha or beta release tags.  If it is
 # non-empty, it will be appended to the version number.  It does not
@@ -26,7 +26,7 @@ release=0
 # requirement is that it must be entirely printable ASCII characters
 # and have no white space.
 
-greek=rc3
+greek=a1
 
 # If repo_rev is empty, then the repository version number will be
 # obtained during "make dist" via the "git describe --tags --always"
@@ -78,12 +78,12 @@ date="Nov 24, 2018"
 # Version numbers are described in the Libtool current:revision:age
 # format.
 
-libprrte_so_version=3:0:0
+libprrte_so_version=3:1:0
 
 # "Common" components install standalone libraries that are run-time
 # linked by one or more components.  So they need to be versioned as
 # well.  Yuck; this somewhat breaks the
 # components-don't-affect-the-build-system abstraction.
 
-libprrte_common_alps_so_version=3:0:0
+libprrte_common_alps_so_version=3:1:0
 
