@@ -534,7 +534,7 @@ int main(int argc, char *argv[])
         setenv("PRTE_MCA_prte_launch_agent", opt->values[0], true); // cmd line overrides all
     }
 
-    /* if we are supporting a singleton, push its ID into the environ
+    /* if we are supporting a singleton, cache its ID
      * so it can get picked up and registered by server init */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_SINGLETON);
     if (NULL != opt) {
