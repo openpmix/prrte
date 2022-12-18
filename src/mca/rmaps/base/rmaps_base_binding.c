@@ -118,8 +118,12 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     }
     if (NULL == trg_obj) {
         /* there aren't any appropriate targets under this object */
-        pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
-        return PRTE_ERR_SILENT;
+        if (PRTE_BINDING_REQUIRED(jdata->map->binding)) {
+            pmix_show_help("help-prte-rmaps-base.txt", "rmaps:no-available-cpus", true, node->name);
+            return PRTE_ERR_SILENT;
+        } else {
+            return PRTE_SUCCESS;
+        }
     }
 
 #if HWLOC_API_VERSION < 0x20000
