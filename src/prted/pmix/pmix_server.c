@@ -350,6 +350,7 @@ static prte_regattr_input_t prte_attributes[] = {
                          "PMIX_ALLOC_QUEUE",
                          "PMIX_ALLOC_PREEMPTIBLE",
                          NULL}},
+#if PMIX_NUMERIC_VERSION >= 0x00050000
     {.function = "PMIx_Session_control",
      .attrs = (char *[]){"PMIX_SESSION_CTRL_ID",
                          "PMIX_SESSION_APP",
@@ -361,6 +362,7 @@ static prte_regattr_input_t prte_attributes[] = {
                          "PMIX_SESSION_SIGNAL",
                          "PMIX_SESSION_COMPLETE",
                          NULL}},
+#endif
     {.function = ""},
 };
 
