@@ -36,6 +36,31 @@ bug fixes (and other actions) for each version of PRRTE since
 version 1.0.
 
 
+3.0.1 -- TBD
+------------------------------------
+PR #1622: Multiple commits
+  - Don't error out on binding if not required
+  - Check for and track scheduler attachment
+  - Accept local group op upcalls
+  - Add an IOF stress test
+  - Protect against earlier PMIx versions
+  - Pass our event base for use by the PMIx library as an aux base
+  - Update to compatibility with PMIx master branch
+  - Silence warning - add return values
+  - Begin adding support for new server module fn pointer
+  - Designate the framework project as PRTE
+  - Minor touchups of the "fault" example
+  - Include topology in allocated node info
+  - Remove debug
+  - Extend query support to include allocation info
+  - Update version to 3.0.1
+PR #1600: Multiple commits
+  - Minor change to check_os_flavors
+  - Don't emit an error output if not needed
+PR #1597: Fix oac_check_package.m4
+PR #1595: build: fix bashisms in configure
+
+
 3.0.0 -- 13 Nov 2022
 ------------------------------------
 **** NOTE: This release represents a major update to the PRRTE
