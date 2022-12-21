@@ -1303,7 +1303,6 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     int i;
     bool found;
     prte_daemon_cmd_flag_t cmd;
-    char *myendian;
     char *alias;
     uint8_t naliases, ni;
     char *nodename = NULL;
@@ -1325,20 +1324,13 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         jdatorted = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
     }
 
-    /* get my endianness */
+    /* get my topology */
     mytopo = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, 0);
     if (NULL == mytopo) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         prted_failed_launch = true;
         goto CLEANUP;
     }
-    myendian = strrchr(mytopo->sig, ':');
-    if (NULL == myendian) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        prted_failed_launch = true;
-        goto CLEANUP;
-    }
-    ++myendian;
 
     /* multiple daemons could be in this buffer, so unpack until we exhaust the data */
     idx = 1;
