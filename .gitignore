@@ -181,6 +181,7 @@ test/cmspawn
 test/qspawn
 test/filegen
 test/iostress
+test/spawn_multiple
 
 docs/_build
 docs/_static
