@@ -181,4 +181,4 @@ test/cmspawn
 test/qspawn
 test/filegen
 test/iostress
-
+test/spawn_multiple
