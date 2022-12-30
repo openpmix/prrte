@@ -37,7 +37,7 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
         }
         prte_pmix_server_globals.scheduler_set_as_server = true;
     }
-
+    return PMIX_SUCCESS;
 }
 
 #if PMIX_NUMERIC_VERSION >= 0x00050000
@@ -67,6 +67,7 @@ pmix_status_t pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
         }
         prte_pmix_server_globals.scheduler_set_as_server = true;
     }
+    return PMIX_SUCCESS;
 
 }
 
