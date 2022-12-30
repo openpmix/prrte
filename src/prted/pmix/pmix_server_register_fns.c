@@ -90,6 +90,9 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     pmix_topology_t topo;
     pmix_data_array_t darray, lparray;
     bool flag, *fptr;
+    size_t size, sz;
+    pmix_info_t *iptr;
+    void *next;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output, "%s register nspace for %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace));
@@ -604,6 +607,30 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     }
     PMIX_LIST_DESTRUCT(&local_procs);
 
+#ifdef PMIX_SIZE_ESTIMATE
+    /* determine the overall size of this payload */
+    iptr = PMIx_Info_list_get_info(info, NULL, &next);
+    size = 0;
+    while (1) {
+        ret = PMIx_Info_get_size(iptr, &sz);
+        if (PMIX_SUCCESS != ret) {
+            break;
+        }
+        size += sz;
+        if (NULL == next) {
+            break;
+        }
+        iptr = PMIx_Info_list_get_info(info, next, &next);
+    }
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        rc = prte_pmix_convert_status(ret);
+        PMIX_INFO_LIST_RELEASE(info);
+        return rc;
+    }
+    PMIX_INFO_LIST_PREPEND(ret, info, PMIX_SIZE_ESTIMATE, &size, PMIX_SIZE);
+#endif
+    
     /* register it */
     PMIX_INFO_LIST_CONVERT(ret, info, &darray);
     pinfo = (pmix_info_t*)darray.array;
