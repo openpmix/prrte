@@ -16,7 +16,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,7 +50,6 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/mca/mca.h"
 #include "src/rml/rml_types.h"
-#include "src/pmix/pmix-internal.h"
 
 BEGIN_C_DECLS
 
@@ -88,6 +87,10 @@ typedef struct {
     size_t nexpected;
     /* number reported in */
     size_t nreported;
+    /* controls values */
+    bool assignID;
+    int timeout;
+    size_t memsize;
     /* distance masks for receive */
     pmix_bitmap_t distance_mask_recv;
     /* received buckets */
@@ -98,6 +101,23 @@ typedef struct {
     void *cbdata;
 } prte_grpcomm_coll_t;
 PMIX_CLASS_DECLARATION(prte_grpcomm_coll_t);
+
+typedef struct {
+    pmix_object_t super;
+    prte_event_t ev;
+    prte_grpcomm_signature_t *sig;
+    pmix_data_buffer_t *buf;
+    pmix_byte_object_t ctrls;
+    pmix_info_t *info;
+    size_t ninfo;
+    prte_grpcomm_cbfunc_t grpcbfunc;
+    pmix_modex_cbfunc_t mdxcbfunc;
+    pmix_info_cbfunc_t infocbfunc;
+    pmix_op_cbfunc_t opcbfunc;
+    void *cbdata;
+    void *relcbdata;
+} prte_pmix_mdx_caddy_t;
+PMIX_CLASS_DECLARATION(prte_pmix_mdx_caddy_t);
 
 /*
  * Component functions - all MUST be provided!
@@ -124,8 +144,7 @@ typedef int (*prte_grpcomm_base_module_xcast_fn_t)(pmix_rank_t *vpids, size_t np
  * NOTE: this is a non-blocking call. The callback function cached in
  * the prte_grpcomm_coll_t will be invoked upon completion. */
 typedef int (*prte_grpcomm_base_module_allgather_fn_t)(prte_grpcomm_coll_t *coll,
-                                                       pmix_data_buffer_t *buf, int mode,
-                                                       pmix_status_t local_status);
+                                                       prte_pmix_mdx_caddy_t *cd);
 
 /* Reliable broadcast a message thru BMG.
  * only need to provide a message buffer, dont need create dmns
@@ -170,10 +189,7 @@ typedef int (*prte_grpcomm_base_API_xcast_fn_t)(prte_grpcomm_signature_t *sig, p
  *
  * NOTE: this is a non-blocking call. The provided callback function
  * will be invoked upon completion. */
-typedef int (*prte_grpcomm_base_API_allgather_fn_t)(prte_grpcomm_signature_t *sig,
-                                                    pmix_data_buffer_t *buf, int mode,
-                                                    pmix_status_t local_status,
-                                                    prte_grpcomm_cbfunc_t cbfunc, void *cbdata);
+typedef int (*prte_grpcomm_base_API_allgather_fn_t)(prte_pmix_mdx_caddy_t *cd);
 
 /* Reliable broadcast a message. Caller will provide an array
  * of daemon. A NULL pointer indicates that all known daemons are in the BMG.

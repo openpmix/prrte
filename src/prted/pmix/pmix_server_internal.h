@@ -18,7 +18,7 @@
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,7 +49,6 @@
 #include "src/util/proc_info.h"
 #include "types.h"
 
-#include "src/mca/grpcomm/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 
@@ -145,20 +144,6 @@ typedef struct {
     void *cbdata;
 } prte_pmix_server_op_caddy_t;
 PMIX_CLASS_DECLARATION(prte_pmix_server_op_caddy_t);
-
-typedef struct {
-    pmix_object_t super;
-    prte_grpcomm_signature_t *sig;
-    pmix_data_buffer_t *buf;
-    pmix_modex_cbfunc_t cbfunc;
-    pmix_info_cbfunc_t infocbfunc;
-    pmix_op_cbfunc_t opcbfunc;
-    int mode;
-    pmix_info_t *info;
-    size_t ninfo;
-    void *cbdata;
-} prte_pmix_mdx_caddy_t;
-PMIX_CLASS_DECLARATION(prte_pmix_mdx_caddy_t);
 
 typedef struct {
     pmix_list_item_t super;
