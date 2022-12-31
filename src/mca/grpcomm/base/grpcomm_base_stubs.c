@@ -16,7 +16,7 @@
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,31 +50,6 @@ static int pack_xcast(prte_grpcomm_signature_t *sig, pmix_data_buffer_t *buffer,
                       pmix_data_buffer_t *message, prte_rml_tag_t tag);
 
 static int create_dmns(prte_grpcomm_signature_t *sig, pmix_rank_t **dmns, size_t *ndmns);
-
-typedef struct {
-    pmix_object_t super;
-    prte_event_t ev;
-    prte_grpcomm_signature_t *sig;
-    pmix_data_buffer_t buf;
-    int mode;
-    pmix_status_t local_status;
-    prte_grpcomm_cbfunc_t cbfunc;
-    void *cbdata;
-} prte_grpcomm_caddy_t;
-static void gccon(prte_grpcomm_caddy_t *p)
-{
-    p->sig = NULL;
-    PMIX_DATA_BUFFER_CONSTRUCT(&p->buf);
-    p->mode = 0;
-    p->local_status = PMIX_SUCCESS;
-    p->cbfunc = NULL;
-    p->cbdata = NULL;
-}
-static void gcdes(prte_grpcomm_caddy_t *p)
-{
-    PMIX_DATA_BUFFER_DESTRUCT(&p->buf);
-}
-static PMIX_CLASS_INSTANCE(prte_grpcomm_caddy_t, pmix_object_t, gccon, gcdes);
 
 int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig, prte_rml_tag_t tag,
                            pmix_data_buffer_t *msg)
@@ -130,7 +105,7 @@ int prte_grpcomm_API_xcast(prte_grpcomm_signature_t *sig, prte_rml_tag_t tag,
 
 static void allgather_stub(int fd, short args, void *cbdata)
 {
-    prte_grpcomm_caddy_t *cd = (prte_grpcomm_caddy_t *) cbdata;
+    prte_pmix_mdx_caddy_t *cd = (prte_pmix_mdx_caddy_t *) cbdata;
     int ret = PRTE_SUCCESS;
     prte_grpcomm_base_active_t *active;
     prte_grpcomm_coll_t *coll;
@@ -140,7 +115,8 @@ static void allgather_stub(int fd, short args, void *cbdata)
     PMIX_ACQUIRE_OBJECT(cd);
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                         "%s grpcomm:base:allgather stub", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s grpcomm:base:allgather stub",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* retrieve an existing tracker, create it if not
      * already found. The allgather module is responsible
@@ -177,49 +153,28 @@ static void allgather_stub(int fd, short args, void *cbdata)
         return;
     }
     PMIX_RELEASE(cd->sig);
-    coll->cbfunc = cd->cbfunc;
-    coll->cbdata = cd->cbdata;
+    cd->sig = NULL;
+    coll->cbfunc = cd->grpcbfunc;
+    coll->cbdata = cd;
 
     /* cycle thru the actives and see who can process it */
     PMIX_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t)
     {
         if (NULL != active->module->allgather) {
-            if (PRTE_SUCCESS == active->module->allgather(coll, &cd->buf, cd->mode, cd->local_status)) {
+            if (PRTE_SUCCESS == active->module->allgather(coll, cd)) {
                 break;
             }
         }
     }
-    PMIX_RELEASE(cd);
 }
 
-int prte_grpcomm_API_allgather(prte_grpcomm_signature_t *sig, pmix_data_buffer_t *buf,
-                               int mode, pmix_status_t local_status,
-                               prte_grpcomm_cbfunc_t cbfunc, void *cbdata)
+int prte_grpcomm_API_allgather(prte_pmix_mdx_caddy_t *cd)
 {
-    prte_grpcomm_caddy_t *cd;
-    pmix_status_t rc;
-
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:base:allgather", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* must push this into the event library to ensure we can
      * access framework-global data safely */
-    cd = PMIX_NEW(prte_grpcomm_caddy_t);
-    /* ensure the data doesn't go away */
-    cd->sig = PMIX_NEW(prte_grpcomm_signature_t);
-    cd->sig->sz = sig->sz;
-    cd->sig->signature = (pmix_proc_t *) malloc(cd->sig->sz * sizeof(pmix_proc_t));
-    memcpy(cd->sig->signature, sig->signature, cd->sig->sz * sizeof(pmix_proc_t));
-    rc = PMIx_Data_copy_payload(&cd->buf, buf);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(cd);
-        return rc;
-    }
-    cd->mode = mode;
-    cd->local_status = local_status;
-    cd->cbfunc = cbfunc;
-    cd->cbdata = cbdata;
     prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, allgather_stub, cd);
     prte_event_set_priority(&cd->ev, PRTE_MSG_PRI);
     PMIX_POST_OBJECT(cd);
@@ -498,5 +453,39 @@ static int pack_xcast(prte_grpcomm_signature_t *sig, pmix_data_buffer_t *buffer,
     }
     PMIX_BYTE_OBJECT_DESTRUCT(&bo);
 
+    return PRTE_SUCCESS;
+}
+
+int prte_pack_ctrl_options(pmix_byte_object_t *ctrlsbo,
+                           const pmix_info_t *info, size_t ninfo)
+{
+    pmix_data_buffer_t ctrlbuf;
+    pmix_status_t rc;
+
+    PMIx_Data_buffer_construct(&ctrlbuf);
+    rc = PMIx_Data_pack(NULL, &ctrlbuf, &ninfo, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIx_Data_buffer_destruct(&ctrlbuf);
+        return rc;
+    }
+    if (0 < ninfo) {
+        rc = PMIx_Data_pack(NULL, &ctrlbuf, (void*)info, ninfo, PMIX_INFO);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIx_Data_buffer_destruct(&ctrlbuf);
+            return rc;
+        }
+    }
+    /* even if the control buffer is empty, we still have
+     * to pack the byte object for it to ensure proper
+     * unpacking on the remote end */
+    rc = PMIx_Data_unload(&ctrlbuf, ctrlsbo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIx_Data_buffer_destruct(&ctrlbuf);
+        return rc;
+    }
+    PMIx_Data_buffer_destruct(&ctrlbuf);
     return PRTE_SUCCESS;
 }

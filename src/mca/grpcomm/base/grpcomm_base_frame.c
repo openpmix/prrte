@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -144,6 +144,9 @@ static void ccon(prte_grpcomm_coll_t *p)
     p->ndmns = 0;
     p->nexpected = 0;
     p->nreported = 0;
+    p->assignID = false;
+    p->timeout = 0;
+    p->memsize = 0;
     p->cbfunc = NULL;
     p->cbdata = NULL;
     p->buffers = NULL;
