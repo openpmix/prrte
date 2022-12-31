@@ -8,7 +8,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -41,8 +41,7 @@ static int init(void);
 static void finalize(void);
 static int xcast(pmix_rank_t *vpids, size_t nprocs, pmix_data_buffer_t *buf);
 static int allgather(prte_grpcomm_coll_t *coll,
-                     pmix_data_buffer_t *buf,
-                     int mode, pmix_status_t local_status);
+                     prte_pmix_mdx_caddy_t *cd);
 
 /* Module def */
 prte_grpcomm_base_module_t prte_grpcomm_direct_module = {
@@ -106,8 +105,8 @@ static int xcast(pmix_rank_t *vpids, size_t nprocs, pmix_data_buffer_t *buf)
     return PRTE_SUCCESS;
 }
 
-static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf,
-                     int mode, pmix_status_t local_status)
+static int allgather(prte_grpcomm_coll_t *coll,
+                     prte_pmix_mdx_caddy_t *cd)
 {
     int rc;
     pmix_data_buffer_t *relay;
@@ -135,16 +134,8 @@ static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf,
         return rc;
     }
 
-    /* pack the mode */
-    rc = PMIx_Data_pack(NULL, relay, &mode, 1, PMIX_INT32);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(relay);
-        return rc;
-    }
-
-    /* pack the local_status */
-    rc = PMIx_Data_pack(NULL, relay, &local_status, 1, PMIX_STATUS);
+    /* pack the ctrls */
+    rc = PMIx_Data_pack(NULL, relay, &cd->ctrls, 1, PMIX_BYTE_OBJECT);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
@@ -152,7 +143,7 @@ static int allgather(prte_grpcomm_coll_t *coll, pmix_data_buffer_t *buf,
     }
 
     /* pass along the payload */
-    rc = PMIx_Data_copy_payload(relay, buf);
+    rc = PMIx_Data_copy_payload(relay, cd->buf);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
@@ -175,8 +166,14 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                            prte_rml_tag_t tag, void *cbdata)
 {
     int32_t cnt;
-    int rc, mode;
+    int rc, timeout;
+    size_t n, ninfo, memsize;
+    bool assignID = false;
+    pmix_status_t st;
+    pmix_info_t *info, infostat;
     prte_grpcomm_signature_t sig;
+    pmix_byte_object_t ctrlsbo;
+    pmix_data_buffer_t ctrlbuf;
     pmix_data_buffer_t *reply;
     prte_grpcomm_coll_t *coll;
     pmix_status_t local_status;
@@ -208,23 +205,98 @@ static void allgather_recv(int status, pmix_proc_t *sender,
         return;
     }
 
-    /* unpack the mode */
+    /* unpack the ctrls from this contributor */
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &mode, &cnt, PMIX_INT32);
+    rc = PMIx_Data_unpack(NULL, buffer, &ctrlsbo, &cnt, PMIX_BYTE_OBJECT);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        PMIX_PROC_FREE(sig.signature, sig.sz);
         return;
     }
+    PMIX_DATA_BUFFER_CONSTRUCT(&ctrlbuf);
+    rc = PMIx_Data_load(&ctrlbuf, &ctrlsbo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_PROC_FREE(sig.signature, sig.sz);
+        PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
+        return;
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
 
-    /* unpack their local status */
+    /* unpack the number of info's in the ctrls */
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &local_status, &cnt, PMIX_STATUS);
+    rc = PMIx_Data_unpack(NULL, &ctrlbuf, &ninfo, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        PMIX_PROC_FREE(sig.signature, sig.sz);
+        PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
         return;
     }
-    if (PMIX_SUCCESS != local_status) {
-        coll->status = local_status;
+    if (0 < ninfo) {
+        PMIX_INFO_CREATE(info, ninfo);
+        cnt = ninfo;
+        rc = PMIx_Data_unpack(NULL, &ctrlbuf, info, &cnt, PMIX_INFO);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_PROC_FREE(sig.signature, sig.sz);
+            PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+            return;
+        }
+    }
+    PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+
+    /* cycle thru the ctrls to look for keys we support */
+    for (n=0; n < ninfo; n++) {
+        if (PMIX_CHECK_KEY(&info[n], PMIX_TIMEOUT)) {
+            PMIX_VALUE_GET_NUMBER(rc, &info[n].value, timeout, int);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_PROC_FREE(sig.signature, sig.sz);
+                return;
+            }
+            if (coll->timeout < timeout) {
+                coll->timeout = timeout;
+            }
+            /* update the info with the collected value */
+            info[n].value.type = PMIX_INT;
+            info[n].value.data.integer = coll->timeout;
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_LOCAL_COLLECTIVE_STATUS)) {
+            PMIX_VALUE_GET_NUMBER(rc, &info[n].value, st, pmix_status_t);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_PROC_FREE(sig.signature, sig.sz);
+                return;
+            }
+            if (PMIX_SUCCESS != st &&
+                PMIX_SUCCESS == coll->status) {
+                coll->status = st;
+            }
+            /* update the info with the collected value */
+            info[n].value.type = PMIX_STATUS;
+            info[n].value.data.status = coll->status;
+#ifdef PMIX_SIZE_ESTIMATE
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_SIZE_ESTIMATE)) {
+            PMIX_VALUE_GET_NUMBER(rc, &info[n].value, memsize, size_t);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_PROC_FREE(sig.signature, sig.sz);
+                PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+                return;
+            }
+            coll->memsize += memsize;
+            /* update the info with the collected value */
+            info[n].value.type = PMIX_SIZE;
+            info[n].value.data.size = coll->memsize;
+#endif
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_GROUP_ASSIGN_CONTEXT_ID)) {
+            assignID = PMIX_INFO_TRUE(&info[n]);
+            if (assignID) {
+                coll->assignID = true;
+            }
+            /* update the info with the collected value */
+            info[n].value.type = PMIX_BOOL;
+            info[n].value.data.flag = coll->assignID;
+        }
     }
 
     /* increment nprocs reported for collective */
@@ -272,20 +344,28 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 PMIX_PROC_FREE(sig.signature, sig.sz);
                 return;
             }
-            /* pack the mode */
-            rc = PMIx_Data_pack(NULL, reply, &mode, 1, PMIX_INT32);
+            /* add some values to the payload in the bucket */
+
+#ifdef PMIX_SIZE_ESTIMATE
+            /* pack the memory size */
+            PMIX_INFO_LOAD(&infostat, PMIX_SIZE_ESTIMATE, &coll->memsize, PMIX_SIZE);
+            rc = PMIx_Data_pack(NULL, reply, &infostat, 1, PMIX_INFO);
+            PMIX_INFO_DESTRUCT(&infostat);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
                 PMIX_PROC_FREE(sig.signature, sig.sz);
                 return;
             }
+#endif
             /* if we were asked to provide a context id, do so */
-            if (1 == mode) {
+            if (assignID) {
                 size_t sz;
                 sz = prte_grpcomm_base.context_id;
                 --prte_grpcomm_base.context_id;
-                rc = PMIx_Data_pack(NULL, reply, &sz, 1, PMIX_UINT32);
+                PMIX_INFO_LOAD(&infostat, PMIX_GROUP_CONTEXT_ID, &sz, PMIX_UINT32);
+                rc = PMIx_Data_pack(NULL, reply, &infostat, 1, PMIX_INFO);
+                PMIX_INFO_DESTRUCT(&infostat);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
@@ -324,22 +404,23 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 PMIX_PROC_FREE(sig.signature, sig.sz);
                 return;
             }
-            /* pack the mode */
-            rc = PMIx_Data_pack(NULL, reply, &mode, 1, PMIX_INT32);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
+            /* pass along the ctrls - we have updated the values
+             * we collected along the way */
+            rc = prte_pack_ctrl_options(&ctrlsbo, info, ninfo);
+            if (PRTE_SUCCESS != rc) {
                 PMIX_DATA_BUFFER_RELEASE(reply);
                 PMIX_PROC_FREE(sig.signature, sig.sz);
                 return;
             }
-            /* pack the local_status */
-            rc = PMIx_Data_pack(NULL, reply, &coll->status, 1, PMIX_STATUS);
+            rc = PMIx_Data_pack(NULL, reply, &ctrlsbo, 1, PMIX_BYTE_OBJECT);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
                 PMIX_PROC_FREE(sig.signature, sig.sz);
+                PMIx_Byte_object_destruct(&ctrlsbo);
                 return;
             }
+            PMIx_Byte_object_destruct(&ctrlsbo);
 
             /* transfer the collected bucket */
             rc = PMIx_Data_copy_payload(reply, &coll->bucket);
@@ -605,11 +686,12 @@ CLEANUP:
     PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
 }
 
-static void barrier_release(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+static void barrier_release(int status, pmix_proc_t *sender,
+                            pmix_data_buffer_t *buffer,
                             prte_rml_tag_t tag, void *cbdata)
 {
     int32_t cnt;
-    int rc, ret, mode;
+    int rc, ret;
     prte_grpcomm_signature_t sig;
     prte_grpcomm_coll_t *coll;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
@@ -636,14 +718,6 @@ static void barrier_release(int status, pmix_proc_t *sender, pmix_data_buffer_t 
     /* unpack the return status */
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &ret, &cnt, PMIX_INT32);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return;
-    }
-
-    /* unpack the mode */
-    cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &mode, &cnt, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return;

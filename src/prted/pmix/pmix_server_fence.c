@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,7 +37,7 @@
 #include "src/util/pmix_output.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/grpcomm/grpcomm.h"
+#include "src/mca/grpcomm/base/base.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
@@ -71,7 +71,7 @@ static void pmix_server_release(int status, pmix_data_buffer_t *buf, void *cbdat
     if (PRTE_SUCCESS == rc) {
         rc = status;
     }
-    cd->cbfunc(rc, bo.bytes, bo.size, cd->cbdata, relcb, bo.bytes);
+    cd->mdxcbfunc(rc, bo.bytes, bo.size, cd->cbdata, relcb, bo.bytes);
     PMIX_RELEASE(cd);
 }
 
@@ -84,13 +84,15 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
                                      size_t ndata, pmix_modex_cbfunc_t cbfunc, void *cbdata)
 {
     prte_pmix_mdx_caddy_t *cd = NULL;
-    int rc;
     pmix_data_buffer_t buf;
-    pmix_status_t ret = PMIX_SUCCESS;
+    pmix_byte_object_t payload;
+    int rc;
 
     cd = PMIX_NEW(prte_pmix_mdx_caddy_t);
-    cd->cbfunc = cbfunc;
+    cd->mdxcbfunc = cbfunc;
     cd->cbdata = cbdata;
+    cd->grpcbfunc = pmix_server_release;
+    cd->buf = PMIx_Data_buffer_create();
 
     /* compute the signature of this collective */
     if (NULL != procs) {
@@ -99,30 +101,32 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
         cd->sig->signature = (pmix_proc_t *) malloc(cd->sig->sz * sizeof(pmix_proc_t));
         memcpy(cd->sig->signature, procs, cd->sig->sz * sizeof(pmix_proc_t));
     }
-#ifdef PMIX_LOCAL_COLLECTIVE_STATUS
-    if (NULL != info) {
-        if (PMIX_CHECK_KEY(&info[ninfo-1], PMIX_LOCAL_COLLECTIVE_STATUS)) {
-            ret = info[ninfo-1].value.data.status;
-        }
-    }
-#endif
 
-    PMIX_DATA_BUFFER_CONSTRUCT(&buf);
+    rc = prte_pack_ctrl_options(&cd->ctrls, info, ninfo);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_RELEASE(cd);
+        return rc;
+    }
 
     if (NULL != data) {
         /* do not use PMIx_Data_load as it would modify
          * the data and we don't own it */
+        PMIx_Data_buffer_construct(&buf);
         buf.base_ptr = (char*)data;
         buf.pack_ptr = buf.base_ptr + ndata;
         buf.unpack_ptr = buf.base_ptr;
         buf.bytes_used = ndata;
         buf.bytes_allocated = ndata;
+        rc = PMIx_Data_copy_payload(cd->buf, &buf);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_RELEASE(cd);
+            return rc;
+        }
     }
 
     /* pass it to the global collective algorithm */
-    /* pass along any data that was collected locally */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.allgather(cd->sig, &buf, 0,ret,
-                                                     pmix_server_release, cd))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm.allgather(cd))) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(cd);
         return PMIX_ERROR;
