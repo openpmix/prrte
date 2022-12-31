@@ -1609,7 +1609,9 @@ static void opcon(prte_pmix_server_op_caddy_t *p)
     p->cbdata = NULL;
     p->server_object = NULL;
 }
-PMIX_CLASS_INSTANCE(prte_pmix_server_op_caddy_t, pmix_object_t, opcon, NULL);
+PMIX_CLASS_INSTANCE(prte_pmix_server_op_caddy_t,
+                    pmix_object_t,
+                    opcon, NULL);
 
 static void rqcon(pmix_server_req_t *p)
 {
@@ -1657,17 +1659,22 @@ static void rqdes(pmix_server_req_t *p)
     }
     PMIX_DATA_BUFFER_DESTRUCT(&p->msg);
 }
-PMIX_CLASS_INSTANCE(pmix_server_req_t, pmix_object_t, rqcon, rqdes);
+PMIX_CLASS_INSTANCE(pmix_server_req_t,
+                    pmix_object_t,
+                    rqcon, rqdes);
 
 static void mdcon(prte_pmix_mdx_caddy_t *p)
 {
     p->sig = NULL;
     p->buf = NULL;
-    p->cbfunc = NULL;
-    p->mode = 0;
+    PMIX_BYTE_OBJECT_CONSTRUCT(&p->ctrls);
     p->info = NULL;
     p->ninfo = 0;
     p->cbdata = NULL;
+    p->grpcbfunc = NULL;
+    p->mdxcbfunc = NULL;
+    p->infocbfunc = NULL;
+    p->opcbfunc = NULL;
 }
 static void mddes(prte_pmix_mdx_caddy_t *p)
 {
@@ -1677,8 +1684,11 @@ static void mddes(prte_pmix_mdx_caddy_t *p)
     if (NULL != p->buf) {
         PMIX_DATA_BUFFER_RELEASE(p->buf);
     }
+    PMIX_BYTE_OBJECT_DESTRUCT(&p->ctrls);
 }
-PMIX_CLASS_INSTANCE(prte_pmix_mdx_caddy_t, pmix_object_t, mdcon, mddes);
+PMIX_CLASS_INSTANCE(prte_pmix_mdx_caddy_t,
+                    pmix_object_t,
+                    mdcon, mddes);
 
 static void pscon(pmix_server_pset_t *p)
 {
@@ -1695,7 +1705,9 @@ static void psdes(pmix_server_pset_t *p)
         free(p->members);
     }
 }
-PMIX_CLASS_INSTANCE(pmix_server_pset_t, pmix_list_item_t, pscon, psdes);
+PMIX_CLASS_INSTANCE(pmix_server_pset_t,
+                    pmix_list_item_t,
+                    pscon, psdes);
 
 static void tlcon(prte_pmix_tool_t *p)
 {

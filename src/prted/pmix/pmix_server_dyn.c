@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,6 +42,7 @@
 #include "src/util/pmix_getcwd.h"
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/grpcomm/base/base.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/rml/rml.h"
 #include "src/mca/schizo/base/base.h"
@@ -956,25 +957,72 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
 {
     prte_pmix_mdx_caddy_t *md = (prte_pmix_mdx_caddy_t*)cbdata;
     pmix_nspace_t nspace;
-    pmix_info_t info[2];
+    pmix_info_t *info = NULL, infostat;
+    size_t ninfo = 1;
     int rc = PMIX_SUCCESS;
     int cnt, n=0;
     prte_pmix_lock_t lock;
+    bool assignedID = false;
     uint32_t ctxid;
     bool first = true;
+    char *payload;
+#ifdef PMIX_SIZE_ESTIMATE
+    size_t memsize = 0;
+#endif
 
-    PMIX_ACQUIRE_OBJECT(cd);
+    PMIX_ACQUIRE_OBJECT(md);
 
     /* process returned data */
     if (NULL != buf && 0 != buf->bytes_used) {
-        /* unpack the context ID */
+        /* check for any directives */
+        payload = buf->unpack_ptr;
         cnt = 1;
-        rc = PMIx_Data_unpack(NULL, buf, &ctxid, &cnt, PMIX_UINT32);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
+        rc = PMIx_Data_unpack(NULL, buf, &infostat, &cnt, PMIX_INFO);
+        while (PMIX_SUCCESS == rc) {
+            if (PMIX_CHECK_KEY(&infostat, PMIX_GROUP_CONTEXT_ID)) {
+                PMIX_VALUE_GET_NUMBER(rc, &infostat.value, ctxid, uint32_t);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                } else {
+                    assignedID = true;
+                    ++ninfo;
+                }
+#ifdef PMIX_SIZE_ESTIMATE
+            } else if (PMIX_CHECK_KEY(&infostat, PMIX_SIZE_ESTIMATE)) {
+                PMIX_VALUE_GET_NUMBER(rc, &infostat.value, memsize, size_t);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                } else {
+                    ++ninfo;
+                }
+#endif
+            }
+            /* save where we are */
+            payload = buf->unpack_ptr;
+            /* cleanup */
+            PMIX_INFO_DESTRUCT(&infostat);
+            /* get the next object */
+            cnt = 1;
+            rc = PMIx_Data_unpack(NULL, buf, &infostat, &cnt, PMIX_INFO);
         }
-        /* pass it down */
-        PMIX_INFO_LOAD(&info[1], PMIX_GROUP_CONTEXT_ID, &ctxid, PMIX_UINT32);
+        /* restore the unpack location as the last unsuccessful attempt will
+         * have moved it */
+        buf->unpack_ptr = payload;
+
+        /* create space for the info array that will be passed down */
+        PMIX_INFO_CREATE(info, ninfo);
+        /* we will put the proc data in the first position, so put anything
+         * else towards the back of the array */
+        n = 1;
+        if (assignedID) {
+            PMIX_INFO_LOAD(&info[n], PMIX_GROUP_CONTEXT_ID, &ctxid, PMIX_UINT32);
+            ++n;
+        }
+#ifdef PMIX_SIZE_ESTIMATE
+        if (0 < memsize) {
+            PMIX_INFO_LOAD(&info[n], PMIX_SIZE_ESTIMATE, &memsize, PMIX_SIZE);
+        }
+#endif
 
         /* there is a byte object for each proc in the connect operation */
         cnt = 1;
@@ -1161,16 +1209,33 @@ static void _cnct(int sd, short args, void *cbdata)
     md->sig->sz = cd->nprocs;
     md->sig->signature = (pmix_proc_t *) malloc(md->sig->sz * sizeof(pmix_proc_t));
     memcpy(md->sig->signature, cd->procs, md->sig->sz * sizeof(pmix_proc_t));
+    md->buf = PMIx_Data_buffer_create();
+    rc = PMIx_Data_copy_payload(md->buf, &dbuf);
+    PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
+    if (PMIX_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_RELEASE(md);
+        goto release;
+    }
+    /* create a buffer and load it with all the controls
+     * info (e.g., timeout and size estimates) the PMIx
+     * server provided */
+    rc = prte_pack_ctrl_options(&md->ctrls, cd->info, cd->ninfo);
+    if (PRTE_SUCCESS != rc) {
+        PMIX_RELEASE(md);
+        goto release;
+    }
+    md->grpcbfunc = connect_release;
     md->opcbfunc = cd->cbfunc;
+    md->cbdata = md;
     md->cbdata = cd->cbdata;
 
     /* pass it to the global collective algorithm */
     /* pass along any data that was collected locally */
-    rc = prte_grpcomm.allgather(md->sig, &dbuf, 1, cd->status, connect_release, md);
+    rc = prte_grpcomm.allgather(md);
     if (PMIX_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         PMIX_RELEASE(md);
-        PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
         goto release;
     }
     PMIX_RELEASE(cd);
