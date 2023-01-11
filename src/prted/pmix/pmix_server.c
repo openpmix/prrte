@@ -425,7 +425,7 @@ void pmix_server_register_params(void)
     /* whether or not to drop a system-level tool rendezvous point */
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "generate_distances",
                                       "Device types whose distances are to be provided (default=none, options=fabric,gpu,network",
-                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
                                       &generate_dist);
     prte_pmix_server_globals.generate_dist = 0;
     if (NULL != generate_dist) {
