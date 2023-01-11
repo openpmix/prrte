@@ -3,7 +3,7 @@
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
@@ -215,6 +215,9 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_AUTORESTART                (PRTE_JOB_START_KEY + 107) // bool - automatically restart failed processes
 #define PRTE_JOB_OUTPUT_PROCTABLE           (PRTE_JOB_START_KEY + 108) // char* - string specifying where the output is to go, with a '-'
                                                                        //         indicating stdout, '+' indicating stderr, else path
+#define PRTE_JOB_DISPLAY_PROCESSORS         (PRTE_JOB_START_KEY + 109) // char* - string displaying nodes whose avail CPUs
+                                                                       //         are to be displayed
+
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
