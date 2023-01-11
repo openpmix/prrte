@@ -507,6 +507,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                                             distances[f].mindist, distances[f].maxdist);
                             }
                         }
+                        darray.type = PMIX_DEVICE_DIST;
                         darray.array = distances;
                         darray.size = ndist;
                         PMIX_INFO_LIST_ADD(ret, pmap, PMIX_DEVICE_DISTANCES, &darray, PMIX_DATA_ARRAY);
