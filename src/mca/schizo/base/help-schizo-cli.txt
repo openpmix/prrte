@@ -707,3 +707,15 @@ Examples:
   <command> --dvm pid:file:prte_pid.txt --np 4 ./a.out
 
   <command> --dvm search --np 4 ./a.out
+#
+# NON-SUPPORTING PMIX
+#
+[non-supporting-pmix]
+The given command line directive is technically valid, but the underlying
+PMIx version being employed lacks the necessary attribute definitions to
+support it.
+
+  Directive:  %s
+  Option:     %s
+
+We are therefore unable to satisfy this request.
