@@ -1,6 +1,6 @@
 # -*- text -*-
 #
-# Copyright (c) 2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -31,6 +31,9 @@ Supported values include:
 
 -   TOPO=LIST displays the topology of each node in the comma-delimited list
     that is allocated to the job
+
+-   CPUS[=LIST] displays the comma-delimited ranges of available CPUs on
+    the provided comma-delimited list of nodes (defaults to all nodes)
 
 No qualifiers are defined for this directive.
 #

@@ -15,7 +15,7 @@
  * Copyright (c) 2016-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2017-2022 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -189,6 +189,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_BIND       "bind"
 #define PRTE_CLI_MAPDEV     "map-devel"
 #define PRTE_CLI_TOPO       "topo="
+#define PRTE_CLI_CPUS       "cpus="
 
 // Runtime directives
 #define PRTE_CLI_ERROR_NZ           "error-nonzero-status"          // optional arg
