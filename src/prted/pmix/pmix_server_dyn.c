@@ -401,6 +401,13 @@ static void interim(int sd, short args, void *cbdata)
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO,
                                PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
 
+#ifdef PMIX_DISPLAY_PROCESSORS
+            /***   DISPLAY PROCESSORS   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_PROCESSORS)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PROCESSORS,
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+#endif
+
         /***   PPR (PROCS-PER-RESOURCE)   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_PPR)) {
             if (PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {

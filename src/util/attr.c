@@ -3,7 +3,7 @@
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
@@ -73,7 +73,7 @@ int prte_set_attribute(pmix_list_t *attributes, prte_attribute_key_t key,
                        pmix_data_type_t type)
 {
     prte_attribute_t *kv;
-    bool *bl;
+    bool *bl, bltrue = true;
     int rc;
 
     PMIX_LIST_FOREACH(kv, attributes, prte_attribute_t)
@@ -83,7 +83,11 @@ int prte_set_attribute(pmix_list_t *attributes, prte_attribute_key_t key,
                 return PRTE_ERR_TYPE_MISMATCH;
             }
             if (PMIX_BOOL == type) {
-                bl = (bool*)data;
+                if (NULL == data) {
+                    bl = &bltrue;
+                } else {
+                    bl = (bool*)data;
+                }
                 if (false == *bl) {
                     pmix_list_remove_item(attributes, &kv->super);
                     PMIX_RELEASE(kv);
@@ -487,6 +491,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "AUTORESTART";
         case PRTE_JOB_OUTPUT_PROCTABLE:
             return "OUTPUT PROCTABLE";
+        case PRTE_JOB_DISPLAY_PROCESSORS:
+            return "DISPLAY PROCESSORS";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
