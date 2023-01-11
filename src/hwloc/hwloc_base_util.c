@@ -20,7 +20,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1192,8 +1192,10 @@ char *prte_hwloc_base_print_binding(prte_binding_policy_t binding)
     return ret;
 }
 
-static void build_map(hwloc_topology_t topo, hwloc_cpuset_t avail, bool use_hwthread_cpus,
-                      hwloc_bitmap_t coreset)
+void prte_hwloc_build_map(hwloc_topology_t topo,
+                          hwloc_cpuset_t avail,
+                          bool use_hwthread_cpus,
+                          hwloc_bitmap_t coreset)
 {
     unsigned k, obj_index, core_index;
     hwloc_obj_t pu, core;
@@ -1289,7 +1291,7 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
             hwloc_bitmap_list_snprintf(tmp, 2048, avail);
             snprintf(ans, 4096, "package[%d][hwt:%s]", n, tmp);
         } else {
-            build_map(topo, avail, use_hwthread_cpus | bits_as_cores, coreset);
+            prte_hwloc_build_map(topo, avail, use_hwthread_cpus | bits_as_cores, coreset);
             /* now print out the string */
             hwloc_bitmap_list_snprintf(tmp, 2048, coreset);
             snprintf(ans, 4096, "package[%d][core:%s]", n, tmp);

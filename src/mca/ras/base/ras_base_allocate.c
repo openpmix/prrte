@@ -15,7 +15,7 @@
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -100,8 +100,11 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     int i, istart;
     prte_node_t *alloc;
     char *flgs, *aliases;
+    bool xmlout;
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
+    xmlout = prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL);
+
+    if (xmlout) {
         pmix_asprintf(&tmp, "<allocation>\n");
     } else {
         pmix_asprintf(&tmp,
@@ -116,7 +119,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
         if (NULL == (alloc = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
             continue;
         }
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
+        if (xmlout) {
             /* need to create the output in XML format */
             pmix_asprintf(&tmp2,
                           "\t<host name=\"%s\" slots=\"%d\" max_slots=\"%d\" slots_inuse=\"%d\">\n",
@@ -150,7 +153,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
             tmp = tmp3;
         }
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
+    if (xmlout) {
         pmix_output(prte_clean_output, "%s</allocation>\n", tmp);
     } else {
         pmix_output(prte_clean_output,
@@ -158,6 +161,116 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     }
     free(tmp);
 }
+
+static void display_cpus(prte_topology_t *t,
+                         prte_job_t *jdata,
+                         char *node)
+{
+    char tmp[2048];
+    unsigned pkg, npkgs;
+    bool bits_as_cores = false, use_hwthread_cpus = prte_hwloc_default_use_hwthread_cpus;
+    unsigned npus, ncores;
+    hwloc_obj_t obj;
+    hwloc_cpuset_t avail = NULL;
+    hwloc_cpuset_t allowed;
+    hwloc_cpuset_t coreset = NULL;
+
+    npus = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
+    ncores = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
+    if (npus == ncores && !use_hwthread_cpus) {
+        /* the bits in this bitmap represent cores */
+        bits_as_cores = true;
+    }
+    use_hwthread_cpus = prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
+    if (!use_hwthread_cpus && !bits_as_cores) {
+        coreset = hwloc_bitmap_alloc();
+    }
+    avail = hwloc_bitmap_alloc();
+
+    pmix_output(prte_clean_output,
+                "\n======================   AVAILABLE PROCESSORS [node: %s]   ======================\n\n", node);
+    npkgs = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PACKAGE);
+    allowed = (hwloc_cpuset_t)hwloc_topology_get_allowed_cpuset(t->topo);
+    for (pkg = 0; pkg < npkgs; pkg++) {
+        obj = hwloc_get_obj_by_type(t->topo, HWLOC_OBJ_PACKAGE, pkg);
+        hwloc_bitmap_and(avail, obj->cpuset, allowed);
+        if (hwloc_bitmap_iszero(avail)) {
+            pmix_output(prte_clean_output, "PKG[%d]: NONE", pkg);
+            continue;
+        }
+        if (bits_as_cores) {
+            /* can just use the hwloc fn directly */
+            hwloc_bitmap_list_snprintf(tmp, 2048, avail);
+            pmix_output(prte_clean_output, "PKG[%d]: %s", pkg, tmp);
+        } else if (use_hwthread_cpus) {
+            /* can just use the hwloc fn directly */
+            hwloc_bitmap_list_snprintf(tmp, 2048, avail);
+            pmix_output(prte_clean_output, "PKG[%d]: %s", pkg, tmp);
+        } else {
+            prte_hwloc_build_map(t->topo, avail, use_hwthread_cpus | bits_as_cores, coreset);
+            /* now print out the string */
+            hwloc_bitmap_list_snprintf(tmp, 2048, coreset);
+            pmix_output(prte_clean_output, "PKG[%d]: %s", pkg, tmp);
+        }
+    }
+    hwloc_bitmap_free(avail);
+    if (NULL != coreset) {
+        hwloc_bitmap_free(coreset);
+    }
+    pmix_output(prte_clean_output,
+                "\n======================================================================\n");
+    return;
+}
+
+void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
+{
+    char **nodes = NULL;
+    int i, j, m;
+    prte_topology_t *t;
+    prte_node_t *nptr;
+    bool moveon;
+
+    if (NULL == nodelist) {
+        /* output the available cpus for all topologies */
+        for (i=0; i < prte_node_topologies->size; i++) {
+            t = (prte_topology_t*)pmix_pointer_array_get_item(prte_node_topologies, i);
+            if (NULL != t) {
+                display_cpus(t, jdata, "N/A");
+            }
+        }
+        return;
+     }
+
+    nodes = PMIX_ARGV_SPLIT_COMPAT(nodelist, ',');
+    for (j=0; NULL != nodes[j]; j++) {
+        moveon = false;
+        for (i=0; i < prte_node_pool->size && !moveon; i++) {
+            nptr = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, i);
+            if (NULL == nptr) {
+                continue;
+            }
+            if (0 == strcmp(nptr->name, nodes[j])) {
+                display_cpus(nptr->topology, jdata, nodes[j]);
+                moveon = true;
+                break;
+            }
+            if (NULL == nptr->aliases) {
+                continue;
+            }
+            /* no choice but an exhaustive search - fortunately, these lists are short! */
+            for (m = 0; NULL != nptr->aliases[m]; m++) {
+                if (0 == strcmp(nodes[j], nptr->aliases[m])) {
+                    /* this is the node! */
+                    display_cpus(nptr->topology, jdata, nodes[j]);
+                    moveon = true;
+                    break;
+                }
+            }
+        }
+    }
+    PMIX_ARGV_FREE_COMPAT(nodes);
+}
+
 
 /*
  * Function for selecting one component from all those that are
@@ -553,23 +666,40 @@ next_state:
     jdata->total_slots_alloc = prte_ras_base.total_slots_alloc;
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO, (void**)&hosts, PMIX_STRING)) {
-        hostlist = PMIX_ARGV_SPLIT_COMPAT(hosts, ',');
-        free(hosts);
-        for (j=0; NULL != hostlist[j]; j++) {
-            node = prte_node_match(NULL, hostlist[j]);
-            if (NULL == node) {
-                continue;
+        if (NULL != hosts) {
+            hostlist = PMIX_ARGV_SPLIT_COMPAT(hosts, ',');
+            free(hosts);
+            for (j=0; NULL != hostlist[j]; j++) {
+                node = prte_node_match(NULL, hostlist[j]);
+                if (NULL == node) {
+                    continue;
+                }
+                pmix_output(prte_clean_output,
+                            "=================================================================\n");
+                pmix_output(prte_clean_output, "TOPOLOGY FOR NODE %s", node->name);
+                prte_hwloc_print(&ptr, NULL, node->topology->topo);
+                pmix_output(prte_clean_output, "%s", ptr);
+                free(ptr);
+                pmix_output(prte_clean_output,
+                            "=================================================================\n");
             }
-            pmix_output(prte_clean_output,
-                        "=================================================================\n");
-            pmix_output(prte_clean_output, "TOPOLOGY FOR NODE %s", node->name);
-            prte_hwloc_print(&ptr, NULL, node->topology->topo);
-            pmix_output(prte_clean_output, "%s", ptr);
-            free(ptr);
-            pmix_output(prte_clean_output,
-                        "=================================================================\n");
+            PMIX_ARGV_FREE_COMPAT(hostlist);
+        } else {
+            for (j=0; j < prte_node_pool->size; j++) {
+                node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, j);
+                if (NULL == node) {
+                    continue;
+                }
+                pmix_output(prte_clean_output,
+                            "=================================================================\n");
+                pmix_output(prte_clean_output, "TOPOLOGY FOR NODE %s", node->name);
+                prte_hwloc_print(&ptr, NULL, node->topology->topo);
+                pmix_output(prte_clean_output, "%s", ptr);
+                free(ptr);
+                pmix_output(prte_clean_output,
+                            "=================================================================\n");
+            }
         }
-        PMIX_ARGV_FREE_COMPAT(hostlist);
     }
 
     /* set the job state to the next position */

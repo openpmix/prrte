@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      UT-Battelle, LLC. All rights reserved.
  *
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2022      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -319,6 +319,11 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         options.use_hwthreads = true;
+    }
+
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PROCESSORS, (void*)&tmp, PMIX_STRING)) {
+        prte_ras_base_display_cpus(jdata, tmp);
+        free(tmp);
     }
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,

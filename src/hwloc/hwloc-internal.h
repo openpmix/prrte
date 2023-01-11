@@ -7,7 +7,7 @@
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -378,6 +378,11 @@ PRTE_EXPORT int prte_hwloc_base_open(void);
 PRTE_EXPORT void prte_hwloc_base_close(void);
 PRTE_EXPORT int prte_hwloc_base_register(void);
 PRTE_EXPORT int prte_hwloc_print(char **output, char *prefix, hwloc_topology_t src);
+
+PRTE_EXPORT void prte_hwloc_build_map(hwloc_topology_t topo,
+                                      hwloc_cpuset_t avail,
+                                      bool use_hwthread_cpus,
+                                      hwloc_bitmap_t coreset);
 
 END_C_DECLS
 

@@ -3,7 +3,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -387,6 +387,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_BIND,
         PRTE_CLI_MAPDEV,
         PRTE_CLI_TOPO,
+        PRTE_CLI_CPUS,
         NULL
     };
 
@@ -578,22 +579,36 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
 
             } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TOPO)) {
                 ptr = strchr(targv[idx], '=');
-                if (NULL == ptr) {
-                    /* missing the value or value is invalid */
-                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
-                                   "display", "TOPO", targv[idx]);
-                    PMIX_ARGV_FREE_COMPAT(targv);
-                    return PRTE_ERR_FATAL;
-                }
-                ++ptr;
-                if ('\0' == *ptr) {
-                    /* missing the value or value is invalid */
-                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
-                                   "display", "TOPO", targv[idx]);
-                    PMIX_ARGV_FREE_COMPAT(targv);
-                    return PRTE_ERR_FATAL;
+                ptr = strchr(targv[idx], '=');
+                if (NULL != ptr) {
+                    ++ptr;
+                    if ('\0' == *ptr) {
+                        /* missing the value or value is invalid */
+                        pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                       "display", "PROCESSORS", targv[idx]);
+                        PMIX_ARGV_FREE_COMPAT(targv);
+                        return PRTE_ERR_FATAL;
+                    }
                 }
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_TOPOLOGY, ptr, PMIX_STRING);
+                if (PMIX_SUCCESS != ret) {
+                    PMIX_ERROR_LOG(ret);
+                    PMIX_ARGV_FREE_COMPAT(targv);
+                    return ret;
+                }
+            } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_CPUS)) {
+                ptr = strchr(targv[idx], '=');
+                if (NULL != ptr) {
+                    ++ptr;
+                    if ('\0' == *ptr) {
+                        /* missing the value or value is invalid */
+                        pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                       "display", "PROCESSORS", targv[idx]);
+                        PMIX_ARGV_FREE_COMPAT(targv);
+                        return PRTE_ERR_FATAL;
+                    }
+                }
+                PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_PROCESSORS, ptr, PMIX_STRING);
                 if (PMIX_SUCCESS != ret) {
                     PMIX_ERROR_LOG(ret);
                     PMIX_ARGV_FREE_COMPAT(targv);
