@@ -391,6 +391,12 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         NULL
     };
 
+    char *displayquals[] = {
+        PRTE_CLI_PARSEABLE,
+        PRTE_CLI_PARSABLE,
+        NULL
+    };
+
     char *rtos[] = {
         PRTE_CLI_ERROR_NZ,
         PRTE_CLI_NOLAUNCH,
@@ -495,7 +501,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     if (NULL != opt) {
         vtmp = PMIX_ARGV_SPLIT_COMPAT(opt->values[0], ',');
         for (n=0; NULL != vtmp[n]; n++) {
-            if (!prte_schizo_base_check_directives(PRTE_CLI_DISPLAY, displays, NULL, vtmp[n])) {
+            if (!prte_schizo_base_check_directives(PRTE_CLI_DISPLAY, displays, displayquals, vtmp[n])) {
                 return PRTE_ERR_SILENT;
             }
         }
@@ -539,11 +545,39 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
 {
     int n, idx;
     pmix_status_t ret;
-    char **targv, *ptr;
+    char **targv, *ptr, *cptr;
 
     for (n=0; NULL != opt->values[n]; n++) {
         targv = PMIX_ARGV_SPLIT_COMPAT(opt->values[n], ',');
-        for (idx = 0; idx < PMIX_ARGV_COUNT_COMPAT(targv); idx++) {
+        for (idx = 0; NULL != targv[idx]; idx++) {
+            /* check for qualifiers */
+            cptr = strchr(targv[idx], ':');
+            if (NULL != cptr) {
+                *cptr = '\0';
+                ++cptr;
+                /* we only support one qualifier at present */
+                if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PARSEABLE) ||
+                    PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PARSABLE)) {
+#ifdef PMIX_DISPLAY_PARSEABLE_OUTPUT
+                    PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
+                    if (PMIX_SUCCESS != ret) {
+                        PMIX_ERROR_LOG(ret);
+                        PMIX_ARGV_FREE_COMPAT(targv);
+                        return ret;
+                    }
+#else
+                    pmix_show_help("help-prte-rmaps-base.txt", "non-supporting-pmix", true,
+                                   "display", cptr);
+                    PMIX_ARGV_FREE_COMPAT(targv);
+                    return PRTE_ERR_FATAL;
+#endif
+                } else {
+                    pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-qualifier", true,
+                                   "display", cptr, "PARSEABLE,PARSABLE");
+                    PMIX_ARGV_FREE_COMPAT(targv);
+                    return PRTE_ERR_FATAL;
+                }
+            }
 
             if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_ALLOC)) {
                 PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_DISPLAY_ALLOCATION, NULL, PMIX_BOOL);
@@ -578,7 +612,6 @@ int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo)
                 }
 
             } else if (PMIX_CHECK_CLI_OPTION(targv[idx], PRTE_CLI_TOPO)) {
-                ptr = strchr(targv[idx], '=');
                 ptr = strchr(targv[idx], '=');
                 if (NULL != ptr) {
                     ++ptr;
