@@ -408,6 +408,14 @@ static void interim(int sd, short args, void *cbdata)
                                PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
 #endif
 
+#ifdef PMIX_DISPLAY_PARSEABLE_OUTPUT
+            /***   DISPLAY PARSEABLE OUTPUT   ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_PARSEABLE_OUTPUT)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
+                               PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
+#endif
+
         /***   PPR (PROCS-PER-RESOURCE)   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_PPR)) {
             if (PRTE_MAPPING_POLICY_IS_SET(jdata->map->mapping)) {
