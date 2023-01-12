@@ -493,6 +493,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "OUTPUT PROCTABLE";
         case PRTE_JOB_DISPLAY_PROCESSORS:
             return "DISPLAY PROCESSORS";
+        case PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT:
+            return "DISPLAY PARSEABLE OUTPUT";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

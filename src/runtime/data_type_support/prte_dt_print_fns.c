@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -123,8 +123,8 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
     /* set default result */
     *output = NULL;
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
-        /* need to create the output in XML format */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
+        /* need to create the output in parsable format */
         pmix_asprintf(&tmp, "<host name=\"%s\" slots=\"%d\" max_slots=\"%d\">\n",
                       (NULL == src->name) ? "UNKNOWN" : src->name, (int) src->slots,
                       (int) src->slots_max);
@@ -243,8 +243,8 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
         use_hwthread_cpus = false;
     }
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
-        /* need to create the output in XML format */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
+        /* need to create the output in parsable format */
         if (0 == src->pid) {
             pmix_asprintf(output, "%s<process rank=\"%s\" status=\"%s\"/>\n", pfx2,
                           PRTE_VPID_PRINT(src->name.rank), prte_proc_state_to_str(src->state));
@@ -372,8 +372,8 @@ void prte_map_print(char **output, prte_job_t *jdata)
     /* set default result */
     *output = NULL;
 
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL)) {
-        /* need to create the output in XML format */
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
+        /* need to create the output in parsable format */
         pmix_asprintf(&tmp, "<map>\n");
         /* loop through nodes */
         for (i = 0; i < src->nodes->size; i++) {
