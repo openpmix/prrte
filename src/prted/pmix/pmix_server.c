@@ -370,7 +370,7 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
 static void _mdxresp(int sd, short args, void *cbdata);
 static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata);
 
-static char *generate_dist = NULL;
+static char *generate_dist = "fabric,gpu,network";
 void pmix_server_register_params(void)
 {
     char **tmp;
