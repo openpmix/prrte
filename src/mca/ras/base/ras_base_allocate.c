@@ -50,8 +50,9 @@
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
-#include "src/util/proc_info.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/proc_info.h"
+#include "src/util/prte_cmd_line.h"
 
 #include "src/mca/ras/base/ras_private.h"
 
@@ -100,11 +101,11 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     int i, istart;
     prte_node_t *alloc;
     char *flgs, *aliases;
-    bool xmlout;
+    bool parsable;
 
-    xmlout = prte_get_attribute(&jdata->attributes, PRTE_JOB_XML_OUTPUT, NULL, PMIX_BOOL);
+    parsable = prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
 
-    if (xmlout) {
+    if (parsable) {
         pmix_asprintf(&tmp, "<allocation>\n");
     } else {
         pmix_asprintf(&tmp,
@@ -119,7 +120,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
         if (NULL == (alloc = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
             continue;
         }
-        if (xmlout) {
+        if (parsable) {
             /* need to create the output in XML format */
             pmix_asprintf(&tmp2,
                           "\t<host name=\"%s\" slots=\"%d\" max_slots=\"%d\" slots_inuse=\"%d\">\n",
@@ -153,7 +154,7 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
             tmp = tmp3;
         }
     }
-    if (xmlout) {
+    if (parsable) {
         pmix_output(prte_clean_output, "%s</allocation>\n", tmp);
     } else {
         pmix_output(prte_clean_output,
@@ -174,6 +175,9 @@ static void display_cpus(prte_topology_t *t,
     hwloc_cpuset_t avail = NULL;
     hwloc_cpuset_t allowed;
     hwloc_cpuset_t coreset = NULL;
+    bool parsable;
+
+    parsable = prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
 
     npus = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
     ncores = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
@@ -187,44 +191,69 @@ static void display_cpus(prte_topology_t *t,
     }
     avail = hwloc_bitmap_alloc();
 
-    pmix_output(prte_clean_output,
-                "\n======================   AVAILABLE PROCESSORS [node: %s]   ======================\n\n", node);
+    if (parsable) {
+        pmix_output(prte_clean_output, "<processors node=%s>", node);
+    } else {
+        pmix_output(prte_clean_output,
+                    "\n======================   AVAILABLE PROCESSORS [node: %s]   ======================\n\n", node);
+    }
     npkgs = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PACKAGE);
     allowed = (hwloc_cpuset_t)hwloc_topology_get_allowed_cpuset(t->topo);
     for (pkg = 0; pkg < npkgs; pkg++) {
         obj = hwloc_get_obj_by_type(t->topo, HWLOC_OBJ_PACKAGE, pkg);
         hwloc_bitmap_and(avail, obj->cpuset, allowed);
         if (hwloc_bitmap_iszero(avail)) {
-            pmix_output(prte_clean_output, "PKG[%d]: NONE", pkg);
+            if (parsable) {
+                pmix_output(prte_clean_output, "    <pkg=%d cpus=%s>", pkg, "NONE");
+            } else {
+                pmix_output(prte_clean_output, "PKG[%d]: NONE", pkg);
+            }
             continue;
         }
         if (bits_as_cores) {
             /* can just use the hwloc fn directly */
             hwloc_bitmap_list_snprintf(tmp, 2048, avail);
-            pmix_output(prte_clean_output, "PKG[%d]: %s", pkg, tmp);
+             if (parsable) {
+                pmix_output(prte_clean_output, "    <pkg=%d cpus=%s>", pkg, tmp);
+            } else {
+                pmix_output(prte_clean_output, "PKG[%d]: %s", pkg, tmp);
+            }
         } else if (use_hwthread_cpus) {
             /* can just use the hwloc fn directly */
             hwloc_bitmap_list_snprintf(tmp, 2048, avail);
-            pmix_output(prte_clean_output, "PKG[%d]: %s", pkg, tmp);
+             if (parsable) {
+                pmix_output(prte_clean_output, "    <pkg=%d cpus=%s>", pkg, tmp);
+            } else {
+                pmix_output(prte_clean_output, "PKG[%d]: %s", pkg, tmp);
+            }
         } else {
             prte_hwloc_build_map(t->topo, avail, use_hwthread_cpus | bits_as_cores, coreset);
             /* now print out the string */
             hwloc_bitmap_list_snprintf(tmp, 2048, coreset);
-            pmix_output(prte_clean_output, "PKG[%d]: %s", pkg, tmp);
+             if (parsable) {
+                pmix_output(prte_clean_output, "    <pkg=%d cpus=%s>", pkg, tmp);
+            } else {
+                pmix_output(prte_clean_output, "PKG[%d]: %s", pkg, tmp);
+            }
         }
     }
     hwloc_bitmap_free(avail);
     if (NULL != coreset) {
         hwloc_bitmap_free(coreset);
     }
-    pmix_output(prte_clean_output,
-                "\n======================================================================\n");
+    if (parsable) {
+        pmix_output(prte_clean_output, "</processors>\n");
+    } else {
+        pmix_output(prte_clean_output,
+                    "\n======================================================================\n");
+    }
     return;
 }
 
 void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
 {
     char **nodes = NULL;
+    char *ptr;
     int i, j, m;
     prte_topology_t *t;
     prte_node_t *nptr;
@@ -239,9 +268,9 @@ void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
             }
         }
         return;
-     }
+    }
 
-    nodes = PMIX_ARGV_SPLIT_COMPAT(nodelist, ',');
+    nodes = PMIX_ARGV_SPLIT_COMPAT(nodelist, ';');
     for (j=0; NULL != nodes[j]; j++) {
         moveon = false;
         for (i=0; i < prte_node_pool->size && !moveon; i++) {
@@ -667,7 +696,7 @@ next_state:
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_TOPO, (void**)&hosts, PMIX_STRING)) {
         if (NULL != hosts) {
-            hostlist = PMIX_ARGV_SPLIT_COMPAT(hosts, ',');
+            hostlist = PMIX_ARGV_SPLIT_COMPAT(hosts, ';');
             free(hosts);
             for (j=0; NULL != hostlist[j]; j++) {
                 node = prte_node_match(NULL, hostlist[j]);

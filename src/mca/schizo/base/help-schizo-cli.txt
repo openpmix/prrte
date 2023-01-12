@@ -29,13 +29,20 @@ Supported values include:
     processes in this job that includes local and node ranks, assigned
     bindings, and other data
 
--   TOPO=LIST displays the topology of each node in the comma-delimited list
+-   TOPO=LIST displays the topology of each node in the semicolon-delimited list
     that is allocated to the job
 
--   CPUS[=LIST] displays the comma-delimited ranges of available CPUs on
-    the provided comma-delimited list of nodes (defaults to all nodes)
+-   CPUS[=LIST] displays the available CPUs on the provided semicolon-delimited
+    list of nodes (defaults to all nodes)
 
-No qualifiers are defined for this directive.
+The display command line directive can include qualifiers by adding a colon (:)
+and any combination of one or more of the following (delimited by colons):
+
+-   PARSEABLE directs that the output be provided in a format that is easily
+    parsed by machines. Note that PARSABLE is also accepted as a typical
+    spelling for the qualifier.
+
+Provided qualifiers will apply to ALL of the display directives.
 #
 #  OUTPUT
 #
