@@ -435,10 +435,31 @@ ranking:
             PRTE_HWLOC_MAKE_OBJ_CACHE(1, options.maptype, options.cmaplvl);
             break;
         case PRTE_MAPPING_BYCORE:
+            if (1 < options.cpus_per_rank &&
+                !options.use_hwthreads) {
+                /* we cannot support this operation as there is only one
+                 * cpu in a core */
+                pmix_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
+                               options.cpus_per_rank, 1,
+                               prte_rmaps_base_print_mapping(options.map));
+                jdata->exit_code = PRTE_ERR_SILENT;
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
+            }
             options.mapdepth = PRTE_BIND_TO_CORE;
             options.maptype = HWLOC_OBJ_CORE;
             break;
         case PRTE_MAPPING_BYHWTHREAD:
+            if (1 < options.cpus_per_rank) {
+                /* we cannot support this operation as there is only one
+                 * cpu in a core */
+                pmix_show_help("help-prte-rmaps-base.txt", "mapping-too-low", true,
+                               options.cpus_per_rank, 1,
+                               prte_rmaps_base_print_mapping(options.map));
+                jdata->exit_code = PRTE_ERR_SILENT;
+                PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                goto cleanup;
+            }
             options.mapdepth = PRTE_BIND_TO_HWTHREAD;
             options.maptype = HWLOC_OBJ_PU;
             break;
