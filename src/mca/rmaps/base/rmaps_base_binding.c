@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Inria.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -267,8 +267,10 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
 {
     hwloc_obj_type_t type;
     hwloc_cpuset_t available, result, tgtcpus;
-    hwloc_obj_t target, tmp_obj;
+    hwloc_obj_t target, tmp_obj, pkg;
     uint16_t n;
+    unsigned npkgs, ncpus;
+    bool moveon = false;
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     /* initialize */
@@ -290,7 +292,36 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
     } else {
         type = HWLOC_OBJ_CORE;
     }
-
+    if (NULL == obj) {
+        /* we do not want the cpu envelope to split across
+         * packages, so we need to ensure we set the
+         * available processors to cover whichever package
+         * has enough CPUs to fill the request */
+        npkgs = hwloc_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE);
+        for (n=0; n < npkgs; n++) {
+            pkg = hwloc_get_obj_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, n);
+#if HWLOC_API_VERSION < 0x20000
+            hwloc_bitmap_and(result, available, pkg->allowed_cpuset);
+#else
+            hwloc_bitmap_and(result, available, pkg->cpuset);
+#endif
+            ncpus = hwloc_get_nbobjs_inside_cpuset_by_type(node->topology->topo, result, type);
+            if (ncpus > options->cpus_per_rank) {
+                /* this is a good spot */
+                hwloc_bitmap_copy(available, result);
+                hwloc_bitmap_zero(result);
+                moveon = true;
+                break;
+            }
+        }
+        if (!moveon) {
+            /* if we get here, then there are no packages that can completely
+             * cover the request - so return an error */
+            hwloc_bitmap_free(available);
+            hwloc_bitmap_free(result);
+            return PRTE_ERR_TAKE_NEXT_OPTION;
+        }
+    }
     /* we bind-to-cpu for the number of cpus that was specified,
      * restricting ourselves to the available cpus in the object */
     for (n=0; n < options->cpus_per_rank; n++) {
@@ -308,6 +339,8 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
         }
     }
     hwloc_bitmap_list_asprintf(&proc->cpuset, result);
+    hwloc_bitmap_free(available);
+    hwloc_bitmap_free(result);
     return PRTE_SUCCESS;
 }
 
@@ -366,7 +399,7 @@ int prte_rmaps_base_bind_proc(prte_job_t *jdata,
 
     if (1 < options->cpus_per_rank) {
         rc = bind_multiple(jdata, proc, node, obj, options);
-        if (PRTE_SUCCESS != rc) {
+        if (PRTE_SUCCESS != rc && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
             PRTE_ERROR_LOG(rc);
         }
         return rc;
