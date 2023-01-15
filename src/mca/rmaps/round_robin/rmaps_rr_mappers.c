@@ -143,8 +143,8 @@ pass:
         for (i = 0; i < options->nprocs && nprocs_mapped < app->num_procs; i++) {
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
-                goto errout;
+                /* move on to the next node */
+                break;
             }
             nprocs_mapped++;
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
@@ -304,8 +304,8 @@ pass:
         for (j=0; j < options->nprocs && nprocs_mapped < app->num_procs; j++) {
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
-                goto errout;
+                /* move to next node */
+                break;
             }
             nprocs_mapped++;
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);

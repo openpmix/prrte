@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2021 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -592,6 +592,22 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
     // point the proc at its node
     proc->node = node;
     PMIX_RETAIN(node); /* maintain accounting on object */
+
+    /* point the proc to its locale */
+    proc->obj = obj;
+
+    /* bind the process so we know which cpus have been taken */
+    rc = prte_rmaps_base_bind_proc(jdata, proc, node, obj, options);
+    if (PRTE_SUCCESS != rc) {
+        PMIX_RELEASE(proc); // releases node to maintain accounting
+        return NULL;
+    }
+    if (0 > (rc = pmix_pointer_array_add(node->procs, (void *) proc))) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_RELEASE(proc); // releases node to maintain accounting
+        return NULL;
+    }
+
     /* if this is a tool app, then it doesn't count against
      * available slots - otherwise, it does */
     if (PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL)) {
@@ -601,22 +617,6 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
         proc->node_rank = node->num_procs;
         node->num_procs++;
         ++node->slots_inuse;
-    }
-    if (0 > (rc = pmix_pointer_array_add(node->procs, (void *) proc))) {
-        PRTE_ERROR_LOG(rc);
-        PMIX_RELEASE(proc); // releases node to maintain accounting
-        return NULL;
-    }
-
-    /* point the proc to its locale */
-    proc->obj = obj;
-
-    /* bind the process so we know which cpus have been taken */
-    rc = prte_rmaps_base_bind_proc(jdata, proc, node, obj, options);
-    if (PRTE_SUCCESS != rc) {
-        pmix_pointer_array_set_item(node->procs, idx, NULL);
-        PMIX_RELEASE(proc); // releases node to maintain accounting
-        return NULL;
     }
 
     /* retain the proc struct so that we correctly track its release */
