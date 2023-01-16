@@ -18,7 +18,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2022 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -86,7 +86,8 @@ prte_schizo_base_module_t prte_schizo_ompi_module = {
     .allow_run_as_root = allow_run_as_root,
     .set_default_ranking = set_default_ranking,
     .job_info = job_info,
-    .set_default_rto = set_default_rto
+    .set_default_rto = set_default_rto,
+    .check_sanity = prte_schizo_base_sanity
 };
 
 static struct option ompioptions[] = {

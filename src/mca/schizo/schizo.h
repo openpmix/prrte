@@ -5,7 +5,7 @@
  *                         reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -114,6 +114,9 @@ typedef void (*prte_schizo_base_module_finalize_fn_t)(void);
 typedef void (*prte_schizo_base_module_job_info_fn_t)(pmix_cli_result_t *results,
                                                       void *jobinfo);
 
+/* give the component a chance to validate directives and their values */
+typedef int (*prte_schizo_base_module_check_sanity_fn_t)(pmix_cli_result_t *cmd_line);
+
 /*
  * schizo module version 1.3.0
  */
@@ -131,6 +134,7 @@ typedef struct {
     prte_schizo_base_module_setup_app_fn_t              setup_app;
     prte_schizo_base_module_setup_fork_fn_t             setup_fork;
     prte_schizo_base_module_job_info_fn_t               job_info;
+    prte_schizo_base_module_check_sanity_fn_t           check_sanity;
     prte_schizo_base_module_finalize_fn_t               finalize;
 } prte_schizo_base_module_t;
 
