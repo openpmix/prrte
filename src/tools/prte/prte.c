@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
@@ -420,9 +420,9 @@ int main(int argc, char *argv[])
 
     /* decide if we are to use a persistent DVM, or act alone */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DVM);
-    if (NULL != opt && proxyrun) {
+    if (proxyrun && (NULL != opt || NULL != getenv("PRTEPROXY_USE_DVM"))) {
         /* use a persistent DVM - act like prun */
-        if (NULL != opt->values && NULL != opt->values[0]) {
+        if (NULL != opt && NULL != opt->values && NULL != opt->values[0]) {
             /* they provided a directive on how to find the DVM */
             if (0 == strncasecmp(opt->values[0], "file:", 5)) {
                 /* change the key to match what prun expects */

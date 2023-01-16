@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC.
  *                         All rights reserved.
  * $COPYRIGHT$
@@ -108,7 +108,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
         return rc;
     }
     // sanity check the results
-    rc = prte_schizo_base_sanity(&results);
+    rc = schizo->check_sanity(&results);
     if (PRTE_SUCCESS != rc) {
         // sanity checker prints the reason
         PMIX_DESTRUCT(&results);

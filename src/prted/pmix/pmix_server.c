@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -350,6 +350,7 @@ static prte_regattr_input_t prte_attributes[] = {
                          "PMIX_ALLOC_QUEUE",
                          "PMIX_ALLOC_PREEMPTIBLE",
                          NULL}},
+#if PMIX_NUMERIC_VERSION >= 0x00050000
     {.function = "PMIx_Session_control",
      .attrs = (char *[]){"PMIX_SESSION_CTRL_ID",
                          "PMIX_SESSION_APP",
@@ -361,6 +362,7 @@ static prte_regattr_input_t prte_attributes[] = {
                          "PMIX_SESSION_SIGNAL",
                          "PMIX_SESSION_COMPLETE",
                          NULL}},
+#endif
     {.function = ""},
 };
 
