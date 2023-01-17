@@ -72,6 +72,7 @@ vc70.pdb
 .hgignore_local
 stamp-h?
 AUTHORS
+docs-venv/
 
 ar-lib
 ylwrap
@@ -101,6 +102,8 @@ config/mca_m4_config_include.m4
 config/ext_no_configure_components.m4
 config/ext_m4_config_include.m4
 config/mca_library_paths.txt
+
+docs/configuration.rst
 
 include/prte_version.h
 contrib/docker/tmp
@@ -149,6 +152,8 @@ src/include/prte_config.h.in
 src/include/version.h
 src/include/frameworks.h
 src/include/prte_config.h
+
+src/etc/prte-configurator.html
 
 src/mca/rmaps/rank_file/rmaps_rank_file_lex.c
 src/mca/rmaps/rank_file/rankfile_lex.c

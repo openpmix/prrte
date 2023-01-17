@@ -20,6 +20,7 @@ Table of contents
    release-notes
    getting-help
    install
+   configuration
    resilience
    developers/index
    contributing

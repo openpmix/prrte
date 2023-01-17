@@ -25,7 +25,7 @@
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
 # Copyright (c) 2018-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -991,6 +991,8 @@ AC_CONFIG_FILES([
     include/Makefile
     include/prte_version.h
     docs/Makefile
+    docs/configuration.rst
+    src/etc/prte-configurator.html
 ])
 
 PRTE_CONFIG_FILES
