@@ -21,4 +21,4 @@ Developers who clone the PRRTE Git repository will not have the
 HTML documentation and man pages by default; it must be built.
 Instructions for how to build the PRRTE documentation can be found
 here:
-https://docs.prrte.orf/en/master/developers/prerequisites.html#sphinx.
+https://docs.prrte.org/en/master/developers/prerequisites.html#sphinx.
