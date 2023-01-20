@@ -153,8 +153,6 @@ src/include/version.h
 src/include/frameworks.h
 src/include/prte_config.h
 
-src/etc/prte-configurator.html
-
 src/mca/rmaps/rank_file/rmaps_rank_file_lex.c
 src/mca/rmaps/rank_file/rankfile_lex.c
 

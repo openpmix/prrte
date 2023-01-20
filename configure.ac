@@ -992,7 +992,6 @@ AC_CONFIG_FILES([
     include/prte_version.h
     docs/Makefile
     docs/configuration.rst
-    src/etc/prte-configurator.html
 ])
 
 PRTE_CONFIG_FILES

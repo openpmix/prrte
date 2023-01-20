@@ -1,3 +1,6 @@
+{% extends "layout.html" %}
+{% set title = 'PRRTE DVM Configuration Tool' %}
+{% block body %}
 <!--
 Copyright (C) 2023      Nanook Consulting. All rights reserved
 
@@ -12,10 +15,6 @@ FOR A PARTICULAR PURPOSE. See the full license statement at
 <https://docs.prrte.org/en/latest/license.html> for details.
 
 -->
-<!DOCTYPE html>
-<html lang="en-US">
-<head>
-<title>PRRTE DVM Configuration Tool</title>
 <SCRIPT type="text/javascript">
 <!--
 function get_field(name,form)
@@ -124,10 +123,8 @@ function displayfile()
 -->
 </SCRIPT>
 <!-- <div style='visibility:hidden;text-align:left;background:#ccc;border:1px solid black;position: absolute;left:100;z-index:1;padding:5;' id='out_box'></div> -->
-</head>
-<body>
 <form name=config>
-<H1>PRRTE Version @PRTE_MAJOR_VERSION@.@PRTE_MINOR_VERSION@ DVM Configuration Tool</H1>
+<H1>PRRTE Version v{{ release }} DVM Configuration Tool</H1>
 <P>This configuration tool is intended to help system administrators create
 a PRRTE configuration file that sets important configuration parameters.</P>
 
@@ -160,7 +157,7 @@ must be stored as <I>/prrte/etc/prte.conf</I> so that all prted daemons can find
 </P>
 
 <H2>Supported Options</H2>
-The following options are supported by PRRTE v@PRTE_MAJOR_VERSION@.@PRTE_MINOR_VERSION@.
+The following options are supported by PRRTE v{{ release }}.
 
 <H3>Bootstrap Options</H3>
 
@@ -191,7 +188,7 @@ on the remaining system nodes.
 
 <b>PRTEDPort</b>: <input type="text" name="prted_port" value="7818">
 <BR>
-`The TCP port upon which each
+The TCP port upon which each
 <I>prted</I> daemon will be listening for connections from its peer daemons
 on the other system nodes.
 <BR>
@@ -287,9 +284,4 @@ to this field. The log filename is formatted as <I>prted-<hostname>-log</I>.
 <input type=button value="Submit" onClick="javascript:displayfile()">
 <input type=reset value="Reset Form">
 </form>
-<hr>
-<p>
-<a href="disclaimer.html" target="_blank" class="privacy">Legal Notices</a><br>
-Last modified 17 June 2020</p>
-</body>
-</html>
+{% endblock %}
