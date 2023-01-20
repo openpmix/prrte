@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2008-2023 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
@@ -19,7 +19,7 @@
 # $HEADER$
 #
 
-prte_config_files = prte-configurator.html prte.conf
+prte_config_files = prte.conf
 prte_file_from_platform = @PRTE_PARAM_FROM_PLATFORM@
 prte_mca_param_file = @PRTE_DEFAULT_MCA_PARAM_CONF@
 
@@ -52,14 +52,6 @@ install-data-local:
         echo "******************************* WARNING ************************************"; \
     else \
         $(INSTALL_DATA) $(srcdir)/prte-default-hostfile $(DESTDIR)$(sysconfdir)/; \
-    fi; \
-	if test -f $(DESTDIR)$(sysconfdir)/prte-configurator.html; then \
-        echo "******************************* WARNING ************************************"; \
-        echo "*** Not installing new prte-configurator.html over existing file in:"; \
-        echo "***   $(DESTDIR)$(sysconfdir)/$$file"; \
-        echo "******************************* WARNING ************************************"; \
-    else \
-        $(INSTALL_DATA) $(srcdir)/prte-configurator.html $(DESTDIR)$(sysconfdir)/; \
     fi; \
 	if test -f $(DESTDIR)$(sysconfdir)/prte.conf; then \
         echo "******************************* WARNING ************************************"; \
