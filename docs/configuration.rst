@@ -3,10 +3,10 @@ PRRTE DVM Configuration
 
 The PMIx Reference RunTime Environment (PRRTE) can be instantiated
 as a Distributed Virtual Machine (DVM) in two ways. First, the
-`prte` command can be executed at a shell prompt. This will discover
+``prte`` command can be executed at a shell prompt. This will discover
 the available resources (either from hostfile or as allocated by a
-resource manager) and start a PRRTE shepherd daemon (`prted`) on each
-of the indicated nodes.
+resource manager) and start a PRRTE shepherd daemon (:ref:`prted(1)
+<man1-prted>`) on each of the indicated nodes.
 
 The other method, however, is to bootstrap the DVM at time of cluster
 startup. Bootstrapping PRRTE allows the DVM to serve as the system-level
@@ -24,8 +24,8 @@ system-level prolog and epilog scripts for each session, and other
 PRRTE features.
 
 The configuration file can be manually created or can be created using
-the PRRTE configuration tool ``<install-location>/etc/prte-configurator.html``
-running in the browser of your choice. Manual creation can best be done
+the :doc:`PRRTE configuration tool </configurator>`
+Manual creation can best be done
 by editing the example configuration file (``<source-location>/src/etc/prte.conf``).
 This file contains all the supported configuration options, with all
 entries commented out. Simply uncomment the options of interest and
@@ -35,18 +35,18 @@ final ``<install-location>/etc`` when ``make install`` is performed.
 The configuration tool also contains all the supported options in an
 easy-to-use form. Once you have filled out the desired entries, the
 "submit" button will show the resulting configuration file on the
-browser window - a simple "copy/paste" operation into your target
+browser window |mdash| a simple "copy/paste" operation into your target
 configuration file will yield the final result.
 
 Configuration Options
 ---------------------
 
-The following options are supported by PRRTE v@PRTE_MAJOR_VERSION@.@PRTE_MINOR_VERSION@.
+The following options are supported by PRRTE |prte_ver|.
 While we make every effort to maintain compatibility with prior versions,
 we recommend that you check options when installing new versions to
 see what may have changed and/or been added. We also recommend that
-you use the prte-configurator.html for the version you are using to
-ensure that it is fully compatible.
+you use the :doc:`PRRTE DVM configurator </configurator>` for the
+version you are using to ensure that it is fully compatible.
 
 Bootstrap Options
 ^^^^^^^^^^^^^^^^^
@@ -122,4 +122,3 @@ be written. If a relative path is provided,
 then the directory will be created under the ``DVMTempDir`` location. The
 path defaults to the specified SessionTmpDir in the absence of any input
 to this field. The log filename is formatted as ``prted-<hostname>-log<``.
-
