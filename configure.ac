@@ -991,7 +991,6 @@ AC_CONFIG_FILES([
     include/Makefile
     include/prte_version.h
     docs/Makefile
-    docs/configuration.rst
 ])
 
 PRTE_CONFIG_FILES
