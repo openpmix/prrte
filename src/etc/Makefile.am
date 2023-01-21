@@ -25,6 +25,10 @@ prte_mca_param_file = @PRTE_DEFAULT_MCA_PARAM_CONF@
 
 EXTRA_DIST = $(prte_config_files) prte-mca-params.conf prte-default-hostfile
 
+# Note that prte-mca-params.conf is "special" -- we do not list it
+# here.
+prte_install_hook_files = $(prte_config_files) prte-default-hostfile
+
 # Steal a little trickery from a generated Makefile to only install
 # files if they do not already exist at the target.  Be sure to read
 # thread starting here
@@ -32,35 +36,31 @@ EXTRA_DIST = $(prte_config_files) prte-mca-params.conf prte-default-hostfile
 # details why the mkdir is in install-data-local.
 
 install-data-local:
-	$(MKDIR_P) $(DESTDIR)$(sysconfdir); \
-    if test "$(prte_file_from_platform)" = "yes"; then \
+	@ $(MKDIR_P) $(DESTDIR)$(sysconfdir); \
+	if test "$(prte_file_from_platform)" = "yes"; then \
 	    $(INSTALL_DATA) $(prte_mca_param_file) $(DESTDIR)$(sysconfdir)/prte-mca-params.conf; \
 	else \
-		if test -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf; then \
-	        echo "******************************* WARNING ************************************"; \
-	        echo "*** Not installing new prte-mca-params.conf over existing file in:"; \
-	        echo "***   $(DESTDIR)$(sysconfdir)/$$file"; \
-	        echo "******************************* WARNING ************************************"; \
+	    if test -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf; then \
+		echo "******************************* WARNING ************************************"; \
+		echo "*** Not installing new prte-mca-params.conf over existing file in:"; \
+		echo "***   $(DESTDIR)$(sysconfdir)/$$file"; \
+		echo "******************************* WARNING ************************************"; \
 	    else \
-	        $(INSTALL_DATA) $(srcdir)/prte-mca-params.conf $(DESTDIR)$(sysconfdir)/; \
+		echo installing prte-mca-params.conf to $(DESTDIR)$(sysconfdir)/; \
+		$(INSTALL_DATA) $(srcdir)/prte-mca-params.conf $(DESTDIR)$(sysconfdir)/; \
 	    fi; \
-	fi; \
-	if test -f $(DESTDIR)$(sysconfdir)/prte-default-hostfile; then \
-        echo "******************************* WARNING ************************************"; \
-        echo "*** Not installing new prte-default-hostfile over existing file in:"; \
-        echo "***   $(DESTDIR)$(sysconfdir)/$$file"; \
-        echo "******************************* WARNING ************************************"; \
-    else \
-        $(INSTALL_DATA) $(srcdir)/prte-default-hostfile $(DESTDIR)$(sysconfdir)/; \
-    fi; \
-	if test -f $(DESTDIR)$(sysconfdir)/prte.conf; then \
-        echo "******************************* WARNING ************************************"; \
-        echo "*** Not installing new prte.conf over existing file in:"; \
-        echo "***   $(DESTDIR)$(sysconfdir)/$$file"; \
-        echo "******************************* WARNING ************************************"; \
-    else \
-        $(INSTALL_DATA) $(srcdir)/prte.conf $(DESTDIR)$(sysconfdir)/; \
-    fi;
+	fi
+	@ for file in $(prte_install_hook_files); do \
+	    if test -f $(DESTDIR)$(sysconfdir)/$$file; then \
+		echo "******************************* WARNING ************************************"; \
+		echo "*** Not installing new $$file over existing file in:"; \
+		echo "***   $(DESTDIR)$(sysconfdir)/$$file"; \
+		echo "******************************* WARNING ************************************"; \
+	    else \
+		echo installing $$file to $(DESTDIR)$(sysconfdir)/; \
+		$(INSTALL_DATA) $(srcdir)/$$file $(DESTDIR)$(sysconfdir)/; \
+	    fi; \
+	done
 
 
 # Only remove if exactly the same as what in our tree
@@ -68,7 +68,7 @@ install-data-local:
 #    the return of the evaluted command is 0 (as opposed to non-zero
 #    as used by everyone else)
 uninstall-local:
-	@ p="$(prte_config_files)"; \
+	@ p="$(prte_install_hook_files)"; \
 	for file in $$p; do \
 	  if test -f "$(DESTDIR)$(sysconfdir)/$$file"; then \
 	  	if test -f "$$file"; then d=; else d="$(srcdir)/"; fi; \
@@ -78,22 +78,3 @@ uninstall-local:
 	    fi ; \
 	  fi ; \
 	done
-	@ if test -f "$(DESTDIR)$(sysconfdir)/prte-default-hostfile"; then \
-		if diff "$(DESTDIR)$(sysconfdir)/prte-default-hostfile" "$(srcdir)/prte-default-hostfile" > /dev/null 2>&1 ; then \
-	      echo "rm -f $(DESTDIR)$(sysconfdir)/prte-default-hostfile" ; \
-	      rm -f "$(DESTDIR)$(sysconfdir)/prte-default-hostfile" ; \
-	    fi ; \
-	fi ;
-	@ if test -f "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf"; then \
-    	if test "$(prte_file_from_platform)" = "yes"; then \
-    		if diff "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf" "$(prte_mca_param_file)" > /dev/null 2>&1 ; then \
-	      		echo "rm -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf" ; \
-	      		rm -f "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf" ; \
-	    	fi ; \
-	    else \
-			if diff "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf" "$(srcdir)/prte-mca-params.conf" > /dev/null 2>&1 ; then \
-		      echo "rm -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf" ; \
-		      rm -f "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf" ; \
-		    fi ; \
-		fi; \
-	fi ;
