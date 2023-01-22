@@ -16,6 +16,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -178,6 +179,10 @@ static void display_cpus(prte_topology_t *t,
     bool parsable;
 
     parsable = prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
+
+    if (parsable) {
+        return;
+    }
 
     npus = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
     ncores = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
