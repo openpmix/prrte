@@ -18,6 +18,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -792,16 +793,19 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
         bool compressed;
         uint8_t *cmpdata = NULL;
         size_t cmplen;
-        /* report the size of the launch message */
-        compressed = PMIx_Data_compress((uint8_t *) jdata->launch_msg.base_ptr,
-                                        jdata->launch_msg.bytes_used, &cmpdata, &cmplen);
-        if (compressed) {
-            pmix_output(0, "LAUNCH MSG RAW SIZE: %d COMPRESSED SIZE: %d",
-                        (int) jdata->launch_msg.bytes_used, (int) cmplen);
-            free(cmpdata);
-            cmpdata = NULL;
-        } else {
-            pmix_output(0, "LAUNCH MSG RAW SIZE: %d", (int) jdata->launch_msg.bytes_used);
+
+        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
+            /* report the size of the launch message */
+            compressed = PMIx_Data_compress((uint8_t *) jdata->launch_msg.base_ptr,
+                                            jdata->launch_msg.bytes_used, &cmpdata, &cmplen);
+            if (compressed) {
+                pmix_output(0, "LAUNCH MSG RAW SIZE: %d COMPRESSED SIZE: %d",
+                            (int) jdata->launch_msg.bytes_used, (int) cmplen);
+                free(cmpdata);
+                cmpdata = NULL;
+            } else {
+                pmix_output(0, "LAUNCH MSG RAW SIZE: %d", (int) jdata->launch_msg.bytes_used);
+            }
         }
         /* go ahead and register the job */
         rc = prte_pmix_server_register_nspace(jdata);

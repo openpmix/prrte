@@ -8,6 +8,7 @@
  *                         and Technology (RIST). All rights reserved.
  *
  * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -350,6 +351,11 @@ PRTE_EXPORT int prte_hwloc_base_memory_set(prte_hwloc_base_memory_segment_t *seg
 PRTE_EXPORT char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
                                            bool use_hwthread_cpus,
                                            hwloc_topology_t topo);
+
+PRTE_EXPORT void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
+                                             bool use_hwthread_cpus,
+                                             hwloc_topology_t topo, int *pkgnum, 
+                                             char *cores, int sz);
 
 /* get the hwloc object that corresponds to the given processor id  and type */
 PRTE_EXPORT hwloc_obj_t prte_hwloc_base_get_pu(hwloc_topology_t topo, bool use_hwthread_cpus,
