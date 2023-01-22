@@ -21,6 +21,7 @@
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1226,6 +1227,135 @@ void prte_hwloc_build_map(hwloc_topology_t topo,
         ++obj_index;
     }
 }
+
+/* formatting core/hwt binding information as xml elements */
+int hwloc_bitmap_list_snprintf_exp(char *__hwloc_restrict buf, size_t buflen, 
+                                   const struct hwloc_bitmap_s *__hwloc_restrict set,
+                                   char *type)
+{
+    int prev = -1;
+    ssize_t size = buflen;
+    char *tmp = buf;
+    int res, ret = 0;
+
+    /* mark the end in case we do nothing later */
+    if (buflen > 0)
+        tmp[0] = '\0';
+
+    while (1)
+    {
+        int begin, end;
+
+        begin = hwloc_bitmap_next(set, prev);
+        if (begin == -1)
+            break;
+        end = hwloc_bitmap_next_unset(set, begin);
+
+        if (end == begin + 1)
+        {
+            res = snprintf(tmp, size, "%*c<%s>%d</%s>\n", 20, ' ', type, begin, type);
+        }
+        else if (end == -1)
+        {
+            res = snprintf(tmp, size, "%*c<%s>%d</%s>\n", 20, ' ', type, begin, type);
+        }
+        else
+        {
+            for (int i = begin; i <= end - 1; i++)
+            {
+                res = snprintf(tmp, size, "%*c<%s>%d</%s>\n", 20, ' ', type, i, type);
+                if (i != (end - 1))
+                    tmp += res;
+            }
+        }
+        if (res < 0)
+            return -1;
+        ret += res;
+
+        if (res >= size)
+            res = size > 0 ? (int)size - 1 : 0;
+
+        tmp += res;
+        size -= res;
+
+        if (end == -1)
+            break;
+        else
+            prev = end - 1;
+    }
+    return ret;
+}
+
+/*
+ * Output is undefined if a rank is bound to more than 1 package
+ */
+void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
+                               bool use_hwthread_cpus, hwloc_topology_t topo, 
+                               int *pkgnum, char *cores, int sz)
+{
+    int n, npkgs, npus, ncores;
+    hwloc_cpuset_t avail, coreset = NULL;
+    hwloc_obj_t pkg;
+    bool bits_as_cores = false;
+
+    /* if the cpuset is all zero, then something is wrong */
+    if (hwloc_bitmap_iszero(cpuset)) {
+        snprintf(cores, sz, "\n%*c<NOT MAPPED/>\n", 20, ' ');
+    }
+
+    /* if the cpuset includes all available cpus, and
+     * the available cpus were not externally constrained,
+     * then we are unbound */
+    avail = prte_hwloc_base_filter_cpus(topo);
+    if (hwloc_bitmap_isequal(cpuset, avail) &&
+        hwloc_bitmap_isfull(avail)) {
+        snprintf(cores, sz, "\n%*c<UNBOUND/>\n", 20, ' ');
+    }
+    hwloc_bitmap_free(avail);
+
+    /* get the number of packages in the topology */
+    npkgs = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
+    avail = hwloc_bitmap_alloc();
+    npus = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
+    ncores = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
+
+    if (npus == ncores && !use_hwthread_cpus) {
+        /* the bits in this bitmap represent cores */
+        bits_as_cores = true;
+    }
+    if (!use_hwthread_cpus && !bits_as_cores) {
+        coreset = hwloc_bitmap_alloc();
+    }
+
+    /* binding happens within a package and not across packages */
+    for (n = 0; n < npkgs; n++) {
+        pkg = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, n);
+        /* see if we have any here */
+        hwloc_bitmap_and(avail, cpuset, pkg->cpuset);
+
+        if (hwloc_bitmap_iszero(avail)) {
+            continue;
+        }
+
+        if (bits_as_cores) {
+            /* can just use the hwloc fn directly */
+            hwloc_bitmap_list_snprintf_exp(cores, sz, avail, "core");
+        } else if (use_hwthread_cpus) {
+            /* can just use the hwloc fn directly */
+            hwloc_bitmap_list_snprintf_exp(cores, sz, avail, "hwt");
+        } else {
+            prte_hwloc_build_map(topo, avail, use_hwthread_cpus | bits_as_cores, coreset);
+            /* now print out the string */
+            hwloc_bitmap_list_snprintf_exp(cores, sz, coreset, "core");
+        }
+        *pkgnum = n;
+    }
+    hwloc_bitmap_free(avail);
+    if (NULL != coreset) {
+        hwloc_bitmap_free(coreset);
+    }
+}
+
 
 /*
  * Make a prettyprint string for a hwloc_cpuset_t
