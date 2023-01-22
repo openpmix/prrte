@@ -15,6 +15,7 @@
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -37,6 +38,74 @@
 #include "src/runtime/prte_globals.h"
 #include "src/util/error_strings.h"
 #include "src/util/name_fns.h"
+
+
+
+/* This function is a modified vesion of the one found in src/mca/ras/base/ras_base_allocate.c*/
+static void display_cpus(prte_topology_t *t,
+                         prte_job_t *jdata,
+                         char *node, char**output)
+{
+    char tmp[2048];
+    unsigned pkg, npkgs;
+    bool bits_as_cores = false, use_hwthread_cpus = prte_hwloc_default_use_hwthread_cpus;
+    unsigned npus, ncores;
+    hwloc_obj_t obj;
+    hwloc_cpuset_t avail = NULL;
+    hwloc_cpuset_t allowed;
+    hwloc_cpuset_t coreset = NULL;
+
+    char *tmp1, *tmp2;
+
+    npus = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
+    ncores = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
+    if (npus == ncores && !use_hwthread_cpus) {
+        /* the bits in this bitmap represent cores */
+        bits_as_cores = true;
+    }
+    use_hwthread_cpus = prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL);
+    if (!use_hwthread_cpus && !bits_as_cores) {
+        coreset = hwloc_bitmap_alloc();
+    }
+    avail = hwloc_bitmap_alloc();
+    pmix_asprintf(&tmp1, "        <processors>\n");
+    npkgs = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PACKAGE);
+    allowed = (hwloc_cpuset_t)hwloc_topology_get_allowed_cpuset(t->topo);
+    for (pkg = 0; pkg < npkgs; pkg++) {
+        obj = hwloc_get_obj_by_type(t->topo, HWLOC_OBJ_PACKAGE, pkg);
+        hwloc_bitmap_and(avail, obj->cpuset, allowed);
+        if (hwloc_bitmap_iszero(avail)) {
+            pmix_asprintf(&tmp2, "%s            <package id=\"%d\" cpus=\"%s\"/>\n", tmp1, pkg, "NONE");
+            continue;
+        }
+        if (bits_as_cores) {
+            /* can just use the hwloc fn directly */
+            hwloc_bitmap_list_snprintf(tmp, 2048, avail);
+            pmix_asprintf(&tmp2, "%s            <package id=\"%d\" cpus=\"%s\"/>\n", tmp1, pkg, tmp);
+        } else if (use_hwthread_cpus) {
+            /* can just use the hwloc fn directly */
+            hwloc_bitmap_list_snprintf(tmp, 2048, avail);
+            pmix_asprintf(&tmp2, "%s            <package id=\"%d\" cpus=\"%s\"/>\n", tmp1, pkg, tmp);
+        } else {
+            prte_hwloc_build_map(t->topo, avail, use_hwthread_cpus | bits_as_cores, coreset);
+            /* now print out the string */
+            hwloc_bitmap_list_snprintf(tmp, 2048, coreset);
+            pmix_asprintf(&tmp2, "%s            <package id=\"%d\" cpus=\"%s\"/>\n", tmp1, pkg, tmp);
+        }
+        free(tmp1);
+        tmp1 = tmp2;
+        tmp2 = NULL;
+    }
+    hwloc_bitmap_free(avail);
+    if (NULL != coreset) {
+        hwloc_bitmap_free(coreset);
+    }
+    
+    pmix_asprintf(output, "%s        </processors>\n", tmp1);
+    free(tmp1);
+    return;
+}
+
 
 /*
  * JOB
@@ -116,31 +185,59 @@ void prte_job_print(char **output, prte_job_t *src)
  */
 void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
 {
-    char *tmp, *tmp2, *tmp3;
-    int32_t i;
+    char *tmp, *tmp1, *tmp2, *tmp3;
+    int32_t i,j;
     prte_proc_t *proc;
+    prte_topology_t *t;
 
     /* set default result */
     *output = NULL;
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
-        /* need to create the output in parsable format */
-        pmix_asprintf(&tmp, "<host name=\"%s\" slots=\"%d\" max_slots=\"%d\">\n",
+        pmix_asprintf(&tmp, "    <host name=\"%s\" slots=\"%d\" max_slots=\"%d\">\n",
                       (NULL == src->name) ? "UNKNOWN" : src->name, (int) src->slots,
                       (int) src->slots_max);
-        /* does this node have any aliases? */
-        tmp3 = NULL;
-        if (NULL != src->aliases) {
-            for (i = 0; NULL != src->aliases[i]; i++) {
-                pmix_asprintf(&tmp2, "%s\t<noderesolve resolved=\"%s\"/>\n", tmp, src->aliases[i]);
-                free(tmp);
-                tmp = tmp2;
+
+        pmix_asprintf(&tmp2,""); 
+        for (j=0; j < prte_node_topologies->size; j++) {
+            t = (prte_topology_t*)pmix_pointer_array_get_item(prte_node_topologies, j);
+            if (NULL != t) {
+                display_cpus(t, jdata, "N/A", &tmp1);
+                pmix_asprintf(&tmp3, "%s%s",tmp2, tmp1);
+                free(tmp1);
+                tmp1 = NULL;
+                free(tmp2);
+                tmp2 = NULL;
+                tmp2 = tmp3;
             }
         }
-        if (NULL != tmp3) {
-            free(tmp3);
+
+        pmix_asprintf(&tmp3, "%s%s", tmp,tmp2);
+        free(tmp2);
+        tmp2 = NULL;
+        free(tmp1);
+        tmp1 = NULL;
+        free(tmp);
+        tmp = tmp3; 
+
+        /* loop through procs and print their rank */
+        for (j = 0; j < src->procs->size; j++) {
+            if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(src->procs, j))) {
+                continue;
+            }
+            if (proc->job != jdata) {
+                continue;
+            }
+            prte_proc_print(&tmp2, jdata, proc);
+            pmix_asprintf(&tmp3, "%s%s", tmp, tmp2);
+            free(tmp2);
+            tmp2 = NULL;
+            free(tmp);
+            tmp = tmp3;
         }
-        *output = tmp;
+        pmix_asprintf(&tmp3, "%s    </host>\n", tmp);
+        free(tmp);
+        *output = tmp3;
         return;
     }
 
@@ -244,15 +341,44 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     }
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
-        /* need to create the output in parsable format */
-        if (0 == src->pid) {
-            pmix_asprintf(output, "%s<process rank=\"%s\" status=\"%s\"/>\n", pfx2,
-                          PRTE_VPID_PRINT(src->name.rank), prte_proc_state_to_str(src->state));
+        int pkgnum;
+        int npus;
+
+        char *cores = NULL;
+
+        char xmlsp = ' ';
+        if (NULL != src->cpuset && NULL != src->node->topology
+            && NULL != src->node->topology->topo) {
+            mycpus = hwloc_bitmap_alloc();
+            hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
+
+            npus = hwloc_get_nbobjs_by_type(src->node->topology->topo, HWLOC_OBJ_PU);
+            /* assuming each "core" xml element will take 20 characters. There could be at most npus such elements */
+            int sz = sizeof(char) * npus * 20;
+            cores = (char *) malloc(sz);
+            if (NULL == cores) {
+                pmix_asprintf(&tmp, "\n%*c<MemoryError/>\n", 8, xmlsp);
+                *output = tmp;
+                return;
+            }
+            prte_hwloc_get_binding_info(mycpus, use_hwthread_cpus,
+                                        src->node->topology->topo, &pkgnum, cores, sz);
+
+            hwloc_bitmap_free(mycpus);
+
+            pmix_asprintf(&tmp, "\n%*c<rank id=\"%s\" appid=\"%ld\">\n%*c<binding>\n"
+                          "%*c<package id=\"%d\">\n%s\n%*c</package>\n%*c</binding>\n%*c</rank>\n",
+                          8, xmlsp, PRTE_VPID_PRINT(src->name.rank), (long) src->app_idx, 12, xmlsp,
+                          16, xmlsp, pkgnum, cores, 16, xmlsp, 12, xmlsp, 8, xmlsp);
+            
+            free (cores);
         } else {
-            pmix_asprintf(output, "%s<process rank=\"%s\" pid=\"%d\" status=\"%s\"/>\n", pfx2,
-                          PRTE_VPID_PRINT(src->name.rank), (int) src->pid,
-                          prte_proc_state_to_str(src->state));
+            pmix_asprintf(&tmp, "\n%*c<rank id=\"%s\">\n%*c<binding></binding>\n%*c</rank>\n", 
+                          8, xmlsp, PRTE_VPID_PRINT(src->name.rank), 12, xmlsp, 8, xmlsp);        
         }
+
+        /* set the return */
+        *output = tmp;
         return;
     }
 
@@ -356,12 +482,14 @@ void prte_app_print(char **output, prte_job_t *jdata, prte_app_context_t *src)
     return;
 }
 
+
 /*
  * JOB_MAP
  */
 void prte_map_print(char **output, prte_job_t *jdata)
 {
-    char *tmp = NULL, *tmp2, *tmp3;
+    char *tmp = NULL, *tmp2 = NULL, *tmp3 = NULL, *tmp4 = NULL;
+    char *tmp_node = NULL;
     int32_t i, j;
     prte_node_t *node;
     prte_proc_t *proc;
@@ -372,52 +500,44 @@ void prte_map_print(char **output, prte_job_t *jdata)
     /* set default result */
     *output = NULL;
 
+
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
-        /* need to create the output in parsable format */
-        pmix_asprintf(&tmp, "<map>\n");
+        /* creating the output in an XML format */
+        prte_topology_t *t;
+        pmix_asprintf(&tmp4, "<?xml version=\"1.0\" ?>\n<map>\n");
+        pmix_asprintf(&tmp,""); 
+
         /* loop through nodes */
         for (i = 0; i < src->nodes->size; i++) {
             if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(src->nodes, i))) {
                 continue;
             }
-            prte_node_print(&tmp2, jdata, node);
-            pmix_asprintf(&tmp3, "%s%s", tmp, tmp2);
-            free(tmp2);
-            free(tmp);
-            tmp = tmp3;
-            /* for each node, loop through procs and print their rank */
-            for (j = 0; j < node->procs->size; j++) {
-                if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, j))) {
-                    continue;
-                }
-                if (proc->job != jdata) {
-                    continue;
-                }
-                prte_proc_print(&tmp2, jdata, proc);
-                pmix_asprintf(&tmp3, "%s%s", tmp, tmp2);
-                free(tmp2);
-                free(tmp);
-                tmp = tmp3;
-            }
-            pmix_asprintf(&tmp3, "%s\t</host>\n", tmp);
+            prte_node_print(&tmp_node, jdata, node);
+            pmix_asprintf(&tmp3, "%s%s",tmp,tmp_node);
+            free(tmp_node);
+            tmp_node = NULL;
             free(tmp);
             tmp = tmp3;
         }
+
         if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
-            pmix_asprintf(&tmp2, "%s\t<comment>\n"
-                "\t\tWarning: This map has been generated with the DONOTLAUNCH option;\n"
-                "\t\tThe compute node architecture has not been probed, and the displayed\n"
-                "\t\tmap reflects the HEADNODE ARCHITECTURE. On systems with a different\n"
-                "\t\tarchitecture between headnode and compute nodes, the map can be\n"
-                "\t\tdisplayed using `prterun --display map /bin/true`, which will launch\n"
-                "\t\tenough of the DVM to probe the compute node architecture.\n"
-                "\t</comment>\n", tmp);
+            pmix_asprintf(&tmp2, "%s<!-- \n"
+                "\tWarning: This map has been generated with the DONOTLAUNCH option;\n"
+                "\tThe compute node architecture has not been probed, and the displayed\n"
+                "\tmap reflects the HEADNODE ARCHITECTURE. On systems with a different\n"
+                "\tarchitecture between headnode and compute nodes, the map can be\n"
+                "\tdisplayed using prterun's display `map /bin/true`, which will launch\n"
+                "\tenough of the DVM to probe the compute node architecture.\n"
+                " -->\n", tmp);
             free(tmp);
             tmp = tmp2;
         }
-        pmix_asprintf(&tmp2, "%s</map>\n", tmp);
-        free(tmp);
+
+        /* end of the xml "map" tag */  
+        pmix_asprintf(&tmp2, "%s%s</map>\n", tmp4,tmp);
         *output = tmp2;
+        free(tmp);
+        free(tmp4);
         return;
     }
 
