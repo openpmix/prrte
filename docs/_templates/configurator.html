@@ -75,41 +75,10 @@ FOR A PARTICULAR PURPOSE. See the full license statement at
 <!--
 function get_field(name,form)
 {
-  if (form.value)
+  if (form.value) {
      return name + "=" + form.value
-  return "#" + name + "="
-}
-
-function get_field2(name,form)
-{
-  if (form.value)
-     return name + "=" + form.value
-  return ""
-}
-
-function get_radio_field_skipfirst(name,form)
-{
-  for (var i=1; i < form.length; i++)
-  {
-    if (form[i].checked)
-    {
-      return name + "=" + form[i].value
-    }
   }
   return "#" + name + "="
-}
-
-function get_radio_value(form)
-{
-  for (var i=0; i < form.length; i++)
-  {
-    if (form[i].checked)
-    {
-      return form[i].value
-    } else {
-        return "0"
-    }
-  }
 }
 
 function get_checkbox_value(form)
@@ -119,13 +88,6 @@ function get_checkbox_value(form)
     } else {
         return "OFF"
     }
-}
-
-function hide_box()
-{
-   var popup = document.getElementById('out_box');
-   popup.style.visibility = 'hidden';
-
 }
 
 function displayfile()
@@ -153,18 +115,6 @@ function displayfile()
    "PRTEDLogProcState=" + get_checkbox_value(document.config.prted_logprocstate) + "<br>" +
    get_field("PRTEDLogPath",document.config.prted_logpath) + "<br>"
 
-   //scroll(0,0);
-   //var popup = document.getElementById('out_box');
-
-   //popup.innerHTML = "<a href='javascript:hide_box();'>close</a><br>";
-   //popup.innerHTML += "#BEGIN PRTE.CONF FILE<br><br>";
-   //popup.innerHTML += printme;
-   //popup.innerHTML += "<br><br>#END PRTE.CONF FILE<br>";
-   //popup.innerHTML += "<a href='javascript:hide_box();'>close</a>";
-
-   //popup.style.visibility = 'visible';
-
-   // OLD CODE
    document.open();
    document.write(printme);
    document.close();
