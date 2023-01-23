@@ -21,9 +21,13 @@ Table of contents
    getting-help
    install
    configuration
-   configurator
    resilience
    developers/index
    contributing
    license
    man/index
+
+.. toctree::
+   :hidden:
+
+   configurator
