@@ -24,19 +24,13 @@ system-level prolog and epilog scripts for each session, and other
 PRRTE features.
 
 The configuration file can be manually created or can be created using
-the :doc:`PRRTE configuration tool </configurator>`
+the :doc:`PRRTE configuration tool </configurator>`.
 Manual creation can best be done
 by editing the example configuration file (``<source-location>/src/etc/prte.conf``).
 This file contains all the supported configuration options, with all
 entries commented out. Simply uncomment the options of interest and
 set them to appropriate values. The file will be installed into the
 final ``<install-location>/etc`` when ``make install`` is performed.
-
-The configuration tool also contains all the supported options in an
-easy-to-use form. Once you have filled out the desired entries, the
-"submit" button will show the resulting configuration file on the
-browser window |mdash| a simple "copy/paste" operation into your target
-configuration file will yield the final result.
 
 Configuration Options
 ---------------------
@@ -122,3 +116,13 @@ be written. If a relative path is provided,
 then the directory will be created under the ``DVMTempDir`` location. The
 path defaults to the specified SessionTmpDir in the absence of any input
 to this field. The log filename is formatted as ``prted-<hostname>-log<``.
+
+
+Configurator Tool
+-----------------
+
+The :doc:`PRRTE configuration tool </configurator>` contains all the supported options in an
+easy-to-use form. Once you have filled out the desired entries, the
+"submit" button will show the resulting configuration file on the
+browser window |mdash| a simple "copy/paste" operation into your target
+configuration file will yield the final result.

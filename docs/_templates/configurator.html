@@ -15,6 +15,62 @@ FOR A PARTICULAR PURPOSE. See the full license statement at
 <https://docs.prrte.org/en/latest/license.html> for details.
 
 -->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRRTE DVM Configuration Tool</title>
+<meta name="description" content="PRRTE DVM Configuration Tool: An easy way to create a PRRTE configuration file" />
+<style>
+.onoffswitch {
+    position: relative; width: 90px;
+    -webkit-user-select:none; -moz-user-select:none; -ms-user-select: none;
+}
+.onoffswitch-checkbox {
+    display: none;
+}
+.onoffswitch-label {
+    display: block; overflow: hidden; cursor: pointer;
+    border: 2px solid #999999; border-radius: 20px;
+}
+.onoffswitch-inner {
+    display: block; width: 200%; margin-left: -100%;
+    transition: margin 0.3s ease-in 0s;
+}
+.onoffswitch-inner:before, .onoffswitch-inner:after {
+    display: block; float: left; width: 50%; height: 30px; padding: 0; line-height: 30px;
+    font-size: 14px; color: white; font-family: Trebuchet, Arial, sans-serif; font-weight: bold;
+    box-sizing: border-box;
+}
+.onoffswitch-inner:before {
+    content: "ON";
+    padding-left: 10px;
+    background-color: #34A7C1; color: #FFFFFF;
+}
+.onoffswitch-inner:after {
+    content: "OFF";
+    padding-right: 10px;
+    background-color: #EEEEEE; color: #999999;
+    text-align: right;
+}
+.onoffswitch-switch {
+    display: block; width: 18px; margin: 6px;
+    background: #FFFFFF;
+    position: absolute; top: 0; bottom: 0;
+    right: 56px;
+    border: 2px solid #999999; border-radius: 20px;
+    transition: all 0.3s ease-in 0s;
+}
+.onoffswitch-checkbox:checked + .onoffswitch-label .onoffswitch-inner {
+    margin-left: 0;
+}
+.onoffswitch-checkbox:checked + .onoffswitch-label .onoffswitch-switch {
+    right: 0px;
+}
+</style>
+</head>
+
 <SCRIPT type="text/javascript">
 <!--
 function get_field(name,form)
@@ -58,17 +114,11 @@ function get_radio_value(form)
 
 function get_checkbox_value(form)
 {
-  comma_list = ""
-  for (var i=0; i < form.length; i++)
-  {
-    if (form[i].checked)
-    {
-     if (comma_list != "")
-      comma_list = comma_list +","
-     comma_list = comma_list+form[i].value
+    if (form.checked) {
+        return "ON"
+    } else {
+        return "OFF"
     }
-  }
-  return comma_list
 }
 
 function hide_box()
@@ -96,11 +146,11 @@ function displayfile()
    get_field("SessionTmpDir",document.config.session_tmpdir) + "<br>" +
    "# <br>" +
    "# Logging Options<br>" +
-   "ControllerLogJobState=" + get_radio_value(document.config.ctrlr_logjobstate) + "<br>" +
-   "ControllerLogProcState=" + get_radio_value(document.config.ctrlr_logprocstate) + "<br>" +
+   "ControllerLogJobState=" + get_checkbox_value(document.config.ctrlr_logjobstate) + "<br>" +
+   "ControllerLogProcState=" + get_checkbox_value(document.config.ctrlr_logprocstate) + "<br>" +
    get_field("ControllerLogPath",document.config.ctrlr_logpath) + "<br>" +
-   "PRTEDLogJobState=" + get_radio_value(document.config.prted_logjobstate) + "<br>" +
-   "PRTEDLogProcState=" + get_radio_value(document.config.prted_logprocstate) + "<br>" +
+   "PRTEDLogJobState=" + get_checkbox_value(document.config.prted_logjobstate) + "<br>" +
+   "PRTEDLogProcState=" + get_checkbox_value(document.config.prted_logprocstate) + "<br>" +
    get_field("PRTEDLogPath",document.config.prted_logpath) + "<br>"
 
    //scroll(0,0);
@@ -133,8 +183,9 @@ configuration tool and options across versions, we recommend that the
 configuration file be built using the tool distributed with the version
 being installed on your cluster. Some parameters will be set to default
 values, but you can manually edit the resulting <I>prte.conf</I> file as desired
-for greater flexibility. See the PRRTE documentation at <A HREF="https://docs.prrte.org/en/latest/configuration.html">https://docs.prrte.org/en/latest/configuration.html</A> for more
-details about the configuration parameters.</P>
+for greater flexibility. See the PRRTE documentation at <A HREF="https://docs.prrte.org">https://docs.prrte.org</A>,
+or your locally generated docs (if available), for more
+details about the configuration parameters for this version.</P>
 
 <P>Note that while PRRTE daemons create log files and other files as needed,
 they treat the lack of parent directories (e.g., the specified "DVMTempDir")
@@ -226,8 +277,14 @@ this location, separated out into a directory for each session.
 
 <H3>Logging Options</H3>
 
-<b>ControllerLogJobState</b>: <input type="button" name="ctrlr_logjobstate" value="0">
-<BR>
+<b>ControllerLogJobState</b>:
+<div class="onoffswitch">
+<input type="checkbox" name="ctrlr_logjobstate" class="onoffswitch-checkbox" id="ControllerLogJobState" checked>
+<label class="onoffswitch-label" for="ControllerLogJobState">
+    <span class="onoffswitch-inner"></span>
+    <span class="onoffswitch-switch"></span>
+</label>
+</div>
 Directs the DVM
 controller to log each DVM-launched job state transition. Log entry includes
 the namespace of the job, the state to which it is transitioning, and the
@@ -235,7 +292,14 @@ date/time stamp when the transition was ordered.
 <BR>
 <BR>
 
-<b>ControllerLogProcState</b>: <input type="radio" name="ctrlr_logprocstate" value="0">
+<b>ControllerLogProcState</b>:
+<div class="onoffswitch">
+<input type="checkbox" name="ctrlr_logprocstate" class="onoffswitch-checkbox" id="ControllerLogProcState" checked>
+<label class="onoffswitch-label" for="ControllerLogProcState">
+    <span class="onoffswitch-inner"></span>
+    <span class="onoffswitch-switch"></span>
+</label>
+</div>
 Directs the DVM
 controller to log each process (in a DVM-launched job) state transition.
 Log entry includes the namespace and rank of the process, the state to
@@ -253,8 +317,14 @@ to this field. The log filename is formatted as <I>prtectrlr-<hostname>-log</I>.
 <BR>
 <BR>
 
-<b>PRTEDLogJobState</b>: <input type="radio" name="prted_logjobstate" value="0">
-<BR>
+<b>PRTEDLogJobState</b>:
+<div class="onoffswitch">
+<input type="checkbox" name="prted_logjobstate" class="onoffswitch-checkbox" id="PRTEDLogJobState" checked>
+<label class="onoffswitch-label" for="PRTEDLogJobState">
+    <span class="onoffswitch-inner"></span>
+    <span class="onoffswitch-switch"></span>
+</label>
+</div>
 Directs each <I>prted</I>
 in the DVM to log each DVM-launched job state transition. Log entry includes
 the namespace of the job, the state to which it is transitioning, and the
@@ -262,8 +332,14 @@ date/time stamp when the transition was ordered.
 <BR>
 <BR>
 
-<b>PRTEDLogProcState</b>: <input type="radio" name="prted_logprocstate" value="0">
-<BR>
+<b>PRTEDLogProcState</b>:
+<div class="onoffswitch">
+<input type="checkbox" name="prted_logprocstate" class="onoffswitch-checkbox" id="PRTEDLogProcState" checked>
+<label class="onoffswitch-label" for="PRTEDLogProcState">
+    <span class="onoffswitch-inner"></span>
+    <span class="onoffswitch-switch"></span>
+</label>
+</div>
 Directs each <I>prted</I>
 in the DVM to log each process (in a DVM-launched job) state transition.
 Log entry includes the namespace and rank of the process, the state to
