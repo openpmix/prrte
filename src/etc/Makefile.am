@@ -85,7 +85,7 @@ uninstall-local:
 	    fi ; \
 	else \
 	    if test -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf; then \
-		    if diff "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf" "$srcdir/prte-mca-params.conf"> /dev/null 2>&1 ; then \
+		    if diff "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf" "$(srcdir)/prte-mca-params.conf"> /dev/null 2>&1 ; then \
 		      echo "rm -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf" ; \
 		      rm -f "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf" ; \
 		    fi ; \
