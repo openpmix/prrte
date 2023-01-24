@@ -24,7 +24,7 @@ system-level prolog and epilog scripts for each session, and other
 PRRTE features.
 
 The configuration file can be manually created or can be created using
-the :doc:`PRRTE configuration tool </configurator>`.
+the `PRRTE configuration tool <configurator.html>`_.
 Manual creation can best be done
 by editing the example configuration file (``<source-location>/src/etc/prte.conf``).
 This file contains all the supported configuration options, with all
@@ -39,7 +39,7 @@ The following options are supported by PRRTE |prte_ver|.
 While we make every effort to maintain compatibility with prior versions,
 we recommend that you check options when installing new versions to
 see what may have changed and/or been added. We also recommend that
-you use the :doc:`PRRTE DVM configurator </configurator>` for the
+you use the `PRRTE DVM configurator <configurator.html>`_ for the
 version you are using to ensure that it is fully compatible.
 
 Bootstrap Options
@@ -121,7 +121,7 @@ to this field. The log filename is formatted as ``prted-<hostname>-log<``.
 Configurator Tool
 -----------------
 
-The :doc:`PRRTE configuration tool </configurator>` contains all the supported options in an
+The `PRRTE configuration tool <configurator.html>`_ contains all the supported options in an
 easy-to-use form. Once you have filled out the desired entries, the
 "submit" button will show the resulting configuration file on the
 browser window |mdash| a simple "copy/paste" operation into your target
