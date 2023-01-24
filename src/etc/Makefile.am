@@ -65,7 +65,7 @@ install-data-local:
 
 # Only remove if exactly the same as what in our tree
 # NOTE TO READER: Bourne shell if ... fi evaluates the body if
-#    the return of the evaluted command is 0 (as opposed to non-zero
+#    the return of the evaluated command is 0 (as opposed to non-zero
 #    as used by everyone else)
 uninstall-local:
 	@ p="$(prte_install_hook_files)"; \
@@ -77,4 +77,17 @@ uninstall-local:
 	      rm -f "$(DESTDIR)$(sysconfdir)/$$file" ; \
 	    fi ; \
 	  fi ; \
-	done
+	done ; \
+	if test "$(prte_file_from_platform)" = "yes"; then \
+	    if diff "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf" "$(prte_mca_param_file)" > /dev/null 2>&1 ; then \
+	      echo "rm -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf" ; \
+	      rm -f "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf" ; \
+	    fi ; \
+	else \
+	    if test -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf; then \
+		    if diff "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf" "$srcdir/prte-mca-params.conf"> /dev/null 2>&1 ; then \
+		      echo "rm -f $(DESTDIR)$(sysconfdir)/prte-mca-params.conf" ; \
+		      rm -f "$(DESTDIR)$(sysconfdir)/prte-mca-params.conf" ; \
+		    fi ; \
+		fi ; \
+	fi ;
