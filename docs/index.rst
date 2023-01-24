@@ -26,8 +26,3 @@ Table of contents
    contributing
    license
    man/index
-
-.. toctree::
-   :hidden:
-
-   configurator
