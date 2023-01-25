@@ -8,7 +8,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.
  *                         All Rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -26,6 +26,10 @@
 #endif
 #ifdef HAVE_MATH_H
 #    include <math.h>
+#endif
+
+#ifndef MIN
+#    define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
 #include "reachable_weighted.h"
