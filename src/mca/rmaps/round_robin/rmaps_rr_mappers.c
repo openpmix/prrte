@@ -563,13 +563,13 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
     float balance;
     prte_proc_t *proc;
     bool second_pass = false;
-    bool nodefull, allfull;
+    bool nodefull, allfull, outofcpus;
     hwloc_obj_t obj = NULL;
     unsigned j, total_nobjs, nobjs;
     prte_binding_policy_t savebind = options->bind;
 
     pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
-                        "mca:rmaps:rr: mapping by %s for job %s slots %d num_procs %lu",
+                        "mca:rmaps:rr:byobj mapping by %s for job %s slots %d num_procs %lu",
                         hwloc_obj_type_string(options->maptype),
                         PRTE_JOBID_PRINT(jdata->nspace),
                         (int) num_slots, (unsigned long) num_procs);
@@ -610,6 +610,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
         allfull = true;
         PMIX_LIST_FOREACH_SAFE(node, nnext, node_list, prte_node_t)
         {
+            outofcpus = false;
             prte_rmaps_base_get_cpuset(jdata, node, options);
             if (!options->donotlaunch) {
                 rc = prte_rmaps_base_check_support(jdata, node, options);
@@ -651,7 +652,8 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                 /* does this object have enough available cpus to
                  * support the requested cpus_per_rank? */
                 ncpus = prte_rmaps_base_get_ncpus(node, obj, options);
-                if (ncpus < options->cpus_per_rank) {
+                if (ncpus < options->cpus_per_rank && !options->overload) {
+                    outofcpus = true;
                     continue;
                 }
                 if (options->mapspan) {
@@ -660,10 +662,14 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                     /* set the number of procs to map on this object to
                      * the fit the number of cpus, adjusting for cpus/rank */
                     options->nprocs = ncpus / options->cpus_per_rank;
+                    if (0 == options->nprocs) {
+                        options->nprocs = 1;
+                    }
                 }
 
                 if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, obj, options)) {
                     rc = PRTE_ERR_OUT_OF_RESOURCE;
+                    PRTE_ERROR_LOG(rc);
                     continue;
                 }
                 for (k=0; k < options->nprocs && nprocs_mapped < app->num_procs && !nodefull; k++) {
@@ -702,6 +708,15 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
     }
 
 errout:
+    if (outofcpus) {
+        /* ran out of cpus */
+        pmix_show_help("help-prte-rmaps-base.txt",
+                       "allocation-overload", true,
+                       (NULL == app) ? "N/A" : app->app,
+                       (NULL == app) ? -1 : app->num_procs,
+                       prte_hwloc_base_print_binding(options->bind));
+        return PRTE_ERR_SILENT;
+    }
     pmix_show_help("help-prte-rmaps-base.txt",
                    "failed-map", true,
                    PRTE_ERROR_NAME(rc),
