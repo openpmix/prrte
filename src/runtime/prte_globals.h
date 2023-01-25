@@ -17,7 +17,7 @@
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -270,6 +270,8 @@ typedef struct {
     struct prte_proc_t *daemon;
     /* track the unassigned cpus */
     hwloc_cpuset_t available;
+    /* cache the cpuset prior to mapping a job for easy reset */
+    hwloc_cpuset_t jobcache;
     /** number of procs on this node */
     prte_node_rank_t num_procs;
     /* array of pointers to procs on this node */

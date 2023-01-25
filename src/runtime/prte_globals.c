@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -608,6 +608,7 @@ static void prte_node_construct(prte_node_t *node)
     node->aliases = NULL;
     node->daemon = NULL;
     node->available = NULL;
+    node->jobcache = hwloc_bitmap_alloc();
 
     node->num_procs = 0;
     node->procs = PMIX_NEW(pmix_pointer_array_t);
@@ -650,6 +651,9 @@ static void prte_node_destruct(prte_node_t *node)
     }
     if (NULL != node->available) {
         hwloc_bitmap_free(node->available);
+    }
+    if (NULL != node->jobcache) {
+        hwloc_bitmap_free(node->jobcache);
     }
     for (i = 0; i < node->procs->size; i++) {
         if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(node->procs, i))) {

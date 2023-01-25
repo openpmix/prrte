@@ -14,7 +14,7 @@
 # Copyright (c) 2011      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -154,6 +154,17 @@ processes than cpus on a resource:
    Node:        %s
    #processes:  %d
    #cpus:       %d
+
+You can override this protection by adding the "overload-allowed"
+option to your binding directive.
+#
+[allocation-overload]
+A request was made to bind to that would result in binding more
+processes than cpus available in your allocation:
+
+   Application:     %s
+   #processes:      %d
+   Binding policy:  %s
 
 You can override this protection by adding the "overload-allowed"
 option to your binding directive.
