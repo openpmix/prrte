@@ -4,7 +4,7 @@
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,23 +42,6 @@ struct prte_install_dirs_t {
     char *includedir;
     char *infodir;
     char *mandir;
-
-    /* Note that the following fields intentionally have an "ompi"
-       prefix, even though they're down in the PRTE layer.  This is
-       not abstraction break because the "ompi" they're referring to
-       is for the build system of the overall software tree -- not an
-       individual project within that overall tree.
-
-       Rather than using pkg{data,lib,includedir}, use our own
-       ompi{data,lib,includedir}, which is always set to
-       {datadir,libdir,includedir}/openmpi. This will keep us from
-       having help files in prefix/share/open-rte when building
-       without PRTE, but in prefix/share/openmpi when building
-       with PRTE.
-
-       Note that these field names match macros set by configure that
-       are used in Makefile.am files.  E.g., project help files are
-       installed into $(prtedatadir). */
     char *prtedatadir;
     char *prtelibdir;
     char *prteincludedir;

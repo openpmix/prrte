@@ -15,7 +15,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -79,6 +79,9 @@ PRTE_EXPORT int prte_ess_base_proc_binding(void);
  * Put functions
  */
 PRTE_EXPORT int prte_ess_env_put(int32_t num_procs, int32_t num_local_procs, char ***env);
+
+/* read a bootstrap configuration file */
+PRTE_EXPORT int prte_ess_base_bootstrap(void);
 
 typedef struct {
     pmix_list_item_t super;

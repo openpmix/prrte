@@ -1,6 +1,6 @@
 # -*- text -*-
 #
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
 # Copyright (c) 2022      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -49,6 +49,7 @@ option to the help request as "--help <option>".
    --parent-uri <arg0>               Specify the URI of the prted acting as the parent of this prted
                                      in a tree-based spawn operation
    --tree-spawn                      A tree-based spawn operation is in progress
+   --bootstrap                       Self-construct the DVM based on a configuration file
 
 
 /*****    Specific Options   *****/

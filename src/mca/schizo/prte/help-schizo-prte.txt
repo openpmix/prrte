@@ -1,6 +1,6 @@
 # -*- text -*-
 #
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
 # Copyright (c) 2022      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -73,6 +73,7 @@ option to the help request as "--help <option>".
    --tmpdir <arg0>                   Set the root for the session directory tree
    --tune <arg0>                     File(s) containing MCA params for tuning DVM operations
    --timeout <arg0>                  Timeout DVM startup if time exceeds the specified number of seconds
+
 
 Report bugs to %s
 #
