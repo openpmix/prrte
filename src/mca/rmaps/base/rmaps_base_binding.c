@@ -158,7 +158,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
                                                   type, 0);
 #if HWLOC_API_VERSION < 0x20000
     hwloc_bitmap_andnot(node->available, node->available, tmp_obj->allowed_cpuset);
-    if (hwloc_bitmap_empty(node->available) && options->overload) {
+    if (hwloc_bitmap_iszero(node->available) && options->overload) {
         /* reset the availability */
         hwloc_bitmap_copy(node->available, node->jobcache);
     }
