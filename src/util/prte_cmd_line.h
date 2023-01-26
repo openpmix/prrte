@@ -86,6 +86,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_FWD_SIGNALS            "forward-signals"           // required
 #define PRTE_CLI_RUN_AS_ROOT            "allow-run-as-root"         // none
 #define PRTE_CLI_STREAM_BUF             "stream-buffering"          // required
+#define PRTE_CLI_BOOTSTRAP              "bootstrap"                 // none
 
 // Application options
 #define PRTE_CLI_NP                     "np"                        // required
