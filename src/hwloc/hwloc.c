@@ -334,6 +334,20 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
             pmix_output_verbose(options->verbosity, options->stream,
                                 "setdefaultbinding[%d] binding not given - using bypackage", __LINE__);
             PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
+        } else if (PRTE_MAPPING_PELIST == mpol) {
+            if (options->use_hwthreads) {
+                /* if we are using hwthread cpus, then bind to those */
+                pmix_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using byhwthread for pe-list", __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                PRTE_BIND_TO_HWTHREAD);
+            } else {
+                /* otherwise bind to core */
+                pmix_output_verbose(options->verbosity, options->stream,
+                                    "setdefaultbinding[%d] binding not given - using bycore for pe-list", __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                PRTE_BIND_TO_CORE);
+            }
         } else {
             if (options->nprocs <= 2) {
                 /* we are mapping by node or some other non-object method */

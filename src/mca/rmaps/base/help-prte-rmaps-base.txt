@@ -128,6 +128,36 @@ mapping operation.
   Binding policy:      %s
 
 #
+[span-packages-multiple]
+Your job failed to map because the resulting process placement
+would cause the process to be bound to CPUs in more than one
+package:
+
+  Mapping policy:  %s
+  Binding policy:  %s
+  CPUs/rank:       %d
+
+This configuration almost always results in a loss of performance
+that can significantly impact applications. Either alter the
+mapping, binding, and/or cpus/rank policies so that each process
+can fit into a single package, or consider using an alternative
+mapper that can handle this configuration (e.g., the rankfile mapper).
+#
+[span-packages-cpuset]
+Your job failed to map because the resulting process placement
+would cause the process to be bound to CPUs in more than one
+package:
+
+  Mapping policy:  %s
+  Binding policy:  %s
+  PE-LIST:         %s
+
+This configuration almost always results in a loss of performance
+that can significantly impact applications. Either alter the
+mapping, binding, and/or PE-LIST policies so that each process
+can fit into a single package, or consider using an alternative
+mapper that can handle this configuration (e.g., the rankfile mapper).
+#
 [unrecognized-policy]
 The specified %s directive is not recognized:
 

@@ -181,9 +181,12 @@ static int bind_to_cpuset(prte_job_t *jdata,
     /* bind each process to prte_hwloc_base_cpu_list */
     unsigned idx;
     hwloc_bitmap_t tset;
-    hwloc_obj_t obj, root;
+    hwloc_obj_t obj, root, pkg;
     char **cpus;
     hwloc_obj_type_t type;
+    unsigned n, npkgs;
+    int rc;
+    bool included;
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind job %s to cpus %s %s",
@@ -233,6 +236,31 @@ static int bind_to_cpuset(prte_job_t *jdata,
     } else {
         /* bind the proc to all assigned cpus */
         tset = options->target;
+    }
+    /* sanity check - are all the target cpus in a single
+     * package, or do they span packages?
+     */
+    npkgs = hwloc_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE);
+    included = false;
+    for (n=0; n < npkgs; n++) {
+        pkg = hwloc_get_obj_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, n);
+#if HWLOC_API_VERSION < 0x20000
+        rc = hwloc_bitmap_isincluded(tset, pkg->allowed_cpuset);
+#else
+        rc = hwloc_bitmap_isincluded(tset, pkg->cpuset);
+#endif
+        if (1 == rc) {
+            included = true;
+            break;
+        }
+    }
+    if (!included) {
+        pmix_show_help("help-prte-rmaps-base.txt", "span-packages-cpuset", true,
+                       prte_rmaps_base_print_mapping(jdata->map->mapping),
+                       prte_hwloc_base_print_binding(jdata->map->binding),
+                       options->cpuset);
+        PMIX_ARGV_FREE_COMPAT(cpus);
+        return PRTE_ERR_SILENT;
     }
     /* bind to the specified cpuset */
     hwloc_bitmap_list_asprintf(&proc->cpuset, tset);
@@ -326,7 +354,11 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
              * cover the request - so return an error */
             hwloc_bitmap_free(available);
             hwloc_bitmap_free(result);
-            return PRTE_ERR_TAKE_NEXT_OPTION;
+            pmix_show_help("help-prte-rmaps-base.txt", "span-packages-multiple", true,
+                           prte_rmaps_base_print_mapping(jdata->map->mapping),
+                           prte_hwloc_base_print_binding(jdata->map->binding),
+                           options->cpus_per_rank);
+            return PRTE_ERR_SILENT;
         }
     }
     /* we bind-to-cpu for the number of cpus that was specified,
@@ -406,7 +438,7 @@ int prte_rmaps_base_bind_proc(prte_job_t *jdata,
 
     if (1 < options->cpus_per_rank) {
         rc = bind_multiple(jdata, proc, node, obj, options);
-        if (PRTE_SUCCESS != rc && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+        if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
         }
         return rc;
