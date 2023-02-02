@@ -144,6 +144,7 @@ pass:
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
                 /* move on to the next node */
+                rc = PRTE_ERR_SILENT;
                 break;
             }
             nprocs_mapped++;
@@ -305,6 +306,7 @@ pass:
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
                 /* move to next node */
+                rc = PRTE_ERR_SILENT;
                 break;
             }
             nprocs_mapped++;
@@ -466,7 +468,7 @@ pass:
         for (i = 0; i < options->nprocs && nprocs_mapped < app->num_procs; i++) {
             proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, NULL, options);
             if (NULL == proc) {
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
+                rc = PRTE_ERR_SILENT;
                 goto errout;
             }
             nprocs_mapped++;
