@@ -3,7 +3,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -335,19 +335,26 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
                                 "setdefaultbinding[%d] binding not given - using bypackage", __LINE__);
             PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
         } else {
-            /* we are mapping by node or some other non-object method */
-            if (options->use_hwthreads) {
-                /* if we are using hwthread cpus, then bind to those */
-                pmix_output_verbose(options->verbosity, options->stream,
-                                    "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
-                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
-                                                PRTE_BIND_TO_HWTHREAD);
+            if (options->nprocs <= 2) {
+                /* we are mapping by node or some other non-object method */
+                if (options->use_hwthreads) {
+                    /* if we are using hwthread cpus, then bind to those */
+                    pmix_output_verbose(options->verbosity, options->stream,
+                                        "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
+                    PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                    PRTE_BIND_TO_HWTHREAD);
+                } else {
+                    /* otherwise bind to core */
+                    pmix_output_verbose(options->verbosity, options->stream,
+                                        "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
+                    PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                    PRTE_BIND_TO_CORE);
+                }
             } else {
-                /* otherwise bind to core */
                 pmix_output_verbose(options->verbosity, options->stream,
-                                    "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
-                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
-                                                PRTE_BIND_TO_CORE);
+                                    "setdefaultbinding[%d] binding not given - using bynuma",
+                                    __LINE__);
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
             }
         }
     }
