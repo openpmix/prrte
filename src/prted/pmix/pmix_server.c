@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -86,6 +86,8 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender, pmix_data_buf
                                   prte_rml_tag_t tg, void *cbdata);
 static void pmix_server_log(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                             prte_rml_tag_t tg, void *cbdata);
+static void pmix_server_sched(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+                              prte_rml_tag_t tg, void *cbdata);
 
 #define PRTE_PMIX_SERVER_MIN_ROOMS 4096
 
@@ -387,19 +389,6 @@ void pmix_server_register_params(void)
         pmix_output_set_verbosity(prte_pmix_server_globals.output,
                                   prte_pmix_server_globals.verbosity);
     }
-    /* specify the size of the hotel */
-    prte_pmix_server_globals.num_rooms = -1;
-    (void)
-        pmix_mca_base_var_register("prte", "pmix", NULL, "server_max_reqs",
-                                   "Maximum number of backlogged PMIx server direct modex requests",
-                                   PMIX_MCA_BASE_VAR_TYPE_INT,
-                                   &prte_pmix_server_globals.num_rooms);
-    /* specify the timeout for the hotel */
-    prte_pmix_server_globals.timeout = 2;
-    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "server_max_wait",
-                                      "Maximum time (in seconds) the PMIx server should wait to service direct modex requests",
-                                      PMIX_MCA_BASE_VAR_TYPE_INT,
-                                      &prte_pmix_server_globals.timeout);
 
     /* whether or not to wait for the universal server */
     prte_pmix_server_globals.wait_for_server = false;
@@ -445,80 +434,32 @@ void pmix_server_register_params(void)
 
 }
 
-static void eviction_cbfunc(struct pmix_hotel_t *hotel,
-                            int room_num, void *occupant)
+static void timeout_cbfunc(int sd, short args, void *cbdata)
 {
-    pmix_server_req_t *req = (pmix_server_req_t *) occupant;
-    bool timeout = false;
-    int rc = PRTE_ERR_TIMEOUT;
-    pmix_value_t *pval = NULL;
-    pmix_status_t prc;
-    PRTE_HIDE_UNUSED_PARAMS(hotel);
+    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "EVICTION FROM ROOM %d", room_num);
+                        "REQUEST TIMED OUT - LOCAL REFID %d REMOTE REFID %d",
+                        req->local_index, req->remote_index);
 
-    /* decrement the request timeout */
-    req->timeout -= prte_pmix_server_globals.timeout;
-    if (req->timeout > 0) {
-        req->timeout -= prte_pmix_server_globals.timeout;
-    }
-    if (0 >= req->timeout) {
-        timeout = true;
-    }
-    if (!timeout) {
-        /* see if this is a dmdx request waiting for a key to arrive */
-        if (NULL != req->key) {
-            pmix_output_verbose(2, prte_pmix_server_globals.output,
-                                "%s server:evict timeout - checking for key %s from proc %s:%u",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->key, req->tproc.nspace,
-                                req->tproc.rank);
-
-            /* see if the key has arrived */
-            if (PMIX_SUCCESS == PMIx_Get(&req->tproc, req->key, req->info, req->ninfo, &pval)) {
-                pmix_output_verbose(2, prte_pmix_server_globals.output,
-                                    "%s server:evict key %s found - retrieving payload",
-                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->key);
-                /* it has - ask our local pmix server for the data */
-                PMIX_VALUE_RELEASE(pval);
-                /* check us back into hotel so the modex_resp function can safely remove us */
-                prc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
-                if(PMIX_SUCCESS != prc) {
-                  goto error_condition;
-                }
-                prc = PMIx_server_dmodex_request(&req->tproc, modex_resp, req);
-                if (PMIX_SUCCESS != prc) {
-                    PMIX_ERROR_LOG(prc);
-                    send_error(rc, &req->tproc, &req->proxy, req->remote_room_num);
-                    pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
-                    PMIX_RELEASE(req);
-                }
-                return;
-            }
-            /* if not, then we continue to wait */
-            pmix_output_verbose(2, prte_pmix_server_globals.output,
-                                "%s server:evict key %s not found - returning to hotel",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->key);
-        }
-        /* not done yet - check us back in */
-        prc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
-        if (PMIX_SUCCESS == prc) {
-            pmix_output_verbose(2, prte_pmix_server_globals.output,
-                                "%s server:evict checked back in to room %d",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->room_num);
-            return;
-        }
-        /* fall thru and return an error so the caller doesn't hang */
-    } else {
-        pmix_show_help("help-prted.txt", "timedout", true, req->operation);
-    }
-
-    error_condition:
+    /* mark that we timed out */
+    req->timed_out = true;
 
     /* don't let the caller hang */
-    if (0 <= req->remote_room_num) {
-        send_error(rc, &req->tproc, &req->proxy, req->remote_room_num);
-    } else if (NULL != req->opcbfunc) {
+    if (0 <= req->remote_index) {
+        /* this was a remote request */
+        send_error(PMIX_ERR_TIMEOUT, &req->tproc, &req->proxy, req->remote_index);
+        /* note: we cannot release the req object because whomever
+         * we gave it to (host or PMIx server library) is still
+         * using it. We'll take care of it once the current holder
+         * returns.
+         */
+        return;
+    }
+
+    /* this was a local request */
+    if (NULL != req->opcbfunc) {
         req->opcbfunc(PMIX_ERR_TIMEOUT, req->cbdata);
     } else if (NULL != req->mdxcbfunc) {
         req->mdxcbfunc(PMIX_ERR_TIMEOUT, NULL, 0, req->cbdata, NULL, NULL);
@@ -527,7 +468,11 @@ static void eviction_cbfunc(struct pmix_hotel_t *hotel,
     } else if (NULL != req->lkcbfunc) {
         req->lkcbfunc(PMIX_ERR_TIMEOUT, NULL, 0, req->cbdata);
     }
-    PMIX_RELEASE(req);
+    /* note: we cannot release the req object because whomever
+     * we gave it to (host or PMIx server library) is still
+     * using it. We'll take care of it once the current holder
+     * returns.
+     */
 }
 
 /* NOTE: this function must be called from within an event! */
@@ -536,12 +481,27 @@ void prte_pmix_server_clear(pmix_proc_t *pname)
     int n;
     pmix_server_req_t *req;
 
-    for (n = 0; n < prte_pmix_server_globals.reqs.num_rooms; n++) {
-        pmix_hotel_knock(&prte_pmix_server_globals.reqs, n, (void **) &req);
+    for (n = 0; n < prte_pmix_server_globals.remote_reqs.size; n++) {
+        req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.remote_reqs, n);
         if (NULL != req) {
-            if (0 == strncmp(req->tproc.nspace, pname->nspace, PMIX_MAX_NSLEN) &&
-                PMIX_CHECK_RANK(req->tproc.rank, pname->rank)) {
-                pmix_hotel_checkout(&prte_pmix_server_globals.reqs, n);
+            if (!PMIX_CHECK_NSPACE(req->tproc.nspace, pname->nspace) ||
+                !PMIX_CHECK_RANK(req->tproc.rank, pname->rank)) {
+                continue;
+            }
+            /* delete the timeout event, if active */
+            if (req->event_active) {
+                prte_event_del(&req->ev);
+            }
+            /* delete the cycle event, if active */
+            if (req->cycle_active) {
+                prte_event_del(&req->cycle);
+            }
+            pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, n, NULL);
+            if (!req->inprogress) {
+                /* if the request is in progress, then someone (host or PMIx server
+                 * library) has the req object - so we cannot release it yet.
+                 * We'll take care of it once the current holder returns.
+                 * If that isn't the case, then release it */
                 PMIX_RELEASE(req);
             }
         }
@@ -612,31 +572,13 @@ int pmix_server_init(void)
     prte_pmix_server_globals.initialized = true;
 
     /* setup the server's state variables */
-    PMIX_CONSTRUCT(&prte_pmix_server_globals.reqs, pmix_hotel_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.psets, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.groups, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.tools, pmix_list_t);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.local_reqs, pmix_pointer_array_t);
     pmix_pointer_array_init(&prte_pmix_server_globals.local_reqs, 128, INT_MAX, 2);
-
-    /* by the time we init the server, we should know how many nodes we
-     * have in our environment - with the exception of mpirun. If the
-     * user specified the size of the hotel, then use that value. Otherwise,
-     * set the value to something large to avoid running out of rooms on
-     * large machines */
-    if (-1 == prte_pmix_server_globals.num_rooms) {
-        prte_pmix_server_globals.num_rooms = prte_process_info.num_daemons * 2;
-        if (prte_pmix_server_globals.num_rooms < PRTE_PMIX_SERVER_MIN_ROOMS) {
-            prte_pmix_server_globals.num_rooms = PRTE_PMIX_SERVER_MIN_ROOMS;
-        }
-    }
-    rc = pmix_hotel_init(&prte_pmix_server_globals.reqs, prte_pmix_server_globals.num_rooms,
-                         prte_event_base, prte_pmix_server_globals.timeout,
-                         eviction_cbfunc);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        return rc;
-    }
+    PMIX_CONSTRUCT(&prte_pmix_server_globals.remote_reqs, pmix_pointer_array_t);
+    pmix_pointer_array_init(&prte_pmix_server_globals.remote_reqs, 128, INT_MAX, 2);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.notifications, pmix_list_t);
     prte_pmix_server_globals.server = *PRTE_NAME_INVALID;
 
@@ -940,6 +882,9 @@ void pmix_server_start(void)
         /* setup recv for logging requests */
         PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING,
                       PRTE_RML_PERSISTENT, pmix_server_log, NULL);
+        /* setup recv for scheduler requests */
+        PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED,
+                      PRTE_RML_PERSISTENT, pmix_server_sched, NULL);
     }
 }
 
@@ -959,8 +904,9 @@ void pmix_server_finalize(void)
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LAUNCH_RESP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_CLIENT);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_NOTIFICATION);
-    if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_MASTER) {
+    if (PRTE_PROC_IS_MASTER) {
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING);
+        PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED);
     }
 
     /* finalize our local data server */
@@ -968,14 +914,20 @@ void pmix_server_finalize(void)
 
     /* cleanup collectives */
     pmix_server_req_t *cd;
-    for (int i = 0; i < prte_pmix_server_globals.num_rooms; i++) {
-      pmix_hotel_checkout_and_return_occupant(&prte_pmix_server_globals.reqs, i, (void **) &cd);
+    for (int i = 0; i < prte_pmix_server_globals.local_reqs.size; i++) {
+      cd = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, i);
+      if (NULL != cd) {
+          PMIX_RELEASE(cd);
+      }
+    }
+    for (int i = 0; i < prte_pmix_server_globals.remote_reqs.size; i++) {
+      cd = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.remote_reqs, i);
       if (NULL != cd) {
           PMIX_RELEASE(cd);
       }
     }
 
-    PMIX_DESTRUCT(&prte_pmix_server_globals.reqs);
+    PMIX_DESTRUCT(&prte_pmix_server_globals.remote_reqs);
     PMIX_DESTRUCT(&prte_pmix_server_globals.local_reqs);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
@@ -985,7 +937,7 @@ void pmix_server_finalize(void)
     prte_pmix_server_globals.initialized = false;
 }
 
-static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int remote_room)
+static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int remote_index)
 {
     pmix_data_buffer_t *reply;
     pmix_status_t prc, pstatus;
@@ -1005,8 +957,8 @@ static void send_error(int status, pmix_proc_t *idreq, pmix_proc_t *remote, int 
         return;
     }
 
-    /* pack the remote daemon's request room number */
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &remote_room, 1, PMIX_INT))) {
+    /* pack the remote daemon's request index */
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &remote_index, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(reply);
         return;
@@ -1034,8 +986,8 @@ static void _mdxresp(int sd, short args, void *cbdata)
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         req->tproc.nspace, req->tproc.rank);
 
-    /* check us out of the hotel */
-    pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
+    /* remove us from the pending array */
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, req->local_index, NULL);
 
     /* pack the status */
     PMIX_DATA_BUFFER_CREATE(reply);
@@ -1051,8 +1003,8 @@ static void _mdxresp(int sd, short args, void *cbdata)
         goto error;
     }
 
-    /* pack the remote daemon's request room number */
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->remote_room_num, 1, PMIX_INT))) {
+    /* pack the remote daemon's request index */
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->remote_index, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(reply);
         goto error;
@@ -1086,6 +1038,7 @@ error:
     PMIX_RELEASE(req);
     return;
 }
+
 /* the modex_resp function takes place in the local PMIx server's
  * progress thread - we must therefore thread-shift it so we can
  * access our global data */
@@ -1095,6 +1048,17 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
 
     PMIX_ACQUIRE_OBJECT(req);
 
+    /* clear any timeout event */
+    if (req->event_active) {
+        prte_event_del(&req->ev);
+        req->event_active = false;
+    }
+    if (req->cycle_active) {
+        prte_event_del(&req->cycle);
+        req->cycle_active = false;
+    }
+
+    req->inprogress = false; // we are done processing this request
     req->pstatus = status;
     if (PMIX_SUCCESS == status && NULL != data) {
         /* we need to preserve the data as the caller
@@ -1111,12 +1075,96 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
     PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 }
+
+static void dmdx_check(int sd, short args, void *cbdata)
+{
+    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    prte_job_t *jdata;
+    prte_proc_t *proc;
+    struct timeval tv = {2, 0};
+    pmix_value_t *pval = NULL;
+    pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    /* do we know about this job? */
+    jdata = prte_get_job_data_object(req->tproc.nspace);
+    if (NULL == jdata) {
+        /* wait some more */
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s dmdx:recv dmdx_check cannot find job object - delaying",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        PMIX_POST_OBJECT(req);
+        prte_event_evtimer_add(&req->cycle, &tv);
+        return;
+    }
+
+    /* we know about this job - look for the proc */
+    proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, req->tproc.rank);
+    if (NULL == proc) {
+        /* this is truly an error, so notify the sender */
+        send_error(PRTE_ERR_NOT_FOUND, &req->tproc, &req->proxy, req->remote_index);
+        if (req->event_active) {
+            /* delete the timeout event */
+            prte_event_del(&req->ev);
+        }
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, req->local_index, NULL);
+        PMIX_RELEASE(req);
+        return;
+    }
+    if (!PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_LOCAL)) {
+        /* send back an error - they obviously have made a mistake */
+        send_error(PRTE_ERR_NOT_FOUND, &req->tproc, &req->proxy, req->remote_index);
+        if (req->event_active) {
+            /* delete the timeout event */
+            prte_event_del(&req->ev);
+        }
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, req->local_index, NULL);
+        PMIX_RELEASE(req);
+        return;
+    }
+
+    if (NULL != req->key) {
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s dmdx:check for key %s",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->key);
+        /* see if we have it */
+        if (PMIX_SUCCESS != PMIx_Get(&req->tproc, req->key, req->info, req->ninfo, &pval)) {
+            pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                "%s dmdx:recv key %s not found - resetting wait",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->key);
+            PMIX_POST_OBJECT(req);
+            prte_event_evtimer_add(&req->cycle, &tv);
+            return;
+        }
+        PMIX_VALUE_RELEASE(pval);
+        /* we do have it, so fetch payload */
+    }
+
+    /* ask our local PMIx server for the data */
+    req->inprogress = true;
+    rc = PMIx_server_dmodex_request(&req->tproc, modex_resp, req);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        req->inprogress = false;
+        send_error(rc, &req->tproc, &req->proxy, req->remote_index);
+        if (req->event_active) {
+            /* delete the timeout event */
+            prte_event_del(&req->ev);
+        }
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, req->local_index, NULL);
+        PMIX_RELEASE(req);
+        return;
+    }
+    return;
+}
+
 static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
                                   pmix_data_buffer_t *buffer,
                                   prte_rml_tag_t tg, void *cbdata)
 {
-    int rc, room_num;
-    int32_t cnt;
+    int rc, index;
+    int32_t cnt, timeout = 0;
+    struct timeval tv = {0, 0};
     prte_job_t *jdata;
     prte_proc_t *proc;
     pmix_server_req_t *req;
@@ -1138,9 +1186,9 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
                         "%s dmdx:recv processing request from proc %s for proc %s:%u",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender), pproc.nspace,
                         pproc.rank);
-    /* and the remote daemon's tracking room number */
+    /* and the remote daemon's tracking index */
     cnt = 1;
-    if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, &room_num, &cnt, PMIX_INT))) {
+    if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, &index, &cnt, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
         return;
     }
@@ -1164,19 +1212,31 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         for (sz = 0; sz < ninfo; sz++) {
             if (PMIX_CHECK_KEY(&info[sz], PMIX_REQUIRED_KEY)) {
                 key = info[sz].value.data.string;
-                break;
+                continue;
+            }
+            if (PMIX_CHECK_KEY(&info[sz], PMIX_TIMEOUT)) {
+                PMIX_VALUE_GET_NUMBER(prc, &info[sz].value, timeout, int32_t);
+                if (PMIX_SUCCESS != prc) {
+                    PMIX_ERROR_LOG(prc);
+                    if (NULL != info) {
+                        PMIX_INFO_FREE(info, ninfo);
+                    }
+                    return;
+                }
+                continue;
             }
         }
     }
 
-    /* is this proc one of mine? */
-    if (NULL == (jdata = prte_get_job_data_object(pproc.nspace))) {
+    /* do we know about this job? */
+    jdata = prte_get_job_data_object(pproc.nspace);
+    if (NULL == jdata) {
         /* not having the jdata means that we haven't unpacked the
          * the launch message for this job yet - this is a race
          * condition, so just log the request and we will fill
          * it later */
         pmix_output_verbose(2, prte_pmix_server_globals.output,
-                            "%s dmdx:recv request no job - checking into hotel",
+                            "%s dmdx:recv request cannot find job object - delaying",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         req = PMIX_NEW(pmix_server_req_t);
         pmix_asprintf(&req->operation, "DMDX: %s:%d", __FILE__, __LINE__);
@@ -1187,28 +1247,42 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         if (NULL != key) {
             req->key = strdup(key);
         }
-        req->remote_room_num = room_num;
-        /* adjust the timeout to reflect the size of the job as it can take some
-         * amount of time to start the job */
-        PRTE_ADJUST_TIMEOUT(req);
-        rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
-        if (PMIX_SUCCESS != rc) {
-            pmix_show_help("help-prted.txt", "noroom", true, req->operation,
-                           prte_pmix_server_globals.num_rooms);
-            PMIX_RELEASE(req);
-            rc = prte_pmix_convert_status(rc);
-            send_error(rc, &pproc, sender, room_num);
+        /* store THEIR index to the request */
+        req->remote_index = index;
+        /* store it in my remote reqs, assigning the index in that array
+         * to the req->local_index as this is MY index to the request */
+        req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.remote_reqs, req);
+
+        /* setup the cycle timer so we periodically wake up and try again */
+        prte_event_evtimer_set(prte_event_base, &req->cycle, dmdx_check, req);
+        prte_event_set_priority(&req->cycle, PRTE_MSG_PRI);
+        req->cycle_active = true;
+        PMIX_POST_OBJECT(req);
+        tv.tv_sec = 2;
+        prte_event_evtimer_add(&req->cycle, &tv);
+
+        /* if they asked for a timeout, then set that too */
+        if (0 < timeout) {
+            prte_event_evtimer_set(prte_event_base, &req->ev, timeout_cbfunc, req);
+            prte_event_set_priority(&req->ev, PRTE_MSG_PRI);
+            req->event_active = true;
+            PMIX_POST_OBJECT(req);
+            tv.tv_sec = timeout;
+            prte_event_evtimer_add(&req->cycle, &tv);
         }
         return;
     }
-    if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, pproc.rank))) {
+
+    /* we know about this job - look for the proc */
+    proc = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, pproc.rank);
+    if (NULL == proc) {
         /* this is truly an error, so notify the sender */
-        send_error(PRTE_ERR_NOT_FOUND, &pproc, sender, room_num);
+        send_error(PRTE_ERR_NOT_FOUND, &pproc, sender, index);
         return;
     }
     if (!PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_LOCAL)) {
         /* send back an error - they obviously have made a mistake */
-        send_error(PRTE_ERR_NOT_FOUND, &pproc, sender, room_num);
+        send_error(PRTE_ERR_NOT_FOUND, &pproc, sender, index);
         return;
     }
 
@@ -1218,7 +1292,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         /* see if we have it */
         if (PMIX_SUCCESS != PMIx_Get(&pproc, key, info, ninfo, &pval)) {
             pmix_output_verbose(2, prte_pmix_server_globals.output,
-                                "%s dmdx:recv key %s not found - checking into hotel",
+                                "%s dmdx:recv key %s not found - delaying",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), key);
             /* we don't - wait for awhile */
             req = PMIX_NEW(pmix_server_req_t);
@@ -1228,22 +1302,28 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
             req->info = info;
             req->ninfo = ninfo;
             req->key = strdup(key);
-            req->remote_room_num = room_num;
-            /* adjust the timeout to reflect the size of the job as it can take some
-             * amount of time to start the job */
-            PRTE_ADJUST_TIMEOUT(req);
-            /* check us into the hotel */
-            rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
-            if (PMIX_SUCCESS != rc) {
-                pmix_show_help("help-prted.txt", "noroom", true, req->operation,
-                               prte_pmix_server_globals.num_rooms);
-                PMIX_RELEASE(req);
-                rc = prte_pmix_convert_status(rc);
-                send_error(rc, &pproc, sender, room_num);
+            req->remote_index = index;
+            /* store it in my remote reqs, assigning the index in that array
+             * to the req->local_index as this is MY index to the request */
+            req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.remote_reqs, req);
+
+            /* setup the cycle timer so we periodically wake up and try again */
+            prte_event_evtimer_set(prte_event_base, &req->cycle, dmdx_check, req);
+            prte_event_set_priority(&req->cycle, PRTE_MSG_PRI);
+            req->cycle_active = true;
+            PMIX_POST_OBJECT(req);
+            tv.tv_sec = 2;
+            prte_event_evtimer_add(&req->cycle, &tv);
+
+            /* if they asked for a timeout, then set that too */
+            if (0 < timeout) {
+                prte_event_evtimer_set(prte_event_base, &req->ev, timeout_cbfunc, req);
+                prte_event_set_priority(&req->ev, PRTE_MSG_PRI);
+                req->event_active = true;
+                PMIX_POST_OBJECT(req);
+                tv.tv_sec = timeout;
+                prte_event_evtimer_add(&req->ev, &tv);
             }
-            pmix_output_verbose(2, prte_pmix_server_globals.output,
-                                "%s:%d CHECKING REQ FOR KEY %s TO %d REMOTE ROOM %d", __FILE__,
-                                __LINE__, req->key, req->room_num, req->remote_room_num);
             return;
         }
         /* we do already have it, so go get the payload */
@@ -1261,26 +1341,36 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
     memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
     req->info = info;
     req->ninfo = ninfo;
-    req->remote_room_num = room_num;
-    /* adjust the timeout to reflect the size of the job as it can take some
-     * amount of time to start the job */
-    PRTE_ADJUST_TIMEOUT(req);
-    rc = pmix_hotel_checkin(&prte_pmix_server_globals.reqs, req, &req->room_num);
-    if (PMIX_SUCCESS != rc) {
-        pmix_show_help("help-prted.txt", "noroom", true, req->operation,
-                       prte_pmix_server_globals.num_rooms);
-        PMIX_RELEASE(req);
-        rc = prte_pmix_convert_status(rc);
-        send_error(rc, &pproc, sender, room_num);
-        return;
+    req->remote_index = index;
+    /* store it in my remote reqs, assigning the index in that array
+     * to the req->local_index as this is MY index to the request */
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.remote_reqs, req);
+
+    /* if they asked for a timeout, then set that too */
+    if (0 < timeout) {
+        prte_event_evtimer_set(prte_event_base, &req->ev, timeout_cbfunc, req);
+        prte_event_set_priority(&req->ev, PRTE_MSG_PRI);
+        req->event_active = true;
+        PMIX_POST_OBJECT(req);
+        tv.tv_sec = timeout;
+        prte_event_evtimer_add(&req->ev, &tv);
     }
 
-    /* ask our local pmix server for the data */
-    if (PMIX_SUCCESS != (prc = PMIx_server_dmodex_request(&pproc, modex_resp, req))) {
+    /* ask our local PMIx server for the data */
+    req->inprogress = true;
+    prc = PMIx_server_dmodex_request(&pproc, modex_resp, req);
+    if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
-        pmix_hotel_checkout(&prte_pmix_server_globals.reqs, req->room_num);
-        PMIX_RELEASE(req);
-        send_error(rc, &pproc, sender, room_num);
+        if (req->event_active) {
+            /* delete the timeout event */
+            prte_event_del(&req->ev);
+        }
+        if (req->cycle_active) {
+            prte_event_del(&req->cycle);
+        }
+        req->inprogress = false;
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, req->local_index, NULL);
+        send_error(rc, &pproc, sender, index);
         return;
     }
     return;
@@ -1317,7 +1407,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
                                   pmix_data_buffer_t *buffer,
                                   prte_rml_tag_t tg, void *cbdata)
 {
-    int room_num, rnum;
+    int index, n;
     int32_t cnt;
     pmix_server_req_t *req;
     datacaddy_t *d;
@@ -1349,9 +1439,9 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
         return;
     }
 
-    /* unpack our tracking room number */
+    /* unpack our tracking index */
     cnt = 1;
-    if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, &room_num, &cnt, PMIX_INT))) {
+    if (PMIX_SUCCESS != (prc = PMIx_Data_unpack(NULL, buffer, &index, &cnt, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
         PMIX_RELEASE(d);
         return;
@@ -1381,24 +1471,24 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
     }
 
     /* get the request out of the tracking array */
-    req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, room_num);
+    req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, index);
     /* return the returned data to the requestor */
     if (NULL != req) {
         if (NULL != req->mdxcbfunc) {
             PMIX_RETAIN(d);
             req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
         }
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, index, NULL);
         PMIX_RELEASE(req);
     } else {
         pmix_output_verbose(2, prte_pmix_server_globals.output,
-                            "REQ WAS NULL IN ROOM %d",
-                            room_num);
+                            "REQ WAS NULL IN ARRAY INDEX %d",
+                            index);
     }
 
     /* now see if anyone else was waiting for data from this target */
-    for (rnum = 0; rnum < prte_pmix_server_globals.local_reqs.size; rnum++) {
-        req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, rnum);
+    for (n = 0; n < prte_pmix_server_globals.local_reqs.size; n++) {
+        req = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, n);
         if (NULL == req) {
             continue;
         }
@@ -1407,7 +1497,7 @@ static void pmix_server_dmdx_resp(int status, pmix_proc_t *sender,
                 PMIX_RETAIN(d);
                 req->mdxcbfunc(pret, d->data, d->ndata, req->cbdata, relcbfunc, d);
             }
-            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, rnum, NULL);
+            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, n, NULL);
             PMIX_RELEASE(req);
         }
     }
@@ -1567,6 +1657,139 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
     }
 }
 
+static void pmix_server_sched(int status, pmix_proc_t *sender,
+                              pmix_data_buffer_t *buffer,
+                              prte_rml_tag_t tg, void *cbdata)
+{
+    pmix_status_t rc;
+    uint8_t cmd;
+    int32_t cnt;
+    size_t ninfo;
+    pmix_alloc_directive_t allocdir;
+    uint32_t sessionID;
+    pmix_info_t *info = NULL;
+    pmix_proc_t source;
+    pmix_server_req_t *req;
+    int refid;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
+
+    /* unpack the command */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &cmd, &cnt, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+
+    /* unpack the reference ID for this request */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &refid, &cnt, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    /* now that we have the remote refID, we can at least send
+     * a reply that the remote end can understand */
+
+    /* unpack the source of the request */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &source, &cnt, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto reply;
+    }
+
+    /* unpack the number of info */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto reply;
+    }
+
+    if (0 == cmd) {
+        /* allocation request - unpack the directive */
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, buffer, &allocdir, &cnt, PMIX_ALLOC_DIRECTIVE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto reply;
+        }
+    } else {
+        /* session control request */
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, buffer, &sessionID, &cnt, PMIX_UINT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto reply;
+        }
+    }
+
+   /* unpack the number of info */
+   cnt = 1;
+   rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+            goto reply;
+    }
+    if (0 < ninfo) {
+        PMIX_INFO_CREATE(info, ninfo);
+        cnt = ninfo;
+        rc = PMIx_Data_unpack(NULL, buffer, info, &cnt, PMIX_INFO);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_INFO_FREE(info, ninfo);
+            goto reply;
+        }
+    }
+
+    if (!prte_pmix_server_globals.scheduler_connected) {
+        /* the scheduler has not attached to us - there is
+         * nothing we can do */
+        rc = PMIX_ERR_NOT_SUPPORTED;
+        if (NULL != info) {
+            PMIX_INFO_FREE(info, ninfo);
+        }
+        goto reply;
+    }
+
+    /* if we have not yet set the scheduler as our server, do so */
+    if (!prte_pmix_server_globals.scheduler_set_as_server) {
+        rc = PMIx_tool_set_server(&prte_pmix_server_globals.scheduler, NULL, 0);
+        if (PMIX_SUCCESS != rc) {
+            if (NULL != info) {
+                PMIX_INFO_FREE(info, ninfo);
+            }
+            goto reply;
+        }
+        prte_pmix_server_globals.scheduler_set_as_server = true;
+    }
+
+    /* track the request */
+    req = PMIX_NEW(pmix_server_req_t);
+
+    if (0 == cmd) {
+        rc = PMIx_Allocation_request_nb(allocdir, info, ninfo,
+                                        req->infocbfunc, req);
+    } else {
+        rc = PMIx_Session_control(sessionID, info, ninfo,
+                                  req->infocbfunc, req);
+    }
+    if (PMIX_SUCCESS != rc) {
+        if (NULL != info) {
+            PMIX_INFO_FREE(info, ninfo);
+        }
+        goto reply;
+    }
+    return;
+
+reply:
+    /* send an error response */
+
+    return;
+
+}
+
 int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info)
 {
     prte_info_item_t *kv;
@@ -1603,6 +1826,8 @@ static void opcon(prte_pmix_server_op_caddy_t *p)
     p->apps = NULL;
     p->napps = 0;
     p->cbfunc = NULL;
+    p->allocdir = 0;
+    p->sessionID = UINT32_MAX;
     p->infocbfunc = NULL;
     p->toolcbfunc = NULL;
     p->spcbfunc = NULL;
@@ -1615,13 +1840,18 @@ PMIX_CLASS_INSTANCE(prte_pmix_server_op_caddy_t,
 
 static void rqcon(pmix_server_req_t *p)
 {
+    p->event_active = false;
+    p->cycle_active = false;
+    p->inprogress = false;
+    p->timed_out = false;
     p->operation = NULL;
     p->cmdline = NULL;
     p->key = NULL;
     p->flag = true;
     p->launcher = false;
     p->scheduler = false;
-    p->remote_room_num = -1;
+    p->local_index = -1;
+    p->remote_index = -1;
     p->uid = 0;
     p->gid = 0;
     p->pid = 0;
@@ -1641,6 +1871,7 @@ static void rqcon(pmix_server_req_t *p)
     p->lkcbfunc = NULL;
     p->rlcbfunc = NULL;
     p->toolcbfunc = NULL;
+    p->infocbfunc = NULL;
     p->cbdata = NULL;
 }
 static void rqdes(pmix_server_req_t *p)
