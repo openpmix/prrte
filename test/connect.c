@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
     }
 
     /* try to get a remote value */
-    PMIX_LOAD_NSPACE(&remote, myproc.nspace);
+    PMIX_LOAD_NSPACE(remote.nspace, myproc.nspace);
     if (0 == myproc.rank) {
         remote.rank = 1;
     } else {
