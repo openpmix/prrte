@@ -15,6 +15,7 @@
 # Copyright (c) 2013      Mellanox Technologies, Inc.  All rights reserved.
 # Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -37,8 +38,8 @@ TESTS = \
 	double-get \
 	get-nofence \
 	get-immediate \
-	attachtest/app.c \
-	attachtest/tool.c \
+	attachtest/app \
+	attachtest/tool \
 	abort \
 	simple_spawn \
 	hello \

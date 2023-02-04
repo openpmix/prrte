@@ -113,7 +113,7 @@ int main(int argc, char **argv)
                         "Usage: %s\n    Options:\n"
                         "        [-i N] [number of iterations]\n"
                         "        [-s] [Sync mode - wait for termination before spawning next child]\n"
-                        "        [-v] [Verbose]\n",
+                        "        [-v] [Verbose]\n"
                         "        [-r N] [Report progress every N iterations]\n",
                         argv[0]);
                 exit(1);
@@ -122,7 +122,7 @@ int main(int argc, char **argv)
                         "Usage: %s\n    Options:\n"
                         "        [-i N] [number of iterations]\n"
                         "        [-s] [Sync mode - wait for termination before spawning next child]\n"
-                        "        [-v] [Verbose]\n",
+                        "        [-v] [Verbose]\n"
                         "        [-r N] [Report progress every N iterations]\n",
                         argv[0]);
                 exit(1);
