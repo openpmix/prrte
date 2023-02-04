@@ -367,6 +367,8 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
 
     char *outputs[] = {
         PRTE_CLI_TAG,
+        PRTE_CLI_TAG_DET,
+        PRTE_CLI_TAG_FULL,
         PRTE_CLI_RANK,
         PRTE_CLI_TIMESTAMP,
         PRTE_CLI_XML,
