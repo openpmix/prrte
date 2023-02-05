@@ -17,6 +17,7 @@
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * Copyright (c) 2019-2022 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,7 +39,7 @@ static pmix_proc_t myproc;
 
 int main(int argc, char **argv)
 {
-    int rc;
+    int rc, np;
     pmix_value_t value;
     pmix_value_t *val = NULL;
     char tmp[1024];
@@ -144,7 +145,12 @@ int main(int argc, char **argv)
     }
     PMIX_ARGV_FREE(peers);
 
-    snprintf(proc.nspace, PMIX_MAX_NSLEN, "%s",  myproc.nspace);
+    np = snprintf(proc.nspace, PMIX_MAX_NSLEN, "%s",  myproc.nspace);
+    if (np >= PMIX_MAX_NSLEN) {
+        fprintf(stderr, "Client ns %s rank %d: snprintf failed\n", myproc.nspace, myproc.rank);
+        exit(0);
+    }
+
     PMIX_INFO_LOAD(&timeout, PMIX_TIMEOUT, &tlimit, PMIX_INT);
     /* get the committed data - ask for someone who doesn't exist as well */
     for (n = 0; n < nprocs; n++) {

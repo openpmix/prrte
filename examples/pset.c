@@ -16,6 +16,7 @@
  * Copyright (c) 2013-2018 Intel, Inc. All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -76,7 +77,7 @@ int main(int argc, char **argv)
                 myproc.nspace, myproc.rank, PMIx_Data_type_string(val->type));
         goto done;
     }
-    fprintf(stderr, "Client %s:%d PMIx_Get returned %d members\n", myproc.nspace, myproc.rank,
+    fprintf(stderr, "Client %s:%d PMIx_Get returned %zd members\n", myproc.nspace, myproc.rank,
             val->data.darray->size);
     pptr = (pmix_proc_t*)val->data.darray->array;
     for (n=0; n < val->data.darray->size; n++) {
