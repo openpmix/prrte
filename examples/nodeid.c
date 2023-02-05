@@ -16,6 +16,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -77,18 +78,18 @@ int main(int argc, char **argv)
         proc.rank = n;
         rc = PMIx_Get(&proc, PMIX_NODEID, NULL, 0, &val);
         if (PMIX_SUCCESS != rc) {
-            fprintf(stderr, "[%s:%u] PMIx_Get failed for nodeid on rank %u: %s\n",
+            fprintf(stderr, "[%s:%u] PMIx_Get failed for nodeid on rank %zd: %s\n",
                     myproc.nspace, myproc.rank, n, PMIx_Error_string(rc));
             break;
         }
         PMIX_VALUE_GET_NUMBER(rc, val, nodeid, uint32_t);
         if (PMIX_SUCCESS != rc) {
-            fprintf(stderr, "[%s:%u] Got bad nodeid for rank %u: %s\n",
+            fprintf(stderr, "[%s:%u] Got bad nodeid for rank %zd: %s\n",
                     myproc.nspace, myproc.rank, n, PMIx_Error_string(rc));
             goto done;
         }
         if (0 == myproc.rank) {
-            fprintf(stderr, "[%s:%u] Peer %u is running on node %u\n",
+            fprintf(stderr, "[%s:%u] Peer %zd is running on node %u\n",
                     myproc.nspace, myproc.rank, n, nodeid);
         }
         PMIX_VALUE_RELEASE(val);
