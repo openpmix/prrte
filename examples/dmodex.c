@@ -58,7 +58,7 @@ int main(int argc, char **argv)
     if (PMIX_SUCCESS != (rc = PMIx_Init(&myproc, NULL, 0))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Init failed: %d\n", myproc.nspace, myproc.rank,
                 rc);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
 
     /* get our job size */
@@ -148,7 +148,7 @@ int main(int argc, char **argv)
     np = snprintf(proc.nspace, PMIX_MAX_NSLEN, "%s",  myproc.nspace);
     if (np >= PMIX_MAX_NSLEN) {
         fprintf(stderr, "Client ns %s rank %d: snprintf failed\n", myproc.nspace, myproc.rank);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
 
     PMIX_INFO_LOAD(&timeout, PMIX_TIMEOUT, &tlimit, PMIX_INT);
@@ -242,7 +242,7 @@ done:
     if (PMIX_SUCCESS != (rc = PMIx_Fence(NULL, 0, NULL, 0))) {
         fprintf(stderr, "Client ns %s rank %d: PMIx_Fence failed: %d\n", myproc.nspace, myproc.rank,
                 rc);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (PMIX_SUCCESS != (rc = PMIx_Finalize(NULL, 0))) {
@@ -255,5 +255,5 @@ done:
         }
     }
     fflush(stderr);
-    return (0);
+    return (EXIT_SUCCESS);
 }
