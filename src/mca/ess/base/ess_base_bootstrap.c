@@ -19,6 +19,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -103,7 +104,7 @@ int prte_ess_base_bootstrap(void)
     int rc = PRTE_ERR_SILENT;
 
     /* see if we can open a configuration file */
-    path = pmix_os_path(false, prte_install_dirs.sysconfdir, "prte.conf");
+    path = pmix_os_path(false, prte_install_dirs.sysconfdir, "prte.conf", NULL);
     fp = fopen(path, "r");
     if (NULL == fp) {
         pmix_show_help("help-prte-runtime.txt", "bootstrap-not-found", true,
