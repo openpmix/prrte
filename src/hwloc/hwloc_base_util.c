@@ -169,11 +169,6 @@ hwloc_cpuset_t prte_hwloc_base_setup_summary(hwloc_topology_t topo)
     hwloc_cpuset_t avail = NULL;
 
     avail = hwloc_bitmap_alloc();
-    /* get the cpus we are bound to */
-    if (!prte_hwloc_synthetic_topo &&
-        0 <= hwloc_get_cpubind(topo, avail, HWLOC_CPUBIND_PROCESS)) {
-        return avail;
-    }
 
     /* get the root available cpuset */
 #if HWLOC_API_VERSION < 0x20000
