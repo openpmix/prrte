@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -608,30 +608,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     }
     PMIX_LIST_DESTRUCT(&local_procs);
 
-#ifdef PMIX_SIZE_ESTIMATE
-    /* determine the overall size of this payload */
-    iptr = PMIx_Info_list_get_info(info, NULL, &next);
-    size = 0;
-    while (1) {
-        ret = PMIx_Info_get_size(iptr, &sz);
-        if (PMIX_SUCCESS != ret) {
-            break;
-        }
-        size += sz;
-        if (NULL == next) {
-            break;
-        }
-        iptr = PMIx_Info_list_get_info(info, next, &next);
-    }
-    if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
-        rc = prte_pmix_convert_status(ret);
-        PMIX_INFO_LIST_RELEASE(info);
-        return rc;
-    }
-    PMIX_INFO_LIST_PREPEND(ret, info, PMIX_SIZE_ESTIMATE, &size, PMIX_SIZE);
-#endif
-    
     /* register it */
     PMIX_INFO_LIST_CONVERT(ret, info, &darray);
     pinfo = (pmix_info_t*)darray.array;

@@ -981,9 +981,6 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     uint32_t ctxid;
     bool first = true;
     char *payload;
-#ifdef PMIX_SIZE_ESTIMATE
-    size_t memsize = 0;
-#endif
 
     PMIX_ACQUIRE_OBJECT(md);
 
@@ -1002,15 +999,6 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
                     assignedID = true;
                     ++ninfo;
                 }
-#ifdef PMIX_SIZE_ESTIMATE
-            } else if (PMIX_CHECK_KEY(&infostat, PMIX_SIZE_ESTIMATE)) {
-                PMIX_VALUE_GET_NUMBER(rc, &infostat.value, memsize, size_t);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_ERROR_LOG(rc);
-                } else {
-                    ++ninfo;
-                }
-#endif
             }
             /* save where we are */
             payload = buf->unpack_ptr;
@@ -1033,11 +1021,6 @@ static void connect_release(int status, pmix_data_buffer_t *buf, void *cbdata)
             PMIX_INFO_LOAD(&info[n], PMIX_GROUP_CONTEXT_ID, &ctxid, PMIX_UINT32);
             ++n;
         }
-#ifdef PMIX_SIZE_ESTIMATE
-        if (0 < memsize) {
-            PMIX_INFO_LOAD(&info[n], PMIX_SIZE_ESTIMATE, &memsize, PMIX_SIZE);
-        }
-#endif
 
         /* there is a byte object for each proc in the connect operation */
         cnt = 1;

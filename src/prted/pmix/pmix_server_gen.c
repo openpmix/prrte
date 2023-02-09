@@ -937,10 +937,6 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     pmix_info_t info;
     pmix_byte_object_t bo;
     int32_t byused;
-#ifdef PMIX_SIZE_ESTIMATE
-    bool gotestimate = false;
-    size_t memsize = 0;
-#endif
     char *payload;
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -969,17 +965,6 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
             }
             assignedID = true;
             cd->ninfo++;
-#ifdef PMIX_SIZE_ESTIMATE
-        } else if (PMIX_CHECK_KEY(&info, PMIX_SIZE_ESTIMATE)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info.value, memsize, size_t);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                cd->ninfo = 0;
-                goto complete;
-            }
-            gotestimate = true;
-            cd->ninfo++;
-#endif
         }
         /* save where we are */
         payload = buf->unpack_ptr;
@@ -1015,12 +1000,6 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     if (0 < cd->ninfo) {
         PMIX_INFO_CREATE(cd->info, cd->ninfo);
         n = 0;
-#ifdef PMIX_SIZE_ESTIMATE
-        if (gotestimate) {
-            PMIX_INFO_LOAD(&cd->info[n], PMIX_SIZE_ESTIMATE, &memsize, PMIX_SIZE);
-            ++n;
-        }
-#endif
         if (assignedID) {
             PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_CONTEXT_ID, &cid, PMIX_UINT32);
             ++n;
