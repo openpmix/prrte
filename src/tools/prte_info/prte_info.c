@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -152,14 +152,17 @@ int main(int argc, char *argv[])
     // we do NOT accept arguments other than our own
     if (NULL != prte_info_cmd_line.tail) {
         str = PMIX_ARGV_JOIN_COMPAT(prte_info_cmd_line.tail, ' ');
-        ptr = pmix_show_help_string("help-pterm.txt", "no-args", false,
-                                    prte_tool_basename, str, prte_tool_basename);
-        free(str);
-        if (NULL != ptr) {
-            printf("%s", ptr);
-            free(ptr);
+        if (0 != strcmp(str, argv[0])) {
+            ptr = pmix_show_help_string("help-pterm.txt", "no-args", false,
+                                        prte_tool_basename, str, prte_tool_basename);
+            free(str);
+            if (NULL != ptr) {
+                printf("%s", ptr);
+                free(ptr);
+            }
+            return -1;
         }
-        return -1;
+        free(str);
     }
 
     /* setup the mca_types array */

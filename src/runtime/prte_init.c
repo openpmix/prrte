@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -106,6 +106,7 @@ pmix_proc_t prte_name_invalid = {{0}, PMIX_RANK_INVALID};
 pmix_nspace_t prte_nspace_wildcard = {0};
 
 static bool util_initialized = false;
+static bool min_initialized = false;
 
 #if PRTE_CC_USE_PRAGMA_IDENT
 #    pragma ident PRTE_IDENT_STRING
@@ -126,16 +127,15 @@ static bool check_exist(char *path)
     return false;
 }
 
-int prte_init_util(prte_proc_type_t flags)
+int prte_init_minimum(void)
 {
     int ret;
-    char *error = NULL;
     char *path = NULL;
 
-    if (util_initialized) {
+    if (min_initialized) {
         return PRTE_SUCCESS;
     }
-    util_initialized = true;
+    min_initialized = true;
 
     /* carry across the toolname */
     pmix_tool_basename = prte_tool_basename;
@@ -165,6 +165,25 @@ int prte_init_util(prte_proc_type_t flags)
     ret = pmix_show_help_add_dir(prte_install_dirs.prtedatadir);
     if (PMIX_SUCCESS != ret) {
         return prte_pmix_convert_status(ret);
+    }
+
+    return PRTE_SUCCESS;
+}
+
+int prte_init_util(prte_proc_type_t flags)
+{
+    int ret;
+    char *error = NULL;
+    char *path = NULL;
+
+    if (util_initialized) {
+        return PRTE_SUCCESS;
+    }
+    util_initialized = true;
+
+    ret = prte_init_minimum();
+    if (PRTE_SUCCESS != ret) {
+        return ret;
     }
 
     /* ensure we know the type of proc for when we finalize */

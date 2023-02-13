@@ -3,7 +3,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -295,7 +295,9 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
         if (0 == strcmp("--prtemca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
-                return PRTE_ERR_FATAL;
+                pmix_show_help("help-schizo-base.txt", "missing-values", true,
+                               "--prtemca");
+                return PRTE_ERR_SILENT;
             }
             p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
             p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
@@ -320,7 +322,9 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
         if (0 == strcmp("--mca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
-                return PRTE_ERR_FATAL;
+                pmix_show_help("help-schizo-base.txt", "missing-values", true,
+                               "--mca");
+                return PRTE_ERR_SILENT;
             }
             p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
             p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
@@ -434,7 +438,9 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
         if (0 == strcmp("--pmixmca", argv[i]) || 0 == strcmp("--gpmixmca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
-                return PRTE_ERR_FATAL;
+                pmix_show_help("help-schizo-base.txt", "missing-values", true,
+                               "--pmixmca");
+                return PRTE_ERR_SILENT;
             }
             /* strip any quotes around the args */
             p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
