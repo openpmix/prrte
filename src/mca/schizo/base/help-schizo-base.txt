@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2020      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -175,3 +175,11 @@ given are:
   bind-to: %s
 
 Please resolve the conflict and try again.
+#
+[missing-values]
+The provided command line option requires passing two
+values:
+
+  Option:  %s <MCA param name> <param value>
+
+Please provide the missing values and try again.

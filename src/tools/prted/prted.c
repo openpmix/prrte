@@ -235,6 +235,11 @@ int main(int argc, char *argv[])
         }
     }
 
+    ret = prte_init_minimum();
+    if (PRTE_SUCCESS != ret) {
+        return ret;
+    }
+
     /* we always need the prrte and pmix params */
     ret = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
     if (PRTE_SUCCESS != ret) {
