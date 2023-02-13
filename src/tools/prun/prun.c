@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -121,6 +121,11 @@ int prun(int argc, char *argv[])
     pargc = argc;
     pargv = pmix_argv_copy_strip(argv);  // strip any quoted arguments
     gethostname(hostname, sizeof(hostname));
+
+    rc = prte_init_minimum();
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
 
     /* because we have to use the schizo framework and init our hostname
      * prior to parsing the incoming argv for cmd line options, do a hacky
