@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -246,6 +246,11 @@ int main(int argc, char *argv[])
     gethostname(hostname, sizeof(hostname));
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
 
+    rc = prte_init_minimum();
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
     /* we always need the prrte and pmix params */
     rc = prte_schizo_base_parse_prte(argc, 0, argv, NULL);
     if (PRTE_SUCCESS != rc) {
@@ -307,13 +312,16 @@ int main(int argc, char *argv[])
     // we do NOT accept arguments other than our own
     if (NULL != results.tail) {
         param = PMIX_ARGV_JOIN_COMPAT(results.tail, ' ');
-        ptr = pmix_show_help_string("help-pterm.txt", "no-args", false,
-                                    prte_tool_basename, param, prte_tool_basename);
-        if (NULL != ptr) {
-            printf("%s", ptr);
-            free(ptr);
+        if (0 != strcmp(param, argv[0])) {
+            ptr = pmix_show_help_string("help-pterm.txt", "no-args", false,
+                                        prte_tool_basename, param, prte_tool_basename);
+            if (NULL != ptr) {
+                printf("%s", ptr);
+                free(ptr);
+            }
+            return -1;
         }
-        return -1;
+        free(param);
     }
 
     /* setup options */

@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
@@ -287,6 +287,11 @@ int main(int argc, char *argv[])
             0 != strncmp(environ[i], "PRTE_", 5)) {
             PMIX_ARGV_APPEND_NOSIZE_COMPAT(&prte_launch_environ, environ[i]);
         }
+    }
+
+    rc = prte_init_minimum();
+    if (PRTE_SUCCESS != rc) {
+        return rc;
     }
 
     /* because we have to use the schizo framework and init our hostname
