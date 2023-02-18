@@ -181,6 +181,11 @@ int main(int argc, char *argv[])
     /* add those in */
     pmix_pointer_array_add(&mca_types, "pmix");
 
+    /* add the rml and routed types since they are no
+     * longer in a framework */
+    pmix_pointer_array_add(&mca_types, "rml");
+    pmix_pointer_array_add(&mca_types, "routed");
+
     /* push all the types found by autogen */
     for (i = 0; NULL != prte_frameworks[i]; i++) {
         pmix_pointer_array_add(&mca_types, prte_frameworks[i]->framework_name);
