@@ -18,7 +18,7 @@
  * Copyright (c) 2018      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2018      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -401,11 +401,6 @@ void prte_info_do_config(bool want_all)
         prte_info_out("Build LDFLAGS", "option:build:ldflags", PRTE_BUILD_LDFLAGS);
         prte_info_out("Build LIBS", "option:build:libs", PRTE_BUILD_LIBS);
 
-        prte_info_out("Wrapper extra CFLAGS", "option:wrapper:extra_cflags",
-                      PRTE_WRAPPER_EXTRA_CFLAGS);
-        prte_info_out("Wrapper extra LDFLAGS", "option:wrapper:extra_ldflags",
-                      PRTE_WRAPPER_EXTRA_LDFLAGS);
-        prte_info_out("Wrapper extra LIBS", "option:wrapper:extra_libs", PRTE_WRAPPER_EXTRA_LIBS);
     }
 
     prte_info_out("Internal debug support", "option:debug", debug);
