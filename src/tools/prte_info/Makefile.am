@@ -14,7 +14,7 @@
 # Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -34,9 +34,6 @@ AM_CFLAGS = \
             -DPRTE_BUILD_LDFLAGS="\"@LDFLAGS@\"" \
             -DPRTE_BUILD_LIBS="\"@LIBS@\"" \
             -DPRTE_CC_ABSOLUTE="\"@PRTE_CC_ABSOLUTE@\"" \
-            -DPRTE_WRAPPER_EXTRA_CFLAGS="\"@PRTE_WRAPPER_EXTRA_CFLAGS@\"" \
-            -DPRTE_WRAPPER_EXTRA_LDFLAGS="\"@PRTE_WRAPPER_EXTRA_LDFLAGS@\"" \
-            -DPRTE_WRAPPER_EXTRA_LIBS="\"@PRTE_WRAPPER_EXTRA_LIBS@\"" \
             -DPRTE_GREEK_VERSION="\"@PRTE_GREEK_VERSION@\"" \
             -DPRTE_REPO_REV="\"@PRTE_REPO_REV@\"" \
             -DPMIX_RELEASE_DATE="\"@PMIX_RELEASE_DATE@\""
