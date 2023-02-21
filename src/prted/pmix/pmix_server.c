@@ -694,15 +694,8 @@ int pmix_server_init(void)
                            &prte_bind_progress_thread_reqd, PMIX_BOOL);
     }
 
-    /* if we are the MASTER, then we are the scheduler
-     * as well as a gateway */
+    /* if we are the MASTER, then we are the gateway */
     if (PRTE_PROC_IS_MASTER) {
-        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SCHEDULER, NULL, PMIX_BOOL);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_INFO_LIST_RELEASE(ilist);
-            rc = prte_pmix_convert_status(prc);
-            return rc;
-        }
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_GATEWAY, NULL, PMIX_BOOL);
         if (PMIX_SUCCESS != prc) {
             PMIX_INFO_LIST_RELEASE(ilist);
