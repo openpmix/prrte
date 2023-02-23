@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -120,7 +120,7 @@ int main(int argc, char **argv)
     pmix_value_t *val = &value;
     char *tmp;
     pmix_proc_t proc;
-    uint32_t nprocs, n;
+    uint32_t nprocs, n, sid;
     pmix_info_t *info;
     bool flag;
     mylock_t mylock;
@@ -212,6 +212,29 @@ int main(int argc, char **argv)
     PMIX_VALUE_GET_NUMBER(rc, val, nprocs, uint32_t);
     PMIX_VALUE_RELEASE(val);
     fprintf(stderr, "Client %s:%d num procs %d\n", myproc.nspace, myproc.rank, nprocs);
+
+    /* get out sessionID */
+    if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_SESSION_ID, NULL, 0, &val))) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get sessionID failed: %d\n", myproc.nspace,
+                myproc.rank, rc);
+    } else {
+        PMIX_VALUE_GET_NUMBER(rc, val, sid, uint32_t);
+        if (PMIX_SUCCESS != rc) {
+            fprintf(stderr, "Session ID was not a number: %s\n", PMIx_Error_string(rc));
+            goto done;
+        }
+        fprintf(stderr, "Client %s:%d sessionID %u\n", myproc.nspace, myproc.rank, sid);
+        PMIX_VALUE_RELEASE(val);
+    }
+
+    /* get out jobID */
+    if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_JOBID, NULL, 0, &val))) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Get jobID failed: %d\n", myproc.nspace,
+                myproc.rank, rc);
+    } else {
+        fprintf(stderr, "Client %s:%d jobID %s\n", myproc.nspace, myproc.rank, val->data.string);
+        PMIX_VALUE_RELEASE(val);
+    }
 
     /* get the number of local procs in our job */
     if (PMIX_SUCCESS != (rc = PMIx_Get(&proc, PMIX_LOCAL_SIZE, NULL, 0, &val))) {
