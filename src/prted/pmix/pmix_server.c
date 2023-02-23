@@ -1765,8 +1765,12 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
         rc = PMIx_Allocation_request_nb(allocdir, info, ninfo,
                                         req->infocbfunc, req);
     } else {
+#if PMIX_NUMERIC_VERSION < 0x00050000
+        rc = PMIX_ERR_NOT_SUPPORTED;
+#else
         rc = PMIx_Session_control(sessionID, info, ninfo,
                                   req->infocbfunc, req);
+#endif
     }
     if (PMIX_SUCCESS != rc) {
         if (NULL != info) {
