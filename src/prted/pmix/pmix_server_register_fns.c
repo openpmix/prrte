@@ -38,6 +38,7 @@
 
 #include "prte_stdint.h"
 #include "src/hwloc/hwloc-internal.h"
+#include "src/include/hash_string.h"
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_argv.h"
 #include "src/util/error.h"
@@ -112,6 +113,16 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         return rc;
     }
     PMIX_INFO_LIST_ADD(ret, info, PMIX_SERVER_RANK, &prte_process_info.myproc.rank, PMIX_PROC_RANK);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_ERROR_LOG(ret);
+        PMIX_INFO_LIST_RELEASE(info);
+        rc = prte_pmix_convert_status(ret);
+        return rc;
+    }
+
+    /* pass the session ID - just a 32-bit hash of our nspace for now */
+    PRTE_HASH_STR(prte_process_info.myproc.nspace, ui32);
+    PMIX_INFO_LIST_ADD(ret, info, PMIX_SESSION_ID, &ui32, PMIX_UINT32);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PMIX_INFO_LIST_RELEASE(info);
