@@ -1697,6 +1697,14 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
         goto reply;
     }
 
+    /* unpack the number of info */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto reply;
+    }
+
     if (0 == cmd) {
         /* allocation request - unpack the directive */
         cnt = 1;
