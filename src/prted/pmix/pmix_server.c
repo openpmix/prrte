@@ -18,7 +18,8 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -373,7 +374,6 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
 static char *generate_dist = "fabric,gpu,network";
 void pmix_server_register_params(void)
 {
-    char **tmp;
     int i;
 
     /* register a verbosity */
@@ -431,7 +431,7 @@ void pmix_server_register_params(void)
                                       &generate_dist);
     prte_pmix_server_globals.generate_dist = 0;
     if (NULL != generate_dist) {
-        tmp = PMIX_ARGV_SPLIT_COMPAT(generate_dist, ',');
+        char **tmp = PMIX_ARGV_SPLIT_COMPAT(generate_dist, ',');
         for (i=0; NULL != tmp[i]; i++) {
             if (0 == strcasecmp(tmp[i], "fabric")) {
                 prte_pmix_server_globals.generate_dist |= PMIX_DEVTYPE_OPENFABRICS;
@@ -441,6 +441,7 @@ void pmix_server_register_params(void)
                 prte_pmix_server_globals.generate_dist |= PMIX_DEVTYPE_NETWORK;
             }
         }
+        PMIX_ARGV_FREE_COMPAT(tmp);
     }
 
 }
