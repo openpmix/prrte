@@ -22,7 +22,7 @@
  * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2022      Triad National Security, LLC. All rights
+ * Copyright (c) 2022-2023 Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
  *
@@ -644,6 +644,7 @@ int main(int argc, char *argv[])
     PMIx_Register_event_handler(&code, 1, &info, 1, parent_died_fn, evhandler_reg_callbk,
                                 (void *) &mylock);
     PRTE_PMIX_WAIT_THREAD(&mylock.lock);
+    PMIX_INFO_DESTRUCT(&info);
     PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
 
     /* check for launch directives in case we were launched by a
