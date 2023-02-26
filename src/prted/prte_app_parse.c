@@ -19,7 +19,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
- * Copyright (c) 2022      Triad National Security, LLC.
+ * Copyright (c) 2022-2023 Triad National Security, LLC.
  *                         All rights reserved.
  * $COPYRIGHT$
  *
@@ -123,7 +123,7 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     /* Setup application context */
     app = PMIX_NEW(prte_pmix_app_t);
     app->app.argv = PMIX_ARGV_COPY_COMPAT(results.tail);
-    app->app.cmd = strdup(app->app.argv[0]);
+    // app->app.cmd is setup below.
 
     /* see if we are to forward the environment */
     fwd = prte_fwd_environment;
