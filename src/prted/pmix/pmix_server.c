@@ -827,6 +827,8 @@ int pmix_server_init(void)
         rc = prte_pmix_convert_status(prc);
         return rc;
     }
+
+    PMIX_INFO_LIST_RELEASE(ilist);
     info = (pmix_info_t*)darray.array;
     ninfo = darray.size;
     prc = PMIx_server_register_resources(info, ninfo, NULL, NULL);
