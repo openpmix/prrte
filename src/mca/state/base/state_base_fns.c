@@ -6,7 +6,6 @@
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
- * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -66,6 +65,7 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
             error = itm;
         }
         if (s->job_state == state) {
+            PRTE_REACHING_JOB_STATE(jdata, state, s->priority);
             if (NULL == s->cbfunc) {
                 PMIX_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
                                      "%s NULL CBFUNC FOR JOB %s STATE %s",
@@ -80,7 +80,6 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
                 caddy->job_state = state;
                 PMIX_RETAIN(jdata);
             }
-            PRTE_REACHING_JOB_STATE(jdata, state, s->priority);
             PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
             return;
         }
@@ -227,6 +226,7 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
             error = itm;
         }
         if (s->proc_state == state) {
+            PRTE_REACHING_PROC_STATE(proc, state, s->priority);
             if (NULL == s->cbfunc) {
                 PMIX_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
                                      "%s NULL CBFUNC FOR PROC %s STATE %s",
@@ -237,7 +237,6 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
             caddy = PMIX_NEW(prte_state_caddy_t);
             caddy->name = *proc;
             caddy->proc_state = state;
-            PRTE_REACHING_PROC_STATE(proc, state, s->priority);
             PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
             return;
         }
