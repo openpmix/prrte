@@ -1136,17 +1136,18 @@ int main(int argc, char *argv[])
         pname.rank = 0;
     }
     if (PMIX_RANK_INVALID != pname.rank) {
-        PMIX_INFO_CREATE(iptr, 1);
-        PMIX_INFO_LOAD(&iptr[0], PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
+        pmix_info_t *iptr2;
+        PMIX_INFO_CREATE(iptr2, 1);
+        PMIX_INFO_LOAD(&iptr2[0], PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
         PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-        ret = PMIx_IOF_push(&pname, 1, NULL, iptr, 1, opcbfunc, &lock);
+        ret = PMIx_IOF_push(&pname, 1, NULL, iptr2, 1, opcbfunc, &lock);
         if (PMIX_SUCCESS != ret && PMIX_OPERATION_SUCCEEDED != ret) {
             pmix_output(0, "IOF push of stdin failed: %s", PMIx_Error_string(ret));
         } else if (PMIX_SUCCESS == ret) {
             PRTE_PMIX_WAIT_THREAD(&lock);
         }
         PRTE_PMIX_DESTRUCT_LOCK(&lock);
-        PMIX_INFO_FREE(iptr, 1);
+        PMIX_INFO_FREE(iptr2, 1);
     }
 
 proceed:
