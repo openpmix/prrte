@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
     prte_pmix_lock_t lock;
     pmix_list_t apps;
     prte_pmix_app_t *app;
-    pmix_info_t *iptr, info;
+    pmix_info_t *iptr, *iptr2, info;
     pmix_status_t ret;
     bool flag;
     size_t n, ninfo, param_len;
@@ -1136,7 +1136,6 @@ int main(int argc, char *argv[])
         pname.rank = 0;
     }
     if (PMIX_RANK_INVALID != pname.rank) {
-        pmix_info_t *iptr2;
         PMIX_INFO_CREATE(iptr2, 1);
         PMIX_INFO_LOAD(&iptr2[0], PMIX_IOF_PUSH_STDIN, NULL, PMIX_BOOL);
         PRTE_PMIX_CONSTRUCT_LOCK(&lock);
