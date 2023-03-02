@@ -593,18 +593,20 @@ static void _toolconn(int sd, short args, void *cbdata)
 
     /* if this is the scheduler and we are not the DVM master, then
      * this is not allowed */
-    if (cd->scheduler && !PRTE_PROC_IS_MASTER) {
-        cd->toolcbfunc(PMIX_ERR_NOT_SUPPORTED, NULL, cd->cbdata);
-        PMIX_RELEASE(cd);
-        return;
-    } else {
-        /* mark that the scheduler has attached to us */
-        prte_pmix_server_globals.scheduler_connected = true;
-        PMIX_LOAD_PROCID(&prte_pmix_server_globals.scheduler,
-                         cd->target.nspace, cd->target.rank);
-        /* we cannot immediately set the scheduler to be our
-         * PMIx server as the PMIx library hasn't finished
-         * recording it */
+    if (cd->scheduler) {
+        if (!PRTE_PROC_IS_MASTER) {
+            cd->toolcbfunc(PMIX_ERR_NOT_SUPPORTED, NULL, cd->cbdata);
+            PMIX_RELEASE(cd);
+            return;
+        } else {
+            /* mark that the scheduler has attached to us */
+            prte_pmix_server_globals.scheduler_connected = true;
+            PMIX_LOAD_PROCID(&prte_pmix_server_globals.scheduler,
+                             cd->target.nspace, cd->target.rank);
+            /* we cannot immediately set the scheduler to be our
+             * PMIx server as the PMIx library hasn't finished
+             * recording it */
+        }
     }
 
     /* if we are not the HNP or master, and the tool doesn't

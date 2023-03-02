@@ -582,6 +582,8 @@ int pmix_server_init(void)
     pmix_pointer_array_init(&prte_pmix_server_globals.remote_reqs, 128, INT_MAX, 2);
     PMIX_CONSTRUCT(&prte_pmix_server_globals.notifications, pmix_list_t);
     prte_pmix_server_globals.server = *PRTE_NAME_INVALID;
+    prte_pmix_server_globals.scheduler_connected = false;
+    prte_pmix_server_globals.scheduler_set_as_server = false;
 
     PMIX_INFO_LIST_START(ilist);
 
@@ -1690,14 +1692,6 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     /* unpack the source of the request */
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &source, &cnt, PMIX_PROC);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        goto reply;
-    }
-
-    /* unpack the number of info */
-    cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         goto reply;
