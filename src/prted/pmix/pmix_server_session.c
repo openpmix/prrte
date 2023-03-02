@@ -20,6 +20,28 @@ static void localrelease(void *cbdata)
     PMIX_RELEASE(req);
 }
 
+static void infocbfunc(pmix_status_t status,
+                       pmix_info_t *info, size_t ninfo,
+                       void *cbdata,
+                       pmix_release_cbfunc_t rel, void *relcbdata)
+{
+    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+
+    if (NULL != req->infocbfunc) {
+        req->infocbfunc(status, info, ninfo, req->cbdata, localrelease, req);
+        if (NULL != rel) {
+            rel(relcbdata);
+        }
+        return;
+    }
+    /* need to cleanup ourselves */
+    if (NULL != rel) {
+        rel(relcbdata);
+    }
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+    PMIX_RELEASE(req);
+}
+
 static void pass_request(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t*)cbdata;
@@ -41,6 +63,38 @@ static void pass_request(int sd, short args, void *cbdata)
     req->cbdata = cd->cbdata;
     /* add this request to our local request tracker array */
     req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+
+    /* if we are the DVM master, then handle this ourselves */
+    if (PRTE_PROC_IS_MASTER) {
+        if (!prte_pmix_server_globals.scheduler_connected) {
+            /* the scheduler has not attached to us - there is
+             * nothing we can do */
+            rc = PMIX_ERR_NOT_SUPPORTED;
+            goto callback;
+        }
+
+        /* if we have not yet set the scheduler as our server, do so */
+        if (!prte_pmix_server_globals.scheduler_set_as_server) {
+            rc = PMIx_tool_set_server(&prte_pmix_server_globals.scheduler, NULL, 0);
+            if (PMIX_SUCCESS != rc) {
+                goto callback;
+            }
+            prte_pmix_server_globals.scheduler_set_as_server = true;
+        }
+
+        if (0 == command) {
+            rc = PMIx_Allocation_request_nb(cd->allocdir, cd->info, cd->ninfo,
+                                            infocbfunc, req);
+        } else {
+            rc = PMIx_Session_control(cd->sessionID, cd->info, cd->ninfo,
+                                      infocbfunc, req);
+        }
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto callback;
+        }
+        return;
+    }
 
     PMIX_DATA_BUFFER_CREATE(buf);
 
