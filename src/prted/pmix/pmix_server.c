@@ -640,6 +640,8 @@ int pmix_server_init(void)
     }
     PMIX_CONSTRUCT(&prte_pmix_server_globals.notifications, pmix_list_t);
     prte_pmix_server_globals.server = *PRTE_NAME_INVALID;
+    prte_pmix_server_globals.scheduler_connected = false;
+    prte_pmix_server_globals.scheduler_set_as_server = false;
 
     PMIX_INFO_LIST_START(ilist);
 
@@ -1568,6 +1570,135 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
         }
         PMIX_RELEASE(scd);
     }
+}
+
+static void pmix_server_sched(int status, pmix_proc_t *sender,
+                              pmix_data_buffer_t *buffer,
+                              prte_rml_tag_t tg, void *cbdata)
+{
+    pmix_status_t rc;
+    uint8_t cmd;
+    int32_t cnt;
+    size_t ninfo;
+    pmix_alloc_directive_t allocdir;
+    uint32_t sessionID;
+    pmix_info_t *info = NULL;
+    pmix_proc_t source;
+    pmix_server_req_t *req;
+    int refid;
+    PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
+
+    /* unpack the command */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &cmd, &cnt, PMIX_UINT8);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+
+    /* unpack the reference ID for this request */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &refid, &cnt, PMIX_INT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return;
+    }
+    /* now that we have the remote refID, we can at least send
+     * a reply that the remote end can understand */
+
+    /* unpack the source of the request */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &source, &cnt, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto reply;
+    }
+
+    if (0 == cmd) {
+        /* allocation request - unpack the directive */
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, buffer, &allocdir, &cnt, PMIX_ALLOC_DIRECTIVE);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto reply;
+        }
+    } else {
+        /* session control request */
+        cnt = 1;
+        rc = PMIx_Data_unpack(NULL, buffer, &sessionID, &cnt, PMIX_UINT32);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            goto reply;
+        }
+    }
+
+   /* unpack the number of info */
+   cnt = 1;
+   rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+            goto reply;
+    }
+    if (0 < ninfo) {
+        PMIX_INFO_CREATE(info, ninfo);
+        cnt = ninfo;
+        rc = PMIx_Data_unpack(NULL, buffer, info, &cnt, PMIX_INFO);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_INFO_FREE(info, ninfo);
+            goto reply;
+        }
+    }
+
+    if (!prte_pmix_server_globals.scheduler_connected) {
+        /* the scheduler has not attached to us - there is
+         * nothing we can do */
+        rc = PMIX_ERR_NOT_SUPPORTED;
+        if (NULL != info) {
+            PMIX_INFO_FREE(info, ninfo);
+        }
+        goto reply;
+    }
+
+    /* if we have not yet set the scheduler as our server, do so */
+    if (!prte_pmix_server_globals.scheduler_set_as_server) {
+        rc = PMIx_tool_set_server(&prte_pmix_server_globals.scheduler, NULL, 0);
+        if (PMIX_SUCCESS != rc) {
+            if (NULL != info) {
+                PMIX_INFO_FREE(info, ninfo);
+            }
+            goto reply;
+        }
+        prte_pmix_server_globals.scheduler_set_as_server = true;
+    }
+
+    /* track the request */
+    req = PMIX_NEW(pmix_server_req_t);
+
+    if (0 == cmd) {
+        rc = PMIx_Allocation_request_nb(allocdir, info, ninfo,
+                                        req->infocbfunc, req);
+    } else {
+#if PMIX_NUMERIC_VERSION < 0x00050000
+        rc = PMIX_ERR_NOT_SUPPORTED;
+#else
+        rc = PMIx_Session_control(sessionID, info, ninfo,
+                                  req->infocbfunc, req);
+#endif
+    }
+    if (PMIX_SUCCESS != rc) {
+        if (NULL != info) {
+            PMIX_INFO_FREE(info, ninfo);
+        }
+        goto reply;
+    }
+    return;
+
+reply:
+    /* send an error response */
+
+    return;
+
 }
 
 int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info)
