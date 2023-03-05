@@ -702,12 +702,22 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* start by sending it to ourselves */
-    PRTE_RML_SEND(ret, PRTE_PROC_MY_NAME->rank, buffer, PRTE_RML_TAG_PRTED_CALLBACK);
-    if (PRTE_SUCCESS != ret) {
-        PRTE_ERROR_LOG(ret);
-        PMIX_DATA_BUFFER_RELEASE(buffer);
-        goto DONE;
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_TREE_SPAWN)) {
+        /* if we are tree-spawning, start by sending it to ourselves */
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_NAME->rank, buffer, PRTE_RML_TAG_PRTED_CALLBACK);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
+            goto DONE;
+        }
+    } else {
+        /* send it to the HNP */
+        PRTE_RML_SEND(ret, PRTE_PROC_MY_HNP->rank, buffer, PRTE_RML_TAG_PRTED_CALLBACK);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            PMIX_DATA_BUFFER_RELEASE(buffer);
+            goto DONE;
+        }
     }
 
     /* if we are tree-spawning, then we need to capture the MCA params
