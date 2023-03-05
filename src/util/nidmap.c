@@ -5,7 +5,7 @@
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      Triad National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -421,6 +421,9 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
         prte_process_info.num_daemons = daemons->num_procs;
         prte_rml_compute_routing_tree();
     }
+
+    /* update the routing tree */
+    prte_rml_compute_routing_tree();
 
 cleanup:
     if (NULL != vpid) {
