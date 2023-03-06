@@ -86,8 +86,12 @@ static void pass_request(int sd, short args, void *cbdata)
             rc = PMIx_Allocation_request_nb(cd->allocdir, cd->info, cd->ninfo,
                                             infocbfunc, req);
         } else {
-            rc = PMIx_Session_control(cd->sessionID, cd->info, cd->ninfo,
-                                      infocbfunc, req);
+#if PMIX_NUMERIC_VERSION < 0x00050000
+        rc = PMIX_ERR_NOT_SUPPORTED;
+#else
+        rc = PMIx_Session_control(cd->sessionID, cd->info, cd->ninfo,
+                                  infocbfunc, req);
+#endif
         }
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
