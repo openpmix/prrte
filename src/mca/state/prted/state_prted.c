@@ -5,7 +5,7 @@
  * Copyright (c) 2020-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021-2022  Consulting.  All rights reserved.
- * Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -338,14 +338,13 @@ static void track_procs(int fd, short argc, void *cbdata)
     proc = &caddy->name;
     state = caddy->proc_state;
 
-    PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+    pmix_output_verbose(5, prte_state_base_framework.framework_output,
                          "%s state:prted:track_procs called for proc %s state %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
-                         prte_proc_state_to_str(state)));
+                         prte_proc_state_to_str(state));
 
     /* get the job object for this proc */
     if (NULL == (jdata = prte_get_job_data_object(proc->nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         goto cleanup;
     }
     if (PRTE_PROC_STATE_READY_FOR_DEBUG == state) {
@@ -492,10 +491,8 @@ static void track_procs(int fd, short argc, void *cbdata)
         if (prte_prteds_term_ordered &&
             0 == pmix_list_get_size(&prte_rml_base.children)) {
             for (i = 0; i < prte_local_children->size; i++) {
-                if (NULL
-                        != (pdata = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
-                                                                                i))
-                    && PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
+                pdata = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+                if (NULL != pdata && PRTE_FLAG_TEST(pdata, PRTE_PROC_FLAG_ALIVE)) {
                     /* at least one is still alive */
                     PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
                                          "%s state:prted all routes gone but proc %s still alive",
