@@ -10,7 +10,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -211,6 +211,12 @@ void prte_rml_compute_routing_tree(void)
         PMIX_LIST_FOREACH(child, &prte_rml_base.children, prte_routed_tree_t)
         {
             d = (prte_proc_t *) pmix_pointer_array_get_item(dmns->procs, child->rank);
+            if (NULL == d || NULL == d->node || NULL == d->node->name) {
+                pmix_output(0, "%s: \tchild %d ",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            child->rank);
+                continue;
+            }
             pmix_output(0, "%s: \tchild %d node %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         child->rank, d->node->name);
             for (j = 0; j < (int) prte_process_info.num_daemons; j++) {
