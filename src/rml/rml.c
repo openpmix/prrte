@@ -8,7 +8,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,6 +47,7 @@ static int verbosity = 0;
 
 void prte_rml_register(void)
 {
+    int ret;
 
     prte_rml_base.max_retries = 3;
     pmix_mca_base_var_register("prte", "rml", "base", "max_retries",
@@ -74,10 +75,13 @@ void prte_rml_register(void)
         pmix_output_set_verbosity(prte_rml_base.routed_output, verbosity);
     }
 
-    pmix_mca_base_var_register("prte", "rml", "base", "radix",
-                               "Radix to be used for routing tree",
-                               PMIX_MCA_BASE_VAR_TYPE_INT,
-                               &prte_rml_base.radix);
+    ret = pmix_mca_base_var_register("prte", "rml", "base", "radix",
+                                     "Radix to be used for routing tree",
+                                     PMIX_MCA_BASE_VAR_TYPE_INT,
+                                     &prte_rml_base.radix);
+    pmix_mca_base_var_register_synonym(ret, "prte", "routed", "radix", NULL,
+                                       PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+
 }
 
 void prte_rml_close(void)
