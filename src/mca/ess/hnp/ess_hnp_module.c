@@ -507,8 +507,10 @@ static int rte_finalize(void)
     (void) pmix_mca_base_framework_close(&prte_grpcomm_base_framework);
     (void) pmix_mca_base_framework_close(&prte_iof_base_framework);
     (void) pmix_mca_base_framework_close(&prte_plm_base_framework);
-    /* make sure our local procs are dead */
-    prte_odls.kill_local_procs(NULL);
+    if (!prte_abnormal_term_ordered) {
+        /* make sure our local procs are dead */
+        prte_odls.kill_local_procs(NULL);
+    }
     (void) pmix_mca_base_framework_close(&prte_rtc_base_framework);
     (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
     prte_rml_close();
