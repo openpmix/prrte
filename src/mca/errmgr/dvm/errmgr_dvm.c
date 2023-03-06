@@ -256,7 +256,8 @@ static void proc_errors(int fd, short args, void *cbdata)
          * avoid normal termination issues */
         if (PRTE_PROC_STATE_COMM_FAILED == state ||
             PRTE_PROC_STATE_HEARTBEAT_FAILED == state ||
-            PRTE_PROC_STATE_UNABLE_TO_SEND_MSG == state) {
+            PRTE_PROC_STATE_UNABLE_TO_SEND_MSG == state ||
+            PRTE_PROC_STATE_FAILED_TO_START == state) {
             /* if this is my own connection, ignore it */
             if (PRTE_PROC_MY_NAME->rank == proc->rank) {
                 PMIX_OUTPUT_VERBOSE((5, prte_errmgr_base_framework.framework_output,
@@ -334,6 +335,11 @@ static void proc_errors(int fd, short args, void *cbdata)
         } else {
             pmix_output(0, "UNSUPPORTED DAEMON ERROR STATE: %s", prte_proc_state_to_str(state));
         }
+        /* since communications have failed, we have to simply force ourselves
+         * to terminate as we cannot rely on the routing tree to get messages
+         * out to other daemons */
+        prte_abnormal_term_ordered = true;
+        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
         goto cleanup;
     }
 
