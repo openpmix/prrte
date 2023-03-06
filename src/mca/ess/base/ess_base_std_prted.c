@@ -100,6 +100,7 @@ int prte_ess_base_prted_setup(void)
     int fd;
     char log_file[PATH_MAX];
     char *error = NULL;
+    char *uri = NULL;
     prte_job_t *jdata;
     prte_proc_t *proc;
     prte_app_context_t *app;
@@ -108,6 +109,7 @@ int prte_ess_base_prted_setup(void)
     prte_topology_t *t;
     prte_ess_base_signal_t *sig;
     int idx;
+    pmix_value_t val;
 
     plm_in_use = false;
 
@@ -339,9 +341,20 @@ int prte_ess_base_prted_setup(void)
     /* it is now safe to start the pmix server */
     pmix_server_start();
 
-    if (NULL != prte_process_info.my_hnp_uri) {
-        pmix_value_t val;
+    /* store our URI for later */
+    prte_oob_base_get_addr(&uri);
+    PMIX_VALUE_LOAD(&val, uri, PMIX_STRING);
+    ret = PMIx_Store_internal(PRTE_PROC_MY_NAME, PMIX_PROC_URI, &val);
+    if (PMIX_SUCCESS != ret) {
+        PMIX_VALUE_DESTRUCT(&val);
+        error = "store MY URI";
+        ret = PRTE_ERROR;
+        goto error;
+    }
+    PMIX_VALUE_DESTRUCT(&val);
+    free(uri);
 
+    if (NULL != prte_process_info.my_hnp_uri) {
         /* extract the HNP's name so we can update the routing table */
         ret = prte_rml_parse_uris(prte_process_info.my_hnp_uri,
                                   PRTE_PROC_MY_HNP,
@@ -356,7 +369,8 @@ int prte_ess_base_prted_setup(void)
          * if/when we attempt to send to it
          */
         PMIX_VALUE_LOAD(&val, prte_process_info.my_hnp_uri, PMIX_STRING);
-        if (PMIX_SUCCESS != PMIx_Store_internal(PRTE_PROC_MY_PROCID, PMIX_PROC_URI, &val)) {
+        ret = PMIx_Store_internal(PRTE_PROC_MY_HNP, PMIX_PROC_URI, &val);
+        if (PMIX_SUCCESS != ret) {
             PMIX_VALUE_DESTRUCT(&val);
             error = "store HNP URI";
             ret = PRTE_ERROR;
