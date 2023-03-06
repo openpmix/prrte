@@ -419,7 +419,6 @@ int prte_util_decode_nidmap(pmix_data_buffer_t *buf)
     /* update num procs */
     if (prte_process_info.num_daemons != daemons->num_procs) {
         prte_process_info.num_daemons = daemons->num_procs;
-        prte_rml_compute_routing_tree();
     }
 
     /* update the routing tree */
