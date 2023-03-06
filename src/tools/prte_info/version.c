@@ -192,9 +192,8 @@ void prte_info_show_component_version(const char *type_name, const char *compone
     /* Now that we have a valid type, find the right component list */
     components = NULL;
     for (j = 0; j < prte_component_map.size; j++) {
-        if (NULL
-            == (map = (prte_info_component_map_t *) pmix_pointer_array_get_item(&prte_component_map,
-                                                                                j))) {
+        map = (prte_info_component_map_t*) pmix_pointer_array_get_item(&prte_component_map, j);
+        if (NULL == map) {
             continue;
         }
         if (0 == strcmp(type_name, map->type)) {
@@ -216,6 +215,11 @@ void prte_info_show_component_version(const char *type_name, const char *compone
                 }
             }
         }
+    } else {
+        /* there are no components, but we still show their type */
+        pmix_asprintf(&pos, "MCA %s", type_name);
+        prte_info_out(pos, NULL, " no components");
+        free(pos);
     }
 }
 
