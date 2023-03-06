@@ -160,6 +160,14 @@ static void send_nb(prte_rml_send_t *msg)
     hop.rank = prte_rml_get_route(msg->dst.rank);
     /* do we know this hop? */
     if (NULL == (peer = prte_oob_tcp_peer_lookup(&hop))) {
+        /* if this message is going to the HNP, send it direct */
+        if (PRTE_PROC_MY_HNP->rank == msg->dst.rank) {
+            hop.rank = PRTE_PROC_MY_HNP->rank;
+            peer = prte_oob_tcp_peer_lookup(&hop);
+            if (NULL != peer) {
+                goto send;
+            }
+        }
         /* push this back to the component so it can try
          * another module within this transport. If no
          * module can be found, the component can push back
@@ -174,6 +182,7 @@ static void send_nb(prte_rml_send_t *msg)
         return;
     }
 
+send:
     pmix_output_verbose(2, prte_oob_base_framework.framework_output,
                         "%s:[%s:%d] processing send to peer %s:%d seq_num = %d via %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__,
