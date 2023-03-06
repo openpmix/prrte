@@ -1336,7 +1336,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     idx = 1;
     while (PMIX_SUCCESS == (ret = PMIx_Data_unpack(NULL, buffer, &dname, &idx, PMIX_PROC))) {
 
-        pmix_output_verboxe(5, prte_plm_base_framework.framework_output,
+        pmix_output_verbose(5, prte_plm_base_framework.framework_output,
                              "%s plm:base:orted_report_launch from daemon %s",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&dname));
 
