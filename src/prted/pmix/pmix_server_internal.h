@@ -54,40 +54,24 @@
 
 BEGIN_C_DECLS
 
-#define PRTED_PMIX_MIN_DMX_TIMEOUT 120
-#define PRTE_ADJUST_TIMEOUT(a)                                       \
-    do {                                                             \
-        size_t _n;                                                   \
-        bool _set = false;                                           \
-        if (NULL != (a)->info) {                                     \
-            for (_n = 0; _n < (a)->ninfo; _n++) {                    \
-                if (PMIX_CHECK_KEY(&(a)->info[_n], PMIX_TIMEOUT)) {  \
-                    (a)->timeout = (a)->info[_n].value.data.integer; \
-                    _set = true;                                     \
-                }                                                    \
-            }                                                        \
-        }                                                            \
-        if (!_set) {                                                 \
-            (a)->timeout = (2 * prte_process_info.num_daemons) / 10; \
-            if ((a)->timeout < PRTED_PMIX_MIN_DMX_TIMEOUT) {         \
-                (a)->timeout = PRTED_PMIX_MIN_DMX_TIMEOUT;           \
-            }                                                        \
-        }                                                            \
-    } while (0)
-
 /* object for tracking requests so we can
  * correctly route the eventual reply */
 typedef struct {
     pmix_object_t super;
     prte_event_t ev;
+    bool event_active;
+    prte_event_t cycle;
+    bool cycle_active;
+    bool inprogress;
+    bool timed_out;
     char *operation;
     char *cmdline;
     char *key;
     int status;
     pmix_status_t pstatus;
     int timeout;
-    int room_num;
-    int remote_room_num;
+    int local_index;
+    int remote_index;
     bool flag;
     bool launcher;
     bool scheduler;
@@ -110,6 +94,7 @@ typedef struct {
     pmix_lookup_cbfunc_t lkcbfunc;
     pmix_release_cbfunc_t rlcbfunc;
     pmix_tool_connection_cbfunc_t toolcbfunc;
+    pmix_info_cbfunc_t infocbfunc;
     void *cbdata;
 } pmix_server_req_t;
 PMIX_CLASS_DECLARATION(pmix_server_req_t);
@@ -137,6 +122,8 @@ typedef struct {
     size_t napps;
     pmix_query_t *queries;
     size_t nqueries;
+    pmix_alloc_directive_t allocdir;
+    uint32_t sessionID;
     pmix_op_cbfunc_t cbfunc;
     pmix_info_cbfunc_t infocbfunc;
     pmix_tool_connection_cbfunc_t toolcbfunc;
@@ -359,8 +346,7 @@ typedef struct {
     bool initialized;
     int verbosity;
     int output;
-    pmix_hotel_t reqs;
-    int num_rooms;
+    pmix_pointer_array_t remote_reqs;
     pmix_pointer_array_t local_reqs;
     int timeout;
     bool wait_for_server;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -194,27 +194,25 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
                                    const pmix_info_t data[], size_t ndata,
                                    pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
-    pmix_status_t rc;
+    prte_pmix_server_op_caddy_t *cd;
 
-    /* if we are not the DVM controller, then send it there */
 
-    /* we are the DVM controller, so pass it down so PMIx can
-     * send it to the scheduler */
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s allocate upcalled on behalf of proc %s:%u with %" PRIsize_t " infos",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), client->nspace, client->rank, ndata);
 
-    if (!prte_pmix_server_globals.scheduler_connected) {
-        /* the scheduler has not attached to us - there is
-         * nothing we can do */
-        return PMIX_ERR_NOT_SUPPORTED;
-    }
-    /* if we have not yet set the scheduler as our server, do so */
-    if (!prte_pmix_server_globals.scheduler_set_as_server) {
-        rc = PMIx_tool_set_server(&prte_pmix_server_globals.scheduler, NULL, 0);
-        if (PMIX_SUCCESS != rc) {
-            return rc;
-        }
-        prte_pmix_server_globals.scheduler_set_as_server = true;
-    }
-    return PMIX_SUCCESS;
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+    PMIX_LOAD_PROCID(&cd->proc, client->nspace, client->rank);
+    cd->allocdir = directive;
+    cd->info = (pmix_info_t *) data;
+    cd->ninfo = ndata;
+    cd->infocbfunc = cbfunc;
+    cd->cbdata = cbdata;
+    prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, pass_request, cd);
+    prte_event_set_priority(&cd->ev, PRTE_MSG_PRI);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
+    return PRTE_SUCCESS;
 }
 
 #if PMIX_NUMERIC_VERSION >= 0x00050000
@@ -224,28 +222,25 @@ pmix_status_t pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
                                           const pmix_info_t directives[], size_t ndirs,
                                           pmix_info_cbfunc_t cbfunc, void *cbdata)
 {
-    pmix_status_t rc;
+    prte_pmix_server_op_caddy_t *cd;
 
-    /* if we are not the DVM controller, then send it there */
 
-    /* we are the DVM controller, so pass it down so PMIx can
-     * send it to the scheduler */
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s session ctrl upcalled on behalf of proc %s:%u with %" PRIsize_t " directives",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), requestor->nspace, requestor->rank, ndirs);
 
-    if (!prte_pmix_server_globals.scheduler_connected) {
-        /* the scheduler has not attached to us - there is
-         * nothing we can do */
-        return PMIX_ERR_NOT_SUPPORTED;
-    }
-    /* if we have not yet set the scheduler as our server, do so */
-    if (!prte_pmix_server_globals.scheduler_set_as_server) {
-        rc = PMIx_tool_set_server(&prte_pmix_server_globals.scheduler, NULL, 0);
-        if (PMIX_SUCCESS != rc) {
-            return rc;
-        }
-        prte_pmix_server_globals.scheduler_set_as_server = true;
-    }
-    return PMIX_SUCCESS;
-
+    cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+    PMIX_LOAD_PROCID(&cd->proc, requestor->nspace, requestor->rank);
+    cd->sessionID = sessionID;
+    cd->info = (pmix_info_t *) directives;
+    cd->ninfo = ndirs;
+    cd->infocbfunc = cbfunc;
+    cd->cbdata = cbdata;
+    prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, pass_request, cd);
+    prte_event_set_priority(&cd->ev, PRTE_MSG_PRI);
+    PMIX_POST_OBJECT(cd);
+    prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
+    return PRTE_SUCCESS;
 }
 
 #endif
