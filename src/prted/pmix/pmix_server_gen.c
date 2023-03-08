@@ -621,14 +621,14 @@ static void _toolconn(int sd, short args, void *cbdata)
             free(tmp);
             prte_plm_globals.next_jobid++;
         } else {
-            cd->room_num = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, cd);
+            cd->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, cd);
             /* we need to send this to the HNP for a jobid */
             PMIX_DATA_BUFFER_CREATE(buf);
             rc = PMIx_Data_pack(NULL, buf, &command, 1, PMIX_UINT8);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
             }
-            rc = PMIx_Data_pack(NULL, buf, &cd->room_num, 1, PMIX_INT);
+            rc = PMIx_Data_pack(NULL, buf, &cd->local_index, 1, PMIX_INT);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
             }
@@ -638,7 +638,7 @@ static void _toolconn(int sd, short args, void *cbdata)
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 xrc = prte_pmix_convert_rc(rc);
-                pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, cd->room_num, NULL);
+                pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, cd->local_index, NULL);
                 PMIX_DATA_BUFFER_RELEASE(buf);
                 if (NULL != cd->toolcbfunc) {
                     cd->toolcbfunc(xrc, NULL, cd->cbdata);

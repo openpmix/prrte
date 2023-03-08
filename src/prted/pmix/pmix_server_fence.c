@@ -157,7 +157,7 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
     }
 
     /* pack the remote daemon's request room number */
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->remote_room_num, 1, PMIX_INT))) {
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->remote_index, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
         PMIX_DATA_BUFFER_RELEASE(reply);
         goto error;
@@ -205,8 +205,10 @@ static void dmodex_req(int sd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(rq);
 
-    pmix_output_verbose(2, prte_pmix_server_globals.output, "%s DMODX REQ FOR %s:%u",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), req->tproc.nspace, req->tproc.rank);
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s DMODX REQ FOR %s:%u",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        req->tproc.nspace, req->tproc.rank);
 
     /* check if they want us to refresh the cache */
     if (NULL != req->info) {
@@ -235,20 +237,13 @@ static void dmodex_req(int sd, short args, void *cbdata)
          * data */
         if (PMIX_SUCCESS == PMIx_Get(&req->tproc, req->key, req->info, req->ninfo, &pval)) {
             PMIX_VALUE_RELEASE(pval);
-            /* mark that the result is to return to us */
-            req->proxy = *PRTE_PROC_MY_NAME;
-            /* save the request in the local_req array until the
-             * data is returned */
-            req->room_num = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
-            /* set the "remote" room number to our own */
-            req->remote_room_num = req->room_num;
-            PMIX_RETAIN(req);
-            /* we have it - just to be safe, get the blob and return it */
-            if (PMIX_SUCCESS != (prc = PMIx_server_dmodex_request(&req->tproc, modex_resp, req))) {
-                PMIX_ERROR_LOG(prc);
-                req->mdxcbfunc(prc, NULL, 0, req->cbdata, NULL, NULL);
-                PMIX_RELEASE(req);
+            /* respond to the request so we trigger release of the
+             * waiting procs */
+            if (NULL != req->mdxcbfunc) {
+                req->mdxcbfunc(PMIX_SUCCESS, NULL, 0, req->cbdata, NULL, NULL);
             }
+            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+            PMIX_RELEASE(req);
             return;
         }
     }
@@ -263,7 +258,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
         if (PMIX_CHECK_PROCID(&r->target, &req->tproc)) {
             /* save the request in the array until the
              * data is returned */
-            req->room_num = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+            req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
             return;
         }
     }
@@ -274,7 +269,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
          * condition where we are being asked about a process
          * that we don't know about yet. In this case, just
          * record the request and we will process it later */
-        req->room_num = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+        req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
         return;
     }
     /* if this is a request for rank=WILDCARD, then they want the job-level data
@@ -317,10 +312,10 @@ static void dmodex_req(int sd, short args, void *cbdata)
     req->proxy = dmn->name;
     /* track the request so we know the function and cbdata
      * to callback upon completion */
-    req->room_num = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
     pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s:%d MY REQ ROOM IS %d FOR KEY %s",
-                        __FILE__, __LINE__, req->room_num,
+                        "%s:%d MY REQ INDEX IS %d FOR KEY %s",
+                        __FILE__, __LINE__, req->local_index,
                         (NULL == req->key) ? "NULL" : req->key);
     /* if we are the host daemon, then this is a local request, so
      * just wait for the data to come in */
@@ -332,28 +327,28 @@ static void dmodex_req(int sd, short args, void *cbdata)
     PMIX_DATA_BUFFER_CREATE(buf);
     if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, &req->tproc, 1, PMIX_PROC))) {
         PMIX_ERROR_LOG(prc);
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
-    /* include the request room number for quick retrieval */
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, &req->room_num, 1, PMIX_INT))) {
+    /* include the request index for quick retrieval */
+    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, &req->local_index, 1, PMIX_INT))) {
         PMIX_ERROR_LOG(prc);
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
     /* add any qualifiers */
     if (PRTE_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, &req->ninfo, 1, PMIX_SIZE))) {
         PMIX_ERROR_LOG(prc);
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
     if (0 < req->ninfo) {
         if (PRTE_SUCCESS != (prc = PMIx_Data_pack(NULL, buf, req->info, req->ninfo, PMIX_INFO))) {
             PMIX_ERROR_LOG(prc);
-            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
+            pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
             PMIX_DATA_BUFFER_RELEASE(buf);
             goto callback;
         }
@@ -363,7 +358,7 @@ static void dmodex_req(int sd, short args, void *cbdata)
     PRTE_RML_SEND(rc, dmn->name.rank, buf, PRTE_RML_TAG_DIRECT_MODEX);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         prc = prte_pmix_convert_rc(rc);
         goto callback;

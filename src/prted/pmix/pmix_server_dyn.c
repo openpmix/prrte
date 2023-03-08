@@ -145,11 +145,11 @@ static void spawn(int sd, short args, void *cbdata)
     PMIX_ACQUIRE_OBJECT(req);
 
     /* add this request to our tracker array */
-    req->room_num = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
 
     /* include the request room number for quick retrieval */
     prte_set_attribute(&req->jdata->attributes, PRTE_JOB_ROOM_NUM,
-                       PRTE_ATTR_GLOBAL, &req->room_num, PMIX_INT);
+                       PRTE_ATTR_GLOBAL, &req->local_index, PMIX_INT);
 
     /* construct a spawn message */
     PMIX_DATA_BUFFER_CREATE(buf);
@@ -159,7 +159,7 @@ static void spawn(int sd, short args, void *cbdata)
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(buf);
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
         goto callback;
     }
 
@@ -167,7 +167,7 @@ static void spawn(int sd, short args, void *cbdata)
     rc = prte_job_pack(buf, req->jdata);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }
@@ -176,7 +176,7 @@ static void spawn(int sd, short args, void *cbdata)
     PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_PLM);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
         PMIX_DATA_BUFFER_RELEASE(buf);
         goto callback;
     }

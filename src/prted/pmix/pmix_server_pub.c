@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -157,14 +157,14 @@ static void execute(int sd, short args, void *cbdata)
     }
 
     /* add this request to our tracker array */
-    req->room_num = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
+    req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
     stored = true;
 
     /* setup the xfer */
     PMIX_DATA_BUFFER_CREATE(xfer);
 
     /* pack the room number */
-    rc = PMIx_Data_pack(NULL, xfer, &req->room_num, 1, PMIX_INT);
+    rc = PMIx_Data_pack(NULL, xfer, &req->local_index, 1, PMIX_INT);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(xfer);
@@ -210,7 +210,7 @@ callback:
         req->lkcbfunc(rc, NULL, 0, req->cbdata);
     }
     if (stored) {
-        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->room_num, NULL);
+        pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
     }
     PMIX_RELEASE(req);
 }
