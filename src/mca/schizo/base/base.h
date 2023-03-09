@@ -2,7 +2,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -107,6 +107,7 @@ PRTE_EXPORT int prte_schizo_base_add_qualifier(pmix_cli_result_t *results,
 PRTE_EXPORT int prte_schizo_base_parse_output(pmix_cli_item_t *opt, void *jinfo);
 PRTE_EXPORT int prte_schizo_base_parse_display(pmix_cli_item_t *opt, void *jinfo);
 
+PRTE_EXPORT int prte_schizo_base_setup_fork(prte_job_t *jdata, prte_app_context_t *app);
 
 
 END_C_DECLS
