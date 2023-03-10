@@ -19,10 +19,10 @@ Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
 Copyright (c) 2012      Sandia National Laboratories.  All rights reserved.
 Copyright (c) 2012      University of Houston. All rights reserved.
 Copyright (c) 2013      NVIDIA Corporation.  All rights reserved.
-# Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
+Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 Copyright (c) 2018-2001 Amazon.com, Inc. or its affiliates.  All Rights
                         reserved.
-Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 $COPYRIGHT$
 
 Additional copyrights may follow
@@ -38,6 +38,63 @@ version 1.0.
 
 3.0.1 -- TBD
 ------------------------------------
+PR #1696: Always set waitpid-fired flag when proc exits
+PR #1694: Fix passing of envars for spawn
+PR #1692: Multiple commits
+  - Plug small memory leaks
+  - Adhere to project's variable declaration convention
+  - Cleanup initial implementation of allocate and session control
+  - Protect one more place for session_control
+  - Fix the routing for non-tree-spawn launch
+  - Cleanup prte_info output
+  - Ensure we exit cleanly when a daemon fails to start
+  - Store prted URI under correct name
+  - Remove duplicate computation of routing tree
+  - Minor cleanup of verbose output
+  - Send direct to HNP if we don't know a route
+  - Cleanup some mangled formatting
+  - Cleanup some debug output
+  - Update the pmix server integration
+PR #1686: Update config/oac submodule
+PR #1682: Multiple commits
+  - Remove wrapper definitions
+  - Extend example to check for sessionID and jobID
+PR #1678: Multiple commits
+  - Add --debug-daemon to prted options
+  - Add the rml and routed types to prte_info array
+PR #1674: Ensure cmd line errors provide error messages
+PR #1672: Multiple commits
+  - Correct default binding for map-by node/slot
+  - Provide better error message for cross-package binding
+  - Add missing command line directives
+  - Fix minor issues found in tests
+  - Silence compiler warning in test/connect
+  - Silence compiler warnings in examples
+  - Use exit macros in example dmodex
+  - Remove antiquated code that can cause problems
+  - Update sphinx requirements
+  - Remove the PMIX_SIZE_ESTIMATE support
+PR #1660: Correct function name when using older hwloc versions
+PR #1658: Multiple commits
+  - Properly handle overload-allowed
+  - Define MIN for environments that lack it
+  - Fix a typo in the README
+  - Fix Sphinx parsing error
+PR #1644: Multiple commits
+  - Add a spawn_multiple test
+  - Provide an estimate of the size of registration data
+  - Provide size estimates for collective operations that return data
+  - Add an option to display the available CPUs
+  - Fix generate_dist type
+  - Protect against missing attribute definition
+  - Set distances array type
+  - Add "parseable" display qualifier
+  - Generate distances by default
+  - Show help message when mapping too low
+  - Fix round-robin by obj with multiple cpus/rank
+  - Fix map-by slot and node for multiple cpus/rank
+PR #1633: First cut of Sphinx/ReadTheDocs docs
+PR #1626: Remove unused variable
 PR #1622: Multiple commits
   - Don't error out on binding if not required
   - Check for and track scheduler attachment
