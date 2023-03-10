@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1556,6 +1556,9 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         goto MOVEON;
     }
 
+    /* mark that the waitpid fired */
+    PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
+
     /* if the proc called "abort", then we just need to flag that it
      * came thru here */
     if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_ABORT)) {
@@ -1566,7 +1569,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
                              "%s odls:waitpid_fired child %s died by call to abort",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
         state = PRTE_PROC_STATE_CALLED_ABORT;
-        PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
         goto MOVEON;
     }
 
@@ -1583,7 +1585,6 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
         PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                              "%s odls:waitpid_fired child %s was ordered to die",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
-        PRTE_FLAG_SET(proc, PRTE_PROC_FLAG_WAITPID);
         goto MOVEON;
     }
 

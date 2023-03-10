@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -563,11 +563,10 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
         }
     } else if (PRTE_PROC_STATE_TERMINATED == state) {
         if (pdata->state == state) {
-            pmix_output_verbose(
-                5, prte_state_base_framework.framework_output,
-                "%s state:base:track_procs proc %s already in state %s. Skip transition.",
-                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
-                prte_proc_state_to_str(state));
+            pmix_output_verbose(5, prte_state_base_framework.framework_output,
+                                "%s state:base:track_procs proc %s already in state %s. Skip transition.",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(proc),
+                                prte_proc_state_to_str(state));
             goto cleanup;
         }
 
@@ -602,9 +601,9 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
                 }
             }
             /* call our appropriate exit procedure */
-            PMIX_OUTPUT_VERBOSE((5, prte_state_base_framework.framework_output,
+            pmix_output_verbose(5, prte_state_base_framework.framework_output,
                                  "%s state:base all routes and children gone - exiting",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_DAEMONS_TERMINATED);
             goto cleanup;
         }
