@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -173,6 +173,11 @@ int main(int argc, char **argv)
     DEBUG_WAIT_THREAD(&myrel.lock);
     DEBUG_DESTRUCT_MYREL(&myrel);
 
+    /* rank 1 waits longer to check that we don't cleanup
+     * until all ranks are done */
+    if (1 == myproc.rank) {
+        sleep(5);
+    }
 done:
     /* finalize us */
     fprintf(stderr, "Client ns %s rank %d: Finalizing\n", myproc.nspace, myproc.rank);
