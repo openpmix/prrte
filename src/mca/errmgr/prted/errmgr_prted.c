@@ -3,7 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2010-2011 Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2004-2011 The University of Tennessee and The University
+ * Copyright (c) 2004-2023 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
@@ -516,9 +516,12 @@ static void proc_errors(int fd, short args, void *cbdata)
                 PRTE_ERROR_LOG(rc);
                 PMIX_RELEASE(alert);
             }
-            /* mark that we notified the HNP for this job so we don't do it again */
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
-                               PMIX_BOOL);
+            /* mark that we notified the HNP for this job so we don't do it again;
+             * recoverable jobs need to receive every notifications, though. */
+            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL)) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
+                                   PMIX_BOOL);
+            }
         }
         /* if the proc has terminated, notify the state machine */
         if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_IOF_COMPLETE)
@@ -629,9 +632,12 @@ static void proc_errors(int fd, short args, void *cbdata)
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
             }
-            /* mark that we notified the HNP for this job so we don't do it again */
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
-                               PMIX_BOOL);
+            /* mark that we notified the HNP for this job so we don't do it again;
+             * recoverable jobs need to receive every notifications, though. */
+            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL)) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
+                                   PMIX_BOOL);
+            }
         }
         /* if the proc has terminated, notify the state machine */
         if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_IOF_COMPLETE)
