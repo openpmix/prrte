@@ -541,9 +541,8 @@ static void track_procs(int fd, short argc, void *cbdata)
                                PMIX_BOOL);
             /* cleanup the procs as these are gone */
             for (i = 0; i < prte_local_children->size; i++) {
-                if (NULL
-                    == (pptr = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children,
-                                                                           i))) {
+                pptr = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+                if (NULL == pptr) {
                     continue;
                 }
                 /* if this child is part of the job... */
@@ -680,12 +679,15 @@ static int pack_state_update(pmix_data_buffer_t *alert, prte_job_t *jdata)
         if (NULL == (child = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
             continue;
         }
-        /* if this child is part of the job... */
-        if (PMIX_CHECK_NSPACE(child->name.nspace, jdata->nspace)) {
+        /* if this child is part of the job and has not been
+         * previously reported... */
+        if (PMIX_CHECK_NSPACE(child->name.nspace, jdata->nspace) &&
+            !PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_TERM_REPORTED)) {
             if (PRTE_SUCCESS != (rc = pack_state_for_proc(alert, child))) {
                 PRTE_ERROR_LOG(rc);
                 return rc;
             }
+            PRTE_FLAG_SET(child, PRTE_PROC_FLAG_TERM_REPORTED);
         }
     }
     /* flag that this job is complete so the receiver can know */
