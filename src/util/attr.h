@@ -224,20 +224,22 @@ typedef uint16_t prte_job_flags_t;
 
 /*** PROC FLAGS - never sent anywhere ***/
 typedef uint16_t prte_proc_flags_t;
-#define PRTE_PROC_FLAG_ALIVE        0x0001 // proc has been launched and has not yet terminated
-#define PRTE_PROC_FLAG_ABORT        0x0002 // proc called abort
-#define PRTE_PROC_FLAG_UPDATED      0x0004 // proc has been updated and need to be included in the next pidmap message
-#define PRTE_PROC_FLAG_LOCAL        0x0008 // indicate that this proc is local
-#define PRTE_PROC_FLAG_REPORTED     0x0010 // indicate proc has reported in
-#define PRTE_PROC_FLAG_REG          0x0020 // proc has registered
-#define PRTE_PROC_FLAG_HAS_DEREG    0x0040 // proc has deregistered
-#define PRTE_PROC_FLAG_AS_MPI       0x0080 // proc is MPI process
-#define PRTE_PROC_FLAG_IOF_COMPLETE 0x0100 // IOF has completed
-#define PRTE_PROC_FLAG_WAITPID      0x0200 // waitpid fired
-#define PRTE_PROC_FLAG_RECORDED     0x0400 // termination has been recorded
-#define PRTE_PROC_FLAG_DATA_IN_SM   0x0800 // modex data has been stored in the local shared memory region
-#define PRTE_PROC_FLAG_DATA_RECVD   0x1000 // modex data for this proc has been received
-#define PRTE_PROC_FLAG_SM_ACCESS    0x2000 // indicate if process can read modex data from shared memory region
+#define PRTE_PROC_FLAG_ALIVE            0x0001 // proc has been launched and has not yet terminated
+#define PRTE_PROC_FLAG_ABORT            0x0002 // proc called abort
+#define PRTE_PROC_FLAG_UPDATED          0x0004 // proc has been updated and need to be included in the next pidmap message
+#define PRTE_PROC_FLAG_LOCAL            0x0008 // indicate that this proc is local
+#define PRTE_PROC_FLAG_REPORTED         0x0010 // indicate proc has reported in
+#define PRTE_PROC_FLAG_REG              0x0020 // proc has registered
+#define PRTE_PROC_FLAG_HAS_DEREG        0x0040 // proc has deregistered
+#define PRTE_PROC_FLAG_AS_MPI           0x0080 // proc is MPI process
+#define PRTE_PROC_FLAG_IOF_COMPLETE     0x0100 // IOF has completed
+#define PRTE_PROC_FLAG_WAITPID          0x0200 // waitpid fired
+#define PRTE_PROC_FLAG_RECORDED         0x0400 // termination has been recorded
+#define PRTE_PROC_FLAG_DATA_IN_SM       0x0800 // modex data has been stored in the local shared memory region
+#define PRTE_PROC_FLAG_DATA_RECVD       0x1000 // modex data for this proc has been received
+#define PRTE_PROC_FLAG_SM_ACCESS        0x2000 // indicate if process can read modex data from shared memory region
+#define PRTE_PROC_FLAG_TERM_REPORTED    0x4000 // proc termination has been reported
+
 
 /***   PROCESS ATTRIBUTE KEYS   ***/
 #define PRTE_PROC_START_KEY PRTE_JOB_MAX_KEY

@@ -10,7 +10,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -621,28 +621,30 @@ static void proc_errors(int fd, short args, void *cbdata)
                 PMIX_DATA_BUFFER_RELEASE(alert);
                 return;
             }
-            PMIX_OUTPUT_VERBOSE(
-                (5, prte_errmgr_base_framework.framework_output,
-                 "%s errmgr:prted reporting proc %s abprted to HNP (local procs = %d)",
-                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
-                 jdata->num_local_procs));
+            pmix_output_verbose(5, prte_errmgr_base_framework.framework_output,
+                                "%s errmgr:prted reporting proc %s aborted to HNP (local procs = %d)",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
+                                jdata->num_local_procs);
             /* send it */
             PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, alert, PRTE_RML_TAG_PLM);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(alert);
             }
+            /* mark that we reported termination of this proc so we
+             * don't do it again */
+            PRTE_FLAG_SET(child, PRTE_PROC_FLAG_TERM_REPORTED);
             /* mark that we notified the HNP for this job so we don't do it again;
              * recoverable jobs need to receive every notifications, though. */
             if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_RECOVERABLE, NULL, PMIX_BOOL)) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED, PRTE_ATTR_LOCAL, NULL,
-                                   PMIX_BOOL);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_FAIL_NOTIFIED,
+                                   PRTE_ATTR_LOCAL, NULL, PMIX_BOOL);
             }
         }
         /* if the proc has terminated, notify the state machine */
-        if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_IOF_COMPLETE)
-            && PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_WAITPID)
-            && !PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_RECORDED)) {
+        if (PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_IOF_COMPLETE) &&
+            PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_WAITPID) &&
+            !PRTE_FLAG_TEST(child, PRTE_PROC_FLAG_RECORDED)) {
             PRTE_ACTIVATE_PROC_STATE(proc, PRTE_PROC_STATE_TERMINATED);
         }
         goto cleanup;
