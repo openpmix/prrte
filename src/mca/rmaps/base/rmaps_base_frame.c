@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -62,13 +62,13 @@ prte_rmaps_base_t prte_rmaps_base = {
     .hwthread_cpus = false,
     .file = NULL,
     .available = NULL,
-    .baseset = NULL
+    .baseset = NULL,
+    .default_mapping_policy = NULL
 };
 
 /*
  * Local variables
  */
-static char *rmaps_base_mapping_policy = NULL;
 static char *rmaps_base_ranking_policy = NULL;
 static bool rmaps_base_inherit = false;
 
@@ -77,7 +77,7 @@ static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
     PRTE_HIDE_UNUSED_PARAMS(flags);
 
     /* define default mapping policy */
-    rmaps_base_mapping_policy = NULL;
+    prte_rmaps_base.default_mapping_policy = NULL;
     (void) pmix_mca_base_var_register("prte", "rmaps", "default", "mapping_policy",
                                       "Default mapping Policy [slot | hwthread | core | l1cache | "
                                       "l2cache | l3cache | numa | package | node | seq | dist | ppr | "
@@ -87,7 +87,7 @@ static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
                                       "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, ORDERED, FILE=%s (path to file containing sequential "
                                       "or rankfile entries)",
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                      &rmaps_base_mapping_policy);
+                                      &prte_rmaps_base.default_mapping_policy);
 
     /* define default ranking policy */
     rmaps_base_ranking_policy = NULL;
@@ -139,8 +139,8 @@ static int prte_rmaps_base_open(pmix_mca_base_open_flag_t flags)
     prte_rmaps_base.baseset = hwloc_bitmap_alloc();
 
     /* set the default mapping and ranking policies */
-    if (NULL != rmaps_base_mapping_policy) {
-        rc = prte_rmaps_base_set_mapping_policy(NULL, rmaps_base_mapping_policy);
+    if (NULL != prte_rmaps_base.default_mapping_policy) {
+        rc = prte_rmaps_base_set_mapping_policy(NULL, prte_rmaps_base.default_mapping_policy);
         if (PRTE_SUCCESS != rc) {
             return rc;
         }
@@ -418,16 +418,6 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
 
         len = strlen(spec);
         if (0 < len && 0 == strncasecmp(spec, "ppr", len)) {
-            if (NULL == jdata) {
-                pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-policy", true,
-                               "mapping", spec);
-                free(spec);
-                return PRTE_ERR_SILENT;
-            } else if (NULL == jdata->map) {
-                PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-                free(spec);
-                return PRTE_ERR_BAD_PARAM;
-            }
             /* at this point, ck points to a string that contains at least
              * two fields (specifying the #procs/obj and the object we are
              * to map by). we have to allow additional modifiers here - e.g.,
@@ -454,7 +444,9 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 cptr++; // cptr now points to the start of the modifiers
             }
             /* now save the pattern */
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL, ck, PMIX_STRING);
+            if (NULL != jdata) {
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL, ck, PMIX_STRING);
+            }
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PPR);
             PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
             ppr = true;
