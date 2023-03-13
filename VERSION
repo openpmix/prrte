@@ -16,8 +16,8 @@
 # <major>.<minor>.<release>.
 
 major=3
-minor=0
-release=1
+minor=1
+release=0
 
 # PRRTE required dependency versions.
 # List in x.y.z format.
@@ -37,7 +37,7 @@ flex_min_version=2.5.4
 # requirement is that it must be entirely printable ASCII characters
 # and have no white space.
 
-greek=rc2
+greek=a1
 
 # If repo_rev is empty, then the repository version number will be
 # obtained during "make dist" via the "git describe --tags --always"
