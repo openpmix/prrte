@@ -343,6 +343,12 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps mapping given by MCA param");
                 jdata->map->mapping = prte_rmaps_base.mapping;
+                if (PRTE_MAPPING_PPR == PRTE_GET_MAPPING_POLICY(jdata->map->mapping)) {
+                    tmp = strchr(prte_rmaps_base.default_mapping_policy, ':');
+                    ++tmp;
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR,
+                                       PRTE_ATTR_GLOBAL, tmp, PMIX_STRING);
+                }
                 did_map = true;
             }
         }
