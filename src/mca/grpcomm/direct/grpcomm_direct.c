@@ -169,6 +169,10 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     int rc, timeout;
     size_t n, ninfo, memsize;
     bool assignID = false;
+    pmix_proc_t *addmembers = NULL;
+    size_t num_members = 0;
+    prte_namelist_t *nm;
+    pmix_data_array_t darray;
     pmix_status_t st;
     pmix_info_t *info, infostat;
     prte_grpcomm_signature_t sig;
@@ -282,6 +286,14 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             /* update the info with the collected value */
             info[n].value.type = PMIX_BOOL;
             info[n].value.data.flag = coll->assignID;
+        } else if (PMIX_CHECK_KEY(&info[n], PMIX_GROUP_ADD_MEMBERS)) {
+            addmembers = (pmix_proc_t*)info[n].value.data.darray->array;
+            num_members = info[n].value.data.darray->size;
+            for (n=0; n < num_members; n++) {
+                nm = PMIX_NEW(prte_namelist_t);
+                PMIX_XFER_PROCID(&nm->name, &addmembers[n]);
+                pmix_list_append(&coll->addmembers, &nm->super);
+            }
         }
     }
 
@@ -331,22 +343,59 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 return;
             }
             /* add some values to the payload in the bucket */
+            PMIX_DATA_BUFFER_CONSTRUCT(&ctrlbuf);
 
             /* if we were asked to provide a context id, do so */
             if (assignID) {
                 size_t sz;
                 sz = prte_grpcomm_base.context_id;
                 --prte_grpcomm_base.context_id;
-                PMIX_INFO_LOAD(&infostat, PMIX_GROUP_CONTEXT_ID, &sz, PMIX_UINT32);
-                rc = PMIx_Data_pack(NULL, reply, &infostat, 1, PMIX_INFO);
+                PMIX_INFO_LOAD(&infostat, PMIX_GROUP_CONTEXT_ID, &sz, PMIX_SIZE);
+                rc = PMIx_Data_pack(NULL, &ctrlbuf, &infostat, 1, PMIX_INFO);
                 PMIX_INFO_DESTRUCT(&infostat);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
                     PMIX_PROC_FREE(sig.signature, sig.sz);
                     return;
                 }
             }
+            /* if we added members, add them here */
+            if (0 < pmix_list_get_size(&coll->addmembers)) {
+                num_members = pmix_list_get_size(&coll->addmembers);
+                PMIX_PROC_CREATE(addmembers, num_members);
+                n=0;
+                PMIX_LIST_FOREACH(nm, &coll->addmembers, prte_namelist_t) {
+                    memcpy(&addmembers[n], &nm->name, sizeof(pmix_proc_t));
+                    ++n;
+                }
+                darray.type = PMIX_PROC;
+                darray.array = addmembers;
+                darray.size = num_members;
+                PMIX_INFO_LOAD(&infostat, PMIX_GROUP_ADD_MEMBERS, &darray, PMIX_DATA_ARRAY);
+                PMIX_PROC_FREE(addmembers, num_members);
+                rc = PMIx_Data_pack(NULL, &ctrlbuf, &infostat, 1, PMIX_INFO);
+                PMIX_INFO_DESTRUCT(&infostat);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+                    PMIX_PROC_FREE(sig.signature, sig.sz);
+                    return;
+                }
+            }
+            PMIX_DATA_BUFFER_UNLOAD(&ctrlbuf, ctrlsbo.bytes, ctrlsbo.size);
+            PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+            rc = PMIx_Data_pack(NULL, reply, &ctrlsbo, 1, PMIX_BYTE_OBJECT);
+            PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(reply);
+                PMIX_PROC_FREE(sig.signature, sig.sz);
+                return;
+            }
+
             /* transfer the collected bucket */
             rc = PMIx_Data_copy_payload(reply, &coll->bucket);
             if (PMIX_SUCCESS != rc) {

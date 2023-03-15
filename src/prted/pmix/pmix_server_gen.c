@@ -934,16 +934,20 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     int rc = PRTE_SUCCESS;
     pmix_status_t ret;
     bool assignedID = false;
-    uint32_t cid;
-    size_t n;
+    bool procsadded = false;
+    size_t cid;
+    pmix_proc_t *procs, *members;
+    size_t n, num_members;
+    pmix_data_array_t darray;
     pmix_info_t info;
+    pmix_data_buffer_t dbuf;
     pmix_byte_object_t bo;
     int32_t byused;
-    char *payload;
+    pmix_server_pset_t *pset;
 
     PMIX_ACQUIRE_OBJECT(cd);
 
-    pmix_output_verbose(2, prte_pmix_server_globals.output,
+   pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s group request complete",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
@@ -953,38 +957,73 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     }
 
     /* check for any directives */
-    cd->ninfo = 0;
-    payload = buf->unpack_ptr;
     cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buf, &info, &cnt, PMIX_INFO);
+    rc = PMIx_Data_unpack(NULL, buf, &bo, &cnt, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto complete;
+    }
+    PMIX_DATA_BUFFER_CONSTRUCT(&dbuf);
+    PMIX_DATA_BUFFER_LOAD(&dbuf, bo.bytes, bo.size);
+
+    cd->ninfo = 2;
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, &dbuf, &info, &cnt, PMIX_INFO);
     while (PMIX_SUCCESS == rc) {
         if (PMIX_CHECK_KEY(&info, PMIX_GROUP_CONTEXT_ID)) {
-            PMIX_VALUE_GET_NUMBER(rc, &info.value, cid, uint32_t);
+            PMIX_VALUE_GET_NUMBER(rc, &info.value, cid, size_t);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 cd->ninfo = 0;
+                PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
                 goto complete;
             }
             assignedID = true;
             cd->ninfo++;
+        } else if (PMIX_CHECK_KEY(&info, PMIX_GROUP_ADD_MEMBERS)) {
+            members = (pmix_proc_t*)info.value.data.darray->array;
+            num_members = info.value.data.darray->size;
+            PMIX_PROC_CREATE(procs, cd->nprocs + num_members);
+            memcpy(procs, cd->procs, cd->nprocs * sizeof(pmix_proc_t));
+            memcpy(procs + (cd->nprocs * sizeof(pmix_proc_t)), members, num_members * sizeof(pmix_proc_t));
+            PMIX_PROC_FREE(cd->procs, cd->nprocs);
+            cd->procs = procs;
+            cd->nprocs += num_members;
+            procsadded = true;
         }
-        /* save where we are */
-        payload = buf->unpack_ptr;
         /* cleanup */
         PMIX_INFO_DESTRUCT(&info);
         /* get the next object */
         cnt = 1;
-        rc = PMIx_Data_unpack(NULL, buf, &info, &cnt, PMIX_INFO);
+        rc = PMIx_Data_unpack(NULL, &dbuf, &info, &cnt, PMIX_INFO);
     }
-    /* restore the unpack location as the last unsuccessful attempt will
-     * have moved it */
-    buf->unpack_ptr = payload;
+    PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
     /* the unpacking loop will have ended when the unpack either
-     * went past the end of the buffer OR it attempted to unpack
-     * the wrong type - so correct the error status here */
-    if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER == rc ||
-        PMIX_ERR_PACK_MISMATCH == rc) {
-        rc = PMIX_SUCCESS;
+     * went past the end of the buffer */
+    if (PMIX_ERR_UNPACK_READ_PAST_END_OF_BUFFER != rc) {
+        PMIX_ERROR_LOG(rc);
+        goto complete;
+    }
+    rc = PMIX_SUCCESS;
+
+    if (PMIX_GROUP_CONSTRUCT == cd->op) {
+       /* add it to our list of known groups */
+        pset = PMIX_NEW(pmix_server_pset_t);
+        pset->name = strdup(cd->grpid);
+        pset->num_members = cd->nprocs;
+        PMIX_PROC_CREATE(pset->members, pset->num_members);
+        memcpy(pset->members, cd->procs, cd->nprocs * sizeof(pmix_proc_t));
+        pmix_list_append(&prte_pmix_server_globals.groups, &pset->super);
+    } else if (PMIX_GROUP_DESTRUCT == cd->op) {
+        /* find this group ID on our list of groups */
+        PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, pmix_server_pset_t)
+        {
+            if (0 == strcmp(pset->name, cd->grpid)) {
+                pmix_list_remove_item(&prte_pmix_server_globals.groups, &pset->super);
+                PMIX_RELEASE(pset);
+                break;
+            }
+        }
     }
 
     /* if anything is left in the buffer, then it is
@@ -999,16 +1038,21 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
         cd->ninfo++;
     }
 
-    if (0 < cd->ninfo) {
-        PMIX_INFO_CREATE(cd->info, cd->ninfo);
-        n = 0;
-        if (assignedID) {
-            PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_CONTEXT_ID, &cid, PMIX_UINT32);
-            ++n;
-        }
-        if (NULL != bo.bytes && 0 < bo.size) {
-            PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_ENDPT_DATA, &bo, PMIX_BYTE_OBJECT);
-        }
+    PMIX_INFO_CREATE(cd->info, cd->ninfo);
+    n = 0;
+    // pass back the final group membership
+    darray.type = PMIX_PROC;
+    darray.array = cd->procs;
+    darray.size = cd->nprocs;
+    PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY);
+    PMIX_PROC_FREE(cd->procs, cd->nprocs);
+    ++n;
+    if (assignedID) {
+        PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_CONTEXT_ID, &cid, PMIX_SIZE);
+        ++n;
+    }
+    if (NULL != bo.bytes && 0 < bo.size) {
+        PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_ENDPT_DATA, &bo, PMIX_BYTE_OBJECT);
     }
 
 complete:
@@ -1024,7 +1068,7 @@ complete:
     }
 }
 
-pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
+pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
                                    const pmix_proc_t procs[], size_t nprocs,
                                    const pmix_info_t directives[], size_t ndirs,
                                    pmix_info_cbfunc_t cbfunc, void *cbdata)
@@ -1044,7 +1088,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* they are required to pass us an id */
-    if (NULL == gpid) {
+    if (NULL == grpid) {
         return PMIX_ERR_BAD_PARAM;
     }
 
@@ -1064,26 +1108,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         }
     }
 
-    if (PMIX_GROUP_CONSTRUCT == op) {
-        /* add it to our list of known groups */
-        pset = PMIX_NEW(pmix_server_pset_t);
-        pset->name = strdup(gpid);
-        pset->num_members = nprocs;
-        PMIX_PROC_CREATE(pset->members, pset->num_members);
-        memcpy(pset->members, procs, nprocs * sizeof(pmix_proc_t));
-        pmix_list_append(&prte_pmix_server_globals.groups, &pset->super);
-    } else if (PMIX_GROUP_DESTRUCT == op) {
-        /* find this group ID on our list of groups */
-        PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, pmix_server_pset_t)
-        {
-            if (0 == strcmp(pset->name, gpid)) {
-                pmix_list_remove_item(&prte_pmix_server_globals.groups, &pset->super);
-                PMIX_RELEASE(pset);
-                break;
-            }
-        }
-    }
-
     /* if they don't want us to do a fence and they don't want a
      * context id assigned, or they insist on forcing local
      * completion of the operation, then we are done */
@@ -1091,10 +1115,35 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         pmix_output_verbose(2, prte_pmix_server_globals.output,
                             "%s group request - purely local",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+        if (PMIX_GROUP_CONSTRUCT == op) {
+            /* add it to our list of known groups */
+            pset = PMIX_NEW(pmix_server_pset_t);
+            pset->name = strdup(grpid);
+            pset->num_members = nprocs;
+            PMIX_PROC_CREATE(pset->members, pset->num_members);
+            memcpy(pset->members, procs, nprocs * sizeof(pmix_proc_t));
+            pmix_list_append(&prte_pmix_server_globals.groups, &pset->super);
+        } else if (PMIX_GROUP_DESTRUCT == op) {
+            /* find this group ID on our list of groups */
+            PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, pmix_server_pset_t)
+            {
+                if (0 == strcmp(pset->name, grpid)) {
+                    pmix_list_remove_item(&prte_pmix_server_globals.groups, &pset->super);
+                    PMIX_RELEASE(pset);
+                    break;
+                }
+            }
+        }
         return PMIX_OPERATION_SUCCEEDED;
     }
 
     cd = PMIX_NEW(prte_pmix_mdx_caddy_t);
+    cd->grpid = grpid;
+    cd->op = op;
+    /* have to copy the procs in case we add members */
+    PMIX_PROC_CREATE(cd->procs, nprocs);
+    memcpy(cd->procs, procs, nprocs * sizeof(pmix_proc_t));
+    cd->nprocs = nprocs;
     cd->grpcbfunc = group_release;
     cd->infocbfunc = cbfunc;
     cd->cbdata = cbdata;
@@ -1106,7 +1155,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *gpid,
         cd->sig->signature = (pmix_proc_t *) malloc(cd->sig->sz * sizeof(pmix_proc_t));
         memcpy(cd->sig->signature, procs, cd->sig->sz * sizeof(pmix_proc_t));
     }
-    /* setup the ctrls blob */
+    /* setup the ctrls blob - this will include any "add_members" directive */
     rc = prte_pack_ctrl_options(&cd->ctrls, directives, ndirs);
     if (PMIX_SUCCESS != rc) {
         PMIX_RELEASE(cd);
