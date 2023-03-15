@@ -1893,6 +1893,8 @@ static void mdcon(prte_pmix_mdx_caddy_t *p)
     p->sig = NULL;
     p->buf = NULL;
     PMIX_BYTE_OBJECT_CONSTRUCT(&p->ctrls);
+    p->procs = NULL;
+    p->nprocs = 0;
     p->info = NULL;
     p->ninfo = 0;
     p->cbdata = NULL;
