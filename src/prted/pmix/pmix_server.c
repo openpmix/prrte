@@ -400,11 +400,10 @@ void pmix_server_register_params(void)
 
     /* whether or not to drop a session-level tool rendezvous point */
     prte_pmix_server_globals.session_server = false;
-    (void)
-        pmix_mca_base_var_register("prte", "pmix", NULL, "session_server",
-                                   "Whether or not to drop a session-level tool rendezvous point",
-                                   PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                   &prte_pmix_server_globals.session_server);
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "session_server",
+                                      "Whether or not to drop a session-level tool rendezvous point",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_pmix_server_globals.session_server);
 
     /* whether or not to drop a system-level tool rendezvous point */
     prte_pmix_server_globals.system_server = false;
@@ -432,6 +431,12 @@ void pmix_server_register_params(void)
         }
         PMIX_ARGV_FREE_COMPAT(tmp);
     }
+
+    prte_pmix_server_globals.system_controller = false;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "system_controller",
+                                      "Whether or not to act as the system-wide controller",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_pmix_server_globals.system_server);
 
 }
 
@@ -654,18 +659,33 @@ int pmix_server_init(void)
         }
     }
 
-    /* if requested, tell the server to drop a system-level
-     * PMIx connection point - only do this for the HNP as, in
-     * at least one case, a daemon can be colocated with the
-     * HNP and would overwrite the server rendezvous file */
-    if (prte_pmix_server_globals.system_server && PRTE_PROC_IS_MASTER) {
-        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYSTEM_SUPPORT,
-                           NULL, PMIX_BOOL);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_INFO_LIST_RELEASE(ilist);
-            rc = prte_pmix_convert_status(prc);
-            return rc;
+    if (PRTE_PROC_IS_MASTER) {
+        /* if requested, tell the server to drop a system-level
+         * PMIx connection point - only do this for the HNP as, in
+         * at least one case, a daemon can be colocated with the
+         * HNP and would overwrite the server rendezvous file */
+        if (prte_pmix_server_globals.system_server) {
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYSTEM_SUPPORT,
+                               NULL, PMIX_BOOL);
+            if (PMIX_SUCCESS != prc) {
+                PMIX_INFO_LIST_RELEASE(ilist);
+                rc = prte_pmix_convert_status(prc);
+                return rc;
+            }
         }
+#ifdef PMIX_SERVER_SYS_CONTROLLER
+        /* if requested, tell the server that we are the system
+         * controller */
+        if (prte_pmix_server_globals.system_controller) {
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYS_CONTROLLER,
+                               NULL, PMIX_BOOL);
+            if (PMIX_SUCCESS != prc) {
+                PMIX_INFO_LIST_RELEASE(ilist);
+                rc = prte_pmix_convert_status(prc);
+                return rc;
+            }
+        }
+#endif
     }
 
     /* if requested, tell the server library to output our PMIx URI */
@@ -708,6 +728,15 @@ int pmix_server_init(void)
         /* if we are also persistent, then we do not output IOF ourselves */
         if (prte_persistent) {
             flag = false;
+#ifdef PMIX_SERVER_CONTROLLER
+            // declare ourselves the system controller
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYS_CONTROLLER, NULL, PMIX_BOOL);
+            if (PMIX_SUCCESS != prc) {
+                PMIX_INFO_LIST_RELEASE(ilist);
+                rc = prte_pmix_convert_status(prc);
+                return rc;
+            }
+#endif
         } else {
             /* if we have a parent or we are in persistent mode, then we
              * don't write out ourselves */
