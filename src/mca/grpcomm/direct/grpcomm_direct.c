@@ -167,7 +167,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
 {
     int32_t cnt;
     int rc, timeout;
-    size_t n, ninfo, memsize;
+    size_t n, ninfo, memsize, m;
     bool assignID = false;
     pmix_proc_t *addmembers = NULL;
     size_t num_members = 0;
@@ -289,9 +289,9 @@ static void allgather_recv(int status, pmix_proc_t *sender,
         } else if (PMIX_CHECK_KEY(&info[n], PMIX_GROUP_ADD_MEMBERS)) {
             addmembers = (pmix_proc_t*)info[n].value.data.darray->array;
             num_members = info[n].value.data.darray->size;
-            for (n=0; n < num_members; n++) {
+            for (m=0; m < num_members; m++) {
                 nm = PMIX_NEW(prte_namelist_t);
-                PMIX_XFER_PROCID(&nm->name, &addmembers[n]);
+                PMIX_XFER_PROCID(&nm->name, &addmembers[m]);
                 pmix_list_append(&coll->addmembers, &nm->super);
             }
         }

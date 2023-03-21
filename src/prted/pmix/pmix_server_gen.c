@@ -956,6 +956,13 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
         goto complete;
     }
 
+    /* if this was a destruct operation, then there is nothing
+     * further we need do */
+    if (PMIX_GROUP_DESTRUCT == cd->op) {
+        rc = status;
+        goto complete;
+    }
+
     /* check for any directives */
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buf, &bo, &cnt, PMIX_BYTE_OBJECT);
@@ -984,8 +991,12 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
             members = (pmix_proc_t*)info.value.data.darray->array;
             num_members = info.value.data.darray->size;
             PMIX_PROC_CREATE(procs, cd->nprocs + num_members);
-            memcpy(procs, cd->procs, cd->nprocs * sizeof(pmix_proc_t));
-            memcpy(procs + (cd->nprocs * sizeof(pmix_proc_t)), members, num_members * sizeof(pmix_proc_t));
+            for (n=0; n < cd->nprocs; n++) {
+                PMIX_XFER_PROCID(&procs[n], &cd->procs[n]);
+            }
+            for (n=0; n < num_members; n++) {
+                PMIX_XFER_PROCID(&procs[n+cd->nprocs], &members[n]);
+            }
             PMIX_PROC_FREE(cd->procs, cd->nprocs);
             cd->procs = procs;
             cd->nprocs += num_members;
