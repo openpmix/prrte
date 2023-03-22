@@ -1260,49 +1260,48 @@ int hwloc_bitmap_list_snprintf_exp(char *__hwloc_restrict buf, size_t buflen,
     int res, ret = 0;
 
     /* mark the end in case we do nothing later */
-    if (buflen > 0)
+    if (buflen > 0) {
         tmp[0] = '\0';
+    }
 
-    while (1)
-    {
+    while (1) {
         int begin, end;
 
         begin = hwloc_bitmap_next(set, prev);
-        if (begin == -1)
+        if (begin == -1) {
             break;
+        }
         end = hwloc_bitmap_next_unset(set, begin);
 
-        if (end == begin + 1)
-        {
+        if (end == begin + 1) {
             res = snprintf(tmp, size, "%*c<%s>%d</%s>\n", 20, ' ', type, begin, type);
-        }
-        else if (end == -1)
-        {
+        } else if (end == -1) {
             res = snprintf(tmp, size, "%*c<%s>%d</%s>\n", 20, ' ', type, begin, type);
-        }
-        else
-        {
-            for (int i = begin; i <= end - 1; i++)
-            {
+        } else {
+            for (int i = begin; i <= end - 1; i++) {
                 res = snprintf(tmp, size, "%*c<%s>%d</%s>\n", 20, ' ', type, i, type);
-                if (i != (end - 1))
+                if (i != (end - 1)) {
                     tmp += res;
+                }
             }
         }
-        if (res < 0)
+        if (res < 0) {
             return -1;
+        }
         ret += res;
 
-        if (res >= size)
+        if (res >= size) {
             res = size > 0 ? (int)size - 1 : 0;
+        }
 
         tmp += res;
         size -= res;
 
-        if (end == -1)
+        if (end == -1) {
             break;
-        else
+        } else {
             prev = end - 1;
+        }
     }
     return ret;
 }
