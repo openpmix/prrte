@@ -17,7 +17,7 @@
 #include "src/include/constants.h"
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/mca.h"
-#include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/rmaps/base/base.h"
 #include "src/mca/schizo/schizo.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_tsd.h"
@@ -286,7 +286,7 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PES_PER_PROC, NULL, PMIX_UINT16)) {
         /* bind to cpus */
-        if (options->use_hwthreads) {
+        if (options->use_hwthreads || prte_rmaps_base.require_hwtcpus) {
             /* if we are using hwthread cpus, then bind to those */
             pmix_output_verbose(options->verbosity, options->stream,
                                 "setdefaultbinding[%d] binding not given - using byhwthread",
@@ -351,7 +351,7 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
         } else {
             if (options->nprocs <= 2) {
                 /* we are mapping by node or some other non-object method */
-                if (options->use_hwthreads) {
+                if (options->use_hwthreads || prte_rmaps_base.require_hwtcpus) {
                     /* if we are using hwthread cpus, then bind to those */
                     pmix_output_verbose(options->verbosity, options->stream,
                                         "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
@@ -573,7 +573,11 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
 
     } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_CORE)) {
-        PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);
+        if (prte_rmaps_base.require_hwtcpus) {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_HWTHREAD);
+        } else {
+            PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_CORE);
+        }
 
     } else if (PMIX_CHECK_CLI_OPTION(myspec, PRTE_CLI_L1CACHE)) {
         PRTE_SET_BINDING_POLICY(tmp, PRTE_BIND_TO_L1CACHE);
