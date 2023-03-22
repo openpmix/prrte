@@ -390,6 +390,8 @@ PRTE_EXPORT void prte_hwloc_build_map(hwloc_topology_t topo,
                                       bool use_hwthread_cpus,
                                       hwloc_bitmap_t coreset);
 
+PRTE_EXPORT bool prte_hwloc_base_core_cpus(hwloc_topology_t topo);
+
 END_C_DECLS
 
 #endif /* PRTE_HWLOC_H_ */
