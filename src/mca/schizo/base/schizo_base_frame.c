@@ -534,6 +534,11 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
     newopt = pmix_cmd_line_get_param(cmd_line, PRTE_CLI_BINDTO);
     if (NULL != opt && NULL != newopt) {
         if (NULL != strcasestr(opt->values[0], "PE")) {
+            /* if we are binding to a PE, then there is no conflict */
+            if (NULL != strcasestr(newopt->values[0], "core") ||
+                NULL != strcasestr(newopt->values[0], "hwt")) {
+                return PRTE_SUCCESS;
+            }
             pmix_show_help("help-schizo-base.txt", "binding-pe-conflict", true,
                            opt->values[0], newopt->values[0]);
             return PRTE_ERR_SILENT;
