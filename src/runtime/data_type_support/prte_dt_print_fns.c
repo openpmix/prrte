@@ -41,7 +41,7 @@
 
 
 
-/* This function is a modified vesion of the one found in src/mca/ras/base/ras_base_allocate.c*/
+/* This function is a modified version of the one found in src/mca/ras/base/ras_base_allocate.c*/
 static void display_cpus(prte_topology_t *t,
                          prte_job_t *jdata,
                          char *node, char**output)
@@ -329,6 +329,10 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     hwloc_cpuset_t mycpus;
     char *str;
     bool use_hwthread_cpus;
+    int pkgnum;
+    int npus;
+    char *cores = NULL;
+    char xmlsp = ' ';
 
     /* set default result */
     *output = NULL;
@@ -341,21 +345,15 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
     }
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
-        int pkgnum;
-        int npus;
-
-        char *cores = NULL;
-
-        char xmlsp = ' ';
-        if (NULL != src->cpuset && NULL != src->node->topology
-            && NULL != src->node->topology->topo) {
+        if (NULL != src->cpuset && NULL != src->node->topology &&
+            NULL != src->node->topology->topo) {
             mycpus = hwloc_bitmap_alloc();
             hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
 
             npus = hwloc_get_nbobjs_by_type(src->node->topology->topo, HWLOC_OBJ_PU);
             /* assuming each "core" xml element will take 20 characters. There could be at most npus such elements */
             int sz = sizeof(char) * npus * 20;
-            cores = (char *) malloc(sz);
+            cores = (char*)malloc(sz);
             if (NULL == cores) {
                 pmix_asprintf(&tmp, "\n%*c<MemoryError/>\n", 8, xmlsp);
                 *output = tmp;
@@ -387,9 +385,9 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
             && NULL != src->node->topology->topo) {
             mycpus = hwloc_bitmap_alloc();
             hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
-            if (NULL
-                == (str = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus,
-                                                   src->node->topology->topo))) {
+            str = prte_hwloc_base_cset2str(mycpus, use_hwthread_cpus,
+                                           src->node->topology->topo);
+            if (NULL == str) {
                 str = strdup("UNBOUND");
             }
             hwloc_bitmap_free(mycpus);
@@ -496,6 +494,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
     prte_job_map_t *src = jdata->map;
     uint16_t u16, *u16ptr = &u16;
     char *ppr, *cpus_per_rank, *cpu_type, *cpuset = NULL;
+    prte_topology_t *t;
 
     /* set default result */
     *output = NULL;
@@ -503,13 +502,12 @@ void prte_map_print(char **output, prte_job_t *jdata)
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
         /* creating the output in an XML format */
-        prte_topology_t *t;
         pmix_asprintf(&tmp4, "<?xml version=\"1.0\" ?>\n<map>\n");
         pmix_asprintf(&tmp,""); 
 
         /* loop through nodes */
         for (i = 0; i < src->nodes->size; i++) {
-            if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(src->nodes, i))) {
+            if (NULL == (node = (prte_node_t*)pmix_pointer_array_get_item(src->nodes, i))) {
                 continue;
             }
             prte_node_print(&tmp_node, jdata, node);
