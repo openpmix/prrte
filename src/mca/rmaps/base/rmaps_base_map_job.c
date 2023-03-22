@@ -317,7 +317,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     } else {
         options.cpus_per_rank = 1;
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) ||
+        prte_rmaps_base.require_hwtcpus) {
         options.use_hwthreads = true;
     }
 

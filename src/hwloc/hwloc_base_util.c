@@ -64,6 +64,26 @@
 
 static bool topo_in_shmem = false;
 
+bool prte_hwloc_base_core_cpus(hwloc_topology_t topo)
+{
+    hwloc_obj_t obj;
+    hwloc_obj_t pu;
+
+    obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0);
+    if (NULL == obj) {
+        return false;
+    }
+    /* see if the cpuset of a core match that of a PU */
+    pu = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PU, 0);
+    /* if the two are equal, then we really don't have
+     * cores in this topology */
+    if (hwloc_bitmap_isequal(obj->cpuset, pu->cpuset)) {
+        return false;
+    }
+    /* we do have cores */
+    return true;
+}
+
 /*
  * Provide the hwloc object that corresponds to the given
  * processor id of the given type.  Remember: "processor" here [usually] means "core" --
@@ -89,16 +109,17 @@ hwloc_obj_t prte_hwloc_base_get_pu(hwloc_topology_t topo, bool use_hwthread_cpus
        So first we have to see if we can find *any* cores by looking
        for the 0th core.  If we find it, then try to find the Nth
        core.  Otherwise, try to find the Nth PU. */
-    if (use_hwthread_cpus || (NULL == hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0))) {
+    if (use_hwthread_cpus || !prte_hwloc_base_core_cpus(topo)) {
         obj_type = HWLOC_OBJ_PU;
     }
 
-    pmix_output_verbose(5, prte_hwloc_base_output, "Searching for %d LOGICAL PU", lid);
+    pmix_output_verbose(5, prte_hwloc_base_output,
+                        "Searching for %d LOGICAL PU", lid);
 
     /* Now do the actual lookup. */
     obj = hwloc_get_obj_by_type(topo, obj_type, lid);
-    PMIX_OUTPUT_VERBOSE(
-        (5, prte_hwloc_base_output, "logical cpu %d %s found", lid, (NULL == obj) ? "not" : "is"));
+    pmix_output_verbose(5, prte_hwloc_base_output,
+                        "logical cpu %d %s found", lid, (NULL == obj) ? "not" : "is");
 
     /* Found the right core (or PU). Return the object */
     return obj;

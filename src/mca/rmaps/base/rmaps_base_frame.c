@@ -135,6 +135,7 @@ static int prte_rmaps_base_open(pmix_mca_base_open_flag_t flags)
     prte_rmaps_base.ranking = 0;
     prte_rmaps_base.inherit = rmaps_base_inherit;
     prte_rmaps_base.hwthread_cpus = false;
+    prte_rmaps_base.require_hwtcpus = false;
     prte_rmaps_base.available = hwloc_bitmap_alloc();
     prte_rmaps_base.baseset = hwloc_bitmap_alloc();
 
@@ -298,11 +299,20 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
                 PMIX_ARGV_FREE_COMPAT(ck2);
                 return PRTE_ERR_SILENT;
             }
-            if (NULL == jdata) {
-                prte_rmaps_base.hwthread_cpus = false;
+            if (prte_rmaps_base.require_hwtcpus) {
+                if (NULL == jdata) {
+                    prte_rmaps_base.hwthread_cpus = true;
+                } else {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL,
+                                       NULL, PMIX_BOOL);
+                }
             } else {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS,
-                                   PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                if (NULL == jdata) {
+                    prte_rmaps_base.hwthread_cpus = false;
+                } else {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                }
             }
             core_cpus_given = true;
 
@@ -351,9 +361,16 @@ int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
             PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
         } else {
             if (PRTE_BIND_TO_NONE != PRTE_GET_BINDING_POLICY(jdata->map->binding)) {
-                pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] mapping not given - using bycore", __LINE__);
-                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
+                if (prte_rmaps_base.require_hwtcpus) {
+                    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps[%d] mapping not given - using byhwthread",
+                                        __LINE__);
+                    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
+                } else {
+                    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                        "mca:rmaps[%d] mapping not given - using bycore", __LINE__);
+                    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
+                }
             } else {
                 pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps[%d] mapping not given - using byslot (bind = NONE)",
@@ -490,7 +507,11 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_SEQ);
 
     } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_CORE)) {
-        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYCORE);
+        if (prte_rmaps_base.require_hwtcpus) {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
+        } else {
+            PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYCORE);
+        }
 
     } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_L1CACHE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL1CACHE);
