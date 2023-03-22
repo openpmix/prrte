@@ -239,7 +239,6 @@ void prte_plm_base_vm_ready(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(caddy);
 
-pmix_output(0, "VM READY");
     /* progress the job */
     caddy->jdata->state = PRTE_JOB_STATE_VM_READY;
 
@@ -248,13 +247,11 @@ pmix_output(0, "VM READY");
      * launch any daemons */
     node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, 1);
     if (NULL == node) {
-        pmix_output(0, "FETCH NODE 0");
         node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, 0);
     }
     if (NULL != node && NULL != node->topology &&
         NULL != node->topology->topo) {
         prte_rmaps_base.require_hwtcpus = !prte_hwloc_base_core_cpus(node->topology->topo);
-        pmix_output(0, "VMREADY HWT CPUS: %s", prte_rmaps_base.require_hwtcpus ? "T" : "F");
     }
 
     /* position any required files */
@@ -809,23 +806,6 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
 
     /* if we don't want to launch the apps, now is the time to leave */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
-        bool compressed;
-        uint8_t *cmpdata = NULL;
-        size_t cmplen;
-
-        if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
-            /* report the size of the launch message */
-            compressed = PMIx_Data_compress((uint8_t *) jdata->launch_msg.base_ptr,
-                                            jdata->launch_msg.bytes_used, &cmpdata, &cmplen);
-            if (compressed) {
-                pmix_output(0, "LAUNCH MSG RAW SIZE: %d COMPRESSED SIZE: %d",
-                            (int) jdata->launch_msg.bytes_used, (int) cmplen);
-                free(cmpdata);
-                cmpdata = NULL;
-            } else {
-                pmix_output(0, "LAUNCH MSG RAW SIZE: %d", (int) jdata->launch_msg.bytes_used);
-            }
-        }
         /* go ahead and register the job */
         rc = prte_pmix_server_register_nspace(jdata);
         if (PRTE_SUCCESS != rc) {
@@ -840,9 +820,6 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALL_JOBS_COMPLETE);
         }
         PMIX_RELEASE(caddy);
-        if (NULL != cmpdata) {
-            free(cmpdata);
-        }
         return;
     }
 
