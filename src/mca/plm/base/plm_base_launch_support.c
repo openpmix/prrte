@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -183,6 +183,7 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
 void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    prte_node_t *node;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
@@ -192,6 +193,8 @@ void prte_plm_base_allocation_complete(int fd, short args, void *cbdata)
      * gone - so skip to the mapping state */
     if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
         PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
+        node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, 0);
+        prte_rmaps_base.require_hwtcpus = !prte_hwloc_base_core_cpus(node->topology->topo);
     } else {
         /* move the state machine along */
         caddy->jdata->state = PRTE_JOB_STATE_ALLOCATION_COMPLETE;
@@ -231,12 +234,28 @@ static void files_ready(int status, void *cbdata)
 void prte_plm_base_vm_ready(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    prte_node_t *node;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
 
+pmix_output(0, "VM READY");
     /* progress the job */
     caddy->jdata->state = PRTE_JOB_STATE_VM_READY;
+
+    /* check the first daemon's node for topology
+     * limitations - or the HNP's node if we didn't
+     * launch any daemons */
+    node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, 1);
+    if (NULL == node) {
+        pmix_output(0, "FETCH NODE 0");
+        node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, 0);
+    }
+    if (NULL != node && NULL != node->topology &&
+        NULL != node->topology->topo) {
+        prte_rmaps_base.require_hwtcpus = !prte_hwloc_base_core_cpus(node->topology->topo);
+        pmix_output(0, "VMREADY HWT CPUS: %s", prte_rmaps_base.require_hwtcpus ? "T" : "F");
+    }
 
     /* position any required files */
     if (PRTE_SUCCESS != prte_filem.preposition_files(caddy->jdata, files_ready, caddy->jdata)) {

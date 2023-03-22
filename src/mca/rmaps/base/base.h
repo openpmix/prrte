@@ -77,6 +77,8 @@ typedef struct {
     char *file;
     hwloc_cpuset_t available, baseset;  // scratch for binding calculation
     char *default_mapping_policy;
+    /* whether or not to require hwtcpus due to topology limitations */
+    bool require_hwtcpus;
 } prte_rmaps_base_t;
 
 /**
