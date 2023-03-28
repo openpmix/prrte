@@ -1255,10 +1255,10 @@ int hwloc_bitmap_list_snprintf_exp(char *__hwloc_restrict buf, size_t buflen,
                                    char *type)
 {
     int ret = 0;
+    char *tmp = buf;
 #if HWLOC_API_VERSION >= 0x20000
     int prev = -1;
     ssize_t size = buflen;
-    char *tmp = buf;
     int res;
 
     /* mark the end in case we do nothing later */
