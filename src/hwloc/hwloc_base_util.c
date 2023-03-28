@@ -1249,63 +1249,17 @@ void prte_hwloc_build_map(hwloc_topology_t topo,
     }
 }
 
-#if HWLOC_API_VERSION < 0x20000
-#define HWLOC_BITMAP_MAGIC 0x20091007
-#ifdef HWLOC_DEBUG
-#define HWLOC__BITMAP_CHECK(set) do {               \
-  assert((set)->magic == HWLOC_BITMAP_MAGIC);           \
-  assert((set)->ulongs_count >= 1);             \
-  assert((set)->ulongs_allocated >= (set)->ulongs_count);   \
-} while (0)
-#else
-#define HWLOC__BITMAP_CHECK(set)
-#endif
-#define HWLOC_SUBBITMAP_INDEX(cpu)      ((cpu)/(HWLOC_BITS_PER_LONG))
-#define HWLOC_SUBBITMAP_CPU_ULBIT(cpu)      ((cpu)%(HWLOC_BITS_PER_LONG))
-#define HWLOC_SUBBITMAP_ULBIT_TO(bit)       (HWLOC_SUBBITMAP_FULL>>(HWLOC_BITS_PER_LONG-1-(bit)))
-
-static int hwloc_bitmap_next_unset(const struct hwloc_bitmap_s * set, int prev_cpu)
-{
-    unsigned i = HWLOC_SUBBITMAP_INDEX(prev_cpu + 1);
-
-    HWLOC__BITMAP_CHECK(set);
-
-    if (i >= set->ulongs_count) {
-        if (!set->infinite)
-            return prev_cpu + 1;
-        else
-            return -1;
-    }
-
-    for(; i<set->ulongs_count; i++) {
-        /* subsets are unsigned longs, use ffsl */
-        unsigned long w = ~set->ulongs[i];
-
-        /* if the prev cpu is in the same word as the possible next one,
-           we need to mask out previous cpus */
-        if (prev_cpu >= 0 && HWLOC_SUBBITMAP_INDEX((unsigned) prev_cpu) == i)
-            w &= ~HWLOC_SUBBITMAP_ULBIT_TO(HWLOC_SUBBITMAP_CPU_ULBIT(prev_cpu));
-
-        if (w)
-            return hwloc_ffsl(w) - 1 + HWLOC_BITS_PER_LONG*i;
-    }
-
-    if (!set->infinite)
-        return set->ulongs_count * HWLOC_BITS_PER_LONG;
-
-    return -1;
-}
-#endif
-
 /* formatting core/hwt binding information as xml elements */
 int hwloc_bitmap_list_snprintf_exp(char *__hwloc_restrict buf, size_t buflen, 
                                    const struct hwloc_bitmap_s *__hwloc_restrict set,
                                    char *type)
 {
+    int ret = 0;
+#if HWLOC_API_VERSION >= 0x20000
     int prev = -1;
     ssize_t size = buflen;
     char *tmp = buf;
-    int res, ret = 0;
+    int res;
 
     /* mark the end in case we do nothing later */
     if (buflen > 0) {
@@ -1351,6 +1305,12 @@ int hwloc_bitmap_list_snprintf_exp(char *__hwloc_restrict buf, size_t buflen,
             prev = end - 1;
         }
     }
+#else
+    if (buflen > 0) {
+        tmp[0] = '\0';
+    }
+    ret = PRTE_ERR_NOT_SUPPORTED;
+#endif
     return ret;
 }
 
