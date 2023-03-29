@@ -179,6 +179,19 @@ bool prte_schizo_base_check_directives(char *directive,
                     /* unfortunately, this is a special case that
                      * must be checked separately due to the format
                      * of the qualifier */
+                    if (3 > PMIX_ARGV_COUNT_COMPAT(args)) {
+                        /* this is an error as there must be at least
+                         * the "ppr" directive, a number, and then the
+                         * resource type. There may also be additional
+                         * qualifiers given, so the count could be greater
+                         * than 3 - but it has to at least contain
+                         * those three fields */
+                        pmix_show_help("help-prte-rmaps-base.txt",
+                                       "invalid-pattern", true,
+                                       dir);
+                        PMIX_ARGV_FREE_COMPAT(args);
+                        return false;
+                    }
                     v = NULL;
                     m = strtoul(args[1], &v, 10);
                     if (NULL != v && 0 < strlen(v)) {
