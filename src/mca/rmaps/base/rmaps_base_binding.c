@@ -301,16 +301,21 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
                          prte_rmaps_options_t *options)
 {
     hwloc_obj_type_t type;
-    hwloc_cpuset_t available, result, tgtcpus;
+    hwloc_cpuset_t result, tgtcpus;
     hwloc_obj_t target, tmp_obj, pkg;
     uint16_t n;
     unsigned npkgs, ncpus;
     bool moveon = false;
     PRTE_HIDE_UNUSED_PARAMS(jdata);
 
+    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                        "mca:rmaps: bind proc %s to %d cpus",
+                        PRTE_NAME_PRINT(&proc->name),
+                        options->cpus_per_rank);
+
     /* initialize */
-    available = hwloc_bitmap_alloc();
     result = hwloc_bitmap_alloc();
+    hwloc_bitmap_zero(result);
     if (NULL == obj) {
         target = hwloc_get_root_obj(node->topology->topo);
     } else {
@@ -321,7 +326,7 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
 #else
     tgtcpus = target->cpuset;
 #endif
-    hwloc_bitmap_and(available, options->target, tgtcpus);
+    hwloc_bitmap_and(prte_rmaps_base.baseset, options->target, tgtcpus);
     if (options->use_hwthreads) {
         type = HWLOC_OBJ_PU;
     } else {
@@ -336,15 +341,14 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
         for (n=0; n < npkgs; n++) {
             pkg = hwloc_get_obj_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, n);
 #if HWLOC_API_VERSION < 0x20000
-            hwloc_bitmap_and(result, available, pkg->allowed_cpuset);
+            hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.baseset, pkg->allowed_cpuset);
 #else
-            hwloc_bitmap_and(result, available, pkg->cpuset);
+            hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.baseset, pkg->cpuset);
 #endif
-            ncpus = hwloc_get_nbobjs_inside_cpuset_by_type(node->topology->topo, result, type);
+            hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, node->available);
+            ncpus = hwloc_get_nbobjs_inside_cpuset_by_type(node->topology->topo, prte_rmaps_base.available, type);
             if (ncpus > options->cpus_per_rank) {
                 /* this is a good spot */
-                hwloc_bitmap_copy(available, result);
-                hwloc_bitmap_zero(result);
                 moveon = true;
                 break;
             }
@@ -352,7 +356,6 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
         if (!moveon) {
             /* if we get here, then there are no packages that can completely
              * cover the request - so return an error */
-            hwloc_bitmap_free(available);
             hwloc_bitmap_free(result);
             pmix_show_help("help-prte-rmaps-base.txt", "span-packages-multiple", true,
                            prte_rmaps_base_print_mapping(jdata->map->mapping),
@@ -360,11 +363,13 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
                            options->cpus_per_rank);
             return PRTE_ERR_SILENT;
         }
+    } else {
+        hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.baseset, node->available);
     }
     /* we bind-to-cpu for the number of cpus that was specified,
      * restricting ourselves to the available cpus in the object */
     for (n=0; n < options->cpus_per_rank; n++) {
-        tmp_obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo, available, type, n);
+        tmp_obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo, prte_rmaps_base.available, type, n);
         if (NULL != tmp_obj) {
 #if HWLOC_API_VERSION < 0x20000
             hwloc_bitmap_or(result, result, tmp_obj->allowed_cpuset);
@@ -378,7 +383,6 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
         }
     }
     hwloc_bitmap_list_asprintf(&proc->cpuset, result);
-    hwloc_bitmap_free(available);
     hwloc_bitmap_free(result);
     return PRTE_SUCCESS;
 }
