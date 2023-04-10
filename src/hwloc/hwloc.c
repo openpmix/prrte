@@ -234,6 +234,8 @@ int prte_hwloc_base_register(void)
                                      &prte_hwloc_base_topo_file);
     (void) pmix_mca_base_var_register_synonym(ret, "prte", "ras", "simulator", "topo_files",
                                               PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
+    (void) pmix_mca_base_var_register_synonym(ret, "prte", "hwloc", "base", "use_topo_file",
+                                              PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
     /* register parameters */
     return PRTE_SUCCESS;

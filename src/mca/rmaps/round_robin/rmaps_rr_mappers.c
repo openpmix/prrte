@@ -641,6 +641,7 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                                 node->name);
 
             nodefull = false;
+        redo:
             for (j=0; j < nobjs && nprocs_mapped < app->num_procs && !nodefull; j++) {
                 pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rr: assigning proc to object %d", j);
@@ -658,49 +659,45 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                     outofcpus = true;
                     continue;
                 }
-                if (options->mapspan) {
-                    options->nprocs = 1;
-                } else {
-                    /* set the number of procs to map on this object to
-                     * the fit the number of cpus, adjusting for cpus/rank */
-                    options->nprocs = ncpus / options->cpus_per_rank;
-                    if (0 == options->nprocs) {
-                        options->nprocs = 1;
-                    }
-                }
+                options->nprocs = 1;
 
                 if (!prte_rmaps_base_check_avail(jdata, app, node, node_list, obj, options)) {
                     rc = PRTE_ERR_OUT_OF_RESOURCE;
                     PRTE_ERROR_LOG(rc);
                     continue;
                 }
-                for (k=0; k < options->nprocs && nprocs_mapped < app->num_procs && !nodefull; k++) {
-                    proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, obj, options);
-                    if (NULL == proc) {
-                        rc = PRTE_ERR_OUT_OF_RESOURCE;
-                        goto errout;
-                    }
-                    nprocs_mapped++;
-                    rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
-                    if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
-                        /* move to next node */
-                        pmix_list_remove_item(node_list, &node->super);
-                        PMIX_RELEASE(node);
-                        nodefull = true;
-                        PMIX_RELEASE(proc);
-                        break;
-                    } else if (PRTE_SUCCESS != rc) {
-                        /* got an error */
-                        PMIX_RELEASE(proc);
-                        goto errout;
-                    }
+
+                proc = prte_rmaps_base_setup_proc(jdata, app->idx, node, obj, options);
+                if (NULL == proc) {
+                    rc = PRTE_ERR_OUT_OF_RESOURCE;
+                    goto errout;
+                }
+                nprocs_mapped++;
+                rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
+                if (PRTE_ERR_TAKE_NEXT_OPTION == rc) {
+                    /* move to next node */
+                    pmix_list_remove_item(node_list, &node->super);
+                    PMIX_RELEASE(node);
+                    nodefull = true;
                     PMIX_RELEASE(proc);
-                    allfull = false;
+                    break;
+                } else if (PRTE_SUCCESS != rc) {
+                    /* got an error */
+                    PMIX_RELEASE(proc);
+                    goto errout;
                 }
-                if (NULL != options->target) {
-                    hwloc_bitmap_free(options->target);
-                    options->target = NULL;
-                }
+                PMIX_RELEASE(proc);
+                allfull = false;
+            }
+            if (nprocs_mapped < app->num_procs && !allfull &&
+                !nodefull && !outofcpus && !options->mapspan) {
+                // keep working these objects until full
+                goto redo;
+            }
+            // move to the next node
+            if (NULL != options->target) {
+                hwloc_bitmap_free(options->target);
+                options->target = NULL;
             }
         }
     } while (nprocs_mapped < app->num_procs && !allfull);
