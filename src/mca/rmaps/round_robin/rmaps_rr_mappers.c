@@ -403,9 +403,7 @@ int prte_rmaps_rr_bycpu(prte_job_t *jdata, prte_app_context_t *app,
     tmp = PMIX_ARGV_SPLIT_COMPAT(options->cpuset, ',');
     ntomap = PMIX_ARGV_COUNT_COMPAT(tmp);
     PMIX_ARGV_FREE_COMPAT(tmp);
-    if (NULL != options->cpuset) {
-        savecpuset = strdup(options->cpuset);
-    }
+    savecpuset = strdup(options->cpuset);
 
 pass:
     PMIX_LIST_FOREACH_SAFE(node, nd, node_list, prte_node_t)
@@ -506,6 +504,10 @@ pass:
             hwloc_bitmap_free(options->job_cpuset);
             options->job_cpuset = NULL;
         }
+        if (NULL != options->cpuset) {
+            free(options->cpuset);
+        }
+        options->cpuset = strdup(savecpuset);
     } // next node
 
     /* second pass: if we haven't mapped everyone yet, it is
@@ -529,7 +531,10 @@ pass:
             extra_procs_to_assign++;
         }
         /* restore the cpuset */
-        options->cpuset = savecpuset;
+        if (NULL != options->cpuset) {
+            free(options->cpuset);
+        }
+        options->cpuset = strdup(savecpuset);
         // Rescan the nodes
         second_pass = true;
         goto pass;
