@@ -571,8 +571,22 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             free(spec);
             return PRTE_ERR_SILENT;
         }
-        ptr = strchr(spec, '='); // cannot be NULL as we checked for it
+        ptr = strchr(spec, '=');
+        if (NULL == ptr) {
+            /* malformed option */
+            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+                           true, spec);
+            free(spec);
+            return PRTE_ERR_SILENT;
+        }
         ptr++; // move past the equal sign
+        if (NULL == ptr) {
+            /* malformed option */
+            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+                           true, spec);
+            free(spec);
+            return PRTE_ERR_SILENT;
+        }
         /* Verify the list is composed of numeric tokens */
         temp_parm = strdup(ptr);
         temp_token = strtok(temp_parm, ",");
