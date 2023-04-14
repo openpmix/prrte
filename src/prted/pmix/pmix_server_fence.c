@@ -43,6 +43,7 @@
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/proc_info.h"
 
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -87,6 +88,11 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
     pmix_data_buffer_t buf;
     pmix_byte_object_t payload;
     int rc;
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s FENCE UPCALLED ON NODE %s",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        prte_process_info.nodename);
 
     cd = PMIX_NEW(prte_pmix_mdx_caddy_t);
     cd->mdxcbfunc = cbfunc;
