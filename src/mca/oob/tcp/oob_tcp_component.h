@@ -18,6 +18,7 @@
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -34,6 +35,7 @@
 #    include <sys/time.h>
 #endif
 
+#include "src/include/prte_stdatomic.h"
 #include "src/class/pmix_bitmap.h"
 #include "src/class/pmix_list.h"
 #include "src/class/pmix_pointer_array.h"
@@ -79,7 +81,7 @@ typedef struct {
     int num_hnp_ports;           /**< number of ports the HNP should listen on */
     pmix_list_t listeners;       /**< List of sockets being monitored by event or thread */
     pmix_thread_t listen_thread; /**< handle to the listening thread */
-    bool listen_thread_active;
+    prte_atomic_bool_t listen_thread_active;
     struct timeval listen_thread_tv; /**< Timeout when using listen thread */
     int stop_thread[2];              /**< pipe used to exit the listen thread */
     int keepalive_probes;   /**< number of keepalives that can be missed before declaring error */
