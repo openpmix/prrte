@@ -959,6 +959,15 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     /* if this was a destruct operation, then there is nothing
      * further we need do */
     if (PMIX_GROUP_DESTRUCT == cd->op) {
+        /* find this group ID on our list of groups */
+        PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, pmix_server_pset_t)
+        {
+            if (0 == strcmp(pset->name, cd->grpid)) {
+                pmix_list_remove_item(&prte_pmix_server_globals.groups, &pset->super);
+                PMIX_RELEASE(pset);
+                break;
+            }
+        }
         rc = status;
         goto complete;
     }
@@ -1025,16 +1034,6 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
         PMIX_PROC_CREATE(pset->members, pset->num_members);
         memcpy(pset->members, cd->procs, cd->nprocs * sizeof(pmix_proc_t));
         pmix_list_append(&prte_pmix_server_globals.groups, &pset->super);
-    } else if (PMIX_GROUP_DESTRUCT == cd->op) {
-        /* find this group ID on our list of groups */
-        PMIX_LIST_FOREACH(pset, &prte_pmix_server_globals.groups, pmix_server_pset_t)
-        {
-            if (0 == strcmp(pset->name, cd->grpid)) {
-                pmix_list_remove_item(&prte_pmix_server_globals.groups, &pset->super);
-                PMIX_RELEASE(pset);
-                break;
-            }
-        }
     }
 
     /* if anything is left in the buffer, then it is
