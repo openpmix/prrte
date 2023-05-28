@@ -169,6 +169,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
         /* reset the availability */
         hwloc_bitmap_copy(node->available, node->jobcache);
     }
+    hwloc_bitmap_andnot(options->target, options->target, tmp_obj->cpuset);
 #endif
     return PRTE_SUCCESS;
 }
