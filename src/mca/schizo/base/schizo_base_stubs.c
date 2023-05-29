@@ -271,24 +271,28 @@ static char *prte_frameworks[] = {
 
 bool prte_schizo_base_check_prte_param(char *param)
 {
-    char **tmp;
+    char *p;
     size_t n;
+    int len;
 
-    tmp = PMIX_ARGV_SPLIT_COMPAT(param, '_');
+    p = strchr(param, '_');
+    len = (int)(p - param);
+
+    if (0 == strncmp(param, "prte", len)) {
+        return true;
+    }
     for (n=0; NULL != prte_frameworks[n]; n++) {
-        if (0 == strncmp(tmp[0], prte_frameworks[n], strlen(prte_frameworks[n]))) {
-            PMIX_ARGV_FREE_COMPAT(tmp);
+        if (0 == strncmp(param, prte_frameworks[n], len)) {
             return true;
         }
     }
-    PMIX_ARGV_FREE_COMPAT(tmp);
     return false;
 }
 
 int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target)
 {
     int i, j;
-    bool ignore;
+    bool use;
     char *p1, *p2, *param;
 
     for (i = 0; i < (argc - start); ++i) {
@@ -331,18 +335,8 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
 
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
-            ignore = true;
-            if (0 == strncmp("prte", p1, strlen("prte"))) {
-                ignore = false;
-            } else {
-                for (j = 0; NULL != prte_frameworks[j]; j++) {
-                    if (0 == strncmp(p1, prte_frameworks[j], strlen(prte_frameworks[j]))) {
-                        ignore = false;
-                        break;
-                    }
-                }
-            }
-            if (!ignore) {
+            use = prte_schizo_base_check_prte_param(p1);
+            if (use) {
                 /* replace the generic directive with a PRRTE specific
                  * one so we know this has been processed */
                 free(argv[i]);
@@ -413,28 +407,31 @@ static char *pmix_frameworks[] = {
 
 bool prte_schizo_base_check_pmix_param(char *param)
 {
-    char **tmp;
+    char *p;
     size_t n;
+    int len;
 
-    tmp = PMIX_ARGV_SPLIT_COMPAT(param, '_');
+    p = strchr(param, '_');
+    len = (int)(p - param);
+
+    if (0 == strncmp(param, "pmix", len)) {
+        return true;
+    }
     for (n=0; NULL != pmix_frameworks[n]; n++) {
-        if (0 == strncmp(tmp[0], pmix_frameworks[n], strlen(pmix_frameworks[n]))) {
-            PMIX_ARGV_FREE_COMPAT(tmp);
+        if (0 == strncmp(param, pmix_frameworks[n], len)) {
             return true;
         }
     }
-    PMIX_ARGV_FREE_COMPAT(tmp);
     return false;
 }
 
 int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target)
 {
     int i, j;
-    bool ignore;
+    bool use;
     char *p1, *p2, *param;
 
     for (i = 0; i < (argc - start); ++i) {
-        ignore = true;
         if (0 == strcmp("--pmixmca", argv[i]) || 0 == strcmp("--gpmixmca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
@@ -505,18 +502,9 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
 
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
-            if (0 == strncmp("pmix", p1, strlen("pmix"))) {
-                ignore = false;
-            } else {
-                for (j = 0; NULL != pmix_frameworks[j]; j++) {
-                    if (0 == strncmp(p1, pmix_frameworks[j], strlen(pmix_frameworks[j]))) {
-                        ignore = false;
-                        break;
-                    }
-                }
-            }
-            if (!ignore) {
-                /* replace the generic directive with a PRRTE specific
+            use = prte_schizo_base_check_pmix_param(p1);
+            if (use) {
+                /* replace the generic directive with a PMIx specific
                  * one so we know this has been processed */
                 free(argv[i]);
                 argv[i] = strdup("--pmixmca");
