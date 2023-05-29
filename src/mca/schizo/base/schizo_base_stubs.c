@@ -472,6 +472,37 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
             p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
             p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
 
+            // see if this param references the MCA "base"
+            if (0 == strncmp(p1, "mca_base_", strlen("mca_base_"))) {
+                /* we have multiple projects that utilize the MCA
+                 * framework system. Since this was given as a generic
+                 * parameter, we cannot tell which of those projects
+                 * are being targeted. So we have no choice but to
+                 * apply the param to ALL of them
+                 */
+                if (NULL == target) {
+                    asprintf(&param, "PMIX_MCA_%s", p1);
+                    setenv(param, p2, true);
+                    free(param);
+                    // PRRTE shares the MCA base with PMIx, so no
+                    // need to cover that project
+                    asprintf(&param, "OMPI_MCA_%s", p1);
+                    setenv(param, p2, true);
+                    free(param);
+                } else {
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, "--pmixmca");
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, p1);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, p2);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, "--omca");
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, p1);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, p2);
+                }
+                free(p1);
+                free(p2);
+                i += 2;
+                continue;
+            }
+
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
             if (0 == strncmp("pmix", p1, strlen("pmix"))) {
