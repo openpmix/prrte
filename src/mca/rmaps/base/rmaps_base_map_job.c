@@ -63,8 +63,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_node_t *node;
     pmix_proc_t *pptr;
     int rc = PRTE_SUCCESS;
-    int n;
-    bool did_map, pernode = false;
+    int n, ppx = 0;
+    bool did_map, pernode = false, ppr_node = false, ppr_socket = false;
     prte_rmaps_base_selected_module_t *mod;
     prte_job_t *parent = NULL;
     prte_app_context_t *app;
@@ -97,13 +97,6 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     memset(&options, 0, sizeof(prte_rmaps_options_t));
     options.stream = prte_rmaps_base_framework.framework_output;
     options.verbosity = 5;  // usual value for base-level functions
-    /* add up all the expected procs */
-    for (n=0; n < jdata->apps->size; n++) {
-        app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, n);
-        if (NULL != app) {
-            options.nprocs += app->num_procs;
-        }
-    }
 
     /* check and set some general options */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
@@ -307,6 +300,70 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         } else {
             PRTE_UNSET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_SUBSCRIBE_GIVEN);
+        }
+    }
+
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &tmp, PMIX_STRING)) {
+        ppx = strtoul(tmp, NULL, 10);
+        if (NULL != strstr(tmp, "node")) {
+            ppr_node = true;
+        } else if (NULL != strstr(tmp, "socket")) {
+            ppr_socket = true;
+        }
+        free(tmp);
+    }
+
+    /* add up all the expected procs */
+    for (n = 0; n < jdata->apps->size; n++) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+        if (NULL != app) {
+            if (0 == app->num_procs) {
+                pmix_list_t nodes;
+                int slots;
+                PMIX_CONSTRUCT(&nodes, pmix_list_t);
+                prte_rmaps_base_get_target_nodes(&nodes, &slots, jdata, app, jdata->map->mapping,
+                                                 true, true);
+                slots = 0;
+                if (ppr_node) {
+                    slots = ppx * pmix_list_get_size(&nodes);
+                } else if (ppr_socket) {
+                    /* add in #sockets for each node */
+                    PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
+                        slots += ppx * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                          HWLOC_OBJ_SOCKET, 0);
+                    }
+                } else {
+                    /* if we are in a managed allocation, then all is good - otherwise,
+                     * we have to do a little more checking */
+                    if (!prte_managed_allocation) {
+                        /* if all the nodes have their slots given, then we are okay */
+                        bool given = true;
+                        PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
+                            if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
+                                given = false;
+                                break;
+                            }
+                        }
+                        /* if -host or -hostfile was given, and the slots were not,
+                         * then this is no longer allowed */
+                        if (!given &&
+                            (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, NULL, PMIX_STRING) ||
+                             prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, NULL, PMIX_STRING))) {
+                            /* inform the user of the error */
+                            pmix_show_help("help-prte-rmaps-base.txt", "num-procs-not-specified", true);
+                            PMIX_LIST_DESTRUCT(&nodes);
+                            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+                            goto cleanup;
+                        }
+                        PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
+                            slots += node->slots;
+                        }
+                    }
+                }
+                app->num_procs = slots;
+                PMIX_LIST_DESTRUCT(&nodes);
+            }
+            options.nprocs += app->num_procs;
         }
     }
 
