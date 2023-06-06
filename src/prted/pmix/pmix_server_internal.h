@@ -200,7 +200,7 @@ PMIX_CLASS_DECLARATION(prte_pmix_tool_t);
         prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);                           \
     } while (0);
 
-#define PRTE_PMIX_THREADSHIFT(p, s, st, m, pl, pn, fn, cf, cb)                     \
+#define PRTE_SERVER_PMIX_THREADSHIFT(p, s, st, m, pl, pn, fn, cf, cb)                     \
     do {                                                                           \
         prte_pmix_server_op_caddy_t *_cd;                                          \
         _cd = PMIX_NEW(prte_pmix_server_op_caddy_t);                               \
