@@ -70,6 +70,7 @@
 #include "src/mca/odls/base/base.h"
 #include "src/mca/oob/base/base.h"
 #include "src/mca/plm/base/base.h"
+#include "src/mca/pmdl/base/base.h"
 #include "src/mca/prtebacktrace/base/base.h"
 #include "src/mca/prteinstalldirs/base/base.h"
 #include "src/mca/ras/base/base.h"
@@ -468,9 +469,9 @@ static void preload_default_mca_params(void)
 
     /* now process the final list - but do not overwrite if the
      * user already has the param in our environment as their
-     * environment settings override all defaults*/
+     * environment settings override all defaults */
     PMIX_LIST_FOREACH(fv, &pfinal, pmix_mca_base_var_file_value_t) {
-        if (prte_schizo_base_check_prte_param(fv->mbvfv_var)) {
+        if (pmix_pmdl_base_check_prte_param(fv->mbvfv_var)) {
             pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
             // set it, but don't overwrite if they already
             // have a value in our environment
@@ -480,7 +481,7 @@ static void preload_default_mca_params(void)
             // or mca frameworks, then we also need to set
             // the equivalent PMIx value
             check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
-        } else if (prte_schizo_base_check_pmix_param(fv->mbvfv_var)) {
+        } else if (pmix_pmdl_base_check_pmix_param(fv->mbvfv_var)) {
             pmix_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
             // set it, but don't overwrite if they already
             // have a value in our environment

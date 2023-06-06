@@ -86,7 +86,7 @@ pmix_status_t pmix_server_client_connected_fn(const pmix_proc_t *proc, void *ser
 {
     /* need to thread-shift this request as we are going
      * to access our global list of registered events */
-    PRTE_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
+    PRTE_SERVER_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
                           NULL, NULL, 0, _client_conn,
                           cbfunc, cbdata);
     return PRTE_SUCCESS;
@@ -118,7 +118,7 @@ pmix_status_t pmix_server_client_finalized_fn(const pmix_proc_t *proc, void *ser
 {
     /* need to thread-shift this request as we are going
      * to access our global list of registered events */
-    PRTE_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
+    PRTE_SERVER_PMIX_THREADSHIFT(proc, server_object, PRTE_SUCCESS,
                           NULL, NULL, 0, _client_finalized,
                           cbfunc, cbdata);
     return PRTE_SUCCESS;
@@ -151,7 +151,7 @@ pmix_status_t pmix_server_abort_fn(const pmix_proc_t *proc, void *server_object,
 {
     /* need to thread-shift this request as we are going
      * to access our global list of registered events */
-    PRTE_PMIX_THREADSHIFT(proc, server_object, status, msg, procs, nprocs, _client_abort, cbfunc,
+    PRTE_SERVER_PMIX_THREADSHIFT(proc, server_object, status, msg, procs, nprocs, _client_abort, cbfunc,
                           cbdata);
     return PRTE_SUCCESS;
 }
@@ -784,7 +784,7 @@ done:
     /* we cannot directly execute the callback here
      * as it would threadlock - so shift to somewhere
      * safe */
-    PRTE_PMIX_THREADSHIFT(PRTE_NAME_WILDCARD, NULL, rc, NULL, NULL, 0, lgcbfn, cbfunc, cbdata);
+    PRTE_SERVER_PMIX_THREADSHIFT(PRTE_NAME_WILDCARD, NULL, rc, NULL, NULL, 0, lgcbfn, cbfunc, cbdata);
 }
 
 pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_proc_t targets[],

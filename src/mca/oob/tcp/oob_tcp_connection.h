@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,7 +61,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
                             __FILE__, __LINE__, PRTE_NAME_PRINT((&(p)->name)));             \
         cop = PMIX_NEW(prte_oob_tcp_conn_op_t);                                             \
         cop->peer = (p);                                                                    \
-        PMIX_THREADSHIFT(cop, prte_event_base, (cbfunc), PRTE_MSG_PRI);                     \
+        PRTE_PMIX_THREADSHIFT(cop, prte_event_base, (cbfunc), PRTE_MSG_PRI);                     \
     } while (0);
 
 #define PRTE_ACTIVATE_TCP_ACCEPT_STATE(s, a, cbfunc)                               \
