@@ -56,7 +56,7 @@
 #include "src/util/pmix_show_help.h"
 
 #include "constants.h"
-#include "src/include/frameworks.h"
+#include "src/include/prte_frameworks.h"
 #include "src/include/version.h"
 #include "src/runtime/prte_locks.h"
 

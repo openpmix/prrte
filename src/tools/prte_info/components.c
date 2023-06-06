@@ -16,7 +16,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,7 +42,7 @@
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_show_help.h"
 
-#include "src/include/frameworks.h"
+#include "src/include/prte_frameworks.h"
 
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 

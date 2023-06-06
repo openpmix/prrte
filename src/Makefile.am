@@ -15,7 +15,7 @@
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
@@ -26,7 +26,6 @@
 #
 
 SUBDIRS = \
-	include \
 	etc \
 	util \
 	$(MCA_prte_FRAMEWORKS_SUBDIRS) \
@@ -35,7 +34,6 @@ SUBDIRS = \
 	$(MCA_prte_FRAMEWORK_COMPONENT_DSO_SUBDIRS)
 
 DIST_SUBDIRS = \
-	include \
 	etc \
 	util \
 	$(MCA_prte_FRAMEWORKS_SUBDIRS) \
@@ -57,6 +55,7 @@ libprrte_la_CPPFLAGS =
 
 # included subdirectory Makefile.am's and appended-to variables
 headers =
+nodist_headers =
 noinst_LTLIBRARIES =
 dist_prtedata_DATA =
 libprrte_la_SOURCES += $(headers)
@@ -71,6 +70,7 @@ endif
 # setup to catch extra files to be included in tarballs
 EXTRA_DIST = Doxyfile
 
+include include/Makefile.am
 include runtime/Makefile.am
 include tools/Makefile.am
 include prted/Makefile.am

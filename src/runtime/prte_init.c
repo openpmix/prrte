@@ -391,7 +391,8 @@ static bool check_pmix_overlap(char *var, char *value)
         setenv(tmp, value, false);
         free(tmp);
         return true;
-    } else if (0 == strncmp(var, "oob_", 4)) {
+    } else if (0 == strncmp(var, "oob_", 4) &&
+               NULL == strstr(var, "verbose")) {
         pmix_asprintf(&tmp, "PMIX_MCA_ptl_%s", &var[4]);
         setenv(tmp, value, false);
         free(tmp);
@@ -490,27 +491,6 @@ static void preload_default_mca_params(void)
         }
     }
 
-    /* now process the results */
-    PMIX_LIST_FOREACH_SAFE(fv, fvnext, &pfinal, pmix_mca_base_var_file_value_t) {
-        // see if this param relates to PRRTE
-        if (prte_schizo_base_check_prte_param(fv->mbvfv_var)) {
-            pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
-            // set it, but don't overwrite if they already
-            // have a value in our environment
-            setenv(tmp, fv->mbvfv_value, false);
-            free(tmp);
-            // if this relates to the DL, OOB, HWLOC, IF, or
-            // REACHABLE frameworks, then we also need to set
-            // the equivalent PMIx value
-            check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
-        } else if (prte_schizo_base_check_pmix_param(fv->mbvfv_var)) {
-            pmix_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
-            // set it, but don't overwrite if they already
-            // have a value in our environment
-            setenv(tmp, fv->mbvfv_value, false);
-            free(tmp);
-        }
-    }
     PMIX_LIST_DESTRUCT(&params);
     PMIX_LIST_DESTRUCT(&params2);
     PMIX_LIST_DESTRUCT(&pfinal);

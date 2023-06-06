@@ -18,6 +18,8 @@
 
 #include "src/class/pmix_list.h"
 
+#include "src/include/pmix_frameworks.h"
+#include "src/include/prte_frameworks.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/runtime/prte_globals.h"
@@ -240,35 +242,6 @@ char *prte_schizo_base_strip_quotes(char *p)
     return pout;
 }
 
-static char *prte_frameworks[] = {
-    "errmgr",
-    "ess",
-    "filem",
-    "grpcomm",
-    "iof",
-    "odls",
-    "oob",
-    "plm",
-    "propagate",
-    "prtebacktrace",
-    "prtedl",
-    "prteif",
-    "prteinstalldirs",
-    "prtereachable",
-    "ras",
-    "rmaps",
-    "rml",
-    "routed",
-    "rtc",
-    "schizo",
-    "state",
-    // inherited from OPAL
-    "hwloc",
-    "if",
-    "reachable",
-    NULL,
-};
-
 bool prte_schizo_base_check_prte_param(char *param)
 {
     char *p;
@@ -281,8 +254,8 @@ bool prte_schizo_base_check_prte_param(char *param)
     if (0 == strncmp(param, "prte", len)) {
         return true;
     }
-    for (n=0; NULL != prte_frameworks[n]; n++) {
-        if (0 == strncmp(param, prte_frameworks[n], len)) {
+    for (n=0; NULL != prte_framework_names[n]; n++) {
+        if (0 == strncmp(param, prte_framework_names[n], len)) {
             return true;
         }
     }
@@ -380,30 +353,28 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
     return PRTE_SUCCESS;
 }
 
-static char *pmix_frameworks[] = {
-    "bfrops",
-    "gds",
-    "pcompress",
-    "pdl",
-    "pfexec",
-    "pif",
-    "pinstalldirs",
-    "ploc",
-    "plog",
-    "pmdl",
-    "pnet",
-    "preg",
-    "prm",
-    "psec",
-    "psensor",
-    "pshmem",
-    "psquash",
-    "pstat",
-    "pstrg",
-    "ptl",
-    "mca",  // mca base now resides in pmix
-    NULL
-};
+static char **pmix_frameworks_tocheck = pmix_framework_names;
+static bool pmix_frameworks_setup = false;
+
+static void setup_pmix_frameworks(void)
+{
+    if (pmix_frameworks_setup) {
+        return;
+    }
+    pmix_frameworks_setup = true;
+
+    char *env = getenv("PMIX_MCA_PREFIXES");
+    if (NULL == env) {
+        return;
+    }
+
+    // If we found the env variable, it will be a comma-delimited list
+    // of values.  Split it into an argv-style array.
+    char **tmp = PMIX_ARGV_SPLIT_COMPAT(env, ',');
+    if (NULL != tmp) {
+        pmix_frameworks_tocheck = tmp;
+    }
+}
 
 bool prte_schizo_base_check_pmix_param(char *param)
 {
@@ -411,14 +382,16 @@ bool prte_schizo_base_check_pmix_param(char *param)
     size_t n;
     int len;
 
+    setup_pmix_frameworks();
+
     p = strchr(param, '_');
     len = (int)(p - param);
 
     if (0 == strncmp(param, "pmix", len)) {
         return true;
     }
-    for (n=0; NULL != pmix_frameworks[n]; n++) {
-        if (0 == strncmp(param, pmix_frameworks[n], len)) {
+    for (n=0; NULL != pmix_frameworks_tocheck[n]; n++) {
+        if (0 == strncmp(param, pmix_frameworks_tocheck[n], len)) {
             return true;
         }
     }
