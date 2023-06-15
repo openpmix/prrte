@@ -24,7 +24,7 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Check out the code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
       # Run the container tester
       - name: Special Builds
         run: docker run --rm -v ${GITHUB_WORKSPACE}:/home/pmixer/prrte --env PR_TARGET_BRANCH=${GITHUB_BASE_REF} -w /home/pmixer/pmix-tests/ci-builds ${{ env.IMAGE_NAME }}:latest /bin/bash -c 'git pull && ./run-all-prrte.sh && echo SUCCESS'
