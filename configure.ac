@@ -27,6 +27,7 @@
 #                         All Rights reserved.
 # Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -56,6 +57,14 @@ AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
 
 OAC_PUSH_PREFIX([PRTE])
+
+# Get the absolute version of the srcdir.  We don't use "readlink -f",
+# because that unfortunately isn't portable (cough cough macOS cough
+# cough).
+save=$(pwd)
+cd $srcdir
+abs_srcdir=$(pwd)
+cd $save
 
 # autotools expects to perform tests without interference
 # from user-provided CFLAGS, particularly -Werror flags.
@@ -705,7 +714,7 @@ AC_INCLUDES_DEFAULT
 #endif])
 
 #
-# Setup HTML and man page processing
+# Setup Sphinx processing
 #
 
 OAC_SETUP_SPHINX([$srcdir/docs/_build/html/index.html], [])
@@ -991,6 +1000,9 @@ AC_CONFIG_FILES([
     include/Makefile
     include/prte_version.h
     docs/Makefile
+    src/docs/Makefile
+    src/docs/show-help-files/Makefile
+    src/docs/prrte-rst-content/Makefile
 ])
 
 PRTE_CONFIG_FILES

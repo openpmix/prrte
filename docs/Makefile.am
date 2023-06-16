@@ -1,5 +1,6 @@
 #
 # Copyright (c) 2022-2023 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 #
 # Copyright (c) 2023      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
@@ -33,20 +34,20 @@ SPHINX_OPTS       ?= -W --keep-going -j auto
 # Note: it is significantly more convenient to list all the source
 # files here using wildcards (vs. listing every single .rst file).
 # However, it is necessary to list $(srcdir) when using wildcards.
-TEXT_SOURCE_FILES = # if you have any .txt files, list them here
-IMAGE_SOURCE_FILES = # if you have any, list them here
-RST_SOURCE_FILES   = \
+RST_SOURCE_FILES = \
         $(srcdir)/*.rst \
+        $(srcdir)/prrte-rst-content/*.rst \
+        $(srcdir)/placement/*.rst \
+        $(srcdir)/hosts/*.rst \
         $(srcdir)/developers/*.rst \
         $(srcdir)/man/*.rst \
         $(srcdir)/man/man1/*.rst \
         $(srcdir)/man/man5/*.rst
 
-EXTRA_DIST         = \
+EXTRA_DIST = \
         requirements.txt \
+        _templates/configurator.html \
         $(SPHINX_CONFIG) \
-        $(TEXT_SOURCE_FILES) \
-        $(IMAGE_SOURCE_FILES) \
         $(RST_SOURCE_FILES)
 
 ###########################################################################
@@ -63,7 +64,9 @@ PRTE_MAN1 = \
         prte_info.1 \
         prted.1 \
         prterun.1 \
-        prun.1
+        prun.1 \
+        psched.1 \
+        pterm.1
 
 PRTE_MAN5 = \
         prte.5
@@ -75,6 +78,8 @@ PRTE_MAN1_BUILT = $(PRTE_MAN1:%.1=$(MAN_OUTDIR)/%.1)
 
 PRTE_MAN5_RST = $(PRTE_MAN5:%.5=man/man5/%.5.rst)
 PRTE_MAN5_BUILT = $(PRTE_MAN5:%.5=$(MAN_OUTDIR)/%.5)
+
+#-------------------
 
 EXTRA_DIST += \
         $(PRTE_MAN1_BUILT) \

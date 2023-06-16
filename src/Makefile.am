@@ -27,6 +27,7 @@
 #
 
 SUBDIRS = \
+	docs \
 	etc \
 	util \
 	$(MCA_prte_FRAMEWORKS_SUBDIRS) \
@@ -35,6 +36,7 @@ SUBDIRS = \
 	$(MCA_prte_FRAMEWORK_COMPONENT_DSO_SUBDIRS)
 
 DIST_SUBDIRS = \
+	docs \
 	etc \
 	util \
 	$(MCA_prte_FRAMEWORKS_SUBDIRS) \

@@ -1,40 +1,46 @@
 .. _man1-prun:
 
 prun
-====
+=====
 
-.. one line summary of this command
-
-prun |mdash| do great things
+prun |mdash| launch an application
 
 SYNOPSIS
 --------
 
-.. brief listing of all the CLI options
-
 .. code:: sh
 
-   prun ...options...
+   shell$ prun ...options...
 
 DESCRIPTION
 -----------
 
-Full description of this command.
+``prun`` submits a job to the PMIx Reference Runtime Environment
+(PRRTE).  The user has control over various distributed virtual
+machine (DVM) options.
+
+Much of this same help documentation for this command is also provided
+through ``prun --help [topic]``.
 
 .. admonition:: PRRTE Docs TODO
    :class: error
 
    Need to write this man page.
 
-EXIT STATUS
------------
+COMMAND LINE OPTIONS
+--------------------
 
-Description of the various exit statuses of this command.
+The following command line options are supported:
 
-EXAMPLES
---------
+.. include:: /prrte-rst-content/prterun-all-cli.rst
 
-Examples of using this command.
+DEPRECATED COMMAND LINE OPTIONS
+-------------------------------
+
+The following command line options are deprecated and may disappear in
+a future version of PRRTE:
+
+.. include:: /prrte-rst-content/prterun-all-deprecated.rst
 
 .. seealso::
-   :ref:`prterun(1) <man1-prterun>`
+   :ref:`prte(1) <man1-prte>`
