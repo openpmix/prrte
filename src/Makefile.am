@@ -27,7 +27,7 @@
 #
 
 SUBDIRS = \
-	include \
+	docs \
 	etc \
 	util \
 	$(MCA_prte_FRAMEWORKS_SUBDIRS) \
@@ -36,7 +36,7 @@ SUBDIRS = \
 	$(MCA_prte_FRAMEWORK_COMPONENT_DSO_SUBDIRS)
 
 DIST_SUBDIRS = \
-	include \
+	docs \
 	etc \
 	util \
 	$(MCA_prte_FRAMEWORKS_SUBDIRS) \
@@ -58,6 +58,7 @@ libprrte_la_CPPFLAGS =
 
 # included subdirectory Makefile.am's and appended-to variables
 headers =
+nodist_headers =
 noinst_LTLIBRARIES =
 dist_prtedata_DATA =
 libprrte_la_SOURCES += $(headers)
@@ -69,6 +70,7 @@ prtedir = $(prteincludedir)/$(subdir)
 nobase_prte_HEADERS = $(headers)
 endif
 
+include include/Makefile.am
 include runtime/Makefile.am
 include tools/Makefile.am
 include prted/Makefile.am

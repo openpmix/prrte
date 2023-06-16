@@ -3,39 +3,27 @@
 prted
 =====
 
-.. one line summary of this command
-
-prted |mdash| do great things
+prted |mdash| helper daemon for PRRTE
 
 SYNOPSIS
 --------
 
-.. brief listing of all the CLI options
-
 .. code:: sh
 
-   prted ...options...
+   shell$ prted ...options...
 
 DESCRIPTION
 -----------
 
-Full description of this command.
+``prted`` is the back end helper daemon for PMIx Reference Runtime
+Environment (PRRTE).
 
-.. admonition:: PRRTE Docs TODO
-   :class: error
+Extensive help documentation for this command is provided through
+``prted --help [topic]``.
 
-   Need to write this man page.
-
-EXIT STATUS
------------
-
-Description of the various exit statuses of this command.
-
-EXAMPLES
---------
-
-Examples of using this command.
+At least for now, that content is not available in man page form.
+Pull requests to add all the content (via repeatable infrastructure)
+would be greatly appreciated.
 
 .. seealso::
-   :ref:`prte(1) <man1-prte>`,
-   :ref:`prterun(1) <man1-prterun>`
+   :ref:`prte(1) <man1-prte>`

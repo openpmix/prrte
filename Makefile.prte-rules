@@ -21,3 +21,11 @@ prte__v_SPHINX_HTML_0 = @echo "  GENERATE HTML docs";
 PRTE_V_SPHINX_MAN = $(prte__v_SPHINX_MAN_$V)
 prte__v_SPHINX_MAN_ = $(prte__v_SPHINX_MAN_$AM_DEFAULT_VERBOSITY)
 prte__v_SPHINX_MAN_0 = @echo "  GENERATE man pages";
+
+PRTE_V_TXT = $(prte__v_SPHINX_TXT_$V)
+prte__v_TXT_ = $(prte__v_SPHINX_TXT_$AM_DEFAULT_VERBOSITY)
+prte__v_TXT_0 = @echo "  GENERATE text files";
+
+PRTE_V_LN_S = $(prte__v_LN_S_$V)
+prte__v_LN_S_ = $(prte__v_LN_S_$AM_DEFAULT_VERBOSITY)
+prte__v_LN_S_0 = @echo "  LN_S    " `basename $@`;

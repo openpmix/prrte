@@ -10,11 +10,12 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
+import os
+import sys
 
 # -- Project information -----------------------------------------------------
+
+needs_sphinx = '4.2'
 
 import datetime
 year = datetime.datetime.now().year
@@ -25,8 +26,15 @@ author = 'The PRRTE Community'
 
 # The full version, including alpha/beta/rc tags
 # Read the PRRTE version from the VERSION file
-with open("../VERSION") as fp:
-    prte_lines = fp.readlines()
+# Note: this conf file lives in 2 different directories, so find the
+# VERSION file relative to where we're running right now.
+prte_lines = None
+for dir in ['..', '../../..']:
+    file = f'{dir}/VERSION'
+    if os.path.exists(file):
+        with open(file) as fp:
+            prte_lines = fp.readlines()
+            break
 
 prte_data = dict()
 for prte_line in prte_lines:
@@ -166,6 +174,10 @@ for root, dirs, files in os.walk("man"):
         # already shows up in the copyright section.
         tuple = (full_filename_without_rst, base_name, '', '', section)
         man_pages.append(tuple)
+
+# -- Options for TEXT output ------------------------------------------------
+
+text_sectionchars = '=-$#@!`'
 
 # -- PRRTE-specific options -----------------------------------------------
 
