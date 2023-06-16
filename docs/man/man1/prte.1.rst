@@ -3,38 +3,27 @@
 prte
 ====
 
-.. one line summary of this command
-
-prte |mdash| do great things
+prte |mdash| instantiate an instance of PRRTE DVM
 
 SYNOPSIS
 --------
 
-.. brief listing of all the CLI options
-
 .. code:: sh
 
-   prte ...options...
+   shell$ prte ...options...
 
 DESCRIPTION
 -----------
 
-Full description of this command.
+``prte`` instantiates an instance of the PMIx Reference Run Time
+Environment (PRRTE) distributed virtual machine (DVM).
 
-.. admonition:: PRRTE Docs TODO
-   :class: error
+Extensive help documentation for this command is provided through
+``prte --help [topic]``.
 
-   Need to write this man page.
-
-EXIT STATUS
------------
-
-Description of the various exit statuses of this command.
-
-EXAMPLES
---------
-
-Examples of using this command.
+At least for now, that content is not available in man page form.
+Pull requests to add all the content (via repeatable infrastructure)
+would be greatly appreciated.
 
 .. seealso::
    :ref:`prterun(1) <man1-prterun>`

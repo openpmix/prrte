@@ -3,14 +3,10 @@
 prte_info
 =========
 
-.. one line summary of this command
-
-prte_info |mdash| do great things
+prte_info |mdash| Provide detailed information on your PRRTE installation
 
 SYNOPSIS
 --------
-
-.. brief listing of all the CLI options
 
 .. code:: sh
 
@@ -19,23 +15,15 @@ SYNOPSIS
 DESCRIPTION
 -----------
 
-Full description of this command.
+``prte_info`` provide detailed information on your PMIx Reference Run
+Time (PRRTE) installation.
 
-.. admonition:: PRRTE Docs TODO
-   :class: error
+Extensive help documentation for this command is provided through
+``prte_info --help [topic]``.
 
-   Need to write this man page.
-
-EXIT STATUS
------------
-
-Description of the various exit statuses of this command.
-
-EXAMPLES
---------
-
-Examples of using this command.
+At least for now, that content is not available in man page form.
+Pull requests to add all the content (via repeatable infrastructure)
+would be greatly appreciated.
 
 .. seealso::
-   :ref:`prte(1) <man1-prte>`,
-   :ref:`prterun(1) <man1-prterun>`
+   :ref:`prte(1) <man1-prte>`

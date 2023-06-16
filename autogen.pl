@@ -8,8 +8,9 @@
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2015      IBM Corporation.  All rights reserved.
-#
 # Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
+#
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -144,6 +145,13 @@ sub mca_process_component {
     if (-f "$cdir/configure.m4") {
         $found_component->{"configure.m4"} = 1;
         verbose "    Found configure.m4 file\n";
+    }
+
+    # Does this directory have a
+    # help-{framework}-{component}.rst file?
+    if (-f "$cdir/help-$framework-$component.rst") {
+        $found_component->{"rst"} = 1;
+        verbose "    Found help-$framework-$component.rst file\n";
     }
 
     # Push the results onto the $mca_found hash array

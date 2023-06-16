@@ -71,7 +71,6 @@ vc70.pdb
 .hgignore_local
 stamp-h?
 AUTHORS
-docs-venv/
 
 ar-lib
 ylwrap
@@ -190,7 +189,12 @@ docs/_build
 docs/_static
 docs/_static/css/custom.css
 docs/_templates
+src/docs/_build
+src/docs/mca/mca.rst
+src/docs/mca/help*rst
+__pycache__
 
 # Common Python virtual environment directory names
 venv
 py??
+docs-venv
