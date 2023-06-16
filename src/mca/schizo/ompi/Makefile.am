@@ -3,6 +3,7 @@
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -13,13 +14,20 @@
 AM_CFLAGS = \
             -DDEFAULT_PARAM_FILE_PATH="\"@AMCA_PARAM_SETS_DIR@\""
 
-dist_prtedata_DATA = \
-    help-schizo-ompi.txt
+# We install the "source" RST file so that Open MPI can find it and
+# use it when building against an external PRTE installation.
+#
+# See src/docs/included-content/Makefile.am for an explanation why we
+# install this file into the "data" directory (vs. the "doc"
+# directory).
+rstdir = $(prtedatadir)/rst/schizo-ompi-rst-content
+dist_rst_DATA = \
+        schizo-ompi-cli.rst
 
 sources = \
-          schizo_ompi_component.c \
-          schizo_ompi.h \
-          schizo_ompi.c
+        schizo_ompi_component.c \
+        schizo_ompi.h \
+        schizo_ompi.c
 
 # Make the output library in this directory, and name it either
 # mca_<type>_<name>.la (for DSO builds) or libmca_<type>_<name>.la
