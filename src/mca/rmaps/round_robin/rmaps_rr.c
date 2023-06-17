@@ -105,17 +105,6 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
         /* setup the nodelist here in case we jump to error */
         PMIX_CONSTRUCT(&node_list, pmix_list_t);
 
-        /* if the number of processes wasn't specified, then we know there can be only
-         * one app_context allowed in the launch, and that we are to launch it across
-         * all available slots. We'll double-check the single app_context rule first
-         */
-        if (0 == app->num_procs && 1 < jdata->num_apps) {
-            pmix_show_help("help-prte-rmaps-rr.txt", "prte-rmaps-rr:multi-apps-and-zero-np", true,
-                           jdata->num_apps, NULL);
-            rc = PRTE_ERR_SILENT;
-            goto error;
-        }
-
         /* for each app_context, we have to get the list of nodes that it can
          * use since that can now be modified with a hostfile and/or -host
          * option
@@ -128,25 +117,6 @@ static int prte_rmaps_rr_map(prte_job_t *jdata,
         }
         /* flag that all subsequent requests should not reset the node->mapped flag */
         initial_map = false;
-
-        if (0 == app->num_procs) {
-            if (NULL != options->cpuset && !options->overload) {
-                tmp = PMIX_ARGV_SPLIT_COMPAT(options->cpuset, ',');
-                app->num_procs = PMIX_ARGV_COUNT_COMPAT(tmp);
-                PMIX_ARGV_FREE_COMPAT(tmp);
-            } else {
-                /* set the num_procs to equal the number of slots on these
-                 * mapped nodes, taking into account the number of cpus/rank
-                 */
-                app->num_procs = num_slots / options->cpus_per_rank;
-                /* sometimes, we have only one "slot" assigned, but may
-                 * want more than one cpu/rank - so ensure we always wind
-                 * up with at least one proc */
-                if (0 == app->num_procs) {
-                    app->num_procs = 1;
-                }
-            }
-        }
 
         /* Make assignments */
         if (PRTE_MAPPING_BYNODE == options->map) {

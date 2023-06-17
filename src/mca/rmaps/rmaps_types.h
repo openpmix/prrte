@@ -98,6 +98,8 @@ typedef struct {
     int nprocs;
     hwloc_obj_type_t maptype;
     unsigned cmaplvl;
+    /* #procs/resource as per PPR */
+    int pprn;
 
     /* ranking values */
     prte_ranking_policy_t rank;
