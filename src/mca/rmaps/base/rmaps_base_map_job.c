@@ -63,14 +63,14 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_node_t *node;
     pmix_proc_t *pptr;
     int rc = PRTE_SUCCESS;
-    int n, ppx = 0;
+    int n;
     bool did_map, pernode = false, ppr_node = false, ppr_socket = false;
     prte_rmaps_base_selected_module_t *mod;
     prte_job_t *parent = NULL;
     prte_app_context_t *app;
     bool inherit = false;
     pmix_proc_t *nptr, *target_proc;
-    char *tmp;
+    char *tmp, **ck;
     uint16_t u16 = 0, procs_per_target = 0;
     uint16_t *u16ptr = &u16;
     bool colocate_daemons = false;
@@ -78,6 +78,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     prte_schizo_base_module_t *schizo;
     prte_rmaps_options_t options;
     pmix_data_array_t *darray = NULL;
+    pmix_list_t nodes;
+    int slots, len;
 
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -263,8 +265,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 }
             }
             /* if not already assigned, inherit the parent's cpu designation */
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)
-                && !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
+            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
+                !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
                 /* get the parent job's designation, if it had one */
                 if (prte_get_attribute(&parent->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
@@ -280,8 +282,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 }
             }
         } else {
-            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)
-                && !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
+            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
+                !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
                 /* inherit the base defaults */
                 if (prte_rmaps_base.hwthread_cpus) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
@@ -293,77 +295,13 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
 
     /* we always inherit a parent's oversubscribe flag unless the job assigned it */
-    if (NULL != parent
-        && !(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
+    if (NULL != parent &&
+        !(PRTE_MAPPING_SUBSCRIBE_GIVEN & PRTE_GET_MAPPING_DIRECTIVE(jdata->map->mapping))) {
         if (PRTE_MAPPING_NO_OVERSUBSCRIBE & PRTE_GET_MAPPING_DIRECTIVE(parent->map->mapping)) {
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
         } else {
             PRTE_UNSET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_NO_OVERSUBSCRIBE);
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_SUBSCRIBE_GIVEN);
-        }
-    }
-
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &tmp, PMIX_STRING)) {
-        ppx = strtoul(tmp, NULL, 10);
-        if (NULL != strstr(tmp, "node")) {
-            ppr_node = true;
-        } else if (NULL != strstr(tmp, "socket")) {
-            ppr_socket = true;
-        }
-        free(tmp);
-    }
-
-    /* add up all the expected procs */
-    for (n = 0; n < jdata->apps->size; n++) {
-        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
-        if (NULL != app) {
-            if (0 == app->num_procs) {
-                pmix_list_t nodes;
-                int slots;
-                PMIX_CONSTRUCT(&nodes, pmix_list_t);
-                prte_rmaps_base_get_target_nodes(&nodes, &slots, jdata, app, jdata->map->mapping,
-                                                 true, true);
-                slots = 0;
-                if (ppr_node) {
-                    slots = ppx * pmix_list_get_size(&nodes);
-                } else if (ppr_socket) {
-                    /* add in #sockets for each node */
-                    PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                        slots += ppx * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                          HWLOC_OBJ_SOCKET, 0);
-                    }
-                } else {
-                    /* if we are in a managed allocation, then all is good - otherwise,
-                     * we have to do a little more checking */
-                    if (!prte_managed_allocation) {
-                        /* if all the nodes have their slots given, then we are okay */
-                        bool given = true;
-                        PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                            if (!PRTE_FLAG_TEST(node, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
-                                given = false;
-                                break;
-                            }
-                        }
-                        /* if -host or -hostfile was given, and the slots were not,
-                         * then this is no longer allowed */
-                        if (!given &&
-                            (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, NULL, PMIX_STRING) ||
-                             prte_get_attribute(&app->attributes, PRTE_APP_HOSTFILE, NULL, PMIX_STRING))) {
-                            /* inform the user of the error */
-                            pmix_show_help("help-prte-rmaps-base.txt", "num-procs-not-specified", true);
-                            PMIX_LIST_DESTRUCT(&nodes);
-                            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
-                            goto cleanup;
-                        }
-                        PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                            slots += node->slots;
-                        }
-                    }
-                }
-                app->num_procs = slots;
-                PMIX_LIST_DESTRUCT(&nodes);
-            }
-            options.nprocs += app->num_procs;
         }
     }
 
@@ -374,14 +312,159 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     } else {
         options.cpus_per_rank = 1;
     }
-    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) ||
-        prte_rmaps_base.require_hwtcpus) {
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL)) {
         options.use_hwthreads = true;
     }
 
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PROCESSORS, (void*)&tmp, PMIX_STRING)) {
         prte_ras_base_display_cpus(jdata, tmp);
         free(tmp);
+    }
+
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_PPR, (void **) &tmp, PMIX_STRING)) {
+        ck = PMIX_ARGV_SPLIT_COMPAT(tmp, ':');
+        if (2 != PMIX_ARGV_COUNT_COMPAT(ck)) {
+            /* must provide a specification */
+            pmix_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, tmp);
+            PMIX_ARGV_FREE_COMPAT(ck);
+            free(tmp);
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+        /* compute the #procs per resource */
+        options.pprn = strtoul(ck[0], NULL, 10);
+        len = strlen(ck[1]);
+        if (0 == strncasecmp(ck[1], "node", len)) {
+            options.maptype = HWLOC_OBJ_MACHINE;
+            options.mapdepth = PRTE_BIND_TO_NONE;
+        } else if (0 == strncasecmp(ck[1], "hwthread", len) ||
+                   0 == strncasecmp(ck[1], "thread", len)) {
+            options.maptype = HWLOC_OBJ_PU;
+            options.mapdepth = PRTE_BIND_TO_HWTHREAD;
+        } else if (0 == strncasecmp(ck[1], "core", len)) {
+            options.maptype = HWLOC_OBJ_CORE;
+            options.mapdepth = PRTE_BIND_TO_CORE;
+        } else if (0 == strncasecmp(ck[1], "package", len) ||
+                   0 == strncasecmp(ck[1], "skt", len)) {
+            options.maptype = HWLOC_OBJ_PACKAGE;
+            options.mapdepth = PRTE_BIND_TO_PACKAGE;
+        } else if (0 == strncasecmp(ck[1], "numa", len) ||
+                   0 == strncasecmp(ck[1], "nm", len)) {
+            options.maptype = HWLOC_OBJ_NUMANODE;
+            options.mapdepth = PRTE_BIND_TO_NUMA;
+        } else if (0 == strncasecmp(ck[1], "l1cache", len)) {
+            PRTE_HWLOC_MAKE_OBJ_CACHE(1, options.maptype, options.cmaplvl);
+            options.mapdepth = PRTE_BIND_TO_L1CACHE;
+        } else if (0 == strncasecmp(ck[1], "l2cache", len)) {
+            PRTE_HWLOC_MAKE_OBJ_CACHE(2, options.maptype, options.cmaplvl);
+            options.mapdepth = PRTE_BIND_TO_L2CACHE;
+        } else if (0 == strncasecmp(ck[1], "l3cache", len)) {
+            PRTE_HWLOC_MAKE_OBJ_CACHE(3, options.maptype, options.cmaplvl);
+            options.mapdepth = PRTE_BIND_TO_L3CACHE;
+        } else {
+            /* unknown spec */
+            pmix_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true,
+                           ck[1], tmp);
+            free(tmp);
+            PMIX_ARGV_FREE_COMPAT(ck);
+            jdata->exit_code = PRTE_ERR_BAD_PARAM;
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+        free(tmp);
+        PMIX_ARGV_FREE_COMPAT(ck);
+    }
+
+    /* add up all the expected procs */
+    for (n = 0; n < jdata->apps->size; n++) {
+        app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n);
+        if (NULL == app ) {
+            continue;
+        }
+        if (0 < app->num_procs) {
+            options.nprocs += app->num_procs;
+            continue;
+        }
+        /*
+         * get the target nodes for this app - the base function
+         * will take any host or hostfile directive into account
+         */
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+        rc = prte_rmaps_base_get_target_nodes(&nodes, &slots,
+                                              jdata, app, jdata->map->mapping,
+                                              true, true);
+        if (PRTE_SUCCESS != rc) {
+            PMIX_LIST_DESTRUCT(&nodes);
+            jdata->exit_code = rc;
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP_FAILED);
+            goto cleanup;
+        }
+        if (0 < options.pprn) {
+            if (HWLOC_OBJ_MACHINE == options.maptype) {
+                app->num_procs = options.pprn * pmix_list_get_size(&nodes);
+            } else if (HWLOC_OBJ_PACKAGE == options.maptype) {
+                /* add in #packages for each node */
+                PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
+                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                                        HWLOC_OBJ_PACKAGE, 0);
+                }
+            } else if (HWLOC_OBJ_NUMANODE== options.maptype) {
+                /* add in #numa for each node */
+                PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
+                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                                        HWLOC_OBJ_NUMANODE, 0);
+                }
+#if HWLOC_API_VERSION < 0x20000
+            } else if (HWLOC_OBJ_CACHE == options.maptype) {
+                /* add in #cache for each node */
+                PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
+                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                                        options.maptype, options.cmaplvl);
+                }
+#else
+            } else if (HWLOC_OBJ_L1CACHE == options.maptype ||
+                       HWLOC_OBJ_L2CACHE == options.maptype ||
+                       HWLOC_OBJ_L1CACHE == options.maptype) {
+                /* add in #cache for each node */
+                PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
+                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                                        options.maptype, options.cmaplvl);
+                }
+#endif
+            } else if (HWLOC_OBJ_CORE == options.maptype) {
+                /* add in #cores for each node */
+                PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
+                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                                        HWLOC_OBJ_CORE, 0);
+                }
+            } else if (HWLOC_OBJ_PU == options.maptype) {
+                /* add in #hwt for each node */
+                PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
+                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                                        HWLOC_OBJ_PU, 0);
+                }
+            }
+        } else {
+           if (NULL != options.cpuset) {
+                ck = PMIX_ARGV_SPLIT_COMPAT(options.cpuset, ',');
+                app->num_procs = PMIX_ARGV_COUNT_COMPAT(ck);
+                PMIX_ARGV_FREE_COMPAT(ck);
+            } else {
+                /* set the num_procs to equal the number of slots on these
+                 * mapped nodes, taking into account the number of cpus/rank
+                 */
+                app->num_procs = slots / options.cpus_per_rank;
+                /* sometimes, we have only one "slot" assigned, but may
+                 * want more than one cpu/rank - so ensure we always wind
+                 * up with at least one proc */
+                if (0 == app->num_procs) {
+                    app->num_procs = 1;
+                }
+            }
+        }
+        PMIX_LIST_DESTRUCT(&nodes);
+        options.nprocs += app->num_procs;
     }
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
@@ -466,7 +549,6 @@ ranking:
         case PRTE_MAPPING_BYNODE:
         case PRTE_MAPPING_BYSLOT:
         case PRTE_MAPPING_BYDIST:
-        case PRTE_MAPPING_PPR:
         case PRTE_MAPPING_PELIST:
         case PRTE_MAPPING_COLOCATE:
             options.mapdepth = PRTE_BIND_TO_NONE;
@@ -526,6 +608,8 @@ ranking:
             }
             options.mapdepth = PRTE_BIND_TO_HWTHREAD;
             options.maptype = HWLOC_OBJ_PU;
+            break;
+        case PRTE_MAPPING_PPR:
             break;
         default:
             PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);

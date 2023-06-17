@@ -350,6 +350,55 @@ int prte_hwloc_base_set_default_binding(void *jd, void *opt)
                 PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
                                                 PRTE_BIND_TO_CORE);
             }
+        } else if (PRTE_MAPPING_PPR == mpol) {
+            if (HWLOC_OBJ_MACHINE == options->maptype) {
+                if (options->nprocs <= 2) {
+                    /* we are mapping by node or some other non-object method */
+                    if (options->use_hwthreads || prte_rmaps_base.require_hwtcpus) {
+                        /* if we are using hwthread cpus, then bind to those */
+                        pmix_output_verbose(options->verbosity, options->stream,
+                                            "setdefaultbinding[%d] binding not given - using byhwthread", __LINE__);
+                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                        PRTE_BIND_TO_HWTHREAD);
+                    } else {
+                        /* otherwise bind to core */
+                        pmix_output_verbose(options->verbosity, options->stream,
+                                            "setdefaultbinding[%d] binding not given - using bycore", __LINE__);
+                        PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding,
+                                                        PRTE_BIND_TO_CORE);
+                    }
+                } else {
+                    pmix_output_verbose(options->verbosity, options->stream,
+                                        "setdefaultbinding[%d] binding not given - using bynuma",
+                                        __LINE__);
+                    PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
+                }
+            } else if (HWLOC_OBJ_PACKAGE == options->maptype) {
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_PACKAGE);
+            } else if (HWLOC_OBJ_NUMANODE== options->maptype) {
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_NUMA);
+#if HWLOC_API_VERSION < 0x20000
+            } else if (HWLOC_OBJ_CACHE == options->maptype) {
+                if (1 == options->cmaplvl) {
+                    PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L1CACHE);
+                } else if (2 == options->cmaplvl) {
+                    PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L2CACHE);
+                } else if (3 == options->cmaplvl) {
+                    PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L3CACHE);
+                }
+#else
+            } else if (HWLOC_OBJ_L1CACHE == options->maptype) {
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L1CACHE);
+            } else if (HWLOC_OBJ_L2CACHE == options->maptype) {
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L2CACHE);
+            } else if (HWLOC_OBJ_L3CACHE == options->maptype) {
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_L3CACHE);
+#endif
+            } else if (HWLOC_OBJ_CORE == options->maptype) {
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_CORE);
+            } else if (HWLOC_OBJ_PU == options->maptype) {
+                PRTE_SET_DEFAULT_BINDING_POLICY(jdata->map->binding, PRTE_BIND_TO_HWTHREAD);
+            }
         } else {
             if (options->nprocs <= 2) {
                 /* we are mapping by node or some other non-object method */

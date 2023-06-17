@@ -344,57 +344,85 @@ static int check_modifiers(char *ck, prte_job_t *jdata, prte_mapping_policy_t *t
 int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
                                         prte_rmaps_options_t *options)
 {
-    /* default based on number of procs */
-    if (options->nprocs <= 2) {
-        if (1 < options->cpus_per_rank) {
-            /* assigning multiple cpus to a rank requires that we map to
-             * objects that have multiple cpus in them, so default
-             * to byslot if nothing else was specified by the user.
-             */
-            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps[%d] mapping not given - using byslot", __LINE__);
-            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
-        } else if (options->use_hwthreads) {
-            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps[%d] mapping not given - using byhwthread",
-                                __LINE__);
-            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
-        } else {
-            if (PRTE_BIND_TO_NONE != PRTE_GET_BINDING_POLICY(jdata->map->binding)) {
-                if (prte_rmaps_base.require_hwtcpus) {
-                    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] mapping not given - using byhwthread",
-                                        __LINE__);
-                    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
-                } else {
-                    pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                        "mca:rmaps[%d] mapping not given - using bycore", __LINE__);
-                    PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
-                }
+    prte_binding_policy_t bind;
+
+    if (1 < options->cpus_per_rank) {
+        /* assigning multiple cpus to a rank requires that we map to
+         * objects that have multiple cpus in them, so default
+         * to byslot if nothing else was specified by the user.
+         */
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                            "mca:rmaps mapping not given with multiple cpus/rank - using byslot");
+        PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
+
+    } else if (PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+        /* they specified a binding policy, but not a mapping policy, so
+         * map by the binding object */
+        bind = PRTE_GET_BINDING_POLICY(jdata->map->binding);
+        switch(bind) {
+            case PRTE_BIND_TO_NONE:
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
+                break;
+            case PRTE_BIND_TO_PACKAGE:
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
+                break;
+            case PRTE_BIND_TO_NUMA:
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
+                break;
+            case PRTE_BIND_TO_L3CACHE:
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYL3CACHE);
+                break;
+            case PRTE_BIND_TO_L2CACHE:
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYL2CACHE);
+                break;
+            case PRTE_BIND_TO_L1CACHE:
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYL1CACHE);
+                break;
+            case PRTE_BIND_TO_CORE:
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
+                break;
+            case PRTE_BIND_TO_HWTHREAD:
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
+                break;
+            default:
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
+                break;
+        }
+        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                            "mca:rmaps mapping not given but binding set - using %s",
+                            prte_rmaps_base_print_mapping(jdata->map->mapping));
+
+    } else {
+        if (options->nprocs <= 2) {
+            // map by whatever CPU we are using
+            if (options->use_hwthreads) {
+                /* if we are using hwthread cpus, then map by those */
+                pmix_output_verbose(options->verbosity, options->stream,
+                                    "mca:rmaps mapping not given - using byhwthread");
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYHWTHREAD);
             } else {
+                /* otherwise map by core */
+                pmix_output_verbose(options->verbosity, options->stream,
+                                    "mca:rmaps mapping not given - using bycore");
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYCORE);
+            }
+        } else {
+            /* if package is available, map by that */
+            if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
                 pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                    "mca:rmaps[%d] mapping not given - using byslot (bind = NONE)",
-                                    __LINE__);
+                                    "mca:rmaps mapping not set by user - using bypackage");
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
+            } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
+                /* if NUMA is available, map by that */
+                pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps mapping not set by user - using bynuma");
+                PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
+            } else {
+                /* if we have neither, then just do by slot */
+                pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                    "mca:rmaps mapping not given and no packages/NUMAs - using byslot");
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
             }
-        }
-    } else {
-        /* if NUMA is available, map by that */
-        if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
-            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps[%d] mapping not set by user - using bynuma", __LINE__);
-            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYNUMA);
-        } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
-            /* if package is available, map by that */
-            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps[%d] mapping not set by user - using bypackage", __LINE__);
-            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
-        } else {
-            /* if we have neither, then just do by slot */
-            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
-                                "mca:rmaps[%d] mapping not given and no packages - using byslot",
-                                __LINE__);
-            PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYSLOT);
         }
     }
     return PRTE_SUCCESS;
@@ -402,12 +430,10 @@ int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
 
 int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
 {
-    char *ck;
+    char **ck;
     char *ptr, *cptr;
     prte_mapping_policy_t tmp;
     int rc;
-    size_t len;
-    char *spec = NULL;
     bool ppr = false;
     char *temp_parm, *temp_token, *parm_delimiter;
 
@@ -423,117 +449,132 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         return PRTE_SUCCESS;
     }
 
-    spec = strdup(inspec); // protect the input string
     /* see if a colon was included - if so, then we have a modifier */
-    ck = strchr(spec, ':');
-    if (NULL != ck) {
-        *ck = '\0'; // terminate spec where the colon was
-        ck++;       // step past the colon
-        pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+    ck = PMIX_ARGV_SPLIT_COMPAT(inspec, ':');
+    if (1 < PMIX_ARGV_COUNT_COMPAT(ck)) {
+        if (0 == strcasecmp(ck[0], "ppr")) {
+            if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
+                pmix_asprintf(&cptr, "%s:%s", ck[1], ck[2]);
+                pmix_output(prte_rmaps_base_framework.framework_output,
                             "%s rmaps:base policy %s modifiers %s provided",
-                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), spec, ck);
-
-        len = strlen(spec);
-        if (0 < len && 0 == strncasecmp(spec, "ppr", len)) {
-            /* at this point, ck points to a string that contains at least
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ck[0], cptr);
+                free(cptr);
+            }
+            /* at this point, ck contains at least
              * two fields (specifying the #procs/obj and the object we are
              * to map by). we have to allow additional modifiers here - e.g.,
              * specifying #pe's/proc or oversubscribe - so check for modifiers. if
-             * they are present, ck will look like "N:obj:mod1,mod2,mod3"
+             * they are present, the rest of ck will look like "N:obj:mod1,mod2,mod3"
              */
-            if (NULL == (ptr = strchr(ck, ':'))) {
+            if (3 > PMIX_ARGV_COUNT_COMPAT(ck)) {
                 /* this is an error - there had to be at least one
                  * colon to delimit the number from the object type
                  */
                 pmix_show_help("help-prte-rmaps-base.txt", "invalid-pattern", true, inspec);
-                free(spec);
+                PMIX_ARGV_FREE_COMPAT(ck);
                 return PRTE_ERR_SILENT;
             }
-            ptr++; // move past the colon
-            /* at this point, ptr is pointing to the beginning of the string that describes
-             * the object plus any modifiers (i.e., "obj:mod1,mod2". We first check to see if there
-             * is another colon indicating that there are modifiers to the request */
-            if (NULL != (cptr = strchr(ptr, ':'))) {
-                /* there are modifiers, so we terminate the object string
-                 * at the location of the colon */
-                *cptr = '\0';
-                /* step over that colon */
-                cptr++; // cptr now points to the start of the modifiers
-            }
-            /* now save the pattern */
+            /* at this point, ck[1] contains the number of procs/resource,
+             * ck[2] contains the string that describes
+             * the object and ck[3] is either NULL or contains any
+             * modifiers (i.e., "#:obj:mod1,mod2") */
             if (NULL != jdata) {
-                prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL, ck, PMIX_STRING);
+                /* save the pattern */
+                pmix_asprintf(&cptr, "%s:%s", ck[1], ck[2]);
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL, cptr, PMIX_STRING);
+                free(cptr);
             }
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PPR);
             PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
             ppr = true;
-            if (NULL == cptr) {
+            if (NULL == ck[3]) {
                 /* there are no modifiers, so we are done */
-                free(spec);
-                spec = NULL;
+                PMIX_ARGV_FREE_COMPAT(ck);
                 goto setpolicy;
             }
+            cptr = ck[3];
         } else {
-            cptr = ck;
+            pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
+                                "%s rmaps:base policy %s modifiers %s provided",
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ck[0], ck[1]);
+            cptr = ck[1];
         }
-        if (PRTE_SUCCESS != (rc = check_modifiers(cptr, jdata, &tmp))
-            && PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+        if (PRTE_SUCCESS != (rc = check_modifiers(cptr, jdata, &tmp)) &&
+            PRTE_ERR_TAKE_NEXT_OPTION != rc) {
             if (PRTE_ERR_BAD_PARAM == rc) {
                 pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-modifier", true, inspec);
+                rc = PRTE_ERR_SILENT;
             }
-            if (NULL != spec) {
-                free(spec);
-            }
+            PMIX_ARGV_FREE_COMPAT(ck);
             return rc;
         }
         if (ppr) {
             /* we are done */
-            free(spec);
-            spec = NULL;
+            PMIX_ARGV_FREE_COMPAT(ck);
             goto setpolicy;
         }
     }
 
-    if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SLOT)) {
+    /* we get here if there was only one element in
+     * the ck array. However, if the input string
+     * started with a ':', then there is no specified
+     * mapping policy for us to set, but we still
+     * have to process the modifier */
+    if (':' == inspec[0]) {
+        if (PRTE_SUCCESS != (rc = check_modifiers(&inspec[1], jdata, &tmp)) &&
+            PRTE_ERR_TAKE_NEXT_OPTION != rc) {
+            if (PRTE_ERR_BAD_PARAM == rc) {
+                pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-modifier", true, inspec);
+                rc = PRTE_ERR_SILENT;
+            }
+            PMIX_ARGV_FREE_COMPAT(ck);
+            return rc;
+        }
+        PMIX_ARGV_FREE_COMPAT(ck);
+        goto setpolicy;
+    }
+
+    cptr = ck[0];
+    if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_SLOT)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYSLOT);
 
-    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_NODE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_NODE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYNODE);
 
-    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_SEQ)) {
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_SEQ)) {
         /* there are several mechanisms by which the file specifying
          * the sequence can be passed, so not really feasible to check
          * it here */
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_SEQ);
 
-    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_CORE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_CORE)) {
         if (prte_rmaps_base.require_hwtcpus) {
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
         } else {
             PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYCORE);
         }
 
-    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_L1CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_L1CACHE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL1CACHE);
 
-    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_L2CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_L2CACHE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL2CACHE);
 
-    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_L3CACHE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_L3CACHE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYL3CACHE);
 
-    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_NUMA)) {
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_NUMA)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYNUMA);
 
-    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_PACKAGE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PACKAGE)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYPACKAGE);
 
-    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_RANKFILE)) {
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_RANKFILE)) {
         /* check that the file was given */
         if ((NULL == jdata && NULL == prte_rmaps_base.file) ||
             (NULL != jdata && !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING))) {
             pmix_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
-            free(spec);
+            PMIX_ARGV_FREE_COMPAT(ck);
             return PRTE_ERR_BAD_PARAM;
         }
         /* if they asked for rankfile and didn't specify one, but did
@@ -543,7 +584,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 if (NULL == prte_rmaps_base.file) {
                     /* also not allowed */
                     pmix_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
-                    free(spec);
+                    PMIX_ARGV_FREE_COMPAT(ck);
                     return PRTE_ERR_BAD_PARAM;
                 }
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,
@@ -552,7 +593,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         }
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYUSER);
 
-    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_HWT)) {
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_HWT)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYHWTHREAD);
         /* if we are mapping processes to individual hwthreads, then
          * we need to treat those hwthreads as separate cpus
@@ -564,27 +605,27 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                                NULL, PMIX_BOOL);
         }
 
-    } else if (PMIX_CHECK_CLI_OPTION(spec, PRTE_CLI_PELIST)) {
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PELIST)) {
         if (NULL == jdata) {
             pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-policy", true,
-                           "mapping policy", spec);
-            free(spec);
+                           "mapping policy", cptr);
+            PMIX_ARGV_FREE_COMPAT(ck);
             return PRTE_ERR_SILENT;
         }
-        ptr = strchr(spec, '=');
+        ptr = strchr(cptr, '=');
         if (NULL == ptr) {
             /* malformed option */
             pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
-                           true, spec);
-            free(spec);
+                           true, cptr);
+            PMIX_ARGV_FREE_COMPAT(ck);
             return PRTE_ERR_SILENT;
         }
         ptr++; // move past the equal sign
         if (NULL == ptr) {
             /* malformed option */
             pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
-                           true, spec);
-            free(spec);
+                           true, cptr);
+            PMIX_ARGV_FREE_COMPAT(ck);
             return PRTE_ERR_SILENT;
         }
         /* Verify the list is composed of numeric tokens */
@@ -595,7 +636,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             if ('\0' != *parm_delimiter) {
                 pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
                                "mapping policy", "PE-LIST", ptr);
-                free(spec);
+                PMIX_ARGV_FREE_COMPAT(ck);
                 free(temp_parm);
                 return PRTE_ERR_SILENT;
             }
@@ -609,16 +650,14 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
 
     } else {
         pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
-                       true, "mapping", spec);
-        free(spec);
+                       true, "mapping", cptr);
+        PMIX_ARGV_FREE_COMPAT(ck);
         return PRTE_ERR_SILENT;
     }
+    PMIX_ARGV_FREE_COMPAT(ck);
     PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
 
 setpolicy:
-    if (NULL != spec) {
-        free(spec);
-    }
     if (NULL == jdata) {
         prte_rmaps_base.mapping = tmp;
     } else {

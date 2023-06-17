@@ -43,7 +43,7 @@ prte_rmaps_base_module_t prte_rmaps_ppr_module = {
 static int ppr_mapper(prte_job_t *jdata,
                       prte_rmaps_options_t *options)
 {
-    int rc = PRTE_SUCCESS, j, ppr, idx, ncpus;
+    int rc = PRTE_SUCCESS, j, idx, ncpus;
     prte_proc_t *proc;
     pmix_mca_base_component_t *c = &prte_mca_rmaps_ppr_component;
     prte_node_t *node, *nd;
@@ -103,60 +103,37 @@ static int ppr_mapper(prte_job_t *jdata,
     }
     jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
 
-        /* split on the colon */
-    ck = PMIX_ARGV_SPLIT_COMPAT(jobppr, ':');
-    if (2 != PMIX_ARGV_COUNT_COMPAT(ck)) {
-        /* must provide a specification */
-        pmix_show_help("help-prte-rmaps-ppr.txt", "invalid-ppr", true, jobppr);
-        PMIX_ARGV_FREE_COMPAT(ck);
-        free(jobppr);
-        return PRTE_ERR_SILENT;
-    }
-    len = strlen(ck[1]);
-    ppr = strtol(ck[0], NULL, 10);
     ranking = PRTE_RANK_BY_SLOT;
-    if (0 == strncasecmp(ck[1], "node", len)) {
+    if (HWLOC_OBJ_MACHINE == options->maptype) {
         mapping = PRTE_MAPPING_BYNODE;
         ranking = PRTE_RANK_BY_NODE;
-        options->maptype = HWLOC_OBJ_MACHINE;
-    } else if (0 == strncasecmp(ck[1], "hwthread", len) ||
-               0 == strncasecmp(ck[1], "thread", len)) {
-        mapping = PRTE_MAPPING_BYHWTHREAD;
-        options->maptype = HWLOC_OBJ_PU;
-    } else if (0 == strncasecmp(ck[1], "core", len)) {
-        mapping = PRTE_MAPPING_BYCORE;
-        options->maptype = HWLOC_OBJ_CORE;
-    } else if (0 == strncasecmp(ck[1], "package", len) || 0 == strncasecmp(ck[1], "skt", len)) {
-        mapping = PRTE_MAPPING_BYPACKAGE;
-        options->maptype = HWLOC_OBJ_PACKAGE;
-    } else if (0 == strncasecmp(ck[1], "numa", len) || 0 == strncasecmp(ck[1], "nm", len)) {
-        mapping = PRTE_MAPPING_BYNUMA;
-        options->maptype = HWLOC_OBJ_NUMANODE;
-    } else if (0 == strncasecmp(ck[1], "l1cache", len)) {
+    } else if (HWLOC_OBJ_PACKAGE == options->maptype) {
+            mapping = PRTE_MAPPING_BYPACKAGE;
+    } else if (HWLOC_OBJ_NUMANODE== options->maptype) {
+            mapping = PRTE_MAPPING_BYNUMA;
+#if HWLOC_API_VERSION < 0x20000
+    } else if (HWLOC_OBJ_CACHE == options->maptype) {
+        if (1 == options->cmaplvl) {
+            mapping = PRTE_MAPPING_BYL1CACHE;
+        } else if (2 == options->cmaplvl) {
+            mapping = PRTE_MAPPING_BYL2CACHE;
+        } else if (3 == options->cmaplvl) {
+            mapping = PRTE_MAPPING_BYL3CACHE;
+        }
+#else
+    } else if (HWLOC_OBJ_L1CACHE == options->maptype) {
         mapping = PRTE_MAPPING_BYL1CACHE;
-        PRTE_HWLOC_MAKE_OBJ_CACHE(1, options->maptype, options->cmaplvl);
-    } else if (0 == strncasecmp(ck[1], "l2cache", len)) {
+    } else if (HWLOC_OBJ_L2CACHE == options->maptype) {
         mapping = PRTE_MAPPING_BYL2CACHE;
-        PRTE_HWLOC_MAKE_OBJ_CACHE(2, options->maptype, options->cmaplvl);
-    } else if (0 == strncasecmp(ck[1], "l3cache", len)) {
+    } else if (HWLOC_OBJ_L3CACHE == options->maptype) {
         mapping = PRTE_MAPPING_BYL3CACHE;
-        PRTE_HWLOC_MAKE_OBJ_CACHE(3, options->maptype, options->cmaplvl);
-    } else {
-        /* unknown spec */
-        pmix_show_help("help-prte-rmaps-ppr.txt", "unrecognized-ppr-option", true, ck[1],
-                       jobppr);
-        PMIX_ARGV_FREE_COMPAT(ck);
-        free(jobppr);
-        return PRTE_ERR_SILENT;
+#endif
+    } else if (HWLOC_OBJ_CORE == options->maptype) {
+        mapping = PRTE_MAPPING_BYCORE;
+    } else if (HWLOC_OBJ_PU == options->maptype) {
+        mapping = PRTE_MAPPING_BYHWTHREAD;
     }
-    PMIX_ARGV_FREE_COMPAT(ck);
 
-    /* if nothing was given, that's an error */
-    if (0 == mapping) {
-        pmix_output(0, "NOTHING GIVEN");
-        free(jobppr);
-        return PRTE_ERR_SILENT;
-    }
     /* record the results */
     PRTE_SET_MAPPING_POLICY(jdata->map->mapping, mapping);
     if (!PRTE_RANKING_POLICY_IS_SET(jdata->map->ranking)) {
@@ -200,27 +177,6 @@ static int ppr_mapper(prte_job_t *jdata,
         }
         /* flag that all subsequent requests should not reset the node->mapped flag */
         initial_map = false;
-        /* if the number of total procs was given, set that
-         * limit - otherwise, set to max so we simply fill
-         * all the nodes with the pattern
-         */
-        if (0 == app->num_procs) {
-            if (HWLOC_OBJ_MACHINE == options->maptype) {
-                app->num_procs = ppr * pmix_list_get_size(&node_list);
-            } else {
-                nobjs = 0;
-                PMIX_LIST_FOREACH(node, &node_list, prte_node_t) {
-                    /* get the number of objects of this type on this node */
-                    nobjs += prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                options->maptype, options->cmaplvl);
-                }
-                if (0 == nobjs) {
-                    rc = PRTE_ERR_NOT_FOUND;
-                    goto error;
-                }
-                app->num_procs = ppr * nobjs;
-            }
-        }
         /* check to see if we can map all the procs */
         if (!PRTE_FLAG_TEST(app, PRTE_APP_FLAG_TOOL) &&
             num_slots < (int) app->num_procs) {
@@ -251,7 +207,7 @@ static int ppr_mapper(prte_job_t *jdata,
             }
 
             if (HWLOC_OBJ_MACHINE == options->maptype) {
-                options->nprocs = ppr;
+                options->nprocs = options->pprn;
                 /* if the number of procs is greater than the number of CPUs
                  * on this node, but less or equal to the number of slots,
                  * then we are not oversubscribed but we are overloaded. If
@@ -271,7 +227,7 @@ static int ppr_mapper(prte_job_t *jdata,
                     options->bind = savebind;
                     continue;
                 }
-                for (j = 0; j < ppr && nprocs_mapped < app->num_procs; j++) {
+                for (j = 0; j < options->pprn && nprocs_mapped < app->num_procs; j++) {
                     proc = prte_rmaps_base_setup_proc(jdata, idx, node, NULL, options);
                     if (NULL == proc) {
                         rc = PRTE_ERR_OUT_OF_RESOURCE;
@@ -297,7 +253,7 @@ static int ppr_mapper(prte_job_t *jdata,
                 if (0 == nobjs) {
                     continue;
                 }
-                options->nprocs = ppr * nobjs;
+                options->nprocs = options->pprn * nobjs;
                 /* if the number of procs is greater than the number of CPUs
                  * on this node, but less or equal to the number of slots,
                  * then we are not oversubscribed but we are overloaded. If
@@ -317,7 +273,7 @@ static int ppr_mapper(prte_job_t *jdata,
                     if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, obj, options)) {
                         continue;
                     }
-                    for (i=0; i < ppr && app->num_procs; i++) {
+                    for (i=0; i < options->pprn && app->num_procs; i++) {
                         proc = prte_rmaps_base_setup_proc(jdata, idx, node, obj, options);
                         if (NULL == proc) {
                             rc = PRTE_ERR_OUT_OF_RESOURCE;
