@@ -26,5 +26,6 @@ AC_DEFUN([PRTE_CONFIG_FILES],[
         src/tools/prte_info/Makefile
         src/tools/prte/Makefile
         src/tools/pterm/Makefile
+        src/tools/psched/Makefile
     ])
 ])
