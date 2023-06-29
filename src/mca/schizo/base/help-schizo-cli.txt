@@ -170,6 +170,43 @@ unset           set         Hostfile defines resource list for the job
 #include#help-schizo-cli#relative-indexing
 
 #
+#  ADD-HOSTFILE
+#
+[add-hostfile]
+PRRTE allows a user to expand an existing DVM prior to launching an application.
+Users can specify a hostfile that contains a list of nodes to be added to the
+DVM using normal hostfile syntax:
+
+#include#help-schizo-cli#hostfile-syntax
+
+The list can include nodes that are already part of the DVM - in this case, the
+number of slots available on those nodes will be set to the new specification, or
+adjusted as directed:
+
+node01  slots=5
+
+would direct that node01 be set to 5 slots, while
+
+node01 slots+=5
+
+would add 5 slots to the current value for node01, and
+
+node01  slots-=5
+
+would subtract 5 slots from the current value.
+
+Slot adjustments for existing nodes will have no impact on currently executing
+jobs, but will be applied to any new spawn requests. Nodes contained in the
+add-hostfile specification are available for immediate use by the accompanying
+application.
+
+Users desiring to constrain the accompanying application to the newly added
+nodes should also include the ``--hostfile`` command line directive, giving
+the same hostfile as its argument:
+
+--add-hostfile <foo> --hostfile <foo>
+
+#
 #  RELATIVE-INDEXING
 #
 [relative-indexing]
@@ -279,6 +316,54 @@ are aggregated and the number of slots assigned to that node are summed together
 Note: A "slot" is the PRRTE term for an allocatable unit where we can launch a process. Thus,
 the number of slots equates to the maximum number of processes PRRTE may start on that node
 without oversubscribing it.
+
+#
+#  ADD-HOST
+#
+[add-host]
+PRRTE allows a user to expand an existing DVM prior to launching an application.
+Users can specify a a comma-delimited list of node names, each entry optionally containing
+a ":N" extension indicating the number of slots to assign to that entry:
+
+--host node01:5,node02
+
+In the absence of the slot extension, one slot will be assigned to the node. Duplicate entries
+are aggregated and the number of slots assigned to that node are summed together.
+
+Note: A "slot" is the PRRTE term for an allocatable unit where we can launch a process. Thus,
+the number of slots equates to the maximum number of processes PRRTE may start on that node
+without oversubscribing it.
+
+The list can include nodes that are already part of the DVM - in this case, the
+number of slots available on those nodes will be set to the new specification, or
+adjusted as directed:
+
+--host node01:5,node02
+
+would direct that node01 be set to 5 slots and node02 will have 1 slot, while
+
+--host node01:+5,node02
+
+would add 5 slots to the current value for node01, and
+
+--host node01:-5,node02
+
+would subtract 5 slots from the current value.
+
+Slot adjustments for existing nodes will have no impact on currently executing
+jobs, but will be applied to any new spawn requests. Nodes contained in the
+add-host specification are available for immediate use by the accompanying
+application.
+
+Users desiring to constrain the accompanying application to the newly added
+nodes should also include the ``--host`` command line directive, giving
+the same hosts in its argument:
+
+--add-host node01:+5,node02 --host node01:5,node02
+
+Note that the ``--host`` argument indicates the number of slots to assign
+node01 for this spawn request, and not the number of slots being added to
+the node01 allocation.
 #
 #  SESSION-DIR
 #

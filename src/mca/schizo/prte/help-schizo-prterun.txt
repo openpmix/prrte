@@ -1,6 +1,6 @@
 # -*- text -*-
 #
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2022      IBM Corporation.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -87,8 +87,11 @@ option to the help request as "--help <option>".
 -N|--npernode <arg0>                 Run designated number of processes on each node
    --personality <arg0>              Specify the personality to be used
 -H|--host <arg0>                     List of hosts to invoke processes on
+   --add-host <arg0>                 List of hosts to add to the DVM prior to launching the given app
    --hostfile <arg0>                 Provide a hostfile
    --machinefile <arg0>              Provide a hostfile (synonym for hostfile)
+   --add-hostfile <arg0>             Provide a hostfile listing hosts to add to the DVM prior to launching
+                                     the given app
    --pmixmca <arg0> <arg1>           Pass context-specific PMIx MCA parameters; they are considered global if
                                      only one context is specified (arg0 is the parameter name; arg1 is the parameter value)
    --gpmixmca <arg0> <arg1>          Pass global PMIx MCA parameters that are applicable to all contexts (arg0
@@ -290,10 +293,16 @@ Provide a hostfile (synonym for "hostfile")
 
 #include#help-schizo-cli#launcher-hostfile
 #
+[add-hostfile]
+#include#help-schizo-cli#add-hostfile
+#
 [host]
 #include#help-schizo-cli#dash-host
 
 #include#help-schizo-cli#relative-indexing
+#
+[add-host]
+#include#help-schizo-cli#add-host
 #
 [personality]
 #include#help-schizo-cli#personality

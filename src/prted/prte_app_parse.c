@@ -205,6 +205,17 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
         }
     }
 
+    /* Did the user specify an add-hostfile? */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_ADDHOSTFILE);
+    if (NULL != opt) {
+        tval = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_ADD_HOSTFILE,
+                           tval, PMIX_STRING);
+        free(tval);
+        // we don't add these to the hostfiles array as they
+        // are not part of an initial DVM
+    }
+
     /* Did the user specify any hosts? */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOST);
     if (NULL != opt) {
@@ -216,6 +227,16 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
                 PMIX_ARGV_APPEND_NOSIZE_COMPAT(hosts, opt->values[i]);
             }
         }
+    }
+
+    /* Did the user specify any add-hosts? */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_ADDHOST);
+    if (NULL != opt) {
+        tval = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_ADD_HOST, tval, PMIX_STRING);
+        free(tval);
+        // we don't add these to the hosts array as they
+        // are not part of an initial DVM
     }
 
     /* check for bozo error */
