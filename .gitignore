@@ -146,6 +146,8 @@ src/mca/prteinstalldirs/config/install_dirs.h
 src/include/prte_config.h
 src/include/prte_config.h.in
 src/include/version.h
+src/include/prte_frameworks.c
+src/include/prte_frameworks.h
 src/include/frameworks.h
 src/include/prte_config.h
 
