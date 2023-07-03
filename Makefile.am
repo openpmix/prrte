@@ -15,6 +15,8 @@
 # Copyright (c) 2017-2018 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
+#
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -26,13 +28,6 @@ SUBDIRS = config contrib src include docs
 EXTRA_DIST = README.md VERSION LICENSE autogen.pl
 
 include examples/Makefile.include
-
-# dist-hook:
-#	env LS_COLORS= sh "$(top_srcdir)/config/distscript.sh" "$(top_srcdir)" "$(distdir)" "$(PRTE_REPO_REV)"
-#	@if test ! -s $(distdir)/AUTHORS ; then \
-#		echo "AUTHORS file is empty; aborting distribution"; \
-#		exit 1; \
-#	fi
 
 # Check for common symbols.  Use a "-hook" to increase the odds that a
 # developer will see it at the end of their installation process.
@@ -46,15 +41,3 @@ install-exec-hook:
 	fi
 
 ACLOCAL_AMFLAGS = -I config
-
-# Use EXTRA_DIST and an explicit target (with a FORCE hack so that
-# it's always run) rather than a dist-hook because there's some magic
-# extra logic in Automake that will add AUTHORS to EXTRA_DIST if the
-# file exists when Automake is run.  Once we're explicit (to avoid odd
-# copy behavior), it's easier to always build AUTHORS here, rather
-# than trying to handle the EXTRA_DIST dependency from a clean repo
-# (no AUTHORS file present) and use dist-hook to run every time.
-#AUTHORS: FORCE
-#	$(PERL) "$(top_srcdir)/contrib/dist/make-authors.pl" --skip-ok --quiet --srcdir="$(top_srcdir)"
-
-#FORCE:
