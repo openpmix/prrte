@@ -149,6 +149,7 @@ src/include/prte_config.h.in
 src/include/version.h
 src/include/prte_frameworks.c
 src/include/prte_frameworks.h
+src/include/frameworks.h
 src/include/prte_config.h
 
 src/mca/rmaps/rank_file/rmaps_rank_file_lex.c
