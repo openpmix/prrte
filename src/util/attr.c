@@ -284,6 +284,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "NODE-HOSTID";
         case PRTE_NODE_SERIAL_NUMBER:
             return "NODE-SERIAL-NUM";
+        case PRTE_NODE_ADD_SLOTS:
+            return "NODE-ADD-SLOTS";
 
         case PRTE_JOB_LAUNCH_MSG_SENT:
             return "JOB-LAUNCH-MSG-SENT";

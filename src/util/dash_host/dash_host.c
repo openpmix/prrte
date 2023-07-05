@@ -14,7 +14,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -117,6 +117,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
     char *cptr;
     char *shortname;
     char *rawname;
+    bool add_slots = false;
 
     PMIX_OUTPUT_VERBOSE((1, prte_ras_base_framework.framework_output,
                          "%s dashhost: parsing args %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -263,6 +264,10 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
                 slots_given = false;
             } else {
                 slots = strtol(cptr, NULL, 10);
+                if ('+' == *cptr || '-' == *cptr) {
+                    // mark that we are being asked to increase/decrease #slots
+                    add_slots = true;
+                }
                 slots_given = true;
             }
         }
@@ -295,6 +300,10 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
             if (slots_given) {
                 node->slots += slots;
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+                if (add_slots) {
+                    prte_set_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                }
             } else if (slots < 0) {
                 node->slots = 0;
                 PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
@@ -344,6 +353,10 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
             if (slots_given) {
                 node->slots = slots;
                 PRTE_FLAG_SET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
+                if (add_slots) {
+                    prte_set_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                }
             } else if (slots < 0) {
                 node->slots = 0;
                 PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_SLOTS_GIVEN);
