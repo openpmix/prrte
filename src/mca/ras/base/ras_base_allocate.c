@@ -821,9 +821,6 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
                 free(hosts);
                 return rc;
             }
-            /* now indicate that this app is to run across them */
-            prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_LOCAL, hosts,
-                               PMIX_STRING);
             prte_remove_attribute(&app->attributes, PRTE_APP_ADD_HOST);
             free(hosts);
         }
@@ -838,11 +835,17 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
         {
             node->state = PRTE_NODE_STATE_ADDED;
             for (n = 0; n < prte_node_pool->size; n++) {
-                if (NULL
-                    == (nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n))) {
+                nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n);
+                if (NULL == nptr) {
                     continue;
                 }
                 if (0 == strcmp(node->name, nptr->name)) {
+                    if (prte_get_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS, NULL, PMIX_BOOL)) {
+                        nptr->slots += node->slots;
+                        prte_remove_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS);
+                    } else {
+                        nptr->slots = node->slots;
+                    }
                     pmix_list_remove_item(&nodes, &node->super);
                     PMIX_RELEASE(node);
                     break;
