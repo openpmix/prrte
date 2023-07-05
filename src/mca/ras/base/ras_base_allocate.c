@@ -37,6 +37,7 @@
 #include "src/pmix/pmix-internal.h"
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/iof/base/base.h"
 #include "src/mca/rmaps/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
@@ -103,8 +104,10 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
     prte_node_t *alloc;
     char *flgs, *aliases;
     bool parsable;
+    pmix_proc_t source;
 
     parsable = prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL);
+    PMIX_LOAD_PROCID(&source, jdata->nspace, PMIX_RANK_WILDCARD);
 
     if (parsable) {
         pmix_asprintf(&tmp, "<allocation>\n");
@@ -156,12 +159,13 @@ void prte_ras_base_display_alloc(prte_job_t *jdata)
         }
     }
     if (parsable) {
-        pmix_output(prte_clean_output, "%s</allocation>\n", tmp);
+        pmix_asprintf(&tmp2, "%s</allocation>\n", tmp);
     } else {
-        pmix_output(prte_clean_output,
+        pmix_asprintf(&tmp2,
                     "%s=================================================================\n", tmp);
     }
     free(tmp);
+    prte_iof_base_output(&source, PMIX_FWD_STDOUT_CHANNEL, tmp2);
 }
 
 static void display_cpus(prte_topology_t *t,
