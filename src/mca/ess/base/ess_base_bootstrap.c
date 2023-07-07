@@ -46,6 +46,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/mca/prteinstalldirs/base/base.h"
 #include "src/rml/rml.h"
@@ -57,21 +58,6 @@
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/ess/base/base.h"
-
-static char *prte_getline(FILE *fp)
-{
-    char *ret, *buff;
-    char input[1024];
-
-    ret = fgets(input, 1024, fp);
-    if (NULL != ret) {
-        input[strlen(input) - 1] = '\0'; /* remove newline */
-        buff = strdup(input);
-        return buff;
-    }
-
-    return NULL;
-}
 
 static pmix_status_t regex_extract_nodes(char *regexp, char ***names);
 static pmix_status_t regex_parse_value_ranges(char *base, char *ranges,
@@ -113,7 +99,7 @@ int prte_ess_base_bootstrap(void)
         return PRTE_ERR_SILENT;
     }
 
-    while (NULL != (line = prte_getline(fp))) {
+    while (NULL != (line = pmix_getline(fp))) {
         /* ignore if line is empty or comment */
         if (0 == strlen(line) || '#' == line[0]) {
             free(line);
@@ -566,7 +552,7 @@ static pmix_status_t read_file(char *regexp, char ***names)
     if (NULL == fp) {
         return PMIX_ERR_BAD_PARAM;
     }
-    while (NULL != (line = prte_getline(fp))) {
+    while (NULL != (line = pmix_getline(fp))) {
         /* ignore if line is empty or comment */
         if (0 == strlen(line) || '#' == line[0]) {
             free(line);
