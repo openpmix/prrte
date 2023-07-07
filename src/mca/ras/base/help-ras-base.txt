@@ -12,6 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2023      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -38,3 +39,11 @@ Cmd line: -mca prte_allocation_required 1
 The number of topology files and the list of number of nodes
 must match - i.e., a number of nodes must be given for each
 topology.
+#
+[ras-base:addhost-not-found]
+A request was made to add hosts from a hostfile, but the
+file could not be opened for reading:
+
+  File: %s
+
+Please check the filename and try again.

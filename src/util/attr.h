@@ -219,7 +219,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_DISPLAY_PROCESSORS         (PRTE_JOB_START_KEY + 109) // char* - string displaying nodes whose avail CPUs
                                                                        //         are to be displayed
 #define PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT   (PRTE_JOB_START_KEY + 110) // bool - display output in machine parsable format
-
+#define PRTE_JOB_EXTEND_DVM                 (PRTE_JOB_START_KEY + 111) // bool - DVM is being extended
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
