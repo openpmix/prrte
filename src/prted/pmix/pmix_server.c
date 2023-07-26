@@ -596,6 +596,7 @@ int pmix_server_init(void)
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_HOSTNAME, prte_process_info.nodename, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 
@@ -604,6 +605,7 @@ int pmix_server_init(void)
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_EXTERNAL_AUX_EVENT_BASE, prte_event_base, PMIX_POINTER);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 #endif
@@ -620,12 +622,14 @@ int pmix_server_init(void)
     PMIX_INFO_LIST_INSERT(prc, ilist, &myinf);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
     // tell the server to share this topology for us
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SHARE_TOPOLOGY, NULL, PMIX_BOOL);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 
@@ -838,6 +842,7 @@ int pmix_server_init(void)
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_HOSTNAME, prte_process_info.nodename, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 
@@ -848,6 +853,7 @@ int pmix_server_init(void)
         free(tmp);
         if (PMIX_SUCCESS != rc) {
             PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
             return rc;
         }
     }
@@ -872,6 +878,7 @@ int pmix_server_init(void)
     PMIx_Register_event_handler(&prc, 1, NULL, 0, lost_connection_hdlr, regcbfunc, &lock);
     PRTE_PMIX_WAIT_THREAD(&lock);
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    rc = prte_pmix_convert_status(prc);
 
     return rc;
 }

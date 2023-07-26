@@ -37,6 +37,8 @@ BEGIN_C_DECLS
  */
 PRTE_EXPORT int prte_dt_init(void);
 
+PRTE_EXPORT void prte_preload_default_mca_params(void);
+
 END_C_DECLS
 
 #endif /* PRTE_RUNTIME_INTERNALS_H */
