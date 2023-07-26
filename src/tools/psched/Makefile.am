@@ -39,7 +39,21 @@ AM_CFLAGS = \
 
 bin_PROGRAMS = psched
 
-psched_SOURCES = psched.c
+dist_prtedata_DATA = help-psched.txt
+
+psched_SOURCES = \
+	psched.h \
+	psched.c \
+	errmgr.c \
+	state.c \
+	server.c \
+	scheduler.c \
+	backend.c \
+	event.c \
+	queries.c \
+	schizo.c \
+	session.c
+
 # the following empty psched_LDFLAGS is used
 #  so that the psched can be compiled statically
 #  by simply changing the value of this from
