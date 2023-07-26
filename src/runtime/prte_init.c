@@ -83,6 +83,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/runtime.h"
+#include "src/runtime/runtime_internals.h"
 
 /*
  * Whether we have completed prte_init or we are in prte_finalize
@@ -115,8 +116,6 @@ static bool min_initialized = false;
 #    ident PRTE_IDENT_STRING
 #endif
 const char prte_version_string[] = PRTE_IDENT_STRING;
-
-static void preload_default_mca_params(void);
 
 static bool check_exist(char *path)
 {
@@ -222,7 +221,7 @@ int prte_init_util(prte_proc_type_t flags)
     }
 
     /* pre-load any default mca param files */
-    preload_default_mca_params();
+    prte_preload_default_mca_params();
 
     /* Register all MCA Params */
     if (PRTE_SUCCESS != (ret = prte_register_params())) {
@@ -417,7 +416,7 @@ static bool check_pmix_overlap(char *var, char *value)
     return false;
 }
 
-static void preload_default_mca_params(void)
+void prte_preload_default_mca_params(void)
 {
     char *file, *home, *tmp;
     pmix_list_t params, params2, pfinal;
