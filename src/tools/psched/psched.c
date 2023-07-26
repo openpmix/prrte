@@ -68,6 +68,9 @@
 #include "src/util/pmix_basename.h"
 #include "src/util/prte_cmd_line.h"
 #include "src/util/daemon_init.h"
+#include "src/util/malloc.h"
+#include "src/util/pmix_if.h"
+#include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_output.h"
 #include "src/util/pmix_printf.h"
@@ -79,11 +82,20 @@
 #include "src/util/pmix_show_help.h"
 #include "src/util/session_dir.h"
 
+#include "src/mca/ess/base/base.h"
+#include "src/mca/plm/base/plm_private.h"
 #include "src/mca/prtebacktrace/base/base.h"
 #include "src/mca/prteinstalldirs/base/base.h"
+#include "src/mca/ras/base/base.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
+
+#include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_locks.h"
 #include "src/runtime/runtime.h"
+#include "src/runtime/runtime_internals.h"
+
+#include "psched.h"
 
 /*
  * Globals
@@ -117,7 +129,14 @@ static void infocbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo, vo
     PRTE_PMIX_WAKEUP_THREAD(&xfer->lock);
 }
 
+static bool forcibly_die = false;
 static int wait_pipe[2];
+static prte_event_t term_handler;
+static prte_event_t epipe_handler;
+static int term_pipe[2];
+static pmix_mutex_t abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
+static void clean_abort(int fd, short flags, void *arg);
+static void abort_signal_callback(int signal);
 
 static int wait_dvm(pid_t pid)
 {
@@ -172,6 +191,11 @@ int main(int argc, char *argv[])
     prte_schizo_base_module_t *schizo;
     pmix_cli_item_t *opt;
     char *path = NULL;
+    prte_job_t *jdata;
+    prte_app_context_t *app;
+    prte_node_t *node;
+    prte_proc_t *pptr;
+    prte_topology_t *t;
 
     /* initialize the globals */
     prte_tool_basename = pmix_basename(argv[0]);
@@ -215,6 +239,9 @@ int main(int argc, char *argv[])
         return prte_pmix_convert_status(ret);
     }
 
+    /* ensure we know the type of proc for when we finalize */
+    prte_process_info.proc_type = PRTE_PROC_MASTER;
+
     /* we always need the prrte and pmix params */
     ret = prte_schizo_base_parse_prte(pargc, 0, pargv, NULL);
     if (PRTE_SUCCESS != ret) {
@@ -238,7 +265,6 @@ int main(int argc, char *argv[])
     /* initialize the output system */
     pmix_output_init();
 
-    /* keyval lex-based parser */
     /* Setup the parameter system */
     if (PRTE_SUCCESS != (ret = pmix_mca_base_var_init())) {
         pmix_show_help("help-prte-runtime",
@@ -250,6 +276,8 @@ int main(int argc, char *argv[])
     /* set the nodename so anyone who needs it has it - this
      * must come AFTER we initialize the installdirs */
     prte_setup_hostname();
+    /* add network aliases to our list of alias hostnames */
+    pmix_ifgetaliases(&prte_process_info.aliases);
 
     /* pretty-print stack handlers */
     if (PRTE_SUCCESS != (ret = prte_util_register_stackhandlers())) {
@@ -260,7 +288,7 @@ int main(int argc, char *argv[])
     }
 
     /* pre-load any default mca param files */
-    preload_default_mca_params();
+    prte_preload_default_mca_params();
 
     /* Register all MCA Params */
     if (PRTE_SUCCESS != (ret = prte_register_params())) {
@@ -279,27 +307,113 @@ int main(int argc, char *argv[])
         return ret;
     }
 
-    /* open the SCHIZO framework */
-    ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
-                                       PMIX_MCA_BASE_OPEN_DEFAULT);
+    /** setup callbacks for abort signals - from this point
+     * forward, we need to abort in a manner that allows us
+     * to cleanup. However, we cannot directly use libevent
+     * to trap these signals as otherwise we cannot respond
+     * to them if we are stuck in an event! So instead use
+     * the basic POSIX trap functions to handle the signal,
+     * and then let that signal handler do some magic to
+     * avoid the hang
+     *
+     * NOTE: posix traps don't allow us to do anything major
+     * in them, so use a pipe tied to a libevent event to
+     * reach a "safe" place where the termination event can
+     * be created
+     */
+    if (0 != pipe(term_pipe)) {
+        exit(1);
+    }
+
+    /*
+     * Initialize the event library
+     */
+    if (PRTE_SUCCESS != (ret = prte_event_base_open())) {
+        pmix_show_help("help-prte-runtime",
+                       "prte_init:startup:internal-failure", true,
+                       "event base open", PRTE_ERROR_NAME(ret), ret);
+        return ret;
+    }
+    /* setup an event to attempt normal termination on signal */
+    prte_event_set(prte_event_base, &term_handler, term_pipe[0], PRTE_EV_READ, clean_abort, NULL);
+    prte_event_add(&term_handler, NULL);
+    /* point the signal trap to a function that will activate that event */
+    signal(SIGTERM, abort_signal_callback);
+    signal(SIGINT, abort_signal_callback);
+    signal(SIGHUP, abort_signal_callback);
+
+    /* setup the locks */
+    if (PRTE_SUCCESS != (ret = prte_locks_init())) {
+        pmix_show_help("help-prte-runtime",
+                       "prte_init:startup:internal-failure", true,
+                       "locks init", PRTE_ERROR_NAME(ret), ret);
+        return ret;
+    }
+
+    /* Ensure the rest of the process info structure is initialized */
+    if (PRTE_SUCCESS != (ret = prte_proc_info())) {
+        pmix_show_help("help-prte-runtime",
+                       "prte_init:startup:internal-failure", true,
+                       "proc info", PRTE_ERROR_NAME(ret), ret);
+        return ret;
+    }
+
+    if (PRTE_SUCCESS != (ret = prte_hwloc_base_register())) {
+        pmix_show_help("help-prte-runtime",
+                       "prte_init:startup:internal-failure", true,
+                       "register hwloc", PRTE_ERROR_NAME(ret), ret);
+        return ret;
+    }
+
+    /* open hwloc */
+    prte_hwloc_base_open();
+    /* get the local topology */
+    ret = prte_hwloc_base_get_topology();
     if (PRTE_SUCCESS != ret) {
-        PRTE_ERROR_LOG(ret);
+        pmix_show_help("help-prte-runtime",
+                       "prte_init:startup:internal-failure", true,
+                       "get topology", PRTE_ERROR_NAME(ret), ret);
         return ret;
     }
 
-    if (PRTE_SUCCESS != (ret = prte_schizo_base_select())) {
-        PRTE_ERROR_LOG(ret);
+    /* setup the global job and node arrays */
+    prte_job_data = PMIX_NEW(pmix_pointer_array_t);
+    ret = pmix_pointer_array_init(prte_job_data,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PMIX_SUCCESS != ret) {
+        pmix_show_help("help-prte-runtime",
+                       "prte_init:startup:internal-failure", true,
+                       "setup job array", PRTE_ERROR_NAME(ret), ret);
         return ret;
     }
-
-    /* get our schizo module */
-    personality = "psched";
-    schizo = prte_schizo_base_detect_proxy(personality);
-    if (NULL == schizo) {
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true,
-                       prte_tool_basename, personality);
-        return 1;
+    prte_node_pool = PMIX_NEW(pmix_pointer_array_t);
+    ret = pmix_pointer_array_init(prte_node_pool, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PMIX_SUCCESS != ret) {
+        pmix_show_help("help-prte-runtime",
+                       "prte_init:startup:internal-failure", true,
+                       "setup node array", PRTE_ERROR_NAME(ret), ret);
+        return ret;
     }
+    prte_node_topologies = PMIX_NEW(pmix_pointer_array_t);
+    ret = pmix_pointer_array_init(prte_node_topologies, PRTE_GLOBAL_ARRAY_BLOCK_SIZE,
+                                  PRTE_GLOBAL_ARRAY_MAX_SIZE,
+                                  PRTE_GLOBAL_ARRAY_BLOCK_SIZE);
+    if (PMIX_SUCCESS != ret) {
+        pmix_show_help("help-prte-runtime",
+                       "prte_init:startup:internal-failure", true,
+                       "setup node topologies array", PRTE_ERROR_NAME(ret), ret);
+        return ret;
+    }
+    /* initialize the cache */
+    prte_cache = PMIX_NEW(pmix_pointer_array_t);
+    pmix_pointer_array_init(prte_cache, 1, INT_MAX, 1);
+
+    /* setup the SCHIZO module */
+    schizo = &psched_schizo_module;
 
     /* parse the CLI to load the MCA params */
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
@@ -342,6 +456,7 @@ int main(int argc, char *argv[])
         setsid();
 #endif
     }
+
     /* ensure we silence any compression warnings */
     PMIX_SETENV_COMPAT("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
 
@@ -353,41 +468,12 @@ int main(int argc, char *argv[])
         return ret;
     }
 
-    /* get the local topology */
-    if (NULL == prte_hwloc_topology) {
-        if (PRTE_SUCCESS != (ret = prte_hwloc_base_get_topology())) {
-            pmix_show_help("help-prte-runtime",
-                           "prte_init:startup:internal-failure", true,
-                           "topology discovery", PRTE_ERROR_NAME(ret), ret);
-            return ret;
-        }
-    }
+    /* setup the state machine */
+    psched_state_init();
 
-    /* open and setup the state machine */
-    ret = pmix_mca_base_framework_open(&prte_state_base_framework,
-                                       PMIX_MCA_BASE_OPEN_DEFAULT);
-    if (PRTE_SUCCESS != ret) {
-        pmix_show_help("help-prte-runtime",
-                       "prte_init:startup:internal-failure", true,
-                       "state open", PRTE_ERROR_NAME(ret), ret);
-        return ret;
-    }
-    if (PRTE_SUCCESS != (ret = prte_state_base_select())) {
-        pmix_show_help("help-prte-runtime",
-                       "prte_init:startup:internal-failure", true,
-                       "state select", PRTE_ERROR_NAME(ret), ret);
-        return ret;
-    }
+    /* setup the errmgr */
+    psched_errmgr_init();
 
-    /* open the errmgr */
-    ret = pmix_mca_base_framework_open(&prte_errmgr_base_framework,
-                                       PMIX_MCA_BASE_OPEN_DEFAULT);
-    if (PRTE_SUCCESS != ret) {
-        pmix_show_help("help-prte-runtime",
-                       "prte_init:startup:internal-failure", true,
-                       "prte_errmgr_base_open", PRTE_ERROR_NAME(ret), ret);
-        return ret;
-    }
     /* set a name */
     ret = prte_plm_base_set_hnp_name();
     if (PRTE_SUCCESS != ret) {
@@ -422,24 +508,12 @@ int main(int argc, char *argv[])
         goto DONE;
     }
 
-    /* setup the PMIx server - we need this here in case the
-     * communications infrastructure wants to register
-     * information */
-    if (PRTE_SUCCESS != (ret = pmix_server_init())) {
+    /* setup the PMIx scheduler class */
+    if (PRTE_SUCCESS != (ret = psched_server_init())) {
         /* the server code already barked, so let's be quiet */
         prte_exit_status = PRTE_ERR_SILENT;
         goto DONE;
     }
-    pmix_server_start();
-
-    /* setup the error manager */
-    if (PRTE_SUCCESS != (ret = prte_errmgr_base_select())) {
-        pmix_show_help("help-prte-runtime",
-                       "prte_init:startup:internal-failure", true,
-                       "errmgr_base_select", PRTE_ERROR_NAME(ret), ret);
-        prte_exit_status = ret;
-        goto DONE;
-     }
 
     /* create my job data object */
     jdata = PMIX_NEW(prte_job_t);
@@ -447,13 +521,7 @@ int main(int argc, char *argv[])
     prte_set_job_data_object(jdata);
 
     /* set the schizo personality to "psched" by default */
-    jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy("psched");
-    if (NULL == jdata->schizo) {
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
-        error = "select personality";
-        ret = PRTE_ERR_SILENT;
-        goto error;
-    }
+    jdata->schizo = (struct prte_schizo_base_module_t *)schizo;
 
     /* every job requires at least one app */
     app = PMIX_NEW(prte_app_context_t);
@@ -469,40 +537,28 @@ int main(int argc, char *argv[])
     pmix_pointer_array_set_item(prte_node_pool, PRTE_PROC_MY_NAME->rank, node);
 
     /* create and store a proc object for us */
-    proc = PMIX_NEW(prte_proc_t);
-    PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
-    proc->job = jdata;
-    proc->rank = proc->name.rank;
-    proc->pid = prte_process_info.pid;
-    prte_oob_base_get_addr(&proc->rml_uri);
-    prte_process_info.my_hnp_uri = strdup(proc->rml_uri);
-    /* store it in the local PMIx repo for later retrieval */
-    PMIX_VALUE_LOAD(&pval, proc->rml_uri, PMIX_STRING);
-    if (PMIX_SUCCESS != (pret = PMIx_Store_internal(PRTE_PROC_MY_NAME, PMIX_PROC_URI, &pval))) {
-        PMIX_ERROR_LOG(pret);
-        ret = PRTE_ERROR;
-        PMIX_VALUE_DESTRUCT(&pval);
-        error = "store uri";
-        goto error;
-    }
-    PMIX_VALUE_DESTRUCT(&pval);
-    proc->state = PRTE_PROC_STATE_RUNNING;
+    pptr = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&pptr->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
+    pptr->job = jdata;
+    pptr->rank = pptr->name.rank;
+    pptr->pid = prte_process_info.pid;
+    pptr->state = PRTE_PROC_STATE_RUNNING;
     PMIX_RETAIN(node); /* keep accounting straight */
-    proc->node = node;
-    pmix_pointer_array_set_item(jdata->procs, PRTE_PROC_MY_NAME->rank, proc);
+    pptr->node = node;
+    pmix_pointer_array_set_item(jdata->procs, PRTE_PROC_MY_NAME->rank, pptr);
 
     /* setup to detect any external allocation */
-    if (PRTE_SUCCESS
-        != (ret = pmix_mca_base_framework_open(&prte_ras_base_framework,
-                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
+    ret = pmix_mca_base_framework_open(&prte_ras_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
-        error = "prte_ras_base_open";
-        goto error;
+        prte_exit_status = ret;
+        goto DONE;
     }
     if (PRTE_SUCCESS != (ret = prte_ras_base_select())) {
         PRTE_ERROR_LOG(ret);
-        error = "prte_ras_base_find_available";
-        goto error;
+        prte_exit_status = ret;
+        goto DONE;
     }
 
     /* add our topology to the array of known topologies */
@@ -542,7 +598,7 @@ DONE:
     PRTE_UPDATE_EXIT_STATUS(ret);
 
     /* cleanup and leave */
-    prte_finalize();
+    psched_server_finalize();
 
     prte_session_dir_cleanup(PRTE_PROC_MY_NAME->nspace);
     /* cleanup the process info */
@@ -552,4 +608,65 @@ DONE:
         fprintf(stderr, "exiting with status %d\n", prte_exit_status);
     }
     exit(prte_exit_status);
+}
+
+static void clean_abort(int fd, short flags, void *arg)
+{
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags, arg);
+
+    /* if we have already ordered this once, don't keep
+     * doing it to avoid race conditions
+     */
+    if (pmix_mutex_trylock(&abort_inprogress_lock)) { /* returns 1 if already locked */
+        if (forcibly_die) {
+            /* exit with a non-zero status */
+            exit(1);
+        }
+        fprintf(stderr,
+                "%s: abort is already in progress...hit ctrl-c again to forcibly terminate\n\n",
+                prte_tool_basename);
+        forcibly_die = true;
+        /* reset the event */
+        prte_event_add(&term_handler, NULL);
+        return;
+    }
+
+    fflush(stderr);
+    /* ensure we exit with a non-zero status */
+    PRTE_UPDATE_EXIT_STATUS(PRTE_ERROR_DEFAULT_EXIT_CODE);
+    // stop the event loop
+    prte_event_base_active = false;
+}
+
+static bool first = true;
+static bool second = true;
+
+/*
+ * Attempt to terminate and wait for callback
+ */
+static void abort_signal_callback(int fd)
+{
+    uint8_t foo = 1;
+    char *msg = "Abort is in progress...hit ctrl-c again to forcibly terminate\n\n";
+    PRTE_HIDE_UNUSED_PARAMS(fd);
+
+    /* if this is the first time thru, just get
+     * the current time
+     */
+    if (first) {
+        first = false;
+        /* tell the event lib to attempt to abnormally terminate */
+        if (-1 == write(term_pipe[1], &foo, 1)) {
+            exit(1);
+        }
+    } else if (second) {
+        if (-1 == write(2, (void *) msg, strlen(msg))) {
+            exit(1);
+        }
+        fflush(stderr);
+        second = false;
+    } else {
+        pmix_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, NULL);
+        exit(1);
+    }
 }

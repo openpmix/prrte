@@ -56,8 +56,8 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/pmix_init_util.h"
 
-#include "schizo_psched.h"
 #include "src/mca/schizo/base/base.h"
+#include "src/tools/psched/psched.h"
 
 static int parse_cli(char **argv, pmix_cli_result_t *results, bool silent);
 static int detect_proxy(char *argv);
@@ -68,7 +68,7 @@ static void job_info(pmix_cli_result_t *results,
 static int set_default_rto(prte_job_t *jdata,
                            prte_rmaps_options_t *options);
 
-prte_schizo_base_module_t prte_schizo_prte_module = {
+prte_schizo_base_module_t psched_schizo_module = {
     .name = "psched",
     .parse_cli = parse_cli,
     .parse_env = parse_env,
