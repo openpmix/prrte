@@ -554,6 +554,7 @@ static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
     PRTE_HIDE_UNUSED_PARAMS(status, ref);
 
     PMIX_ACQUIRE_OBJECT(lock);
+    lock->status = status;
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
@@ -877,6 +878,7 @@ int pmix_server_init(void)
     prc = PMIX_ERR_LOST_CONNECTION;
     PMIx_Register_event_handler(&prc, 1, NULL, 0, lost_connection_hdlr, regcbfunc, &lock);
     PRTE_PMIX_WAIT_THREAD(&lock);
+    prc = lock.status;
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
     rc = prte_pmix_convert_status(prc);
 
