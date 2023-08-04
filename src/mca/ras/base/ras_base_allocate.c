@@ -796,7 +796,7 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
                  * uses flex and that has problems handling the range of allowed
                  * syntax here */
                 fp = fopen(hostfiles[k], "r");
-                if (NULL == fopen) {
+                if (NULL == fp) {
                     pmix_show_help("help-ras-base.txt", "ras-base:addhost-not-found", true, hostfiles[k]);
                     PMIX_ARGV_FREE_COMPAT(hostfiles);
                     PMIX_LIST_DESTRUCT(&nodes);
