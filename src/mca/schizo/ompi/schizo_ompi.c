@@ -1849,7 +1849,11 @@ static bool check_pmix_overlap(char *var, char *value)
     return false;
 }
 
-static int detect_proxy(char *personalities)
+// NOTE: This code is fundamentally the same (module PMIX <-> OPAL)
+//      as the translate_params() routine in the OMPI repo's
+//      opal/mca/pmix/base/pmix_base_fns.c file.  If there are
+//      changes here, there are likely to be changes there.
+static int translate_params(void)
 {
     char *evar, *tmp, *e2;
     char *file;
@@ -1859,35 +1863,6 @@ static int detect_proxy(char *personalities)
     uid_t uid;
     int n, len;
 
-    pmix_output_verbose(2, prte_schizo_base_framework.framework_output,
-                        "%s[%s]: detect proxy with %s (%s)",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__,
-                        (NULL == personalities) ? "NULL" : personalities,
-                        prte_tool_basename);
-
-    /* COMMAND-LINE OVERRIDES ALL */
-    if (NULL != personalities) {
-        /* this is a list of personalities we need to check -
-         * if it contains "ompi", then we are available */
-        if (NULL != strstr(personalities, "ompi")) {
-            goto weareit;
-        }
-        return 0;
-    }
-
-    /* if we were told the proxy, then use it */
-    if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy"))) {
-        if (0 == strcmp(evar, "ompi")) {
-            goto weareit;
-        } else {
-            return 0;
-        }
-    }
-
-    /* if neither of those were true, then it cannot be us */
-    return 0;
-
-weareit:
     /* since we are the proxy, we need to check the OMPI default
      * MCA params to see if there is something relating to PRRTE
      * in them - this would be "old" references to things from
@@ -1999,6 +1974,39 @@ weareit:
     }
 
     return 100;
+}
+
+static int detect_proxy(char *personalities)
+{
+    char *evar;
+
+    pmix_output_verbose(2, prte_schizo_base_framework.framework_output,
+                        "%s[%s]: detect proxy with %s (%s)",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__,
+                        (NULL == personalities) ? "NULL" : personalities,
+                        prte_tool_basename);
+
+    /* COMMAND-LINE OVERRIDES ALL */
+    if (NULL != personalities) {
+        /* this is a list of personalities we need to check -
+         * if it contains "ompi", then we are available */
+        if (NULL != strstr(personalities, "ompi")) {
+            return translate_params();
+        }
+        return 0;
+    }
+
+    /* if we were told the proxy, then use it */
+    if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy"))) {
+        if (0 == strcmp(evar, "ompi")) {
+            return translate_params();
+        } else {
+            return 0;
+        }
+    }
+
+    /* if neither of those were true, then it cannot be us */
+    return 0;
 }
 
 static void allow_run_as_root(pmix_cli_result_t *results)
