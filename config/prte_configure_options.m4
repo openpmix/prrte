@@ -18,7 +18,7 @@ dnl                         reserved.
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 dnl
 dnl Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
 dnl Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
 dnl                         All Rights reserved.
 dnl $COPYRIGHT$
@@ -376,5 +376,24 @@ else
 fi
 AC_DEFINE_UNQUOTED([PRTE_ENABLE_GETPWUID], [$prte_want_getpwuid],
                    [Disable getpwuid support (default: enabled)])
+
+#
+# Do we want to install the PRRTE scheduler?
+#
+AC_MSG_CHECKING([if want to install PRRTE pseudo-scheduler])
+AC_ARG_WITH(prte-scheduler,
+    AS_HELP_STRING([--with-prte-scheduler],
+                   [Normal PRTE users/applications do not need this.  Users/applications wishing to explore dynamic allocation support probably do (default: disabled).]))
+if test "$with_prte_scheduler" = "yes"; then
+    AC_MSG_RESULT([yes])
+    prte_want_scheduler="yes"
+    WANT_PRTE_SCHED=1
+else
+    AC_MSG_RESULT([no])
+    prte_want_scheduler="no"
+    WANT_PRTE_SCHED=0
+fi
+AM_CONDITIONAL(WANT_PRTE_SCHED, test "$WANT_PRTE_SCHED" = 1)
+PRTE_SUMMARY_ADD([Miscellaneous], [PRTE Pseudo-Scheduler], [], [$prte_want_scheduler])
 
 ])dnl

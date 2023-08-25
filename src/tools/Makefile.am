@@ -31,8 +31,12 @@ SUBDIRS += \
 	tools/pcc \
     tools/prte_info \
     tools/prte \
-    tools/pterm \
+    tools/pterm
+
+if WANT_PRTE_SCHED
+SUBDIRS += \
     tools/psched
+endif
 
 DIST_SUBDIRS += \
 	tools/prted \
