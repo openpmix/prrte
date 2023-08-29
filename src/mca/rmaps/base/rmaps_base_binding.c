@@ -346,7 +346,7 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
 #endif
             hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, node->available);
             ncpus = hwloc_get_nbobjs_inside_cpuset_by_type(node->topology->topo, prte_rmaps_base.available, type);
-            if (ncpus > options->cpus_per_rank) {
+            if (ncpus >= options->cpus_per_rank) {
                 /* this is a good spot */
                 moveon = true;
                 break;
