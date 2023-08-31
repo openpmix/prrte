@@ -4,7 +4,7 @@
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,7 +19,7 @@
  *
  * General Description:
  *
- * This framework provides portable access to prtedlopen- and prtedlsym-like
+ * This framework provides portable access to dlopen- and prtedlsym-like
  * functionality, very similar to Libtool's libltprtedl.  Indeed, one of
  * the components in this framework will use libltprtedl, if it is
  * present/available.  However, on some common types systems where
@@ -41,7 +41,7 @@
  * https://github.com/open-mpi/ompi/pull/390).  That being said, we,
  * as a developer community, still wanted to be able to natively use
  * DSOs by default.  A small/simple framework for DL functionality,
- * along with a simple component that supports prtedlopen/prtedlsym on POSIX
+ * along with a simple component that supports dlopen/prtedlsym on POSIX
  * platforms and another component that natively uses libltprtedl seemed
  * like a good solution.
  */
