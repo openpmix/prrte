@@ -3,7 +3,7 @@
 # Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 #
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
@@ -58,7 +58,7 @@ AC_DEFUN([MCA_prte_prtedl_libltdl_CONFIG],[
                   [prte_prtedl_libltdl],
                   [ltprtedl.h],
                   [ltprtedl],
-                  [lt_prtedlopen],
+                  [lt_dlopen],
                   [prte_prtedl_libltdl_happy=yes],
                   [prte_prtedl_libltdl_happy=no])
               ])
