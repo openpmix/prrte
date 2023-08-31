@@ -8,7 +8,7 @@
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -57,7 +57,7 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
 
     *handle = NULL;
 
-    /* Setup the prtedlopen flags */
+    /* Setup the dlopen flags */
     int flags = RTLD_LAZY;
     if (private_namespace) {
         flags |= RTLD_LOCAL;
@@ -95,8 +95,8 @@ static int dlopen_open(const char *fname, bool use_ext, bool private_namespace,
                 continue;
             }
 
-            /* Yes, the file exists -- try to prtedlopen it.  If we can't
-               prtedlopen it, bail. */
+            /* Yes, the file exists -- try to dlopen it.  If we can't
+               dlopen it, bail. */
             do_dlopen(name, flags, &local_handle, err_msg);
             free(name);
             break;
