@@ -11,6 +11,8 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2023      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -198,8 +200,15 @@ void prte_rml_compute_routing_tree(void)
     }
 
     /* compute my direct children and the bitmap that shows which vpids
-     * lie underneath their branch
+     * lie underneath their branch.  destroy list if it is not empty.
+     * this situation can arise when the DVM is being resized.
      */
+
+    if (pmix_list_get_size(&prte_rml_base.children) > 0) {
+        PMIX_LIST_DESTRUCT(&prte_rml_base.children);
+        PMIX_CONSTRUCT(&prte_rml_base.children, pmix_list_t);
+    }
+
     radix_tree(Ii, &prte_rml_base.children, NULL);
 
     if (0 < pmix_output_get_verbosity(prte_rml_base.routed_output)) {
