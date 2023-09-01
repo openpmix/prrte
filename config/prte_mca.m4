@@ -14,7 +14,7 @@ dnl Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 dnl Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2019      Research Organization for Information Science
 dnl                         and Technology (RIST).  All rights reserved.
-dnl Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -112,7 +112,7 @@ AC_DEFUN([PRTE_MCA],[
     if test "$enable_static" != "no"; then
         DSO_all=0
         msg="none (static libraries built)"
-    elif test "$PRRTE_ENABLE_DLOPEN_SUPPORT" = 0; then
+    elif test "$PRTE_ENABLE_DLOPEN_SUPPORT" = 0; then
         DSO_all=0
         msg="none (dlopen disabled)"
     elif test -z "$enable_mca_dso"; then
