@@ -56,7 +56,6 @@ configure.log.*
 make.log.*
 make.install.log.*
 libtool
-doxygen
 bin
 lib
 cscope.*
