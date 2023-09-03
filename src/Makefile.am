@@ -18,6 +18,7 @@
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -68,9 +69,7 @@ prtedir = $(prteincludedir)/$(subdir)
 nobase_prte_HEADERS = $(headers)
 endif
 
-# setup to catch extra files to be included in tarballs
-EXTRA_DIST = Doxyfile
-
+include include/Makefile.am
 include runtime/Makefile.am
 include tools/Makefile.am
 include prted/Makefile.am
