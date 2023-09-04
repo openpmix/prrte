@@ -15,7 +15,7 @@
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
@@ -69,7 +69,6 @@ prtedir = $(prteincludedir)/$(subdir)
 nobase_prte_HEADERS = $(headers)
 endif
 
-include include/Makefile.am
 include runtime/Makefile.am
 include tools/Makefile.am
 include prted/Makefile.am
