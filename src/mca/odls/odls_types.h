@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,6 +60,7 @@ typedef uint8_t prte_daemon_cmd_flag_t;
 #define PRTE_DAEMON_HALT_VM_CMD          (prte_daemon_cmd_flag_t) 19
 #define PRTE_DAEMON_HALT_DVM_CMD         (prte_daemon_cmd_flag_t) 20
 #define PRTE_DAEMON_REPORT_JOB_COMPLETE  (prte_daemon_cmd_flag_t) 21
+#define PRTE_DAEMON_DEFINE_PSET          (prte_daemon_cmd_flag_t) 50
 
 /* request proc resource usage */
 #define PRTE_DAEMON_TOP_CMD (prte_daemon_cmd_flag_t) 22
