@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -105,7 +105,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
     pmix_nspace_t job;
     pmix_data_buffer_t data, *answer;
     prte_job_t *jdata;
-    pmix_proc_t proc;
+    pmix_proc_t proc, *pptr;
     int32_t i, num_replies;
     pmix_pointer_array_t procarray;
     prte_proc_t *proct;
@@ -338,6 +338,45 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), num_new_procs, num_procs));
         }
 
+        break;
+
+        /****    DEFINE PSET    ****/
+    case PRTE_DAEMON_DEFINE_PSET:
+        // get pset name
+        n = 1;
+        ret = PMIx_Data_unpack(NULL, buffer, &cmd_str, &n, PMIX_STRING);
+        if (PMIX_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            goto CLEANUP;
+        }
+        // get number of target procs
+        n = 1;
+        ret = PMIx_Data_unpack(NULL, buffer, &num_procs, &n, PMIX_INT32);
+        if (PMIX_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            goto CLEANUP;
+        }
+        // create space for them
+        pptr = PMIx_Proc_create(num_procs);
+        if (NULL == pptr) {
+            PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
+            goto CLEANUP;
+        }
+        // unpack the targets
+        n = num_procs;
+        ret = PMIx_Data_unpack(NULL, buffer, pptr, &n, PMIX_PROC);
+        if (PMIX_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            goto CLEANUP;
+        }
+        // define the pset
+        ret = PMIx_server_define_process_set(pptr, num_procs, cmd_str);
+        free(cmd_str);
+        cmd_str = NULL;
+        PMIx_Proc_free(pptr, num_procs);
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+        }
         break;
 
         /****    EXIT COMMAND    ****/

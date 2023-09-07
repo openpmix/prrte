@@ -809,7 +809,7 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
                         requestor->nspace, requestor->rank);
 
     for (m = 0; m < ndirs; m++) {
-        if (0 == strncmp(directives[m].key, PMIX_JOB_CTRL_KILL, PMIX_MAX_KEYLEN)) {
+        if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_KILL)) {
             /* convert the list of targets to a pointer array */
             if (NULL == targets) {
                 ptrarray = NULL;
@@ -844,7 +844,13 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
                 }
                 PMIX_DESTRUCT(&parray);
             }
-        } else if (0 == strncmp(directives[m].key, PMIX_JOB_CTRL_TERMINATE, PMIX_MAX_KEYLEN)) {
+            if (PMIX_SUCCESS != rc) {
+                return rc;
+            }
+            return PMIX_OPERATION_SUCCEEDED;
+        }
+
+        if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_TERMINATE)) {
             if (NULL == targets) {
                 /* terminate the daemons and all running jobs */
                 PMIX_DATA_BUFFER_CREATE(cmd);
@@ -866,8 +872,14 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
                 }
                 PMIX_DATA_BUFFER_RELEASE(cmd);
                 PMIX_RELEASE(sig);
+                if (PMIX_SUCCESS != rc) {
+                    return rc;
+                }
+                return PMIX_OPERATION_SUCCEEDED;
             }
-        } else if (0 == strncmp(directives[m].key, PMIX_JOB_CTRL_SIGNAL, PMIX_MAX_KEYLEN)) {
+        }
+
+        if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_SIGNAL)) {
             PMIX_DATA_BUFFER_CREATE(cmd);
             cmmnd = PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
             /* pack the command */
@@ -912,10 +924,64 @@ pmix_status_t pmix_server_job_ctrl_fn(const pmix_proc_t *requestor, const pmix_p
             }
             PMIX_DATA_BUFFER_RELEASE(cmd);
             PMIX_RELEASE(sig);
+            if (PMIX_SUCCESS != rc) {
+                return rc;
+            }
+            return PMIX_OPERATION_SUCCEEDED;
         }
+
+#ifdef PMIX_JOB_CTRL_DEFINE_PSET
+        if (PMIX_CHECK_KEY(&directives[m], PMIX_JOB_CTRL_DEFINE_PSET)) {
+            // goes to all daemons
+            PMIX_DATA_BUFFER_CREATE(cmd);
+            cmmnd = PRTE_DAEMON_DEFINE_PSET;
+            /* pack the command */
+            rc = PMIx_Data_pack(NULL, cmd, &cmmnd, 1, PMIX_UINT8);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(cmd);
+                return rc;
+            }
+            // pack the pset name
+            rc = PMIx_Data_pack(NULL, cmd, (void*)&directives[m].value.data.string, 1, PMIX_STRING);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(cmd);
+                return rc;
+            }
+            // pack the #targets
+            rc = PMIx_Data_pack(NULL, cmd, &ntargets, 1, PMIX_INT32);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(cmd);
+                return rc;
+            }
+            // pack the targets
+            rc = PMIx_Data_pack(NULL, cmd, (void*)targets, ntargets, PMIX_PROC);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                PMIX_DATA_BUFFER_RELEASE(cmd);
+                return rc;
+            }
+            /* goes to all daemons */
+            sig = PMIX_NEW(prte_grpcomm_signature_t);
+            sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
+            sig->sz = 1;
+            PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
+            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, cmd))) {
+                PRTE_ERROR_LOG(rc);
+            }
+            PMIX_DATA_BUFFER_RELEASE(cmd);
+            PMIX_RELEASE(sig);
+            if (PMIX_SUCCESS != rc) {
+                return rc;
+            }
+            return PMIX_OPERATION_SUCCEEDED;
+        }
+#endif
     }
 
-    return PMIX_OPERATION_SUCCEEDED;
+    return PMIX_ERR_NOT_SUPPORTED;
 }
 
 static void relcb(void *cbdata)
