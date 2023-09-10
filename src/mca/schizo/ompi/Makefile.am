@@ -20,9 +20,13 @@ AM_CFLAGS = \
 # See src/docs/included-content/Makefile.am for an explanation why we
 # install this file into the "data" directory (vs. the "doc"
 # directory).
+#
+# NOTE: This file is a ReStructured Text file (RST), but we
+# intentionally name it .rstxt.  See the comment in the Open MPI
+# docs/Makefile.am file for an explanation why.
 rstdir = $(prtedatadir)/rst/schizo-ompi-rst-content
 dist_rst_DATA = \
-        schizo-ompi-cli.rst
+        schizo-ompi-cli.rstxt
 
 # Install the help file
 dist_prtedata_DATA = \
