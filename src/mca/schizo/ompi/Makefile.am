@@ -24,6 +24,10 @@ rstdir = $(prtedatadir)/rst/schizo-ompi-rst-content
 dist_rst_DATA = \
         schizo-ompi-cli.rst
 
+# Install the help file
+dist_prtedata_DATA = \
+        help-schizo-ompi.txt
+
 sources = \
         schizo_ompi_component.c \
         schizo_ompi.h \
