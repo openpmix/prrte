@@ -163,9 +163,25 @@ prte_state_base_module_t psched_state_module = {
     .remove_proc_state = prte_state_base_remove_proc_state
 };
 
+static int state_base_verbose = -1;
 void psched_state_init(void)
 {
+    pmix_output_stream_t lds;
+
+    pmix_mca_base_var_register("prte", "state", "base", "verbose",
+                               "Verbosity for debugging state machine",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &state_base_verbose);
+    if (0 <= state_base_verbose) {
+        PMIX_CONSTRUCT(&lds, pmix_output_stream_t);
+        lds.lds_want_stdout = true;
+        prte_state_base_framework.framework_output = pmix_output_open(&lds);
+        PMIX_DESTRUCT(&lds);
+        pmix_output_set_verbosity(prte_state_base_framework.framework_output, state_base_verbose);
+    }
+
     prte_state = psched_state_module;
+    psched_state_module.init();
 }
 
 /************************
@@ -175,6 +191,10 @@ static int init(void)
 {
     int i, rc;
     int num_states;
+
+    pmix_output_verbose(2, prte_state_base_framework.framework_output,
+                        "%s state:psched: initialize",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* setup the state machines */
     PMIX_CONSTRUCT(&prte_job_states, pmix_list_t);

@@ -334,6 +334,7 @@ int main(int argc, char *argv[])
                        "event base open", PRTE_ERROR_NAME(ret), ret);
         return ret;
     }
+
     /* setup an event to attempt normal termination on signal */
     prte_event_set(prte_event_base, &term_handler, term_pipe[0], PRTE_EV_READ, clean_abort, NULL);
     prte_event_add(&term_handler, NULL);
@@ -413,6 +414,7 @@ int main(int argc, char *argv[])
     pmix_pointer_array_init(prte_cache, 1, INT_MAX, 1);
 
     /* setup the SCHIZO module */
+    psched_schizo_init();
     schizo = &psched_schizo_module;
 
     /* parse the CLI to load the MCA params */
@@ -442,7 +444,8 @@ int main(int argc, char *argv[])
         prte_debug_flag = true;
     }
     // leave_session_attached is used to indicate that we are not to daemonize
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_LEAVE_SESSION_ATTACHED)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_LEAVE_SESSION_ATTACHED) ||
+        pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG)) {
         prte_leave_session_attached = true;
     }
 
@@ -577,6 +580,9 @@ int main(int argc, char *argv[])
         pmix_output(0, "%s", output);
         free(output);
     }
+
+    // setup the scheduler itself
+    psched_scheduler_init();
 
     /* output a message indicating we are alive, our name, and our pid
      * for debugging purposes

@@ -208,7 +208,6 @@ static prte_regattr_input_t prte_attributes[] = {
     {.function = ""},
 };
 
-static char *generate_dist = "fabric,gpu,network";
 void psched_register_params(void)
 {
     /* register a verbosity */
@@ -219,6 +218,9 @@ void psched_register_params(void)
     if (0 <= psched_globals.verbosity) {
         psched_globals.output = pmix_output_open(NULL);
         pmix_output_set_verbosity(psched_globals.output,
+                                  psched_globals.verbosity);
+        prte_pmix_server_globals.output = pmix_output_open(NULL);
+        pmix_output_set_verbosity(prte_pmix_server_globals.output,
                                   psched_globals.verbosity);
     }
 
@@ -294,6 +296,12 @@ int psched_server_init(void)
     pmix_pointer_array_init(&psched_globals.requests, 128, INT_MAX, 2);
     PMIX_CONSTRUCT(&psched_globals.tools, pmix_list_t);
     psched_globals.syscontroller = *PRTE_NAME_INVALID;
+
+    psched_register_params();
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s server:psched: initialize",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     PMIX_INFO_LIST_START(ilist);
 

@@ -41,10 +41,12 @@ typedef struct {
     bool controller_connected;
     int verbosity;
     int output;
+    int scheduler_output;
 } psched_globals_t;
 
 extern psched_globals_t psched_globals;
 
+void psched_schizo_init(void);
 void psched_state_init(void);
 void psched_errmgr_init(void);
 int psched_server_init(void);
