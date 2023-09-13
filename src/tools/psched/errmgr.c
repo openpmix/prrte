@@ -85,13 +85,32 @@ static void check_send_notification(prte_job_t *jdata,
                                     prte_proc_t *proc,
                                     pmix_status_t event);
 
+static int errmgr_base_verbose = -1;
 void psched_errmgr_init(void)
 {
+    pmix_output_stream_t lds;
+
+    pmix_mca_base_var_register("prte", "errmgr", "base", "verbose",
+                               "Verbosity for debugging errmgr framework",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &errmgr_base_verbose);
+    if (0 <= errmgr_base_verbose) {
+        PMIX_CONSTRUCT(&lds, pmix_output_stream_t);
+        lds.lds_want_stdout = true;
+        prte_errmgr_base_framework.framework_output = pmix_output_open(&lds);
+        PMIX_DESTRUCT(&lds);
+        pmix_output_set_verbosity(prte_errmgr_base_framework.framework_output, errmgr_base_verbose);
+    }
     prte_errmgr = psched_errmgr_module;
+    psched_errmgr_module.init();
 }
 
 static int init(void)
 {
+    pmix_output_verbose(2, prte_errmgr_base_framework.framework_output,
+                        "%s errmgr:psched: initialize",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+
     /* setup state machine to trap job errors */
     prte_state.add_job_state(PRTE_JOB_STATE_ERROR, job_errors, PRTE_ERROR_PRI);
 

@@ -120,6 +120,28 @@ static struct option pschedoptions[] = {
 };
 static char *pschedshorts = "h::vVx:H:";
 
+static int schizo_base_verbose = -1;
+void psched_schizo_init(void)
+{
+    pmix_output_stream_t lds;
+
+    pmix_mca_base_var_register("prte", "schizo", "base", "verbose",
+                               "Verbosity for debugging schizo framework",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &schizo_base_verbose);
+    if (0 <= schizo_base_verbose) {
+        PMIX_CONSTRUCT(&lds, pmix_output_stream_t);
+        lds.lds_want_stdout = true;
+        prte_schizo_base_framework.framework_output = pmix_output_open(&lds);
+        PMIX_DESTRUCT(&lds);
+        pmix_output_set_verbosity(prte_schizo_base_framework.framework_output, schizo_base_verbose);
+    }
+
+    pmix_output_verbose(2, prte_schizo_base_framework.framework_output,
+                        "%s schizo:psched: initialize",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+}
+
 static int parse_cli(char **argv, pmix_cli_result_t *results,
                      bool silent)
 {
