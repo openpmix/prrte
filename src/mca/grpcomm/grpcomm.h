@@ -91,6 +91,7 @@ typedef struct {
     bool assignID;
     int timeout;
     size_t memsize;
+    pmix_list_t addmembers;
     /* distance masks for receive */
     pmix_bitmap_t distance_mask_recv;
     /* received buckets */
@@ -106,8 +107,12 @@ typedef struct {
     pmix_object_t super;
     prte_event_t ev;
     prte_grpcomm_signature_t *sig;
+    pmix_group_operation_t op;
+    char *grpid;
     pmix_data_buffer_t *buf;
     pmix_byte_object_t ctrls;
+    pmix_proc_t *procs;
+    size_t nprocs;
     pmix_info_t *info;
     size_t ninfo;
     prte_grpcomm_cbfunc_t grpcbfunc;

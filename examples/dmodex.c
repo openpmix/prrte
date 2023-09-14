@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * Copyright (c) 2019-2022 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
@@ -50,7 +50,7 @@ int main(int argc, char **argv)
     pmix_rank_t *locals = NULL;
     uint8_t j;
     pmix_info_t timeout;
-    int tlimit = 10;
+    int tlimit = 240;
 
     EXAMPLES_HIDE_UNUSED_PARAMS(argc, argv);
 

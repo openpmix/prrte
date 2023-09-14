@@ -80,7 +80,7 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
                 caddy->job_state = state;
                 PMIX_RETAIN(jdata);
             }
-            PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
+            PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
             return;
         }
     }
@@ -109,7 +109,7 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
         PMIX_RETAIN(jdata);
     }
     PRTE_REACHING_JOB_STATE(jdata, state, s->priority);
-    PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
+    PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
 }
 
 int prte_state_base_add_job_state(prte_job_state_t state, prte_state_cbfunc_t cbfunc, int priority)
@@ -237,7 +237,7 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
             caddy = PMIX_NEW(prte_state_caddy_t);
             caddy->name = *proc;
             caddy->proc_state = state;
-            PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
+            PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
             return;
         }
     }
@@ -262,7 +262,7 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
     caddy->name = *proc;
     caddy->proc_state = state;
     PRTE_REACHING_PROC_STATE(proc, state, s->priority);
-    PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
+    PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
 }
 
 int prte_state_base_add_proc_state(prte_proc_state_t state, prte_state_cbfunc_t cbfunc,

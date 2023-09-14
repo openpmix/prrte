@@ -4,7 +4,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,18 +64,18 @@ static void ready_for_debug(int fd, short args, void *cbata);
  * DVM module - used when mpirun is persistent
  ******************/
 prte_state_base_module_t prte_state_dvm_module = {
-    init,
-    finalize,
-    prte_state_base_activate_job_state,
-    prte_state_base_add_job_state,
-    prte_state_base_set_job_state_callback,
-    prte_state_base_set_job_state_priority,
-    prte_state_base_remove_job_state,
-    prte_state_base_activate_proc_state,
-    prte_state_base_add_proc_state,
-    prte_state_base_set_proc_state_callback,
-    prte_state_base_set_proc_state_priority,
-    prte_state_base_remove_proc_state
+    .init = init,
+    .finalize = finalize,
+    .activate_job_state = prte_state_base_activate_job_state,
+    .add_job_state = prte_state_base_add_job_state,
+    .set_job_state_callback = prte_state_base_set_job_state_callback,
+    .set_job_state_priority = prte_state_base_set_job_state_priority,
+    .remove_job_state = prte_state_base_remove_job_state,
+    .activate_proc_state = prte_state_base_activate_proc_state,
+    .add_proc_state = prte_state_base_add_proc_state,
+    .set_proc_state_callback = prte_state_base_set_proc_state_callback,
+    .set_proc_state_priority = prte_state_base_set_proc_state_priority,
+    .remove_proc_state = prte_state_base_remove_proc_state
 };
 
 static void dvm_notify(int sd, short args, void *cbdata);

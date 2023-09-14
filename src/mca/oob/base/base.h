@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -116,7 +116,7 @@ PRTE_EXPORT void prte_oob_base_send_nb(int fd, short args, void *cbdata);
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__);              \
         prte_oob_send_cd = PMIX_NEW(prte_oob_send_t);                                             \
         prte_oob_send_cd->msg = (m);                                                              \
-        PMIX_THREADSHIFT(prte_oob_send_cd, prte_event_base, prte_oob_base_send_nb, PRTE_MSG_PRI); \
+        PRTE_PMIX_THREADSHIFT(prte_oob_send_cd, prte_event_base, prte_oob_base_send_nb, PRTE_MSG_PRI); \
     } while (0)
 
 PRTE_EXPORT prte_oob_base_peer_t *prte_oob_base_get_peer(const pmix_proc_t *pr);

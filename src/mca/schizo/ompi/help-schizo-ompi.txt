@@ -1,8 +1,9 @@
-	# -*- text -*-
+# -*- text -*-
 #
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2022      Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2022      IBM Corporation.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -19,179 +20,9 @@
 %s (%s) %s
 
 Usage: %s [OPTION]...
-Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
 
-/*****      General Options      *****/
-
--h|--help                            This help message
--h|--help <arg0>                     Help for the specified option
--v|--verbose                         Enable typical debug options
--V|--version                         Print version and exit
-
-
-/*****       Debug Options       *****/
-
-   --debug-daemons                   Debug daemons - if not set, the "verbose" setting will be limited to
-                                     the DVM controller to reduce clutter
-   --debug-daemons-file              Enable debugging of any PRTE daemons used by this application, storing
-                                     their verbose output in files
-   --display <arg0>                  Comma-delimited list of options for displaying information about the
-                                     allocation and job. Allowed values for <arg0>:
-                                       allocation, bind, map, map-devel, topo
-   --get-stack-traces                Get stack traces of all application procs on timeout
-   --leave-session-attached          Do not discard stdout/stderr of remote PRTE daemons
-   --report-state-on-timeout         Report all job and process states upon timeout
-   --spawn-timeout <arg0>            Timeout the job if spawn takes more than the specified number of seconds
-   --test-suicide <arg0>             Suicide instead of clean abort after delay
-   --timeout <arg0>                  Timeout the job after the specified number of seconds
-   --output-proctable <arg0>         Print the complete proctable to stdout after launch, allowed <arg0>
-                                     values are '+', '-', or a filename.
-
-
-/*****      Output Options       *****/
-
-   --output <arg0>                   Comma-delimited list of options that control how output is
-                                     generated.
-                                       Allowed values for <arg0>:
-                                     tag, timestamp, xml, merge-stderr-to-stdout, dir=DIRNAME, file=filename.
-                                       The dir option redirects output from application processes into
-                                     DIRNAME/job/rank/std[out,err,diag].
-                                       The file option redirects output from application processes into
-                                     filename.rank. In both cases, the provided name will be converted to an
-                                     absolute path.
-                                       Supported qualifiers include NOCOPY (do not copy the output to the
-                                     stdout/err streams).
-   --report-child-jobs-separately    Return the exit status of the primary job only
-   --xterm <arg0>                    Create a new xterm window and display output from the specified ranks
-                                     there
-
-
-
-/*****       Input Options       *****/
-
-   --stdin <arg0>                    Specify procs to receive stdin [rank, all, none] (default: 0, indicating
-                                     rank 0)
-
-
-
-/*****      Mapping Options      *****/
-
-   --map-by <arg0>                   Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache
-                                     | l2cache | l3cache | numa (default:np>2) | package | node | seq | dist |
-                                     ppr |,rankfile].
-                                       Supported colon-delimited modifiers are: PE=y
-                                     (for multiple cpus/proc), SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL,
-                                     HWTCPUS, CORECPUS, DEVICE(for dist policy), INHERIT, NOINHERIT,
-                                     PE-LIST=a,b (comma-delimited ranges of cpus to use for this job),
-                                     FILE=<path> for seq and rankfile options
-
-
-
-/*****      Ranking Options      *****/
-
-   --rank-by <arg0>                  Ranking Policy for job [slot | node | fill | span]
-
-
-
-/*****      Binding Options      *****/
-
-   --bind-to <arg0>                  Binding policy for job. Allowed values for <arg0>:
-                                       none, hwthread, core, l1cache, l2cache, l3cache, numa, package,
-                                       ("none" is the default when oversubscribed.
-                                       "core" is the default when np<=2, and "numa" is the default when np>2).
-                                     Allowed colon-delimited qualifiers: overload-allowed, if-supported
-
-
-
-/*****     Developer Options     *****/
-
-   --do-not-launch                   Perform all necessary operations to prepare to launch the application,
-                                     but do not actually launch it (usually used to test mapping patterns)
-
-
-
-/*****      Launch Options       *****/
-
-   --default-hostfile <arg0>         Provide a default hostfile
--H|--host <arg0>                     List of hosts to invoke processes on
-   --hostfile <arg0>                 Provide a hostfile
-   --initial-errhandler <arg0>       Specify the initial error handler that is attached to predefined
-                                     communicators during the first MPI call.
-   --machinefile <arg0>              Provide a hostfile
-   --mca <arg0> <arg1>               Pass context-specific MCA parameters; they are considered global if
-                                     --gmca is not used and only one context is specified (arg0 is the
-                                     parameter name; arg1 is the parameter value)
-   --path <arg0>                     PATH to be used to look for executables to start processes
-   --pmixmca <arg0> <arg1>           Pass context-specific PMIx MCA parameters; they are considered global if
-                                     only one context is specified (arg0 is the parameter name; arg1 is the parameter value)
-   --preload-files <arg0>            Preload the comma separated list of files to the remote machines current
-                                     working directory before starting the remote process.
-   --prtemca <arg0> <arg1>           Pass context-specific PRTE MCA parameters to the DVM
-   --pset <arg0>                     User-specified name assigned to the processes in their given application
-   --rankfile <arg0>                 Name of file to specify explicit task mapping
--s|--preload-binary                  Preload the binary on the remote machine before starting the remote
-                                     process.
-   --set-cwd-to-session-dir          Set the working directory of the started processes to their session
-                                     directory
-   --show-progress                   Output a brief periodic report on launch progress
-   --wd <arg0>                       Synonym for --wdir
-   --wdir <arg0>                     Set the working directory of the started processes
--x <arg0>                            Export an environment variable, optionally specifying a value (e.g., "-x
-                                     foo" exports the environment variable foo and takes its value from the
-                                     current environment; "-x foo=bar" exports the environment variable name
-                                     foo and sets its value to "bar" in the started processes; "-x foo*"
-                                     exports all current environmental variables starting with "foo")
-
-
-
-/*****    Specific Options   *****/
-
-   --allow-run-as-root               Allow execution as root (STRONGLY DISCOURAGED)
-   --daemonize                       Daemonize the DVM daemons into the background
-   --forward-signals <arg0>          Comma-delimited list of additional signals (names or integers) to forward
-                                     to application processes ("none" => forward nothing). Signals provided by
-                                     default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT
-   --launch-agent <arg0>             Name of daemon executable used to start processes on remote nodes
-                                     (default: prted)
-   --max-vm-size <arg0>              Number of daemons to start
-   --noprefix                        Disable automatic --prefix behavior
-   --personality <arg0>              Specify the personality to be used
-   --prefix <arg0>                   Prefix to be used to look for RTE executables
-   --set-sid                         Direct the DVM daemons to separate from the current session
-   --singleton <arg0>                ID of the singleton process that started us
-   --tmpdir <arg0>                   Set the root for the session directory tree
-   --tune <arg0>                     File(s) containing MCA params for tuning DVM operations
-   --dvm  <arg0>                     Use a persistent DVM instead of instantiating independent runtime
-                                     infrastructure. Required argument passed to indicate the
-                                     pid, uri, file containing the uri, or namespace of the DVM.
-                                     Specify "--dvm search" to search for DVM controller, using first found.
-
-
-
-/*****    Fault Tolerance Options (if enabled)    *****/
-   --enable-recovery                 Enable recovery from process failure (Default = disabled)
-   --max-restarts                    Max number of times to restart a failed process
-   --disable-recovery                Disable recovery (resets all recovery options to off)
-   --continuous                      Job is to run until explicitly terminated
-   --with-ft                         Specify the type(s) of error handling that the application will use.
-
-
-/*****    MPI Options    *****/
-   --initial-errhandler              Specify the initial error handler that is attached to predefined
-                                     communicators during the first MPI call.
-   --display-comm                    Display table of communication methods between ranks during MPI_Init
-   --display-comm-finalize           "Display table of communication methods between ranks during MPI_Finalize
-   --soft                            This option is unsupported, but mandated by the MPI standard
-   --arch <arg0>                     This option is unsupported, but mandated by the MPI standard
-   --file <arg0>                     This option is unsupported, but mandated by the MPI standard
-
-/*****    Options for debugger/tools use   *****/
-   --keepalive <arg0>                Pipe to monitor - DVM will terminate upon closure
-   --report-pid <arg0>               Printout pid on stdout (-), stderr (+), or a file (anything else)
-   --report-uri <arg0>               Printout URI on stdout (-), stderr (+), or a file (anything else)
-   --stop-on-exec <arg0>             If supported, stop each specified process at start of execution
-   --stop-in-init <arg0>             Direct the specified processes to stop in PMIx_Init
-   --stop-in-app <arg0>              Direct the specified processes to stop at an application-controlled location
+See the mpirun(1) man page or HTML help for a detailed list of command
+line options that are available.
 
 %s
 #
@@ -254,7 +85,7 @@ If neither the --hostfile or --host options are specified, this will be the set 
 
 The --hostfile and --host options can be used to select a subset of nodes from the default set to be used.
 
-If both the --hostfile and --host options are specified, then the --hostfile option specifies the 
+If both the --hostfile and --host options are specified, then the --hostfile option specifies the
 initial subset of nodes used from the default-hostfile set, and the --host option specifies what subset of
 nodes from that second subset will be used as the final subset of nodes used.
 
@@ -521,7 +352,7 @@ An internal Open MPI environment variable needed for Java support was not set.
 Open MPI 5.0.0 or newer is required for this support.
 #
 [output-proctable]
-Print the complete proctable to stdout after launch. This option accepts an optional argument, 
+Print the complete proctable to stdout after launch. This option accepts an optional argument,
 which must be + to print to stdout, - to print to stderr, or a valid filename to print to
 a file. For instance --output-proctable=+
 

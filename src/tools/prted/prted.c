@@ -19,7 +19,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -87,7 +87,7 @@
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/ess/ess.h"
+#include "src/mca/ess/base/base.h"
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/odls/base/base.h"
@@ -255,9 +255,9 @@ int main(int argc, char *argv[])
     prte_init_util(PRTE_PROC_DAEMON);
 
     /* open the SCHIZO framework */
-    if (PRTE_SUCCESS
-        != (ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
-                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
+    ret = pmix_mca_base_framework_open(&prte_schizo_base_framework,
+                                       PMIX_MCA_BASE_OPEN_DEFAULT);
+    if (PRTE_SUCCESS != ret) {
         PRTE_ERROR_LOG(ret);
         return ret;
     }
@@ -342,6 +342,16 @@ int main(int argc, char *argv[])
 
     /* ensure we silence any compression warnings */
     PMIX_SETENV_COMPAT("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
+
+    /* check for bootstrap operation */
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_BOOTSTRAP)) {
+        /* fill in our procID and other information
+         * from the configuration file */
+        ret = prte_ess_base_bootstrap();
+        if (PRTE_SUCCESS != ret) {
+            return ret;
+        }
+    }
 
     if (PRTE_SUCCESS != (ret = prte_init(&argc, &argv, PRTE_PROC_DAEMON))) {
         PRTE_ERROR_LOG(ret);

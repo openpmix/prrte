@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -67,7 +67,7 @@ void prte_rml_recv_buffer_nb(pmix_proc_t *peer,
     req->post->persistent = persistent;
     req->post->cbfunc = cbfunc;
     req->post->cbdata = cbdata;
-    PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
+    PRTE_PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
 }
 void prte_rml_recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
 {
@@ -90,5 +90,5 @@ void prte_rml_recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
     req->cancel = true;
     PMIX_XFER_PROCID(&req->post->peer, peer);
     req->post->tag = tag;
-    PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
+    PRTE_PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
 }

@@ -18,6 +18,8 @@
 
 #include "src/class/pmix_list.h"
 
+#include "src/include/pmix_frameworks.h"
+#include "src/include/prte_frameworks.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/runtime/prte_globals.h"
@@ -240,55 +242,30 @@ char *prte_schizo_base_strip_quotes(char *p)
     return pout;
 }
 
-static char *prte_frameworks[] = {
-    "errmgr",
-    "ess",
-    "filem",
-    "grpcomm",
-    "iof",
-    "odls",
-    "oob",
-    "plm",
-    "propagate",
-    "prtebacktrace",
-    "prtedl",
-    "prteif",
-    "prteinstalldirs",
-    "prtereachable",
-    "ras",
-    "rmaps",
-    "rml",
-    "routed",
-    "rtc",
-    "schizo",
-    "state",
-    // inherited from OPAL
-    "hwloc",
-    "if",
-    "reachable",
-    NULL,
-};
-
 bool prte_schizo_base_check_prte_param(char *param)
 {
-    char **tmp;
+    char *p;
     size_t n;
+    int len;
 
-    tmp = PMIX_ARGV_SPLIT_COMPAT(param, '_');
-    for (n=0; NULL != prte_frameworks[n]; n++) {
-        if (0 == strncmp(tmp[0], prte_frameworks[n], strlen(prte_frameworks[n]))) {
-            PMIX_ARGV_FREE_COMPAT(tmp);
+    p = strchr(param, '_');
+    len = (int)(p - param);
+
+    if (0 == strncmp(param, "prte", len)) {
+        return true;
+    }
+    for (n=0; NULL != prte_framework_names[n]; n++) {
+        if (0 == strncmp(param, prte_framework_names[n], len)) {
             return true;
         }
     }
-    PMIX_ARGV_FREE_COMPAT(tmp);
     return false;
 }
 
 int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target)
 {
     int i, j;
-    bool ignore;
+    bool use;
     char *p1, *p2, *param;
 
     for (i = 0; i < (argc - start); ++i) {
@@ -331,18 +308,8 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
 
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
-            ignore = true;
-            if (0 == strncmp("prte", p1, strlen("prte"))) {
-                ignore = false;
-            } else {
-                for (j = 0; NULL != prte_frameworks[j]; j++) {
-                    if (0 == strncmp(p1, prte_frameworks[j], strlen(prte_frameworks[j]))) {
-                        ignore = false;
-                        break;
-                    }
-                }
-            }
-            if (!ignore) {
+            use = prte_schizo_base_check_prte_param(p1);
+            if (use) {
                 /* replace the generic directive with a PRRTE specific
                  * one so we know this has been processed */
                 free(argv[i]);
@@ -386,55 +353,58 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
     return PRTE_SUCCESS;
 }
 
-static char *pmix_frameworks[] = {
-    "bfrops",
-    "gds",
-    "pcompress",
-    "pdl",
-    "pfexec",
-    "pif",
-    "pinstalldirs",
-    "ploc",
-    "plog",
-    "pmdl",
-    "pnet",
-    "preg",
-    "prm",
-    "psec",
-    "psensor",
-    "pshmem",
-    "psquash",
-    "pstat",
-    "pstrg",
-    "ptl",
-    "mca",  // mca base now resides in pmix
-    NULL
-};
+static char **pmix_frameworks_tocheck = pmix_framework_names;
+static bool pmix_frameworks_setup = false;
+
+static void setup_pmix_frameworks(void)
+{
+    if (pmix_frameworks_setup) {
+        return;
+    }
+    pmix_frameworks_setup = true;
+
+    char *env = getenv("PMIX_MCA_PREFIXES");
+    if (NULL == env) {
+        return;
+    }
+
+    // If we found the env variable, it will be a comma-delimited list
+    // of values.  Split it into an argv-style array.
+    char **tmp = PMIX_ARGV_SPLIT_COMPAT(env, ',');
+    if (NULL != tmp) {
+        pmix_frameworks_tocheck = tmp;
+    }
+}
 
 bool prte_schizo_base_check_pmix_param(char *param)
 {
-    char **tmp;
+    char *p;
     size_t n;
+    int len;
 
-    tmp = PMIX_ARGV_SPLIT_COMPAT(param, '_');
-    for (n=0; NULL != pmix_frameworks[n]; n++) {
-        if (0 == strncmp(tmp[0], pmix_frameworks[n], strlen(pmix_frameworks[n]))) {
-            PMIX_ARGV_FREE_COMPAT(tmp);
+    setup_pmix_frameworks();
+
+    p = strchr(param, '_');
+    len = (int)(p - param);
+
+    if (0 == strncmp(param, "pmix", len)) {
+        return true;
+    }
+    for (n=0; NULL != pmix_frameworks_tocheck[n]; n++) {
+        if (0 == strncmp(param, pmix_frameworks_tocheck[n], len)) {
             return true;
         }
     }
-    PMIX_ARGV_FREE_COMPAT(tmp);
     return false;
 }
 
 int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target)
 {
     int i, j;
-    bool ignore;
+    bool use;
     char *p1, *p2, *param;
 
     for (i = 0; i < (argc - start); ++i) {
-        ignore = true;
         if (0 == strcmp("--pmixmca", argv[i]) || 0 == strcmp("--gpmixmca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
@@ -472,20 +442,42 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
             p1 = prte_schizo_base_strip_quotes(argv[i + 1]);
             p2 = prte_schizo_base_strip_quotes(argv[i + 2]);
 
+            // see if this param references the MCA "base"
+            if (0 == strncmp(p1, "mca_base_", strlen("mca_base_"))) {
+                /* we have multiple projects that utilize the MCA
+                 * framework system. Since this was given as a generic
+                 * parameter, we cannot tell which of those projects
+                 * are being targeted. So we have no choice but to
+                 * apply the param to ALL of them
+                 */
+                if (NULL == target) {
+                    asprintf(&param, "PMIX_MCA_%s", p1);
+                    setenv(param, p2, true);
+                    free(param);
+                    // PRRTE shares the MCA base with PMIx, so no
+                    // need to cover that project
+                    asprintf(&param, "OMPI_MCA_%s", p1);
+                    setenv(param, p2, true);
+                    free(param);
+                } else {
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, "--pmixmca");
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, p1);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, p2);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, "--omca");
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, p1);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(target, p2);
+                }
+                free(p1);
+                free(p2);
+                i += 2;
+                continue;
+            }
+
             /* this is a generic MCA designation, so see if the parameter it
              * refers to belongs to one of our frameworks */
-            if (0 == strncmp("pmix", p1, strlen("pmix"))) {
-                ignore = false;
-            } else {
-                for (j = 0; NULL != pmix_frameworks[j]; j++) {
-                    if (0 == strncmp(p1, pmix_frameworks[j], strlen(pmix_frameworks[j]))) {
-                        ignore = false;
-                        break;
-                    }
-                }
-            }
-            if (!ignore) {
-                /* replace the generic directive with a PRRTE specific
+            use = prte_schizo_base_check_pmix_param(p1);
+            if (use) {
+                /* replace the generic directive with a PMIx specific
                  * one so we know this has been processed */
                 free(argv[i]);
                 argv[i] = strdup("--pmixmca");

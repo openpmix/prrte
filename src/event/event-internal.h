@@ -8,7 +8,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  *
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -164,7 +164,7 @@ typedef struct {
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_event_list_item_t);
 
 /* define a threadshift macro */
-#define PMIX_THREADSHIFT(x, eb, f, p)                                  \
+#define PRTE_PMIX_THREADSHIFT(x, eb, f, p)                                  \
     do {                                                               \
         prte_event_set((eb), &((x)->ev), -1, PRTE_EV_WRITE, (f), (x)); \
         prte_event_set_priority(&((x)->ev), (p));                      \

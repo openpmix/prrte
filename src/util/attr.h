@@ -83,6 +83,7 @@ typedef uint8_t prte_node_flags_t;
                                                           // we need to know the id of our "host" to help any procs on us to determine locality
 #define PRTE_NODE_SERIAL_NUMBER (PRTE_NODE_START_KEY + 5) // string - serial number: used if node is a coprocessor
 #define PRTE_NODE_PORT          (PRTE_NODE_START_KEY + 6) // int32 - Alternate port to be passed to plm
+#define PRTE_NODE_ADD_SLOTS     (PRTE_NODE_START_KEY + 7) // bool - slots are being added to existing node
 
 #define PRTE_NODE_MAX_KEY (PRTE_NODE_START_KEY + 100)
 
@@ -218,7 +219,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_DISPLAY_PROCESSORS         (PRTE_JOB_START_KEY + 109) // char* - string displaying nodes whose avail CPUs
                                                                        //         are to be displayed
 #define PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT   (PRTE_JOB_START_KEY + 110) // bool - display output in machine parsable format
-
+#define PRTE_JOB_EXTEND_DVM                 (PRTE_JOB_START_KEY + 111) // bool - DVM is being extended
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

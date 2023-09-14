@@ -1,6 +1,8 @@
 #
 # Copyright (c) 2022-2023 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 #
+# Copyright (c) 2023      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -10,38 +12,42 @@
 
 # We need this Makefile to be executed serially.  Below, we list all
 # the man pages as the targets of the rule that invokes Sphinx for
-# dependency/generation reasons.  But a *single* execution of Sphinx
-# will generate *all* of the man pages and HTML files.  Hence, when
-# "make" determines that none of the man page files exist, it should
-# execute the Sphinx-invocation rule once, and then it will realize
-# that all the man pages files exist.  More specifically: if someone
-# invokes "make -j N", we need make to not execute the
+# dependency/generation reasons.  But a *single* execution of the make
+# target will generate *all* of the man pages and HTML files.  Hence,
+# when "make" determines that none of the man page files exist, it
+# should execute the Sphinx-invocation rule once, and then it will
+# realize that all the man pages files exist.  More specifically: if
+# someone invokes "make -j N", we need make to not execute the
 # Sphinx-invocation rule multiple times simultaneously.  Both GNU Make
 # and BSD Make will honor the .NOTPARALLEL target to disable all
 # parallel invocation in this Makefile[.am].
+#
+# Note that even though we explicitly disable make's parallelism,
+# we'll use Sphinx's internal parallelism via "-j auto" -- see
+# SPHINX_OPTS.
 .NOTPARALLEL:
 
 OUTDIR             = _build
 SPHINX_CONFIG      = conf.py
-SPHINX_OPTS       ?= -W --keep-going
+SPHINX_OPTS       ?= -W --keep-going -j auto
 
 # Note: it is significantly more convenient to list all the source
 # files here using wildcards (vs. listing every single .rst file).
 # However, it is necessary to list $(srcdir) when using wildcards.
-TEXT_SOURCE_FILES = # if you have any .txt files, list them here
-IMAGE_SOURCE_FILES = # if you have any, list them here
-RST_SOURCE_FILES   = \
+RST_SOURCE_FILES = \
         $(srcdir)/*.rst \
+        $(srcdir)/prrte-rst-content/*.rst \
+        $(srcdir)/placement/*.rst \
+        $(srcdir)/hosts/*.rst \
         $(srcdir)/developers/*.rst \
         $(srcdir)/man/*.rst \
         $(srcdir)/man/man1/*.rst \
         $(srcdir)/man/man5/*.rst
 
-EXTRA_DIST         = \
+EXTRA_DIST = \
         requirements.txt \
+        _templates/configurator.html \
         $(SPHINX_CONFIG) \
-        $(TEXT_SOURCE_FILES) \
-        $(IMAGE_SOURCE_FILES) \
         $(RST_SOURCE_FILES)
 
 ###########################################################################
@@ -58,7 +64,8 @@ PRTE_MAN1 = \
         prte_info.1 \
         prted.1 \
         prterun.1 \
-        prun.1
+        prun.1 \
+        pterm.1
 
 PRTE_MAN5 = \
         prte.5
@@ -70,6 +77,8 @@ PRTE_MAN1_BUILT = $(PRTE_MAN1:%.1=$(MAN_OUTDIR)/%.1)
 
 PRTE_MAN5_RST = $(PRTE_MAN5:%.5=man/man5/%.5.rst)
 PRTE_MAN5_BUILT = $(PRTE_MAN5:%.5=$(MAN_OUTDIR)/%.5)
+
+#-------------------
 
 EXTRA_DIST += \
         $(PRTE_MAN1_BUILT) \

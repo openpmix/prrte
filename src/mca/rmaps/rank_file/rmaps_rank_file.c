@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2022 IBM Corporation.  All rights reserved.
  *
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -45,6 +45,7 @@
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
 #include "src/util/proc_info.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -65,7 +66,6 @@ prte_rmaps_base_module_t prte_rmaps_rank_file_module = {
 static int prte_rmaps_rank_file_parse(const char *);
 static char *prte_rmaps_rank_file_parse_string_or_int(void);
 
-static char *prte_getline(FILE *fp);
 static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, char **aff_rankfile);
 static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata, prte_rmaps_options_t *options, char *affinity_file);
 
@@ -748,21 +748,6 @@ static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata,
     return PRTE_SUCCESS;
 }
 
-static char *prte_getline(FILE *fp)
-{
-    char *ret, *buff;
-    char input[1024];
-
-    ret = fgets(input, 1024, fp);
-    if (NULL != ret) {
-        input[strlen(input) - 1] = '\0'; /* remove newline */
-        buff = strdup(input);
-        return buff;
-    }
-
-    return NULL;
-}
-
 static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, char **aff_rankfile)
 {
     FILE *fp;
@@ -800,7 +785,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
         return PRTE_ERR_NOT_FOUND;
     }
 
-    while (NULL != (hstname = prte_getline(fp))) {
+    while (NULL != (hstname = pmix_getline(fp))) {
         if (0 == strlen(hstname)) {
             free(hstname);
             /* blank line - ignore */

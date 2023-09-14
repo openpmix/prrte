@@ -90,8 +90,10 @@ void pmix_server_notify_spawn(pmix_nspace_t jobid, int room, pmix_status_t ret)
     PMIX_RELEASE(req);
 
     /* mark that we sent it */
-    prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED,
-                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+    if (NULL != jdata) {
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_SPAWN_NOTIFIED,
+                           PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+    }
 }
 void pmix_server_launch_resp(int status, pmix_proc_t *sender,
                              pmix_data_buffer_t *buffer,

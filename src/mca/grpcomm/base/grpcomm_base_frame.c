@@ -120,7 +120,9 @@ PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, grpcomm, "GRPCOMM", base_register, prte_gr
                                 prte_grpcomm_base_close, prte_grpcomm_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
-PMIX_CLASS_INSTANCE(prte_grpcomm_base_active_t, pmix_list_item_t, NULL, NULL);
+PMIX_CLASS_INSTANCE(prte_grpcomm_base_active_t,
+                    pmix_list_item_t,
+                    NULL, NULL);
 
 static void scon(prte_grpcomm_signature_t *p)
 {
@@ -133,7 +135,9 @@ static void sdes(prte_grpcomm_signature_t *p)
         free(p->signature);
     }
 }
-PMIX_CLASS_INSTANCE(prte_grpcomm_signature_t, pmix_object_t, scon, sdes);
+PMIX_CLASS_INSTANCE(prte_grpcomm_signature_t,
+                    pmix_object_t,
+                    scon, sdes);
 
 static void ccon(prte_grpcomm_coll_t *p)
 {
@@ -147,6 +151,7 @@ static void ccon(prte_grpcomm_coll_t *p)
     p->assignID = false;
     p->timeout = 0;
     p->memsize = 0;
+    PMIX_CONSTRUCT(&p->addmembers, pmix_list_t);
     p->cbfunc = NULL;
     p->cbdata = NULL;
     p->buffers = NULL;
@@ -157,7 +162,10 @@ static void cdes(prte_grpcomm_coll_t *p)
         PMIX_RELEASE(p->sig);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&p->bucket);
+    PMIX_LIST_DESTRUCT(&p->addmembers);
     free(p->dmns);
     free(p->buffers);
 }
-PMIX_CLASS_INSTANCE(prte_grpcomm_coll_t, pmix_list_item_t, ccon, cdes);
+PMIX_CLASS_INSTANCE(prte_grpcomm_coll_t,
+                    pmix_list_item_t,
+                    ccon, cdes);

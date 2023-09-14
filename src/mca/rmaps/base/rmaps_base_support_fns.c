@@ -77,27 +77,6 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
         }
         free(hosts);
     }
-    /* did the app_context contain an add-hostfile? */
-    hosts = NULL;
-    if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, (void **) &hosts, PMIX_STRING) &&
-        NULL != hosts) {
-        /* yes - filter the node list through the file, removing
-         * any nodes not found in the file
-         */
-        if (PRTE_SUCCESS != (rc = prte_util_filter_hostfile_nodes(nodes, hosts, remove))) {
-            free(hosts);
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-        /** check that anything is here */
-        if (0 == pmix_list_get_size(nodes)) {
-            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
-                           app->app, "-add-hostfile", hosts);
-            free(hosts);
-            return PRTE_ERR_SILENT;
-        }
-        free(hosts);
-    }
     /* now filter the list through any -host specification */
     hosts = NULL;
     if (prte_get_attribute(&app->attributes, PRTE_APP_DASH_HOST, (void **) &hosts, PMIX_STRING) &&
@@ -111,24 +90,6 @@ int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bo
         if (0 == pmix_list_get_size(nodes)) {
             pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
                            app->app, "-host", hosts);
-            free(hosts);
-            return PRTE_ERR_SILENT;
-        }
-        free(hosts);
-    }
-    /* now filter the list through any add-host specification */
-    hosts = NULL;
-    if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST, (void **) &hosts, PMIX_STRING) &&
-        NULL != hosts) {
-        if (PRTE_SUCCESS != (rc = prte_util_filter_dash_host_nodes(nodes, hosts, remove))) {
-            PRTE_ERROR_LOG(rc);
-            free(hosts);
-            return rc;
-        }
-        /** check that anything is left! */
-        if (0 == pmix_list_get_size(nodes)) {
-            pmix_show_help("help-prte-rmaps-base.txt", "prte-rmaps-base:no-mapped-node", true,
-                           app->app, "-add-host", hosts);
             free(hosts);
             return PRTE_ERR_SILENT;
         }

@@ -18,7 +18,7 @@ dnl                         reserved.
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 dnl
 dnl Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
 dnl Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
 dnl                         All Rights reserved.
 dnl $COPYRIGHT$

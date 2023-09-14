@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2022-2023 Triad National Security, LLC.
  *                         All rights reserved.
  * $COPYRIGHT$
@@ -194,6 +194,13 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
     /* Did the user specify a hostfile? */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOSTFILE);
     if (NULL != opt) {
+        for (i=0; NULL != opt->values[i]; i++) {
+            if (!pmix_path_is_absolute(opt->values[i])) {
+                value = pmix_os_path(false, cwd, opt->values[i], NULL);
+                free(opt->values[i]);
+                opt->values[i] = value;
+            }
+        }
         tval = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
         PMIX_INFO_LIST_ADD(rc, app->info, PMIX_HOSTFILE,
                            tval, PMIX_STRING);
@@ -203,6 +210,24 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
                 PMIX_ARGV_APPEND_NOSIZE_COMPAT(hostfiles, opt->values[i]);
             }
         }
+    }
+
+    /* Did the user specify an add-hostfile? */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_ADDHOSTFILE);
+    if (NULL != opt) {
+        for (i=0; NULL != opt->values[i]; i++) {
+            if (!pmix_path_is_absolute(opt->values[i])) {
+                value = pmix_os_path(false, cwd, opt->values[i], NULL);
+                free(opt->values[i]);
+                opt->values[i] = value;
+            }
+        }
+        tval = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_ADD_HOSTFILE,
+                           tval, PMIX_STRING);
+        free(tval);
+        // we don't add these to the hostfiles array as they
+        // are not part of an initial DVM
     }
 
     /* Did the user specify any hosts? */
@@ -216,6 +241,16 @@ static int create_app(prte_schizo_base_module_t *schizo, char **argv, pmix_list_
                 PMIX_ARGV_APPEND_NOSIZE_COMPAT(hosts, opt->values[i]);
             }
         }
+    }
+
+    /* Did the user specify any add-hosts? */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_ADDHOST);
+    if (NULL != opt) {
+        tval = PMIX_ARGV_JOIN_COMPAT(opt->values, ',');
+        PMIX_INFO_LIST_ADD(rc, app->info, PMIX_ADD_HOST, tval, PMIX_STRING);
+        free(tval);
+        // we don't add these to the hosts array as they
+        // are not part of an initial DVM
     }
 
     /* check for bozo error */

@@ -84,14 +84,14 @@ void prte_plm_base_set_slots(prte_node_t *node)
 {
     if (0 == strncmp(prte_set_slots, "cores", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
-            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_CORE,
-                                                             0);
+            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                             HWLOC_OBJ_CORE, 0);
         }
     } else if (0 == strncmp(prte_set_slots, "sockets", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
-            if (0
-                == (node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                     HWLOC_OBJ_SOCKET, 0))) {
+            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                             HWLOC_OBJ_SOCKET, 0);
+            if (0 == node->slots) {
                 /* some systems don't report sockets - in this case,
                  * use numanodes */
                 node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
@@ -2129,6 +2129,14 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
         return PRTE_SUCCESS;
     }
 
+    PMIX_CONSTRUCT(&nodes, pmix_list_t);
+
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_EXTEND_DVM, NULL, PMIX_BOOL)) {
+        // nodes have been added, so extend the DVM
+        prte_remove_attribute(&jdata->attributes, PRTE_JOB_EXTEND_DVM);
+        goto construct;
+    }
+
     /* if this is a dynamic spawn, then we don't make any changes to
      * the virtual machine unless specifically requested to do so
      */
@@ -2154,7 +2162,6 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
             /* mark that this is from a singleton */
             singleton = true;
         }
-        PMIX_CONSTRUCT(&nodes, pmix_list_t);
         for (i = 1; i < prte_node_pool->size; i++) {
             if (NULL == (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
                 continue;
@@ -2201,7 +2208,6 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
      */
     multi_sim = prte_get_attribute(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM, NULL, PMIX_BOOL);
     if (prte_get_attribute(&daemons->attributes, PRTE_JOB_NO_VM, NULL, PMIX_BOOL) || multi_sim) {
-        PMIX_CONSTRUCT(&nodes, pmix_list_t);
         /* loop across all nodes and include those that have
          * num_procs > 0 && no daemon already on them
          */
@@ -2290,9 +2296,6 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
      * each time we are called
      */
     map->num_new_daemons = 0;
-
-    /* setup the list of nodes */
-    PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
     /* if this is an unmanaged allocation, then we use
      * the nodes that were specified for the union of
@@ -2434,6 +2437,7 @@ int prte_plm_base_setup_virtual_machine(prte_job_t *jdata)
         goto process;
     }
 
+construct:
     /* construct a list of available nodes */
     for (i = 1; i < prte_node_pool->size; i++) {
         if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
