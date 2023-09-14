@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,6 +38,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/util/pmix_if.h"
 #include "src/util/pmix_net.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/ess.h"
@@ -84,7 +85,6 @@ static void sn_des(seq_node_t *p)
 }
 PMIX_CLASS_INSTANCE(seq_node_t, pmix_list_item_t, sn_con, sn_des);
 
-static char *prte_getline(FILE *fp);
 static int process_file(char *path, pmix_list_t *list);
 
 static bool quickmatch(prte_node_t *nd, char *name)
@@ -406,21 +406,6 @@ error:
     return PRTE_ERR_SILENT;
 }
 
-static char *prte_getline(FILE *fp)
-{
-    char *ret, *buff;
-    char input[1024];
-
-    ret = fgets(input, 1024, fp);
-    if (NULL != ret) {
-        input[strlen(input) - 1] = '\0'; /* remove newline */
-        buff = strdup(input);
-        return buff;
-    }
-
-    return NULL;
-}
-
 static int process_file(char *path, pmix_list_t *list)
 {
     char *hstname = NULL;
@@ -434,7 +419,7 @@ static int process_file(char *path, pmix_list_t *list)
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
         return PRTE_ERR_NOT_FOUND;
     }
-    while (NULL != (hstname = prte_getline(fp))) {
+    while (NULL != (hstname = pmix_getline(fp))) {
         if (0 == strlen(hstname)) {
             free(hstname);
             /* blank line - ignore */

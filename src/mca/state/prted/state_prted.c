@@ -49,18 +49,18 @@ static int finalize(void);
  * PRTED module
  ******************/
 prte_state_base_module_t prte_state_prted_module = {
-    init,
-    finalize,
-    prte_state_base_activate_job_state,
-    prte_state_base_add_job_state,
-    prte_state_base_set_job_state_callback,
-    prte_state_base_set_job_state_priority,
-    prte_state_base_remove_job_state,
-    prte_state_base_activate_proc_state,
-    prte_state_base_add_proc_state,
-    prte_state_base_set_proc_state_callback,
-    prte_state_base_set_proc_state_priority,
-    prte_state_base_remove_proc_state
+    .init = init,
+    .finalize = finalize,
+    .activate_job_state = prte_state_base_activate_job_state,
+    .add_job_state = prte_state_base_add_job_state,
+    .set_job_state_callback = prte_state_base_set_job_state_callback,
+    .set_job_state_priority = prte_state_base_set_job_state_priority,
+    .remove_job_state = prte_state_base_remove_job_state,
+    .activate_proc_state = prte_state_base_activate_proc_state,
+    .add_proc_state = prte_state_base_add_proc_state,
+    .set_proc_state_callback = prte_state_base_set_proc_state_callback,
+    .set_proc_state_priority = prte_state_base_set_proc_state_priority,
+    .remove_proc_state = prte_state_base_remove_proc_state
 };
 
 /* Local functions */

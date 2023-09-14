@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -74,6 +74,7 @@ bool prte_add_pid_to_session_dirname = false;
 bool prte_allow_run_as_root = false;
 bool prte_fwd_environment = false;
 bool prte_show_launch_progress = false;
+bool prte_bootstrap_setup = false;
 
 /* PRTE OOB port flags */
 bool prte_static_ports = false;

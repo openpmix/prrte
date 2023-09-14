@@ -73,6 +73,7 @@ PRTE_EXPORT extern char *prte_tool_actual;         // actual tool executable
 PRTE_EXPORT extern char *prte_progress_thread_cpus;
 PRTE_EXPORT extern bool prte_bind_progress_thread_reqd;
 PRTE_EXPORT extern bool prte_show_launch_progress;
+PRTE_EXPORT extern bool prte_bootstrap_setup;
 
 /**
  * Global indicating where this process was bound to at launch (will

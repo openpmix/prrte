@@ -15,7 +15,7 @@
  *                         et Automatique. All rights reserved.
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -216,7 +216,7 @@ void prte_wait_cb_cancel(prte_proc_t *child)
     trk = PMIX_NEW(prte_wait_tracker_t);
     PMIX_RETAIN(child); // protect against race conditions
     trk->child = child;
-    PMIX_THREADSHIFT(trk, prte_event_base, cancel_callback, PRTE_SYS_PRI);
+    PRTE_PMIX_THREADSHIFT(trk, prte_event_base, cancel_callback, PRTE_SYS_PRI);
 }
 
 /* callback from the event library whenever a SIGCHLD is received */

@@ -17,7 +17,7 @@
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
@@ -77,16 +77,16 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
     # if the version file exists, then we need to parse it to find
     # the actual release series
-    AC_MSG_CHECKING([version at or above v4.2.2])
+    AC_MSG_CHECKING([version at or above v4.2.4])
     AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
                                         #include <pmix_version.h>
-                                        #if (PMIX_NUMERIC_VERSION < 0x00040202)
-                                        #error "not version 4.2.2 or above"
+                                        #if (PMIX_NUMERIC_VERSION < 0x00040204)
+                                        #error "not version 4.2.4 or above"
                                         #endif
                                        ], [])],
                       [AC_MSG_RESULT([yes])],
                       [AC_MSG_RESULT(no)
-                       AC_MSG_WARN([PRRTE requires PMIx v4.2.2 or above.])
+                       AC_MSG_WARN([PRRTE requires PMIx v4.2.4 or above.])
                        AC_MSG_ERROR([Please select a supported version and configure again])])
 
     AC_CHECK_HEADER([src/util/pmix_argv.h], [],

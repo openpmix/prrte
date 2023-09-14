@@ -71,7 +71,6 @@ vc70.pdb
 .hgignore_local
 stamp-h?
 AUTHORS
-docs-venv/
 
 ar-lib
 ylwrap
@@ -149,6 +148,7 @@ src/include/prte_config.h.in
 src/include/version.h
 src/include/prte_frameworks.c
 src/include/prte_frameworks.h
+src/include/frameworks.h
 src/include/prte_config.h
 
 src/mca/rmaps/rank_file/rmaps_rank_file_lex.c
@@ -161,6 +161,7 @@ src/tools/prte/prte
 src/tools/pcc/pcc
 src/tools/pcc/pcc-wrapper-data.txt
 src/tools/pterm/pterm
+src/tools/psched/psched
 
 src/util/hostfile/hostfile_lex.c
 src/util/keyval/keyval_lex.c
@@ -188,7 +189,12 @@ docs/_build
 docs/_static
 docs/_static/css/custom.css
 docs/_templates
+src/docs/_build
+src/docs/mca/mca.rst
+src/docs/mca/help*rst
+__pycache__
 
 # Common Python virtual environment directory names
 venv
 py??
+docs-venv

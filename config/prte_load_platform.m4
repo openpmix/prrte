@@ -14,7 +14,7 @@ dnl Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2015      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -89,6 +89,9 @@ AC_DEFUN([PRTE_LOAD_PLATFORM], [
         # define an alternate default mca param filename
         platform_alt_mca_file="`basename $platform_loaded`.conf"
 
+        # define an alternate default configuration filename
+        platform_alt_config_file="`basename $platform_loaded`.config"
+
         # look where platform file is located for platform.conf name
         if test -r "${platform_file_dir}/${platform_alt_mca_file}" ; then
             AC_SUBST(PRTE_DEFAULT_MCA_PARAM_CONF, [$platform_file_dir/$platform_alt_mca_file])
@@ -100,6 +103,20 @@ AC_DEFUN([PRTE_LOAD_PLATFORM], [
         # if not, then just use the default
         else
             AC_SUBST(PRTE_DEFAULT_MCA_PARAM_CONF, [prte-mca-params.conf])
+            AC_SUBST(PRTE_PARAM_FROM_PLATFORM, "no")
+        fi
+
+        # look where platform file is located for platform.config name
+        if test -r "${platform_file_dir}/${platform_alt_config_file}" ; then
+            AC_SUBST(PRTE_DEFAULT_CONFIG, [$platform_file_dir/$platform_alt_config_file])
+            AC_SUBST(PRTE_PARAM_FROM_PLATFORM, "yes")
+        # if not, see if a file is there with the default name
+        elif test -r "${platform_file_dir}/prte.config" ; then
+            AC_SUBST(PRTE_DEFAULT_CONFIG, [$platform_file_dir/prte.config])
+            AC_SUBST(PRTE_PARAM_FROM_PLATFORM, "yes")
+        # if not, then just use the default
+        else
+            AC_SUBST(PRTE_DEFAULT_CONFIG, [prte.config])
             AC_SUBST(PRTE_PARAM_FROM_PLATFORM, "no")
         fi
 

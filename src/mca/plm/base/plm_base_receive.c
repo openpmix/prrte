@@ -128,7 +128,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
     pmix_proc_t name, *nptr;
     pid_t pid;
     bool debugging, found;
-    int i, room;
+    int i, room, *rmptr = &room;
     char **env;
     char *prefix_dir, *tmp;
     pmix_rank_t tgt, *tptr;
@@ -346,7 +346,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         }
 
         /* pack the room number of the request */
-        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void **) &room, PMIX_INT)) {
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ROOM_NUM, (void **) &rmptr, PMIX_INT)) {
             rc = PMIx_Data_pack(NULL, answer, &room, 1, PMIX_INT);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);

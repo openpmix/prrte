@@ -5,7 +5,7 @@
  *                         reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$

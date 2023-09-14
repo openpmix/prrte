@@ -400,11 +400,10 @@ void pmix_server_register_params(void)
 
     /* whether or not to drop a session-level tool rendezvous point */
     prte_pmix_server_globals.session_server = false;
-    (void)
-        pmix_mca_base_var_register("prte", "pmix", NULL, "session_server",
-                                   "Whether or not to drop a session-level tool rendezvous point",
-                                   PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                   &prte_pmix_server_globals.session_server);
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "session_server",
+                                      "Whether or not to drop a session-level tool rendezvous point",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_pmix_server_globals.session_server);
 
     /* whether or not to drop a system-level tool rendezvous point */
     prte_pmix_server_globals.system_server = false;
@@ -432,6 +431,12 @@ void pmix_server_register_params(void)
         }
         PMIX_ARGV_FREE_COMPAT(tmp);
     }
+
+    prte_pmix_server_globals.system_controller = false;
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "system_controller",
+                                      "Whether or not to act as the system-wide controller",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_pmix_server_globals.system_server);
 
 }
 
@@ -549,6 +554,7 @@ static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
     PRTE_HIDE_UNUSED_PARAMS(status, ref);
 
     PMIX_ACQUIRE_OBJECT(lock);
+    lock->status = status;
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
@@ -591,6 +597,7 @@ int pmix_server_init(void)
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_HOSTNAME, prte_process_info.nodename, PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 
@@ -599,6 +606,7 @@ int pmix_server_init(void)
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_EXTERNAL_AUX_EVENT_BASE, prte_event_base, PMIX_POINTER);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 #endif
@@ -615,12 +623,14 @@ int pmix_server_init(void)
     PMIX_INFO_LIST_INSERT(prc, ilist, &myinf);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
     // tell the server to share this topology for us
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SHARE_TOPOLOGY, NULL, PMIX_BOOL);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 
@@ -654,18 +664,33 @@ int pmix_server_init(void)
         }
     }
 
-    /* if requested, tell the server to drop a system-level
-     * PMIx connection point - only do this for the HNP as, in
-     * at least one case, a daemon can be colocated with the
-     * HNP and would overwrite the server rendezvous file */
-    if (prte_pmix_server_globals.system_server && PRTE_PROC_IS_MASTER) {
-        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYSTEM_SUPPORT,
-                           NULL, PMIX_BOOL);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_INFO_LIST_RELEASE(ilist);
-            rc = prte_pmix_convert_status(prc);
-            return rc;
+    if (PRTE_PROC_IS_MASTER) {
+        /* if requested, tell the server to drop a system-level
+         * PMIx connection point - only do this for the HNP as, in
+         * at least one case, a daemon can be colocated with the
+         * HNP and would overwrite the server rendezvous file */
+        if (prte_pmix_server_globals.system_server) {
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYSTEM_SUPPORT,
+                               NULL, PMIX_BOOL);
+            if (PMIX_SUCCESS != prc) {
+                PMIX_INFO_LIST_RELEASE(ilist);
+                rc = prte_pmix_convert_status(prc);
+                return rc;
+            }
         }
+#ifdef PMIX_SERVER_SYS_CONTROLLER
+        /* if requested, tell the server that we are the system
+         * controller */
+        if (prte_pmix_server_globals.system_controller) {
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYS_CONTROLLER,
+                               NULL, PMIX_BOOL);
+            if (PMIX_SUCCESS != prc) {
+                PMIX_INFO_LIST_RELEASE(ilist);
+                rc = prte_pmix_convert_status(prc);
+                return rc;
+            }
+        }
+#endif
     }
 
     /* if requested, tell the server library to output our PMIx URI */
@@ -708,6 +733,15 @@ int pmix_server_init(void)
         /* if we are also persistent, then we do not output IOF ourselves */
         if (prte_persistent) {
             flag = false;
+#ifdef PMIX_SERVER_CONTROLLER
+            // declare ourselves the system controller
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYS_CONTROLLER, NULL, PMIX_BOOL);
+            if (PMIX_SUCCESS != prc) {
+                PMIX_INFO_LIST_RELEASE(ilist);
+                rc = prte_pmix_convert_status(prc);
+                return rc;
+            }
+#endif
         } else {
             /* if we have a parent or we are in persistent mode, then we
              * don't write out ourselves */
@@ -809,6 +843,7 @@ int pmix_server_init(void)
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_HOSTNAME, prte_process_info.nodename, PMIX_STRING);
     if (PMIX_SUCCESS != rc) {
         PMIX_INFO_LIST_RELEASE(ilist);
+        rc = prte_pmix_convert_status(prc);
         return rc;
     }
 
@@ -819,6 +854,7 @@ int pmix_server_init(void)
         free(tmp);
         if (PMIX_SUCCESS != rc) {
             PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
             return rc;
         }
     }
@@ -842,7 +878,9 @@ int pmix_server_init(void)
     prc = PMIX_ERR_LOST_CONNECTION;
     PMIx_Register_event_handler(&prc, 1, NULL, 0, lost_connection_hdlr, regcbfunc, &lock);
     PRTE_PMIX_WAIT_THREAD(&lock);
+    prc = lock.status;
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
+    rc = prte_pmix_convert_status(prc);
 
     return rc;
 }
@@ -1697,14 +1735,6 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
         goto reply;
     }
 
-    /* unpack the number of info */
-    cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &ninfo, &cnt, PMIX_SIZE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        goto reply;
-    }
-
     if (0 == cmd) {
         /* allocation request - unpack the directive */
         cnt = 1;
@@ -1901,6 +1931,8 @@ static void mdcon(prte_pmix_mdx_caddy_t *p)
     p->sig = NULL;
     p->buf = NULL;
     PMIX_BYTE_OBJECT_CONSTRUCT(&p->ctrls);
+    p->procs = NULL;
+    p->nprocs = 0;
     p->info = NULL;
     p->ninfo = 0;
     p->cbdata = NULL;

@@ -3,9 +3,10 @@ Release Notes
 
 - Systems that have been tested are:
 
+  - Linux (various flavors/distros), 32 bit, with gcc
   - Linux (various flavors/distros), 64 bit (x86), with gcc, Intel,
     and Portland (*)
-  - OS X (10.7 and above), 64 bit (x86_64), with gcc and clang (*)
+  - OS X (10.7 and above), 32 and 64 bit (x86_64), with gcc (*)
 
 - PRRTE has taken some steps towards Reproducible Builds
   (https://reproducible-builds.org/).  Specifically, PRRTE's
