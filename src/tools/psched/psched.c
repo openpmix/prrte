@@ -90,6 +90,7 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_locks.h"
 #include "src/runtime/runtime.h"
@@ -439,6 +440,12 @@ int main(int argc, char *argv[])
         schizo->allow_run_as_root(&results); // will exit us if not allowed
     }
 
+    /* if we were given a keepalive pipe, set up to monitor it now */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_KEEPALIVE);
+    if (NULL != opt) {
+        PMIX_SETENV_COMPAT("PMIX_KEEPALIVE_PIPE", opt->values[0], true, &environ);
+    }
+
     /* check for debug options */
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG)) {
         prte_debug_flag = true;
@@ -450,14 +457,28 @@ int main(int argc, char *argv[])
     }
 
     // detach from controlling terminal, if so directed
-    if (!prte_leave_session_attached) {
+    if (!prte_leave_session_attached ||
+        pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         pipe(wait_pipe);
         prte_state_base.parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
         close(wait_pipe[0]);
 #if defined(HAVE_SETSID)
-        setsid();
+        /* see if we were directed to separate from current session */
+        if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SET_SID)) {
+            setsid();
+        }
 #endif
+    }
+
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_NO_READY_MSG)) {
+        prte_state_base.ready_msg = false;
+    }
+
+    /* if we were asked to report a uri, set the MCA param to do so */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_REPORT_URI);
+    if (NULL != opt) {
+        prte_pmix_server_globals.report_uri = strdup(opt->values[0]);
     }
 
     /* ensure we silence any compression warnings */
@@ -584,10 +605,8 @@ int main(int argc, char *argv[])
     // setup the scheduler itself
     psched_scheduler_init();
 
-    /* output a message indicating we are alive, our name, and our pid
-     * for debugging purposes
-     */
-    if (prte_debug_flag) {
+    /* output a message indicating we are alive, our name, and our pid */
+    if (prte_state_base.ready_msg) {
         fprintf(stderr, "Scheduler %s checking in as pid %ld on host %s\n",
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (long) prte_process_info.pid,
                 prte_process_info.nodename);
