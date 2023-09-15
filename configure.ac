@@ -718,6 +718,7 @@ AC_INCLUDES_DEFAULT
 #
 
 OAC_SETUP_SPHINX([$srcdir/docs/_build/html/index.html], [])
+AC_CHECK_PROGS(PYTHON, [python3 python python2])
 
 AS_IF([test -n "$OAC_MAKEDIST_DISABLE"],
       [AS_IF([test -n "$PRTE_MAKEDIST_DISABLE"],

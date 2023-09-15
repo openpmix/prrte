@@ -96,7 +96,9 @@ $(TXT_SENTINEL_OUTPUT):
 if PRTE_BUILD_DOCS
 	$(PRTE_V_TXT) $(SPHINX_BUILD) -M text "$(srcdir)" "$(OUTDIR)" $(SPHINX_OPTS)
 else !PRTE_BUILD_DOCS
-	$(PRTE_V_TXT) $(srcdir)/build-dummy-ini-files.py $(TXT_OUTDIR) $(ALL_TXT_BUILT)
+	$(PRTE_V_TXT) \
+	$(PYTHON) $(srcdir)/build-dummy-ini-files.py $(TXT_OUTDIR) $(ALL_TXT_BUILT); \
+	touch $(TXT_SENTINEL_OUTPUT)
 endif !PRTE_BUILD_DOCS
 
 maintainer-clean-local:
