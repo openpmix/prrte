@@ -67,15 +67,12 @@ for outfile in sys.argv:
     # this script runnable in as many environments as possible.
     try:
         os.makedirs(full_outdir, exists_ok=True)
+        # Write the output file
+        with open(outfile, 'w') as fp:
+            for section in sections:
+                # Use Python 2-friendly formatting for environments where
+                # we don't have Python 3 (!).
+                fp.write("""[{}]
+    This help section is empty because PRRTE was built without Sphinx.\n""".format(section))
     except Exception:
-        # cannot create the directory, so just leave it alone
-        # we did our best, they'll just get a runtime error
-        return
-
-    # Write the output file
-    with open(outfile, 'w') as fp:
-        for section in sections:
-            # Use Python 2-friendly formatting for environments where
-            # we don't have Python 3 (!).
-            fp.write("""[{}]
-This help section is empty because PRRTE was built without Sphinx.\n""".format(section))
+        pass
