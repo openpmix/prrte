@@ -65,6 +65,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/grpcomm.h"
+#include "src/mca/schizo/base/base.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
@@ -73,6 +74,7 @@
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 #include "src/util/proc_info.h"
+#include "src/util/prte_cmd_line.h"
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
 
@@ -273,7 +275,7 @@ static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 /*
  * Initialize global variables used w/in the server.
  */
-int psched_server_init(void)
+int psched_server_init(pmix_cli_result_t *results)
 {
     int rc;
     void *ilist;
@@ -285,6 +287,7 @@ int psched_server_init(void)
     prte_pmix_lock_t lock;
     bool flag;
     pmix_proc_t myproc;
+    pmix_cli_item_t *opt;
 
     if (psched_globals.initialized) {
         return PRTE_SUCCESS;
@@ -444,6 +447,27 @@ int psched_server_init(void)
         return rc;
     }
 
+    /* get output options */
+    opt = pmix_cmd_line_get_param(results, PRTE_CLI_OUTPUT);
+    if (NULL != opt) {
+        rc = prte_schizo_base_parse_output(opt, ilist);
+        if (PRTE_SUCCESS != rc) {
+            PMIX_INFO_LIST_RELEASE(ilist);
+            return rc;
+        }
+    }
+
+    /* check for runtime options */
+    opt = pmix_cmd_line_get_param(results, PRTE_CLI_RTOS);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_RUNTIME_OPTIONS,
+                           opt->values[0], PMIX_STRING);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
+            return rc;
+        }
+    }
 
     /* convert to an info array */
     PMIX_INFO_LIST_CONVERT(prc, ilist, &darray);

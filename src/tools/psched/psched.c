@@ -67,6 +67,7 @@
 #include "src/util/pmix_argv.h"
 #include "src/util/pmix_basename.h"
 #include "src/util/prte_cmd_line.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/daemon_init.h"
 #include "src/util/malloc.h"
 #include "src/util/pmix_if.h"
@@ -105,6 +106,7 @@ static pmix_cli_result_t results;
 
 typedef struct {
     prte_pmix_lock_t lock;
+    pmix_status_t status;
     pmix_info_t *info;
     size_t ninfo;
 } myxfer_t;
@@ -114,8 +116,8 @@ static void infocbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo, vo
 {
     myxfer_t *xfer = (myxfer_t *) cbdata;
     size_t n;
-    PRTE_HIDE_UNUSED_PARAMS(status);
 
+    xfer->status = status;
     if (NULL != info) {
         xfer->ninfo = ninfo;
         PMIX_INFO_CREATE(xfer->info, xfer->ninfo);
@@ -138,6 +140,25 @@ static int term_pipe[2];
 static pmix_mutex_t abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static void clean_abort(int fd, short flags, void *arg);
 static void abort_signal_callback(int signal);
+
+static void parent_died_fn(size_t evhdlr_registration_id, pmix_status_t status,
+                           const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+                           pmix_info_t results[], size_t nresults,
+                           pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+{
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status, source, info, ninfo, results, nresults);
+    clean_abort(0, 0, NULL);
+    cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
+}
+
+static void evhandler_reg_callbk(pmix_status_t status, size_t evhandler_ref, void *cbdata)
+{
+    myxfer_t *lock = (myxfer_t *) cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(evhandler_ref);
+
+    lock->status = status;
+    PRTE_PMIX_WAKEUP_THREAD(&lock->lock);
+}
 
 static int wait_dvm(pid_t pid)
 {
@@ -174,18 +195,19 @@ static bool check_exist(char *path)
 int main(int argc, char *argv[])
 {
     int ret = 0;
-    int i;
+    int i, code;
     pmix_data_buffer_t *buffer;
     pmix_value_t val;
-    pmix_proc_t proc;
+    pmix_proc_t proc, pname;
     pmix_status_t prc;
     myxfer_t xfer;
     pmix_data_buffer_t pbuf, *wbuf;
     pmix_byte_object_t pbo;
     int8_t flag;
     uint8_t naliases, ni;
-    char **nonlocal = NULL, *personality;
+    char **nonlocal = NULL, *personality, *mypidfile;
     int n;
+    pmix_info_t info;
     pmix_value_t *vptr;
     char **pargv;
     int pargc;
@@ -481,6 +503,44 @@ int main(int argc, char *argv[])
         prte_pmix_server_globals.report_uri = strdup(opt->values[0]);
     }
 
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_REPORT_PID);
+    if (NULL != opt) {
+        /* if the string is a "-", then output to stdout */
+        if (0 == strcmp(opt->values[0], "-")) {
+            fprintf(stdout, "%lu\n", (unsigned long) getpid());
+        } else if (0 == strcmp(opt->values[0], "+")) {
+            /* output to stderr */
+            fprintf(stderr, "%lu\n", (unsigned long) getpid());
+        } else {
+            char *leftover;
+            int outpipe;
+            /* see if it is an integer pipe */
+            leftover = NULL;
+            outpipe = strtol(opt->values[0], &leftover, 10);
+            if (NULL == leftover || 0 == strlen(leftover)) {
+                /* stitch together the var names and URI */
+                pmix_asprintf(&leftover, "%lu", (unsigned long) getpid());
+                /* output to the pipe */
+                prc = pmix_fd_write(outpipe, strlen(leftover) + 1, leftover);
+                free(leftover);
+                close(outpipe);
+            } else {
+                /* must be a file */
+                FILE *fp;
+                fp = fopen(opt->values[0], "w");
+                if (NULL == fp) {
+                    pmix_output(0, "Impossible to open the file %s in write mode\n", opt->values[0]);
+                    PRTE_UPDATE_EXIT_STATUS(1);
+                    goto DONE;
+                }
+                /* output my PID */
+                fprintf(fp, "%lu\n", (unsigned long) getpid());
+                fclose(fp);
+                mypidfile = strdup(opt->values[0]);
+            }
+        }
+    }
+
     /* ensure we silence any compression warnings */
     PMIX_SETENV_COMPAT("PMIX_MCA_compress_base_silence_warning", "1", true, &environ);
 
@@ -532,12 +592,24 @@ int main(int argc, char *argv[])
         goto DONE;
     }
 
-    /* setup the PMIx scheduler class */
-    if (PRTE_SUCCESS != (ret = psched_server_init())) {
+    /* setup the PMIx server library */
+    if (PRTE_SUCCESS != (ret = psched_server_init(&results))) {
         /* the server code already barked, so let's be quiet */
         prte_exit_status = PRTE_ERR_SILENT;
         goto DONE;
     }
+
+    /* setup the keepalive event registration */
+    memset(&xfer, 0, sizeof(myxfer_t));
+    PRTE_PMIX_CONSTRUCT_LOCK(&xfer.lock);
+    code = PMIX_ERR_JOB_TERMINATED;
+    PMIX_LOAD_PROCID(&pname, "PMIX_KEEPALIVE_PIPE", PMIX_RANK_UNDEF);
+    PMIX_INFO_LOAD(&info, PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
+    PMIx_Register_event_handler(&code, 1, &info, 1, parent_died_fn, evhandler_reg_callbk,
+                                (void *) &xfer);
+    PRTE_PMIX_WAIT_THREAD(&xfer.lock);
+    PMIX_INFO_DESTRUCT(&info);
+    PRTE_PMIX_DESTRUCT_LOCK(&xfer.lock);
 
     /* create my job data object */
     jdata = PMIX_NEW(prte_job_t);
