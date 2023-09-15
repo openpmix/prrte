@@ -30,6 +30,7 @@ dist_rst_DATA = \
     cli-dvm-hostfile.rst \
     cli-dvm.rst \
     cli-forward-signals.rst \
+    cli-general.rst \
     cli-launcher-hostfile.rst \
     cli-leave-session-attached.rst \
     cli-map-by.rst \

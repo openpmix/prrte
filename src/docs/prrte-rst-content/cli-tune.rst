@@ -22,4 +22,5 @@ Syntax in the file is:
    param = value
 
 with one parameter and its associated value per line. Empty lines and
-lines beginning with the ``#`` character are ignored.
+lines beginning with the ``#`` character are ignored, as is any
+whitespace around the ``=`` character.

@@ -9,6 +9,11 @@
 
    $HEADER$
 
+General command line options
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: /prrte-rst-content/cli-general.rst
+
 The ``--add-host`` option
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
