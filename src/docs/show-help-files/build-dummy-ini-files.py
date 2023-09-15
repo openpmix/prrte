@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 #
 # Copyright 2023 Jeffrey M. Squyres.  All rights reserved.
 #
@@ -65,12 +65,14 @@ for outfile in sys.argv:
     # Use older form of os.mkdirs (without the exist_ok param) to make
     # this script runnable in as many environments as possible.
     try:
-        os.makedirs(full_outdir)
-    except FileExistsError:
+        os.makedirs(full_outdir, exists_ok=True)
+    except Exception:
         pass
 
     # Write the output file
     with open(outfile, 'w') as fp:
         for section in sections:
-            fp.write(f"""[{section}]
-This help section is empty because PRRTE was built without Sphinx.\n""")
+            # Use Python 2-friendly formatting for environments where
+            # we don't have Python 3 (!).
+            fp.write("""[{}]
+This help section is empty because PRRTE was built without Sphinx.\n""".format(section))
