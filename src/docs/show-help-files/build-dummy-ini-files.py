@@ -63,10 +63,13 @@ for outfile in sys.argv:
 
     # Ensure the out directory exists
     full_outdir = os.path.abspath(os.path.dirname(outfile))
-    # Use older form of os.mkdirs (without the exist_ok param) to make
-    # this script runnable in as many environments as possible.
+    if not os.path.exists(full_outdir):
+        # Use older form of os.mkdirs (without the exist_ok param) to
+        # make this script runnable in as many environments as
+        # possible.
+        os.makedirs(full_outdir)
+
     try:
-        os.makedirs(full_outdir, exists_ok=True)
         # Write the output file
         with open(outfile, 'w') as fp:
             for section in sections:
@@ -74,5 +77,6 @@ for outfile in sys.argv:
                 # we don't have Python 3 (!).
                 fp.write("""[{}]
     This help section is empty because PRRTE was built without Sphinx.\n""".format(section))
-    except Exception:
+    except Exception as e:
+        print("ERROR: {}".format(e))
         pass
