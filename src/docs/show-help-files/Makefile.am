@@ -105,6 +105,4 @@ maintainer-clean-local:
 ###########################################################################
 
 # Install the generated text files
-if [ -e $(TXT_OUTDIR)/help-schizo-pinfo.txt ] ; \
-	dist_prtedata_DATA = $(ALL_TXT_BUILT) ; \
-endif
+dist_prtedata_DATA = $(ALL_TXT_BUILT)
