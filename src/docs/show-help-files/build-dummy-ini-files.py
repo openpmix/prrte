@@ -11,7 +11,7 @@
 
 # Trivial script to scrape section names from source .rst files and
 # generate dummy show_help-style text files.  We only use this script
-# a) if the show_help files are not availabale (i.e., in a git clone),
+# a) if the show_help files are not available (i.e., in a git clone),
 # and b) if Sphinx is not available.
 #
 # We generate these show_help files (as opposed to generating a run
@@ -19,7 +19,7 @@
 # 100% obvious that you're not getting proper help files because you
 # did not have Sphinx available.
 
-# Intentially use a minimal set of Python modules (to decrease any
+# Intentionally use a minimal set of Python modules (to decrease any
 # needed dependencies).
 
 import re
@@ -68,7 +68,9 @@ for outfile in sys.argv:
     try:
         os.makedirs(full_outdir, exists_ok=True)
     except Exception:
-        pass
+        # cannot create the directory, so just leave it alone
+        # we did our best, they'll just get a runtime error
+        return
 
     # Write the output file
     with open(outfile, 'w') as fp:
