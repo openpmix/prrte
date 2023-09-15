@@ -56,17 +56,8 @@ Output options
 * ``--stream-buffering <value>``: Control how output is buffered.
   :ref:`See below for details <label-psched-stream-buffering>`.
 
-Specific options
+Resource options
 ^^^^^^^^^^^^^^^^
-
-* ``--allow-run-as-root``: Allow execution as root **(STRONGLY
-  DISCOURAGED)**.  :ref:`See below for details
-  <label-psched-allow-run-as-root>`.
-
-* ``--daemonize``: Daemonize the scheduler into the background.
-
-* ``--no-ready-msg``: Do not output a "ready" message when the
-  scheduler has completed initializing.
 
 * ``--default-hostfile <filename>``: Provide a default hostfile.
 
@@ -79,15 +70,23 @@ Specific options
 
 * ``--machinefile <filename>``: Synonym for ``--hostfile``.
 
+
+Specific options
+^^^^^^^^^^^^^^^^
+
+* ``--allow-run-as-root``: Allow execution as root **(STRONGLY
+  DISCOURAGED)**.  :ref:`See below for details
+  <label-psched-allow-run-as-root>`.
+
+* ``--daemonize``: Daemonize the scheduler into the background.
+
+* ``--no-ready-msg``: Do not output a "ready" message when the
+  scheduler has completed initializing.
+
 * ``--set-sid``: Direct the scheduler to separate from the current
   session.
 
 * ``--tmpdir <dir>``: Set the root for the session directory tree.
-
-Debug options
-^^^^^^^^^^^^^^^^^^^^^^^
-
-* ``--debug``: Synonym for ``--leave-session-attached``
 
 * ``--report-pid <value>``: Print out PID on stdout (``-``), stderr
   (``+``), or a filename (anything else)
@@ -95,14 +94,18 @@ Debug options
 * ``--report-uri <value>``: Print out URI on stdout (``-``), stderr
   (``+``), or a filename (anything else)
 
+* ``--keepalive <filename>``: Named pipe filename to monitor |mdash|
+  ``psched`` will terminate upon closure
+
+
+Debug options
+^^^^^^^^^^^^^
+
+* ``--debug``: Synonym for ``--leave-session-attached``
+
 * ``--leave-session-attached``: Do not discard stdout/stderr of remote
   PRTE daemons.
   :ref:`See below for details <label-psched-leave-session-attached>`.
-
-* ``--display <value>``: Comma-delimited list of options for
-  displaying information about allocations. Allowed values
-  for ``<value>``: ``allocation``, ``topo``, ``cpus``.
-  :ref:`See below for details <label-psched-display>`.
 
 
 Details of individual command line options
