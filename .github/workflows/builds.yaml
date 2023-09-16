@@ -1,0 +1,52 @@
+name: Build tests
+
+on: [pull_request]
+
+jobs:
+  # JMS Put macos back in
+
+  ubuntu:
+    runs-on: ubuntu-latest
+    # JMS Put matrix back in
+    steps:
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends software-properties-common libhwloc-dev libevent-dev
+    - name: Install OpenPMIx
+      run: |
+        git clone --recursive https://github.com/openpmix/openpmix.git
+        cd openpmix
+        echo "============== PWD: `pwd`"
+        ./autogen.pl
+        ./configure --prefix=`pwd`/install
+        make -j install
+    - name: Git clone PRRTE
+      uses: actions/checkout@v3
+      with:
+            submodules: recursive
+    - name: Build PRRTE
+      run: |
+        echo "============== PWD: `pwd`"
+        ./autogen.pl
+
+        sphinx=
+        if test "${{ matrix.sphinx }}" = sphinx; then
+            pip install -r docs/requirements.txt
+            sphinx=--enable-sphinx
+        fi
+
+        c=./configure
+        if test "${{ matrix.path }}" = vpath; then
+            mkdir build
+            cd build
+            c=../configure
+        fi
+
+        $c --prefix=${PWD}/install --with-pmix=`pwd`/openpmix/install $sphinx
+        make -j
+        make check
+        make install
+        make uninstall
+
+  # JMS Put distcheck back in
