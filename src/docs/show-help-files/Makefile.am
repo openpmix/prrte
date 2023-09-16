@@ -106,4 +106,5 @@ maintainer-clean-local:
 
 ###########################################################################
 
+# Install the generated text files
 dist_prtedata_DATA = $(ALL_TXT_BUILT)
