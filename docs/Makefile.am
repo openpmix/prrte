@@ -2,6 +2,7 @@
 # Copyright (c) 2022-2023 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 #
+# Copyright (c) 2023      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -60,7 +61,6 @@ PRTE_MAN1 = \
         prted.1 \
         prterun.1 \
         prun.1 \
-        psched.1 \
         pterm.1
 
 PRTE_MAN5 = \
