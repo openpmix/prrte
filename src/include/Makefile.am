@@ -12,7 +12,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -20,28 +20,27 @@
 # $HEADER$
 #
 
-headers = constants.h \
-		  types.h \
-		  frameworks.h \
-		  hash_string.h \
-		  prefetch.h \
-		  prte_config_top.h \
-		  prte_config_bottom.h \
-		  prte_portable_platform.h \
-		  prte_portable_platform_real.h \
-		  prte_stdint.h \
-		  prte_stdatomic.h \
-		  prte_socket_errno.h \
-		  align.h
+# This makefile.am does not stand on its own - it is included from src/Makefile.am
 
-nodist_headers = \
-		  prte_config.h \
-		  version.h
+headers += \
+        include/constants.h \
+        include/types.h \
+        include/prte_frameworks.h \
+        include/hash_string.h \
+        include/prefetch.h \
+        include/prte_config_top.h \
+        include/prte_config_bottom.h \
+        include/prte_portable_platform.h \
+        include/prte_portable_platform_real.h \
+        include/prte_stdint.h \
+        include/prte_stdatomic.h \
+        include/prte_socket_errno.h \
+        include/align.h
 
-EXTRA_DIST = $(headers)
+nodist_headers += \
+        include/prte_config.h \
+        include/version.h
 
-if WANT_INSTALL_HEADERS
-prtedir = $(prteincludedir)
-nobase_dist_prte_HEADERS = $(headers)
-nobase_nodist_prte_HEADERS = $(nodist_headers)
-endif
+libprrte_la_SOURCES += \
+        $(headers) \
+        include/prte_frameworks.c
