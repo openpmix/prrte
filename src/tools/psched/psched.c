@@ -599,17 +599,19 @@ int main(int argc, char *argv[])
         goto DONE;
     }
 
-    /* setup the keepalive event registration */
-    memset(&xfer, 0, sizeof(myxfer_t));
-    PRTE_PMIX_CONSTRUCT_LOCK(&xfer.lock);
-    code = PMIX_ERR_JOB_TERMINATED;
-    PMIX_LOAD_PROCID(&pname, "PMIX_KEEPALIVE_PIPE", PMIX_RANK_UNDEF);
-    PMIX_INFO_LOAD(&info, PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
-    PMIx_Register_event_handler(&code, 1, &info, 1, parent_died_fn, evhandler_reg_callbk,
-                                (void *) &xfer);
-    PRTE_PMIX_WAIT_THREAD(&xfer.lock);
-    PMIX_INFO_DESTRUCT(&info);
-    PRTE_PMIX_DESTRUCT_LOCK(&xfer.lock);
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_KEEPALIVE)) {
+        /* setup the keepalive event registration */
+        memset(&xfer, 0, sizeof(myxfer_t));
+        PRTE_PMIX_CONSTRUCT_LOCK(&xfer.lock);
+        code = PMIX_ERR_JOB_TERMINATED;
+        PMIX_LOAD_PROCID(&pname, "PMIX_KEEPALIVE_PIPE", PMIX_RANK_UNDEF);
+        PMIX_INFO_LOAD(&info, PMIX_EVENT_AFFECTED_PROC, &pname, PMIX_PROC);
+        PMIx_Register_event_handler(&code, 1, &info, 1, parent_died_fn, evhandler_reg_callbk,
+                                    (void *) &xfer);
+        PRTE_PMIX_WAIT_THREAD(&xfer.lock);
+        PMIX_INFO_DESTRUCT(&info);
+        PRTE_PMIX_DESTRUCT_LOCK(&xfer.lock);
+    }
 
     /* create my job data object */
     jdata = PMIX_NEW(prte_job_t);
@@ -643,6 +645,20 @@ int main(int argc, char *argv[])
     pptr->node = node;
     pmix_pointer_array_set_item(jdata->procs, PRTE_PROC_MY_NAME->rank, pptr);
 
+    // pass along any hostfile option
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOSTFILE);
+    if (NULL != opt) {
+        prte_set_attribute(&app->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL,
+                           opt->values[0], PMIX_STRING);
+    }
+
+    // pass along any dash-host option
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOST);
+    if (NULL != opt) {
+        prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL,
+                           opt->values[0], PMIX_STRING);
+    }
+
     /* setup to detect any external allocation */
     ret = pmix_mca_base_framework_open(&prte_ras_base_framework,
                                        PMIX_MCA_BASE_OPEN_DEFAULT);
@@ -674,6 +690,17 @@ int main(int argc, char *argv[])
         free(output);
     }
 
+    // check for default hostfile CLI option
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DEFAULT_HOSTFILE);
+    if (NULL != opt) {
+        if (NULL != prte_default_hostfile) {
+            // command line overrides environ
+            free(prte_default_hostfile);
+        }
+        prte_default_hostfile = strdup(opt->values[0]);
+        prte_default_hostfile_given = true;
+    }
+
     // setup the scheduler itself
     psched_scheduler_init();
 
@@ -683,6 +710,9 @@ int main(int argc, char *argv[])
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (long) prte_process_info.pid,
                 prte_process_info.nodename);
     }
+
+    // trigger the state event to read the allocation
+    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_ALLOCATE);
 
     /* loop the event lib until an exit event is detected */
     while (prte_event_base_active) {

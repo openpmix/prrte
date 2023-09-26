@@ -15,7 +15,7 @@
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -66,17 +66,17 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (long) num_nodes));
 
     /* mark the job as being a large-cluster sim if that was requested */
-    if (1 < prte_ras_base.multiplier) {
-        prte_set_attribute(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM, PRTE_ATTR_GLOBAL, NULL,
-                           PMIX_BOOL);
+    if (1 < prte_ras_base.multiplier && NULL != jdata) {
+        prte_set_attribute(&jdata->attributes, PRTE_JOB_MULTI_DAEMON_SIM,
+                           PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
     }
 
     /* set the size of the global array - this helps minimize time
      * spent doing realloc's
      */
-    if (PRTE_SUCCESS
-        != (rc = pmix_pointer_array_set_size(prte_node_pool,
-                                             num_nodes * prte_ras_base.multiplier))) {
+    rc = pmix_pointer_array_set_size(prte_node_pool,
+                                     num_nodes * prte_ras_base.multiplier);
+    if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -96,17 +96,15 @@ int prte_ras_base_node_insert(pmix_list_t *nodes, prte_job_t *jdata)
                     break;
                 }
             }
-            if (prte_hnp_is_allocated
-                && !(PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping)
-                     & PRTE_MAPPING_NO_USE_LOCAL)) {
+            if (prte_hnp_is_allocated &&
+                !(PRTE_GET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping) & PRTE_MAPPING_NO_USE_LOCAL)) {
                 if (NULL != hnp_node->name) {
                     free(hnp_node->name);
                 }
                 hnp_node->name = strdup("prte");
                 skiphnp = true;
                 PRTE_SET_MAPPING_DIRECTIVE(prte_rmaps_base.mapping, PRTE_MAPPING_NO_USE_LOCAL);
-                PRTE_FLAG_SET(hnp_node,
-                              PRTE_NODE_NON_USABLE); // leave this node out of mapping operations
+                PRTE_FLAG_SET(hnp_node, PRTE_NODE_NON_USABLE); // leave this node out of mapping operations
             }
         }
     }
