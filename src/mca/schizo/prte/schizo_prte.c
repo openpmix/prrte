@@ -462,27 +462,27 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     if (0 == strcmp(prte_tool_actual, "prte")) {
         myoptions = prteoptions;
         shorts = prteshorts;
-        helpfile = "help-schizo-prte.txt";
+        helpfile = "help-prte.txt";
     } else if (0 == strcmp(prte_tool_actual, "prterun")) {
         myoptions = prterunoptions;
         shorts = prterunshorts;
-        helpfile = "help-schizo-prterun.txt";
+        helpfile = "help-prterun.txt";
     } else if (0 == strcmp(prte_tool_actual, "prted")) {
         myoptions = prtedoptions;
         shorts = prtedshorts;
-        helpfile = "help-schizo-prted.txt";
+        helpfile = "help-prted.txt";
     } else if (0 == strcmp(prte_tool_actual, "prun")) {
         myoptions = prunoptions;
         shorts = prunshorts;
-        helpfile = "help-schizo-prun.txt";
+        helpfile = "help-prun.txt";
     } else if (0 == strcmp(prte_tool_actual, "pterm")) {
         myoptions = ptermoptions;
         shorts = ptermshorts;
-        helpfile = "help-schizo-pterm.txt";
+        helpfile = "help-pterm.txt";
     } else if (0 == strcmp(prte_tool_actual, "prte_info")) {
         myoptions = pinfooptions;
         shorts = pinfoshorts;
-        helpfile = "help-schizo-pinfo.txt";
+        helpfile = "help-prte-info.txt";
     }
     pmix_tool_msg = "Report bugs to: https://github.com/openpmix/prrte";
     pmix_tool_org = "PRRTE";
