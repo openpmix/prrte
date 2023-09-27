@@ -1,6 +1,6 @@
-# PMIx Reference Runtime Environment (PRRTE)
+# PMIx Reference RunTime Environment (PRRTE)
 
-PRRTE is [the PMIx Reference Run Time
+PRRTE is [the PMIx Reference RunTime
 Environment](https://github.com/openpmix/prrte)
 
 ## Official documentation

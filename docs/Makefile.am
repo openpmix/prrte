@@ -42,7 +42,8 @@ RST_SOURCE_FILES = \
         $(srcdir)/developers/*.rst \
         $(srcdir)/man/*.rst \
         $(srcdir)/man/man1/*.rst \
-        $(srcdir)/man/man5/*.rst
+        $(srcdir)/man/man5/*.rst \
+        $(srcdir)/news/*.rst
 
 EXTRA_DIST = \
         requirements.txt \
