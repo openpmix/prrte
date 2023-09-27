@@ -1,7 +1,7 @@
 PRRTE v3.x series
 =================
 
-This file contains all the NEWS updates for the PRRTE v3.x
+This file contains all the NEWS updates for the PRRTE v3.0
 series, in reverse chronological order.
 
 3.0.1 -- 27 Sep 2023
