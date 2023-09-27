@@ -1,7 +1,7 @@
 PRRTE v3.x series
 =================
 
-This file contains all the NEWS updates for the PRRTE v3.x
+This file contains all the NEWS updates for the PRRTE v3.0
 series, in reverse chronological order.
 
 3.0.1 -- 27 Sep 2023
@@ -14,6 +14,7 @@ series, in reverse chronological order.
                continue to improve and correct the documents in future
                releases.
 
+- PR #1818: Update VERSION and rename news file
 - PR #1816: Correct confusion over help file names
 - PR #1814: Update NEWS infrastructure
 - PR #1810: Blacklist the HWLOC GL component to avoid deadlock
