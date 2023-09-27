@@ -15,14 +15,14 @@
 # major, minor, and release are generally combined in the form
 # <major>.<minor>.<release>.
 
-major=4
+major=3
 minor=0
-release=0
+release=1
 
 # PRRTE required dependency versions.
 # List in x.y.z format.
 
-pmix_min_version=4.1.2
+pmix_min_version=4.2.4
 hwloc_min_version=1.11.0
 event_min_version=2.0.21
 automake_min_version=1.13.4
@@ -89,12 +89,12 @@ date="Nov 24, 2018"
 # Version numbers are described in the Libtool current:revision:age
 # format.
 
-libprrte_so_version=4:0:0
+libprrte_so_version=3:1:0
 
 # "Common" components install standalone libraries that are run-time
 # linked by one or more components.  So they need to be versioned as
 # well.  Yuck; this somewhat breaks the
 # components-don't-affect-the-build-system abstraction.
 
-libprrte_common_alps_so_version=4:0:0
+libprrte_common_alps_so_version=3:0:0
 
