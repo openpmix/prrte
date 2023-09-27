@@ -40,3 +40,5 @@ Table of contents
    contributing
    license
    man/index
+   versions
+   news/index
