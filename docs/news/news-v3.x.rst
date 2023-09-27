@@ -14,6 +14,7 @@ series, in reverse chronological order.
                continue to improve and correct the documents in future
                releases.
 
+- PR #1816: Correct confusion over help file names
 - PR #1814: Update NEWS infrastructure
 - PR #1810: Blacklist the HWLOC GL component to avoid deadlock
 - PR #1807: Multiple commits
