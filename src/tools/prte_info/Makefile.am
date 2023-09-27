@@ -42,8 +42,6 @@ AM_LDFLAGS = $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
 
 bin_PROGRAMS = prte_info
 
-dist_prtedata_DATA = help-prte-info.txt
-
 prte_info_SOURCES = \
         pinfo.h \
         prte_info.c \

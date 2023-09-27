@@ -36,12 +36,12 @@ SPHINX_OPTS   ?= --keep-going -j auto
 RST_SOURCE_FILES = \
         $(srcdir)/prrte-rst-content/*.rst \
         $(srcdir)/index.rst \
-        $(srcdir)/help-schizo-pinfo.rst \
-        $(srcdir)/help-schizo-prte.rst \
-        $(srcdir)/help-schizo-prted.rst \
-        $(srcdir)/help-schizo-prterun.rst \
-        $(srcdir)/help-schizo-prun.rst \
-        $(srcdir)/help-schizo-pterm.rst
+        $(srcdir)/help-prte-info.rst \
+        $(srcdir)/help-prte.rst \
+        $(srcdir)/help-prted.rst \
+        $(srcdir)/help-prterun.rst \
+        $(srcdir)/help-prun.rst \
+        $(srcdir)/help-pterm.rst
 
 TXT_OUTDIR = $(OUTDIR)/text
 
@@ -49,12 +49,12 @@ TXT_OUTDIR = $(OUTDIR)/text
 # will emit lots of files in the TXT_OUTDIR; these are the only ones
 # that we care about).
 ALL_TXT_BUILT = \
-        $(TXT_OUTDIR)/help-schizo-pinfo.txt \
-        $(TXT_OUTDIR)/help-schizo-prte.txt \
-        $(TXT_OUTDIR)/help-schizo-prted.txt \
-        $(TXT_OUTDIR)/help-schizo-prterun.txt \
-        $(TXT_OUTDIR)/help-schizo-prun.txt \
-        $(TXT_OUTDIR)/help-schizo-pterm.txt
+        $(TXT_OUTDIR)/help-prte-info.txt \
+        $(TXT_OUTDIR)/help-prte.txt \
+        $(TXT_OUTDIR)/help-prted.txt \
+        $(TXT_OUTDIR)/help-prterun.txt \
+        $(TXT_OUTDIR)/help-prun.txt \
+        $(TXT_OUTDIR)/help-pterm.txt
 
 #-------------------
 

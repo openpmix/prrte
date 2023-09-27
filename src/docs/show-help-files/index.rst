@@ -9,17 +9,17 @@ harmelss by-products; we ignore them.
 
 .. toctree::
 
-   Pinfo <help-schizo-pinfo>
+   Pinfo <help-prte-info>
 
-   Prte <help-schizo-prte>
+   Prte <help-prte>
 
-   Prted <help-schizo-prted>
+   Prted <help-prted>
 
-   Prterun <help-schizo-prterun>
+   Prterun <help-prterun>
 
-   Prun <help-schizo-prun>
+   Prun <help-prun>
 
-   Prun <help-schizo-pterm>
+   Prun <help-pterm>
 
 Have to also include these additional files so that Sphinx doesn't
 complain that there are RST files in the doc tree that aren't used.

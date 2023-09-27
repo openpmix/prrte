@@ -14,7 +14,7 @@
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -40,8 +40,6 @@ AM_CFLAGS = \
             -DPMIX_RELEASE_DATE="\"@PMIX_RELEASE_DATE@\""
 
 bin_PROGRAMS = prun
-
-dist_prtedata_DATA = help-prun.txt
 
 prun_SOURCES = \
         main.c \
