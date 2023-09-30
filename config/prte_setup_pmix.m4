@@ -20,6 +20,7 @@
 # Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -77,16 +78,24 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
 
     # if the version file exists, then we need to parse it to find
     # the actual release series
-    AC_MSG_CHECKING([version at or above v4.2.4])
+    # NOTE: We have already read PRRTE's VERSION file, so we can use
+    # $pmix_min_version.
+    AC_MSG_CHECKING([version at or above v$pmix_min_version])
+    # Convert a.b.c to hex for comparison to the PMIX_NUMERIC_VERSION
+    # C macro
+    pmix_min_major=`echo $pmix_min_version | cut -d. -f1`
+    pmix_min_minor=`echo $pmix_min_version | cut -d. -f2`
+    pmix_min_release=`echo $pmix_min_version | cut -d. -f3`
+    pmix_min_version_hex=`printf "0x%02x%02x%02x" $pmix_min_major $pmix_min_minor $pmix_min_release`
     AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
                                         #include <pmix_version.h>
-                                        #if (PMIX_NUMERIC_VERSION < 0x00040204)
-                                        #error "not version 4.2.4 or above"
+                                        #if (PMIX_NUMERIC_VERSION < $pmix_min_version_hex)
+                                        #error "not version $pmix_min_version or above"
                                         #endif
                                        ], [])],
                       [AC_MSG_RESULT([yes])],
                       [AC_MSG_RESULT(no)
-                       AC_MSG_WARN([PRRTE requires PMIx v4.2.4 or above.])
+                       AC_MSG_WARN([PRRTE requires PMIx v$pmix_min_version or above.])
                        AC_MSG_ERROR([Please select a supported version and configure again])])
 
     AC_CHECK_HEADER([src/util/pmix_argv.h], [],
