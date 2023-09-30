@@ -9,6 +9,18 @@ PMIx Reference RunTime Environment (PRRTE).  More information is
 available `in the FAQ section on the PRRTE web site
 <https://github.com/openpmix/prrte>`_.
 
+Minimum PMIx version
+--------------------
+
+The ``configure`` script in PRRTE |prte_ver| must be able to find an
+OpenPMIx installation that is |pmix_min_version| or higher.  If
+``configure`` cannot find a suitable OpenPMIx version, it will abort
+with an error.
+
+If OpenPMIx cannot be found in default preprocessor and linker search
+paths, you can specify the ``--with-pmix=DIR`` CLI option to tell
+``configure`` where to find it.
+
 
 Developer Builds
 ----------------
