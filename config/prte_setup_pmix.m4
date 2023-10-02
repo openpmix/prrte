@@ -80,22 +80,18 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     # the actual release series
     # NOTE: We have already read PRRTE's VERSION file, so we can use
     # $pmix_min_version.
-    AC_MSG_CHECKING([version at or above v$pmix_min_version])
-    # Convert a.b.c to hex for comparison to the PMIX_NUMERIC_VERSION
-    # C macro
-    pmix_min_major=`echo $pmix_min_version | cut -d. -f1`
-    pmix_min_minor=`echo $pmix_min_version | cut -d. -f2`
-    pmix_min_release=`echo $pmix_min_version | cut -d. -f3`
-    pmix_min_version_hex=`printf "0x%02x%02x%02x" $pmix_min_major $pmix_min_minor $pmix_min_release`
+    prte_pmix_min_num_version=PRTE_PMIX_NUMERIC_MIN_VERSION
+    prte_pmix_min_version=PRTE_PMIX_MIN_VERSION
+    AC_MSG_CHECKING([version at or above v$prte_pmix_min_version])
     AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
                                         #include <pmix_version.h>
-                                        #if (PMIX_NUMERIC_VERSION < $pmix_min_version_hex)
-                                        #error "not version $pmix_min_version or above"
+                                        #if (PMIX_NUMERIC_VERSION < $prte_pmix_min_num_version)
+                                        #error "not version $prte_pmix_min_num_version or above"
                                         #endif
                                        ], [])],
                       [AC_MSG_RESULT([yes])],
                       [AC_MSG_RESULT(no)
-                       AC_MSG_WARN([PRRTE requires PMIx v$pmix_min_version or above.])
+                       AC_MSG_WARN([PRRTE requires PMIx v$prte_pmix_min_num_version or above.])
                        AC_MSG_ERROR([Please select a supported version and configure again])])
 
     AC_CHECK_HEADER([src/util/pmix_argv.h], [],

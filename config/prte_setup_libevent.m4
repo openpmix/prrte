@@ -6,7 +6,7 @@
 # Copyright (c) 2017-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2020      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
@@ -134,20 +134,24 @@ AC_DEFUN([PRTE_LIBEVENT_CONFIG],[
     fi
 
     if test $prte_libevent_support -eq 1; then
-        # Pin the "oldest supported" version to 2.0.21
-        AC_MSG_CHECKING([if libevent version is 2.0.21 or greater])
-        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <event2/event.h>]],
-                                           [[
-                                             #if defined(_EVENT_NUMERIC_VERSION) && _EVENT_NUMERIC_VERSION < 0x02001500
-                                             #error "libevent API version is less than 0x02001500"
-                                             #elif defined(EVENT__NUMERIC_VERSION) && EVENT__NUMERIC_VERSION < 0x02001500
-                                             #error "libevent API version is less than 0x02001500"
-                                             #endif
-                                           ]])],
-                          [AC_MSG_RESULT([yes])],
-                          [AC_MSG_RESULT([no])
-                           AC_MSG_WARN([libevent version is too old (2.0.21 or later required)])
-                           prte_libevent_support=0])
+        prte_event_min_num_version=PRTE_EVENT_NUMERIC_MIN_VERSION
+        prte_event_min_version=PRTE_EVENT_MIN_VERSION
+        AC_MSG_CHECKING([version at or above v$prte_event_min_version])
+        AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                            #include <event2/event.h>
+#if defined(_EVENT_NUMERIC_VERSION) && _EVENT_NUMERIC_VERSION < $prte_event_min_num_version
+#error "libevent API version is less than $prte_event_min_version"
+#elif defined(EVENT__NUMERIC_VERSION) && EVENT__NUMERIC_VERSION < $prte_event_min_num_version
+#error "libevent API version is less than $prte_event_min_version"
+#endif
+                                       ], [])],
+                      [prte_libevent_cv_version_check=yes
+                       AC_MSG_RESULT([yes])],
+                      [prte_libevent_cv_version_check=no
+                       AC_MSG_RESULT([no])])
+        AS_IF([test "${prte_libevent_cv_version_check}" = "no"],
+              [AC_MSG_WARN([libevent version is too old ($prte_event_min_version or later required)])
+               prte_libevent_support=0])
     fi
 
     # restore global flags
