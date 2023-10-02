@@ -35,7 +35,6 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
     prte_check_hwloc_save_CPPFLAGS="$CPPFLAGS"
     prte_check_hwloc_save_LDFLAGS="$LDFLAGS"
     prte_check_hwloc_save_LIBS="$LIBS"
-    prte_have_topology_dup=0
 
     if test "$with_hwloc" = "no"; then
         AC_MSG_WARN([PRRTE requires HWLOC topology library support.])
@@ -64,73 +63,39 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
         AC_MSG_ERROR([Cannot continue.])
     fi
 
-    # update global flags to test for HWLOC version
-    PRTE_FLAGS_PREPEND_UNIQ([CPPFLAGS], [$prte_hwloc_CPPFLAGS])
-    PRTE_FLAGS_PREPEND_UNIQ([LDFLAGS], [$prte_hwloc_LDFLAGS])
-    PRTE_FLAGS_PREPEND_UNIQ([LIBS], [$prte_hwloc_LIBS])
-
-    AC_MSG_CHECKING([if hwloc version is 1.5 or greater])
-    AC_COMPILE_IFELSE(
-          [AC_LANG_PROGRAM([#include <hwloc.h>],
-          [[
-    #if HWLOC_API_VERSION < 0x00010500
-    #error "hwloc version is less than 0x00010500"
-    #endif
-          ]])],
-          [AC_MSG_RESULT([yes])],
-          [AC_MSG_RESULT([no])
-           AC_MSG_ERROR([Cannot continue])])
-
-    AC_MSG_CHECKING([if hwloc version is 1.8 or greater])
-    AC_COMPILE_IFELSE(
-          [AC_LANG_PROGRAM([#include <hwloc.h>],
-          [[
-    #if HWLOC_API_VERSION < 0x00010800
-    #error "hwloc version is less than 0x00010800"
-    #endif
-          ]])],
-          [AC_MSG_RESULT([yes])
-           prte_have_topology_dup=1],
-          [AC_MSG_RESULT([no])])
-
-    AC_MSG_CHECKING([if hwloc version is at least 2.0])
-    AC_COMPILE_IFELSE(
-          [AC_LANG_PROGRAM([#include <hwloc.h>],
-          [[
-    #if HWLOC_VERSION_MAJOR < 2
-    #error "hwloc version is less than 2.0"
-    #endif
-          ]])],
-          [AC_MSG_RESULT([yes])
-           prte_version_high=1],
-          [AC_MSG_RESULT([no])
-           prte_version_high=0])
+    # NOTE: We have already read PRRTE's VERSION file, so we can use
+    # those values
+    prte_hwloc_min_num_version=PRTE_HWLOC_NUMERIC_MIN_VERSION
+    prte_hwloc_min_version=PRTE_HWLOC_MIN_VERSION
+    AC_MSG_CHECKING([version at or above v$prte_hwloc_min_version])
+    AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                        #include <hwloc.h>
+                                        #if (HWLOC_API_VERSION < $prte_hwloc_min_num_version)
+                                        #error "not version $prte_hwloc_min_num_version or above"
+                                        #endif
+                                       ], [])],
+                      [AC_MSG_RESULT([yes])],
+                      [AC_MSG_RESULT(no)
+                       AC_MSG_WARN([PRRTE requires HWLOC v$prte_hwloc_min_version or above.])
+                       AC_MSG_ERROR([Please select a supported version and configure again])])
 
     AC_MSG_CHECKING([if hwloc version is greater than 2.x])
-    AC_COMPILE_IFELSE(
-          [AC_LANG_PROGRAM([#include <hwloc.h>],
-          [[
-    #if HWLOC_VERSION_MAJOR > 2
-    #error "hwloc version is greater than 2.x"
-    #endif
-          ]])],
-          [AC_MSG_RESULT([no])],
-          [AC_MSG_RESULT([yes])
-           AC_MSG_WARN([This PRRTE version does not support HWLOC])
-           AC_MSG_WARN([versions 3.x or higher. Please direct us])
-           AC_MSG_WARN([to an HWLOC version in the 1.11-2.x range.])
-           AC_MSG_ERROR([Cannot continue])])
-
-    CPPFLAGS=$prte_check_hwloc_save_CPPFLAGS
-    LDFLAGS=$prte_check_hwloc_save_LDFLAGS
-    LIBS=$prte_check_hwloc_save_LIBS
+    AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                        #include <hwloc.h>
+                                        #if (HWLOC_VERSION_MAJOR > 2)
+                                        #error "hwloc version is greater than 2.x"
+                                        #endif
+                                       ], [])],
+                      [AC_MSG_RESULT([no])],
+                      [AC_MSG_RESULT([yes])
+                       AC_MSG_WARN([This PRRTE version does not support HWLOC])
+                       AC_MSG_WARN([versions 3.x or higher. Please direct us])
+                       AC_MSG_WARN([to an HWLOC version in the $prte_hwloc_min_version-2.x range.])
+                       AC_MSG_ERROR([Cannot continue])])
 
     PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_CPPFLAGS], [$prte_hwloc_CPPFLAGS])
     PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LDFLAGS], [$prte_hwloc_LDFLAGS])
     PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LIBS], [$prte_hwloc_LIBS])
-
-    AC_DEFINE_UNQUOTED([PRTE_HAVE_HWLOC_TOPOLOGY_DUP], [$prte_have_topology_dup],
-                       [Whether or not hwloc_topology_dup is available])
 
     PRTE_SUMMARY_ADD([Required Packages], [HWLOC], [], [$prte_hwloc_SUMMARY])
 
