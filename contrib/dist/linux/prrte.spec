@@ -612,7 +612,7 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 %{shell_scripts_path}/%{shell_scripts_basename}.sh
 %{shell_scripts_path}/%{shell_scripts_basename}.csh
 %endif
-%doc README INSTALL LICENSE
+%doc README.md LICENSE
 
 %else
 
@@ -656,7 +656,7 @@ test "x$RPM_BUILD_ROOT" != "x" && rm -rf $RPM_BUILD_ROOT
 %{shell_scripts_path}/%{shell_scripts_basename}.sh
 %{shell_scripts_path}/%{shell_scripts_basename}.csh
 %endif
-%doc README INSTALL LICENSE
+%doc README.md LICENSE
 %{_pkgdatadir}
 
 %files devel -f devel.files
