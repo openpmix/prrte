@@ -63,6 +63,9 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
         AC_MSG_ERROR([Cannot continue.])
     fi
 
+    # update global flags to test for HWLOC version
+    PRTE_FLAGS_PREPEND_UNIQ([CPPFLAGS], [$prte_hwloc_CPPFLAGS])
+
     # NOTE: We have already read PRRTE's VERSION file, so we can use
     # those values
     prte_hwloc_min_num_version=PRTE_HWLOC_NUMERIC_MIN_VERSION
@@ -92,6 +95,9 @@ AC_DEFUN([PRTE_SETUP_HWLOC],[
                        AC_MSG_WARN([versions 3.x or higher. Please direct us])
                        AC_MSG_WARN([to an HWLOC version in the $prte_hwloc_min_version-2.x range.])
                        AC_MSG_ERROR([Cannot continue])])
+
+    # reset global flags
+    CPPFLAGS=$prte_check_hwloc_save_CPPFLAGS
 
     PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_CPPFLAGS], [$prte_hwloc_CPPFLAGS])
     PRTE_FLAGS_APPEND_UNIQ([PRTE_FINAL_LDFLAGS], [$prte_hwloc_LDFLAGS])
