@@ -29,8 +29,7 @@
 
 OUTDIR         = _build
 SPHINX_CONFIG  = conf.py
-#SPHINX_OPTS   ?= -W --keep-going -j auto
-SPHINX_OPTS   ?= --keep-going -j auto
+SPHINX_OPTS   ?= -W --keep-going -j auto
 
 # All RST source files, including those that are not installed
 RST_SOURCE_FILES = \
