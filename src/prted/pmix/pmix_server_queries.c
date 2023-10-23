@@ -781,12 +781,14 @@ static void _query(int sd, short args, void *cbdata)
 done:
     rcd = PMIX_NEW(prte_pmix_server_op_caddy_t);
     PMIX_INFO_LIST_CONVERT(rc, results, &dry);
-    if (PMIX_SUCCESS != rc) {
+    if (PMIX_SUCCESS != rc && PMIX_ERR_EMPTY != rc) {
         PMIX_ERROR_LOG(rc);
         ret = rc;
     }
     PMIX_INFO_LIST_RELEASE(results);
-    if (PMIX_SUCCESS == ret) {
+    if (PMIX_ERR_EMPTY == rc) {
+        ret = PMIX_ERR_NOT_FOUND;
+    } else if (PMIX_SUCCESS == ret) {
         if (0 == dry.size) {
             ret = PMIX_ERR_NOT_FOUND;
         } else {
