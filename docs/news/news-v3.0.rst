@@ -1,11 +1,22 @@
-PRRTE v3.x series
+PRRTE v3.0 series
 =================
 
 This file contains all the NEWS updates for the PRRTE v3.0
 series, in reverse chronological order.
 
-3.0.2 -- TBD
-------------
+3.0.2 -- 23 Oct 2023
+--------------------
+- PR #1832: Update NEWS for release
+- PR #1831: Silence error log
+- PR #1829: Multiple commits
+   - docs/show-help-files: Re-enable Sphinx warning checks
+   - Correctly forward stdin to remote procs
+- PR #1826: Multiple commits
+   - docs: document minimum PMIx version needed
+   - prte_setup_pmix.m4: use PMIx min version from VERSION
+   - Make checking min versions consistent
+   - Update CPPFLAGS for HWLOC config tests
+- PR #1822: Fix rpmbuild error
 - PR #1821: Roll VERSION to v3.0.2
 
 
