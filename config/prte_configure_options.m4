@@ -383,15 +383,15 @@ AC_DEFINE_UNQUOTED([PRTE_ENABLE_GETPWUID], [$prte_want_getpwuid],
 AC_MSG_CHECKING([if want to install PRRTE pseudo-scheduler])
 AC_ARG_WITH(prte-scheduler,
     AS_HELP_STRING([--with-prte-scheduler],
-                   [Normal PRTE users/applications do not need this.  Users/applications wishing to explore dynamic allocation support probably do (default: disabled).]))
-if test "$with_prte_scheduler" = "yes"; then
-    AC_MSG_RESULT([yes])
-    prte_want_scheduler="yes"
-    WANT_PRTE_SCHED=1
-else
+                   [Normal PRTE users/applications do not need this.  Users/applications wishing to explore dynamic allocation support probably do (default: enabled).]))
+if test "$with_prte_scheduler" = "no"; then
     AC_MSG_RESULT([no])
     prte_want_scheduler="no"
     WANT_PRTE_SCHED=0
+else
+    AC_MSG_RESULT([yes])
+    prte_want_scheduler="yes"
+    WANT_PRTE_SCHED=1
 fi
 AM_CONDITIONAL(WANT_PRTE_SCHED, test "$WANT_PRTE_SCHED" = 1)
 PRTE_SUMMARY_ADD([Miscellaneous], [PRTE Pseudo-Scheduler], [], [$prte_want_scheduler])

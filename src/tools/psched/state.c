@@ -31,6 +31,9 @@
 #include "src/mca/state/base/base.h"
 #include "psched.h"
 
+/* global variables */
+pmix_list_t prte_psched_states;
+
 /*
  * Module functions: Global
  */
@@ -40,9 +43,9 @@ static int finalize(void);
 /* local functions */
 static void alloc_complete(int fd, short args, void *cbata);
 
-/* defined default state machine sequence - individual
- * plm's must add a state for launching daemons
- */
+/* define job state machine sequence - only required to
+ * allow integration to main PRRTE code for detecting
+ * base allocation */
 static prte_job_state_t launch_states[] = {
     PRTE_JOB_STATE_ALLOCATE,
     PRTE_JOB_STATE_ALLOCATION_COMPLETE
@@ -53,6 +56,21 @@ static prte_state_cbfunc_t launch_callbacks[] = {
     alloc_complete
 };
 
+/* define scheduler state machine sequence for walking
+ * thru an allocation lifecycle */
+static prte_sched_state_t sched_states[] = {
+    PSCHED_STATE_INIT,
+    PSCHED_STATE_QUEUE,
+    PSCHED_STATE_SESSION_COMPLETE
+};
+
+static prte_state_cbfunc_t sched_callbacks[] = {
+    psched_request_init,
+    psched_request_queue,
+    psched_session_complete
+};
+
+
 static void force_quit(int fd, short args, void *cbdata)
 {
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
@@ -61,6 +79,10 @@ static void force_quit(int fd, short args, void *cbdata)
     prte_event_base_active = false;
     PMIX_RELEASE(caddy);
 }
+
+static int add_psched_state(prte_sched_state_t state,
+                            prte_state_cbfunc_t cbfunc);
+static void psched_print_state_machine(void);
 
 /************************
  * Local variables
@@ -120,6 +142,7 @@ static int init(void)
     /* setup the state machines */
     PMIX_CONSTRUCT(&prte_job_states, pmix_list_t);
     PMIX_CONSTRUCT(&prte_proc_states, pmix_list_t);
+    PMIX_CONSTRUCT(&prte_psched_states, pmix_list_t);
 
     /* setup the job state machine */
     num_states = sizeof(launch_states) / sizeof(prte_job_state_t);
@@ -150,6 +173,18 @@ static int init(void)
         prte_state_base_print_job_state_machine();
     }
 
+    /* setup the scheduler state machine */
+    num_states = sizeof(sched_states) / sizeof(prte_sched_state_t);
+    for (i = 0; i < num_states; i++) {
+        rc = add_psched_state(sched_states[i], sched_callbacks[i]);
+        if (PRTE_SUCCESS != rc) {
+            PRTE_ERROR_LOG(rc);
+        }
+    }
+    if (4 < pmix_output_get_verbosity(psched_globals.output)) {
+        psched_print_state_machine();
+    }
+
     return PRTE_SUCCESS;
 }
 
@@ -158,6 +193,7 @@ static int finalize(void)
     /* cleanup the state machines */
     PMIX_LIST_DESTRUCT(&prte_proc_states);
     PMIX_LIST_DESTRUCT(&prte_job_states);
+    PMIX_LIST_DESTRUCT(&prte_psched_states);
 
     return PRTE_SUCCESS;
 }
@@ -169,3 +205,185 @@ static void alloc_complete(int fd, short args, void *cbdata)
 
     PMIX_RELEASE(caddy);
 }
+
+void psched_activate_sched_state(psched_req_t *req, prte_sched_state_t state)
+{
+    psched_state_t *s, *any = NULL, *error = NULL;
+
+    /* check for uniqueness */
+    PMIX_LIST_FOREACH(s, &prte_psched_states, psched_state_t) {
+        if (s->sched_state == PSCHED_STATE_ANY) {
+            /* save this place */
+            any = s;
+        }
+        if (s->sched_state == PSCHED_STATE_ERROR) {
+            error = s;
+        }
+        if (s->sched_state == state) {
+            PRTE_REACHING_SCHED_STATE(req, state);
+            if (NULL == s->cbfunc) {
+                pmix_output_verbose(1, psched_globals.output,
+                                    "%s NULL CBFUNC FOR SCHED %s STATE %s",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                    (NULL == req->user_refid) ? "N/A" : req->user_refid,
+                                    prte_sched_state_to_str(state));
+                return;
+            }
+            PSCHED_THREADSHIFT(req, s->cbfunc);
+            return;
+        }
+    }
+    /* if we get here, then the state wasn't found, so execute
+     * the default handler if it is defined
+     */
+    if (PSCHED_STATE_ERROR < state && NULL != error) {
+        s = (psched_state_t *) error;
+    } else if (NULL != any) {
+        s = (psched_state_t *) any;
+    } else {
+        pmix_output_verbose(1, psched_globals.output,
+                            "ACTIVATE: SCHED STATE %s NOT REGISTERED",
+                            prte_sched_state_to_str(state));
+        return;
+    }
+    if (NULL == s->cbfunc) {
+        pmix_output_verbose(1, psched_globals.output,
+                            "ACTIVATE: ANY STATE HANDLER NOT DEFINED");
+        return;
+    }
+    PRTE_REACHING_SCHED_STATE(req, state);
+    PSCHED_THREADSHIFT(req, s->cbfunc);
+}
+
+static int add_psched_state(prte_sched_state_t state,
+                            prte_state_cbfunc_t cbfunc)
+{
+    psched_state_t *st;
+
+    /* check for uniqueness */
+    PMIX_LIST_FOREACH(st, &prte_psched_states, psched_state_t) {
+        if (st->sched_state == state) {
+            pmix_output_verbose(1, psched_globals.output,
+                                "DUPLICATE STATE DEFINED: %s", prte_sched_state_to_str(state));
+            return PRTE_ERR_BAD_PARAM;
+        }
+    }
+
+    st = PMIX_NEW(psched_state_t);
+    st->sched_state = state;
+    st->cbfunc = cbfunc;
+    pmix_list_append(&prte_psched_states, &(st->super));
+
+    return PRTE_SUCCESS;
+}
+
+const char* prte_sched_state_to_str(prte_sched_state_t s)
+{
+    switch (s) {
+        case PSCHED_STATE_UNDEF:
+            return "UNDEFINED";
+        case PSCHED_STATE_INIT:
+            return "INIT";
+        case PSCHED_STATE_QUEUE:
+            return "QUEUE";
+        case PSCHED_STATE_SESSION_COMPLETE:
+            return "SESSION COMPLETE";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+static void psched_print_state_machine(void)
+{
+    psched_state_t *st;
+
+    pmix_output(0, "SCHEDULER STATE MACHINE:");
+    PMIX_LIST_FOREACH (st, &prte_psched_states, psched_state_t) {
+        pmix_output(0, "\tState: %s cbfunc: %s",
+                    prte_sched_state_to_str(st->sched_state),
+                    (NULL == st->cbfunc) ? "NULL" : "DEFINED");
+    }
+}
+
+
+static void state_con(psched_state_t *p)
+{
+    p->sched_state = PSCHED_STATE_UNDEF;
+    p->cbfunc = NULL;
+}
+PMIX_CLASS_INSTANCE(psched_state_t,
+                    pmix_list_item_t,
+                    state_con, NULL);
+
+static void req_con(psched_req_t *p)
+{
+    PMIx_Load_procid(&p->requestor, NULL, PMIX_RANK_INVALID);
+    p->data = NULL;
+    p->ndata = 0;
+    p->user_refid = NULL;
+    p->alloc_refid = NULL;
+    p->num_nodes = 0;
+    p->nlist = NULL;
+    p->exclude = NULL;
+    p->num_cpus = 0;
+    p->ncpulist = NULL;
+    p->cpulist = NULL;
+    p->memsize = 0.0;
+    p->time = NULL;
+    p->queue = NULL;
+    p->preemptible = false;
+    p->lend = NULL;
+    p->image = NULL;
+    p->waitall = false;
+    p->share = false;
+    p->noshell = false;
+    p->dependency = NULL;
+    p->begintime = NULL;
+    p->state = PSCHED_STATE_UNDEF;
+    p->sessionID = UINT32_MAX;
+}
+static void req_des(psched_req_t *p)
+{
+    if (NULL != p->data) {
+        PMIx_Info_free(p->data, p->ndata);
+    }
+    if (NULL != p->user_refid) {
+        free(p->user_refid);
+    }
+    if (NULL != p->alloc_refid) {
+        free(p->alloc_refid);
+    }
+    if (NULL != p->nlist) {
+        free(p->nlist);
+    }
+    if (NULL != p->exclude) {
+        free(p->exclude);
+    }
+    if (NULL != p->ncpulist) {
+        free(p->ncpulist);
+    }
+    if (NULL != p->cpulist) {
+        free(p->cpulist);
+    }
+    if (NULL != p->time) {
+        free(p->time);
+    }
+    if (NULL != p->queue) {
+        free(p->queue);
+    }
+    if (NULL != p->lend) {
+        free(p->lend);
+    }
+    if (NULL != p->image) {
+        free(p->image);
+    }
+    if (NULL != p->dependency) {
+        free(p->dependency);
+    }
+    if (NULL != p->begintime) {
+        free(p->begintime);
+    }
+}
+PMIX_CLASS_INSTANCE(psched_req_t,
+                    pmix_list_item_t,
+                    req_con, req_des);

@@ -88,9 +88,7 @@ static pmix_server_module_t psched_server = {
     .notify_event = psched_notify_event,
     .query = psched_query_fn,
     .tool_connected = psched_tool_connected_fn,
-    .log = psched_log_fn,
     .job_control = psched_job_ctrl_fn,
-    .group = psched_group_fn,
     .allocate = psched_alloc_fn,
 #if PMIX_NUMERIC_VERSION >= 0x00050000
     .session_control = psched_session_ctrl_fn
@@ -210,22 +208,42 @@ static prte_regattr_input_t prte_attributes[] = {
     {.function = ""},
 };
 
+static int gen_verbose = -1;
+
 void psched_register_params(void)
 {
+    bool opened = false;
+
     /* register a verbosity */
+    psched_globals.verbosity = -1;
     (void) pmix_mca_base_var_register("prte", "psched", NULL, "verbose",
                                       "Debug verbosity for PRRTE Scheduler",
                                       PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &psched_globals.verbosity);
-    if (0 <= psched_globals.verbosity) {
+    if (0 < psched_globals.verbosity) {
         psched_globals.output = pmix_output_open(NULL);
         pmix_output_set_verbosity(psched_globals.output,
                                   psched_globals.verbosity);
         prte_pmix_server_globals.output = pmix_output_open(NULL);
         pmix_output_set_verbosity(prte_pmix_server_globals.output,
                                   psched_globals.verbosity);
+        opened = true;
     }
 
+    /* register the general verbosity */
+    (void) pmix_mca_base_var_register("prte", "pmix", NULL, "server_verbose",
+                                      "Debug verbosity for PMIx server",
+                                      PMIX_MCA_BASE_VAR_TYPE_INT,
+                                      &gen_verbose);
+    if (0 < gen_verbose && psched_globals.verbosity < gen_verbose) {
+        if (!opened) {
+            psched_globals.output = pmix_output_open(NULL);
+            prte_pmix_server_globals.output = pmix_output_open(NULL);
+        }
+        pmix_output_set_verbosity(psched_globals.output, gen_verbose);
+        pmix_output_set_verbosity(prte_pmix_server_globals.output, gen_verbose);
+        psched_globals.verbosity = gen_verbose;
+    }
 }
 
 /* provide a callback function for lost connections to allow us
@@ -299,8 +317,6 @@ int psched_server_init(pmix_cli_result_t *results)
     pmix_pointer_array_init(&psched_globals.requests, 128, INT_MAX, 2);
     PMIX_CONSTRUCT(&psched_globals.tools, pmix_list_t);
     psched_globals.syscontroller = *PRTE_NAME_INVALID;
-
-    psched_register_params();
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s server:psched: initialize",
@@ -535,30 +551,4 @@ void psched_server_finalize(void)
     if (PMIX_SUCCESS != prc) {
         PMIX_ERROR_LOG(prc);
     }
-
-#if 0
-    /* cleanup collectives */
-    pmix_server_req_t *cd;
-    for (int i = 0; i < prte_pmix_server_globals.local_reqs.size; i++) {
-      cd = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.local_reqs, i);
-      if (NULL != cd) {
-          PMIX_RELEASE(cd);
-      }
-    }
-    for (int i = 0; i < prte_pmix_server_globals.remote_reqs.size; i++) {
-      cd = (pmix_server_req_t*)pmix_pointer_array_get_item(&prte_pmix_server_globals.remote_reqs, i);
-      if (NULL != cd) {
-          PMIX_RELEASE(cd);
-      }
-    }
-
-    PMIX_DESTRUCT(&prte_pmix_server_globals.remote_reqs);
-    PMIX_DESTRUCT(&prte_pmix_server_globals.local_reqs);
-    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
-    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
-    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.groups);
-
-    /* shutdown the local server */
-    psched_globals.initialized = false;
-#endif
 }

@@ -968,6 +968,7 @@ void pmix_server_finalize(void)
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.notifications);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.psets);
     PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.groups);
+    PMIX_LIST_DESTRUCT(&prte_pmix_server_globals.tools);
 
     /* shutdown the local server */
     prte_pmix_server_globals.initialized = false;

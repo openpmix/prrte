@@ -114,13 +114,10 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
 
 int prte_state_base_add_job_state(prte_job_state_t state, prte_state_cbfunc_t cbfunc, int priority)
 {
-    pmix_list_item_t *item;
     prte_state_t *st;
 
     /* check for uniqueness */
-    for (item = pmix_list_get_first(&prte_job_states); item != pmix_list_get_end(&prte_job_states);
-         item = pmix_list_get_next(item)) {
-        st = (prte_state_t *) item;
+    PMIX_LIST_FOREACH(st, &prte_job_states, prte_state_t) {
         if (st->job_state == state) {
             PMIX_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
                                  "DUPLICATE STATE DEFINED: %s", prte_job_state_to_str(state)));
