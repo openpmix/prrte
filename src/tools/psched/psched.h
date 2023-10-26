@@ -30,6 +30,7 @@
 #include "src/class/pmix_list.h"
 #include "src/class/pmix_pointer_array.h"
 #include "src/mca/schizo/schizo.h"
+#include "src/mca/state/state.h"
 
 BEGIN_C_DECLS
 
@@ -46,13 +47,14 @@ typedef struct {
 
 extern psched_globals_t psched_globals;
 
-void psched_schizo_init(void);
-void psched_state_init(void);
-void psched_errmgr_init(void);
-int psched_server_init(pmix_cli_result_t *results);
-void psched_server_finalize(void);
-void psched_scheduler_init(void);
-void psched_scheduler_finalize(void);
+extern void psched_schizo_init(void);
+extern void psched_state_init(void);
+extern void psched_errmgr_init(void);
+extern int psched_server_init(pmix_cli_result_t *results);
+extern void psched_server_finalize(void);
+extern void psched_scheduler_init(void);
+extern void psched_scheduler_finalize(void);
+extern void psched_register_params(void);
 
 extern pmix_status_t psched_register_events_fn(pmix_status_t *codes, size_t ncodes,
                                                const pmix_info_t info[], size_t ninfo,
@@ -76,20 +78,10 @@ extern pmix_status_t psched_query_fn(pmix_proc_t *proct,
 extern void psched_tool_connected_fn(pmix_info_t *info, size_t ninfo,
                                     pmix_tool_connection_cbfunc_t cbfunc, void *cbdata);
 
-extern void psched_log_fn(const pmix_proc_t *client,
-                          const pmix_info_t data[], size_t ndata,
-                          const pmix_info_t directives[], size_t ndirs,
-                          pmix_op_cbfunc_t cbfunc, void *cbdata);
-
 extern pmix_status_t psched_job_ctrl_fn(const pmix_proc_t *requestor,
                                         const pmix_proc_t targets[], size_t ntargets,
                                         const pmix_info_t directives[], size_t ndirs,
                                         pmix_info_cbfunc_t cbfunc, void *cbdata);
-
-extern pmix_status_t psched_group_fn(pmix_group_operation_t op, char *gpid,
-                                     const pmix_proc_t procs[], size_t nprocs,
-                                     const pmix_info_t directives[], size_t ndirs,
-                                     pmix_info_cbfunc_t cbfunc, void *cbdata);
 
 extern pmix_status_t psched_alloc_fn(const pmix_proc_t *client,
                                      pmix_alloc_directive_t directive,
@@ -103,7 +95,118 @@ extern pmix_status_t psched_session_ctrl_fn(const pmix_proc_t *requestor,
                                             pmix_info_cbfunc_t cbfunc, void *cbdata);
 #endif
 
+// global objects
 extern prte_schizo_base_module_t psched_schizo_module;
+extern pmix_list_t prte_psched_states;
+
+typedef int32_t prte_sched_state_t;
+#define PSCHED_STATE_ANY                INT32_MAX
+#define PSCHED_STATE_UNDEF               0
+#define PSCHED_STATE_INIT                1
+#define PSCHED_STATE_QUEUE               2
+#define PSCHED_STATE_SESSION_COMPLETE   30
+
+/* Define a boundary so we can easily and quickly determine
+ * if a scheduler operation abnormally terminated - leave a little room
+ * for future expansion
+ */
+#define PSCHED_STATE_ERROR          50
+
+typedef struct {
+    pmix_list_item_t super;
+    prte_sched_state_t sched_state;
+    prte_state_cbfunc_t cbfunc;
+} psched_state_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(psched_state_t);
+
+PRTE_EXPORT extern pmix_list_t prte_psched_states;
+
+/* track a session throughout its lifecycle */
+typedef struct {
+    /** Base object so this can be put on a list */
+    pmix_list_item_t super;
+    prte_event_t ev;
+    // allocation request info
+    pmix_proc_t requestor;
+    pmix_alloc_directive_t directive;
+    // original info keys
+    pmix_info_t *data;
+    size_t ndata;
+    // callback upon completion
+    pmix_info_cbfunc_t cbfunc;
+    void *cbdata;
+    // processed directives
+    char *user_refid;
+    char *alloc_refid;
+    uint64_t num_nodes;
+    char *nlist;
+    char *exclude;
+    uint64_t num_cpus;
+    char *ncpulist;
+    char *cpulist;
+    float memsize;
+    char *time;
+    char *queue;
+    bool preemptible;
+    char *lend;
+    char *image;
+    bool waitall;
+    bool share;
+    bool noshell;
+    char *dependency;
+    char *begintime;
+    // internal tracking info
+    prte_sched_state_t state;
+    // assigned session info
+    uint32_t sessionID;
+} psched_req_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(psched_req_t);
+
+extern const char* prte_sched_state_to_str(prte_sched_state_t s);
+// scheduler operations
+extern void psched_activate_sched_state(psched_req_t *req, prte_sched_state_t state);
+extern void psched_request_init(int fd, short args, void *cbdata);
+extern void psched_request_queue(int fd, short args, void *cbdata);
+extern void psched_session_complete(int fd, short args, void *cbdata);
+
+
+#define PRTE_ACTIVATE_SCHED_STATE(j, s)                                             \
+    do {                                                                            \
+        psched_req_t *shadow = (j);                                                 \
+        if (psched_globals.verbosity > 0) {                                         \
+            double timestamp = 0.0;                                                 \
+            PRTE_STATE_GET_TIMESTAMP(timestamp);                                    \
+            pmix_output_verbose(1, psched_globals.output,      \
+                                "%s [%f] ACTIVATE SCHED %s STATE %s AT %s:%d",      \
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), timestamp,      \
+                                (NULL == shadow->alloc_refid) ? "NO REFID" : shadow->alloc_refid,    \
+                                prte_sched_state_to_str((s)), __FILE__, __LINE__);  \
+        }                                                                           \
+        psched_activate_sched_state(shadow, (s));                                   \
+    } while (0);
+
+#define PRTE_REACHING_SCHED_STATE(j, s)                                             \
+    do {                                                                            \
+        psched_req_t *shadow = (j);                                                 \
+        if (psched_globals.verbosity > 0) {                      \
+            double timestamp = 0.0;                                                 \
+            PRTE_STATE_GET_TIMESTAMP(timestamp);                                    \
+            pmix_output_verbose(1, psched_globals.output,      \
+                                "%s [%f] ACTIVATING SCHED %s STATE %s AT %s:%d",             \
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), timestamp,      \
+                                (NULL == shadow->alloc_refid) ? "NO REFID" : shadow->alloc_refid,    \
+                                prte_sched_state_to_str((s)), __FILE__, __LINE__);                      \
+            shadow->state = (s);                                                    \
+        }                                                                           \
+    } while (0);
+
+#define PSCHED_THREADSHIFT(c, fn)                                                   \
+    do {                                                                            \
+        prte_event_set(prte_event_base, &((c)->ev), -1, PRTE_EV_WRITE, (fn), (c));  \
+        prte_event_set_priority(&((c)->ev), PRTE_MSG_PRI);                          \
+        PMIX_POST_OBJECT(c);                                                        \
+        prte_event_active(&((c)->ev), PRTE_EV_WRITE, 1);                            \
+    } while (0);
 
 END_C_DECLS
 

@@ -312,6 +312,7 @@ int main(int argc, char *argv[])
 
     /* pre-load any default mca param files */
     prte_preload_default_mca_params();
+    psched_register_params();
 
     /* Register all MCA Params */
     if (PRTE_SUCCESS != (ret = prte_register_params())) {
