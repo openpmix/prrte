@@ -154,7 +154,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
                                                       PRTE_RELEASE_VERSION, PRTE_GREEK_VERSION, NULL);
 
     rc = pmix_cmd_line_parse(argv, pschedshorts, pschedoptions, NULL,
-                             results, "help-schizo-prte.txt");
+                             results, "help-psched.txt");
     if (PMIX_SUCCESS != rc) {
         if (PMIX_OPERATION_SUCCEEDED == rc) {
             /* pmix cmd line interpreter output result

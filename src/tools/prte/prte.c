@@ -519,6 +519,8 @@ int main(int argc, char *argv[])
 
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_NO_READY_MSG)) {
         prte_state_base.ready_msg = false;
+    } else {
+        prte_state_base.ready_msg = true;
     }
 
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_SYSTEM_SERVER)) {
