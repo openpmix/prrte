@@ -169,6 +169,14 @@ void psched_request_queue(int fd, short args, void *cbdata)
     pmix_output_verbose(2, psched_globals.output,
                         "%s scheduler:psched: queue request",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+
+    // need to reply to requestor so they don't hang
+    if (NULL != req->cbfunc) {
+        req->cbfunc(PMIX_ERR_NOT_SUPPORTED, NULL, 0, req->cbdata, NULL, NULL);
+    }
+    // cannot continue processing the request
+    PMIX_RELEASE(req);
+
 }
 
 void psched_session_complete(int fd, short args, void *cbdata)
