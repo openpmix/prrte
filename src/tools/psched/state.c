@@ -32,7 +32,7 @@
 #include "psched.h"
 
 /* global variables */
-pmix_list_t prte_psched_states;
+pmix_list_t prte_psched_states = PMIX_LIST_STATIC_INIT;
 
 /*
  * Module functions: Global
