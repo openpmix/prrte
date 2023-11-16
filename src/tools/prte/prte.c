@@ -737,8 +737,10 @@ int main(int argc, char *argv[])
                 }
                 free(tmp_basename);
             }
-            prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
-                               tpath, PMIX_STRING);
+            if (NULL != tpath) {
+                prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
+                                   tpath, PMIX_STRING);
+            }
         }
     }
 
