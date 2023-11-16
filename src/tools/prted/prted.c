@@ -297,6 +297,16 @@ int main(int argc, char *argv[])
         return ret;
     }
 
+    /* Register all global MCA Params */
+    if (PRTE_SUCCESS != (ret = prte_register_params())) {
+        if (PRTE_ERR_SILENT != ret) {
+            pmix_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true,
+                           "prte register params",
+                           PRTE_ERROR_NAME(ret), ret);
+        }
+        return 1;
+    }
+
     /* check if we are running as root - if we are, then only allow
      * us to proceed if the allow-run-as-root flag was given. Otherwise,
      * exit with a giant warning message

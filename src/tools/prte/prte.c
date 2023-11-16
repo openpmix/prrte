@@ -401,6 +401,16 @@ int main(int argc, char *argv[])
      * choice of proxy since some environments forward their envars */
     unsetenv("PRTE_MCA_schizo_proxy");
 
+    /* Register all global MCA Params */
+    if (PRTE_SUCCESS != (rc = prte_register_params())) {
+        if (PRTE_ERR_SILENT != rc) {
+            pmix_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true,
+                           "prte register params",
+                           PRTE_ERROR_NAME(rc), rc);
+        }
+        return 1;
+    }
+
     /* parse the input argv to get values, including everyone's MCA params */
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
     rc = schizo->parse_cli(pargv, &results, PMIX_CLI_WARN);
@@ -737,6 +747,26 @@ int main(int argc, char *argv[])
         if (PRTE_SUCCESS != rc) {
             PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
             goto DONE;
+        }
+    }
+
+    /* check a couple of display options for the DVM itself */
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DISPLAY);
+    if (NULL != opt) {
+        char **targv;
+        for (n=0; NULL != opt->values[n]; n++) {
+            targv = PMIX_ARGV_SPLIT_COMPAT(opt->values[n], ',');
+            for (i=0; NULL != targv[i]; i++) {
+                if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_ALLOC)) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PARSEABLE) ||
+                           PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PARSABLE)) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
+                                       PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
+                }
+            }
+            PMIX_ARGV_FREE_COMPAT(targv);
         }
     }
 
