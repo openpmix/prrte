@@ -167,6 +167,15 @@ int prte_init_minimum(void)
         return prte_pmix_convert_status(ret);
     }
 
+    /* keyval lex-based parser */
+    /* Setup the parameter system */
+    if (PRTE_SUCCESS != (ret = pmix_mca_base_var_init())) {
+        return ret;
+    }
+
+    /* pre-load any default mca param files */
+    prte_preload_default_mca_params();
+
     return PRTE_SUCCESS;
 }
 
@@ -195,13 +204,6 @@ int prte_init_util(prte_proc_type_t flags)
     /* initialize the output system */
     pmix_output_init();
 
-    /* keyval lex-based parser */
-    /* Setup the parameter system */
-    if (PRTE_SUCCESS != (ret = pmix_mca_base_var_init())) {
-        error = "mca_base_var_init";
-        goto error;
-    }
-
     /* set the nodename so anyone who needs it has it - this
      * must come AFTER we initialize the installdirs */
     prte_setup_hostname();
@@ -218,15 +220,6 @@ int prte_init_util(prte_proc_type_t flags)
     if (PRTE_SUCCESS != (ret = prte_util_init_sys_limits(&error))) {
         pmix_show_help("help-prte-runtime.txt", "prte_init:syslimit", false, error);
         return PRTE_ERR_SILENT;
-    }
-
-    /* pre-load any default mca param files */
-    prte_preload_default_mca_params();
-
-    /* Register all MCA Params */
-    if (PRTE_SUCCESS != (ret = prte_register_params())) {
-        error = "prte_register_params";
-        goto error;
     }
 
     ret = pmix_mca_base_framework_open(&prte_prtebacktrace_base_framework,
