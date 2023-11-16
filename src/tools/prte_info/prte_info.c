@@ -44,6 +44,7 @@
 #include "src/class/pmix_object.h"
 #include "src/class/pmix_pointer_array.h"
 #include "src/mca/base/pmix_base.h"
+#include "src/mca/errmgr/errmgr.h"
 #include "src/mca/prteinstalldirs/prteinstalldirs.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/prted/pmix/pmix_server.h"
@@ -134,6 +135,16 @@ int main(int argc, char *argv[])
     }
     if (NULL == personality) {
         personality = schizo->name;
+    }
+
+    /* Register all global MCA Params */
+    if (PRTE_SUCCESS != (ret = prte_register_params())) {
+        if (PRTE_ERR_SILENT != ret) {
+            pmix_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true,
+                           "prte register params",
+                           PRTE_ERROR_NAME(ret), ret);
+        }
+        return 1;
     }
 
     /* parse the input argv to get values, including everyone's MCA params */
