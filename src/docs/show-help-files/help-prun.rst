@@ -530,3 +530,479 @@ about the PRRTE session directory.
 [leave-session-attached]
 
 .. include:: /prrte-rst-content/cli-leave-session-attached.rst
+
+[prun:executable-not-specified]
+
+No executable was specified on the %s command line.
+
+Aborting.
+
+[prun:call-failed]
+
+%s encountered a %s call failure.  This should not happen, and
+usually indicates an error within the operating system itself.
+Specifically, the following error occurred:
+
+    %s
+
+The only other available information that may be helpful is the errno
+that was returned: %d.
+
+[prun:proc-ordered-abort]
+
+%s has exited due to process rank %lu with PID %lu on
+node %s calling "abort". This may have caused other processes
+in the application to be terminated by signals sent by %s
+(as reported here).
+
+[prun:proc-exit-no-sync]
+
+%s has exited due to process rank %lu with PID %lu on
+node %s exiting improperly. There are three reasons this could occur:
+
+1. this process did not call "init" before exiting, but others in
+the job did. This can cause a job to hang indefinitely while it waits
+for all processes to call "init". By rule, if one process calls "init",
+then ALL processes must call "init" prior to termination.
+
+2. this process called "init", but exited without calling "finalize".
+By rule, all processes that call "init" MUST call "finalize" prior to
+exiting or it will be considered an "abnormal termination"
+
+3. this process called "MPI_Abort" or "prte_abort" and the mca parameter
+prte_create_session_dirs is set to false. In this case, the run-time cannot
+detect that the abort call was an abnormal termination. Hence, the only
+error message you will receive is this one.
+
+This may have caused other processes in the application to be
+terminated by signals sent by %s (as reported here).
+
+You can avoid this message by specifying -quiet on the %s command line.
+
+[prun:proc-aborted]
+
+%s noticed that process rank %lu with PID %lu on node %s exited on signal %d.
+
+[prun:proc-aborted-strsignal]
+
+%s noticed that process rank %lu with PID %lu on node %s exited on signal %d (%s).
+
+[prun:empty-prefix]
+
+A prefix was supplied to %s that only contained slashes.
+
+This is a fatal error; %s will now abort.  No processes were launched.
+
+[prun:sys-limit-pipe]
+
+%s was unable to launch the specified application as it encountered an error:
+
+Error: system limit exceeded on number of pipes that can be open
+Node: %s
+
+when attempting to start process rank %lu.
+
+This can be resolved by setting the mca parameter opal_set_max_sys_limits to 1,
+increasing your limit descriptor setting (using limit or ulimit commands),
+asking the system administrator for that node to increase the system limit, or
+by rearranging your processes to place fewer of them on that node.
+
+[prun:sys-limit-files]
+
+%s was unable to launch the specified application as it encountered an error:
+
+Error: system limit exceeded on number of files that can be open
+Node: %s
+
+when attempting to start process rank %lu.
+
+This can be resolved by setting the mca parameter opal_set_max_sys_limits to 1,
+increasing your limit descriptor setting (using limit or ulimit commands),
+asking the system administrator for that node to increase the system limit, or
+by rearranging your processes to place fewer of them on that node.
+
+[prun:pipe-setup-failure]
+
+%s was unable to launch the specified application as it encountered an error:
+
+Error: pipe function call failed when setting up I/O forwarding subsystem
+Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:sys-limit-children]
+
+%s was unable to launch the specified application as it encountered an error:
+
+Error: system limit exceeded on number of processes that can be started
+Node: %s
+
+when attempting to start process rank %lu.
+
+This can be resolved by either asking the system administrator for that node to
+increase the system limit, or by rearranging your processes to place fewer of them
+on that node.
+
+[prun:failed-term-attrs]
+
+%s was unable to launch the specified application as it encountered an error:
+
+Error: reading tty attributes function call failed while setting up
+I/O forwarding system
+Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:wdir-not-found]
+
+%s was unable to launch the specified application as it could not
+find the specified working directory:
+
+Working directory: %s
+Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:wdir-not-accessible]
+
+%s was unable to launch the specified application as it lacks
+permissions to change to the specified working directory:
+
+Working directory: %s
+Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:exe-not-found]
+
+%s was unable to find the specified executable file, and therefore
+did not launch the job.  This error was first reported for process
+rank %lu; it may have occurred for other processes as well.
+
+NOTE: A common cause for this error is misspelling a %s command
+      line parameter option (remember that %s interprets the first
+      unrecognized command line token as the executable).
+
+Node:       %s
+Executable: %s
+
+[prun:exe-not-accessible]
+
+%s was unable to launch the specified application as it lacked
+permissions to execute an executable:
+
+Executable: %s
+Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:pipe-read-failure]
+
+%s was unable to launch the specified application as it encountered an error:
+
+Error: reading from a pipe function call failed while spawning a local process
+Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:proc-failed-to-start]
+
+%s was unable to start the specified application as it encountered an
+error:
+
+Error code: %d
+Error name: %s
+Node: %s
+
+when attempting to start process rank %lu.
+
+[prun:proc-failed-to-start-no-status]
+
+%s was unable to start the specified application as it encountered an
+error on node %s. More information may be available above.
+
+[prun:ompi-server-filename-bad]
+
+%s was unable to parse the filename where contact info for the
+prte-server was to be found. The option we were given was:
+
+--prte-server %s
+
+This appears to be missing the required ':' following the
+keyword "file". Please remember that the correct format for this
+command line option is:
+
+--prte-server file:path-to-file
+
+where path-to-file can be either relative to the cwd or absolute.
+
+[prun:ompi-server-filename-missing]
+
+%s was unable to parse the filename where contact info for the
+prte-server was to be found. The option we were given was:
+
+--prte-server %s
+
+This appears to be missing a filename following the ':'. Please
+remember that the correct format for this command line option is:
+
+--prte-server file:path-to-file
+
+where path-to-file can be either relative to the cwd or absolute.
+
+[prun:ompi-server-filename-access]
+
+%s was unable to access the filename where contact info for the
+prte-server was to be found. The option we were given was:
+
+--prte-server %s
+
+Please remember that the correct format for this command line option is:
+
+--prte-server file:path-to-file
+
+where path-to-file can be either relative to the cwd or absolute, and that
+you must have read access permissions to that file.
+
+[prun:ompi-server-file-bad]
+
+%s was unable to read the prte-server's contact info from the
+given filename. The filename we were given was:
+
+FILE: %s
+
+Please remember that the correct format for this command line option is:
+
+--prte-server file:path-to-file
+
+where path-to-file can be either relative to the cwd or absolute, and that
+the file must have a single line in it that contains the PRTE
+uri for the prte-server. Note that this is *not* a standard uri, but
+a special format used internally by PRTE for communications. It can
+best be generated by simply directing the prte-server to put its
+uri in a file, and then giving %s that filename.
+
+
+[prun:multiple-paffinity-schemes]
+
+Multiple processor affinity schemes were specified (can only specify
+one):
+
+Slot list: %s
+prte_paffinity_alone:  true
+
+Please specify only the one desired method.
+
+[prun:invalid-node-rank]
+
+An invalid node rank was obtained - this is probably something
+that should be reported to the PRRTE developers.
+
+[prun:invalid-local-rank]
+
+An invalid local rank was obtained - this is probably something
+that should be reported to the PRRTE developers.
+
+[prun:invalid-phys-cpu]
+
+An invalid physical processor id was returned when attempting to
+set processor affinity - please check to ensure that your system
+supports such functionality. If so, then this is probably something
+that should be reported to the PRRTE developers.
+
+[prun:topo-not-supported]
+
+An attempt was made to bind a process to a specific hardware topology
+mapping (e.g., binding to a package) but the operating system does not
+support such topology-aware actions.  Talk to your local system
+administrator to find out if your system can support topology-aware
+functionality (e.g., Linux Kernels newer than v2.6.18).
+
+Systems that do not support processor topology-aware functionality
+cannot use "bind to package" and other related functionality.
+
+  Local host:        %s
+  Action attempted:  %s %s
+  Application name:  %s
+
+[prun:not-enough-resources]
+
+Not enough %s were found on the local host to meet the requested
+binding action:
+
+  Local host:        %s
+  Action requested:  %s
+  Application name:  %s
+
+Please revise the request and try again.
+
+[prun:invalid-slot-list-range]
+
+A slot list was provided that exceeds the boundaries on available
+resources:
+
+  Local host: %s
+  Slot list:  %s
+
+Please check your boundaries and try again.
+
+[prun:proc-comm-failed]
+
+A critical communication path was lost to:
+
+  My name:      %s
+  Process name: %s
+  Node:         %s
+
+[prun:proc-mem-exceeded]
+
+A process exceeded memory limits:
+
+  Process name: %s
+  Node:         %s
+
+[prun:proc-stalled]
+
+One or more processes appear to have stalled - a monitored file
+failed to show the required activity.
+
+[prun:proc-sensor-exceeded]
+
+One or more processes have exceeded a specified sensor limit, but
+no further info is available.
+
+[prun:proc-heartbeat-failed]
+
+%s failed to receive scheduled heartbeat communications from a remote
+process:
+
+  Process name: %s
+  Node:         %s
+
+[prun:non-zero-exit]
+
+%s detected that one or more processes exited with non-zero status, thus causing
+the job to be terminated. The first process to do so was:
+
+  Process name: %s
+  Exit code:    %d
+
+[prun:negative-nprocs]
+
+%s has detected that one or more applications was given a negative
+number of processes to run:
+
+  Application:  %s
+  Num procs:    %d
+
+Please correct this value and try again.
+
+[prun:timeout]
+
+The user-provided time limit for job execution has been reached:
+
+  Timeout: %d seconds
+
+The job will now be aborted.  Please check your code and/or
+adjust/remove the job execution time limit (as specified by --timeout
+command line option or MPIEXEC_TIMEOUT environment variable).
+
+[prun:conflict-env-set]
+
+ERROR: You have attempted to pass environment variables to PRTE
+with both the "-x" method and by setting the MCA parameter "mca_base_env_list".
+
+PRTE does not support mixing these two methods.  Please choose one
+method and try launching your job again.
+
+Your job will now abort.
+
+[prun:pmix-failed]
+
+The call to pmix_init_server() failed. This may be due to your
+system's restriction for Unix's socket's path-length.
+
+   prte_proc_session_dir: %s
+
+Please try to set TMPDIR to something short (like /tmp) or change
+Your computer's name (see uname -n).
+
+[prun:timeoutconflict]
+
+Conflicting requests for timeout were given:
+
+  --timeout command line option: %d
+  MPIEXEC_TIMEOUT envar:         %s
+
+Only one method should be provided, or else they must agree. Please
+correct and retry.
+
+[prun:stop-on-exec]
+
+%s was unable to stop the executable at first instruction:
+
+  Error:     %s
+  Nodename:  %s
+  Rank:      %lu
+
+[use-pterm]
+
+Use of %s to terminate the PRTE DVM has been deprecated. Please use
+the "pterm" tool instead in the future.
+
+[bad-pause-for-tool]
+
+%s detected the presence of the PMIX_LAUNCHER_PAUSE_FOR_TOOL environmental
+variable, but the value of the variable is in an improper form:
+
+  PMIX_LAUNCHER_PAUSE_FOR_TOOL:  %s
+
+The variable must be of the form (nspace:rank) of the tool requesting that
+%s pause for it to connect. Please reset the value of the variable and try
+again.
+
+[prun:executable-incorrectly-given]
+
+The %s command was given with an application specified. %s is only used
+to start the persistent DVM - it cannot be used with an application.
+
+[bad-option-input]
+
+%s was given an option that expected a string argument:
+
+  option: %s
+  argument: %s
+  expected: %s
+
+Please correct the option and try again.
+
+[file-open-error]
+
+%s was unable to open the specified file provided as an option:
+
+  option: %s
+  argument: %s
+  file: %s
+
+Please correct the option and try again.
+
+[bad-file]
+
+%s was unable to read the necessary info from the provided file:
+
+  option: %s
+  argument: %s
+  file: %s
+
+Please correct the option or the file and try again.
+
+[bad-dvm-option]
+
+The --dvm <arg> option was provided, but the argument
+is one not recognized:
+
+  arg: %s
+
+Please see "%s --help dvm" for a list of recognized
+options and examples
+
