@@ -1801,7 +1801,15 @@ static bool check_prte_overlap(char *var, char *value)
         return true;
     } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
         // need to convert reachable to prtereachable
-        pmix_asprintf(&tmp, "PRTE_MCA_prtereachable_%s", &var[strlen("reachable")]);
+        pmix_asprintf(&tmp, "PRTE_MCA_prtereachable_%s", &var[strlen("reachable_")]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "orte_", strlen("orte_"))) {
+        // need to convert "orte" to "prte"
+        pmix_asprintf(&tmp, "PRTE_MCA_prte_%s", &var[strlen("orte_")]);
         // set it, but don't overwrite if they already
         // have a value in our environment
         setenv(tmp, value, false);
