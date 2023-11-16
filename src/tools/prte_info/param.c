@@ -132,7 +132,7 @@ void prte_info_do_params(bool want_all_in, bool want_internal)
                     }
 
                     if (!found) {
-                        pmix_show_help("help-pinfo.txt", "not-found", true, type);
+                        pmix_show_help("help-prte-info.txt", "not-found", true, type);
                         exit(1);
                     }
 
@@ -304,7 +304,7 @@ void prte_info_do_path(bool want_all)
                 } else if (0 == strcmp(prte_info_path_pkgincludedir, scope)) {
                     prte_info_show_path(prte_info_path_pkgincludedir, prte_install_dirs.prteincludedir);
                 } else {
-                    pmix_show_help("help-pinfo.txt", "usage", true, "USAGE");
+                    pmix_show_help("help-prte-info.txt", "usage", true, "USAGE");
                     exit(1);
                 }
             }

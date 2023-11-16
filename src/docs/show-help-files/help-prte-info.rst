@@ -124,3 +124,35 @@ Show the hostname upon which PRRTE was configured and built
 Syntax: ``-a`` or ``--all``
 
 Show all configuration options and MCA parameters
+
+[lib-call-fail]
+
+A library call unexpectedly failed.  This is a terminal error; please
+show this message to a PRTE wizard:
+
+        Library call: %s
+        Source file: %s
+        Source line number: %d
+
+Aborting...
+
+[developer warning: field too long]
+
+DEVELOPER WARNING: A field in prte_info output is too long and
+will appear poorly in the prettyprint output.
+
+   Value:      "%s"
+   Max length: %d
+
+[not-found]
+
+The specified framework could not be found:
+
+  Framework: %s
+
+This could be due to a misspelling of the framework name, or because support
+for that framework was not configured into this version of PRTE. Please see
+
+  prte_info --config
+
+for a full report of how PRTE was configured.

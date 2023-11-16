@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -110,7 +110,7 @@ void prte_info_out(const char *pretty_message, const char *plain_message, const 
             spaces = strdup("");
 #if PRTE_ENABLE_DEBUG
             if (centerpoint < (int) strlen(pretty_message)) {
-                pmix_show_help("help-pinfo.txt", "developer warning: field too long", false,
+                pmix_show_help("help-prte-info.txt", "developer warning: field too long", false,
                                pretty_message, centerpoint);
             }
 #endif
