@@ -295,6 +295,16 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    /* Register all global MCA Params */
+    if (PRTE_SUCCESS != (rc = prte_register_params())) {
+        if (PRTE_ERR_SILENT != rc) {
+            pmix_show_help("help-prte-runtime", "prte_init:startup:internal-failure", true,
+                           "prte register params",
+                           PRTE_ERROR_NAME(rc), rc);
+        }
+        return 1;
+    }
+
     rc = schizo->parse_cli(argv, &results, PMIX_CLI_WARN);
     if (PRTE_SUCCESS != rc) {
         PMIX_DESTRUCT(&results);
