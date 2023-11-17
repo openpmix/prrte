@@ -1807,6 +1807,14 @@ static bool check_prte_overlap(char *var, char *value)
         setenv(tmp, value, false);
         free(tmp);
         return true;
+    } else if (0 == strncmp(var, "plm_rsh_", strlen("plm_rsh_"))) {
+        // need to convert rsh to ssh
+        pmix_asprintf(&tmp, "PRTE_MCA_plm_ssh_%s", &var[strlen("plm_rsh_")]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
     } else if (0 == strncmp(var, "orte_", strlen("orte_"))) {
         // need to convert "orte" to "prte"
         pmix_asprintf(&tmp, "PRTE_MCA_prte_%s", &var[strlen("orte_")]);
