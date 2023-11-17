@@ -124,3 +124,14 @@ Delay specified number of seconds before trying to connect
 [pmixmca]
 
 .. include:: /prrte-rst-content/cli-pmixmca.rst
+
+[no-args]
+
+The %s command does not accept arguments other than those
+specifically defined by the command. The following were
+not recognized:
+
+  Args: %s
+
+Please see "%s --help" for a description of all accepted
+command options.
