@@ -24,6 +24,7 @@
  *                         reserved.
  * Copyright (c) 2022-2023 Triad National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -704,14 +705,15 @@ int main(int argc, char *argv[])
             param[param_len - 1] = '\0';
             param_len--;
             if (0 == param_len) {
-                pmix_show_help("help-prun.txt", "prun:empty-prefix", true, prte_tool_basename,
-                               prte_tool_basename);
-                PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
-                goto DONE;
+                /* We get here if we removed all PATH_SEP's and end up
+                   with an empty string.  In this case, the prefix is
+                   just a single PATH_SEP. */
+                strncpy(param, PRTE_PATH_SEP, sizeof(param) - 1);
+                break;
             }
         }
-        prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL, param,
-                           PMIX_STRING);
+        prte_set_attribute(&dapp->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
+                           param, PMIX_STRING);
         free(param);
     } else {
         /* Check if called with fully-qualified path to prte.
