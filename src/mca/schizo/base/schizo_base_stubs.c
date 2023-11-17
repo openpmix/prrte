@@ -327,6 +327,10 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
                     pmix_asprintf(&param, "prtedl_%s", &p1[strlen("dl_")]);
                     free(p1);
                     p1 = param;
+                } else if (0 == strncasecmp(p1, "plm_rsh", strlen("plm_rsh"))) {
+                    pmix_asprintf(&param, "plm_ssh_%s", &p1[strlen("plm_rsh_")]);
+                    free(p1);
+                    p1 = param;
                 }
                 if (NULL == target) {
                     /* push it into our environment */
