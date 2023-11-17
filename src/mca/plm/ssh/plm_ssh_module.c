@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -592,7 +592,11 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
             if (0 == strcmp(orted_cmd, "prted")) {
                 /* if the cmd is our standard one, then add the prefix */
                 value = pmix_basename(prte_install_dirs.bindir);
-                pmix_asprintf(&tmp, "%s/%s", prefix_dir, value);
+                if ('/' == prefix_dir[strlen(prefix_dir)-1]) {
+                    pmix_asprintf(&tmp, "%s%s", prefix_dir, value);
+                } else {
+                    pmix_asprintf(&tmp, "%s/%s", prefix_dir, value);
+                }
                 free(value);
                 pmix_asprintf(&full_orted_cmd, "%s/%s", tmp, orted_cmd);
                 free(tmp);
