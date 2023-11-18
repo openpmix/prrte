@@ -45,6 +45,10 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                   [AS_HELP_STRING([--disable-pmix-lib-checks],
                                   [If --disable-pmix-lib-checks is specified, configure will assume that -lpmix is available])])
 
+    AC_ARG_WITH(prte-scheduler,
+        AS_HELP_STRING([--with-prte-scheduler],
+                       [Normal PRTE users/applications do not need this.  Users/applications wishing to explore dynamic allocation support probably do (default: enabled).]))
+
     prte_pmix_support=1
 
     if test "$with_pmix" = "no"; then
@@ -94,6 +98,18 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                        AC_MSG_WARN([PRRTE requires PMIx v$prte_pmix_min_num_version or above.])
                        AC_MSG_ERROR([Please select a supported version and configure again])])
 
+    AC_MSG_CHECKING([version at or above v6.0])
+    AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
+                                        #include <pmix_version.h>
+                                        #if (PMIX_NUMERIC_VERSION < 0x00060000)
+                                        #error "not version v6.0 or above"
+                                        #endif
+                                       ], [])],
+                      [AC_MSG_RESULT([yes])
+                       prte_pmix_low_version=0],
+                      [AC_MSG_RESULT(no)
+                       prte_pmix_low_version=1])
+
     AC_CHECK_HEADER([src/util/pmix_argv.h], [],
                     [AC_MSG_ERROR([Could not find PMIx devel headers.  Can not continue.])])
 
@@ -117,6 +133,28 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     AC_SUBST([PMIXCC_PATH])
 
     PRTE_SUMMARY_ADD([Required Packages], [PMIx], [], [$prte_pmix_SUMMARY])
+
+    #
+    # Do we want to install the PRRTE scheduler?
+    #
+    AC_MSG_CHECKING([if want to install PRRTE pseudo-scheduler])
+    if test "$prte_pmix_low_version" = "0"; then
+        if test "$with_prte_scheduler" = "no"; then
+            AC_MSG_RESULT([no])
+            prte_want_scheduler="no"
+            WANT_PRTE_SCHED=0
+        else
+            AC_MSG_RESULT([yes])
+            prte_want_scheduler="yes"
+            WANT_PRTE_SCHED=1
+        fi
+    else
+        prte_want_scheduler="no"
+        WANT_PRTE_SCHED=0
+    fi
+    AM_CONDITIONAL(WANT_PRTE_SCHED, test "$WANT_PRTE_SCHED" = 1)
+    PRTE_SUMMARY_ADD([Miscellaneous], [PRTE Pseudo-Scheduler], [], [$prte_want_scheduler])
+
 
     PRTE_VAR_SCOPE_POP
 ])
