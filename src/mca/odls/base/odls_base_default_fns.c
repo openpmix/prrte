@@ -1527,6 +1527,8 @@ void prte_odls_base_default_wait_local_proc(int fd, short sd, void *cbdata)
     bool flag = false;
     PRTE_HIDE_UNUSED_PARAMS(fd, sd);
 
+    PMIX_ACQUIRE_OBJECT(t2);
+
     pmix_output_verbose(5, prte_odls_base_framework.framework_output,
                         "%s odls:wait_local_proc child process %s pid %ld terminated",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name),
