@@ -412,7 +412,7 @@ int prte_util_add_dash_host_nodes(pmix_list_t *nodes, char *hosts, bool allocati
         }
     }
 
-    if (prte_managed_allocation) {
+    if (prte_managed_allocation && !allocating) {
         prte_node_t *node_from_pool = NULL;
         PMIX_LIST_FOREACH(node, nodes, prte_node_t) {
             needcheck = true;

@@ -47,3 +47,18 @@ file could not be opened for reading:
   File: %s
 
 Please check the filename and try again.
+#
+[ras-base:nonuniform-slots]
+A request was made to add hosts from a hostfile while operating
+in a managed allocation. In this case, either the slots must be
+specified in the given hostfile, or the number of slots assigned
+by the resource manager on the existing nodes must be uniform.
+
+The current allocation does not conform to that requirement:
+
+   Base number of slots: %d
+   Node: %s
+   Number of slots: %d
+
+Please assign a number of slots for each node to be added to the
+allocation.

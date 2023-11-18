@@ -753,13 +753,14 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
 {
     int rc;
     pmix_list_t nodes;
-    int i, k, n, slots;
+    int i, k, m, n, slots;
     prte_app_context_t *app;
     prte_node_t *node, *next, *nptr;
-    char *hosts, *line, *cptr, *ptr, **hostfiles;
+    char *hosts, *line, *cptr, *ptr, **hostfiles, *nm;
     FILE *fp;
     bool addslots, found;
     bool extend = false;
+    int default_slots = -1;
 
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
@@ -775,6 +776,32 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
      * generate an error in this scenario, so only non-relative syntax
      * can be present
      */
+
+    /* if we are in a managed allocation, the best we can do for nodes
+     * that do not include a specific slot assignment is to (a) check
+     * to see if there is a uniform assignment on existing nodes and
+     * use that, or (b) generate an error as we cannot know what the
+     * host environment might have set
+     */
+    if (prte_managed_allocation) {
+        for (n = 0; n < prte_node_pool->size; n++) {
+            nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n);
+            if (NULL == nptr) {
+                continue;
+            }
+            if (-1 == default_slots) {
+                default_slots = nptr->slots;
+                continue;
+            }
+            if (default_slots != nptr->slots) {
+                // generate an error message
+                pmix_show_help("help-ras-base.txt", "ras-base:nonuniform-slots", true,
+                               default_slots, nptr->name, nptr->slots);
+                PMIX_LIST_DESTRUCT(&nodes);
+                return PRTE_ERR_SILENT;
+            }
+        }
+    }
 
     for (i = 0; i < jdata->apps->size; i++) {
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
@@ -819,28 +846,35 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
                         free(line);
                         continue;
                     }
-
+                    addslots = false;
                     // because there can be arbitrary whitespace around keywords,
                     // we manually parse the line to get the directives
                     ptr = cptr;
-                    while (NULL != ptr && !isspace(*ptr)) {
+                    while ('\0' != *ptr && !isspace(*ptr)) {
                         ++ptr;
                     }
-                    *ptr = '\0';
+                    if ('\0' == *ptr) {
+                        // end of the line - just the node name was given
+                        slots = default_slots;
+                        goto process;
+                    }
+                    *ptr = '\0'; // terminate the name
                     // find the '=' sign
                     ++ptr;
-                    ptr = strchr(ptr, '=');
-                    if (NULL == ptr) {
-                        // didn't specify slots - autodetect them
-                        slots = -1;
+                    while ('\0' != *ptr && ('=' != *ptr || isspace(*ptr))) {
+                        ++ptr;
+                    }
+                    if ('\0' == *ptr) {
+                        // didn't specify slots - use the default value
+                        slots = default_slots;
                         goto process;
                     }
                     // find the value
                     ++ptr;
-                    while (NULL != ptr && '\0' != *ptr && isspace(*ptr)) {
+                    while ('\0' != *ptr && isspace(*ptr)) {
                         ++ptr;
                     }
-                    if (NULL == ptr || '\0' == *ptr) {
+                    if ('\0' == *ptr) {
                         // bad syntax
                         PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
                         fclose(fp);
@@ -851,7 +885,6 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
                     }
                     // if it is a '+' or '-', then we are adjusting
                     // the #slots
-                    addslots = false;
                     if ('+' == *ptr || '-' == *ptr) {
                         addslots = true;
                     }
@@ -860,23 +893,42 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
             process:
                     // see if we have this node
                     found = false;
-                    for (n = 0; n < prte_node_pool->size; n++) {
+                    // does the name refer to me?
+                        if (prte_check_host_is_local(cptr)) {
+                            nm = prte_process_info.nodename;
+                        } else {
+                            nm = cptr;
+                        }
+
+                    for (n = 0; !found && n < prte_node_pool->size; n++) {
                         nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n);
                         if (NULL == nptr) {
                             continue;
                         }
-                        if (0 == strcmp(cptr, nptr->name)) {
+                        if (0 == strcmp(nm, nptr->name)) {
                             // we have the node
                             if (addslots) {
                                 nptr->slots += slots;
                                 if (0 > nptr->slots) {
                                     nptr->slots = 0;
                                 }
-                            } else {
-                                nptr->slots = slots;
                             }
                             found = true;
                             break;
+                        } else if (NULL != nptr->aliases) {
+                            /* no choice but an exhaustive search - fortunately, these lists are short! */
+                            for (m = 0; NULL != nptr->aliases[m]; m++) {
+                                if (0 == strcmp(cptr, nptr->aliases[m])) {
+                                    if (addslots) {
+                                        nptr->slots += slots;
+                                        if (0 > nptr->slots) {
+                                            nptr->slots = 0;
+                                        }
+                                    }
+                                    found = true;
+                                    break;
+                                }
+                            }
                         }
                     }
                     if (!found) {
@@ -942,7 +994,8 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
         PMIX_LIST_FOREACH_SAFE(node, next, &nodes, prte_node_t)
         {
             node->state = PRTE_NODE_STATE_ADDED;
-            for (n = 0; n < prte_node_pool->size; n++) {
+            found = false;
+            for (n = 0; !found && n < prte_node_pool->size; n++) {
                 nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n);
                 if (NULL == nptr) {
                     continue;
@@ -956,7 +1009,22 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
                     }
                     pmix_list_remove_item(&nodes, &node->super);
                     PMIX_RELEASE(node);
-                    break;
+                    found = true;
+                } else if (NULL != nptr->aliases) {
+                    /* no choice but an exhaustive search - fortunately, these lists are short! */
+                    for (m = 0; !found && NULL != nptr->aliases[m]; m++) {
+                        if (0 == strcmp(node->name, nptr->aliases[m])) {
+                            if (prte_get_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS, NULL, PMIX_BOOL)) {
+                                nptr->slots += node->slots;
+                                prte_remove_attribute(&node->attributes, PRTE_NODE_ADD_SLOTS);
+                            } else {
+                                nptr->slots = node->slots;
+                            }
+                            pmix_list_remove_item(&nodes, &node->super);
+                            PMIX_RELEASE(node);
+                            found = true;
+                        }
+                    }
                 }
             }
         }
@@ -981,7 +1049,8 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
     }
 
     /* shall we display the results? */
-    if (0 < pmix_output_get_verbosity(prte_ras_base_framework.framework_output)) {
+    if (0 < pmix_output_get_verbosity(prte_ras_base_framework.framework_output) ||
+        prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PMIX_BOOL)) {
         prte_ras_base_display_alloc(jdata);
     }
 
