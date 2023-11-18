@@ -336,7 +336,6 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
     char **temp_argv, **env;
     prte_pmix_app_t *app;
     bool made_app;
-    bool ddash = false;
 
     /* Make the apps */
     temp_argv = NULL;
@@ -348,13 +347,6 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
 
     env = NULL;
     for (i = 1; NULL != argv[i]; ++i) {
-        // if this is a `--`, then everything beyond it
-        // belongs to the application
-        if (0 == strcmp(argv[i], "--")) {
-            ddash = true;
-            ++i;
-            break;
-        }
         if (0 == strcmp(argv[i], ":")) {
             /* Make an app with this argv */
             if (PMIX_ARGV_COUNT_COMPAT(temp_argv) > 1) {
@@ -394,13 +386,9 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
         }
         if (made_app) {
             pmix_list_append(jdata, &app->super);
-            if (ddash && NULL != argv[i]) {
-                for (j=i; NULL != argv[j]; j++) {
-                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&app->app.argv, argv[j]);
-                }
-            }
         }
     }
+
     if (NULL != env) {
         PMIX_ARGV_FREE_COMPAT(env);
     }
