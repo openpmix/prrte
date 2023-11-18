@@ -28,6 +28,40 @@
 # $HEADER$
 #
 
+dnl $1 is the base cap name (i.e., what comes after "PMIX_CAP_")
+dnl $2 is the action if happy
+dnl $3 is the action if not happy
+AC_DEFUN([PRTE_CHECK_PMIX_CAP],[
+    PRTE_VAR_SCOPE_PUSH([prte_cpp_save])
+
+    AC_MSG_CHECKING([for PMIX_CAP_$1])
+
+    prte_cpp_save=$CPP
+    CPP="$PMIXCC_PATH -E"
+    AC_PREPROC_IFELSE(
+        [AC_LANG_PROGRAM([#include <pmix.h>],
+                         [#if !defined(PMIX_CAPABILITIES)
+                          #error This PMIx does not have any capability flags
+                          #endif
+                          #if !defined(PMIX_CAP_$1)
+                          #error This PMIx does not have the PMIX_CAP_$1 capability flag at all
+                          #endif
+                          #if (PMIX_CAPABILITIES & PMIX_CAP_$1) == 0
+                          #error This PMIx does not have the PMIX_CAP_$1 capability flag set
+                          #endif
+                         ]
+                        )
+        ],
+        [AC_MSG_RESULT([found])
+         $2],
+        [AC_MSG_RESULT([not found])
+         $3])
+
+    CPP=$prte_cpp_save
+
+    PRTE_VAR_SCOPE_POP
+])
+
 AC_DEFUN([PRTE_CHECK_PMIX],[
 
     PRTE_VAR_SCOPE_PUSH([prte_external_pmix_save_CPPFLAGS prte_pmix_support found_pmixcc])
@@ -135,6 +169,34 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
            PMIXCC_PATH=])
     AM_CONDITIONAL([PRTE_HAVE_PMIXCC], [test $found_pmixcc -eq 1])
     AC_SUBST([PMIXCC_PATH])
+
+    # Check for any needed capabilities from the PMIx we found.
+    #
+    # Note: if the PMIx we found does not define capability flags,
+    # then it definitely does not have the capability flags we're
+    # looking for.
+
+    # We must have this capability.  If we don't, abort.
+    PRTE_CHECK_PMIX_CAP([202311CLI], [],
+                        [AC_MSG_WARN([Your PMIx version is too old.])
+                         AC_MSG_WARN([This PRRTE needs a PMIx with the PMIX_CAP_202311CLI capability flag])
+                         AC_MSG_ERROR([Cannot continue])])
+
+    # We'd like to have this capability, but we can handle it if we
+    # don't.
+    PRTE_SAD_BECAUSE_PMIX_DOES_NOT_HAVE_CAP_SOMETHING_ELSE=0
+    PRTE_CHECK_PMIX_CAP([SOMETHING_ELSE], [],
+                        [AC_MSG_WARN([Your PMIx version does not have PMIX_CAP_SOMETHING_ELSE])
+                         AC_MSG_WARN([PRRTE will function, but in a degraded state])
+                         PRTE_SAD_BECAUSE_PMIX_DOES_NOT_HAVE_CAP_SOMETHING_ELSE=1])
+    AC_DEFINE_UNQUOTED([PRTE_SAD_BECAUSE_PMIX_DOES_NOT_HAVE_CAP_SOMETHING_ELSE],
+                       [$RESULT],
+                       [PRTE is sad because the PMIx we are compiling against does not have PMIX_CAP_SOMETHING_ELSE])
+
+    # Test for a capability that we know does not exist, just to make
+    # sure that CHECK_PMIX_CAP correctly handles it.
+    PRTE_CHECK_PMIX_CAP([BOGUS], [],
+                        [AC_MSG_WARN([Your PMIx version does not have PMIX_CAP_BOGUS])])
 
     PRTE_SUMMARY_ADD([Required Packages], [PMIx], [], [$prte_pmix_SUMMARY])
 
