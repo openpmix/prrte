@@ -325,3 +325,12 @@ PRTE_EXPORT int prte_attr_register(const char *project, prte_attribute_key_t key
         free(_output);                                                              \
     } while (0)
 #endif
+
+// forward declarations
+struct prte_proc_t;
+struct prte_node_t;
+struct prte_job_t;
+
+PRTE_EXPORT char* prte_print_proc_flags(struct prte_proc_t *p);
+PRTE_EXPORT char* prte_print_node_flags(struct prte_node_t *p);
+PRTE_EXPORT char* prte_print_job_flags(struct prte_job_t *p);

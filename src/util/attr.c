@@ -25,7 +25,7 @@
 #include "src/util/pmix_string_copy.h"
 
 #include "src/mca/errmgr/errmgr.h"
-
+#include "src/runtime/prte_globals.h"
 #include "src/util/attr.h"
 
 #define MAX_CONVERTERS            5
@@ -888,4 +888,148 @@ int prte_attr_unload(prte_attribute_t *kv, void **data, pmix_data_type_t type)
         return PRTE_ERR_NOT_SUPPORTED;
     }
     return PRTE_SUCCESS;
+}
+
+char* prte_print_proc_flags(struct prte_proc_t *ptr)
+{
+    prte_proc_t *p = (prte_proc_t*)ptr;
+    char **tmp = NULL;
+    char *ans;
+
+    // start with the proc name
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, PRTE_NAME_PRINT(&p->name));
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, ": ");
+
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_ALIVE)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "ALIVE");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_ABORT)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "ABORT");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_UPDATED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "UPDATED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_LOCAL)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "LOCAL");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_REPORTED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "REPORTED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_REG)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "REGISTERED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_HAS_DEREG)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "DEREGISTERED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_AS_MPI)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "MPI");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_IOF_COMPLETE)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "IOF-COMPLETE");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_WAITPID)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "WAITPID");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_RECORDED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "RECORDED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_DATA_IN_SM)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "DATA-IN-SM");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_DATA_RECVD)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "DATA-RECVD");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_SM_ACCESS)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "SM-ACCESS");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_PROC_FLAG_TERM_REPORTED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "TERMINATED");
+    }
+    ans = PMIX_ARGV_JOIN_COMPAT(tmp, '|');
+    PMIX_ARGV_FREE_COMPAT(tmp);
+    return ans;
+}
+
+char* prte_print_node_flags(struct prte_node_t *ptr)
+{
+    prte_node_t *p = (prte_node_t*)ptr;
+    char **tmp = NULL;
+    char *ans;
+
+    // start with the node name
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, p->name);
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, ": ");
+
+    if (PRTE_FLAG_TEST(p, PRTE_NODE_FLAG_DAEMON_LAUNCHED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "DAEMON-LAUNCHED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_NODE_FLAG_LOC_VERIFIED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "LOCATION");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_NODE_FLAG_OVERSUBSCRIBED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "OVERSUBSCRIBED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_NODE_FLAG_MAPPED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "MAPPED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_NODE_FLAG_SLOTS_GIVEN)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "SLOTS-GIVEN");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_NODE_NON_USABLE)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "NONUSABLE");
+    }
+    ans = PMIX_ARGV_JOIN_COMPAT(tmp, '|');
+    PMIX_ARGV_FREE_COMPAT(tmp);
+    return ans;
+}
+
+char* prte_print_job_flags(struct prte_job_t *ptr)
+{
+    prte_job_t *p = (prte_job_t*)ptr;
+    char **tmp = NULL;
+    char *ans;
+
+    // start with the job name
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, PRTE_JOBID_PRINT(p->nspace));
+    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, ": ");
+
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_UPDATED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "UPDATED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_RESTARTED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "RESTARTED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_ABORTED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "ABORTED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_FORWARD_OUTPUT)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "FORWARD-OUTPUT");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_DO_NOT_MONITOR)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "DO-NOT-MONITOR");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_FORWARD_COMM)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "FWD-COM");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_RESTART)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "RESTART");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_PROCS_MIGRATING)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "MIGRATING");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_OVERSUBSCRIBED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "OVERSUBSCRIBED");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_TOOL)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "TOOL");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_LAUNCHER)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "LAUNCHER");
+    }
+    if (PRTE_FLAG_TEST(p, PRTE_JOB_FLAG_ERR_REPORTED)) {
+        PMIX_ARGV_APPEND_NOSIZE_COMPAT(&tmp, "ERROR-REPORTED");
+    }
+    ans = PMIX_ARGV_JOIN_COMPAT(tmp, '|');
+    PMIX_ARGV_FREE_COMPAT(tmp);
+    return ans;
 }
