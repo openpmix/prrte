@@ -112,14 +112,14 @@ static int init(void)
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* setup state machine to trap job errors */
-    prte_state.add_job_state(PRTE_JOB_STATE_ERROR, job_errors, PRTE_ERROR_PRI);
+    prte_state.add_job_state(PRTE_JOB_STATE_ERROR, job_errors);
 
     /* set the lost connection state to run at MSG priority so
      * we can process any last messages from the proc
      */
-    prte_state.add_proc_state(PRTE_PROC_STATE_COMM_FAILED, proc_errors, PRTE_MSG_PRI);
+    prte_state.add_proc_state(PRTE_PROC_STATE_COMM_FAILED, proc_errors);
 
-    prte_state.add_proc_state(PRTE_PROC_STATE_ERROR, proc_errors, PRTE_ERROR_PRI);
+    prte_state.add_proc_state(PRTE_PROC_STATE_ERROR, proc_errors);
 
     return PRTE_SUCCESS;
 }

@@ -275,7 +275,6 @@ pmix_status_t pmix_server_publish_fn(const pmix_proc_t *proc, const pmix_info_t 
 
     /* thread-shift so we can store the tracker */
     prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, execute, req);
-    prte_event_set_priority(&(req->ev), PRTE_MSG_PRI);
     PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 
@@ -360,7 +359,6 @@ pmix_status_t pmix_server_lookup_fn(const pmix_proc_t *proc, char **keys, const 
 
     /* thread-shift so we can store the tracker */
     prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, execute, req);
-    prte_event_set_priority(&(req->ev), PRTE_MSG_PRI);
     PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 
@@ -442,7 +440,6 @@ pmix_status_t pmix_server_unpublish_fn(const pmix_proc_t *proc, char **keys,
 
     /* thread-shift so we can store the tracker */
     prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, execute, req);
-    prte_event_set_priority(&(req->ev), PRTE_MSG_PRI);
     PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 

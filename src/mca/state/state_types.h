@@ -3,7 +3,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,7 +61,6 @@ typedef struct {
     prte_job_state_t job_state;
     prte_proc_state_t proc_state;
     prte_state_cbfunc_t cbfunc;
-    int priority;
 } prte_state_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_state_t);
 

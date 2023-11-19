@@ -40,18 +40,6 @@ typedef event_callback_fn prte_event_cbfunc_t;
 
 BEGIN_C_DECLS
 
-/* set the number of event priority levels */
-#define PRTE_EVENT_NUM_PRI 8
-
-#define PRTE_EV_ERROR_PRI   0
-#define PRTE_EV_MSG_HI_PRI  1
-#define PRTE_EV_SYS_HI_PRI  2
-#define PRTE_EV_MSG_LO_PRI  3
-#define PRTE_EV_SYS_LO_PRI  4
-#define PRTE_EV_INFO_HI_PRI 5
-#define PRTE_EV_INFO_LO_PRI 6
-#define PRTE_EV_LOWEST_PRI  7
-
 #define PRTE_EVENT_SIGNAL(ev) prte_event_get_signal(ev)
 
 #define PRTE_TIMEOUT_DEFAULT \
@@ -101,8 +89,6 @@ PRTE_EXPORT prte_event_t *prte_event_alloc(void);
 
 /* Event priority APIs */
 #define prte_event_base_priority_init(b, n) event_base_priority_init((b), (n))
-
-#define prte_event_set_priority(x, n) event_priority_set((x), (n))
 
 /* Basic event APIs */
 #define prte_event_enable_debug_mode() event_enable_debug_mode()
@@ -164,10 +150,9 @@ typedef struct {
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_event_list_item_t);
 
 /* define a threadshift macro */
-#define PRTE_PMIX_THREADSHIFT(x, eb, f, p)                                  \
+#define PRTE_PMIX_THREADSHIFT(x, eb, f)                                \
     do {                                                               \
         prte_event_set((eb), &((x)->ev), -1, PRTE_EV_WRITE, (f), (x)); \
-        prte_event_set_priority(&((x)->ev), (p));                      \
         PMIX_POST_OBJECT((x));                                         \
         prte_event_active(&((x)->ev), PRTE_EV_WRITE, 1);               \
     } while (0)

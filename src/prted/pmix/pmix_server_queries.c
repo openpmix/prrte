@@ -824,7 +824,6 @@ pmix_status_t pmix_server_query_fn(pmix_proc_t *proct, pmix_query_t *queries, si
     cd->cbdata = cbdata;
 
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _query, cd);
-    prte_event_set_priority(&(cd->ev), PRTE_MSG_PRI);
     PMIX_POST_OBJECT(cd);
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 

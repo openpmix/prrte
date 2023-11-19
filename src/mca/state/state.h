@@ -4,7 +4,7 @@
  *                         reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -113,31 +113,31 @@ PRTE_EXPORT extern pmix_mca_base_framework_t prte_state_base_framework;
     } while (0);
 
 /* Called when actually arriving (reaching) the state with priority k */
-#define PRTE_REACHING_JOB_STATE(j, s, k)                                                      \
+#define PRTE_REACHING_JOB_STATE(j, s)                                                         \
     do {                                                                                      \
         prte_job_t *shadow = (j);                                                             \
         if (prte_state_base_framework.framework_verbose > 0) {                                \
             double timestamp = 0.0;                                                           \
             PRTE_STATE_GET_TIMESTAMP(timestamp);                                              \
             pmix_output_verbose(1, prte_state_base_framework.framework_output,                \
-                                "%s [%f] ACTIVATING JOB %s STATE %s PRI %d",                  \
+                                "%s [%f] ACTIVATING JOB %s STATE %s",                         \
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), timestamp,                \
                                 (NULL == shadow) ? "NULL" : PRTE_JOBID_PRINT(shadow->nspace), \
-                                prte_job_state_to_str((s)), k);                               \
+                                prte_job_state_to_str((s)));                                  \
         }                                                                                     \
     } while (0);
 
-#define PRTE_REACHING_PROC_STATE(p, s, k)                                            \
+#define PRTE_REACHING_PROC_STATE(p, s)                                               \
     do {                                                                             \
         pmix_proc_t *shadow = (p);                                                   \
         if (prte_state_base_framework.framework_verbose > 0) {                       \
             double timestamp = 0.0;                                                  \
             PRTE_STATE_GET_TIMESTAMP(timestamp);                                     \
             pmix_output_verbose(1, prte_state_base_framework.framework_output,       \
-                                "%s [%f] ACTIVATING PROC %s STATE %s PRI %d",        \
+                                "%s [%f] ACTIVATING PROC %s STATE %s",               \
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), timestamp,       \
                                 (NULL == shadow) ? "NULL" : PRTE_NAME_PRINT(shadow), \
-                                prte_proc_state_to_str((s)), k);                     \
+                                prte_proc_state_to_str((s)));                        \
         }                                                                            \
     } while (0);
 
@@ -193,19 +193,13 @@ typedef void (*prte_state_base_module_activate_job_state_fn_t)(prte_job_t *jdata
  *
  */
 typedef int (*prte_state_base_module_add_job_state_fn_t)(prte_job_state_t state,
-                                                         prte_state_cbfunc_t cbfunc, int priority);
+                                                         prte_state_cbfunc_t cbfunc);
 
 /* Set the callback function for a state in the job state machine.
  *
  */
 typedef int (*prte_state_base_module_set_job_state_callback_fn_t)(prte_job_state_t state,
                                                                   prte_state_cbfunc_t cbfunc);
-
-/* Set the event priority for a state in the job state machine.
- *
- */
-typedef int (*prte_state_base_module_set_job_state_priority_fn_t)(prte_job_state_t state,
-                                                                  int priority);
 
 /* Remove a state from the job state machine.
  *
@@ -248,19 +242,13 @@ typedef void (*prte_state_base_module_activate_proc_state_fn_t)(pmix_proc_t *pro
  *
  */
 typedef int (*prte_state_base_module_add_proc_state_fn_t)(prte_proc_state_t state,
-                                                          prte_state_cbfunc_t cbfunc, int priority);
+                                                          prte_state_cbfunc_t cbfunc);
 
 /* Set the callback function for a state in the proc state machine.
  *
  */
 typedef int (*prte_state_base_module_set_proc_state_callback_fn_t)(prte_proc_state_t state,
                                                                    prte_state_cbfunc_t cbfunc);
-
-/* Set the event priority for a state in the proc state machine.
- *
- */
-typedef int (*prte_state_base_module_set_proc_state_priority_fn_t)(prte_proc_state_t state,
-                                                                   int priority);
 
 /* Remove a state from the proc state machine.
  *
@@ -279,13 +267,11 @@ struct prte_state_base_module_1_0_0_t {
     prte_state_base_module_activate_job_state_fn_t activate_job_state;
     prte_state_base_module_add_job_state_fn_t add_job_state;
     prte_state_base_module_set_job_state_callback_fn_t set_job_state_callback;
-    prte_state_base_module_set_job_state_priority_fn_t set_job_state_priority;
     prte_state_base_module_remove_job_state_fn_t remove_job_state;
     /* Proc state APIs */
     prte_state_base_module_activate_proc_state_fn_t activate_proc_state;
     prte_state_base_module_add_proc_state_fn_t add_proc_state;
     prte_state_base_module_set_proc_state_callback_fn_t set_proc_state_callback;
-    prte_state_base_module_set_proc_state_priority_fn_t set_proc_state_priority;
     prte_state_base_module_remove_proc_state_fn_t remove_proc_state;
 };
 typedef struct prte_state_base_module_1_0_0_t prte_state_base_module_1_0_0_t;

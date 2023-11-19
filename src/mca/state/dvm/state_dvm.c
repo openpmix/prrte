@@ -4,7 +4,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -69,12 +69,10 @@ prte_state_base_module_t prte_state_dvm_module = {
     .activate_job_state = prte_state_base_activate_job_state,
     .add_job_state = prte_state_base_add_job_state,
     .set_job_state_callback = prte_state_base_set_job_state_callback,
-    .set_job_state_priority = prte_state_base_set_job_state_priority,
     .remove_job_state = prte_state_base_remove_job_state,
     .activate_proc_state = prte_state_base_activate_proc_state,
     .add_proc_state = prte_state_base_add_proc_state,
     .set_proc_state_callback = prte_state_base_set_proc_state_callback,
-    .set_proc_state_priority = prte_state_base_set_proc_state_priority,
     .remove_proc_state = prte_state_base_remove_proc_state
 };
 
@@ -183,24 +181,23 @@ static int init(void)
     num_states = sizeof(launch_states) / sizeof(prte_job_state_t);
     for (i = 0; i < num_states; i++) {
         if (PRTE_SUCCESS
-            != (rc = prte_state.add_job_state(launch_states[i], launch_callbacks[i],
-                                              PRTE_SYS_PRI))) {
+            != (rc = prte_state.add_job_state(launch_states[i], launch_callbacks[i]))) {
             PRTE_ERROR_LOG(rc);
         }
     }
     /* add the termination response */
-    rc = prte_state.add_job_state(PRTE_JOB_STATE_DAEMONS_TERMINATED, prte_quit, PRTE_SYS_PRI);
+    rc = prte_state.add_job_state(PRTE_JOB_STATE_DAEMONS_TERMINATED, prte_quit);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
     /* add a default error response */
-    rc = prte_state.add_job_state(PRTE_JOB_STATE_FORCED_EXIT, force_quit, PRTE_ERROR_PRI);
+    rc = prte_state.add_job_state(PRTE_JOB_STATE_FORCED_EXIT, force_quit);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
     /* add callback to report progress, if requested */
     rc = prte_state.add_job_state(PRTE_JOB_STATE_REPORT_PROGRESS,
-                                  prte_state_base_report_progress, PRTE_ERROR_PRI);
+                                  prte_state_base_report_progress);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
@@ -213,7 +210,7 @@ static int init(void)
      */
     num_states = sizeof(proc_states) / sizeof(prte_proc_state_t);
     for (i = 0; i < num_states; i++) {
-        rc = prte_state.add_proc_state(proc_states[i], proc_callbacks[i], PRTE_SYS_PRI);
+        rc = prte_state.add_proc_state(proc_states[i], proc_callbacks[i]);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
         }

@@ -125,18 +125,6 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_timer_t);
 
 PRTE_EXPORT extern int prte_exit_status;
 
-/* PRTE event priorities - we define these
- * at levels that permit higher layers such as
- * OMPI to handle their events at higher priority,
- * with the exception of errors. Errors generally
- * require exception handling (e.g., ctrl-c termination)
- * that overrides the need to process MPI messages
- */
-#define PRTE_ERROR_PRI PRTE_EV_ERROR_PRI
-#define PRTE_MSG_PRI   PRTE_EV_MSG_LO_PRI
-#define PRTE_SYS_PRI   PRTE_EV_SYS_LO_PRI
-#define PRTE_INFO_PRI  PRTE_EV_INFO_LO_PRI
-
 /* define some common keys used in PRTE */
 #define PRTE_DB_DAEMON_VPID "prte.daemon.vpid"
 

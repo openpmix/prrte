@@ -17,7 +17,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -139,7 +139,6 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
         tmp = PMIX_NEW(prte_timer_t);                                                             \
         tmp->payload = (cbd);                                                                     \
         prte_event_evtimer_set(prte_event_base, tmp->ev, (cbfunc), tmp);                          \
-        prte_event_set_priority(tmp->ev, PRTE_ERROR_PRI);                                         \
         timeout = (deltat) * (n);                                                                 \
         if ((maxwait) > 0 && timeout > (maxwait)) {                                               \
             timeout = (maxwait);                                                                  \
@@ -161,12 +160,11 @@ PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
  * event back to the event pool when done! Otherwise, the finalize
  * function will take care of it.
  */
-#define PRTE_TIMER_EVENT(sec, usec, cbfunc, pri)                                                \
+#define PRTE_TIMER_EVENT(sec, usec, cbfunc)                                                     \
     do {                                                                                        \
         prte_timer_t *tm;                                                                       \
         tm = PMIX_NEW(prte_timer_t);                                                            \
         prte_event_evtimer_set(prte_event_base, tm->ev, (cbfunc), tm);                          \
-        prte_event_set_priority(tm->ev, (pri));                                                 \
         tm->tv.tv_sec = (sec) + (usec) / 1000000;                                               \
         tm->tv.tv_usec = (usec) % 1000000;                                                      \
         PMIX_OUTPUT_VERBOSE((1, prte_debug_output,                                              \

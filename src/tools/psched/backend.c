@@ -261,7 +261,6 @@ void psched_tool_connected_fn(pmix_info_t *info, size_t ninfo,
     cd->target.rank = 0; // set default for tool
 
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _toolconn, cd);
-    prte_event_set_priority(&(cd->ev), PRTE_MSG_PRI);
     PMIX_POST_OBJECT(cd);
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
 }

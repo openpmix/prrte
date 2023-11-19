@@ -224,8 +224,7 @@ static int ssh_init(void)
 
     /* point to our launch command */
     if (PRTE_SUCCESS
-        != (rc = prte_state.add_job_state(PRTE_JOB_STATE_LAUNCH_DAEMONS, launch_daemons,
-                                          PRTE_SYS_PRI))) {
+        != (rc = prte_state.add_job_state(PRTE_JOB_STATE_LAUNCH_DAEMONS, launch_daemons))) {
         PRTE_ERROR_LOG(rc);
         return rc;
     }
@@ -233,7 +232,6 @@ static int ssh_init(void)
     /* setup the event for metering the launch */
     PMIX_CONSTRUCT(&launch_list, pmix_list_t);
     prte_event_set(prte_event_base, &launch_event, -1, 0, process_launch_list, NULL);
-    prte_event_set_priority(&launch_event, PRTE_SYS_PRI);
 
     /* start the recvs */
     if (PRTE_SUCCESS != (rc = prte_plm_base_comm_start())) {

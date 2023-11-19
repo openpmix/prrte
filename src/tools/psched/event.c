@@ -93,7 +93,6 @@ pmix_status_t psched_register_events_fn(pmix_status_t *codes, size_t ncodes,
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _register_events, cd);
-    prte_event_set_priority(&(cd->ev), PRTE_MSG_PRI);
     PMIX_POST_OBJECT(cd);
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
     return PMIX_SUCCESS;
@@ -127,7 +126,6 @@ pmix_status_t psched_deregister_events_fn(pmix_status_t *codes, size_t ncodes,
     cd->cbfunc = cbfunc;
     cd->cbdata = cbdata;
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _deregister_events, cd);
-    prte_event_set_priority(&(cd->ev), PRTE_MSG_PRI);
     PMIX_POST_OBJECT(cd);
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
     return PRTE_SUCCESS;

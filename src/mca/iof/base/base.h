@@ -17,7 +17,7 @@
  * Copyright (c) 2017      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -184,7 +184,6 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
                 prte_event_set(prte_event_base, ep->wev->ev, ep->wev->fd, PRTE_EV_WRITE, wrthndlr, \
                                ep);                                                                \
             }                                                                                      \
-            prte_event_set_priority(ep->wev->ev, PRTE_MSG_PRI);                                    \
         }                                                                                          \
         *(snk) = ep;                                                                               \
         PMIX_POST_OBJECT(ep);                                                                      \
@@ -234,7 +233,6 @@ static inline bool prte_iof_base_fd_always_ready(int fd)
         } else {                                                                              \
             prte_event_set(prte_event_base, rev->ev, (fid), PRTE_EV_READ, (cbfunc), rev);     \
         }                                                                                     \
-        prte_event_set_priority(rev->ev, PRTE_MSG_PRI);                                       \
         if ((actv)) {                                                                         \
             PRTE_IOF_READ_ACTIVATE(rev)                                                       \
         }                                                                                     \
