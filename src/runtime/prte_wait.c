@@ -75,7 +75,8 @@ static void timer_dest(prte_timer_t *tm)
 {
     prte_event_free(tm->ev);
 }
-PMIX_CLASS_INSTANCE(prte_timer_t, pmix_object_t, timer_const, timer_dest);
+PMIX_CLASS_INSTANCE(prte_timer_t, pmix_object_t,
+                    timer_const, timer_dest);
 
 static void wccon(prte_wait_tracker_t *p)
 {
@@ -89,7 +90,8 @@ static void wcdes(prte_wait_tracker_t *p)
         PMIX_RELEASE(p->child);
     }
 }
-PMIX_CLASS_INSTANCE(prte_wait_tracker_t, pmix_list_item_t, wccon, wcdes);
+PMIX_CLASS_INSTANCE(prte_wait_tracker_t, pmix_list_item_t,
+                    wccon, wcdes);
 
 /* Local Variables */
 static prte_event_t handler;
@@ -114,7 +116,8 @@ int prte_wait_init(void)
 {
     PMIX_CONSTRUCT(&pending_cbs, pmix_list_t);
 
-    prte_event_set(prte_event_base, &handler, SIGCHLD, PRTE_EV_SIGNAL | PRTE_EV_PERSIST,
+    prte_event_set(prte_event_base, &handler, SIGCHLD,
+                   PRTE_EV_SIGNAL | PRTE_EV_PERSIST,
                    wait_signal_callback, &handler);
 
     prte_event_add(&handler, NULL);
@@ -133,7 +136,8 @@ int prte_wait_finalize(void)
 
 /* this function *must* always be called from
  * within an event in the prte_event_base */
-void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback, prte_event_base_t *evb,
+void prte_wait_cb(prte_proc_t *child,
+                  prte_wait_cbfunc_t callback,
                   void *data)
 {
     prte_wait_tracker_t *t2;
@@ -151,10 +155,9 @@ void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback, prte_event_ba
             t2 = PMIX_NEW(prte_wait_tracker_t);
             PMIX_RETAIN(child); // protect against race conditions
             t2->child = child;
-            t2->evb = evb;
             t2->cbfunc = callback;
             t2->cbdata = data;
-            prte_event_set(t2->evb, &t2->ev, -1, PRTE_EV_WRITE, t2->cbfunc, t2);
+            prte_event_set(prte_event_base, &t2->ev, -1, PRTE_EV_WRITE, t2->cbfunc, t2);
             prte_event_active(&t2->ev, PRTE_EV_WRITE, 1);
         }
         return;
@@ -173,7 +176,6 @@ void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback, prte_event_ba
     t2 = PMIX_NEW(prte_wait_tracker_t);
     PMIX_RETAIN(child); // protect against race conditions
     t2->child = child;
-    t2->evb = evb;
     t2->cbfunc = callback;
     t2->cbdata = data;
     pmix_list_append(&pending_cbs, &t2->super);
@@ -254,7 +256,7 @@ static void wait_signal_callback(int fd, short event, void *arg)
                 t2->child->exit_code = status;
                 pmix_list_remove_item(&pending_cbs, &t2->super);
                 if (NULL != t2->cbfunc) {
-                    prte_event_set(t2->evb, &t2->ev, -1, PRTE_EV_WRITE, t2->cbfunc, t2);
+                    prte_event_set(prte_event_base, &t2->ev, -1, PRTE_EV_WRITE, t2->cbfunc, t2);
                     prte_event_active(&t2->ev, PRTE_EV_WRITE, 1);
                 } else {
                     PMIX_RELEASE(t2);

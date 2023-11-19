@@ -1397,7 +1397,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             /* set the waitpid callback here for thread protection and
              * to ensure we can capture the callback on shortlived apps */
             PRTE_FLAG_SET(child, PRTE_PROC_FLAG_ALIVE);
-            prte_wait_cb(child, prte_odls_base_default_wait_local_proc, prte_event_base, NULL);
+            prte_wait_cb(child, prte_odls_base_default_wait_local_proc, NULL);
 
             /* dispatch this child to the next available launch thread */
             cd = PMIX_NEW(prte_odls_spawn_caddy_t);
@@ -2053,7 +2053,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
         prte_odls_globals.next_base = 0;
     }
     evb = prte_odls_globals.ev_bases[prte_odls_globals.next_base];
-    prte_wait_cb(child, prte_odls_base_default_wait_local_proc, prte_event_base, NULL);
+    prte_wait_cb(child, prte_odls_base_default_wait_local_proc, NULL);
 
     PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output, "%s restarting app %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), app->app));

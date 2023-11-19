@@ -654,7 +654,7 @@ static int plm_slurm_start_proc(int argc, char **argv, char *prefix)
     /* be sure to mark it as alive so we don't instantly fire */
     PRTE_FLAG_SET(dummy, PRTE_PROC_FLAG_ALIVE);
     /* setup the waitpid so we can find out if srun succeeds! */
-    prte_wait_cb(dummy, srun_wait_cb, prte_event_base, NULL);
+    prte_wait_cb(dummy, srun_wait_cb, NULL);
 
     if (0 == srun_pid) { /* child */
         char *bin_base = NULL, *lib_base = NULL;
