@@ -558,7 +558,7 @@ static int plm_alps_start_proc(int argc, char **argv, char **env, char *prefix)
     /* be sure to mark it as alive so we don't instantly fire */
     PRTE_FLAG_SET(alpsrun, PRTE_PROC_FLAG_ALIVE);
     /* setup the waitpid so we can find out if alps succeeds! */
-    prte_wait_cb(alpsrun, alps_wait_cb, prte_event_base, NULL);
+    prte_wait_cb(alpsrun, alps_wait_cb, NULL);
 
     if (0 == alps_pid) { /* child */
         char *bin_base = NULL, *lib_base = NULL;

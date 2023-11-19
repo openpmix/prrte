@@ -548,7 +548,7 @@ static int plm_pals_start_proc(int argc, char **argv, char **env, char *prefix)
     /* be sure to mark it as alive so we don't instantly fire */
     PRTE_FLAG_SET(palsrun, PRTE_PROC_FLAG_ALIVE);
     /* setup the waitpid so we can find out if pals succeeds! */
-    prte_wait_cb(palsrun, pals_wait_cb, prte_event_base, NULL);
+    prte_wait_cb(palsrun, pals_wait_cb, NULL);
 
     if (0 == pals_pid) { /* child */
         char *bin_base = NULL, *lib_base = NULL;
