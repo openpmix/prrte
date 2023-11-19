@@ -410,8 +410,7 @@ static void proc_errors(int fd, short args, void *cbdata)
             t2 = PMIX_NEW(prte_wait_tracker_t);
             PMIX_RETAIN(child); // protect against race conditions
             t2->child = child;
-            t2->evb = prte_event_base;
-            prte_event_set(t2->evb, &t2->ev, -1, PRTE_EV_WRITE,
+            prte_event_set(prte_event_base, &t2->ev, -1, PRTE_EV_WRITE,
                            prte_odls_base_default_wait_local_proc, t2);
             prte_event_active(&t2->ev, PRTE_EV_WRITE, 1);
             goto cleanup;
