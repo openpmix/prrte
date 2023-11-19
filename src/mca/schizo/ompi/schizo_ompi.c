@@ -403,12 +403,27 @@ cleanup:
     return rc;
 }
 
+static bool mcaoption(char *s)
+{
+    size_t len = strlen(s);
+
+    if (3 > len) {
+        return false;
+    }
+    if ('a' == s[len-1] &&
+        'c' == s[len-2] &&
+        'm' == s[len-3]) {
+        return true;
+    }
+    return false;
+}
+
 static int parse_cli(char **argv, pmix_cli_result_t *results,
                      bool silent)
 {
-    int rc, n;
+    int rc, m, n;
     pmix_cli_item_t *opt;
-    char *p1;
+    char *p1, *p2;
     char **pargv;
 
     /* backup the argv */
@@ -437,6 +452,19 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
     for (n=1; NULL != pargv[n]; n++) {
         /* check for option */
         if ('-' != pargv[n][0]) {
+            continue;
+        }
+        // if this is an mca spec, then skip it
+        if (mcaoption(pargv[n])) {
+            if ('-' != pargv[n][1]) {
+                // make it a "--" option
+                p2 = strdup(pargv[n]);
+                free(pargv[n]);
+                pmix_asprintf(&pargv[n], "-%s", p2);
+                free(p2);
+            }
+            // now skip the next two positions
+            n += 2;
             continue;
         }
         /* check for single-dash errors */
