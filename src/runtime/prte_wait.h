@@ -63,7 +63,6 @@ typedef void (*prte_wait_cbfunc_t)(int fd, short args, void *cb);
 typedef struct {
     pmix_list_item_t super;
     prte_event_t ev;
-    prte_event_base_t *evb;
     prte_proc_t *child;
     prte_wait_cbfunc_t cbfunc;
     void *cbdata;
@@ -86,8 +85,9 @@ PRTE_EXPORT void prte_wait_disable(void);
  * \c waitpid() will have already been called on the process at this
  * time.
  */
-PRTE_EXPORT void prte_wait_cb(prte_proc_t *proc, prte_wait_cbfunc_t callback,
-                              prte_event_base_t *evb, void *data);
+PRTE_EXPORT void prte_wait_cb(prte_proc_t *proc,
+                              prte_wait_cbfunc_t callback,
+                              void *data);
 
 PRTE_EXPORT void prte_wait_cb_cancel(prte_proc_t *proc);
 

@@ -932,7 +932,7 @@ static void process_launch_list(int fd, short args, void *cbdata)
         caddy = (prte_plm_ssh_caddy_t *) item;
         /* register the sigchild callback */
         PRTE_FLAG_SET(caddy->daemon, PRTE_PROC_FLAG_ALIVE);
-        prte_wait_cb(caddy->daemon, ssh_wait_daemon, prte_event_base, (void *) caddy);
+        prte_wait_cb(caddy->daemon, ssh_wait_daemon, (void *) caddy);
 
         /* fork a child to exec the ssh/ssh session */
         pid = fork();
