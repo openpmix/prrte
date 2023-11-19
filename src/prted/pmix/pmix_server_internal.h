@@ -149,7 +149,6 @@ PMIX_CLASS_DECLARATION(prte_pmix_tool_t);
         _cd->cbfunc = (cfn);                                                       \
         _cd->cbdata = (cbd);                                                       \
         prte_event_set(prte_event_base, &(_cd->ev), -1, PRTE_EV_WRITE, (fn), _cd); \
-        prte_event_set_priority(&(_cd->ev), PRTE_MSG_PRI);                         \
         PMIX_POST_OBJECT(_cd);                                                     \
         prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);                           \
     } while (0);
@@ -165,7 +164,6 @@ PMIX_CLASS_DECLARATION(prte_pmix_tool_t);
         _req->mdxcbfunc = (ocf);                                                     \
         _req->cbdata = (ocd);                                                        \
         prte_event_set(prte_event_base, &(_req->ev), -1, PRTE_EV_WRITE, (cf), _req); \
-        prte_event_set_priority(&(_req->ev), PRTE_MSG_PRI);                          \
         PMIX_POST_OBJECT(_req);                                                      \
         prte_event_active(&(_req->ev), PRTE_EV_WRITE, 1);                            \
     } while (0);
@@ -179,7 +177,6 @@ PMIX_CLASS_DECLARATION(prte_pmix_tool_t);
         _req->spcbfunc = (ocf);                                                      \
         _req->cbdata = (ocd);                                                        \
         prte_event_set(prte_event_base, &(_req->ev), -1, PRTE_EV_WRITE, (cf), _req); \
-        prte_event_set_priority(&(_req->ev), PRTE_MSG_PRI);                          \
         PMIX_POST_OBJECT(_req);                                                      \
         prte_event_active(&(_req->ev), PRTE_EV_WRITE, 1);                            \
     } while (0);
@@ -195,7 +192,6 @@ PMIX_CLASS_DECLARATION(prte_pmix_tool_t);
         _cd->cbfunc = (cf);                                                        \
         _cd->cbdata = (cb);                                                        \
         prte_event_set(prte_event_base, &(_cd->ev), -1, PRTE_EV_WRITE, (fn), _cd); \
-        prte_event_set_priority(&(_cd->ev), PRTE_MSG_PRI);                         \
         PMIX_POST_OBJECT(_cd);                                                     \
         prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);                           \
     } while (0);
@@ -213,7 +209,6 @@ PMIX_CLASS_DECLARATION(prte_pmix_tool_t);
         _cd->cbfunc = (cf);                                                        \
         _cd->cbdata = (cb);                                                        \
         prte_event_set(prte_event_base, &(_cd->ev), -1, PRTE_EV_WRITE, (fn), _cd); \
-        prte_event_set_priority(&(_cd->ev), PRTE_MSG_PRI);                         \
         PMIX_POST_OBJECT(_cd);                                                     \
         prte_event_active(&(_cd->ev), PRTE_EV_WRITE, 1);                           \
     } while (0);

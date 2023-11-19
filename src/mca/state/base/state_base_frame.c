@@ -6,7 +6,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -136,7 +136,6 @@ static void prte_state_construct(prte_state_t *state)
     state->job_state = PRTE_JOB_STATE_UNDEF;
     state->proc_state = PRTE_PROC_STATE_UNDEF;
     state->cbfunc = NULL;
-    state->priority = PRTE_INFO_PRI;
 }
 PMIX_CLASS_INSTANCE(prte_state_t, pmix_list_item_t, prte_state_construct, NULL);
 

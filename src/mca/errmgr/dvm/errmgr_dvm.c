@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -88,14 +88,14 @@ static void check_send_notification(prte_job_t *jdata,
 static int init(void)
 {
     /* setup state machine to trap job errors */
-    prte_state.add_job_state(PRTE_JOB_STATE_ERROR, job_errors, PRTE_ERROR_PRI);
+    prte_state.add_job_state(PRTE_JOB_STATE_ERROR, job_errors);
 
     /* set the lost connection state to run at MSG priority so
      * we can process any last messages from the proc
      */
-    prte_state.add_proc_state(PRTE_PROC_STATE_COMM_FAILED, proc_errors, PRTE_MSG_PRI);
+    prte_state.add_proc_state(PRTE_PROC_STATE_COMM_FAILED, proc_errors);
 
-    prte_state.add_proc_state(PRTE_PROC_STATE_ERROR, proc_errors, PRTE_ERROR_PRI);
+    prte_state.add_proc_state(PRTE_PROC_STATE_ERROR, proc_errors);
 
     return PRTE_SUCCESS;
 }

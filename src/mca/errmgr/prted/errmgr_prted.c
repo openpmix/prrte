@@ -87,15 +87,15 @@ static void proc_errors(int fd, short args, void *cbdata);
 static int init(void)
 {
     /* setup state machine to trap job errors */
-    prte_state.add_job_state(PRTE_JOB_STATE_ERROR, job_errors, PRTE_ERROR_PRI);
+    prte_state.add_job_state(PRTE_JOB_STATE_ERROR, job_errors);
 
     /* set the lost connection state to run at MSG priority so
      * we can process any last messages from the proc
      */
-    prte_state.add_proc_state(PRTE_PROC_STATE_COMM_FAILED, proc_errors, PRTE_MSG_PRI);
+    prte_state.add_proc_state(PRTE_PROC_STATE_COMM_FAILED, proc_errors);
 
     /* setup state machine to trap proc errors */
-    prte_state.add_proc_state(PRTE_PROC_STATE_ERROR, proc_errors, PRTE_ERROR_PRI);
+    prte_state.add_proc_state(PRTE_PROC_STATE_ERROR, proc_errors);
 
     return PRTE_SUCCESS;
 }
@@ -229,7 +229,6 @@ cleanup:
     timer->tv.tv_sec = 5;
     timer->tv.tv_usec = 0;
     prte_event_evtimer_set(prte_event_base, timer->ev, wakeup, NULL);
-    prte_event_set_priority(timer->ev, PRTE_ERROR_PRI);
     PMIX_POST_OBJECT(timer);
     prte_event_evtimer_add(timer->ev, &timer->tv);
 }
@@ -414,7 +413,6 @@ static void proc_errors(int fd, short args, void *cbdata)
             t2->evb = prte_event_base;
             prte_event_set(t2->evb, &t2->ev, -1, PRTE_EV_WRITE,
                            prte_odls_base_default_wait_local_proc, t2);
-            prte_event_set_priority(&t2->ev, PRTE_MSG_PRI);
             prte_event_active(&t2->ev, PRTE_EV_WRITE, 1);
             goto cleanup;
         }

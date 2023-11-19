@@ -524,7 +524,7 @@ static int raw_preposition_files(prte_job_t *jdata,
         xfer->app_idx = fs->app_idx;
         xfer->outbound = outbound;
         pmix_list_append(&outbound->xfers, &xfer->super);
-        PRTE_PMIX_THREADSHIFT(xfer, prte_event_base, send_chunk, PRTE_MSG_PRI);
+        PRTE_PMIX_THREADSHIFT(xfer, prte_event_base, send_chunk);
         PMIX_RELEASE(item);
     }
     PMIX_DESTRUCT(&fsets);
@@ -1054,7 +1054,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         }
         free(tmp);
         incoming->pending = true;
-        PRTE_PMIX_THREADSHIFT(incoming, prte_event_base, write_handler, PRTE_MSG_PRI);
+        PRTE_PMIX_THREADSHIFT(incoming, prte_event_base, write_handler);
     }
     /* create an output object for this data */
     output = PMIX_NEW(prte_filem_raw_output_t);

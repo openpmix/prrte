@@ -3,7 +3,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -39,11 +39,6 @@ int prte_event_base_open(void)
     /* PRTE tools "block" in their own loop over the event
      * base, so no progress thread is required */
     prte_event_base = prte_sync_event_base;
-
-    /* set the number of priorities */
-    if (0 < PRTE_EVENT_NUM_PRI) {
-        prte_event_base_priority_init(prte_sync_event_base, PRTE_EVENT_NUM_PRI);
-    }
 
     initialized = true;
     return PRTE_SUCCESS;

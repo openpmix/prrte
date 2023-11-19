@@ -861,7 +861,6 @@ int pmix_server_spawn_fn(const pmix_proc_t *proc, const pmix_info_t job_info[], 
     cd->spcbfunc = cbfunc;
     cd->cbdata = cbdata;
     prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, interim, cd);
-    prte_event_set_priority(&cd->ev, PRTE_MSG_PRI);
     PMIX_POST_OBJECT(cd);
     prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
     return PRTE_SUCCESS;
@@ -1287,7 +1286,6 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
     op->cbfunc = cbfunc;
     op->cbdata = cbdata;
     prte_event_set(prte_event_base, &(op->ev), -1, PRTE_EV_WRITE, _cnct, op);
-    prte_event_set_priority(&(op->ev), PRTE_MSG_PRI);
     PMIX_POST_OBJECT(op);
     prte_event_active(&(op->ev), PRTE_EV_WRITE, 1);
 
