@@ -149,8 +149,16 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
             WANT_PRTE_SCHED=1
         fi
     else
-        prte_want_scheduler="no"
-        WANT_PRTE_SCHED=0
+        if test "$with_prte_scheduler" = "yes"; then
+            AC_MSG_RESULT([yes])
+            AC_MSG_WARN([Pseudo-scheduler requested, but PMIx version])
+            AC_MSG_WARN([is too low. Please reconfigure with a version])
+            AC_MSG_WARN([of at least v6.0])
+            AC_MSG_ERROR([Cannot continue.])
+        else
+            prte_want_scheduler="no"
+            WANT_PRTE_SCHED=0
+        fi
     fi
     AM_CONDITIONAL(WANT_PRTE_SCHED, test "$WANT_PRTE_SCHED" = 1)
     PRTE_SUMMARY_ADD([Miscellaneous], [PRTE Pseudo-Scheduler], [], [$prte_want_scheduler])
