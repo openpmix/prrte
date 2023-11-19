@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -194,6 +194,8 @@ startup:
         }
         prte_odls_globals.ev_bases = prte_event_base_ptr;
     } else {
+        pmix_output_verbose(5, prte_odls_base_framework.framework_output,
+                            "START %d LAUNCH THREADS", prte_odls_globals.num_threads);
         prte_odls_globals.ev_bases = (prte_event_base_t **) malloc(prte_odls_globals.num_threads
                                                                    * sizeof(prte_event_base_t *));
         for (i = 0; i < prte_odls_globals.num_threads; i++) {
@@ -337,7 +339,10 @@ static void launch_local_dest(prte_odls_launch_local_t *ptr)
 {
     prte_event_free(ptr->ev);
 }
-PMIX_CLASS_INSTANCE(prte_odls_launch_local_t, pmix_object_t, launch_local_const, launch_local_dest);
+PMIX_CLASS_INSTANCE(prte_odls_launch_local_t,
+                    pmix_object_t,
+                    launch_local_const,
+                    launch_local_dest);
 
 static void sccon(prte_odls_spawn_caddy_t *p)
 {
@@ -362,4 +367,6 @@ static void scdes(prte_odls_spawn_caddy_t *p)
         PMIX_ARGV_FREE_COMPAT(p->env);
     }
 }
-PMIX_CLASS_INSTANCE(prte_odls_spawn_caddy_t, pmix_object_t, sccon, scdes);
+PMIX_CLASS_INSTANCE(prte_odls_spawn_caddy_t,
+                    pmix_object_t,
+                    sccon, scdes);

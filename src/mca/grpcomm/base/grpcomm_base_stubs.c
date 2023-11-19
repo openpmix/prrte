@@ -176,7 +176,6 @@ int prte_grpcomm_API_allgather(prte_pmix_mdx_caddy_t *cd)
     /* must push this into the event library to ensure we can
      * access framework-global data safely */
     prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, allgather_stub, cd);
-    prte_event_set_priority(&cd->ev, PRTE_MSG_PRI);
     PMIX_POST_OBJECT(cd);
     prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
     return PRTE_SUCCESS;

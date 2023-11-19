@@ -1107,7 +1107,6 @@ static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata
         req->sz = sz;
     }
     prte_event_set(prte_event_base, &(req->ev), -1, PRTE_EV_WRITE, _mdxresp, req);
-    prte_event_set_priority(&(req->ev), PRTE_MSG_PRI);
     PMIX_POST_OBJECT(req);
     prte_event_active(&(req->ev), PRTE_EV_WRITE, 1);
 }
@@ -1291,7 +1290,6 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
 
         /* setup the cycle timer so we periodically wake up and try again */
         prte_event_evtimer_set(prte_event_base, &req->cycle, dmdx_check, req);
-        prte_event_set_priority(&req->cycle, PRTE_MSG_PRI);
         req->cycle_active = true;
         PMIX_POST_OBJECT(req);
         tv.tv_sec = 2;
@@ -1300,7 +1298,6 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         /* if they asked for a timeout, then set that too */
         if (0 < timeout) {
             prte_event_evtimer_set(prte_event_base, &req->ev, timeout_cbfunc, req);
-            prte_event_set_priority(&req->ev, PRTE_MSG_PRI);
             req->event_active = true;
             PMIX_POST_OBJECT(req);
             tv.tv_sec = timeout;
@@ -1345,7 +1342,6 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
 
             /* setup the cycle timer so we periodically wake up and try again */
             prte_event_evtimer_set(prte_event_base, &req->cycle, dmdx_check, req);
-            prte_event_set_priority(&req->cycle, PRTE_MSG_PRI);
             req->cycle_active = true;
             PMIX_POST_OBJECT(req);
             tv.tv_sec = 2;
@@ -1354,7 +1350,6 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
             /* if they asked for a timeout, then set that too */
             if (0 < timeout) {
                 prte_event_evtimer_set(prte_event_base, &req->ev, timeout_cbfunc, req);
-                prte_event_set_priority(&req->ev, PRTE_MSG_PRI);
                 req->event_active = true;
                 PMIX_POST_OBJECT(req);
                 tv.tv_sec = timeout;
@@ -1385,7 +1380,6 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
     /* if they asked for a timeout, then set that too */
     if (0 < timeout) {
         prte_event_evtimer_set(prte_event_base, &req->ev, timeout_cbfunc, req);
-        prte_event_set_priority(&req->ev, PRTE_MSG_PRI);
         req->event_active = true;
         PMIX_POST_OBJECT(req);
         tv.tv_sec = timeout;

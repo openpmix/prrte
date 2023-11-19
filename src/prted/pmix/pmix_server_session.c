@@ -209,7 +209,6 @@ pmix_status_t pmix_server_alloc_fn(const pmix_proc_t *client,
     cd->infocbfunc = cbfunc;
     cd->cbdata = cbdata;
     prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, pass_request, cd);
-    prte_event_set_priority(&cd->ev, PRTE_MSG_PRI);
     PMIX_POST_OBJECT(cd);
     prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
     return PRTE_SUCCESS;
@@ -237,7 +236,6 @@ pmix_status_t pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
     cd->infocbfunc = cbfunc;
     cd->cbdata = cbdata;
     prte_event_set(prte_event_base, &cd->ev, -1, PRTE_EV_WRITE, pass_request, cd);
-    prte_event_set_priority(&cd->ev, PRTE_MSG_PRI);
     PMIX_POST_OBJECT(cd);
     prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
     return PRTE_SUCCESS;

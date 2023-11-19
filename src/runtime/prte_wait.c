@@ -116,7 +116,6 @@ int prte_wait_init(void)
 
     prte_event_set(prte_event_base, &handler, SIGCHLD, PRTE_EV_SIGNAL | PRTE_EV_PERSIST,
                    wait_signal_callback, &handler);
-    prte_event_set_priority(&handler, PRTE_SYS_PRI);
 
     prte_event_add(&handler, NULL);
     return PRTE_SUCCESS;
@@ -156,7 +155,6 @@ void prte_wait_cb(prte_proc_t *child, prte_wait_cbfunc_t callback, prte_event_ba
             t2->cbfunc = callback;
             t2->cbdata = data;
             prte_event_set(t2->evb, &t2->ev, -1, PRTE_EV_WRITE, t2->cbfunc, t2);
-            prte_event_set_priority(&t2->ev, PRTE_MSG_PRI);
             prte_event_active(&t2->ev, PRTE_EV_WRITE, 1);
         }
         return;
@@ -216,7 +214,7 @@ void prte_wait_cb_cancel(prte_proc_t *child)
     trk = PMIX_NEW(prte_wait_tracker_t);
     PMIX_RETAIN(child); // protect against race conditions
     trk->child = child;
-    PRTE_PMIX_THREADSHIFT(trk, prte_event_base, cancel_callback, PRTE_SYS_PRI);
+    PRTE_PMIX_THREADSHIFT(trk, prte_event_base, cancel_callback);
 }
 
 /* callback from the event library whenever a SIGCHLD is received */
@@ -257,7 +255,6 @@ static void wait_signal_callback(int fd, short event, void *arg)
                 pmix_list_remove_item(&pending_cbs, &t2->super);
                 if (NULL != t2->cbfunc) {
                     prte_event_set(t2->evb, &t2->ev, -1, PRTE_EV_WRITE, t2->cbfunc, t2);
-                    prte_event_set_priority(&t2->ev, PRTE_MSG_PRI);
                     prte_event_active(&t2->ev, PRTE_EV_WRITE, 1);
                 } else {
                     PMIX_RELEASE(t2);

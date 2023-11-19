@@ -61,7 +61,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
                             __FILE__, __LINE__, PRTE_NAME_PRINT((&(p)->name)));             \
         cop = PMIX_NEW(prte_oob_tcp_conn_op_t);                                             \
         cop->peer = (p);                                                                    \
-        PRTE_PMIX_THREADSHIFT(cop, prte_event_base, (cbfunc), PRTE_MSG_PRI);                     \
+        PRTE_PMIX_THREADSHIFT(cop, prte_event_base, (cbfunc));                              \
     } while (0);
 
 #define PRTE_ACTIVATE_TCP_ACCEPT_STATE(s, a, cbfunc)                               \
@@ -69,7 +69,6 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_conn_op_t);
         prte_oob_tcp_conn_op_t *cop;                                               \
         cop = PMIX_NEW(prte_oob_tcp_conn_op_t);                                    \
         prte_event_set(prte_event_base, &cop->ev, s, PRTE_EV_READ, (cbfunc), cop); \
-        prte_event_set_priority(&cop->ev, PRTE_MSG_PRI);                           \
         PMIX_POST_OBJECT(cop);                                                     \
         prte_event_add(&cop->ev, 0);                                               \
     } while (0);

@@ -54,12 +54,10 @@ prte_state_base_module_t prte_state_prted_module = {
     .activate_job_state = prte_state_base_activate_job_state,
     .add_job_state = prte_state_base_add_job_state,
     .set_job_state_callback = prte_state_base_set_job_state_callback,
-    .set_job_state_priority = prte_state_base_set_job_state_priority,
     .remove_job_state = prte_state_base_remove_job_state,
     .activate_proc_state = prte_state_base_activate_proc_state,
     .add_proc_state = prte_state_base_add_proc_state,
     .set_proc_state_callback = prte_state_base_set_proc_state_callback,
-    .set_proc_state_priority = prte_state_base_set_proc_state_priority,
     .remove_proc_state = prte_state_base_remove_proc_state
 };
 
@@ -108,19 +106,18 @@ static int init(void)
 
     num_states = sizeof(job_states) / sizeof(prte_job_state_t);
     for (i = 0; i < num_states; i++) {
-        rc = prte_state.add_job_state(job_states[i], job_callbacks[i], PRTE_SYS_PRI);
+        rc = prte_state.add_job_state(job_states[i], job_callbacks[i]);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
         }
     }
     /* add a default error response */
-    rc = prte_state.add_job_state(PRTE_JOB_STATE_FORCED_EXIT, prte_quit, PRTE_ERROR_PRI);
+    rc = prte_state.add_job_state(PRTE_JOB_STATE_FORCED_EXIT, prte_quit);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
     /* add a state for when we are ordered to terminate */
-    rc = prte_state.add_job_state(PRTE_JOB_STATE_DAEMONS_TERMINATED, prte_quit,
-                                  PRTE_SYS_PRI);
+    rc = prte_state.add_job_state(PRTE_JOB_STATE_DAEMONS_TERMINATED, prte_quit);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
     }
@@ -133,7 +130,7 @@ static int init(void)
      */
     num_states = sizeof(proc_states) / sizeof(prte_proc_state_t);
     for (i = 0; i < num_states; i++) {
-        rc = prte_state.add_proc_state(proc_states[i], proc_callbacks[i], PRTE_SYS_PRI);
+        rc = prte_state.add_proc_state(proc_states[i], proc_callbacks[i]);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
         }
