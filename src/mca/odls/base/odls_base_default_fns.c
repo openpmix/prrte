@@ -1397,7 +1397,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             /* set the waitpid callback here for thread protection and
              * to ensure we can capture the callback on shortlived apps */
             PRTE_FLAG_SET(child, PRTE_PROC_FLAG_ALIVE);
-            prte_wait_cb(child, prte_odls_base_default_wait_local_proc, evb, NULL);
+            prte_wait_cb(child, prte_odls_base_default_wait_local_proc, prte_event_base, NULL);
 
             /* dispatch this child to the next available launch thread */
             cd = PMIX_NEW(prte_odls_spawn_caddy_t);
@@ -1411,8 +1411,8 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
             cd->opts.usepty = PRTE_ENABLE_PTY_SUPPORT;
 
             /* do we want to setup stdin? */
-            if (jobdat->stdin_target == PMIX_RANK_WILDCARD
-                || child->name.rank == jobdat->stdin_target) {
+            if (jobdat->stdin_target == PMIX_RANK_WILDCARD ||
+                child->name.rank == jobdat->stdin_target) {
                 cd->opts.connect_stdin = true;
             } else {
                 cd->opts.connect_stdin = false;
@@ -1439,7 +1439,6 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&child->name),
                                 prte_odls_globals.next_base);
             prte_event_set(evb, &cd->ev, -1, PRTE_EV_WRITE, prte_odls_base_spawn_proc, cd);
-            prte_event_set_priority(&cd->ev, PRTE_MSG_PRI);
             prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
         }
     }
@@ -2054,13 +2053,12 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
         prte_odls_globals.next_base = 0;
     }
     evb = prte_odls_globals.ev_bases[prte_odls_globals.next_base];
-    prte_wait_cb(child, prte_odls_base_default_wait_local_proc, evb, NULL);
+    prte_wait_cb(child, prte_odls_base_default_wait_local_proc, prte_event_base, NULL);
 
     PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output, "%s restarting app %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), app->app));
 
     prte_event_set(evb, &cd->ev, -1, PRTE_EV_WRITE, prte_odls_base_spawn_proc, cd);
-    prte_event_set_priority(&cd->ev, PRTE_MSG_PRI);
     prte_event_active(&cd->ev, PRTE_EV_WRITE, 1);
 
 CLEANUP:

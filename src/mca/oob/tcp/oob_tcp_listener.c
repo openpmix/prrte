@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -160,7 +160,6 @@ int prte_oob_tcp_start_listening(void)
         listener->ev_active = true;
         prte_event_set(prte_event_base, &listener->event, listener->sd,
                        PRTE_EV_READ | PRTE_EV_PERSIST, connection_event_handler, 0);
-        prte_event_set_priority(&listener->event, PRTE_MSG_PRI);
         PMIX_POST_OBJECT(listener);
         prte_event_add(&listener->event, 0);
     }
@@ -643,7 +642,6 @@ static void *listen_thread(pmix_object_t *obj)
                 pending_connection = PMIX_NEW(prte_oob_tcp_pending_connection_t);
                 prte_event_set(prte_event_base, &pending_connection->ev, -1, PRTE_EV_WRITE,
                                connection_handler, pending_connection);
-                prte_event_set_priority(&pending_connection->ev, PRTE_MSG_PRI);
                 pending_connection->fd = accept(sd, (struct sockaddr *) &(pending_connection->addr),
                                                 &addrlen);
 
@@ -737,7 +735,6 @@ done:
                    PRTE_EV_READ|PRTE_EV_PERSIST,
                    connection_event_handler,
                    0);
-        prte_event_set_priority(listener->event, PRTE_MSG_PRI);
         prte_event_add(listener->event, 0);
     }
 #endif

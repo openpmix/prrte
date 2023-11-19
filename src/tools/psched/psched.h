@@ -203,7 +203,6 @@ extern void psched_session_complete(int fd, short args, void *cbdata);
 #define PSCHED_THREADSHIFT(c, fn)                                                   \
     do {                                                                            \
         prte_event_set(prte_event_base, &((c)->ev), -1, PRTE_EV_WRITE, (fn), (c));  \
-        prte_event_set_priority(&((c)->ev), PRTE_MSG_PRI);                          \
         PMIX_POST_OBJECT(c);                                                        \
         prte_event_active(&((c)->ev), PRTE_EV_WRITE, 1);                            \
     } while (0);

@@ -19,7 +19,7 @@
  * Copyright (c) 2016      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -606,7 +606,6 @@ static void tcp_peer_event_init(prte_oob_tcp_peer_t *peer)
         assert(!peer->send_ev_active && !peer->recv_ev_active);
         prte_event_set(prte_event_base, &peer->recv_event, peer->sd, PRTE_EV_READ | PRTE_EV_PERSIST,
                        prte_oob_tcp_recv_handler, peer);
-        prte_event_set_priority(&peer->recv_event, PRTE_MSG_PRI);
         if (peer->recv_ev_active) {
             prte_event_del(&peer->recv_event);
             peer->recv_ev_active = false;
@@ -614,7 +613,6 @@ static void tcp_peer_event_init(prte_oob_tcp_peer_t *peer)
 
         prte_event_set(prte_event_base, &peer->send_event, peer->sd,
                        PRTE_EV_WRITE | PRTE_EV_PERSIST, prte_oob_tcp_send_handler, peer);
-        prte_event_set_priority(&peer->send_event, PRTE_MSG_PRI);
         if (peer->send_ev_active) {
             prte_event_del(&peer->send_event);
             peer->send_ev_active = false;

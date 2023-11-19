@@ -430,7 +430,7 @@ int main(int argc, char *argv[])
              * and have it kill us
              */
             if (0 < prted_debug_failure_delay) {
-                PRTE_TIMER_EVENT(prted_debug_failure_delay, 0, shutdown_callback, PRTE_SYS_PRI);
+                PRTE_TIMER_EVENT(prted_debug_failure_delay, 0, shutdown_callback);
 
             } else {
                 pmix_output(0, "%s is executing clean %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),

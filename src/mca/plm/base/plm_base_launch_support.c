@@ -668,7 +668,6 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
         timer = PMIX_NEW(prte_timer_t);
         timer->payload = caddy->jdata;
         prte_event_evtimer_set(prte_event_base, timer->ev, spawn_timeout_cb, caddy->jdata);
-        prte_event_set_priority(timer->ev, PRTE_ERROR_PRI);
         timer->tv.tv_sec = time;
         timer->tv.tv_usec = 0;
         prte_set_attribute(&caddy->jdata->attributes, PRTE_SPAWN_TIMEOUT_EVENT, PRTE_ATTR_LOCAL, timer, PMIX_POINTER);
@@ -683,7 +682,6 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
         timer = PMIX_NEW(prte_timer_t);
         timer->payload = caddy->jdata;
         prte_event_evtimer_set(prte_event_base, timer->ev, job_timeout_cb, caddy->jdata);
-        prte_event_set_priority(timer->ev, PRTE_ERROR_PRI);
         timer->tv.tv_sec = time;
         timer->tv.tv_usec = 0;
         prte_set_attribute(&caddy->jdata->attributes, PRTE_JOB_TIMEOUT_EVENT, PRTE_ATTR_LOCAL, timer, PMIX_POINTER);

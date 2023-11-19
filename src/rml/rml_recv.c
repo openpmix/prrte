@@ -67,7 +67,7 @@ void prte_rml_recv_buffer_nb(pmix_proc_t *peer,
     req->post->persistent = persistent;
     req->post->cbfunc = cbfunc;
     req->post->cbdata = cbdata;
-    PRTE_PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
+    PRTE_PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv);
 }
 void prte_rml_recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
 {
@@ -90,5 +90,5 @@ void prte_rml_recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag)
     req->cancel = true;
     PMIX_XFER_PROCID(&req->post->peer, peer);
     req->post->tag = tag;
-    PRTE_PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv, PRTE_MSG_PRI);
+    PRTE_PMIX_THREADSHIFT(req, prte_event_base, prte_rml_base_post_recv);
 }

@@ -82,11 +82,11 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
  * s => pointer to prte_oob_tcp_send_t
  * f => true if send event is to be activated
  */
-#define MCA_OOB_TCP_QUEUE_MSG(p, s, f)                                                \
-    do {                                                                              \
-        (s)->peer = (struct prte_oob_tcp_peer_t *) (p);                               \
-        (s)->activate = (f);                                                          \
-        PRTE_PMIX_THREADSHIFT((s), prte_event_base, prte_oob_tcp_queue_msg, PRTE_MSG_PRI); \
+#define MCA_OOB_TCP_QUEUE_MSG(p, s, f)                                          \
+    do {                                                                        \
+        (s)->peer = (struct prte_oob_tcp_peer_t *) (p);                         \
+        (s)->activate = (f);                                                    \
+        PRTE_PMIX_THREADSHIFT((s), prte_event_base, prte_oob_tcp_queue_msg);    \
     } while (0)
 
 /* queue a message to be sent by one of our modules - must
@@ -201,7 +201,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_msg_op_t);
                             __FILE__, __LINE__, PRTE_NAME_PRINT(&((ms)->dst)));               \
         mop = PMIX_NEW(prte_oob_tcp_msg_op_t);                                                \
         mop->msg = (ms);                                                                      \
-        PRTE_PMIX_THREADSHIFT(mop, prte_event_base, (cbfunc), PRTE_MSG_PRI);                       \
+        PRTE_PMIX_THREADSHIFT(mop, prte_event_base, (cbfunc));                                \
     } while (0);
 
 typedef struct {
@@ -243,7 +243,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
         }                                                                                          \
         PMIX_XFER_PROCID(&mop->hop, (h));                                                          \
         /* this goes to the OOB framework, so use that event base */                               \
-        PRTE_PMIX_THREADSHIFT(mop, prte_event_base, (cbfunc), PRTE_MSG_PRI);                            \
+        PRTE_PMIX_THREADSHIFT(mop, prte_event_base, (cbfunc));                                     \
     } while (0)
 
 #define PRTE_ACTIVATE_TCP_NO_ROUTE(r, h, c)                                                       \
@@ -257,7 +257,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
         PMIX_XFER_PROCID(&mop->hop, (h));                                                         \
         /* this goes to the component, so use the framework                                       \
          * event base */                                                                          \
-        PRTE_PMIX_THREADSHIFT(mop, prte_event_base, (c), PRTE_MSG_PRI);                                \
+        PRTE_PMIX_THREADSHIFT(mop, prte_event_base, (c));                                         \
     } while (0)
 
 #endif /* _MCA_OOB_TCP_SENDRECV_H_ */

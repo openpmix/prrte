@@ -65,7 +65,7 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
             error = itm;
         }
         if (s->job_state == state) {
-            PRTE_REACHING_JOB_STATE(jdata, state, s->priority);
+            PRTE_REACHING_JOB_STATE(jdata, state);
             if (NULL == s->cbfunc) {
                 PMIX_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
                                      "%s NULL CBFUNC FOR JOB %s STATE %s",
@@ -80,7 +80,7 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
                 caddy->job_state = state;
                 PMIX_RETAIN(jdata);
             }
-            PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
+            PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc);
             return;
         }
     }
@@ -108,11 +108,11 @@ void prte_state_base_activate_job_state(prte_job_t *jdata, prte_job_state_t stat
         caddy->job_state = state;
         PMIX_RETAIN(jdata);
     }
-    PRTE_REACHING_JOB_STATE(jdata, state, s->priority);
-    PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
+    PRTE_REACHING_JOB_STATE(jdata, state);
+    PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc);
 }
 
-int prte_state_base_add_job_state(prte_job_state_t state, prte_state_cbfunc_t cbfunc, int priority)
+int prte_state_base_add_job_state(prte_job_state_t state, prte_state_cbfunc_t cbfunc)
 {
     prte_state_t *st;
 
@@ -128,7 +128,6 @@ int prte_state_base_add_job_state(prte_job_state_t state, prte_state_cbfunc_t cb
     st = PMIX_NEW(prte_state_t);
     st->job_state = state;
     st->cbfunc = cbfunc;
-    st->priority = priority;
     pmix_list_append(&prte_job_states, &(st->super));
 
     return PRTE_SUCCESS;
@@ -152,26 +151,9 @@ int prte_state_base_set_job_state_callback(prte_job_state_t state, prte_state_cb
     st = PMIX_NEW(prte_state_t);
     st->job_state = state;
     st->cbfunc = cbfunc;
-    st->priority = PRTE_SYS_PRI;
     pmix_list_append(&prte_job_states, &(st->super));
 
     return PRTE_SUCCESS;
-}
-
-int prte_state_base_set_job_state_priority(prte_job_state_t state, int priority)
-{
-    pmix_list_item_t *item;
-    prte_state_t *st;
-
-    for (item = pmix_list_get_first(&prte_job_states); item != pmix_list_get_end(&prte_job_states);
-         item = pmix_list_get_next(item)) {
-        st = (prte_state_t *) item;
-        if (st->job_state == state) {
-            st->priority = priority;
-            return PRTE_SUCCESS;
-        }
-    }
-    return PRTE_ERR_NOT_FOUND;
 }
 
 int prte_state_base_remove_job_state(prte_job_state_t state)
@@ -223,7 +205,7 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
             error = itm;
         }
         if (s->proc_state == state) {
-            PRTE_REACHING_PROC_STATE(proc, state, s->priority);
+            PRTE_REACHING_PROC_STATE(proc, state);
             if (NULL == s->cbfunc) {
                 PMIX_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
                                      "%s NULL CBFUNC FOR PROC %s STATE %s",
@@ -234,7 +216,7 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
             caddy = PMIX_NEW(prte_state_caddy_t);
             caddy->name = *proc;
             caddy->proc_state = state;
-            PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
+            PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc);
             return;
         }
     }
@@ -246,8 +228,8 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
     } else if (NULL != any) {
         s = (prte_state_t *) any;
     } else {
-        PMIX_OUTPUT_VERBOSE(
-            (1, prte_state_base_framework.framework_output, "INCREMENT: ANY STATE NOT FOUND"));
+        PMIX_OUTPUT_VERBOSE((1, prte_state_base_framework.framework_output,
+                             "INCREMENT: ANY STATE NOT FOUND"));
         return;
     }
     if (NULL == s->cbfunc) {
@@ -258,12 +240,11 @@ void prte_state_base_activate_proc_state(pmix_proc_t *proc, prte_proc_state_t st
     caddy = PMIX_NEW(prte_state_caddy_t);
     caddy->name = *proc;
     caddy->proc_state = state;
-    PRTE_REACHING_PROC_STATE(proc, state, s->priority);
-    PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc, s->priority);
+    PRTE_REACHING_PROC_STATE(proc, state);
+    PRTE_PMIX_THREADSHIFT(caddy, prte_event_base, s->cbfunc);
 }
 
-int prte_state_base_add_proc_state(prte_proc_state_t state, prte_state_cbfunc_t cbfunc,
-                                   int priority)
+int prte_state_base_add_proc_state(prte_proc_state_t state, prte_state_cbfunc_t cbfunc)
 {
     pmix_list_item_t *item;
     prte_state_t *st;
@@ -282,7 +263,6 @@ int prte_state_base_add_proc_state(prte_proc_state_t state, prte_state_cbfunc_t 
     st = PMIX_NEW(prte_state_t);
     st->proc_state = state;
     st->cbfunc = cbfunc;
-    st->priority = priority;
     pmix_list_append(&prte_proc_states, &(st->super));
 
     return PRTE_SUCCESS;
@@ -298,22 +278,6 @@ int prte_state_base_set_proc_state_callback(prte_proc_state_t state, prte_state_
         st = (prte_state_t *) item;
         if (st->proc_state == state) {
             st->cbfunc = cbfunc;
-            return PRTE_SUCCESS;
-        }
-    }
-    return PRTE_ERR_NOT_FOUND;
-}
-
-int prte_state_base_set_proc_state_priority(prte_proc_state_t state, int priority)
-{
-    pmix_list_item_t *item;
-    prte_state_t *st;
-
-    for (item = pmix_list_get_first(&prte_proc_states);
-         item != pmix_list_get_end(&prte_proc_states); item = pmix_list_get_next(item)) {
-        st = (prte_state_t *) item;
-        if (st->proc_state == state) {
-            st->priority = priority;
             return PRTE_SUCCESS;
         }
     }

@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -122,7 +122,6 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_odls_launch_local_t);
         ll->fork_local = (f);                                      \
         prte_event_set(prte_event_base, ll->ev, -1, PRTE_EV_WRITE, \
                        prte_odls_base_default_launch_local, ll);   \
-        prte_event_set_priority(ll->ev, PRTE_SYS_PRI);             \
         prte_event_active(ll->ev, PRTE_EV_WRITE, 1);               \
     } while (0);
 

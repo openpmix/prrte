@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  *
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -192,7 +192,6 @@ PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
         /* setup the event */                                                                   \
         prte_event_set(prte_event_base, &msg->ev, -1, PRTE_EV_WRITE,                            \
                        prte_rml_base_process_msg, msg);                                         \
-        prte_event_set_priority(&msg->ev, PRTE_MSG_PRI);                                        \
         prte_event_active(&msg->ev, PRTE_EV_WRITE, 1);                                          \
     } while (0);
 
@@ -201,7 +200,6 @@ PRTE_EXPORT pmix_rank_t prte_rml_get_route(pmix_rank_t target);
         /* setup the event */                                                                   \
         prte_event_set(prte_event_base, &(m)->ev, -1, PRTE_EV_WRITE,                            \
                        prte_rml_base_process_msg, (m));                                         \
-        prte_event_set_priority(&(m)->ev, PRTE_MSG_PRI);                                        \
         prte_event_active(&(m)->ev, PRTE_EV_WRITE, 1);                                          \
     } while (0);
 
