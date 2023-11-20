@@ -332,6 +332,7 @@ int prte_schizo_base_sanity(pmix_cli_result_t *cmd_line)
         PRTE_CLI_PPR,
         PRTE_CLI_RANKFILE,
         PRTE_CLI_PELIST,
+        PRTE_CLI_LIKWID,
         NULL
     };
     char *mapquals[] = {
