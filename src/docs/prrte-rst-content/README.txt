@@ -25,17 +25,16 @@ The overall scheme is relatively straightfoward:
 2. Where relevant, use the RST include directive using the absolute
    path form:
 
-   .. include:: /prrte-rst-content/prterun-all-cli.rst
-   .. include:: /prrte-rst-content/prterun-all-deprecated.rst
+   .. include:: /prrte-rst-content/prte-all.rst
 
    The absolute path represents the root of the RST tree (not the root
    of the overall filesystem).
 
-   The RST files shown above are the public interface for the RST
-   docs: they will include multiple other RST files.  The specific
-   list of files that are included by the above files may (will)
+   The RST file shown above is the public interface for the RST
+   docs: it will include multiple other RST files.  The specific
+   list of files that are included by the above file may (will)
    change over time; downstream projects are encouraged to limit
-   themselves to including only the above-listed files to protect
+   themselves to including only the above-listed file to protect
    themselves from changes like this.
 
    The RST files use the following RST block indicators in this order:

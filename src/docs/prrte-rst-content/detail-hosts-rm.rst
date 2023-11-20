@@ -14,9 +14,12 @@
 
 :orphan:
 
-Tag all output with ``[job,rank]``.
+Resource Manager-Provided Hosts
+===============================
 
-.. admonition:: Deprecated
-   :class: warning
+When launching under a Resource Manager (RM), the RM usually
+picks which hosts |mdash| and how many processes can be launched on
+each host |mdash| on a per-job basis.
 
-   This option is deprecated.  Please use ``--output``.
+The RM will communicate this information to PRRTE directly; users can
+simply omit specifying hosts or numbers of processes.

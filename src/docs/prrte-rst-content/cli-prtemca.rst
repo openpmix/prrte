@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 Pass a PRRTE MCA parameter.
 
 Syntax: ``--prtemca <key> <value>``, where ``key`` is the parameter

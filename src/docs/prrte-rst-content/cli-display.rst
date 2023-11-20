@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 The ``display`` command line directive must be accompanied by a
 comma-delimited list of case-insensitive options indicating what
 information about the job and/or allocation is to be displayed. The

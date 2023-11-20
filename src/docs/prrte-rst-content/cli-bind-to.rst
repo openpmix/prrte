@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 By default, processes are bound to individual CPUs (either COREs or
 HWTHREADs, as defined by default or by user specification for the
 job). On nodes that are OVERSUBSCRIBEd (i.e., where the number of

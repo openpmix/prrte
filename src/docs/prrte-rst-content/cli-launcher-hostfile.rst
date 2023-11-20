@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 PRRTE supports several levels of user-specified hostfiles based on an
 established precedence order. Users can specify a hostfile that
 contains a list of nodes to be used for the job, or can provide a
@@ -47,3 +52,7 @@ manager (RM):
      - | Hostfile defines resource list for the job,
        | then host filters the list to define the final
        | set of nodes to be used for the job
+
+.. include:: /prrte-rst-content/detail-hostfiles.rst
+
+.. include:: /prrte-rst-content/detail-hosts-relative-indexing.rst

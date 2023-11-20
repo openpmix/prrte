@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 Debug daemon output is enabled and all output from the daemons is
 redirected into files with names of the form:
 
