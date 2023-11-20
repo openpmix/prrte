@@ -151,7 +151,7 @@ BEGIN_C_DECLS
 
 /* define the command line directives PRRTE recognizes */
 
-// Placement directives
+// Placement directives - used by mapping and binding
 #define PRTE_CLI_SLOT       "slot"
 #define PRTE_CLI_HWT        "hwthread"
 #define PRTE_CLI_CORE       "core"
@@ -168,6 +168,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_NONE       "none"
 #define PRTE_CLI_HWTCPUS    "hwtcpus"
 #define PRTE_CLI_PELIST     "pe-list="
+#define PRTE_CLI_LIKWID     "likwid"
 
 // Ranking directives
 // PRTE_CLI_SLOT, PRTE_CLI_NODE, PRTE_CLI_SPAN reused here

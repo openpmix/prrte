@@ -81,7 +81,7 @@ static int prte_rmaps_base_register(pmix_mca_base_register_flag_t flags)
     (void) pmix_mca_base_var_register("prte", "rmaps", "default", "mapping_policy",
                                       "Default mapping Policy [slot | hwthread | core | l1cache | "
                                       "l2cache | l3cache | numa | package | node | seq | dist | ppr | "
-                                      "rankfile | pe-list=a,b (comma-delimited ranges of cpus to use for this job)],"
+                                      "rankfile | likwid | pe-list=a,b (comma-delimited ranges of cpus to use for this job)],"
                                       " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
                                       "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
                                       "DEVICE=dev (for dist policy), INHERIT, NOINHERIT, ORDERED, FILE=%s (path to file containing sequential "
@@ -647,6 +647,9 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                            ptr, PMIX_STRING);
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PELIST);
         PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
+
+    } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_LIKWID)) {
+        PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_LIKWID);
 
     } else {
         pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",

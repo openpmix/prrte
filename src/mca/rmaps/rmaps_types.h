@@ -13,7 +13,7 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -160,6 +160,7 @@ typedef struct {
 #define PRTE_MAPPING_PELIST     11
 /* convenience - declare anything <= 15 to be round-robin*/
 #define PRTE_MAPPING_RR         16
+#define PRTE_MAPPING_LIKWID     17
 
 /* sequential policy */
 #define PRTE_MAPPING_SEQ        20
