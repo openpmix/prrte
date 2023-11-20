@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 Prefix to be used to look for PRRTE executables. PRRTE automatically
 sets the prefix for remote daemons if it was either configured with
 the ``--enable-prte-prefix-by-default`` option OR prte itself was

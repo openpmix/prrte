@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 Syntax: ``--gmca <key> <value>``, where ``key`` is the parameter name
 and ``value`` is the parameter value. The ``g`` prefix indicates that
 this parameter is "global", and to be applied to *all* application

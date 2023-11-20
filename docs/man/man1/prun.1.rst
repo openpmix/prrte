@@ -32,15 +32,13 @@ COMMAND LINE OPTIONS
 
 The following command line options are supported:
 
-.. include:: /prrte-rst-content/prterun-all-cli.rst
+.. TODO - add in all supported CLI
 
 DEPRECATED COMMAND LINE OPTIONS
 -------------------------------
 
-The following command line options are deprecated and may disappear in
-a future version of PRRTE:
+.. TODO - check for deprecated CLI and add those here
 
-.. include:: /prrte-rst-content/prterun-all-deprecated.rst
 
 .. seealso::
    :ref:`prte(1) <man1-prte>`

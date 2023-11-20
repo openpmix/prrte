@@ -166,7 +166,7 @@ The ``--host`` option
 .. _label-psched-hostfile:
 
 The ``--hostfile`` option
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. include:: /prrte-rst-content/cli-dvm-hostfile.rst
 

@@ -20,12 +20,3 @@ harmelss by-products; we ignore them.
    Prun <help-prun>
 
    Prun <help-pterm>
-
-Have to also include these additional files so that Sphinx doesn't
-complain that there are RST files in the doc tree that aren't used.
-
-.. toctree::
-   :hidden:
-
-   prrte-rst-content/prterun-all-cli
-   prrte-rst-content/prterun-all-deprecated

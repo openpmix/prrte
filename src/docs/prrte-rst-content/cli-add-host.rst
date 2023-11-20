@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 PRRTE allows a user to expand an existing DVM prior to launching an
 application.  Users can specify a a comma-delimited list of node
 names, each entry optionally containing a ``:N`` extension indicating
