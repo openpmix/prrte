@@ -31,19 +31,14 @@ through ``prun --help [topic]``.
 COMMAND LINE OPTIONS
 --------------------
 
-.. JMS I suspect we don't want to include prterun-all-cli.rst here --
-   I think only a subset of those commands are available for prun.
+.. TODO - add in all supported CLI
 
-.. include:: /prrte-rst-content/prterun-all-cli.rst
 
 DEPRECATED COMMAND LINE OPTIONS
 -------------------------------
 
-.. JMS I suspect we don't want to include prterun-all-deprecated.rst
-   here -- I think only a subset of those commands are available for
-   prun.
+.. TODO - check for deprecated CLI and add those here
 
-.. include:: /prrte-rst-content/prterun-all-deprecated.rst
 
 EXIT STATUS
 -----------

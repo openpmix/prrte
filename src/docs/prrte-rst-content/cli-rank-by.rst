@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 PRRTE automatically ranks processes for each job starting from zero.
 Regardless of the algorithm used, rank assignments span applications
 in the same job |mdash| i.e., a command line of

@@ -673,3 +673,32 @@ but do not actually launch it (usually used to test mapping patterns)
 [display-allocation]
 
 .. include:: /prrte-rst-content/deprecated-display-allocation.rst
+
+[placement]
+
+.. include:: /prrte-rst-content/detail-placement.rst
+
+[placement-examples]
+
+.. include:: /prrte-rst-content/detail-placement-examples.rst
+
+[placement-rankfiles]
+
+.. include:: /prrte-rst-content/detail-placement-rankfiles.rst
+
+[placement-deprecated]
+
+.. include:: /prrte-rst-content/detail-placement-deprecated.rst
+
+[placement-diagnostics]
+
+.. include:: /prrte-rst-content/detail-placement-diagnostics.rst
+
+[placement-fundamentals]
+
+.. include:: /prrte-rst-content/detail-placement-fundamentals.rst
+
+[placement-limits]
+
+.. include:: /prrte-rst-content/detail-placement-limits.rst
+

@@ -14,9 +14,10 @@
 
 :orphan:
 
-Tag all output with ``[job,rank]``.
+Definition of "processor element"
+=================================
 
-.. admonition:: Deprecated
-   :class: warning
+By default, PRRTE defines that a "processing element" is a processor
+core.  However, if ``--use-hwthread-cpus`` is specified on the command
+line, then a "processing element" is a hardware thread.
 
-   This option is deprecated.  Please use ``--output``.

@@ -45,6 +45,8 @@ dist_rst_DATA = \
     cli-stream-buffering.rst \
     cli-tune.rst \
     cli-x.rst \
+    definitions-pes.rst \
+    definitions-slots.rst \
     deprecated-bind-to-core.rst \
     deprecated-display-allocation.rst \
     deprecated-display-devel-allocation.rst \
@@ -60,5 +62,14 @@ dist_rst_DATA = \
     deprecated-tag-output.rst \
     deprecated-timestamp-output.rst \
     deprecated-xml.rst \
-    prterun-all-cli.rst \
-    prterun-all-deprecated.rst
+    detail-hostfiles.rst \
+    detail-hosts-cli.rst \
+    detail-hosts-relative-indexing.rst \
+    detail-hosts-rm.rst \
+    detail-placement.rst \
+    detail-placement-examples.rst \
+    detail-placement-rankfiles.rst \
+    detail-placement-fundamentals.rst \
+    detail-placement-deprecated.rst \
+    detail-placement-diagnostics.rst \
+    detail-placement-limits.rst

@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 Host syntax consists of a comma-delimited list of node names, each
 entry optionally containing a ``:N`` extension indicating the number
 of slots to assign to that entry:
