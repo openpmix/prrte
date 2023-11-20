@@ -359,7 +359,8 @@ static int prte_rmaps_seq_map(prte_job_t *jdata,
                 goto error;
             }
             rc = prte_rmaps_base_check_oversubscribed(jdata, app, node, options);
-            if (PRTE_SUCCESS != rc) {
+            if (PRTE_SUCCESS != rc &&
+                PRTE_ERR_TAKE_NEXT_OPTION != rc) {
                 PMIX_RELEASE(proc);
                 goto error;
             }
