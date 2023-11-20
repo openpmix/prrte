@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 Debug daemon output enabled. This is a somewhat limited stream of
 information normally used to simply confirm that the daemons
 started. Includes leaving the output streams open.

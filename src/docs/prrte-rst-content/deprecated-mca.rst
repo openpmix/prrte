@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 Syntax: ``--mca <key> <value>``, where ``key`` is the parameter name
 and ``value`` is the parameter value.
 

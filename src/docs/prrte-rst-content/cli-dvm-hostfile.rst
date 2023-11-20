@@ -9,6 +9,11 @@
 
    $HEADER$
 
+.. The following line is included so that Sphinx won't complain
+   about this file not being directly included in some toctree
+
+:orphan:
+
 PRRTE supports several levels of user-specified host lists based on an
 established precedence order. Users can specify a default hostfile
 that contains a list of nodes to be used by the DVM. Only one default
@@ -83,3 +88,5 @@ specification so that a user can utilize different portions of the
 allocation for different DVMs. This is done according to the same
 precedence order as in the prior table, with the RM providing the
 initial pool of nodes.
+
+.. include:: /prrte-rst-content/detail-hostfiles.rst
