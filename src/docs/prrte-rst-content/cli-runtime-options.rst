@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 The ``--runtime-options`` command line directive must be accompanied
 by a comma-delimited list of case-insensitive options that control the
 runtime behavior of the job. The full directive need not be provided

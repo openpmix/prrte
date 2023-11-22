@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 Processes are mapped based on one of the following directives as
 applied at the job level:
 

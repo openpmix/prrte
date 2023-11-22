@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 PRRTE supports several levels of user-specified host lists based on an
 established precedence order. Users can specify a default hostfile
 that contains a list of nodes to be used by the DVM. Only one default

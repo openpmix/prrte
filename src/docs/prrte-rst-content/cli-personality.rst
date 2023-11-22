@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 Specify the personality to be used. This governs selection of the
 plugin responsible for defining and parsing the command line,
 harvesting and forwarding environmental variables, and providing

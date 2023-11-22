@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 The ``output`` command line directive must be accompanied by a
 comma-delimited list of case-insensitive options that control how
 output is generated. The full directive need not be provided |mdash| only
