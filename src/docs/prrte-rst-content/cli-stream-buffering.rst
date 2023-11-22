@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 Adjust buffering for stdout/stderr.  Allowable values:
 
 * 0: unbuffered

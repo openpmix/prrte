@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 Display a detailed process map (mostly intended for developers)
 just before launch.
 

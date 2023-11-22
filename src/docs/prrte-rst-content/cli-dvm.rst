@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 A required argument is passed to the ``--dvm`` directive to specify
 the location of the DVM controller (e.g., ``--dvm pid:12345``) or by
 passing the string ``search`` to instead search for an existing
