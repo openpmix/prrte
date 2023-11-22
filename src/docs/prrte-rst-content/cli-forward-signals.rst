@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 Comma-delimited list of additional signals (names or integers) to
 forward to application processes (``none`` = forward
 nothing). Signals provided by default include SIGTSTP, SIGUSR1,
