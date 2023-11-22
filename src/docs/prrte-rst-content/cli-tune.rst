@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 Comma-delimited list of one or more files containing PRRTE and PMIx
 MCA params for tuning DVM and/or application operations. Parameters in
 the file will be treated as *generic* parameters and subject to the

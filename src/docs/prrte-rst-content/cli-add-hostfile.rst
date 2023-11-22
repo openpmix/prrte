@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 PRRTE allows a user to expand an existing DVM prior to launching an
 application.  Users can specify a hostfile that contains a list of
 nodes to be added to the DVM using normal hostfile syntax.

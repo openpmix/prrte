@@ -12,8 +12,6 @@
 .. The following line is included so that Sphinx won't complain
    about this file not being directly included in some toctree
 
-:orphan:
-
 Redirect output from application processes into
 ``filename/job/rank/std[out,err,diag]``. A relative path value will be
 converted to an absolute path. The directory name may include a colon
