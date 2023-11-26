@@ -15,6 +15,7 @@
 #                         All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -23,8 +24,6 @@
 #
 
 # This makefile.am does not stand on its own - it is included from src/Makefile.am
-
-dist_prtedata_DATA += runtime/help-prte-runtime.txt
 
 headers += \
         runtime/runtime.h \
