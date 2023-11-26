@@ -13,6 +13,7 @@
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -38,8 +39,6 @@ AM_CFLAGS = \
             -DPMIX_RELEASE_DATE="\"@PMIX_RELEASE_DATE@\""
 
 bin_PROGRAMS = psched
-
-dist_prtedata_DATA = help-psched.txt
 
 psched_SOURCES = \
 	psched.h \

@@ -20,3 +20,19 @@ harmelss by-products; we ignore them.
    Prun <help-prun>
 
    Prun <help-pterm>
+
+   Psched <help-psched>
+
+   Prte runtime <help-prte-runtime>
+
+   Hwloc base <help-prte-hwloc-base>
+
+   Regex <help-regex>
+
+   CLI <help-cli>
+
+   Util <help-prte-util>
+
+   Hostfiles <help-hostfiles>
+
+   Dash host <help-dash-host>
