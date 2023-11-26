@@ -14,6 +14,7 @@
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2018      IBM Corporation.  All rights reserved.
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -22,8 +23,6 @@
 #
 
 # This makefile.am does not stand on its own - it is included from src/Makefile.am
-
-dist_prtedata_DATA += prted/help-prted.txt
 
 headers += \
 	prted/prted.h

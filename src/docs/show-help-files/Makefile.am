@@ -40,7 +40,13 @@ RST_SOURCE_FILES = \
         $(srcdir)/help-prted.rst \
         $(srcdir)/help-prterun.rst \
         $(srcdir)/help-prun.rst \
-        $(srcdir)/help-pterm.rst
+        $(srcdir)/help-pterm.rst \
+        $(srcdir)/help-cli.rst \
+        $(srcdir)/help-dash-host.rst \
+        $(srcdir)/help-hostfiles.rst \
+        $(srcdir)/help-prte-hwloc-base.rst \
+        $(srcdir)/help-prte-runtime.rst \
+        $(srcdir)/help-prte-util.rst
 
 TXT_OUTDIR = $(OUTDIR)/text
 
@@ -53,7 +59,13 @@ ALL_TXT_BUILT = \
         $(TXT_OUTDIR)/help-prted.txt \
         $(TXT_OUTDIR)/help-prterun.txt \
         $(TXT_OUTDIR)/help-prun.txt \
-        $(TXT_OUTDIR)/help-pterm.txt
+        $(TXT_OUTDIR)/help-pterm.txt \
+        $(TXT_OUTDIR)/help-cli.txt \
+        $(TXT_OUTDIR)/help-dash-host.txt \
+        $(TXT_OUTDIR)/help-hostfiles.txt \
+        $(TXT_OUTDIR)/help-prte-hwloc-base.txt \
+        $(TXT_OUTDIR)/help-prte-runtime.txt \
+        $(TXT_OUTDIR)/help-prte-util.txt
 
 #-------------------
 
