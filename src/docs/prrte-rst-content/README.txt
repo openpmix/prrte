@@ -25,17 +25,9 @@ The overall scheme is relatively straightfoward:
 2. Where relevant, use the RST include directive using the absolute
    path form:
 
-   .. include:: /prrte-rst-content/prte-all.rst
+   .. include:: /prrte-rst-content/<FOO>.rst
 
-   The absolute path represents the root of the RST tree (not the root
-   of the overall filesystem).
-
-   The RST file shown above is the public interface for the RST
-   docs: it will include multiple other RST files.  The specific
-   list of files that are included by the above file may (will)
-   change over time; downstream projects are encouraged to limit
-   themselves to including only the above-listed file to protect
-   themselves from changes like this.
+   where <FOO> is the name of whichever RST file you want to include.
 
    The RST files use the following RST block indicators in this order:
 
@@ -71,7 +63,7 @@ Sphinx is notably picky about two things:
    with the absolute path form.  Attempting to use relative paths
    *might* be able to work, but is not advisable.
 
-2. That every *.rst file in the doc tree is used.
+2. That every *.rst file in the doc tree is used (by default).
 
    The "prrte-rst-content" directory contains a bunch of individual
    *.rst files.  If downstream project documentation ends up only
@@ -80,10 +72,13 @@ Sphinx is notably picky about two things:
 
    In such cases, downstream projects can either remove unneeded files
    (which may not be entirely safe across multiple different versions
-   of PRRTE), or use the RST ".. toctree::" directive with the
-   ":hidden:" parameter to include those RST files so that Sphinx will
-   not complain, but not have them linked anywhere in the rendered
-   output tree.
+   of PRRTE), or add the "prrte-rst-content" directory to their
+   conf.py's exclude_patterns list.  Adding "prrte-rst-content" to
+   exclude_patterns will prevent Sphinx from searching that entire
+   directory for un-reference *.rst files (either via a TOC directive
+   or the include:: directive).  Note that listing "prrte-rst-content"
+   in exclude_patterns does *not* prevent explicitly include::'ing any
+   files from that directory.
 
 
 How PRRTE developers should maintain these RST files
@@ -95,20 +90,13 @@ There are two types of files in this directory:
    project documentation.
 
    As described in the "How downstream projects should use PRRTE's RST
-   files" section in this file, there are a small number of "public"
-   RST files that are intended to be included by downstream projects.
+   files" section in this file, any files in this directory should
+   include other PRRTE RST files using the absolute path form, and
+   assume that /prrte-rst-content is a top-level directory in the RST
+   doc tree.
 
-   a. PRRTE developers should attempt to a) make this list as short as
-      possible, and b) keep the list the same between PRRTE versions
-      as much as possible.  This helps downstream projects include the
-      PRRTE docs in their own docs over time.
-
-   b. These files should include other PRRTE RST files using the
-      absolute path form, and assume that /prrte-rst-content is a
-      top-level directory in the RST doc tree.
-
-      The absolute path represents the root of the RST tree (not the
-      root of the overall filesystem).
+   NOTE: The absolute path represents the root of the RST tree (not
+   the root of the overall filesystem).
 
 2. Files that are included (directly or indirectly) by the files from
    #1.
@@ -125,7 +113,3 @@ There are two types of files in this directory:
    b. Be ware of creating RST labels, especially for the "lowest"
       level files (that may be included multiple times in multiple
       places).
-
-   c. When using the ".. include::" RST directive, use the absolute
-      path form, and assume that /prrte-rst-content is a top-level
-      directory in the RST doc tree.
