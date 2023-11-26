@@ -18,6 +18,7 @@
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
 # Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -26,12 +27,6 @@
 #
 
 SUBDIRS = hostfile
-
-dist_prtedata_DATA = help-prte-util.txt \
-                     help-cli.txt \
-                     help-regex.txt \
-                     hostfile/help-hostfile.txt \
-                     dash_host/help-dash-host.txt
 
 noinst_LTLIBRARIES = libprrteutil.la
 
