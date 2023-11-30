@@ -18,7 +18,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2021 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,6 +35,7 @@
 #endif
 
 #include <ctype.h>
+#include <getopt.h>
 
 #ifdef HAVE_SYS_UTSNAME_H
 #    include <sys/utsname.h>
@@ -47,356 +48,165 @@
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/prte_cmd_line.h"
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/ess/base/base.h"
 #include "src/mca/rmaps/rmaps_types.h"
+#include "src/mca/state/base/base.h"
 #include "src/runtime/prte_globals.h"
 
-#include "schizo_hydra.h"
+#include "schizo_mpich.h"
 #include "src/mca/schizo/base/base.h"
 
-static int define_cli(prte_cmd_line_t *cli);
-static int check_help(prte_cmd_line_t *cli, char **argv);
-static int parse_cli(int argc, int start, char **argv, char ***target);
-static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***argv);
-static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, bool cmdline);
+static int parse_cli(char **argv, pmix_cli_result_t *results, bool silent);
 static int detect_proxy(char *argv);
-static void allow_run_as_root(prte_cmd_line_t *cmd_line);
-static void job_info(prte_cmd_line_t *cmdline, void *jobinfo);
-static int check_sanity(prte_cmd_line_t *cmd_line);
+static int parse_env(char **srcenv, char ***dstenv, pmix_cli_result_t *cli);
+static void allow_run_as_root(pmix_cli_result_t *results);
+static void job_info(pmix_cli_result_t *results,
+                     void *jobinfo);
+static int set_default_rto(prte_job_t *jdata,
+                           prte_rmaps_options_t *options);
+static int check_sanity(pmix_cli_result_t *cmd_line);
 
-prte_schizo_base_module_t prte_schizo_hydra_module = {
-    .name = "hydra",
-    .define_cli = define_cli,
-    .check_help = check_help,
+prte_schizo_base_module_t prte_schizo_mpich_module = {
+    .name = "mpich",
     .parse_cli = parse_cli,
-    .parse_deprecated_cli = parse_deprecated_cli,
     .parse_env = parse_env,
+    .setup_fork = prte_schizo_base_setup_fork,
     .detect_proxy = detect_proxy,
     .allow_run_as_root = allow_run_as_root,
     .job_info = job_info,
+    .set_default_rto = set_default_rto,
     .check_sanity = check_sanity
 };
 
-static prte_cmd_line_init_t hydra_cmd_line_init[] = {
+static struct option myoptions[] = {
     /* basic options */
-    {'h', "help", 0, PRTE_CMD_LINE_TYPE_BOOL, "This help message", PRTE_CMD_LINE_OTYPE_GENERAL},
-    {'V', "version", 0, PRTE_CMD_LINE_TYPE_BOOL, "Print version and exit",
-     PRTE_CMD_LINE_OTYPE_GENERAL},
-    {'v', "verbose", 0, PRTE_CMD_LINE_TYPE_BOOL, "Be verbose", PRTE_CMD_LINE_OTYPE_GENERAL},
-    {'q', "quiet", 0, PRTE_CMD_LINE_TYPE_BOOL, "Suppress helpful messages",
-     PRTE_CMD_LINE_OTYPE_GENERAL},
-    {'\0', "parsable", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "When used in conjunction with other parameters, the output is displayed in a "
-     "machine-parsable format",
-     PRTE_CMD_LINE_OTYPE_GENERAL},
-    {'\0', "parseable", 0, PRTE_CMD_LINE_TYPE_BOOL, "Synonym for --parsable",
-     PRTE_CMD_LINE_OTYPE_GENERAL},
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_HELP, PMIX_ARG_OPTIONAL, 'h'),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_VERSION, PMIX_ARG_NONE, 'V'),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_VERBOSE, PMIX_ARG_NONE, 'v'),
 
-    /* mpirun options */
-    /* Specify the launch agent to be used */
-    {'\0', "launch-agent", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Name of daemon executable used to start processes on remote nodes (default: prted)",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    /* maximum size of VM - typically used to subdivide an allocation */
-    {'\0', "max-vm-size", 1, PRTE_CMD_LINE_TYPE_INT, "Number of daemons to start",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    {'\0', "debug-daemons", 0, PRTE_CMD_LINE_TYPE_BOOL, "Debug daemons", PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "debug-daemons-file", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Enable debugging of any PRTE daemons used by this application, storing output in files",
-     PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "leave-session-attached", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Do not discard stdout/stderr of remote PRTE daemons", PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "tmpdir", 1, PRTE_CMD_LINE_TYPE_STRING, "Set the root for the session directory tree",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    {'\0', "prefix", 1, PRTE_CMD_LINE_TYPE_STRING, "Prefix to be used to look for RTE executables",
-     PRTE_CMD_LINE_OTYPE_DVM},
-    {'\0', "noprefix", 0, PRTE_CMD_LINE_TYPE_BOOL, "Disable automatic --prefix behavior",
-     PRTE_CMD_LINE_OTYPE_DVM},
+    // MCA parameters
+    PMIX_OPTION_DEFINE(PRTE_CLI_PRTEMCA, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PMIXMCA, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_TUNE, PMIX_ARG_REQD),
 
-    /* setup MCA parameters */
-    {'\0', "omca", 2, PRTE_CMD_LINE_TYPE_STRING,
-     "Pass context-specific HYDRA MCA parameters; they are considered global if --gmca is not used "
-     "and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "gomca", 2, PRTE_CMD_LINE_TYPE_STRING,
-     "Pass global HYDRA MCA parameters that are applicable to all contexts (arg0 is the parameter "
-     "name; arg1 is the parameter value)",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "mca", 2, PRTE_CMD_LINE_TYPE_STRING,
-     "Pass context-specific MCA parameters; they are considered global if --gmca is not used and "
-     "only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    /* setup MCA parameters */
-    {'\0', "prtemca", 2, PRTE_CMD_LINE_TYPE_STRING,
-     "Pass context-specific PRTE MCA parameters; they are considered global if --gmca is not used "
-     "and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "pmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
-     "Pass context-specific PMIx MCA parameters; they are considered global if --gmca is not used "
-     "and only one context is specified (arg0 is the parameter name; arg1 is the parameter value)",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "gpmixmca", 2, PRTE_CMD_LINE_TYPE_STRING,
-     "Pass global PMIx MCA parameters that are applicable to all contexts (arg0 is the parameter "
-     "name; arg1 is the parameter value)",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "tune", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "File(s) containing MCA params for tuning DVM operations", PRTE_CMD_LINE_OTYPE_DVM},
+    // DVM options
+    PMIX_OPTION_DEFINE(PRTE_CLI_DAEMONIZE, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_SET_SID, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_PID, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_URI, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_TEST_SUICIDE, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DEFAULT_HOSTFILE, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_KEEPALIVE, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_LAUNCH_AGENT, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_MAX_VM_SIZE, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DEBUG_DAEMONS_FILE, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_LEAVE_SESSION_ATTACHED, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_TMPDIR, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PREFIX, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_NOPREFIX, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_FWD_SIGNALS, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PERSONALITY, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_RUN_AS_ROOT, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_CHILD_SEP, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DVM, PMIX_ARG_REQD),
 
-    /* forward signals */
-    {'\0', "forward-signals", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Comma-delimited list of additional signals (names or integers) to forward to "
-     "application processes [\"none\" => forward nothing]. Signals provided by "
-     "default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT, SIGALRM, and SIGCONT",
-     PRTE_CMD_LINE_OTYPE_DVM},
+    // Launch options
+    PMIX_OPTION_DEFINE(PRTE_CLI_TIMEOUT, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_REPORT_STATE, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_STACK_TRACES, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_SPAWN_TIMEOUT, PMIX_ARG_REQD),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_NP, PMIX_ARG_REQD, 'n'),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_NP, PMIX_ARG_REQD, 'c'),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_NPERNODE, PMIX_ARG_REQD, 'N'),
+    PMIX_OPTION_DEFINE(PRTE_CLI_APPFILE, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_XTERM, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_STOP_ON_EXEC, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_INIT, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_STOP_IN_APP, PMIX_ARG_NONE),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_FWD_ENVAR, PMIX_ARG_REQD, 'x'),
+    PMIX_OPTION_DEFINE(PRTE_CLI_WDIR, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("wd", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_SET_CWD_SESSION, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PATH, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PSET, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_HOSTFILE, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("machinefile", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_ADDHOSTFILE, PMIX_ARG_REQD),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_HOST, PMIX_ARG_REQD, 'H'),
+    PMIX_OPTION_DEFINE(PRTE_CLI_ADDHOST, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_PRELOAD_FILES, PMIX_ARG_REQD),
+    PMIX_OPTION_SHORT_DEFINE(PRTE_CLI_PRELOAD_BIN, PMIX_ARG_NONE, 's'),
+    PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_FWD_ENVIRON, PMIX_ARG_OPTIONAL),
 
-    {'\0', "debug", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Top-level PRTE debug switch (default: false) "
-     "This CLI option will be deprecated starting in Open MPI v5",
-     PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "debug-verbose", 1, PRTE_CMD_LINE_TYPE_INT,
-     "Verbosity level for PRTE debug messages (default: 1)", PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'d', "debug-devel", 0, PRTE_CMD_LINE_TYPE_BOOL, "Enable debugging of PRTE",
-     PRTE_CMD_LINE_OTYPE_DEBUG},
+    // output options
+    PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
 
-    {'\0', "timeout", 1, PRTE_CMD_LINE_TYPE_INT,
-     "Timeout the job after the specified number of seconds", PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "report-state-on-timeout", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Report all job and process states upon timeout", PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "get-stack-traces", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Get stack traces of all application procs on timeout", PRTE_CMD_LINE_OTYPE_DEBUG},
+    // input options
+    PMIX_OPTION_DEFINE(PRTE_CLI_STDIN, PMIX_ARG_REQD),
 
-    {'\0', "allow-run-as-root", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Allow execution as root (STRONGLY DISCOURAGED)", PRTE_CMD_LINE_OTYPE_DVM}, /* End of list */
-    /* fwd mpirun port */
-    {'\0', "fwd-mpirun-port", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Forward mpirun port to compute node daemons so all will use it", PRTE_CMD_LINE_OTYPE_DVM},
-
-    /* Conventional options - for historical compatibility, support
-     * both single and multi dash versions */
-    /* Number of processes; -c, -n, --n, -np, and --np are all
-     synonyms */
-    {'c', "np", 1, PRTE_CMD_LINE_TYPE_INT, "Number of processes to run",
-     PRTE_CMD_LINE_OTYPE_GENERAL},
-    {'n', "n", 1, PRTE_CMD_LINE_TYPE_INT, "Number of processes to run",
-     PRTE_CMD_LINE_OTYPE_GENERAL},
-    {'N', NULL, 1, PRTE_CMD_LINE_TYPE_INT, "Number of processes to run per node",
-     PRTE_CMD_LINE_OTYPE_GENERAL},
-    /* Use an appfile */
-    {'\0', "app", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Provide an appfile; ignore all other command line options", PRTE_CMD_LINE_OTYPE_GENERAL},
-
-    /* output options */
-    {'\0', "output", 1, PRTE_CMD_LINE_TYPE_STRING,
-        "Comma-delimited list of options that control how output is generated."
-        "Allowed values: tag, timestamp, xml, merge-stderr-to-stdout, dir=DIRNAME, file=filename."
-        " The dir option redirects output from application processes into DIRNAME/job/rank/std[out,err,diag]."
-        " The file option redirects output from application processes into filename.rank.[out,err,diag]."
-        " If merge is specified, the dir and file options will put both stdout and stderr into a"
-        " file with the \"out\" suffix. In both cases, "
-        "the provided name will be converted to an absolute path. Supported qualifiers include NOCOPY"
-        " (do not copy the output to the stdout/err streams).",
-        PRTE_CMD_LINE_OTYPE_OUTPUT},
-    /* exit status reporting */
-    {'\0', "report-child-jobs-separately", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Return the exit status of the primary job only", PRTE_CMD_LINE_OTYPE_OUTPUT},
-    /* select XML output */
-    {'\0', "xml", 0, PRTE_CMD_LINE_TYPE_BOOL, "Provide all output in XML format",
-     PRTE_CMD_LINE_OTYPE_OUTPUT},
-    /* tag output */
-    {'\0', "tag-output", 0, PRTE_CMD_LINE_TYPE_BOOL, "Tag all output with [job,rank]",
-     PRTE_CMD_LINE_OTYPE_OUTPUT},
-    {'\0', "timestamp-output", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Timestamp all application process output", PRTE_CMD_LINE_OTYPE_OUTPUT},
-    {'\0', "output-directory", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Redirect output from application processes into filename/job/rank/std[out,err,diag]. A "
-     "relative path value will be converted to an absolute path. The directory name may include a "
-     "colon followed by a comma-delimited list of optional case-insensitive directives. Supported "
-     "directives currently include NOJOBID (do not include a job-id directory level) and NOCOPY "
-     "(do not copy the output to the stdout/err streams)",
-     PRTE_CMD_LINE_OTYPE_OUTPUT},
-    {'\0', "output-filename", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Redirect output from application processes into filename.rank. A relative path value will be "
-     "converted to an absolute path. The directory name may include a colon followed by a "
-     "comma-delimited list of optional case-insensitive directives. Supported directives currently "
-     "include NOCOPY (do not copy the output to the stdout/err streams)",
-     PRTE_CMD_LINE_OTYPE_OUTPUT},
-    {'\0', "merge-stderr-to-stdout", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Merge stderr to stdout for each process", PRTE_CMD_LINE_OTYPE_OUTPUT},
-    {'\0', "xterm", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Create a new xterm window and display output from the specified ranks there",
-     PRTE_CMD_LINE_OTYPE_OUTPUT},
-    {'\0', "stream-buffering", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Adjust buffering for stdout/stderr [0 unbuffered] [1 line buffered] [2 fully buffered]",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-
-    /* input options */
-    /* select stdin option */
-    {'\0', "stdin", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Specify procs to receive stdin [rank, all, none] (default: 0, indicating rank 0)",
-     PRTE_CMD_LINE_OTYPE_INPUT},
-
-    /* debugger options */
-    {'\0', "output-proctable", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Print the complete proctable to stdout [-], stderr [+], or a file [anything else] after "
-     "launch",
-     PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "stop-on-exec", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "If supported, stop each process at start of execution", PRTE_CMD_LINE_OTYPE_DEBUG},
-
-    /* launch options */
-    /* Preload the binary on the remote machine */
-    {'s', "preload-binary", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Preload the binary on the remote machine before starting the remote process.",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    /* Preload files on the remote machine */
-    {'\0', "preload-files", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Preload the comma separated list of files to the remote machines current working directory "
-     "before starting the remote process.",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    /* Export environment variables; potentially used multiple times,
-     so it does not make sense to set into a variable */
-    {'x', NULL, 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Export an environment variable, optionally specifying a value (e.g., \"-x foo\" exports the "
-     "environment variable foo and takes its value from the current environment; \"-x foo=bar\" "
-     "exports the environment variable name foo and sets its value to \"bar\" in the started "
-     "processes; \"-x foo*\" exports all current environmental variables starting with \"foo\")",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "wdir", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Set the working directory of the started processes", PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "wd", 1, PRTE_CMD_LINE_TYPE_STRING, "Synonym for --wdir", PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "set-cwd-to-session-dir", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Set the working directory of the started processes to their session directory",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "path", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "PATH to be used to look for executables to start processes", PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "show-progress", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Output a brief periodic report on launch progress", PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "pset", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "User-specified name assigned to the processes in their given application",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    /* Set a hostfile */
-    {'\0', "hostfile", 1, PRTE_CMD_LINE_TYPE_STRING, "Provide a hostfile",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "machinefile", 1, PRTE_CMD_LINE_TYPE_STRING, "Provide a hostfile",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'\0', "default-hostfile", 1, PRTE_CMD_LINE_TYPE_STRING, "Provide a default hostfile",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-    {'H', "host", 1, PRTE_CMD_LINE_TYPE_STRING, "List of hosts to invoke processes on",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-
-    /* placement options */
     /* Mapping options */
-    {'\0', "map-by", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Mapping Policy for job [slot | hwthread | core (default:np<=2) | l1cache | "
-     "l2cache | l3cache | package (default:np>2) | node | seq | dist | ppr |,"
-     "rankfile]"
-     " with supported colon-delimited modifiers: PE=y (for multiple cpus/proc), "
-     "SPAN, OVERSUBSCRIBE, NOOVERSUBSCRIBE, NOLOCAL, HWTCPUS, CORECPUS, "
-     "DEVICE(for dist policy), INHERIT, NOINHERIT, PE-LIST=a,b (comma-delimited "
-     "ranges of cpus to use for this job), FILE=<path> for seq and rankfile options",
-     PRTE_CMD_LINE_OTYPE_MAPPING},
+    PMIX_OPTION_DEFINE(PRTE_CLI_MAPBY, PMIX_ARG_REQD),
 
     /* Ranking options */
-    {'\0', "rank-by", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Ranking Policy for job [slot (default:np<=2) | hwthread | core | l1cache "
-     "| l2cache | l3cache | package (default:np>2) | node], with modifier :SPAN or :FILL",
-     PRTE_CMD_LINE_OTYPE_RANKING},
+    PMIX_OPTION_DEFINE(PRTE_CLI_RANKBY, PMIX_ARG_REQD),
 
     /* Binding options */
-    {'\0', "bind-to", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Process binding",
-     PRTE_CMD_LINE_OTYPE_BINDING},
+    PMIX_OPTION_DEFINE(PRTE_CLI_BINDTO, PMIX_ARG_REQD),
 
-    /* rankfile */
-    {'\0', "rankfile", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Name of file to specify explicit task mapping", PRTE_CMD_LINE_OTYPE_LAUNCH},
+    /* Runtime options */
+    PMIX_OPTION_DEFINE(PRTE_CLI_RTOS, PMIX_ARG_REQD),
 
     /* display options */
-    {'\0', "display", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Comma-delimited list of options for displaying information about the allocation and job."
-     "Allowed values: allocation, bind, map, map-devel, topo",
-     PRTE_CMD_LINE_OTYPE_DEBUG},
-    /* developer options */
-    {'\0', "do-not-launch", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Perform all necessary operations to prepare to launch the application, but do not actually "
-     "launch it (usually used to test mapping patterns)",
-     PRTE_CMD_LINE_OTYPE_DEVEL},
-    {'\0', "display-devel-map", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Display a detailed process map (mostly intended for developers) just before launch",
-     PRTE_CMD_LINE_OTYPE_DEVEL},
-    {'\0', "display-topo", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Display the topology as part of the process map (mostly intended for developers) just before "
-     "launch",
-     PRTE_CMD_LINE_OTYPE_DEVEL},
-    {'\0', "report-bindings", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Whether to report process bindings to stderr", PRTE_CMD_LINE_OTYPE_DEVEL},
-    {'\0', "display-devel-allocation", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Display a detailed list (mostly intended for developers) of the allocation being used by "
-     "this job",
-     PRTE_CMD_LINE_OTYPE_DEVEL},
-    {'\0', "display-map", 0, PRTE_CMD_LINE_TYPE_BOOL, "Display the process map just before launch",
-     PRTE_CMD_LINE_OTYPE_DEBUG},
-    {'\0', "display-allocation", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Display the allocation being used by this job", PRTE_CMD_LINE_OTYPE_DEBUG},
+    PMIX_OPTION_DEFINE(PRTE_CLI_DISPLAY, PMIX_ARG_REQD),
 
-#if PRTE_ENABLE_FT
-    {'\0', "enable-recovery", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Enable recovery from process failure [Default = disabled]", PRTE_CMD_LINE_OTYPE_FT},
-    {'\0', "max-restarts", 1, PRTE_CMD_LINE_TYPE_INT,
-     "Max number of times to restart a failed process", PRTE_CMD_LINE_OTYPE_FT},
-    {'\0', "disable-recovery", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Disable recovery (resets all recovery options to off)", PRTE_CMD_LINE_OTYPE_FT},
-    {'\0', "continuous", 0, PRTE_CMD_LINE_TYPE_BOOL, "Job is to run until explicitly terminated",
-     PRTE_CMD_LINE_OTYPE_FT},
-    {'\0', "with-ft", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Specify the type(s) of error handling that the application will use.",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
-#endif
+    // deprecated options
+    PMIX_OPTION_DEFINE("mca", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("xml", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("tag-output", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("timestamp-output", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("output-directory", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("output-filename", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("merge-stderr-to-stdout", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-devel-map", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-topo", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("report-bindings", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-devel-allocation", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-map", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("display-allocation", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("rankfile", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("nolocal", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("oversubscribe", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("nooversubscribe", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("use-hwthread-cpus", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("cpu-set", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("cpu-list", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("bind-to-core", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("bynode", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("bycore", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("byslot", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("cpus-per-proc", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("cpus-per-rank", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("npernode", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("pernode", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("npersocket", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("ppr", PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE("debug", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE("do-not-launch", PMIX_ARG_NONE),
+    PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT_PROCTABLE, PMIX_ARG_OPTIONAL),
 
-    /* mpiexec mandated form launch key parameters */
-    {'\0', "initial-errhandler", 1, PRTE_CMD_LINE_TYPE_STRING,
-     "Specify the initial error handler that is attached to predefined communicators during the "
-     "first MPI call.",
-     PRTE_CMD_LINE_OTYPE_LAUNCH},
+    PMIX_OPTION_END
+};
+static char *myshorts = "h::vVpn:c:N:sH:x:";
 
-    /* Display Commumication Protocol : MPI_Init */
-    {'\0', "display-comm", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Display table of communication methods between ranks during MPI_Init",
-     PRTE_CMD_LINE_OTYPE_GENERAL},
-
-    /* Display Commumication Protocol : MPI_Finalize */
-    {'\0', "display-comm-finalize", 0, PRTE_CMD_LINE_TYPE_BOOL,
-     "Display table of communication methods between ranks during MPI_Finalize",
-     PRTE_CMD_LINE_OTYPE_GENERAL},
-
-    /* End of list */
-    {'\0', NULL, 0, PRTE_CMD_LINE_TYPE_NULL, NULL}};
-
-static int define_cli(prte_cmd_line_t *cli)
-{
-    int rc;
-
-    pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
-                        "%s schizo:hydra: define_cli", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-
-    /* protect against bozo error */
-    if (NULL == cli) {
-        return PRTE_ERR_BAD_PARAM;
-    }
-
-    rc = prte_cmd_line_add(cli, hydra_cmd_line_init);
-    return rc;
-}
-
-typedef struct {
-    char *option;
-    char *description;
-} options_t;
-
+#if 0
 static options_t opthelp[] = {
     {"--bind-to",
         "-bind-to: Process-core binding type to use\n\n"
@@ -459,7 +269,7 @@ static char *genhelp =
     "\n  Other local options:\n"
     "    -n/-np {value}                   number of processes\n"
     "    {exec_name} {args}               executable name and arguments\n"
-    "\n\nHydra specific options (treated as global):\n"
+    "\n\nMpich specific options (treated as global):\n"
     "\n  Launch options:\n"
     "    -launcher                        launcher to use (ssh rsh fork slurm ll lsf sge manual persist)\n"
     "    -launcher-exec                   executable to use to launch processes\n"
@@ -473,7 +283,7 @@ static char *genhelp =
     "    -membind                         memory binding policy\n"
     "\n  Demux engine options:\n"
     "    -demux                           demux engine (poll select)\n"
-    "\n  Other Hydra options:\n"
+    "\n  Other Mpich options:\n"
     "    -verbose                         verbose mode\n"
     "    -info                            build information\n"
     "    -print-all-exitcodes             print exit codes of all processes\n"
@@ -494,46 +304,7 @@ static char *genhelp =
     "    -skip-launch-node                do not run MPI processes on the launch node\n"
     "    -gpus-per-proc                   number of GPUs per process (default: auto)\n"
 ;
-
-static int check_help(prte_cmd_line_t *cli, char **argv)
-{
-    size_t n;
-    char *option;
-
-    if (pmix_cmd_line_is_taken(cli, "help")) {
-        fprintf(stdout, "\nUsage: %s [global opts] [local opts for exec1] [exec1] [exec1 args] :"
-                        "[local opts for exec2] [exec2] [exec2 args] : ...\n%s",
-                prte_tool_basename, genhelp);
-        /* If someone asks for help, that should be all we do */
-        return PRTE_ERR_SILENT;
-    } else {
-        /* check if an option was given that has a value of "--help" as
-         * that indicates a request for option-specific help */
-        option = NULL;
-        for (n=1; NULL != argv[n]; n++) {
-            if (0 == strcmp(argv[n], "--help") ||
-                0 == strcmp(argv[n], "-help")) {
-                /* the argv before this one must be the option they
-                 * are seeking help about */
-                option = argv[n-1];
-                break;
-            }
-        }
-        if (NULL != option) {
-            /* see if more detailed help message is available
-             * for this option */
-            for (n=0; NULL != opthelp[n].option; n++) {
-                if (0 == strcmp(opthelp[n].option, option)) {
-                    fprintf(stdout, "\n%s", opthelp[n].description);
-                    break;
-                }
-            }
-            return PRTE_ERR_SILENT;
-        }
-    }
-
-    return PRTE_SUCCESS;
-}
+#endif
 
 static void check_and_replace(char **argv, int idx,
                               char *replacement)
@@ -552,8 +323,10 @@ static void check_and_replace(char **argv, int idx,
     }
 }
 
-static int convert_deprecated_cli(char *option, char ***argv, int i)
+static int convert_deprecated_cli(pmix_cli_result_t *results,
+                                  bool silent)
 {
+#if 0
     char **pargs, *p2;
     int rc = PRTE_SUCCESS;
 
@@ -639,10 +412,14 @@ static int convert_deprecated_cli(char *option, char ***argv, int i)
     }
 
     return rc;
+#endif
+    return PRTE_SUCCESS;
 }
 
-static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***argv)
+static int parse_deprecated_cli(pmix_cli_result_t *results,
+                                bool silent)
 {
+#if 0
     pmix_status_t rc;
 
     char *options[] = {"--genv",
@@ -691,16 +468,39 @@ static int parse_deprecated_cli(prte_cmd_line_t *cmdline, int *argc, char ***arg
                                                  true, convert_deprecated_cli);
 
     return rc;
+#endif
+    return PRTE_SUCCESS;
 }
 
-static int parse_cli(int argc, int start, char **argv, char ***target)
+static int parse_cli(char **argv, pmix_cli_result_t *results,
+                     bool silent)
 {
-    int i;
+    int rc;
 
     pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
-                        "%s schizo:hydra: parse_cli",
+                        "%s schizo:mpich: parse_cli",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
+    rc = pmix_cmd_line_parse(argv, myshorts, myoptions, NULL,
+                             results, "help-schizo-mpich.txt");
+    if (PMIX_SUCCESS != rc) {
+        if (PMIX_OPERATION_SUCCEEDED == rc) {
+            /* pmix cmd line interpreter output result
+             * successfully - usually means version or
+             * some other stock output was generated */
+            return PRTE_OPERATION_SUCCEEDED;
+        }
+        rc = prte_pmix_convert_status(rc);
+        return rc;
+    }
+
+    /* check for deprecated options - warn and convert them */
+    rc = convert_deprecated_cli(results, silent);
+    if (PRTE_SUCCESS != rc) {
+        return rc;
+    }
+
+#if 0
     for (i = 0; i < (argc - start); i++) {
          if (0 == strcmp("--map-by", argv[i])) {
             /* if they set "inherit", then make this the default for prte */
@@ -723,18 +523,20 @@ static int parse_cli(int argc, int start, char **argv, char ***target)
              break;
         }
     }
-
+#endif
     return PRTE_SUCCESS;
 }
 
-static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, bool cmdline)
+static int parse_env(char **srcenv, char ***dstenv,
+                     pmix_cli_result_t *cli)
 {
+#if 0
     char *p1, *p2;
     prte_value_t *pval;
     int i, j;
 
     pmix_output_verbose(1, prte_schizo_base_framework.framework_output,
-                        "%s schizo:hydra: parse_env",
+                        "%s schizo:mpich: parse_env",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     /* if they are filling out a cmd line, then we don't
@@ -756,7 +558,7 @@ static int parse_env(prte_cmd_line_t *cmd_line, char **srcenv, char ***dstenv, b
             free(p2);
         }
     }
-
+#endif
     return PRTE_SUCCESS;
 }
 
@@ -772,9 +574,9 @@ static int detect_proxy(char *personalities)
 
     /* COMMAND-LINE OVERRRIDES ALL */
     /* this is a list of personalities we need to check -
-     * if it contains "hydra" or "mpich", then we are available */
+     * if it contains "mpich" or "mpich", then we are available */
     if (NULL != personalities) {
-        if (NULL != strstr(personalities, "hydra") ||
+        if (NULL != strstr(personalities, "mpich") ||
             NULL != strstr(personalities, "mpich")) {
             return 100;
         }
@@ -783,7 +585,7 @@ static int detect_proxy(char *personalities)
 
     /* if we were told the proxy, then use it */
     if (NULL != (evar = getenv("PRTE_MCA_schizo_proxy"))) {
-        if (0 == strcmp(evar, "hydra") ||
+        if (0 == strcmp(evar, "mpich") ||
             0 == strcmp(evar, "mpich")) {
             return 100;
         } else {
@@ -795,18 +597,22 @@ static int detect_proxy(char *personalities)
     return 0;
 }
 
-static void allow_run_as_root(prte_cmd_line_t *cmd_line)
+static void allow_run_as_root(pmix_cli_result_t *results)
 {
-    /* hydra always allows run-as-root */
+    /* mpich always allows run-as-root */
     return;
 }
 
-static void job_info(prte_cmd_line_t *cmdline, void *jobinfo)
+static void job_info(pmix_cli_result_t *results,
+                     void *jobinfo)
 {
+    PRTE_HIDE_UNUSED_PARAMS(results, jobinfo);
+    return;
 }
 
-static int check_sanity(prte_cmd_line_t *cmd_line)
+static int check_sanity(pmix_cli_result_t *cmd_line)
 {
+#if 0
     prte_value_t *pval;
     char *mappers[] = {"slot", "hwthread", "core", "l1cache", "l2cache",  "l3cache", "l4cache", "l5cache", "package",
                        "node", "seq",      "dist", "ppr",     "rankfile", NULL};
@@ -889,6 +695,13 @@ static int check_sanity(prte_cmd_line_t *cmd_line)
             return PRTE_ERR_SILENT;
         }
     }
-
+#endif
     return PRTE_SUCCESS;
+}
+
+static int set_default_rto(prte_job_t *jdata,
+                           prte_rmaps_options_t *options)
+{
+    PRTE_HIDE_UNUSED_PARAMS(options);
+    return prte_state_base_set_runtime_options(jdata, NULL);
 }

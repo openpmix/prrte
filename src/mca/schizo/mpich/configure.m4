@@ -14,7 +14,7 @@
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # $COPYRIGHT$
@@ -24,10 +24,10 @@
 # $HEADER$
 #
 
-# MCA_schizo_hydra_CONFIG([action-if-found], [action-if-not-found])
+# MCA_schizo_mpich_CONFIG([action-if-found], [action-if-not-found])
 # -----------------------------------------------------------
-AC_DEFUN([MCA_prte_schizo_hydra_CONFIG],[
-    AC_CONFIG_FILES([src/mca/schizo/hydra/Makefile])
+AC_DEFUN([MCA_prte_schizo_mpich_CONFIG],[
+    AC_CONFIG_FILES([src/mca/schizo/mpich/Makefile])
 
     AC_ARG_ENABLE([mpich-support],
                   [AS_HELP_STRING([--disable-mpich-support],
