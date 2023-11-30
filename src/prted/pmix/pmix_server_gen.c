@@ -686,6 +686,7 @@ void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo,
                             void *cbdata)
 {
     pmix_server_req_t *cd;
+    size_t n;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s TOOL CONNECTION REQUEST RECVD",
@@ -693,11 +694,16 @@ void pmix_tool_connected_fn(pmix_info_t *info, size_t ninfo,
 
     /* need to threadshift this request */
     cd = PMIX_NEW(pmix_server_req_t);
-    cd->info = info;
-    cd->ninfo = ninfo;
     cd->toolcbfunc = cbfunc;
     cd->cbdata = cbdata;
     cd->target.rank = 0; // set default for tool
+
+    /* protect the provided info */
+    cd->ninfo = ninfo;
+    PMIX_INFO_CREATE(cd->info, cd->ninfo);
+    for(n = 0; n < ninfo; n++){
+        PMIX_INFO_XFER(&cd->info[n], &info[n]);
+    }
 
     prte_event_set(prte_event_base, &(cd->ev), -1, PRTE_EV_WRITE, _toolconn, cd);
     PMIX_POST_OBJECT(cd);
