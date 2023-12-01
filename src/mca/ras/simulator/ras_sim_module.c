@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  *
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,7 +43,7 @@ prte_ras_base_module_t prte_ras_sim_module = {NULL, allocate, NULL, finalize};
 
 static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
-    int i, n, val, dig, num_nodes;
+    int i, n, val, dig, num_nodes, nslots;
     prte_node_t *node;
     prte_topology_t *t;
     hwloc_topology_t topo;
@@ -57,20 +57,32 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
     hwloc_cpuset_t available;
 
     node_cnt = PMIX_ARGV_SPLIT_COMPAT(prte_mca_ras_simulator_component.num_nodes, ',');
+    num_nodes = PMIX_ARGV_COUNT_COMPAT(node_cnt);
+
     if (NULL != prte_mca_ras_simulator_component.slots) {
         slot_cnt = PMIX_ARGV_SPLIT_COMPAT(prte_mca_ras_simulator_component.slots, ',');
-        /* backfile the slot_cnt so every topology has a cnt */
-        tmp = slot_cnt[PMIX_ARGV_COUNT_COMPAT(slot_cnt) - 1];
-        for (n = PMIX_ARGV_COUNT_COMPAT(slot_cnt); n < PMIX_ARGV_COUNT_COMPAT(node_cnt); n++) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&slot_cnt, tmp);
+        /* if they didn't provide a slot count for each node, then
+         * backfill the slot_cnt so every node has a cnt */
+        nslots = PMIX_ARGV_COUNT_COMPAT(slot_cnt);
+        if (nslots < num_nodes) {
+            // take the last one given and extend it to cover remaining nodes
+            tmp = slot_cnt[nslots - 1];
+            for (n = nslots; n < num_nodes; n++) {
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&slot_cnt, tmp);
+            }
         }
     }
     if (NULL != prte_mca_ras_simulator_component.slots_max) {
         max_slot_cnt = PMIX_ARGV_SPLIT_COMPAT(prte_mca_ras_simulator_component.slots_max, ',');
-        /* backfill the max_slot_cnt as reqd */
-        tmp = max_slot_cnt[PMIX_ARGV_COUNT_COMPAT(slot_cnt) - 1];
-        for (n = PMIX_ARGV_COUNT_COMPAT(max_slot_cnt); n < PMIX_ARGV_COUNT_COMPAT(max_slot_cnt); n++) {
-            PMIX_ARGV_APPEND_NOSIZE_COMPAT(&max_slot_cnt, tmp);
+        /* if they didn't provide a max slot count for each node, then
+         * backfill the slot_cnt so every node has a cnt */
+        nslots = PMIX_ARGV_COUNT_COMPAT(max_slot_cnt);
+         if (nslots < num_nodes) {
+            // take the last one given and extend it to cover remaining nodes
+            tmp = max_slot_cnt[nslots - 1];
+            for (n = nslots; n < num_nodes; n++) {
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&max_slot_cnt, tmp);
+            }
         }
     }
 
@@ -128,10 +140,10 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
                                                            obj);
             }
             if (NULL == slot_cnt || NULL == slot_cnt[n]) {
-                node->slots = 0;
-            } else {
                 obj = hwloc_get_root_obj(t->topo);
                 node->slots = prte_hwloc_base_get_npus(t->topo, use_hwthread_cpus, available, obj);
+            } else {
+                node->slots = strtol(slot_cnt[n], NULL, 10);
             }
             PMIX_RETAIN(t);
             node->topology = t;
@@ -146,6 +158,10 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 
     /* record the number of allocated nodes */
     prte_num_allocated_nodes = pmix_list_get_size(nodes);
+
+    // ensure we do not attempt to launch this job
+    prte_set_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, PRTE_ATTR_GLOBAL,
+                       NULL, PMIX_BOOL);
 
     if (NULL != max_slot_cnt) {
         PMIX_ARGV_FREE_COMPAT(max_slot_cnt);
