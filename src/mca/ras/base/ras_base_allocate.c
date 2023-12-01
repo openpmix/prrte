@@ -764,6 +764,28 @@ int prte_ras_base_add_hosts(prte_job_t *jdata)
 
     PMIX_CONSTRUCT(&nodes, pmix_list_t);
 
+    // see if we have any add-hostfile or add-host directives
+    for (i = 0; i < jdata->apps->size; i++) {
+        if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, i))) {
+            continue;
+        }
+        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE,
+                       (void **) &hosts, PMIX_STRING)) {
+            // found one
+            free(hosts);
+            goto proceed;
+        }
+        if (prte_get_attribute(&app->attributes, PRTE_APP_ADD_HOST,
+                               (void **) &hosts, PMIX_STRING)) {
+            // found one
+            free(hosts);
+            goto proceed;
+        }
+    }
+    // if we get here, then there were no directives
+    return PRTE_SUCCESS;
+
+proceed:
     /* Individual add-hostfile names, if given, are included
      * in the app_contexts for this job. We therefore need to
      * retrieve the app_contexts for the job, and then cycle
