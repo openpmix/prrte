@@ -1205,10 +1205,11 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
     pmix_server_req_t *req;
     pmix_proc_t pproc;
     pmix_status_t prc;
-    pmix_info_t *info = NULL;
+    pmix_info_t *info = NULL, *iptr;
     size_t ninfo;
     char *key = NULL;
-    size_t sz;
+    size_t sz, n, refreshidx;
+    bool refresh_cache = false;
     pmix_value_t *pval = NULL;
     PRTE_HIDE_UNUSED_PARAMS(status, tg, cbdata);
 
@@ -1246,7 +1247,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
     if (NULL != info) {
         for (sz = 0; sz < ninfo; sz++) {
             if (PMIX_CHECK_KEY(&info[sz], PMIX_REQUIRED_KEY)) {
-                key = info[sz].value.data.string;
+                key = strdup(info[sz].value.data.string);
                 continue;
             }
             if (PMIX_CHECK_KEY(&info[sz], PMIX_TIMEOUT)) {
@@ -1260,6 +1261,34 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
                 }
                 continue;
             }
+            if (PMIX_CHECK_KEY(&info[sz], PMIX_GET_REFRESH_CACHE)) {
+                refresh_cache = PMIX_INFO_TRUE(&info[sz]);
+                refreshidx = sz;
+                continue;
+            }
+        }
+    }
+
+    if (refresh_cache) {
+        if (1 < ninfo) {
+            // need to remove the refresh cache key to avoid loops
+            PMIX_INFO_CREATE(iptr, ninfo - 1);
+            sz = 0;
+            for (n = 0; n < ninfo; n++) {
+                if (n == refreshidx) {
+                    continue;
+                }
+                PMIX_INFO_XFER(&iptr[sz], &info[n]);
+                ++sz;
+            }
+            PMIX_INFO_FREE(info, ninfo);
+            info = iptr;
+            ninfo = sz;
+        } else {
+            // refresh was the only key
+            PMIX_INFO_FREE(info, ninfo);
+            info = NULL;
+            ninfo = 0;
         }
     }
 
@@ -1280,7 +1309,8 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         req->info = info;
         req->ninfo = ninfo;
         if (NULL != key) {
-            req->key = strdup(key);
+            req->key = key;
+            key = NULL;
         }
         /* store THEIR index to the request */
         req->remote_index = index;
@@ -1320,7 +1350,8 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
     }
 
     if (NULL != key) {
-        pmix_output_verbose(2, prte_pmix_server_globals.output, "%s dmdx:recv checking for key %s",
+        pmix_output_verbose(2, prte_pmix_server_globals.output,
+                            "%s dmdx:recv checking for key %s",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), key);
         /* see if we have it */
         if (PMIX_SUCCESS != PMIx_Get(&pproc, key, info, ninfo, &pval)) {
@@ -1334,7 +1365,8 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
             memcpy(&req->tproc, &pproc, sizeof(pmix_proc_t));
             req->info = info;
             req->ninfo = ninfo;
-            req->key = strdup(key);
+            req->key = key;
+            key = NULL;
             req->remote_index = index;
             /* store it in my remote reqs, assigning the index in that array
              * to the req->local_index as this is MY index to the request */
@@ -1362,6 +1394,11 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         pmix_output_verbose(2, prte_pmix_server_globals.output,
                             "%s dmdx:recv key %s found - retrieving payload",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), key);
+    }
+
+    if (NULL != key) {
+        free(key);
+        key = NULL;
     }
 
     /* track the request since the call down to the PMIx server
