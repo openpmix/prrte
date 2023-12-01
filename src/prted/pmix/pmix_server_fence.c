@@ -140,61 +140,6 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
     return PMIX_SUCCESS;
 }
 
-static void modex_resp(pmix_status_t status, char *data, size_t sz, void *cbdata)
-{
-    pmix_server_req_t *req = (pmix_server_req_t *) cbdata;
-    pmix_data_buffer_t *reply;
-    pmix_status_t prc;
-
-    PMIX_ACQUIRE_OBJECT(req);
-
-    /* pack the status */
-    PMIX_DATA_BUFFER_CREATE(reply);
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &status, 1, PMIX_STATUS))) {
-        PMIX_ERROR_LOG(prc);
-        PMIX_DATA_BUFFER_RELEASE(reply);
-        goto error;
-    }
-    /* pack the id of the requested proc */
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->tproc, 1, PMIX_PROC))) {
-        PMIX_ERROR_LOG(prc);
-        PMIX_DATA_BUFFER_RELEASE(reply);
-        goto error;
-    }
-
-    /* pack the remote daemon's request room number */
-    if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &req->remote_index, 1, PMIX_INT))) {
-        PMIX_ERROR_LOG(prc);
-        PMIX_DATA_BUFFER_RELEASE(reply);
-        goto error;
-    }
-    if (PMIX_SUCCESS == status) {
-        /* return any provided data */
-        if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, &sz, 1, PMIX_SIZE))) {
-            PMIX_ERROR_LOG(prc);
-            PMIX_DATA_BUFFER_RELEASE(reply);
-            goto error;
-        }
-        if (0 < sz) {
-            if (PMIX_SUCCESS != (prc = PMIx_Data_pack(NULL, reply, data, sz, PMIX_BYTE))) {
-                PMIX_ERROR_LOG(prc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                goto error;
-            }
-        }
-    }
-
-    /* send the response */
-    PRTE_RML_SEND(prc, req->proxy.rank, reply, PRTE_RML_TAG_DIRECT_MODEX_RESP);
-    if (PRTE_SUCCESS != prc) {
-        PRTE_ERROR_LOG(prc);
-        PMIX_DATA_BUFFER_RELEASE(reply);
-    }
-
-error:
-    PMIX_RELEASE(req);
-    return;
-}
 
 static void dmodex_req(int sd, short args, void *cbdata)
 {
