@@ -766,8 +766,8 @@ int main(int argc, char *argv[])
                 if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_ALLOC)) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
                                        PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
-                } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PARSEABLE) ||
-                           PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PARSABLE)) {
+                } else if (PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_PARSEABLE) ||
+                           PMIX_CHECK_CLI_OPTION(targv[i], PRTE_CLI_PARSABLE)) {
                     prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT,
                                        PRTE_ATTR_GLOBAL, NULL, PMIX_BOOL);
                 }
