@@ -260,9 +260,6 @@ option to the help request as ``--help <option>``.
    * - ``--allow-run-as-root``
      - Allow execution as root (**STRONGLY DISCOURAGED**)
 
-   * - ``--daemonize``
-     - Daemonize the prterun and its daemons into the background
-
    * - ``--forward-signals <signals>``
      - Comma-delimited list of additional signals (names or integers) to forward
        to application processes [``none`` => forward nothing].
@@ -347,10 +344,6 @@ the directive appears.
 [stream]
 
 .. include:: /prrte-rst-content/cli-stream-buffering.rst
-
-[daemonize]
-
-Daemonize the prterun and the DVM daemons into the background
 
 [system-server]
 
