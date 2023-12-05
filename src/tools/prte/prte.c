@@ -559,9 +559,6 @@ int main(int argc, char *argv[])
         prte_pmix_server_globals.singleton = strdup(opt->values[0]);
     }
 
-    /* Setup MCA params */
-    prte_register_params();
-
     /* default to a persistent DVM */
     prte_persistent = true;
 
