@@ -71,7 +71,7 @@ static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata, prte_r
 
 char *prte_rmaps_rank_file_slot_list = NULL;
 
-#if PMIX_NUMERIC_VERSION < 0x00040207
+#if PMIX_NUMERIC_VERSION < 0x00040208
 static char *pmix_getline(FILE *fp)
 {
     char *ret, *buff;
