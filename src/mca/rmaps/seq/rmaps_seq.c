@@ -109,6 +109,23 @@ static bool quickmatch(prte_node_t *nd, char *name)
     return false;
 }
 
+#if PMIX_NUMERIC_VERSION < 0x00040207
+static char *pmix_getline(FILE *fp)
+{
+    char *ret, *buff;
+    char input[1024];
+
+    ret = fgets(input, 1024, fp);
+    if (NULL != ret) {
+        input[strlen(input) - 1] = '\0'; /* remove newline */
+        buff = strdup(input);
+        return buff;
+    }
+
+    return NULL;
+}
+#endif
+
 /*
  * Sequentially map the ranks according to the placement in the
  * specified hostfile
