@@ -68,7 +68,7 @@ static pmix_status_t regex_parse_value_range(char *base, char *range,
                                              char ***names);
 static pmix_status_t read_file(char *regexp, char ***names);
 
-#if PMIX_NUMERIC_VERSION < 0x00040207
+#if PMIX_NUMERIC_VERSION < 0x00040208
 static char *pmix_getline(FILE *fp)
 {
     char *ret, *buff;
