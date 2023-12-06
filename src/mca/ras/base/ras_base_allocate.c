@@ -59,7 +59,7 @@
 
 #include "src/mca/ras/base/ras_private.h"
 
-#if PMIX_NUMERIC_VERSION < 0x00040207
+#if PMIX_NUMERIC_VERSION < 0x00040208
 static char *pmix_getline(FILE *fp)
 {
     char *ret, *buff;
