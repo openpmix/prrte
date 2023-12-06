@@ -59,6 +59,23 @@
 
 #include "src/mca/ras/base/ras_private.h"
 
+#if PMIX_NUMERIC_VERSION < 0x00040207
+static char *pmix_getline(FILE *fp)
+{
+    char *ret, *buff;
+    char input[1024];
+
+    ret = fgets(input, 1024, fp);
+    if (NULL != ret) {
+        input[strlen(input) - 1] = '\0'; /* remove newline */
+        buff = strdup(input);
+        return buff;
+    }
+
+    return NULL;
+}
+#endif
+
 char *prte_ras_base_flag_string(prte_node_t *node)
 {
     char *tmp, *t3, **t2 = NULL;
