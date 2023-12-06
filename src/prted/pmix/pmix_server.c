@@ -568,6 +568,7 @@ int pmix_server_init(void)
     pmix_data_array_t darray;
     pmix_info_t *info, myinf;
     size_t n, ninfo;
+    pmix_value_t *val;
     char *tmp;
     pmix_status_t prc;
     prte_pmix_lock_t lock;
@@ -828,6 +829,24 @@ int pmix_server_init(void)
     }
     PMIX_INFO_FREE(info, ninfo);
     rc = PRTE_SUCCESS;
+
+#ifdef PMIX_VERSION_NUMERIC
+    /* find out what version of PMIx is being used - note that
+     * it is NOT an error to not be able to retrieve this
+     * value as it just means the PMIx library pre-dates
+     * introduction of the ability to retrieve the version */
+    prc = PMIx_Get(NULL, PMIX_VERSION_NUMERIC, NULL, 0, &val);
+    if (PMIX_SUCCESS == prc) {
+        // check the version
+        if (val->data.uint32 < PRTE_PMIX_MINIMUM_VERSION) {
+            pmix_show_help("help-prted.txt", "min-pmix-violation", true,
+                           PRTE_PMIX_MINIMUM_VERSION, val->data.uint32);
+            PMIX_VALUE_RELEASE(val);
+            return PRTE_ERR_SILENT;
+        }
+        PMIX_VALUE_RELEASE(val);
+    }
+#endif
 
     /* register our support */
     for (n = 0; 0 != strlen(prte_attributes[n].function); n++) {
