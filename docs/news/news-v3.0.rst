@@ -4,6 +4,46 @@ PRRTE v3.0 series
 This file contains all the NEWS updates for the PRRTE v3.0
 series, in reverse chronological order.
 
+3.0.3 -- TBD
+------------
+- PR #1884: Multiple commits
+   - Fix copy/paste error
+   - Remove daemonize option from prterun
+   - Fix the ras simulator module
+   - Preserve backward compatibility
+   - Check the PMIx version for min required
+   - Correct min version for pmix_getline util
+- PR #1877: Multiple commits
+   - Remove the "refresh" key before requesting dmodx from PMIx server
+   - Shift a code block to enable MCA param directive for ppr mapping
+- PR #1870: Multiple commits
+   - Begin to restore the detailed help topics
+   - docs: add prrte-rst-content to conf.py's exclude_patterns
+   - src/docs: update README.txt
+   - Consolidate non-component show_help files
+   - Add missing file
+- PR #1865: Fix the seq mapper
+- PR #1860: Multiple commits
+   - prte.c: a prefix of "/" is ok
+   - Correctly translate the plm_rsh MCA params
+   - Fix add-hostfile and add-host operations
+   - Add print functions for node, job, and proc flags
+   - Add missing "acquire_object"
+   - Fix handling of "--" in cmd line
+   - Use global PRRTE event base for sigchld callback
+   - Remove the event base param to prte_wait_cb
+   - Fix OMPI cmd line processing
+- PR #1846: Multiple commits
+   - Restore the prun help strings
+   - Restore prte_info show help topics
+   - Recover the pterm show-help strings
+- PR #1843: Avoid adding NULL prefix value to app attributes
+- PR #1841: Multiple commits
+   - Error out of attempts for 32-bit builds
+   - Convert OMPI MCA params from legacy orte
+   - Fix display of DVM allocation
+
+
 3.0.2 -- 23 Oct 2023
 --------------------
 - PR #1832: Update NEWS for release
