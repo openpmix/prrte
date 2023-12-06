@@ -275,15 +275,15 @@ is alive:
 
 [mpir-debugger-detected]
 
-PRTE has detected that you have attached a debugger to this MPI
+PRRTE has detected that you have attached a debugger to this MPI
 job, and that debugger is using the legacy "MPIR" method of
 attachment.
 
-Please note that PRTE has deprecated the "MPIR" debugger
+Please note that PRRTE has deprecated the "MPIR" debugger
 attachment method in favor of the new "PMIx" debugger attchment
 mechanisms.
 
-.. warning:: This means that future versions of PRTE may not support
+.. warning:: This means that future versions of PRRTE may not support
              the "MPIR" debugger attachment method at all.
              Specifically: the debugger you just attached may not work
              with future versions of PRTE.
@@ -305,3 +305,14 @@ set:
 
 Only one of these can be set |mdash| please fix the options and try
 again.
+
+[min-pmix-violation]
+
+PRRTE has detected that the PMIx library being used to run this
+executable does not meet the minimum supported version:
+
+  Min PMIx version: %0x
+  Detected version: %0x
+
+Please check your LD_LIBRARY_PATH and ensure we are pointed to
+a version that meets the minimum requirement.
