@@ -120,6 +120,10 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
     PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LDFLAGS, $prte_pmix_LDFLAGS)
     PRTE_FLAGS_APPEND_UNIQ(PRTE_FINAL_LIBS, $prte_pmix_LIBS)
 
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_MINIMUM_VERSION],
+                       [$prte_pmix_min_num_version],
+                       [Minimum supported PMIx version])
+
     found_pmixcc=0
     PMIXCC_PATH="pmixcc"
     AS_IF([test -n "${with_pmix}"],
