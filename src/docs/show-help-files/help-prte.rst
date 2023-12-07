@@ -334,3 +334,8 @@ that option for more information.
 [display]
 
 .. include:: /prrte-rst-content/cli-display.rst
+
+[runtime-options]
+
+.. include:: /prrte-rst-content/cli-runtime-options.rst
+

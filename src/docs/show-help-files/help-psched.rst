@@ -48,40 +48,6 @@ option to the help request as "--help <option>".
    * - ``-V`` | ``--version``
      - Print version and exit
 
-.. list-table::
-   :header-rows: 2
-   :widths: 20 45
-
-   * -
-     - Debug Options
-
-   * - Option
-     - Description
-
-   * - ``--debug``
-     - Top-level PRTE debug switch (default: ``false``) This option
-       will be deprecated, use ``--debug-devel`` instead.
-
-   * - ``--debug-daemons-file``
-     - Enable debugging of any PRTE daemons used by this application,
-       storing output in files
-
-   * - ``--leave-session-attached``
-     - Do not daemonize the ``prted``
-
-   * - ``--test-suicide <arg0>``
-     - Suicide instead of clean abort after specified delay
-
-.. list-table::
-   :header-rows: 2
-   :widths: 20 45
-
-   * -
-     - DVM Options
-
-   * - Option
-     - Description
-
    * - ``--pmixmca <key> <value>``
      - Pass context-specific PMIx MCA parameters; they are considered
        global if only one context is specified (``key`` is the
@@ -93,19 +59,31 @@ option to the help request as "--help <option>".
        specified (``key`` is the parameter name; ``value`` is the
        parameter value)
 
-   * - ``--dvm-master-uri <uri>``
-     - Specify the URI of the DVM master, or the name of the file
-       (specified as ``file:filename``) that contains that info
+   * - ``--tune <files>``
+     - File(s) containing MCA params for tuning scheduler operations
 
-   * - ``--parent-uri <uri>``
-     - Specify the URI of the prted acting as the parent of this prted
-       in a tree-based spawn operation
+.. list-table::
+   :header-rows: 2
+   :widths: 20 45
 
-   * - ``--tree-spawn``
-     - A tree-based spawn operation is in progress
+   * -
+     - Resource Options
 
-   * - ``--bootstrap``
-     - Self-construct the DVM based on a configuration file
+   * - Option
+     - Description
+
+   * - ``--default-hostfile <filename>``
+     - Provide a default hostfile
+
+   * - ``-H`` | ``--host <hosts>``
+     - List of hosts to invoke processes on
+
+   * - ``--hostfile <file>``
+     - Provide a hostfile
+
+   * - ``--machinefile <file>``
+     - Provide a hostfile (synonym for ``--hostfile``)
+
 
 .. list-table::
    :header-rows: 2
@@ -117,15 +95,32 @@ option to the help request as "--help <option>".
    * - Option
      - Description
 
+   * - ``--allow-run-as-root``
+     - Allow execution as root (**STRONGLY DISCOURAGED**)
+
+   * - ``--daemonize``
+     - Daemonize the scheduler into the background
+
+   * - ``--no-ready-msg``
+     - Do not print a "DVM ready" message
+
    * - ``--set-sid``
-     - Direct the DVM daemons to separate from the current session
+     - Direct the scheduler to separate from the current session
 
-   * - ``--system-server``
-     - Start the DVM as the system server
+   * - ``--tmpdir <dir>``
+     - Set the filesystem root for the session directory tree
 
-   * - ``--pubsub-server <uri>``
-     - Contact information for external PRRTE publish/lookup data
-       server
+   * - ``--report-pid <arg>``
+     - Print out PID on stdout (``-``), stderr (``+``), or a file
+       (anything else)
+
+   * - ``--report-uri <arg>``
+     - Print out URI on stdout (``-``), stderr (``+``), or a file
+       (anything else)
+
+   * - ``--keepalive <arg0>``
+     - Pipe to monitor - scheduler will terminate upon closure
+
 
 Report bugs to %s
 
@@ -135,44 +130,75 @@ Report bugs to %s
 
 Report bugs to %s
 
-[dvm-master-uri]
+[pmixmca]
 
-Specify the URI of the DVM master, or the name of the file (specified as
-``file:filename``) that contains that info
-
-[test-suicide]
-
-Test DVM cleanup upon daemon failure by having one daemon suicide after delay
-
-[system-server]
-
-Start the daemon as the system server on its node
-
-[set-sid]
-
-Direct the daemon to separate from the current session
+.. include:: /prrte-rst-content/cli-pmixmca.rst
 
 [prtemca]
 
 .. include:: /prrte-rst-content/cli-prtemca.rst
 
-[pmixmca]
+[tune]
 
-.. include:: /prrte-rst-content/cli-pmixmca.rst
+.. include:: /prrte-rst-content/cli-tune.rst
 
-[leave-session-attached]
+[default-hostfile]
 
-.. include:: /prrte-rst-content/cli-leave-session-attached.rst
+Specify a default hostfile.
 
-[parent-uri]
+Also see ``--help hostfile``.
 
-Specify the URI of the prted acting as the parent of this prted in a
-tree-based spawn operation
+[host]
 
-[tree-spawn]
+.. include:: /prrte-rst-content/cli-dash-host.rst
 
-A tree-based spawn operation is in progress
+[hostfile]
 
-[pubsub-server]
+.. include:: /prrte-rst-content/cli-dvm-hostfile.rst
 
-Contact information for external PRRTE publish/lookup data server
+See the "Host specification" HTML documentation for details about the
+format and content of hostfiles.
+
+[machinefile]
+
+Provide a hostfile.  This option is a synonym for ``--hostfile``; see
+that option for more information.
+
+[allow-run-as-root]
+
+.. include:: /prrte-rst-content/cli-allow-run-as-root.rst
+
+[daemonize]
+
+Daemonize the scheduler into the background
+
+[no-ready-msg]
+
+Do not print a scheduler ready message
+
+[set-sid]
+
+Direct the scheduler to separate from the current
+session
+
+[tmpdir]
+
+Define the root location for the PRRTE session directory tree
+
+See the "Session directory" HTML documentation for additional details
+about the PRRTE session directory.
+
+[report-pid]
+
+Printout scheduler's PID on stdout [-], stderr [+], or a file
+[anything else]
+
+[report-uri]
+
+Printout scheduler's URI on stdout [-], stderr [+], or a file
+[anything else]
+
+[keepalive]
+
+Pipe for scheduler to monitor - scheduler will terminate upon closure
+
