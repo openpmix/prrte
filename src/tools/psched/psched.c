@@ -472,16 +472,20 @@ int main(int argc, char *argv[])
     /* check for debug options */
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG)) {
         prte_debug_flag = true;
-    }
-    // leave_session_attached is used to indicate that we are not to daemonize
-    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_LEAVE_SESSION_ATTACHED) ||
-        pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG)) {
-        prte_leave_session_attached = true;
+        if (psched_globals.verbosity <= 0) {
+            // verbosity not previously set, so do so now
+            psched_globals.verbosity = 10;
+            psched_globals.output = pmix_output_open(NULL);
+            pmix_output_set_verbosity(psched_globals.output,
+                                      psched_globals.verbosity);
+            prte_pmix_server_globals.output = pmix_output_open(NULL);
+            pmix_output_set_verbosity(prte_pmix_server_globals.output,
+                                      psched_globals.verbosity);
+        }
     }
 
     // detach from controlling terminal, if so directed
-    if (!prte_leave_session_attached ||
-        pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DAEMONIZE)) {
         pipe(wait_pipe);
         prte_state_base.parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);

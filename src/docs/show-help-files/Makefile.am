@@ -40,6 +40,7 @@ RST_SOURCE_FILES = \
         $(srcdir)/help-prted.rst \
         $(srcdir)/help-prterun.rst \
         $(srcdir)/help-prun.rst \
+        $(srcdir)/help-psched.rst \
         $(srcdir)/help-pterm.rst \
         $(srcdir)/help-cli.rst \
         $(srcdir)/help-dash-host.rst \
@@ -59,6 +60,7 @@ ALL_TXT_BUILT = \
         $(TXT_OUTDIR)/help-prted.txt \
         $(TXT_OUTDIR)/help-prterun.txt \
         $(TXT_OUTDIR)/help-prun.txt \
+        $(TXT_OUTDIR)/help-psched.txt \
         $(TXT_OUTDIR)/help-pterm.txt \
         $(TXT_OUTDIR)/help-cli.txt \
         $(TXT_OUTDIR)/help-dash-host.txt \
