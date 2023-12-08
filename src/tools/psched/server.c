@@ -444,8 +444,8 @@ int psched_server_init(pmix_cli_result_t *results)
         return rc;
     }
 
-    /* if the root DVM is present, connect to it */
-    PMIX_INFO_LIST_ADD(prc, ilist, PMIX_CONNECT_TO_SYSTEM,
+    /* if the system controller is present, connect to it */
+    PMIX_INFO_LIST_ADD(prc, ilist, PMIX_CONNECT_TO_SYS_CONTROLLER,
                        NULL, PMIX_BOOL);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
@@ -454,35 +454,13 @@ int psched_server_init(pmix_cli_result_t *results)
     }
 
     /* don't require the connection else we will abort
-     * if the root DVM isn't found */
+     * if the system controller isn't found */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_TOOL_CONNECT_OPTIONAL,
                        NULL, PMIX_BOOL);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
         rc = prte_pmix_convert_status(prc);
         return rc;
-    }
-
-    /* get output options */
-    opt = pmix_cmd_line_get_param(results, PRTE_CLI_OUTPUT);
-    if (NULL != opt) {
-        rc = prte_schizo_base_parse_output(opt, ilist);
-        if (PRTE_SUCCESS != rc) {
-            PMIX_INFO_LIST_RELEASE(ilist);
-            return rc;
-        }
-    }
-
-    /* check for runtime options */
-    opt = pmix_cmd_line_get_param(results, PRTE_CLI_RTOS);
-    if (NULL != opt) {
-        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_RUNTIME_OPTIONS,
-                           opt->values[0], PMIX_STRING);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_INFO_LIST_RELEASE(ilist);
-            rc = prte_pmix_convert_status(prc);
-            return rc;
-        }
     }
 
     /* convert to an info array */
