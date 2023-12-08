@@ -414,7 +414,7 @@ void pmix_server_register_params(void)
 
     /* whether or not to drop a system-level tool rendezvous point */
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "generate_distances",
-                                      "Device types whose distances are to be provided (default=none, options=fabric,gpu,network",
+                                      "Device types whose distances are to be provided (default=fabric,gpu,network)",
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
                                       &generate_dist);
     prte_pmix_server_globals.generate_dist = 0;
@@ -436,7 +436,7 @@ void pmix_server_register_params(void)
     (void) pmix_mca_base_var_register("prte", "pmix", NULL, "system_controller",
                                       "Whether or not to act as the system-wide controller",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_pmix_server_globals.system_server);
+                                      &prte_pmix_server_globals.system_controller);
 
 }
 
@@ -666,6 +666,26 @@ int pmix_server_init(void)
     }
 
     if (PRTE_PROC_IS_MASTER) {
+        // mark ourselves as a gateway server
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_GATEWAY, NULL, PMIX_BOOL);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
+            return rc;
+        }
+        /* if we have a parent or we are in persistent mode, then we
+         * don't write out ourselves */
+        if (NULL != getenv("PMIX_LAUNCHER_RNDZ_URI") || prte_persistent) {
+            flag = false;
+        } else {
+            flag = true;
+        }
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
+            return rc;
+        }
         /* if requested, tell the server to drop a system-level
          * PMIx connection point - only do this for the HNP as, in
          * at least one case, a daemon can be colocated with the
@@ -680,10 +700,25 @@ int pmix_server_init(void)
             }
         }
 #ifdef PMIX_SERVER_SYS_CONTROLLER
-        /* if requested, tell the server that we are the system
-         * controller */
-        if (prte_pmix_server_globals.system_controller) {
+        /* if requested and persistent, tell the server that we are the system
+         * controller - don't do this for the non-persistent mode */
+        if (prte_persistent && prte_pmix_server_globals.system_controller) {
             PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYS_CONTROLLER,
+                               NULL, PMIX_BOOL);
+            if (PMIX_SUCCESS != prc) {
+                PMIX_INFO_LIST_RELEASE(ilist);
+                rc = prte_pmix_convert_status(prc);
+                return rc;
+            }
+            // connect to scheduler if one is around
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_CONNECT_TO_SCHEDULER,
+                               NULL, PMIX_BOOL);
+            if (PMIX_SUCCESS != prc) {
+                PMIX_INFO_LIST_RELEASE(ilist);
+                rc = prte_pmix_convert_status(prc);
+                return rc;
+            }
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_TOOL_CONNECT_OPTIONAL,
                                NULL, PMIX_BOOL);
             if (PMIX_SUCCESS != prc) {
                 PMIX_INFO_LIST_RELEASE(ilist);
@@ -692,6 +727,15 @@ int pmix_server_init(void)
             }
         }
 #endif
+    } else {
+        /* prted's never locally output */
+        flag = false;
+        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
+        if (PMIX_SUCCESS != prc) {
+            PMIX_INFO_LIST_RELEASE(ilist);
+            rc = prte_pmix_convert_status(prc);
+            return rc;
+        }
     }
 
     /* if requested, tell the server library to output our PMIx URI */
@@ -721,52 +765,6 @@ int pmix_server_init(void)
                            prte_progress_thread_cpus, PMIX_STRING);
         PMIX_INFO_LIST_ADD(prc, ilist, PMIX_BIND_REQUIRED,
                            &prte_bind_progress_thread_reqd, PMIX_BOOL);
-    }
-
-    /* if we are the MASTER, then we are the gateway */
-    if (PRTE_PROC_IS_MASTER) {
-        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_GATEWAY, NULL, PMIX_BOOL);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_INFO_LIST_RELEASE(ilist);
-            rc = prte_pmix_convert_status(prc);
-            return rc;
-        }
-        /* if we are also persistent, then we do not output IOF ourselves */
-        if (prte_persistent) {
-            flag = false;
-#ifdef PMIX_SERVER_CONTROLLER
-            // declare ourselves the system controller
-            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_SYS_CONTROLLER, NULL, PMIX_BOOL);
-            if (PMIX_SUCCESS != prc) {
-                PMIX_INFO_LIST_RELEASE(ilist);
-                rc = prte_pmix_convert_status(prc);
-                return rc;
-            }
-#endif
-        } else {
-            /* if we have a parent or we are in persistent mode, then we
-             * don't write out ourselves */
-            if (NULL != getenv("PMIX_LAUNCHER_RNDZ_URI") || prte_persistent) {
-                flag = false;
-            } else {
-                flag = true;
-            }
-        }
-        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_INFO_LIST_RELEASE(ilist);
-            rc = prte_pmix_convert_status(prc);
-            return rc;
-        }
-    } else {
-        /* prted's never locally output */
-        flag = false;
-        PMIX_INFO_LIST_ADD(prc, ilist, PMIX_IOF_LOCAL_OUTPUT, &flag, PMIX_BOOL);
-        if (PMIX_SUCCESS != prc) {
-            PMIX_INFO_LIST_RELEASE(ilist);
-            rc = prte_pmix_convert_status(prc);
-            return rc;
-        }
     }
 
     /* PRTE always allows remote tool connections */
