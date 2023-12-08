@@ -269,6 +269,10 @@ int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target
     char *p1, *p2, *param;
 
     for (i = 0; i < (argc - start); ++i) {
+        if (0 == strcmp("--", argv[i])) {
+            // quit processing
+            return PRTE_SUCCESS;
+        }
         if (0 == strcmp("--prtemca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
@@ -409,6 +413,10 @@ int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target
     char *p1, *p2, *param;
 
     for (i = 0; i < (argc - start); ++i) {
+        if (0 == strcmp("--", argv[i])) {
+            // quit processing
+            return PRTE_SUCCESS;
+        }
         if (0 == strcmp("--pmixmca", argv[i]) || 0 == strcmp("--gpmixmca", argv[i])) {
             if (NULL == argv[i + 1] || NULL == argv[i + 2]) {
                 /* this is an error */
