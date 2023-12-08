@@ -184,6 +184,7 @@ test/qspawn
 test/filegen
 test/iostress
 test/spawn_multiple
+test/clichk
 
 docs/_build
 docs/_static
