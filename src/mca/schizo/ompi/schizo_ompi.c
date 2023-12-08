@@ -450,6 +450,10 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
 
     /* Convert single dashes to multi-dashes. */
     for (n=1; NULL != pargv[n]; n++) {
+        if (0 == strcmp("--", pargv[n])) {
+            // quit processing
+            break;
+        }
         /* check for option */
         if ('-' != pargv[n][0]) {
             continue;
