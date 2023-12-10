@@ -513,6 +513,31 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
                     /* connect the two */
                     PMIX_RETAIN(dmn->node);
                     pptr->node = dmn->node;
+
+                    /* add the node to the job map, if needed */
+                    if (!PRTE_FLAG_TEST(pptr->node, PRTE_NODE_FLAG_MAPPED)) {
+                        PMIX_RETAIN(pptr->node);
+                        pmix_pointer_array_add(jdata->map->nodes, pptr->node);
+                        jdata->map->num_nodes++;
+                        PRTE_FLAG_SET(pptr->node, PRTE_NODE_FLAG_MAPPED);
+                    }
+                    /* add this proc to that node */
+                    PMIX_RETAIN(pptr);
+                    pmix_pointer_array_add(pptr->node->procs, pptr);
+                    pptr->node->num_procs++;
+                    /* and connect it back to its job object, if not already done */
+                    if (NULL == pptr->job) {
+                        PMIX_RETAIN(jdata);
+                        pptr->job = jdata;
+                    }
+                }
+                /* reset the mapped flags */
+                for (n = 0; n < jdata->map->nodes->size; n++) {
+                    if (NULL
+                        != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, n))) {
+                        PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
+                    }
+
                 }
             }
             /* release the buffer */
