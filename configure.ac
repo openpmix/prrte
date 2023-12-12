@@ -414,7 +414,7 @@ AC_CHECK_HEADERS([arpa/inet.h dirent.h \
                   sys/types.h sys/uio.h sys/un.h net/uio.h sys/utsname.h sys/wait.h syslog.h \
                   termios.h unistd.h util.h malloc.h \
                   paths.h \
-                  ioLib.h sockLib.h hostLib.h])
+                  ioLib.h sockLib.h hostLib.h stdatomic.h])
 
 # Needed to work around Darwin requiring sys/socket.h for
 # net/if.h
