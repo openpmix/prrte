@@ -51,7 +51,8 @@ TESTS = \
 	qspawn \
 	iostress \
 	filegen \
-	clichk
+	clichk \
+	chkfs
 
 all: $(TESTS)
 
