@@ -38,7 +38,6 @@ static int mountpoint(char *filename, char **fstype)
     }
 
     while (getmntent_r(fp, &mnt, buf, sizeof(buf))) {
-        fprintf(stderr, "MNT: %s %s\n", mnt.mnt_fsname, mnt.mnt_dir);
         fd = open(mnt.mnt_dir, O_RDONLY);
         if (0 > fd) {
             // probably lack permissions
@@ -75,8 +74,12 @@ int main(int argc, char **argv)
 
     for (n=1; NULL != argv[n]; n++) {
         rc = mountpoint(argv[n], &fstype);
-        fprintf(stdout, "Return: %d File: %s FStype: %s\n", rc, argv[n], fstype);
-        free(fstype);
+        if (0 == rc) {
+            fprintf(stdout, "Return: %d File: %s FStype: %s\n", rc, argv[n], fstype);
+            free(fstype);
+        } else {
+            fprintf(stdout, "File: %s Unknown type\n", argv[n]);
+        }
     }
 
     return 0;
