@@ -4,8 +4,13 @@ PRRTE v3.0 series
 This file contains all the NEWS updates for the PRRTE v3.0
 series, in reverse chronological order.
 
-3.0.3 -- TBD
-------------
+3.0.3 -- 19 Dec 2023
+--------------------
+- PR #1893: Check for stdatomic.h
+- PR #1891: add nodes to job data for ALL jobs included in the launch message
+- PR #1888: Multiple commits
+   - Minor tweaks of cmd line processing
+   - Preserve the clichk test code for future use
 - PR #1884: Multiple commits
    - Fix copy/paste error
    - Remove daemonize option from prterun
