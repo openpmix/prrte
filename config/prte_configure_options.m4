@@ -54,7 +54,7 @@ AC_DEFINE_UNQUOTED([PRTE_WANT_PRTE_PREFIX_BY_DEFAULT],
 # Is this a developer copy?
 #
 
-if test -d .git; then
+if git describe 350564b9f381dfbdbe119f26585f07da6f4b9e8a &> /dev/null ; then
     PRTE_DEVEL=1
 else
     PRTE_DEVEL=0
