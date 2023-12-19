@@ -49,6 +49,7 @@ static void pass_request(int sd, short args, void *cbdata)
     pmix_data_buffer_t *buf;
     uint8_t command;
     pmix_status_t rc;
+    pmix_info_t info[2];
 
     /* create a request tracker for this operation */
     req = PMIX_NEW(pmix_server_req_t);
@@ -67,10 +68,19 @@ static void pass_request(int sd, short args, void *cbdata)
     /* if we are the DVM master, then handle this ourselves */
     if (PRTE_PROC_IS_MASTER) {
         if (!prte_pmix_server_globals.scheduler_connected) {
-            /* the scheduler has not attached to us - there is
-             * nothing we can do */
-            rc = PMIX_ERR_NOT_SUPPORTED;
-            goto callback;
+            /* the scheduler has not attached to us - see if we
+             * can attach to it, make it optional so we don't
+             * hang if there is no scheduler available */
+            PMIX_INFO_LOAD(&info[0], PMIX_CONNECT_TO_SCHEDULER, NULL, PMIX_BOOL);
+            PMIX_INFO_LOAD(&info[1], PMIX_TOOL_CONNECT_OPTIONAL, NULL, PMIX_BOOL);
+            rc = PMIx_tool_attach_to_server(NULL, &prte_pmix_server_globals.scheduler,
+                                            info, 2);
+            PMIX_INFO_DESTRUCT(&info[0]);
+            PMIX_INFO_DESTRUCT(&info[1]);
+            if (PMIX_SUCCESS != rc) {
+                goto callback;
+            }
+            prte_pmix_server_globals.scheduler_set_as_server = true;
         }
 
         /* if we have not yet set the scheduler as our server, do so */
@@ -87,10 +97,10 @@ static void pass_request(int sd, short args, void *cbdata)
                                             infocbfunc, req);
         } else {
 #if PMIX_NUMERIC_VERSION < 0x00050000
-        rc = PMIX_ERR_NOT_SUPPORTED;
+            rc = PMIX_ERR_NOT_SUPPORTED;
 #else
-        rc = PMIx_Session_control(cd->sessionID, cd->info, cd->ninfo,
-                                  infocbfunc, req);
+            rc = PMIx_Session_control(cd->sessionID, cd->info, cd->ninfo,
+                                      infocbfunc, req);
 #endif
         }
         if (PMIX_SUCCESS != rc) {
@@ -168,7 +178,7 @@ static void pass_request(int sd, short args, void *cbdata)
         }
     }
 
-    /* send this request to the DVM controller - might be us */
+    /* send this request to the DVM controller */
     PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, buf, PRTE_RML_TAG_SCHED);
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);
