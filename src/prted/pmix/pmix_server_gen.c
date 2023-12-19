@@ -525,6 +525,9 @@ static void _toolconn(int sd, short args, void *cbdata)
     pmix_data_buffer_t *buf;
     prte_plm_cmd_flag_t command = PRTE_PLM_ALLOC_JOBID_CMD;
     pmix_status_t xrc;
+    bool primary = false;
+    bool nspace_given = false;
+    bool rank_given = false;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -560,8 +563,10 @@ static void _toolconn(int sd, short args, void *cbdata)
                 }
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_NSPACE)) {
                 PMIX_LOAD_NSPACE(cd->target.nspace, cd->info[n].value.data.string);
+                nspace_given = true;
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_RANK)) {
                 cd->target.rank = cd->info[n].value.data.rank;
+                rank_given = true;
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_HOSTNAME)) {
                 cd->operation = strdup(cd->info[n].value.data.string);
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_CMD_LINE)) {
@@ -570,6 +575,8 @@ static void _toolconn(int sd, short args, void *cbdata)
                 cd->launcher = PMIX_INFO_TRUE(&cd->info[n]);
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_SERVER_SCHEDULER)) {
                 cd->scheduler = PMIX_INFO_TRUE(&cd->info[n]);
+            } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PRIMARY_SERVER)) {
+                primary = PMIX_INFO_TRUE(&cd->info[n]);
             } else if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PROC_PID)) {
                 PMIX_VALUE_GET_NUMBER(xrc, &cd->info[n].value, cd->pid, pid_t);
                 if (PMIX_SUCCESS != xrc) {
@@ -599,11 +606,25 @@ static void _toolconn(int sd, short args, void *cbdata)
         } else {
             /* mark that the scheduler has attached to us */
             prte_pmix_server_globals.scheduler_connected = true;
+            // the scheduler always self-assigns its ID
+            if (!nspace_given || !rank_given) {
+                cd->toolcbfunc(PMIX_ERR_NOT_SUPPORTED, NULL, cd->cbdata);
+                PMIX_RELEASE(cd);
+                return;
+            }
             PMIX_LOAD_PROCID(&prte_pmix_server_globals.scheduler,
                              cd->target.nspace, cd->target.rank);
-            /* we cannot immediately set the scheduler to be our
-             * PMIx server as the PMIx library hasn't finished
-             * recording it */
+            rc = PMIX_SUCCESS;
+
+            if (!primary) {
+                /* we cannot immediately set the scheduler to be our
+                 * PMIx server as the PMIx library hasn't finished
+                 * recording it */
+                goto complete;
+            }
+            // it has been recorded in the library, so record it here
+            prte_pmix_server_globals.scheduler_set_as_server = true;
+            goto complete;
         }
     }
 
@@ -652,6 +673,8 @@ static void _toolconn(int sd, short args, void *cbdata)
     if (PMIX_SUCCESS != rc) {
         rc = prte_pmix_convert_rc(rc);
     }
+
+complete:
     if (NULL != cd->toolcbfunc) {
         cd->toolcbfunc(rc, &cd->target, cd->cbdata);
     }

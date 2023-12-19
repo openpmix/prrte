@@ -129,6 +129,8 @@ typedef struct {
     // allocation request info
     pmix_proc_t requestor;
     pmix_alloc_directive_t directive;
+    // whether the data is a local copy
+    bool copy;
     // original info keys
     pmix_info_t *data;
     size_t ndata;
