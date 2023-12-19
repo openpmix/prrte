@@ -315,6 +315,7 @@ PMIX_CLASS_INSTANCE(psched_state_t,
 static void req_con(psched_req_t *p)
 {
     PMIx_Load_procid(&p->requestor, NULL, PMIX_RANK_INVALID);
+    p->copy = false;  // data is not a local copy
     p->data = NULL;
     p->ndata = 0;
     p->user_refid = NULL;
@@ -341,7 +342,7 @@ static void req_con(psched_req_t *p)
 }
 static void req_des(psched_req_t *p)
 {
-    if (NULL != p->data) {
+    if (NULL != p->data && p->copy) {
         PMIx_Info_free(p->data, p->ndata);
     }
     if (NULL != p->user_refid) {
