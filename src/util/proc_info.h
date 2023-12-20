@@ -13,7 +13,7 @@
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2020 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -95,6 +95,7 @@ typedef struct prte_process_info_t {
     char *sock_stdout; /**< Path name to temp file for stdout. */
     char *sock_stderr; /**< Path name to temp file for stderr. */
     char *cpuset;      /**< String-representation of bitmap where we are bound */
+    bool shared_fs;     // whether the tmpdir is on a shared file system
 } prte_process_info_t;
 
 /**
