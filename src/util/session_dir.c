@@ -55,6 +55,7 @@
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_output.h"
+#include "src/util/pmix_path.h"
 #include "src/util/pmix_printf.h"
 #include "src/util/pmix_environ.h"
 
@@ -115,6 +116,9 @@ static int prte_create_dir(char *directory)
 static int _setup_tmpdir_base(void)
 {
     int rc = PRTE_SUCCESS;
+#if PMIX_NUMERIC_VERSION != 0x00040208
+    char *fstype = NULL;
+#endif
 
     /* make sure that we have tmpdir_base set
      * if we need it
@@ -126,6 +130,23 @@ static int _setup_tmpdir_base(void)
             goto exit;
         }
     }
+
+#if PMIX_NUMERIC_VERSION != 0x00040208
+    // check to see if this is on a shared file system
+    // as we know this will impact launch as well as
+    // application execution performance
+    prte_process_info.shared_fs = pmix_path_nfs(prte_process_info.tmpdir_base, &fstype);
+    prte_process_info.shared_fs = true;
+    if (prte_process_info.shared_fs && !prte_silence_shared_fs) {
+        // this is a shared file system - warn the user
+        pmix_show_help("help-prte-runtime.txt", "prte:session:dir:shared", true,
+                       prte_process_info.tmpdir_base, fstype, prte_tool_basename);
+    }
+    if (NULL != fstype) {
+        free(fstype);
+    }
+#endif
+
 exit:
     if (PRTE_SUCCESS != rc) {
         PRTE_ERROR_LOG(rc);

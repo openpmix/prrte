@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -74,7 +74,9 @@ PRTE_EXPORT prte_process_info_t prte_process_info = {
     .sock_stdin = NULL,
     .sock_stdout = NULL,
     .sock_stderr = NULL,
-    .cpuset = NULL};
+    .cpuset = NULL,
+    .shared_fs = false
+};
 
 static bool init = false;
 static char *prte_strip_prefix;

@@ -74,6 +74,7 @@ PRTE_EXPORT extern char *prte_progress_thread_cpus;
 PRTE_EXPORT extern bool prte_bind_progress_thread_reqd;
 PRTE_EXPORT extern bool prte_show_launch_progress;
 PRTE_EXPORT extern bool prte_bootstrap_setup;
+PRTE_EXPORT extern bool prte_silence_shared_fs;
 
 /**
  * Global indicating where this process was bound to at launch (will
