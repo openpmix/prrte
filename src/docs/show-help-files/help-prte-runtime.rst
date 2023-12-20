@@ -158,3 +158,31 @@ the regex of participating nodes on at least one node:
    error:  %s
 
 Please fix the error and try again.
+
+[prte:session:dir:shared]
+
+PRTE has detected that the head of the session directory
+tree (where scratch files and shared memory backing storage
+will be placed) resides on a shared file system:
+
+.. code::
+
+   Directory: %s
+   File system type: %s
+
+For performance reasons, it is strongly recommended that the
+session directory be located on a local file system. This can
+be controlled by setting the system temporary directory to be
+used by PRTE using either the TMPDIR envar or the "prte_tmpdir_base"
+MCA param.
+
+If you need the temporary directory to be different
+on remote nodes from the local one where %s is running (e.g.,
+when a login node is being employed), then you can set the
+local temporary directory using the "prte_local_tmpdir_base"
+MCA param and the one to be used on all other nodes using the
+"prte_remote_tmpdir_base" param.
+
+This is only a warning advisory and your job will continue.
+You can disable this warning in the future by setting the
+"prte_silence_shared_fs" MCA param to "1".

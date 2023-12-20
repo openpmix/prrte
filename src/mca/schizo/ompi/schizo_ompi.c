@@ -48,6 +48,7 @@
 #include "src/util/pmix_os_path.h"
 #include "src/util/pmix_path.h"
 #include "src/util/pmix_environ.h"
+#include "src/util/proc_info.h"
 #include "src/util/prte_cmd_line.h"
 #include "src/runtime/pmix_init_util.h"
 #include "src/util/session_dir.h"
@@ -1794,6 +1795,17 @@ static int parse_env(char **srcenv, char ***dstenv,
         PMIX_ARGV_FREE_COMPAT(xparams);
         PMIX_ARGV_FREE_COMPAT(xvals);
     }
+
+#if PMIX_NUMERIC_VERSION != 0x00040208
+    /* add a flag indicating that we did indeed check the tmpdir
+     * for a shared file system */
+    if (prte_process_info.shared_fs) {
+        p1 = "TRUE";
+    } else {
+        p1 = "FALSE";
+    }
+    PMIX_SETENV_COMPAT("PRTE_SHARED_FS", p1, true, dstenv);
+#endif
 
     return PRTE_SUCCESS;
 }

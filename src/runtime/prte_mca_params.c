@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -67,7 +67,7 @@ char *prte_set_max_sys_limits = NULL;
 int prte_pmix_verbose_output = 0;
 char *prte_progress_thread_cpus = NULL;
 bool prte_bind_progress_thread_reqd = false;
-
+bool prte_silence_shared_fs = false;
 int prte_max_thread_in_progress = 1;
 
 int prte_register_params(void)
@@ -497,6 +497,11 @@ int prte_register_params(void)
                                       "Whether binding of internal PRRTE progress thread is required",
                                       PMIX_MCA_BASE_VAR_TYPE_BOOL,
                                       &prte_bind_progress_thread_reqd);
+
+    (void) pmix_mca_base_var_register("prte", "prte", NULL, "silence_shared_fs",
+                                      "Silence the shared file system warning",
+                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
+                                      &prte_silence_shared_fs);
 
     /* pickup the RML params */
     prte_rml_register();
