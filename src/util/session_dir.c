@@ -13,7 +13,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -136,7 +136,6 @@ static int _setup_tmpdir_base(void)
     // as we know this will impact launch as well as
     // application execution performance
     prte_process_info.shared_fs = pmix_path_nfs(prte_process_info.tmpdir_base, &fstype);
-    prte_process_info.shared_fs = true;
     if (prte_process_info.shared_fs && !prte_silence_shared_fs) {
         // this is a shared file system - warn the user
         pmix_show_help("help-prte-runtime.txt", "prte:session:dir:shared", true,
