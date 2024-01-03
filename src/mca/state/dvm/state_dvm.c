@@ -4,7 +4,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,6 +28,7 @@
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_output.h"
 #include "src/util/proc_info.h"
+#include "src/util/session_dir.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/filem/filem.h"
@@ -590,7 +591,7 @@ static void check_complete(int fd, short args, void *cbdata)
     PMIX_LOAD_PROCID(&pname, jdata->nspace, PMIX_RANK_WILDCARD);
     prte_pmix_server_clear(&pname);
 
-    /* cleanup the procs as these are gone */
+    /* cleanup the local procs as these are gone */
     for (i = 0; i < prte_local_children->size; i++) {
         if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
             continue;
@@ -666,6 +667,7 @@ static void check_complete(int fd, short args, void *cbdata)
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             terminate_dvm = true;  // flag that the DVM is to terminate
             PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NOTIFY_COMPLETED);
+            PMIX_RELEASE(caddy);
             return;
         }
 
@@ -834,15 +836,6 @@ release:
         PMIX_DESTRUCT(&procs);
     }
 
-    /* remove the session directory tree */
-    if (0 > pmix_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
-                          PRTE_LOCAL_JOBID(jdata->nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-    } else {
-        pmix_os_dirpath_destroy(tmp, true, NULL);
-        free(tmp);
-    }
-
     if (jdata->state != PRTE_JOB_STATE_NOTIFIED) {
         PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
                              "%s state:dvm:check_job_completed state is terminated - activating notify",
@@ -852,6 +845,7 @@ release:
         jdata->state = PRTE_JOB_STATE_NOTIFIED;
     }
 
+    PMIX_POST_OBJECT(jdata);
     PMIX_RELEASE(caddy);
 }
 
@@ -866,7 +860,9 @@ static void cleanup_job(int sd, short args, void *cbdata)
         dvm_terminated = true;
         prte_plm.terminate_orteds();
     }
-
+    if (NULL != caddy->jdata) {
+        PMIX_RELEASE(caddy->jdata);
+    }
     PMIX_RELEASE(caddy);
 }
 
@@ -960,6 +956,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+            PMIX_RELEASE(caddy);
             return;
         }
         /* pack the source - it cannot be me as that will cause
@@ -969,6 +966,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+            PMIX_RELEASE(caddy);
             return;
         }
         /* pack the range */
@@ -976,6 +974,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+            PMIX_RELEASE(caddy);
             return;
         }
         /* pack the number of infos */
@@ -983,6 +982,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+            PMIX_RELEASE(caddy);
             return;
         }
         /* pack the infos themselves */
@@ -990,6 +990,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_FREE(info, ninfo);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
+            PMIX_RELEASE(caddy);
             return;
         }
         PMIX_INFO_FREE(info, ninfo);
@@ -1003,6 +1004,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
             PMIX_DATA_BUFFER_RELEASE(reply);
+            PMIX_RELEASE(caddy);
             return;
         }
         rc = PMIx_Data_copy_payload(reply, &pbkt);
@@ -1011,6 +1013,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
+            PMIX_RELEASE(caddy);
             return;
         }
 
@@ -1023,6 +1026,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
             PMIX_PROC_FREE(sig.signature, 1);
+            PMIX_RELEASE(caddy);
             return;
         }
         PMIX_OUTPUT_VERBOSE((2, prte_state_base_framework.framework_output,
@@ -1060,11 +1064,12 @@ static void dvm_notify(int sd, short args, void *cbdata)
         prte_grpcomm.xcast(&sig, PRTE_RML_TAG_DAEMON, reply);
         PMIX_DATA_BUFFER_RELEASE(reply);
         PMIX_PROC_FREE(sig.signature, 1);
-        PMIX_RELEASE(caddy);
     }
 
     // We are done with our use of job data and have notified the other daemons
     if (notify) {
         PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_NOTIFIED);
     }
+
+    PMIX_RELEASE(caddy);
 }

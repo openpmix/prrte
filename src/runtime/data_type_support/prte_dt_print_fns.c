@@ -14,7 +14,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -225,7 +225,7 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
             if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(src->procs, j))) {
                 continue;
             }
-            if (proc->job != jdata) {
+            if (!PMIX_CHECK_NSPACE(proc->name.nspace, jdata->nspace)) {
                 continue;
             }
             prte_proc_print(&tmp2, jdata, proc);

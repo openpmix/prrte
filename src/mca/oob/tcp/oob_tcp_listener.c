@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -800,7 +800,6 @@ static void connection_event_handler(int incoming_sd, short flags, void *cbdata)
             pmix_show_help("help-oob-tcp.txt", "accept failed", true, prte_process_info.nodename,
                            prte_socket_errno, strerror(prte_socket_errno),
                            "Out of file descriptors");
-            prte_errmgr.abort(PRTE_ERROR_DEFAULT_EXIT_CODE, NULL);
             return;
         }
 

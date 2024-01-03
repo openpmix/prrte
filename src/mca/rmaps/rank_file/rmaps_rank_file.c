@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2022 IBM Corporation.  All rights reserved.
  *
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -783,9 +783,9 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
     }
 
     // session dir + / (1) + lsf_rf. (7) + XXXXXX (6) + \0 (1)
-    len = strlen(prte_process_info.jobfam_session_dir) + 1 + 7 + 6 + 1;
+    len = strlen(prte_process_info.top_session_dir) + 1 + 7 + 6 + 1;
     (*aff_rankfile) = (char*) malloc(sizeof(char) * len);
-    sprintf(*aff_rankfile, "%s/lsf_rf.XXXXXX", prte_process_info.jobfam_session_dir);
+    sprintf(*aff_rankfile, "%s/lsf_rf.XXXXXX", prte_process_info.top_session_dir);
 
     /* open the file */
     fp = fopen(affinity_file, "r");
