@@ -4,8 +4,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020-2021 IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022  Consulting.  All rights reserved.
- * Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -476,11 +475,6 @@ static void track_procs(int fd, short argc, void *cbdata)
         PRTE_FLAG_SET(pdata, PRTE_PROC_FLAG_RECORDED);
         PRTE_FLAG_UNSET(pdata, PRTE_PROC_FLAG_ALIVE);
         pdata->state = state;
-        /* Clean up the session directory as if we were the process
-         * itself.  This covers the case where the process died abnormally
-         * and didn't cleanup its own session directory.
-         */
-        prte_session_dir_finalize(proc);
         /* if we are trying to terminate and our routes are
          * gone, then terminate ourselves IF no local procs
          * remain (might be some from another job)

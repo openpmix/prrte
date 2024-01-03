@@ -10,7 +10,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -64,12 +64,11 @@ static void prted_abort(int error_code, char *fmt, ...);
 /******************
  * prted module
  ******************/
-prte_errmgr_base_module_t prte_errmgr_prted_module = {.init = init,
-                                                      .finalize = finalize,
-                                                      .logfn = prte_errmgr_base_log,
-                                                      .abort = prted_abort,
-                                                      .abort_peers = prte_errmgr_base_abort_peers,
-                                                      .enable_detector = NULL};
+prte_errmgr_base_module_t prte_errmgr_prted_module = {
+    .init = init,
+    .finalize = finalize,
+    .logfn = prte_errmgr_base_log
+};
 
 /* Local functions */
 static bool any_live_children(pmix_nspace_t job);
@@ -671,8 +670,8 @@ static void proc_errors(int fd, short args, void *cbdata)
 
         /* remove all of this job's children from the global list */
         for (i = 0; i < prte_local_children->size; i++) {
-            if (NULL
-                == (ptr = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i))) {
+            ptr = (prte_proc_t *) pmix_pointer_array_get_item(prte_local_children, i);
+            if (NULL == ptr) {
                 continue;
             }
             if (PMIX_CHECK_NSPACE(jdata->nspace, ptr->name.nspace)) {
@@ -680,9 +679,6 @@ static void proc_errors(int fd, short args, void *cbdata)
                 PMIX_RELEASE(ptr);
             }
         }
-
-        /* ensure the job's local session directory tree is removed */
-        prte_session_dir_cleanup(jdata->nspace);
 
         /* remove this job from our local job data since it is complete */
         PMIX_RELEASE(jdata);

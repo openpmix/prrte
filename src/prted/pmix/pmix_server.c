@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
@@ -529,10 +529,6 @@ static void lost_connection_hdlr(size_t evhdlr_registration_id, pmix_status_t st
     PMIX_LIST_FOREACH(tl, &prte_pmix_server_globals.tools, prte_pmix_tool_t)
     {
         if (PMIX_CHECK_PROCID(&tl->name, source)) {
-            /* remove the session directory we created for it */
-            if (NULL != tl->nsdir) {
-                pmix_os_dirpath_destroy(tl->nsdir, true, NULL);
-            }
             /* take this tool off the list */
             pmix_list_remove_item(&prte_pmix_server_globals.tools, &tl->super);
             /* release it */
@@ -637,7 +633,7 @@ int pmix_server_init(void)
 
     /* tell the server our temp directory */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_TMPDIR,
-                       prte_process_info.jobfam_session_dir,
+                       prte_process_info.top_session_dir,
                        PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);
@@ -2023,16 +2019,6 @@ PMIX_CLASS_INSTANCE(pmix_server_pset_t,
                     pmix_list_item_t,
                     pscon, psdes);
 
-static void tlcon(prte_pmix_tool_t *p)
-{
-    p->nsdir = NULL;
-}
-static void tldes(prte_pmix_tool_t *p)
-{
-    if (NULL != p->nsdir) {
-        free(p->nsdir);
-    }
-}
 PMIX_CLASS_INSTANCE(prte_pmix_tool_t,
                     pmix_list_item_t,
-                    tlcon, tldes);
+                    NULL, NULL);

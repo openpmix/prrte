@@ -17,7 +17,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -90,18 +90,19 @@
 
 static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
-static void rte_abort(int status, bool report) __prte_attribute_noreturn__;
 
-prte_ess_base_module_t prte_ess_hnp_module = {.init = rte_init,
-                                              .finalize = rte_finalize,
-                                              .abort = rte_abort};
+prte_ess_base_module_t prte_ess_hnp_module = {
+    .init = rte_init,
+    .finalize = rte_finalize
+};
 
 static int rte_init(int argc, char **argv)
 {
     int ret;
     char *error = NULL;
     char *contact_path;
-    prte_job_t *jdata;
+    char *tmp;
+    prte_job_t *jdata = NULL;
     prte_node_t *node;
     prte_proc_t *proc;
     prte_app_context_t *app;
@@ -169,26 +170,76 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
-    /* setup my session directory here as the OOB may need it */
-    PMIX_OUTPUT_VERBOSE(
-        (2, prte_debug_output, "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
-         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-         (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
-         prte_process_info.nodename));
-    /* take a pass thru the session directory code to fillin the
-     * tmpdir names - don't create anything yet
-     */
-    if (PRTE_SUCCESS != (ret = prte_session_dir(false, PRTE_PROC_MY_NAME))) {
-        error = "prte_session_dir define";
+    /* get the job data object for the daemons */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
+    ret = prte_set_job_data_object(jdata);
+
+    /* set the schizo personality to "prte" by default */
+    jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy("prte");
+    if (NULL == jdata->schizo) {
+        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
+        error = "select personality";
+        ret = PRTE_ERR_SILENT;
         goto error;
     }
-    /* clear the session directory just in case there are
-     * stale directories laying around
-     */
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
 
-    /* now actually create the directory tree */
-    if (PRTE_SUCCESS != (ret = prte_session_dir(true, PRTE_PROC_MY_NAME))) {
+    /* mark that the daemons have reported as we are the
+     * only ones in the system right now, and we definitely
+     * are running!
+     */
+    jdata->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
+
+    /* every job requires at least one app */
+    app = PMIX_NEW(prte_app_context_t);
+    app->app = strdup(argv[0]);
+    app->argv = PMIX_ARGV_COPY_COMPAT(argv);
+    app->job = (struct prte_job_t*)jdata;
+    pmix_pointer_array_set_item(jdata->apps, 0, app);
+    jdata->num_apps++;
+    /* create and store a node object where we are */
+    node = PMIX_NEW(prte_node_t);
+    node->name = strdup(prte_process_info.nodename);
+    node->index = PRTE_PROC_MY_NAME->rank;
+    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_LOC_VERIFIED);
+    pmix_pointer_array_set_item(prte_node_pool, PRTE_PROC_MY_NAME->rank, node);
+
+    /* create and store a proc object for us */
+    proc = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
+    proc->pid = prte_process_info.pid;
+    proc->state = PRTE_PROC_STATE_RUNNING;
+    PMIX_RETAIN(node); /* keep accounting straight */
+    proc->node = node;
+    pmix_pointer_array_set_item(jdata->procs, PRTE_PROC_MY_NAME->rank, proc);
+
+    /* record that the daemon (i.e., us) is on this node
+     * NOTE: we do not add the proc object to the node's
+     * proc array because we are not an application proc.
+     * Instead, we record it in the daemon field of the
+     * node object
+     */
+    PMIX_RETAIN(proc); /* keep accounting straight */
+    node->daemon = proc;
+    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
+    node->state = PRTE_NODE_STATE_UP;
+    /* get our aliases - will include all the interface aliases captured in prte_init */
+    node->aliases = PMIX_ARGV_COPY_COMPAT(prte_process_info.aliases);
+    /* record that the daemon job is running */
+    jdata->num_procs = 1;
+    jdata->state = PRTE_JOB_STATE_RUNNING;
+    /* obviously, we have "reported" */
+    jdata->num_reported = 1;
+    jdata->num_daemons_reported = 1;
+
+    /* setup my session directory here as the OOB may need it */
+    PMIX_OUTPUT_VERBOSE((2, prte_debug_output,
+                         "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
+                         prte_process_info.nodename));
+    /* create the directory tree */
+    if (PRTE_SUCCESS != (ret = prte_session_dir(PRTE_PROC_MY_NAME))) {
         error = "prte_session_dir";
         goto error;
     }
@@ -229,6 +280,20 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
+    // set our RML address
+    prte_oob_base_get_addr(&proc->rml_uri);
+    prte_process_info.my_hnp_uri = strdup(proc->rml_uri);
+    /* store it in the local PMIx repo for later retrieval */
+    PMIX_VALUE_LOAD(&pval, proc->rml_uri, PMIX_STRING);
+    if (PMIX_SUCCESS != (pret = PMIx_Store_internal(PRTE_PROC_MY_NAME, PMIX_PROC_URI, &pval))) {
+        PMIX_ERROR_LOG(pret);
+        ret = PRTE_ERROR;
+        PMIX_VALUE_DESTRUCT(&pval);
+        error = "store uri";
+        goto error;
+    }
+    PMIX_VALUE_DESTRUCT(&pval);
+
     /*
      * Runtime Messaging Layer
      */
@@ -258,81 +323,6 @@ static int rte_init(int argc, char **argv)
         error = "prte_errmgr_base_select";
         goto error;
     }
-
-    /* get the job data object for the daemons */
-    jdata = PMIX_NEW(prte_job_t);
-    PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
-    prte_set_job_data_object(jdata);
-
-    /* set the schizo personality to "prte" by default */
-    jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy("prte");
-    if (NULL == jdata->schizo) {
-        pmix_show_help("help-schizo-base.txt", "no-proxy", true, prte_tool_basename, "prte");
-        error = "select personality";
-        ret = PRTE_ERR_SILENT;
-        goto error;
-    }
-
-    /* mark that the daemons have reported as we are the
-     * only ones in the system right now, and we definitely
-     * are running!
-     */
-    jdata->state = PRTE_JOB_STATE_DAEMONS_REPORTED;
-
-    /* every job requires at least one app */
-    app = PMIX_NEW(prte_app_context_t);
-    app->app = strdup(argv[0]);
-    app->argv = PMIX_ARGV_COPY_COMPAT(argv);
-    pmix_pointer_array_set_item(jdata->apps, 0, app);
-    jdata->num_apps++;
-    /* create and store a node object where we are */
-    node = PMIX_NEW(prte_node_t);
-    node->name = strdup(prte_process_info.nodename);
-    node->index = PRTE_PROC_MY_NAME->rank;
-    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_LOC_VERIFIED);
-    pmix_pointer_array_set_item(prte_node_pool, PRTE_PROC_MY_NAME->rank, node);
-
-    /* create and store a proc object for us */
-    proc = PMIX_NEW(prte_proc_t);
-    PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
-    proc->job = jdata;
-    proc->rank = proc->name.rank;
-    proc->pid = prte_process_info.pid;
-    prte_oob_base_get_addr(&proc->rml_uri);
-    prte_process_info.my_hnp_uri = strdup(proc->rml_uri);
-    /* store it in the local PMIx repo for later retrieval */
-    PMIX_VALUE_LOAD(&pval, proc->rml_uri, PMIX_STRING);
-    if (PMIX_SUCCESS != (pret = PMIx_Store_internal(PRTE_PROC_MY_NAME, PMIX_PROC_URI, &pval))) {
-        PMIX_ERROR_LOG(pret);
-        ret = PRTE_ERROR;
-        PMIX_VALUE_DESTRUCT(&pval);
-        error = "store uri";
-        goto error;
-    }
-    PMIX_VALUE_DESTRUCT(&pval);
-    proc->state = PRTE_PROC_STATE_RUNNING;
-    PMIX_RETAIN(node); /* keep accounting straight */
-    proc->node = node;
-    pmix_pointer_array_set_item(jdata->procs, PRTE_PROC_MY_NAME->rank, proc);
-
-    /* record that the daemon (i.e., us) is on this node
-     * NOTE: we do not add the proc object to the node's
-     * proc array because we are not an application proc.
-     * Instead, we record it in the daemon field of the
-     * node object
-     */
-    PMIX_RETAIN(proc); /* keep accounting straight */
-    node->daemon = proc;
-    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_DAEMON_LAUNCHED);
-    node->state = PRTE_NODE_STATE_UP;
-    /* get our aliases - will include all the interface aliases captured in prte_init */
-    node->aliases = PMIX_ARGV_COPY_COMPAT(prte_process_info.aliases);
-    /* record that the daemon job is running */
-    jdata->num_procs = 1;
-    jdata->state = PRTE_JOB_STATE_RUNNING;
-    /* obviously, we have "reported" */
-    jdata->num_reported = 1;
-    jdata->num_daemons_reported = 1;
 
     if (0 < pmix_output_get_verbosity(prte_ess_base_framework.framework_output)) {
         pmix_output(0, "ALIASES FOR %s", node->name);
@@ -430,13 +420,10 @@ static int rte_init(int argc, char **argv)
 
     /* set the pmix_output hnp file location to be in the
      * proc-specific session directory. */
-    pmix_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
-    /* save my contact info in a file for others to find */
-    if (NULL == prte_process_info.jobfam_session_dir) {
-        /* has to be set here! */
-        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-        goto error;
-    }
+    pmix_asprintf(&tmp, "%s/%s", jdata->session_dir,
+                              PMIX_RANK_PRINT(PRTE_PROC_MY_NAME->rank));
+    pmix_output_set_output_file_info(tmp, "output-", NULL, NULL);
+    free(tmp);
 
     /* setup I/O forwarding system - must come after we init routes */
     if (PRTE_SUCCESS
@@ -472,35 +459,21 @@ error:
         pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
                        PRTE_ERROR_NAME(ret), ret);
     }
-    /* remove my contact info file, if we have session directories */
-    if (NULL != prte_process_info.jobfam_session_dir) {
-        contact_path = pmix_os_path(false, prte_process_info.jobfam_session_dir, "contact.txt",
-                                    NULL);
-        unlink(contact_path);
-        free(contact_path);
+    if (NULL != jdata) {
+        /* remove our session directory tree */
+        PMIX_RELEASE(jdata);
     }
-    /* remove our use of the session directory tree */
-    prte_session_dir_finalize(PRTE_PROC_MY_NAME);
-    /* ensure we scrub the session directory tree */
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
     return PRTE_ERR_SILENT;
 }
 
 static int rte_finalize(void)
 {
     char *contact_path;
+    prte_job_t *jdata;
 
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
     prte_errmgr.finalize();
-
-    /* remove my contact info file, if we have session directories */
-    if (NULL != prte_process_info.jobfam_session_dir) {
-        contact_path = pmix_os_path(false, prte_process_info.jobfam_session_dir, "contact.txt",
-                                    NULL);
-        unlink(contact_path);
-        free(contact_path);
-    }
 
     /* close frameworks */
     (void) pmix_mca_base_framework_close(&prte_filem_base_framework);
@@ -519,11 +492,6 @@ static int rte_finalize(void)
     (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
     (void) pmix_mca_base_framework_close(&prte_state_base_framework);
 
-    /* remove our use of the session directory tree */
-    prte_session_dir_finalize(PRTE_PROC_MY_NAME);
-    /* ensure we scrub the session directory tree */
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
-
     free(prte_topo_signature);
 
     /* shutdown the pmix server */
@@ -533,28 +501,4 @@ static int rte_finalize(void)
     fflush(stderr);
 
     return PRTE_SUCCESS;
-}
-
-static void rte_abort(int status, bool report)
-{
-    PRTE_HIDE_UNUSED_PARAMS(report);
-
-    pmix_output(0, "ABORT");
-    /* do NOT do a normal finalize as this will very likely
-     * hang the process. We are aborting due to an abnormal condition
-     * that precludes normal cleanup
-     *
-     * We do need to do the following bits to make sure we leave a
-     * clean environment. Taken from prte_finalize():
-     * - Assume errmgr cleans up child processes before we exit.
-     */
-
-    /* ensure we scrub the session directory tree */
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
-    /* - Clean out the global structures
-     * (not really necessary, but good practice)
-     */
-    prte_proc_info_finalize();
-    /* just exit */
-    exit(status);
 }

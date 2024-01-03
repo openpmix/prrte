@@ -19,7 +19,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -574,23 +574,38 @@ int main(int argc, char *argv[])
         return ret;
     }
 
-    /* take a pass thru the session directory code to fillin the
-     * tmpdir names - don't create anything yet
-     */
-    ret = prte_session_dir(false, PRTE_PROC_MY_NAME);
-    if (PRTE_SUCCESS != ret) {
-        pmix_show_help("help-prte-runtime",
-                       "prte_init:startup:internal-failure", true,
-                       "session_dir define", PRTE_ERROR_NAME(ret), ret);
-        return ret;
-    }
-    /* clear the session directory just in case there are
-     * stale directories laying around
-     */
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+    /* create my job data object */
+    jdata = PMIX_NEW(prte_job_t);
+    PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
+    prte_set_job_data_object(jdata);
 
-    /* now actually create the directory tree */
-    ret = prte_session_dir(true, PRTE_PROC_MY_NAME);
+    /* set the schizo personality to "psched" by default */
+    jdata->schizo = (struct prte_schizo_base_module_t *)schizo;
+
+    /* every job requires at least one app */
+    app = PMIX_NEW(prte_app_context_t);
+    app->app = strdup(argv[0]);
+    app->argv = PMIX_ARGV_COPY_COMPAT(argv);
+    pmix_pointer_array_set_item(jdata->apps, 0, app);
+    jdata->num_apps++;
+    /* create and store a node object where we are */
+    node = PMIX_NEW(prte_node_t);
+    node->name = strdup(prte_process_info.nodename);
+    node->index = PRTE_PROC_MY_NAME->rank;
+    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_LOC_VERIFIED);
+    pmix_pointer_array_set_item(prte_node_pool, PRTE_PROC_MY_NAME->rank, node);
+
+    /* create and store a proc object for us */
+    pptr = PMIX_NEW(prte_proc_t);
+    PMIX_LOAD_PROCID(&pptr->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
+    pptr->pid = prte_process_info.pid;
+    pptr->state = PRTE_PROC_STATE_RUNNING;
+    PMIX_RETAIN(node); /* keep accounting straight */
+    pptr->node = node;
+    pmix_pointer_array_set_item(jdata->procs, PRTE_PROC_MY_NAME->rank, pptr);
+
+    /* create the directory tree */
+    ret = prte_session_dir(PRTE_PROC_MY_NAME);
     if (PRTE_SUCCESS != ret) {
         pmix_show_help("help-prte-runtime",
                        "prte_init:startup:internal-failure", true,
@@ -619,38 +634,6 @@ int main(int argc, char *argv[])
         PMIX_INFO_DESTRUCT(&info);
         PRTE_PMIX_DESTRUCT_LOCK(&xfer.lock);
     }
-
-    /* create my job data object */
-    jdata = PMIX_NEW(prte_job_t);
-    PMIX_LOAD_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace);
-    prte_set_job_data_object(jdata);
-
-    /* set the schizo personality to "psched" by default */
-    jdata->schizo = (struct prte_schizo_base_module_t *)schizo;
-
-    /* every job requires at least one app */
-    app = PMIX_NEW(prte_app_context_t);
-    app->app = strdup(argv[0]);
-    app->argv = PMIX_ARGV_COPY_COMPAT(argv);
-    pmix_pointer_array_set_item(jdata->apps, 0, app);
-    jdata->num_apps++;
-    /* create and store a node object where we are */
-    node = PMIX_NEW(prte_node_t);
-    node->name = strdup(prte_process_info.nodename);
-    node->index = PRTE_PROC_MY_NAME->rank;
-    PRTE_FLAG_SET(node, PRTE_NODE_FLAG_LOC_VERIFIED);
-    pmix_pointer_array_set_item(prte_node_pool, PRTE_PROC_MY_NAME->rank, node);
-
-    /* create and store a proc object for us */
-    pptr = PMIX_NEW(prte_proc_t);
-    PMIX_LOAD_PROCID(&pptr->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
-    pptr->job = jdata;
-    pptr->rank = pptr->name.rank;
-    pptr->pid = prte_process_info.pid;
-    pptr->state = PRTE_PROC_STATE_RUNNING;
-    PMIX_RETAIN(node); /* keep accounting straight */
-    pptr->node = node;
-    pmix_pointer_array_set_item(jdata->procs, PRTE_PROC_MY_NAME->rank, pptr);
 
     // pass along any hostfile option
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_HOSTFILE);
@@ -734,7 +717,10 @@ DONE:
     /* cleanup and leave */
     psched_server_finalize();
 
-    prte_session_dir_cleanup(PRTE_PROC_MY_NAME->nspace);
+    /* release our internal job object - this
+     * also purges the session dir tree */
+    PMIX_RELEASE(jdata);
+
     /* cleanup the process info */
     prte_proc_info_finalize();
 
@@ -800,7 +786,7 @@ static void abort_signal_callback(int fd)
         fflush(stderr);
         second = false;
     } else {
-        pmix_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, NULL);
+        pmix_os_dirpath_destroy(prte_process_info.top_session_dir, true, NULL);
         exit(1);
     }
 }

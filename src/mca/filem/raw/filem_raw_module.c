@@ -5,7 +5,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -92,17 +92,6 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
 static void recv_ack(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
                      prte_rml_tag_t tag, void *cbdata);
 static void write_handler(int fd, short event, void *cbdata);
-
-static char *filem_session_dir(void)
-{
-    char *session_dir = prte_process_info.jobfam_session_dir;
-    if (NULL == session_dir) {
-        /* if no job family session dir was provided -
-         * use the job session dir */
-        session_dir = prte_process_info.job_session_dir;
-    }
-    return session_dir;
-}
 
 static int raw_init(void)
 {
@@ -607,14 +596,11 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
     pmix_list_item_t *item;
     char **files = NULL, *bname, *filestring;
 
-    /* check my jobfam session directory for files I have received and
+    /* check my job's session directory for files I have received and
      * symlink them to the proc-level session directory of each
      * local process in the job
-     *
-     * TODO: @rhc - please check that I've correctly interpret your
-     *  intention here
      */
-    session_dir = filem_session_dir();
+    session_dir = jdata->session_dir;
     if (NULL == session_dir) {
         /* we were unable to find any suitable directory */
         rc = PRTE_ERR_BAD_PARAM;
@@ -662,8 +648,8 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
             continue;
         }
         /* ignore children we have already handled */
-        if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_ALIVE)
-            || (PRTE_PROC_STATE_INIT != proc->state && PRTE_PROC_STATE_RESTART != proc->state)) {
+        if (PRTE_FLAG_TEST(proc, PRTE_PROC_FLAG_ALIVE) ||
+            (PRTE_PROC_STATE_INIT != proc->state && PRTE_PROC_STATE_RESTART != proc->state)) {
             continue;
         }
 
@@ -672,18 +658,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&proc->name)));
 
         /* get the session dir name in absolute form */
-        path = prte_process_info.proc_session_dir;
-
-        /* create it, if it doesn't already exist */
-        if (PMIX_SUCCESS != (rc = pmix_os_dirpath_create(path, S_IRWXU))) {
-            PMIX_ERROR_LOG(rc);
-            /* doesn't exist with correct permissions, and/or we can't
-             * create it - either way, we are done
-             */
-            free(files);
-            rc = prte_pmix_convert_status(rc);
-            return rc;
-        }
+        pmix_asprintf(&path, "%s/%s", session_dir, PMIX_RANK_PRINT(proc->name.rank));
 
         /* cycle thru the incoming files */
         for (item = pmix_list_get_first(&incoming_files);
@@ -707,6 +682,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
                                 != (rc = create_link(session_dir, path, inbnd->link_pts[j]))) {
                                 PRTE_ERROR_LOG(rc);
                                 free(files);
+                                free(path);
                                 return rc;
                             }
                         }
@@ -719,6 +695,7 @@ static int raw_link_local_files(prte_job_t *jdata, prte_app_context_t *app)
                 }
             }
         }
+        free(path);
     }
     PMIX_ARGV_FREE_COMPAT(files);
     return PRTE_SUCCESS;
@@ -1013,7 +990,7 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
         incoming->top = strdup(tmp);
         free(tmp);
         /* define the full path to where we will put it */
-        session_dir = filem_session_dir();
+        session_dir = prte_process_info.top_session_dir;
 
         incoming->fullpath = pmix_os_path(false, session_dir, file, NULL);
 

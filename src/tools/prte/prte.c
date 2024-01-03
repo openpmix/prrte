@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2022-2023 Triad National Security, LLC. All rights
@@ -1319,7 +1319,7 @@ static void abort_signal_callback(int fd)
         second = false;
     } else {
         surekill();  // ensure we attempt to kill everything
-        pmix_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, NULL);
+        pmix_os_dirpath_destroy(prte_process_info.top_session_dir, true, NULL);
         exit(1);
     }
 }
@@ -1371,16 +1371,12 @@ static int prep_singleton(const char *name)
     /* create a proc for the singleton */
     proc = PMIX_NEW(prte_proc_t);
     PMIX_LOAD_PROCID(&proc->name, jdata->nspace, rank);
-    proc->rank = proc->name.rank;
     proc->parent = PRTE_PROC_MY_NAME->rank;
     proc->app_idx = 0;
     proc->app_rank = rank;
     proc->local_rank = 0;
     proc->node_rank = 0;
     proc->state = PRTE_PROC_STATE_RUNNING;
-    /* link it to the job */
-    PMIX_RETAIN(jdata);
-    proc->job = jdata;
     /* link it to the app */
     PMIX_RETAIN(proc);
     pmix_pointer_array_set_item(&app->procs, rank, proc);

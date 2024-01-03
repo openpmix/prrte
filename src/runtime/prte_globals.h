@@ -17,7 +17,7 @@
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -191,6 +191,7 @@ typedef uint16_t prte_job_controls_t;
  * defining it - resolves potential circular definition
  */
 struct prte_proc_t;
+struct prte_job_t;
 struct prte_job_map_t;
 struct prte_schizo_base_module_t;
 
@@ -211,6 +212,8 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_topology_t);
 typedef struct {
     /** Parent object */
     pmix_object_t super;
+    /** the job this app belongs to */
+    struct prte_job_t *job;
     /** Unique index when multiple apps per job */
     prte_app_idx_t idx;
     /** Absolute pathname of argv[0] */
@@ -312,6 +315,8 @@ typedef struct {
     struct prte_schizo_base_module_t *schizo;
     /* jobid for this job */
     pmix_nspace_t nspace;
+    // session directory for this job
+    char *session_dir;
     int index; // index in the job array where this is stored
     /* offset to the total number of procs so shared memory
      * components can potentially connect to any spawned jobs*/
@@ -377,8 +382,6 @@ struct prte_proc_t {
     pmix_list_item_t super;
     /* process name */
     pmix_proc_t name;
-    prte_job_t *job;
-    pmix_rank_t rank;
     /* the vpid of my parent - the daemon vpid for an app
      * or the vpid of the parent in the routing tree of
      * a daemon */

@@ -18,7 +18,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -100,6 +100,7 @@ int prte_ess_base_prted_setup(void)
     char log_file[PATH_MAX];
     char *error = NULL;
     char *uri = NULL;
+    char *tmp;
     prte_job_t *jdata;
     prte_proc_t *proc;
     prte_app_context_t *app;
@@ -212,60 +213,6 @@ int prte_ess_base_prted_setup(void)
             goto error;
         }
     }
-    /* setup my session directory here as the OOB may need it */
-    PMIX_OUTPUT_VERBOSE(
-        (2, prte_ess_base_framework.framework_output,
-         "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
-         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-         (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
-         prte_process_info.nodename));
-
-    /* take a pass thru the session directory code to fillin the
-     * tmpdir names - don't create anything yet
-     */
-    if (PRTE_SUCCESS != (ret = prte_session_dir(false, PRTE_PROC_MY_NAME))) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_session_dir define";
-        goto error;
-    }
-    /* clear the session directory just in case there are
-     * stale directories laying around
-     */
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
-    /* now actually create the directory tree */
-    if (PRTE_SUCCESS != (ret = prte_session_dir(true, PRTE_PROC_MY_NAME))) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_session_dir";
-        goto error;
-    }
-    /* set the pmix_output env file location to be in the
-     * proc-specific session directory. */
-    pmix_output_set_output_file_info(prte_process_info.proc_session_dir, "output-", NULL, NULL);
-    /* setup stdout/stderr */
-    if (prte_debug_daemons_file_flag) {
-        /* if we are debugging to a file, then send stdout/stderr to
-         * the prted log file
-         */
-
-        /* define a log file name in the session directory */
-        snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log", prte_process_info.myproc.nspace,
-                 prte_process_info.nodename);
-        log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
-
-        fd = open(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
-        if (fd < 0) {
-            /* couldn't open the file for some reason, so
-             * just connect everything to /dev/null
-             */
-            fd = open("/dev/null", O_RDWR | O_CREAT | O_TRUNC, 0666);
-        } else {
-            dup2(fd, STDOUT_FILENO);
-            dup2(fd, STDERR_FILENO);
-            if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
-                close(fd);
-            }
-        }
-    }
 
     /* Setup the job data object for the daemons */
     /* create and store the job data object */
@@ -289,8 +236,6 @@ int prte_ess_base_prted_setup(void)
     /* create and store a proc object for us */
     proc = PMIX_NEW(prte_proc_t);
     PMIX_LOAD_PROCID(&proc->name, PRTE_PROC_MY_NAME->nspace, PRTE_PROC_MY_NAME->rank);
-    proc->job = jdata;
-    proc->rank = proc->name.rank;
     proc->pid = prte_process_info.pid;
     proc->state = PRTE_PROC_STATE_RUNNING;
     pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
@@ -299,6 +244,54 @@ int prte_ess_base_prted_setup(void)
     jdata->state = PRTE_JOB_STATE_RUNNING;
     /* obviously, we have "reported" */
     jdata->num_reported = 1;
+
+    /* setup my session directory here as the OOB may need it */
+    PMIX_OUTPUT_VERBOSE(
+        (2, prte_ess_base_framework.framework_output,
+         "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
+         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+         (NULL == prte_process_info.tmpdir_base) ? "UNDEF" : prte_process_info.tmpdir_base,
+         prte_process_info.nodename));
+
+    /* create the directory tree */
+    if (PRTE_SUCCESS != (ret = prte_session_dir(PRTE_PROC_MY_NAME))) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_session_dir";
+        goto error;
+    }
+
+    /* set the pmix_output env file location to be in the
+     * proc-specific session directory. */
+    pmix_asprintf(&tmp, "%s/%s", jdata->session_dir,
+                              PMIX_RANK_PRINT(PRTE_PROC_MY_NAME->rank));
+    pmix_output_set_output_file_info(tmp, "output-", NULL, NULL);
+    free(tmp);
+    /* setup stdout/stderr */
+    if (prte_debug_daemons_file_flag) {
+        /* if we are debugging to a file, then send stdout/stderr to
+         * the prted log file
+         */
+
+        /* define a log file name in the session directory */
+        snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log",
+                 prte_process_info.myproc.nspace,
+                 prte_process_info.nodename);
+        log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
+
+        fd = open(log_path, O_RDWR | O_CREAT | O_TRUNC, 0640);
+        if (fd < 0) {
+            /* couldn't open the file for some reason, so
+             * just connect everything to /dev/null
+             */
+            fd = open("/dev/null", O_RDWR | O_CREAT | O_TRUNC, 0666);
+        } else {
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+            if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+                close(fd);
+            }
+        }
+    }
 
     /* setup the PMIx server - we need this here in case the
      * communications infrastructure wants to register
@@ -509,12 +502,10 @@ int prte_ess_base_prted_setup(void)
     return PRTE_SUCCESS;
 
 error:
-    pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true, error,
-                   PRTE_ERROR_NAME(ret), ret);
+    pmix_show_help("help-prte-runtime.txt", "prte_init:startup:internal-failure", true,
+                   error, PRTE_ERROR_NAME(ret), ret);
     /* remove our use of the session directory tree */
-    prte_session_dir_finalize(PRTE_PROC_MY_NAME);
-    /* ensure we scrub the session directory tree */
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+    PMIX_RELEASE(jdata);
     return PRTE_ERR_SILENT;
 }
 
@@ -565,10 +556,6 @@ int prte_ess_base_prted_finalize(void)
     (void) pmix_mca_base_framework_close(&prte_oob_base_framework);
     (void) pmix_mca_base_framework_close(&prte_prtereachable_base_framework);
     (void) pmix_mca_base_framework_close(&prte_state_base_framework);
-    /* remove our use of the session directory tree */
-    prte_session_dir_finalize(PRTE_PROC_MY_NAME);
-    /* ensure we scrub the session directory tree */
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
 
     /* shutdown the pmix server */
     pmix_server_finalize();

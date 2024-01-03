@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -53,10 +53,10 @@
 extern bool prte_keep_fqdn_hostnames;
 
 PRTE_EXPORT prte_process_info_t prte_process_info = {
-    .myproc = {{0}, 0},
-    .my_hnp = {{0}, 0},
+    .myproc = PMIX_PROC_STATIC_INIT,
+    .my_hnp = PMIX_PROC_STATIC_INIT,
     .my_hnp_uri = NULL,
-    .my_parent = {{0}, 0},
+    .my_parent = PMIX_PROC_STATIC_INIT,
     .hnp_pid = 0,
     .num_daemons = 1,
     .num_nodes = 1,
@@ -65,15 +65,8 @@ PRTE_EXPORT prte_process_info_t prte_process_info = {
     .pid = 0,
     .proc_type = PRTE_PROC_TYPE_NONE,
     .my_port = 0,
-    .num_restarts = 0,
     .tmpdir_base = NULL,
     .top_session_dir = NULL,
-    .jobfam_session_dir = NULL,
-    .job_session_dir = NULL,
-    .proc_session_dir = NULL,
-    .sock_stdin = NULL,
-    .sock_stdout = NULL,
-    .sock_stderr = NULL,
     .cpuset = NULL,
     .shared_fs = false
 };
@@ -225,13 +218,6 @@ int prte_proc_info(void)
                                       PMIX_MCA_BASE_VAR_TYPE_INT,
                                       &prte_process_info.num_nodes);
 
-    /* get the number of times this proc has restarted */
-    prte_process_info.num_restarts = 0;
-    (void) pmix_mca_base_var_register("prte", "prte", NULL, "num_restarts",
-                                      "Number of times this proc has restarted",
-                                      PMIX_MCA_BASE_VAR_TYPE_INT,
-                                      &prte_process_info.num_restarts);
-
     return PRTE_SUCCESS;
 }
 
@@ -251,21 +237,6 @@ int prte_proc_info_finalize(void)
         prte_process_info.top_session_dir = NULL;
     }
 
-    if (NULL != prte_process_info.jobfam_session_dir) {
-        free(prte_process_info.jobfam_session_dir);
-        prte_process_info.jobfam_session_dir = NULL;
-    }
-
-    if (NULL != prte_process_info.job_session_dir) {
-        free(prte_process_info.job_session_dir);
-        prte_process_info.job_session_dir = NULL;
-    }
-
-    if (NULL != prte_process_info.proc_session_dir) {
-        free(prte_process_info.proc_session_dir);
-        prte_process_info.proc_session_dir = NULL;
-    }
-
     if (NULL != prte_process_info.nodename) {
         free(prte_process_info.nodename);
         prte_process_info.nodename = NULL;
@@ -274,21 +245,6 @@ int prte_proc_info_finalize(void)
     if (NULL != prte_process_info.cpuset) {
         free(prte_process_info.cpuset);
         prte_process_info.cpuset = NULL;
-    }
-
-    if (NULL != prte_process_info.sock_stdin) {
-        free(prte_process_info.sock_stdin);
-        prte_process_info.sock_stdin = NULL;
-    }
-
-    if (NULL != prte_process_info.sock_stdout) {
-        free(prte_process_info.sock_stdout);
-        prte_process_info.sock_stdout = NULL;
-    }
-
-    if (NULL != prte_process_info.sock_stderr) {
-        free(prte_process_info.sock_stderr);
-        prte_process_info.sock_stderr = NULL;
     }
 
     prte_process_info.proc_type = PRTE_PROC_TYPE_NONE;
