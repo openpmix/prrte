@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,13 +48,6 @@
  */
 BEGIN_C_DECLS
 
-/* define a struct to hold framework-global values */
-typedef struct {
-    pmix_list_t error_cbacks;
-} prte_errmgr_base_t;
-
-PRTE_EXPORT extern prte_errmgr_base_t prte_errmgr_base;
-
 /* declare the base default module */
 PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr_default_fns;
 
@@ -62,10 +55,6 @@ PRTE_EXPORT extern prte_errmgr_base_module_t prte_errmgr_default_fns;
  * Base functions
  */
 PRTE_EXPORT void prte_errmgr_base_log(int error_code, char *filename, int line);
-
-PRTE_EXPORT void prte_errmgr_base_abort(int error_code, char *fmt, ...)
-    __prte_attribute_format__(__printf__, 2, 3);
-PRTE_EXPORT int prte_errmgr_base_abort_peers(pmix_proc_t *procs, int32_t num_procs, int error_code);
 
 END_C_DECLS
 #endif

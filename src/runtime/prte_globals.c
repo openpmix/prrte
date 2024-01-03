@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,11 +43,14 @@
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/rml/rml.h"
+#include "src/mca/state/state.h"
+
 #include "src/util/pmix_argv.h"
 #include "src/util/name_fns.h"
 #include "src/util/pmix_net.h"
 #include "src/util/pmix_output.h"
 #include "src/util/proc_info.h"
+#include "src/util/session_dir.h"
 
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/runtime.h"
@@ -404,6 +407,7 @@ bool prte_nptr_match(prte_node_t *n1, prte_node_t *n2)
 
 static void prte_app_context_construct(prte_app_context_t *app_context)
 {
+    app_context->job = NULL;
     app_context->idx = 0;
     app_context->app = NULL;
     app_context->num_procs = 0;
@@ -465,6 +469,7 @@ static void prte_job_construct(prte_job_t *job)
     job->personality = NULL;
     job->schizo = NULL;
     PMIX_LOAD_NSPACE(job->nspace, NULL);
+    job->session_dir = NULL;
     job->index = -1;
     job->offset = 0;
     job->apps = PMIX_NEW(pmix_pointer_array_t);
@@ -516,14 +521,10 @@ static void prte_job_destruct(prte_job_t *job)
         return;
     }
 
-    if (prte_debug_flag) {
-        pmix_output(0, "%s Releasing job data for %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                    PRTE_JOBID_PRINT(job->nspace));
-    }
-
     if (NULL != job->personality) {
         PMIX_ARGV_FREE_COMPAT(job->personality);
     }
+
     for (n = 0; n < job->apps->size; n++) {
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(job->apps, n))) {
             continue;
@@ -568,6 +569,7 @@ static void prte_job_destruct(prte_job_t *job)
         if (NULL == (proc = (prte_proc_t *) pmix_pointer_array_get_item(job->procs, n))) {
             continue;
         }
+        pmix_pointer_array_set_item(job->procs, n, NULL);
         PMIX_RELEASE(proc);
     }
     PMIX_RELEASE(job->procs);
@@ -584,6 +586,14 @@ static void prte_job_destruct(prte_job_t *job)
     }
 
     PMIX_LIST_DESTRUCT(&job->children);
+
+    if (NULL != job->session_dir) {
+        prte_job_session_dir_finalize(job);
+        if (NULL != job->session_dir) {
+            free(job->session_dir);
+            job->session_dir = NULL;
+        }
+    }
 
     if (NULL != prte_job_data && 0 <= job->index) {
         /* remove the job from the global array */
@@ -669,13 +679,12 @@ static void prte_node_destruct(prte_node_t *node)
     PMIX_LIST_DESTRUCT(&node->attributes);
 }
 
-PMIX_CLASS_INSTANCE(prte_node_t, pmix_list_item_t, prte_node_construct, prte_node_destruct);
+PMIX_CLASS_INSTANCE(prte_node_t, pmix_list_item_t,
+                    prte_node_construct, prte_node_destruct);
 
 static void prte_proc_construct(prte_proc_t *proc)
 {
     proc->name = *PRTE_NAME_INVALID;
-    proc->job = NULL;
-    proc->rank = PMIX_RANK_INVALID;
     proc->parent = PMIX_RANK_INVALID;
     proc->pid = 0;
     proc->local_rank = PRTE_LOCAL_RANK_INVALID;
@@ -712,7 +721,8 @@ static void prte_proc_destruct(prte_proc_t *proc)
     PMIX_LIST_DESTRUCT(&proc->attributes);
 }
 
-PMIX_CLASS_INSTANCE(prte_proc_t, pmix_list_item_t, prte_proc_construct, prte_proc_destruct);
+PMIX_CLASS_INSTANCE(prte_proc_t, pmix_list_item_t,
+                    prte_proc_construct, prte_proc_destruct);
 
 static void prte_job_map_construct(prte_job_map_t *map)
 {
@@ -750,7 +760,8 @@ static void prte_job_map_destruct(prte_job_map_t *map)
     PMIX_RELEASE(map->nodes);
 }
 
-PMIX_CLASS_INSTANCE(prte_job_map_t, pmix_object_t, prte_job_map_construct, prte_job_map_destruct);
+PMIX_CLASS_INSTANCE(prte_job_map_t, pmix_object_t,
+                    prte_job_map_construct, prte_job_map_destruct);
 
 static void prte_attr_cons(prte_attribute_t *p)
 {
@@ -762,7 +773,8 @@ static void prte_attr_des(prte_attribute_t *p)
 {
     PMIX_VALUE_DESTRUCT(&p->data);
 }
-PMIX_CLASS_INSTANCE(prte_attribute_t, pmix_list_item_t, prte_attr_cons, prte_attr_des);
+PMIX_CLASS_INSTANCE(prte_attribute_t, pmix_list_item_t,
+                    prte_attr_cons, prte_attr_des);
 
 static void tcon(prte_topology_t *t)
 {
@@ -778,7 +790,8 @@ static void tdes(prte_topology_t *t)
         free(t->sig);
     }
 }
-PMIX_CLASS_INSTANCE(prte_topology_t, pmix_object_t, tcon, tdes);
+PMIX_CLASS_INSTANCE(prte_topology_t, pmix_object_t,
+                    tcon, tdes);
 
 #if PRTE_PICKY_COMPILERS
 void prte_hide_unused_params(int x, ...)

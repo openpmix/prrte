@@ -17,7 +17,7 @@
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -91,49 +91,4 @@ void prte_errmgr_base_log(int error_code, char *filename, int line)
 
     pmix_output(0, "%s PRTE_ERROR_LOG: %s in file %s at line %d",
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), errstring, filename, line);
-}
-
-void prte_errmgr_base_abort(int error_code, char *fmt, ...)
-{
-    va_list arglist;
-
-    /* If there was a message, output it */
-    va_start(arglist, fmt);
-    if (NULL != fmt) {
-        char *buffer = NULL;
-        pmix_vasprintf(&buffer, fmt, arglist);
-        pmix_output(0, "%s", buffer);
-        free(buffer);
-    }
-    va_end(arglist);
-
-    /* if I am a daemon or the HNP... */
-    if (PRTE_PROC_IS_MASTER || PRTE_PROC_IS_DAEMON) {
-        /* whack my local procs */
-        if (NULL != prte_odls.kill_local_procs) {
-            prte_odls.kill_local_procs(NULL);
-        }
-        /* whack any session directories */
-        prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
-    }
-
-    /* if a critical connection failed, or a sensor limit was exceeded, exit without dropping a core
-     */
-    if (PRTE_ERR_CONNECTION_FAILED == error_code || PRTE_ERR_SENSOR_LIMIT_EXCEEDED == error_code) {
-        prte_ess.abort(error_code, false);
-    } else {
-        prte_ess.abort(error_code, true);
-    }
-
-    /*
-     * We must exit in prte_ess.abort; all implementations of prte_ess.abort
-     * contain __prte_attribute_noreturn__
-     */
-    /* No way to reach here */
-}
-
-int prte_errmgr_base_abort_peers(pmix_proc_t *procs, int32_t num_procs, int error_code)
-{
-    PRTE_HIDE_UNUSED_PARAMS(procs, num_procs, error_code);
-    return PRTE_ERR_NOT_IMPLEMENTED;
 }

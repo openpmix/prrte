@@ -18,7 +18,7 @@
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -135,7 +135,6 @@ PMIX_CLASS_DECLARATION(prte_pmix_server_op_caddy_t);
 typedef struct {
     pmix_list_item_t super;
     pmix_proc_t name;
-    char *nsdir;
 } prte_pmix_tool_t;
 PMIX_CLASS_DECLARATION(prte_pmix_tool_t);
 

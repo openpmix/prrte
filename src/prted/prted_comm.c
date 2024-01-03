@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -501,15 +501,7 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         /* cleanup any pending server ops */
         PMIX_LOAD_PROCID(&pname, job, PMIX_RANK_WILDCARD);
         prte_pmix_server_clear(&pname);
-        /* remove the session directory tree */
-        if (0 > pmix_asprintf(&cmd_str, "%s/%d", prte_process_info.jobfam_session_dir,
-                              PRTE_LOCAL_JOBID(jdata->nspace))) {
-            ret = PRTE_ERR_OUT_OF_RESOURCE;
-            goto CLEANUP;
-        }
-        pmix_os_dirpath_destroy(cmd_str, true, NULL);
-        free(cmd_str);
-        cmd_str = NULL;
+
         PMIX_RELEASE(jdata);
         break;
 

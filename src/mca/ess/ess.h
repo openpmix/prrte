@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2012-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -56,26 +56,12 @@ typedef int (*prte_ess_base_module_init_fn_t)(int argc, char **argv);
  */
 typedef int (*prte_ess_base_module_finalize_fn_t)(void);
 
-/**
- * Abort the current application
- *
- * Aborts currently running application, NOTE: We do NOT call the
- * regular C-library "abort" function, even
- * though that would have alerted us to the fact that this is
- * an abnormal termination, because it would automatically cause
- * a core file to be generated. The "report" flag indicates if the
- * function should create an appropriate file to alert the local
- * orted that termination was abnormal.
- */
-typedef void (*prte_ess_base_module_abort_fn_t)(int status, bool report);
-
 /*
  * the standard module data structure
  */
 struct prte_ess_base_module_3_0_0_t {
     prte_ess_base_module_init_fn_t init;
     prte_ess_base_module_finalize_fn_t finalize;
-    prte_ess_base_module_abort_fn_t abort;
 };
 typedef struct prte_ess_base_module_3_0_0_t prte_ess_base_module_3_0_0_t;
 typedef struct prte_ess_base_module_3_0_0_t prte_ess_base_module_t;

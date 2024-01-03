@@ -14,7 +14,7 @@
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -47,7 +47,6 @@
 prte_ess_base_module_t prte_ess = {
     .init = NULL,
     .finalize = NULL,
-    .abort = NULL,
 };
 int prte_ess_base_num_procs = -1;
 char *prte_ess_base_nspace = NULL;

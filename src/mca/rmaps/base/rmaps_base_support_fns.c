@@ -14,7 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2021 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -540,7 +540,6 @@ prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
     proc = PMIX_NEW(prte_proc_t);
     /* set the jobid */
     PMIX_LOAD_NSPACE(proc->name.nspace, jdata->nspace);
-    proc->job = jdata;
     /* flag the proc as ready for launch */
     proc->state = PRTE_PROC_STATE_INIT;
     proc->app_idx = idx;

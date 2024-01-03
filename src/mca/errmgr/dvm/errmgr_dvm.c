@@ -11,7 +11,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -71,9 +71,7 @@ static int finalize(void);
 prte_errmgr_base_module_t prte_errmgr_dvm_module = {
     .init = init,
     .finalize = finalize,
-    .logfn = prte_errmgr_base_log,
-    .abort = prte_errmgr_base_abort,
-    .abort_peers = prte_errmgr_base_abort_peers
+    .logfn = prte_errmgr_base_log
 };
 
 /*
