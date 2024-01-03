@@ -13,7 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,9 +50,10 @@ static int lsf_set_name(void);
 static int rte_init(int argc, char **argv);
 static int rte_finalize(void);
 
-prte_ess_base_module_t prte_ess_lsf_module = {.init = rte_init,
-                                              .finalize = rte_finalize,
-                                              .abort = NULL};
+prte_ess_base_module_t prte_ess_lsf_module = {
+    .init = rte_init,
+    .finalize = rte_finalize
+};
 
 /*
  * Local variables

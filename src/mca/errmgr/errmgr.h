@@ -16,7 +16,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014      NVIDIA Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -99,27 +99,6 @@ typedef int (*prte_errmgr_base_module_finalize_fn_t)(void);
  */
 typedef void (*prte_errmgr_base_module_log_fn_t)(int error_code, char *filename, int line);
 
-/**
- * Alert - self aborting
- * This function is called when a process is aborting due to some internal error.
- * It will finalize the process
- * itself, and then exit - it takes no other actions. The intent here is to provide
- * a last-ditch exit procedure that attempts to clean up a little.
- */
-typedef void (*prte_errmgr_base_module_abort_fn_t)(int error_code, char *fmt, ...)
-    __prte_attribute_format_funcptr__(__printf__, 2, 3);
-
-/**
- * Alert - abort peers
- *  This function is called when a process wants to abort one or more peer processes.
- *  For example, MPI_Abort(comm) will use this function to terminate peers in the
- *  communicator group before aborting itself.
- */
-typedef int (*prte_errmgr_base_module_abort_peers_fn_t)(pmix_proc_t *procs, int32_t num_procs,
-                                                        int error_code);
-
-typedef void (*prte_errmgr_base_module_enable_detector_fn_t)(bool flag);
-
 /*
  * Module Structure
  */
@@ -130,11 +109,6 @@ struct prte_errmgr_base_module_2_3_0_t {
     prte_errmgr_base_module_finalize_fn_t finalize;
 
     prte_errmgr_base_module_log_fn_t logfn;
-    prte_errmgr_base_module_abort_fn_t abort;
-    prte_errmgr_base_module_abort_peers_fn_t abort_peers;
-
-    /* start error detector and propagator */
-    prte_errmgr_base_module_enable_detector_fn_t enable_detector;
 };
 typedef struct prte_errmgr_base_module_2_3_0_t prte_errmgr_base_module_2_3_0_t;
 typedef prte_errmgr_base_module_2_3_0_t prte_errmgr_base_module_t;

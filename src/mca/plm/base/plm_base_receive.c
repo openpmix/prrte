@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -111,7 +111,8 @@ int prte_plm_base_comm_stop(void)
 }
 
 /* process incoming messages in order of receipt */
-void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buffer,
+void prte_plm_base_recv(int status, pmix_proc_t *sender,
+                        pmix_data_buffer_t *buffer,
                         prte_rml_tag_t tag, void *cbdata)
 {
     prte_plm_cmd_flag_t command;
@@ -232,7 +233,8 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t *buf
         }
 
         /* get the parent's job object */
-        if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
+        if (NULL != (parent = prte_get_job_data_object(nptr->nspace)) &&
+            !PMIX_CHECK_NSPACE(parent->nspace, PRTE_PROC_MY_NAME->nspace)) {
             /* link the spawned job to the spawner */
             PMIX_RETAIN(jdata);
             pmix_list_append(&parent->children, &jdata->super);

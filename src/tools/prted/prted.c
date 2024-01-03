@@ -19,7 +19,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -200,6 +200,7 @@ int main(int argc, char *argv[])
     int pargc;
     prte_schizo_base_module_t *schizo;
     pmix_cli_item_t *opt;
+    prte_job_t *jdata;
 
     char *umask_str = getenv("PRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -440,7 +441,8 @@ int main(int argc, char *argv[])
                  * indicating clean termination! Instead, just forcibly cleanup
                  * the local session_dir tree and exit
                  */
-                prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+                jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                PMIX_RELEASE(jdata);
 
                 /* if we were ordered to abort, do so */
                 if (prted_abort) {
@@ -808,7 +810,9 @@ DONE:
     /* cleanup and leave */
     prte_finalize();
 
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    PMIX_RELEASE(jdata);
+
     /* cleanup the process info */
     prte_proc_info_finalize();
 
@@ -822,6 +826,7 @@ static void shutdown_callback(int fd, short flags, void *arg)
 {
     prte_timer_t *tm = (prte_timer_t *) arg;
     bool suicide = false;
+    prte_job_t *jdata;
     PRTE_HIDE_UNUSED_PARAMS(fd, flags);
 
     if (NULL != tm) {
@@ -844,7 +849,8 @@ static void shutdown_callback(int fd, short flags, void *arg)
             exit(1);
         }
         prte_odls.kill_local_procs(NULL);
-        prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+        jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+        PMIX_RELEASE(jdata);
         abort();
     }
     pmix_output(0, "%s is executing clean abnormal termination",
@@ -854,7 +860,8 @@ static void shutdown_callback(int fd, short flags, void *arg)
      * the local session_dir tree and exit
      */
     prte_odls.kill_local_procs(NULL);
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    PMIX_RELEASE(jdata);
     exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 

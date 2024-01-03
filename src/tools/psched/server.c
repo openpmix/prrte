@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
@@ -261,10 +261,6 @@ static void lost_connection_hdlr(size_t evhdlr_registration_id, pmix_status_t st
     PMIX_LIST_FOREACH(tl, &psched_globals.tools, prte_pmix_tool_t)
     {
         if (PMIX_CHECK_PROCID(&tl->name, source)) {
-            /* remove the session directory we created for it */
-            if (NULL != tl->nsdir) {
-                pmix_os_dirpath_destroy(tl->nsdir, true, NULL);
-            }
             /* take this tool off the list */
             pmix_list_remove_item(&psched_globals.tools, &tl->super);
             /* release it */
@@ -409,7 +405,7 @@ int psched_server_init(pmix_cli_result_t *results)
 
     /* tell the server our temp directory */
     PMIX_INFO_LIST_ADD(prc, ilist, PMIX_SERVER_TMPDIR,
-                       prte_process_info.jobfam_session_dir,
+                       prte_process_info.top_session_dir,
                        PMIX_STRING);
     if (PMIX_SUCCESS != prc) {
         PMIX_INFO_LIST_RELEASE(ilist);

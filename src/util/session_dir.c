@@ -73,9 +73,9 @@
 /*******************************
  * Local function Declarations
  *******************************/
-static int prte_create_dir(char *directory);
+static bool _check_file(const char *root, const char *path);
 
-static bool prte_dir_check_file(const char *root, const char *path);
+static bool setup_base_complete = false;
 
 #define PRTE_PRINTF_FIX_STRING(a) ((NULL == a) ? "(null)" : a)
 
@@ -85,7 +85,7 @@ static bool prte_dir_check_file(const char *root, const char *path);
 /*
  * Check and create the directory requested
  */
-static int prte_create_dir(char *directory)
+static int _create_dir(char *directory)
 {
     mode_t my_mode = S_IRWXU; /* I'm looking for full rights */
     int ret;
@@ -138,7 +138,7 @@ exit:
     return rc;
 }
 
-int prte_setup_top_session_dir(void)
+static int _setup_top_session_dir(void)
 {
     int rc = PRTE_SUCCESS;
     /* get the effective uid */
@@ -150,82 +150,22 @@ int prte_setup_top_session_dir(void)
         if (PRTE_SUCCESS != (rc = _setup_tmpdir_base())) {
             return rc;
         }
-        if (NULL == prte_process_info.nodename || NULL == prte_process_info.tmpdir_base) {
+        if (NULL == prte_process_info.nodename ||
+            NULL == prte_process_info.tmpdir_base) {
             /* we can't setup top session dir */
             rc = PRTE_ERR_BAD_PARAM;
             goto exit;
         }
-        if (prte_add_pid_to_session_dirname) {
-            if (0 > pmix_asprintf(&prte_process_info.top_session_dir, "%s/prte.%s.%lu.%lu",
-                                  prte_process_info.tmpdir_base, prte_process_info.nodename,
-                                  (unsigned long)pid, (unsigned long) uid)) {
-                prte_process_info.top_session_dir = NULL;
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
-                goto exit;
-            }
-        } else {
-            if (0 > pmix_asprintf(&prte_process_info.top_session_dir, "%s/prte.%s.%lu",
-                                  prte_process_info.tmpdir_base, prte_process_info.nodename,
-                                  (unsigned long) uid)) {
-                prte_process_info.top_session_dir = NULL;
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
-                goto exit;
-            }
-        }
-    }
-exit:
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-    }
-    return rc;
-}
-
-static int _setup_jobfam_session_dir(pmix_proc_t *proc)
-{
-    int rc = PRTE_SUCCESS;
-    PRTE_HIDE_UNUSED_PARAMS(proc);
-
-    /* construct the top_session_dir if we need */
-    if (NULL == prte_process_info.jobfam_session_dir) {
-        if (PRTE_SUCCESS != (rc = prte_setup_top_session_dir())) {
-            PRTE_ERROR_LOG(rc);
-            return rc;
-        }
-
-        if (0 > pmix_asprintf(&prte_process_info.jobfam_session_dir, "%s/dvm.%lu",
-                              prte_process_info.top_session_dir,
-                              (unsigned long) prte_process_info.pid)) {
+        if (0 > pmix_asprintf(&prte_process_info.top_session_dir, "%s/%s.%s.%lu.%lu",
+                              prte_process_info.tmpdir_base, prte_tool_basename,
+                              prte_process_info.nodename,
+                              (unsigned long)pid, (unsigned long) uid)) {
+            prte_process_info.top_session_dir = NULL;
             rc = PRTE_ERR_OUT_OF_RESOURCE;
+            goto exit;
         }
     }
-
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-    }
-    return rc;
-}
-
-static int _setup_job_session_dir(pmix_proc_t *proc)
-{
-    int rc = PRTE_SUCCESS;
-
-    /* construct the top_session_dir if we need */
-    if (NULL == prte_process_info.job_session_dir) {
-        if (PRTE_SUCCESS != (rc = _setup_jobfam_session_dir(proc))) {
-            return rc;
-        }
-        if (!PMIX_NSPACE_INVALID(proc->nspace)) {
-            if (0 > pmix_asprintf(&prte_process_info.job_session_dir, "%s/%s",
-                                  prte_process_info.jobfam_session_dir,
-                                  PRTE_LOCAL_JOBID_PRINT(proc->nspace))) {
-                prte_process_info.job_session_dir = NULL;
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
-                goto exit;
-            }
-        } else {
-            prte_process_info.job_session_dir = NULL;
-        }
-    }
+    rc = _create_dir(prte_process_info.top_session_dir);
 
 exit:
     if (PRTE_SUCCESS != rc) {
@@ -234,48 +174,54 @@ exit:
     return rc;
 }
 
-static int _setup_proc_session_dir(pmix_proc_t *proc)
+static int _setup_job_session_dir(prte_job_t *jdata)
 {
     int rc = PRTE_SUCCESS;
 
-    /* construct the top_session_dir if we need */
-    if (NULL == prte_process_info.proc_session_dir) {
-        if (PRTE_SUCCESS != (rc = _setup_job_session_dir(proc))) {
-            return rc;
+    if (NULL == jdata->session_dir) {
+        if (0 > pmix_asprintf(&jdata->session_dir, "%s/%s",
+                              prte_process_info.top_session_dir,
+                              PRTE_LOCAL_JOBID_PRINT(jdata->nspace))) {
+            return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        if (PMIX_RANK_INVALID != proc->rank) {
-            if (0 > pmix_asprintf(&prte_process_info.proc_session_dir, "%s/%s",
-                                  prte_process_info.job_session_dir, PRTE_VPID_PRINT(proc->rank))) {
-                prte_process_info.proc_session_dir = NULL;
-                rc = PRTE_ERR_OUT_OF_RESOURCE;
-                goto exit;
-            }
-        } else {
-            prte_process_info.proc_session_dir = NULL;
-        }
-    }
-
-exit:
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
+        rc = _create_dir(jdata->session_dir);
     }
     return rc;
 }
 
-int prte_session_setup_base(pmix_proc_t *proc)
+static int _setup_proc_session_dir(prte_job_t *jdata,
+                                   pmix_proc_t *p)
 {
     int rc;
+    char *tmp;
+
+    if (0 > pmix_asprintf(&tmp, "%s/%s", jdata->session_dir,
+                          PMIX_RANK_PRINT(p->rank))) {
+        return PRTE_ERR_OUT_OF_RESOURCE;
+    }
+    rc = _create_dir(tmp);
+    free(tmp);
+    return rc;
+}
+
+static int setup_base(void)
+{
+    int rc;
+
+    // only do this once
+    if (setup_base_complete) {
+        return PRTE_SUCCESS;
+    }
+    setup_base_complete = true;
 
     /* Ensure that system info is set */
     prte_proc_info();
 
-    /* setup job and proc session directories */
-    if (PRTE_SUCCESS != (rc = _setup_job_session_dir(proc))) {
-        return rc;
-    }
-
-    if (PRTE_SUCCESS != (rc = _setup_proc_session_dir(proc))) {
-        return rc;
+    if (NULL == prte_process_info.tmpdir_base) {
+        if (PRTE_SUCCESS != (rc = _setup_tmpdir_base())) {
+            PRTE_ERROR_LOG(rc);
+            return rc;
+        }
     }
 
     /* BEFORE doing anything else, check to see if this prefix is
@@ -302,20 +248,25 @@ int prte_session_setup_base(pmix_proc_t *proc)
         }
         PMIX_ARGV_FREE_COMPAT(list); /* done with this */
     }
-    return PRTE_SUCCESS;
+
+    rc = _setup_top_session_dir();
+
+    return rc;
 }
 
 /*
  * Construct the session directory and create it if necessary
  */
-int prte_session_dir(bool create, pmix_proc_t *proc)
+int prte_session_dir(pmix_proc_t *proc)
 {
     int rc = PRTE_SUCCESS;
+    prte_job_t *jdata;
+    prte_proc_t *p;
 
     /*
      * Get the session directory full name
      */
-    if (PRTE_SUCCESS != (rc = prte_session_setup_base(proc))) {
+    if (PRTE_SUCCESS != (rc = setup_base())) {
         if (PRTE_ERR_FATAL == rc) {
             /* this indicates we should abort quietly */
             rc = PRTE_ERR_SILENT;
@@ -323,20 +274,26 @@ int prte_session_dir(bool create, pmix_proc_t *proc)
         goto cleanup;
     }
 
-    /*
-     * Now that we have the full path, go ahead and create it if necessary
-     */
-    if (create) {
-        if (PRTE_SUCCESS != (rc = prte_create_dir(prte_process_info.proc_session_dir))) {
+    /* setup job and proc session directories */
+    jdata = prte_get_job_data_object(proc->nspace);
+    if (NULL == jdata) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        return PRTE_ERR_NOT_FOUND;
+    }
+    if (PRTE_SUCCESS != (rc = _setup_job_session_dir(jdata))) {
+        PRTE_ERROR_LOG(rc);
+        return rc;
+    }
+
+    if (PMIX_RANK_IS_VALID(proc->rank)) {
+        if (PRTE_SUCCESS != (rc = _setup_proc_session_dir(jdata, proc))) {
             PRTE_ERROR_LOG(rc);
-            goto cleanup;
+            return rc;
         }
     }
 
     if (prte_debug_flag) {
-        pmix_output(0, "procdir: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.proc_session_dir));
-        pmix_output(0, "jobdir: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.job_session_dir));
-        pmix_output(0, "job: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.jobfam_session_dir));
+        pmix_output(0, "jobdir: %s", PRTE_PRINTF_FIX_STRING(jdata->session_dir));
         pmix_output(0, "top: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.top_session_dir));
         pmix_output(0, "tmp: %s", PRTE_PRINTF_FIX_STRING(prte_process_info.tmpdir_base));
     }
@@ -345,146 +302,49 @@ cleanup:
     return rc;
 }
 
-/*
- * A job has aborted - so force cleanup of the session directory
- */
-int prte_session_dir_cleanup(pmix_nspace_t jobid)
+void prte_job_session_dir_finalize(prte_job_t *jdata)
 {
-    int ret;
-    PRTE_HIDE_UNUSED_PARAMS(jobid);
-
-    /* special case - if a daemon is colocated with mpirun,
-     * then we let mpirun do the rest to avoid a race
-     * condition. this scenario always results in the rank=1
-     * daemon colocated with mpirun */
-    if (prte_ras_base.launch_orted_on_hn && PRTE_PROC_IS_DAEMON && 1 == PRTE_PROC_MY_NAME->rank) {
-        return PRTE_SUCCESS;
-    }
-
     if (prte_process_info.rm_session_dirs) {
         /* RM will clean them up for us */
-        return PRTE_SUCCESS;
-    }
-
-    if (NULL == prte_process_info.jobfam_session_dir
-        || NULL == prte_process_info.proc_session_dir) {
-        /* this should never happen - it means we are calling
-         * cleanup *before* properly setting up the session
-         * dir system. This leaves open the possibility of
-         * accidentally removing directories we shouldn't
-         * touch
-         */
-        return PRTE_ERR_NOT_INITIALIZED;
-    }
-
-    /* recursively blow the whole session away for our job family,
-     * saving only output files
-     */
-    pmix_os_dirpath_destroy(prte_process_info.jobfam_session_dir, true, prte_dir_check_file);
-
-    if (pmix_os_dirpath_is_empty(prte_process_info.jobfam_session_dir)) {
-        if (prte_debug_flag) {
-            pmix_output(0, "sess_dir_cleanup: found jobfam session dir empty - deleting");
-        }
-        rmdir(prte_process_info.jobfam_session_dir);
-    }
-
-    if (NULL != prte_process_info.top_session_dir) {
-        if (pmix_os_dirpath_is_empty(prte_process_info.top_session_dir)) {
-            if (prte_debug_flag) {
-                pmix_output(0, "sess_dir_cleanup: found top session dir empty - deleting");
-            }
-            rmdir(prte_process_info.top_session_dir);
-        }
-    }
-
-    /* now attempt to eliminate the top level directory itself - this
-     * will fail if anything is present, but ensures we cleanup if
-     * we are the last one out
-     */
-    if (NULL != prte_process_info.top_session_dir) {
-        pmix_os_dirpath_destroy(prte_process_info.top_session_dir, false, prte_dir_check_file);
-    }
-
-    return PRTE_SUCCESS;
-}
-
-int prte_session_dir_finalize(pmix_proc_t *proc)
-{
-    int ret;
-
-    if (prte_process_info.rm_session_dirs) {
-        /* RM will clean them up for us */
-        return PRTE_SUCCESS;
-    }
-
-    if (NULL == prte_process_info.job_session_dir ||
-        NULL == prte_process_info.proc_session_dir) {
-        /* this should never happen - it means we are calling
-         * cleanup *before* properly setting up the session
-         * dir system. This leaves open the possibility of
-         * accidentally removing directories we shouldn't
-         * touch
-         */
-        return PRTE_ERR_NOT_INITIALIZED;
-    }
-
-    pmix_os_dirpath_destroy(prte_process_info.proc_session_dir, false, prte_dir_check_file);
-
-    if (pmix_os_dirpath_is_empty(prte_process_info.proc_session_dir)) {
-        if (prte_debug_flag) {
-            pmix_output(0, "sess_dir_finalize: found proc session dir empty - deleting");
-        }
-        rmdir(prte_process_info.proc_session_dir);
+        return;
     }
 
     /* special case - if a daemon is colocated with mpirun,
      * then we let mpirun do the rest to avoid a race
      * condition. this scenario always results in the rank=1
      * daemon colocated with mpirun */
-    if (prte_ras_base.launch_orted_on_hn && PRTE_PROC_IS_DAEMON && 1 == PRTE_PROC_MY_NAME->rank) {
-        return PRTE_SUCCESS;
+    if (prte_ras_base.launch_orted_on_hn && PRTE_PROC_IS_DAEMON &&
+        1 == PRTE_PROC_MY_NAME->rank) {
+        return;
     }
 
-    pmix_os_dirpath_destroy(prte_process_info.job_session_dir, false, prte_dir_check_file);
-
-    /* only remove the jobfam session dir if we are the
-     * local daemon and we are finalizing our own session dir */
-    if ((PRTE_PROC_IS_MASTER || PRTE_PROC_IS_DAEMON) && (PRTE_PROC_MY_NAME == proc)) {
-        pmix_os_dirpath_destroy(prte_process_info.jobfam_session_dir, false, prte_dir_check_file);
+    if (NULL == jdata->session_dir) {
+        return;
     }
 
-    if (NULL != prte_process_info.top_session_dir) {
-        pmix_os_dirpath_destroy(prte_process_info.top_session_dir, false, prte_dir_check_file);
-    }
-
-    if (pmix_os_dirpath_is_empty(prte_process_info.job_session_dir)) {
-        if (prte_debug_flag) {
-            pmix_output(0, "sess_dir_finalize: found job session dir empty - deleting");
-        }
-        rmdir(prte_process_info.job_session_dir);
-    }
-
-    if (pmix_os_dirpath_is_empty(prte_process_info.jobfam_session_dir)) {
-        if (prte_debug_flag) {
-            pmix_output(0, "sess_dir_finalize: found jobfam session dir empty - deleting");
-        }
-        rmdir(prte_process_info.jobfam_session_dir);
-    }
-
-    if (NULL != prte_process_info.top_session_dir) {
-        if (pmix_os_dirpath_is_empty(prte_process_info.top_session_dir)) {
-            if (prte_debug_flag) {
-                pmix_output(0, "sess_dir_finalize: found top session dir empty - deleting");
+    /* if this is the DVM job, then we destroy the top-level
+     * session directory, but only if we are finalizing */
+    if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace)) {
+        if (prte_finalizing) {
+            if (NULL != prte_process_info.top_session_dir) {
+                pmix_os_dirpath_destroy(prte_process_info.top_session_dir, false, _check_file);
+                rmdir(prte_process_info.top_session_dir);
+                free(prte_process_info.top_session_dir);
+                prte_process_info.top_session_dir = NULL;
             }
-            rmdir(prte_process_info.top_session_dir);
         }
+        return;
     }
 
-    return PRTE_SUCCESS;
+    pmix_os_dirpath_destroy(jdata->session_dir, false, _check_file);
+    /* if the job-level session dir is now empty, remove it */
+    rmdir(jdata->session_dir);
+    free(jdata->session_dir);
+    jdata->session_dir = NULL;
+    return;
 }
 
-static bool prte_dir_check_file(const char *root, const char *path)
+static bool _check_file(const char *root, const char *path)
 {
     struct stat st;
     char *fullpath;

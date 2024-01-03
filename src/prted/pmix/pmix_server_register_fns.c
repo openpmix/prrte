@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2024      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -46,6 +46,7 @@
 #include "src/util/error.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_output.h"
+#include "src/util/pmix_printf.h"
 #include "types.h"
 
 #include "src/mca/errmgr/errmgr.h"
@@ -53,6 +54,7 @@
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
 #include "src/util/name_fns.h"
+#include "src/util/session_dir.h"
 
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -97,7 +99,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     pmix_info_t *iptr;
     void *next;
 
-    pmix_output_verbose(2, prte_pmix_server_globals.output, "%s register nspace for %s",
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s register nspace for %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_JOBID_PRINT(jdata->nspace));
 
     /* setup the info list */
@@ -319,25 +322,20 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     /* tell the user what we did with FQDN */
     PMIX_INFO_LIST_ADD(ret, info, PMIX_HOSTNAME_KEEP_FQDN, &prte_keep_fqdn_hostnames, PMIX_BOOL);
 
-    /* pass the top-level session directory - this is our jobfam session dir */
-    PMIX_INFO_LIST_ADD(ret, info, PMIX_TMPDIR, prte_process_info.jobfam_session_dir, PMIX_STRING);
+    /* pass the top-level session directory */
+    PMIX_INFO_LIST_ADD(ret, info, PMIX_TMPDIR, prte_process_info.top_session_dir, PMIX_STRING);
 
     /* create and pass a job-level session directory */
-    if (0 > pmix_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
-                          PRTE_LOCAL_JOBID(jdata->nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        PMIX_INFO_LIST_RELEASE(info);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-    rc = pmix_os_dirpath_create(prte_process_info.jobfam_session_dir, S_IRWXU);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    pproc.rank = PMIX_RANK_INVALID;
+    rc = prte_session_dir(&pproc);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
         PMIX_INFO_LIST_RELEASE(info);
         rc = prte_pmix_convert_status(rc);
         return rc;
     }
-    PMIX_INFO_LIST_ADD(ret, info, PMIX_NSDIR, tmp, PMIX_STRING);
-    free(tmp);
+    // job session dir will have been stored in the jdata object
+    PMIX_INFO_LIST_ADD(ret, info, PMIX_NSDIR, jdata->session_dir, PMIX_STRING);
 
     /* check for output directives */
     fptr = &flag;
@@ -537,20 +535,16 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             }
             if (PRTE_PROC_MY_NAME->rank == node->daemon->name.rank) {
                 /* create and pass a proc-level session directory */
-                if (0 > pmix_asprintf(&tmp, "%s/%u/%u", prte_process_info.jobfam_session_dir,
-                                      PRTE_LOCAL_JOBID(jdata->nspace), pptr->name.rank)) {
-                    PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-                    PMIX_INFO_LIST_RELEASE(info);
-                    PMIX_INFO_LIST_RELEASE(pmap);
-                    return PRTE_ERR_OUT_OF_RESOURCE;
-                }
-                if (PMIX_SUCCESS != (rc = pmix_os_dirpath_create(tmp, S_IRWXU))) {
+                rc = prte_session_dir(&pptr->name);
+                if (PRTE_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                     PMIX_INFO_LIST_RELEASE(info);
                     PMIX_INFO_LIST_RELEASE(pmap);
                     rc = prte_pmix_convert_status(rc);
                     return rc;
                 }
+                pmix_asprintf(&tmp, "%s/%s", jdata->session_dir,
+                                          PMIX_RANK_PRINT(pptr->name.rank));
                 PMIX_INFO_LIST_ADD(ret, pmap, PMIX_PROCDIR, tmp, PMIX_STRING);
                 free(tmp);
             }
@@ -738,71 +732,27 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
 /* add any info that the tool couldn't self-assign */
 int prte_pmix_server_register_tool(pmix_nspace_t nspace)
 {
-    void *ilist;
     pmix_status_t ret;
-    char *tmp;
-    pmix_data_array_t darray;
-    pmix_info_t *iptr;
-    size_t ninfo;
     prte_pmix_lock_t lock;
     int rc;
     prte_pmix_tool_t *tl;
 
-    PMIX_INFO_LIST_START(ilist);
-
-    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_TMPDIR,
-                       prte_process_info.jobfam_session_dir, PMIX_STRING);
-
-    /* create and pass a job-level session directory */
-    if (0 > pmix_asprintf(&tmp, "%s/%u", prte_process_info.jobfam_session_dir,
-                          PRTE_LOCAL_JOBID(nspace))) {
-        PRTE_ERROR_LOG(PRTE_ERR_OUT_OF_RESOURCE);
-        return PRTE_ERR_OUT_OF_RESOURCE;
-    }
-    rc = pmix_os_dirpath_create(tmp, S_IRWXU);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        free(tmp);
-        rc = prte_pmix_convert_status(rc);
-        return rc;
-    }
-    PMIX_INFO_LIST_ADD(ret, ilist, PMIX_NSDIR, tmp, PMIX_STRING);
-
     /* record this tool */
     tl = PMIX_NEW(prte_pmix_tool_t);
     PMIX_LOAD_PROCID(&tl->name, nspace, 0);
-    tl->nsdir = tmp;
     pmix_list_append(&prte_pmix_server_globals.tools, &tl->super);
 
-    /* pass it down */
-    PMIX_INFO_LIST_CONVERT(ret, ilist, &darray);
-    if (PMIX_ERR_EMPTY == ret) {
-        iptr = NULL;
-        ninfo = 0;
-    } else if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
-        rc = prte_pmix_convert_status(ret);
-        PMIX_INFO_LIST_RELEASE(ilist);
-        return rc;
-    } else {
-        iptr = (pmix_info_t *) darray.array;
-        ninfo = darray.size;
-    }
-    PMIX_INFO_LIST_RELEASE(ilist);
-
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);
-    ret = PMIx_server_register_nspace(nspace, 1, iptr, ninfo,
+    ret = PMIx_server_register_nspace(nspace, 1, NULL, 0,
                                       opcbfunc, &lock);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         rc = prte_pmix_convert_status(ret);
-        PMIX_INFO_FREE(iptr, ninfo);
         PRTE_PMIX_DESTRUCT_LOCK(&lock);
         return rc;
     }
     PRTE_PMIX_WAIT_THREAD(&lock);
     rc = lock.status;
     PRTE_PMIX_DESTRUCT_LOCK(&lock);
-    PMIX_INFO_FREE(iptr, ninfo);
     return rc;
 }

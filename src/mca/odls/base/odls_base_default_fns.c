@@ -525,11 +525,6 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
                     PMIX_RETAIN(pptr);
                     pmix_pointer_array_add(pptr->node->procs, pptr);
                     pptr->node->num_procs++;
-                    /* and connect it back to its job object, if not already done */
-                    if (NULL == pptr->job) {
-                        PMIX_RETAIN(jdata);
-                        pptr->job = jdata;
-                    }
                 }
                 /* reset the mapped flags */
                 for (n = 0; n < jdata->map->nodes->size; n++) {
@@ -578,7 +573,7 @@ next:
     if (PRTE_PROC_IS_MASTER) {
         /* we don't want/need the extra copy of the prte_job_t, but
          * we can't just release it as that will NULL the location in
-         * the prte_job_data array. So set the jobid to INVALID to
+         * the prte_job_data array. So set its index to -1 to
          * protect the array, and then release the object to free
          * the storage */
         jdata->index = -1;
@@ -730,11 +725,6 @@ next:
             PMIX_RETAIN(pptr);
             pmix_pointer_array_add(pptr->node->procs, pptr);
             pptr->node->num_procs++;
-            /* and connect it back to its job object, if not already done */
-            if (NULL == pptr->job) {
-                PMIX_RETAIN(jdata);
-                pptr->job = jdata;
-            }
         }
         /* see if it belongs to us */
         if (pptr->parent == PRTE_PROC_MY_NAME->rank) {
@@ -834,14 +824,15 @@ static int setup_path(prte_app_context_t *app, char **wdir)
     char dir[MAXPATHLEN];
     char *session_dir;
     bool usercwd = false;
+    prte_job_t *job;
 
     if (prte_get_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, NULL, PMIX_BOOL)) {
         /* move us to that location */
-        session_dir = prte_process_info.jobfam_session_dir;
+        job = (prte_job_t*)app->job;
+        session_dir = job->session_dir;
         if (NULL == session_dir) {
-            /* if no job family session dir was provided -
-             * use the job session dir */
-            session_dir = prte_process_info.job_session_dir;
+            // cannot do it
+            return PRTE_ERROR;
         }
         if (0 != chdir(session_dir)) {
             return PRTE_ERROR;
@@ -987,7 +978,7 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     PRTE_FLAG_UNSET(child, PRTE_PROC_FLAG_WAITPID);
 
     /* setup the pmix environment */
-    PMIX_LOAD_PROCID(&pproc, child->job->nspace, child->name.rank);
+    PMIX_LOAD_PROCID(&pproc, child->name.nspace, child->name.rank);
     if (PMIX_SUCCESS != (ret = PMIx_server_setup_fork(&pproc, &cd->env))) {
         PMIX_ERROR_LOG(ret);
         rc = PRTE_ERROR;
@@ -1815,8 +1806,8 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
              *  job could be given as a WILDCARD value, we must
              *  check for that as well as for equality.
              */
-            if (!PMIX_NSPACE_INVALID(proc->name.nspace)
-                && !PMIX_CHECK_NSPACE(proc->name.nspace, child->name.nspace)) {
+            if (!PMIX_NSPACE_INVALID(proc->name.nspace) &&
+                !PMIX_CHECK_NSPACE(proc->name.nspace, child->name.nspace)) {
 
                 PMIX_OUTPUT_VERBOSE((5, prte_odls_base_framework.framework_output,
                                      "%s odls:kill_local_proc child %s is not part of job %s",
@@ -1898,8 +1889,6 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
             continue;
 
         CLEANUP:
-            /* ensure the child's session directory is cleaned up */
-            prte_session_dir_finalize(&child->name);
             /* check for everything complete - this will remove
              * the child object from our local list
              */
@@ -1962,13 +1951,12 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
                 cd->child->state = PRTE_PROC_STATE_KILLED_BY_CMD; /* we ordered it to die */
             }
 
-            /* ensure the child's session directory is cleaned up */
-            prte_session_dir_finalize(&cd->child->name);
             /* check for everything complete - this will remove
              * the child object from our local list
              */
-            if (!prte_finalizing && PRTE_FLAG_TEST(cd->child, PRTE_PROC_FLAG_IOF_COMPLETE)
-                && PRTE_FLAG_TEST(cd->child, PRTE_PROC_FLAG_WAITPID)) {
+            if (!prte_finalizing &&
+                PRTE_FLAG_TEST(cd->child, PRTE_PROC_FLAG_IOF_COMPLETE) &&
+                PRTE_FLAG_TEST(cd->child, PRTE_PROC_FLAG_WAITPID)) {
                 PRTE_ACTIVATE_PROC_STATE(&cd->child->name, cd->child->state);
             }
         }

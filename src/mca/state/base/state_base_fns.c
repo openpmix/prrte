@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -541,12 +541,6 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
             PMIx_server_deregister_client(proc, opcbfunc, &lock);
             PRTE_PMIX_WAIT_THREAD(&lock);
             PRTE_PMIX_DESTRUCT_LOCK(&lock);
-
-            /* Clean up the session directory as if we were the process
-             * itself.  This covers the case where the process died abnormally
-             * and didn't cleanup its own session directory.
-             */
-            prte_session_dir_finalize(proc);
         }
         /* if we are trying to terminate and our routes are
          * gone, then terminate ourselves IF no local procs

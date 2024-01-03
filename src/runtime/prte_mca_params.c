@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,7 +55,6 @@ static char *prte_tmpdir_base = NULL;
 static char *prte_local_tmpdir_base = NULL;
 static char *prte_remote_tmpdir_base = NULL;
 static char *prte_top_session_dir = NULL;
-static char *prte_jobfam_session_dir = NULL;
 static char *local_setup_slots = NULL;
 
 char *prte_signal_string = NULL;

@@ -16,7 +16,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -48,8 +48,13 @@
 
 int prte_finalize(void)
 {
-    int rc, n;
+    int rc, n, i;
     prte_job_t *jdata = NULL, *child_jdata = NULL, *next_jdata = NULL;
+    prte_app_context_t *app;
+    prte_proc_t *p;
+    pmix_pointer_array_t *array;
+    prte_node_t *node;
+    prte_topology_t *topo;
 
     PMIX_ACQUIRE_THREAD(&prte_init_lock);
     if (!prte_initialized) {
@@ -70,17 +75,23 @@ int prte_finalize(void)
     /* release the cache */
     PMIX_RELEASE(prte_cache);
 
-    /* Release the job hash table
-     *
-     * There is the potential for a prte_job_t object to still be in the
-     * children list of another prte_job_t object, both objects stored in the
-     * prte_job_data array. If this happens then an assert will be raised
-     * when the first prte_job_t object is released when iterating over the
-     * prte_job_data structure. Therefore, we traverse the children list of
-     * every prte_job_t in the prte_job_data hash, removing all children
-     * references before iterating over the prte_job_data hash table to
-     * release the prte_job_t objects.
-     */
+    /* call the finalize function for this environment */
+    if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {
+        return rc;
+    }
+    (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
+
+    // clean up the node array
+    for (n = 0; n < prte_node_pool->size; n++) {
+        node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n);
+        if (NULL == node) {
+            continue;
+        }
+        pmix_pointer_array_set_item(prte_node_pool, n, NULL);
+        PMIX_RELEASE(node);
+    }
+    PMIX_RELEASE(prte_node_pool);
+
     for (n = 0; n < prte_job_data->size; n++) {
         jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, n);
         if (NULL == jdata) {
@@ -93,61 +104,42 @@ int prte_finalize(void)
         {
             pmix_list_remove_item(&jdata->children, &child_jdata->super);
         }
+        /* clean up any app contexts as they refcount the jdata object */
+        for (i=0; i < jdata->apps->size; i++) {
+            app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, i);
+            if (NULL != app) {
+                pmix_pointer_array_set_item(jdata->apps, i, NULL);
+                PMIX_RELEASE(app);
+            }
+        }
+        // clean up any procs
+        for (i=0; i < jdata->procs->size; i++) {
+            p = (prte_proc_t*)pmix_pointer_array_get_item(jdata->procs, i);
+            if (NULL != p) {
+                pmix_pointer_array_set_item(jdata->procs, i, NULL);
+                PMIX_RELEASE(p);
+            }
+        }
+        pmix_pointer_array_set_item(prte_job_data, n, NULL);
         PMIX_RELEASE(jdata);
     }
     PMIX_RELEASE(prte_job_data);
 
-    {
-        pmix_pointer_array_t *array = prte_node_topologies;
-        int i;
-        if (array->number_free != array->size) {
-            array->lowest_free = 0;
-            array->number_free = array->size;
-            for (i = 0; i < array->size; i++) {
-                if (NULL != array->addr[i]) {
-                    prte_topology_t *topo = (prte_topology_t *) array->addr[i];
-                    topo->topo = NULL;
-                    PMIX_RELEASE(topo);
-                }
-                array->addr[i] = NULL;
-            }
+    for (n = 0; n < prte_node_topologies->size; n++) {
+        topo = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, n);
+        if (NULL == topo) {
+            continue;
         }
+        pmix_pointer_array_set_item(prte_node_topologies, n, NULL);
+        PMIX_RELEASE(topo);
     }
     PMIX_RELEASE(prte_node_topologies);
-
-    {
-        pmix_pointer_array_t *array = prte_node_pool;
-        int i;
-        prte_node_t *node;
-        if (array->number_free != array->size) {
-            array->lowest_free = 0;
-            array->number_free = array->size;
-            for (i = 0; i < array->size; i++) {
-                if (NULL != array->addr[i]) {
-                    node = (prte_node_t *) array->addr[i];
-                    if (NULL != node) {
-                        if (NULL != node->daemon) {
-                            PMIX_RELEASE(node->daemon);
-                        }
-                        PMIX_RELEASE(node);
-                    }
-                }
-                array->addr[i] = NULL;
-            }
-        }
-    }
-    PMIX_RELEASE(prte_node_pool);
 
     /* Close the general debug stream */
     pmix_output_close(prte_debug_output);
 
     pmix_mca_base_alias_cleanup();
 
-    /* call the finalize function for this environment */
-    if (PRTE_SUCCESS != (rc = prte_ess.finalize())) {
-        return rc;
-    }
-    (void) pmix_mca_base_framework_close(&prte_ess_base_framework);
     prte_proc_info_finalize();
 
     pmix_output_finalize();

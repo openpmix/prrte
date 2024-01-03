@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -242,6 +242,7 @@ static void interim(int sd, short args, void *cbdata)
     for (n = 0; n < cd->napps; n++) {
         papp = &cd->apps[n];
         app = PMIX_NEW(prte_app_context_t);
+        app->job = (struct prte_job_t*)jdata;
         app->idx = pmix_pointer_array_add(jdata->apps, app);
         jdata->num_apps++;
         if (NULL != papp->cmd) {
