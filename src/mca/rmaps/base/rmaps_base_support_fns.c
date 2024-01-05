@@ -54,7 +54,7 @@
 int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bool remove)
 {
     int rc = PRTE_ERR_TAKE_NEXT_OPTION;
-    char *hosts;
+    char *hosts, *alloc_id;
 
     /* did the app_context contain a hostfile? */
     hosts = NULL;
@@ -180,18 +180,18 @@ int prte_rmaps_base_get_target_nodes(pmix_list_t *allocated_nodes,
             PMIX_DESTRUCT(&nodes);
             return PRTE_ERR_SILENT;
         }
-        /* find the nodes in our node array and assemble them
+        /* find the nodes in the session and assemble them
          * in list order as that is what the user specified. Note
          * that the prte_node_t objects on the nodes list are not
          * fully filled in - they only contain the user-provided
          * name of the node as a temp object. Thus, we cannot just
          * check to see if the node pointer matches that of a node
-         * in the node_pool.
+         * in the session.
          */
         PMIX_LIST_FOREACH_SAFE(nptr, next, &nodes, prte_node_t)
         {
-            for (i = 0; i < prte_node_pool->size; i++) {
-                node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i);
+            for (i = 0; i < jdata->session->nodes->size; i++) {
+                node = (prte_node_t *) pmix_pointer_array_get_item(jdata->session->nodes, i);
                 if (NULL == node) {
                     continue;
                 }
@@ -263,24 +263,11 @@ addknown:
      * this point either has the HNP node or nothing, and the HNP
      * node obviously has a daemon on it (us!)
      */
-    if (0 == pmix_list_get_size(allocated_nodes)) {
-        /* the list is empty - if the HNP is allocated, then add it */
-        if (prte_hnp_is_allocated) {
-            nd = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
-            if (!PRTE_FLAG_TEST(nd, PRTE_NODE_NON_USABLE)) {
-                PMIX_RETAIN(nd);
-                pmix_list_append(allocated_nodes, &nd->super);
-            } else {
-                nd = NULL;
-            }
-        } else {
-            nd = NULL;
-        }
-    } else {
-        nd = (prte_node_t *) pmix_list_get_last(allocated_nodes);
-    }
-    for (i = 1; i < prte_node_pool->size; i++) {
-        if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, i))) {
+    nd = (prte_node_t *) pmix_list_get_last(allocated_nodes);  
+    for (i = 0; i < jdata->session->nodes->size; i++) {
+        if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->session->nodes, i))) {
+
+
             /* ignore nodes that are non-usable */
             if (PRTE_FLAG_TEST(node, PRTE_NODE_NON_USABLE)) {
                 continue;
@@ -310,6 +297,11 @@ addknown:
             if (NULL == node->daemon && !novm) {
                 PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
                                      "NODE %s HAS NO DAEMON", node->name));
+                continue;
+            }
+            if(0 == node->index && !prte_hnp_is_allocated){
+                PMIX_OUTPUT_VERBOSE((10, prte_rmaps_base_framework.framework_output,
+                                     "HNP NODE %s IS NOT ALLOCATED", node->name));
                 continue;
             }
             /* retain a copy for our use in case the item gets

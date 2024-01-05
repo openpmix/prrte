@@ -88,7 +88,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     size_t nmsize;
     pmix_server_pset_t *pset;
     pmix_cpuset_t cpuset;
-    uint32_t ui32;
+    uint32_t ui32, *ui32_ptr;
     prte_job_t *parent = NULL;
     pmix_device_distance_t *distances;
     size_t ndist;
@@ -125,14 +125,16 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
         return rc;
     }
 
-    /* pass the session ID - just a 32-bit hash of our nspace for now */
-    PRTE_HASH_STR(prte_process_info.myproc.nspace, ui32);
-    PMIX_INFO_LIST_ADD(ret, info, PMIX_SESSION_ID, &ui32, PMIX_UINT32);
-    if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
-        PMIX_INFO_LIST_RELEASE(info);
-        rc = prte_pmix_convert_status(ret);
-        return rc;
+    /* pass the session ID */
+    ui32_ptr = &ui32;
+    if(prte_get_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID, (void **) &ui32_ptr, PMIX_UINT32)){
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_SESSION_ID, &ui32, PMIX_UINT32); 
+        if (PMIX_SUCCESS != ret) {
+            PMIX_ERROR_LOG(ret);
+            PMIX_INFO_LIST_RELEASE(info);
+            rc = prte_pmix_convert_status(ret);
+            return rc;
+        }
     }
 
     /* jobid */

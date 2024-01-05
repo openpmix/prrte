@@ -184,6 +184,9 @@ static int rte_init(int argc, char **argv)
         goto error;
     }
 
+    /* Set the session of the daemon job to the default session */
+    jdata->session = prte_default_session;
+
     /* mark that the daemons have reported as we are the
      * only ones in the system right now, and we definitely
      * are running!

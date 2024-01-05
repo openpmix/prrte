@@ -206,6 +206,16 @@ typedef struct {
 } prte_topology_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_topology_t);
 
+/* Object for tracking allocations */
+typedef struct{
+    pmix_object_t super;
+    uint32_t session_id;
+    pmix_pointer_array_t *nodes;
+    pmix_pointer_array_t *jobs;
+    pmix_pointer_array_t *children;
+}prte_session_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_session_t);
+
 /**
  * Information about a specific application to be launched in the RTE.
  */
@@ -321,6 +331,8 @@ typedef struct {
     /* offset to the total number of procs so shared memory
      * components can potentially connect to any spawned jobs*/
     pmix_rank_t offset;
+    /* session this job is running in */
+    prte_session_t *session;
     /* app_context array for this job */
     pmix_pointer_array_t *apps;
     /* number of app_contexts in the array */
@@ -433,6 +445,13 @@ struct prte_proc_t {
 };
 typedef struct prte_proc_t prte_proc_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_proc_t);
+
+/** Get session object */
+PRTE_EXPORT prte_session_t *prte_get_session_object(const uint32_t session_id);
+
+PRTE_EXPORT int prte_set_session_object(prte_session_t *session);
+
+PRTE_EXPORT bool prte_sessions_related(prte_session_t *session1, prte_session_t *session2);
 
 /**
  * Get a job data object
@@ -557,6 +576,7 @@ PRTE_EXPORT extern float prte_max_timeout;
 PRTE_EXPORT extern prte_timer_t *prte_mpiexec_timeout;
 
 /* global arrays for data storage */
+PRTE_EXPORT extern pmix_pointer_array_t *prte_sessions;
 PRTE_EXPORT extern pmix_pointer_array_t *prte_job_data;
 PRTE_EXPORT extern pmix_pointer_array_t *prte_node_pool;
 PRTE_EXPORT extern pmix_pointer_array_t *prte_node_topologies;
@@ -577,6 +597,7 @@ PRTE_EXPORT extern char *prte_default_hostfile;
 PRTE_EXPORT extern bool prte_default_hostfile_given;
 PRTE_EXPORT extern int prte_num_allocated_nodes;
 PRTE_EXPORT extern char *prte_default_dash_host;
+PRTE_EXPORT extern prte_session_t *prte_default_session;
 
 /* tool communication controls */
 PRTE_EXPORT extern bool prte_report_events;

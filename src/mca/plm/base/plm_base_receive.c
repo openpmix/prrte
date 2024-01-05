@@ -64,6 +64,8 @@
 #include "src/mca/plm/plm.h"
 #include "src/mca/plm/plm_types.h"
 
+#include "src/prted/pmix/pmix_server_internal.h"
+
 static bool recv_issued = false;
 
 int prte_plm_base_comm_start(void)
@@ -118,6 +120,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     prte_plm_cmd_flag_t command;
     int32_t count;
     pmix_nspace_t job;
+    prte_session_t *session;
     prte_job_t *jdata, *parent, jb;
     pmix_data_buffer_t *answer;
     pmix_rank_t vpid;
@@ -125,13 +128,14 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     prte_proc_state_t state;
     prte_exit_code_t exit_code;
     int32_t rc = PRTE_SUCCESS, ret;
+    uint32_t ui32, *ui32_ptr;
     prte_app_context_t *app, *child_app;
     pmix_proc_t name, *nptr;
     pid_t pid;
     bool debugging, found;
     int i, room, *rmptr = &room;
     char **env;
-    char *prefix_dir, *tmp;
+    char *prefix_dir, *tmp, *endptr;
     pmix_rank_t tgt, *tptr;
     pmix_value_t pidval = PMIX_VALUE_STATIC_INIT;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
@@ -231,6 +235,42 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             rc = PRTE_ERR_NOT_FOUND;
             goto ANSWER_LAUNCH;
         }
+
+        /* If an alloc id was given assign the according session - otherwise default to parent session */
+        session = NULL;
+        ui32_ptr = &ui32;
+        if(prte_get_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID, (void **) &ui32_ptr, PMIX_UINT32)){
+            session = prte_get_session_object(ui32); 
+
+            /* Jobs are only allowed to be spawned in the the session of the requestor 
+             * or one of its child sessions. */
+            if(NULL == session || !prte_sessions_related(prte_get_job_data_object(nptr->nspace)->session, session)){
+                PRTE_ERROR_LOG(PRTE_ERR_PERM);
+                rc = PRTE_ERR_PERM;
+                goto ANSWER_LAUNCH;
+            }
+        }else{  
+            /* try defaulting to parent session */
+            if(NULL != (parent = prte_get_job_data_object(nptr->nspace))){
+                session = parent->session;
+            /* The proc requesting the spawn is a tool, hence does not have a session.
+             * If we don't have a scheduler connected (or the tool itself is the scheduler) we allow
+             * it to spawn into the default session, i.e. the global node pool
+             */
+            }else if(!prte_pmix_server_globals.scheduler_connected || 
+                    PMIX_CHECK_PROCID(nptr, &prte_pmix_server_globals.scheduler)){
+                    session = prte_default_session;
+            }else{
+                PRTE_ERROR_LOG(PRTE_ERR_PERM);
+                rc = PRTE_ERR_PERM;
+                goto ANSWER_LAUNCH;  
+            }
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID,
+                               PRTE_ATTR_GLOBAL, &session->session_id, PMIX_UINT32);
+        }
+        
+        jdata->session = session;
+        pmix_pointer_array_add(jdata->session->jobs, jdata);
 
         /* get the parent's job object */
         if (NULL != (parent = prte_get_job_data_object(nptr->nspace)) &&
