@@ -1185,7 +1185,6 @@ int main(int argc, char *argv[])
     if (verbose) {
         pmix_output(0, "Spawning job");
     }
-
     /* let the PMIx server handle it for us so that all the job infos
      * get properly recorded - e.g., forwarding IOF */
     PRTE_PMIX_CONSTRUCT_LOCK(&lock);

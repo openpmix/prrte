@@ -65,6 +65,7 @@
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/grpcomm/grpcomm.h"
+#include "src/mca/ras/base/ras_private.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
 #include "src/runtime/prte_data_server.h"
@@ -74,6 +75,7 @@
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/dash_host/dash_host.h"
 
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
@@ -927,6 +929,10 @@ void pmix_server_start(void)
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_JOBID_RESP,
                   PRTE_RML_PERSISTENT, pmix_server_jobid_return, NULL);
 
+    /* setup recv for alloc request response */
+    PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED_RESP,
+                  PRTE_RML_PERSISTENT, pmix_server_alloc_request_resp, NULL);
+
     if (PRTE_PROC_IS_MASTER) {
         /* setup recv for logging requests */
         PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING,
@@ -953,6 +959,7 @@ void pmix_server_finalize(void)
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LAUNCH_RESP);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_DATA_CLIENT);
     PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_NOTIFICATION);
+    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED_RESP);
     if (PRTE_PROC_IS_MASTER) {
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_LOGGING);
         PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_SCHED);
@@ -1738,6 +1745,212 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
     }
 }
 
+/* alloc callback to process the results and send them to the requesting daemon */
+void send_alloc_resp( pmix_status_t status,
+                                    pmix_info_t info[], size_t ninfo,
+                                    void *cbdata,
+                                    pmix_release_cbfunc_t release_fn,
+                                    void *release_cbdata)
+{
+    pmix_data_buffer_t *buf;
+    pmix_status_t rc;
+    pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    pmix_alloc_directive_t directive;
+    uint32_t session_id = UINT32_MAX;
+    char *endptr, *hosts, *tmp;
+    char **dir, **host_argv = NULL, **alloc_nlist = NULL, **alloc_clist = NULL;
+    pmix_list_t nodes;
+    prte_node_t *nptr;
+    prte_session_t *session;
+    prte_job_t *jdata;
+    size_t len, n, i;
+
+    /* track this allocation so it can be referenced in e.g. a call to PMIx_Spawn */
+    if(PRTE_PROC_IS_MASTER && status == PMIX_SUCCESS){
+        for(int n = 0; n < ninfo; n++){
+            if(PMIX_CHECK_KEY(&info[n], PMIX_ALLOC_ID)){
+                session_id = strtoul(info[n].value.data.string, &endptr, 10); 
+            }else if(PMIX_CHECK_KEY(&info[n], PMIX_ALLOC_NODE_LIST)){
+                alloc_nlist = PMIX_ARGV_SPLIT_COMPAT(info[n].value.data.string, ',');
+            }else if(PMIX_CHECK_KEY(&info[n], PMIX_ALLOC_NUM_CPU_LIST)){
+                alloc_clist = PMIX_ARGV_SPLIT_COMPAT(info[n].value.data.string, ',');
+            }
+        }
+        /* They did not provide an alloc id and nodelist. This is an error! */
+        if(session_id == UINT32_MAX || alloc_nlist == NULL){
+            status = PMIX_ERR_BAD_PARAM;
+            goto ANSWER;
+        }
+        dir = PMIX_ARGV_SPLIT_COMPAT(req->operation, ' ');
+        directive = strtoul(dir[1], &endptr, 10);
+        switch(directive){
+            case PMIX_ALLOC_RELEASE:
+                if(NULL == (session = prte_get_session_object(session_id))){
+                    status = PRTE_ERR_BAD_PARAM;
+                    PRTE_ERROR_LOG(status);
+                    goto ANSWER;
+                }
+                /* Remove specified nodes from session object */
+                len = PMIX_ARGV_COUNT_COMPAT(alloc_nlist);
+                for(n = 0; n < session->nodes->size; n++){
+                    if(NULL == (nptr = (prte_node_t *) pmix_pointer_array_get_item(session->nodes, n))){
+                        continue;
+                    }
+                    for(i = 0; i < len; i++){
+                        if(0 == strcmp(nptr->name, alloc_nlist[i])){
+                            pmix_pointer_array_set_item(session->nodes, n, NULL);
+                        }
+                    }
+                }
+                PMIX_ARGV_FREE_COMPAT(alloc_nlist);
+                /* all done */
+                goto ANSWER;
+            case PMIX_ALLOC_NEW:
+                /* if we already have a session with this id that's an error */
+                if(NULL != (session = prte_get_session_object(session_id))){
+                    status = PRTE_ERR_BAD_PARAM;
+                    PRTE_ERROR_LOG(status);
+                    goto ANSWER;
+                }
+                /* create a new session object */
+                session = PMIX_NEW(prte_session_t);
+                if(NULL == session){
+                    status = PRTE_ERR_OUT_OF_RESOURCE;
+                    PRTE_ERROR_LOG(status);
+                    goto ANSWER;
+                }
+                session->session_id = session_id;
+                prte_set_session_object(session);
+
+                /* Track the session as a child session of session the requestor is running in */
+                jdata = prte_get_job_data_object(req->tproc.nspace);
+                if(NULL != jdata){
+                    pmix_pointer_array_add(jdata->session->children, session);
+                }else{
+                    /* default to our default session */
+                    pmix_pointer_array_add(prte_default_session->children, session);
+                }
+                break;
+            case PMIX_ALLOC_EXTEND:
+                /* Get the session object to extend */
+                if(NULL == (session = prte_get_session_object(session_id))){
+                    status = PRTE_ERR_BAD_PARAM;;
+                    PRTE_ERROR_LOG(status);
+                    goto ANSWER;
+                }
+                break;
+            case PMIX_ALLOC_REAQUIRE:
+                /* TODO: Not sure how to handle this */
+                goto ANSWER;
+        }
+
+        /* If we get here, we need to add specified nodes to the nodepool */
+        if(NULL != alloc_nlist && NULL == alloc_clist){
+            hosts = PMIX_ARGV_JOIN_COMPAT(alloc_nlist, ',');
+            PMIX_ARGV_FREE_COMPAT(alloc_nlist);
+        }else if (NULL != alloc_nlist && NULL != alloc_clist){
+            len = PMIX_ARGV_COUNT_COMPAT(alloc_nlist);
+            for(n = 0; n < len; n++){
+                tmp = malloc(strlen(alloc_nlist[n]) + strlen(alloc_clist[n]) + 2);
+                sprintf(tmp, "%s:%s", alloc_nlist[n], alloc_clist[n]);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&host_argv, tmp);
+                free(tmp);
+            }
+            hosts = PMIX_ARGV_JOIN_COMPAT(host_argv, ',');
+            PMIX_ARGV_FREE_COMPAT(host_argv);
+            PMIX_ARGV_FREE_COMPAT(alloc_nlist);
+            PMIX_ARGV_FREE_COMPAT(alloc_clist);
+        }
+
+        /* Create a list of nodes from the hostlist */
+        PMIX_CONSTRUCT(&nodes, pmix_list_t);
+        if (PRTE_SUCCESS != (rc = prte_util_add_dash_host_nodes(&nodes, hosts, true))) {
+            PRTE_ERROR_LOG(rc);
+            status = rc;
+            goto ANSWER;
+        }
+        free(hosts);
+
+        /* If we got something back add it to */
+        if (!pmix_list_is_empty(&nodes)) {
+            /* Mark that this node was added */
+            PMIX_LIST_FOREACH(nptr, &nodes, prte_node_t){
+                nptr->state = PRTE_NODE_STATE_ADDED;
+                if(session != prte_default_session){
+                    pmix_pointer_array_add(session->nodes, nptr);
+                }
+            }
+            /* store the results in the global resource pool - this removes the
+             * list items
+             */
+            if (PRTE_SUCCESS != (rc = prte_ras_base_node_insert(&nodes, NULL))) {
+                PRTE_ERROR_LOG(rc);
+                status = rc;
+                goto ANSWER;
+            }
+
+            /* mark that an updated nidmap must be communicated to existing daemons */
+            prte_nidmap_communicated = false;
+        }
+        for(n = 0; n < prte_node_pool->size; n++){
+            if(NULL == (nptr = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, n))){
+                continue;
+            }
+        }
+    }
+    /* Now pack everything into a buffer and send it away */
+ANSWER:
+
+    /* pack the status */
+    PMIX_DATA_BUFFER_CREATE(buf);
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &status, 1, PMIX_STATUS))) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return;
+    }
+
+    /* pack the remote daemon's request index */
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &req->remote_index, 1, PMIX_INT))) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return;
+    }
+
+    /* pack the remote daemon's request index */
+    if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, &ninfo, 1, PMIX_SIZE))) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+        return;
+    }
+
+    if(0 < ninfo){
+        /* pack the remote daemon's request index */
+        if (PMIX_SUCCESS != (rc = PMIx_Data_pack(NULL, buf, info, ninfo, PMIX_INFO))) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_DATA_BUFFER_RELEASE(buf);
+            return;
+        }
+    }
+
+    /* send the response */
+    PRTE_RML_SEND(rc, req->proxy.rank, buf, PRTE_RML_TAG_SCHED_RESP);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        PMIX_DATA_BUFFER_RELEASE(buf);
+    }
+
+    /* Call the provided callback function */
+    if(NULL != release_fn){
+        release_fn(release_cbdata);
+    }
+
+    /* Release the server op request data */
+    pmix_pointer_array_set_item(&prte_pmix_server_globals.local_reqs, req->local_index, NULL);
+    if(0 < req->ninfo){
+        PMIX_INFO_FREE(req->info, req->ninfo);
+    }
+}
+
 static void pmix_server_sched(int status, pmix_proc_t *sender,
                               pmix_data_buffer_t *buffer,
                               prte_rml_tag_t tg, void *cbdata)
@@ -1745,14 +1958,17 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     pmix_status_t rc;
     uint8_t cmd;
     int32_t cnt;
-    size_t ninfo;
+    size_t ninfo, need_id, n;
     pmix_alloc_directive_t allocdir;
     uint32_t sessionID;
     pmix_info_t *info = NULL;
     pmix_proc_t source;
     pmix_server_req_t *req;
+    prte_session_t *session;
+    prte_job_t *client_job;
+    char alloc_id[64];
     int refid;
-    PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
+    PRTE_HIDE_UNUSED_PARAMS(status, tg, cbdata);
 
     /* unpack the command */
     cnt = 1;
@@ -1840,10 +2056,45 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
 
     /* track the request */
     req = PMIX_NEW(pmix_server_req_t);
+    req->remote_index = refid;
+    req->info = info;
+    req->ninfo = ninfo;
+    PMIX_PROC_LOAD(&req->proxy, sender->nspace, sender->rank);
+    PMIX_PROC_LOAD(&req->tproc, source.nspace, source.rank);
+    if (0 == cmd) {
+        pmix_asprintf(&req->operation, "ALLOCATE: %u", allocdir);
+    } else {
+        pmix_asprintf(&req->operation, "SESSIONCTRL: %u", allocdir);
+    }
 
     if (0 == cmd) {
-        rc = PMIx_Allocation_request_nb(allocdir, info, ninfo,
-                                        req->infocbfunc, req);
+        /* check if they specified an alloc id - otherwise default to requestors session */
+        need_id = 1;
+        for(n = 0; n < ninfo; n++){
+            if(PMIX_CHECK_KEY(&info[n], PMIX_ALLOC_ID)){
+                need_id = 0;
+            }
+        }
+        req->ninfo = ninfo + need_id;
+        PMIX_INFO_CREATE(req->info, req->ninfo);
+        for(n = 0; n < ninfo; n++){
+            PMIX_INFO_XFER(&req->info[n], &info[n]);
+        }
+        if(need_id){
+            client_job = prte_get_job_data_object(req->tproc.nspace);
+            if(NULL != client_job){
+                sprintf(alloc_id, "%u", client_job->session->session_id);
+            }else{
+                /* default to the default session */
+                sprintf(alloc_id, "%u", prte_default_session->session_id);
+            }
+            PMIX_INFO_LOAD(&req->info[ninfo], PMIX_ALLOC_ID, alloc_id, PMIX_STRING);
+        }
+        rc = PMIx_Allocation_request_nb(allocdir, req->info, req->ninfo,
+                                        send_alloc_resp, req);
+        if (NULL != info) {
+            PMIX_INFO_FREE(info, ninfo);
+        }
     } else {
 #if PMIX_NUMERIC_VERSION < 0x00050000
         rc = PMIX_ERR_NOT_SUPPORTED;
@@ -1853,16 +2104,13 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
 #endif
     }
     if (PMIX_SUCCESS != rc) {
-        if (NULL != info) {
-            PMIX_INFO_FREE(info, ninfo);
-        }
         goto reply;
     }
     return;
 
 reply:
     /* send an error response */
-
+    send_alloc_resp(rc, NULL, 0, req, NULL, NULL);
     return;
 
 }

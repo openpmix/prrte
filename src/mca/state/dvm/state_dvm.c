@@ -503,6 +503,7 @@ static void lkcbfunc(pmix_status_t status, void *cbdata)
 static void check_complete(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
+    prte_session_t *session;
     prte_job_t *jdata, *jptr;
     prte_proc_t *proc;
     int i, rc;
@@ -720,6 +721,17 @@ release:
      * we call the errmgr so that any attempt to restart the job will
      * avoid doing so in the exact same place as the current job
      */
+    session = jdata->session;
+    if(NULL != session){
+        for(i = 0; i < session->jobs->size; i++){
+            if(NULL != (jptr = pmix_pointer_array_get_item(session->jobs, i))){
+                if(PMIX_CHECK_NSPACE(jdata->nspace, jptr->nspace)){
+                    pmix_pointer_array_set_item(session->jobs, i, NULL);
+                    break;
+                }
+            }
+        }
+    }
     if (NULL != jdata->map) {
         map = jdata->map;
         takeall = false;

@@ -319,6 +319,10 @@ PRTE_EXPORT extern int prte_pmix_server_register_tool(pmix_nspace_t nspace);
 
 PRTE_EXPORT extern int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info);
 
+PRTE_EXPORT extern void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
+                                                pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
+                                                void *cbdata);
+
 #if PMIX_NUMERIC_VERSION >= 0x00050000
 PRTE_EXPORT extern pmix_status_t
 pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,

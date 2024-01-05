@@ -738,6 +738,7 @@ cleanup:
     return rc;
 }
 
+
 int prte_util_get_ordered_dash_host_list(pmix_list_t *nodes, char *hosts)
 {
     int rc, i;

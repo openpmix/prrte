@@ -222,6 +222,7 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 
 /* scheduler requests */
 #define PRTE_RML_TAG_SCHED 72
+#define PRTE_RML_TAG_SCHED_RESP 73
 
 
 #define PRTE_RML_TAG_MAX 100
