@@ -20,6 +20,8 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2024      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -624,11 +626,12 @@ static void _query(int sd, short args, void *cbdata)
                     ret = PMIX_ERR_NOT_FOUND;
                     goto done;
                 }
-                /* define the array that holds the membership - no need to allocate anything */
+                /* define the array that holds the membership - no need to allocate anything if we are careful */
                 dry.array = psptr->members;
-                dry.type = PMIX_PROC_RANK;
+                dry.type = PMIX_PROC;
                 dry.size = psptr->num_members;
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_PSET_MEMBERSHIP, &dry, PMIX_DATA_ARRAY);
+                dry.array = NULL;  /* say no to array destructor freeing the pset members array */
                 PMIX_DATA_ARRAY_DESTRUCT(&dry);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
