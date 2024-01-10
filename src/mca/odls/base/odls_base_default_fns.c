@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      Mellanox Technologies Ltd. All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -1958,7 +1958,9 @@ int prte_odls_base_default_kill_local_procs(pmix_pointer_array_t *procs,
             cd->child->pid = 0;
 
             /* mark the child as "killed" */
-            cd->child->state = PRTE_PROC_STATE_KILLED_BY_CMD; /* we ordered it to die */
+            if (cd->child->state < PRTE_PROC_STATE_TERMINATED) {
+                cd->child->state = PRTE_PROC_STATE_KILLED_BY_CMD; /* we ordered it to die */
+            }
 
             /* ensure the child's session directory is cleaned up */
             prte_session_dir_finalize(&cd->child->name);
