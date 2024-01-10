@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -228,7 +228,8 @@ static char *print_aborted_job(prte_job_t *job,
             }
         }
         return output;
-    } else if (PRTE_PROC_STATE_ABORTED == proc->state) {
+    } else if (PRTE_PROC_STATE_ABORTED == proc->state ||
+               PRTE_PROC_STATE_CALLED_ABORT == proc->state) {
         output = pmix_show_help_string("help-prun.txt", "prun:proc-ordered-abort", true,
                                        prte_tool_basename, (unsigned long) proc->name.rank,
                                        (unsigned long) proc->pid, node->name, prte_tool_basename);
