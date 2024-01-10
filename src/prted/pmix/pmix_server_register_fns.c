@@ -20,6 +20,8 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
  * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2024      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -422,12 +424,15 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
                     pmix_list_append(&members, &nm->super);
                 }
             }
+            pset->num_members = pmix_list_get_size(&members);
             if (0 < (i = pmix_list_get_size(&members))) {
                 PMIX_DATA_ARRAY_CONSTRUCT(&darray, i, PMIX_PROC);
                 procptr = (pmix_proc_t*)darray.array;
                 k = 0;
+                pset->members = (pmix_proc_t *)malloc(i * sizeof (pmix_proc_t));
                 PMIX_LIST_FOREACH(nm, &members, prte_namelist_t) {
                     PMIX_LOAD_PROCID(&procptr[k], nm->name.nspace, nm->name.rank);
+                    PMIX_LOAD_PROCID(&pset->members[k], nm->name.nspace, nm->name.rank);
                     ++k;
                 }
                 PMIX_INFO_LIST_ADD(ret, iarray, PMIX_PSET_MEMBERS, &darray, PMIX_DATA_ARRAY);
