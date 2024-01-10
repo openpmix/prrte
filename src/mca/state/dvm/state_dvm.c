@@ -4,7 +4,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -625,7 +625,7 @@ static void check_complete(int fd, short args, void *cbdata)
                 pmix_byte_object_t bo;
                 PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
                 bo.bytes = (char *) msg;
-                bo.size = strlen(msg) + 1;
+                bo.size = strlen(msg);
                 PRTE_PMIX_CONSTRUCT_LOCK(&lock);
                 rc = PMIx_server_IOF_deliver(&prte_process_info.myproc,
                                              PMIX_FWD_STDDIAG_CHANNEL,
