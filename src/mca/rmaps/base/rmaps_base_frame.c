@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -430,10 +430,10 @@ int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
 
 int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
 {
-    char **ck;
-    char *ptr, *cptr;
+    char **ck, **range;
+    char *ptr, *cptr, *val;
     prte_mapping_policy_t tmp;
-    int rc;
+    int rc, n;
     bool ppr = false;
     char *temp_parm, *temp_token, *parm_delimiter;
 
@@ -535,6 +535,26 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
     }
 
     cptr = ck[0];
+    // check for an '=' and split out the value from the option
+    if (NULL != (ptr = strchr(ck[0], '='))) {
+        *ptr = '\0';
+        cptr = strdup(ck[0]);
+        *ptr = '='; // restore the option
+        ++ptr;
+        if (NULL == ptr) {
+            /* malformed option */
+            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+                           true, "mapping", ck[0]);
+            PMIX_ARGV_FREE_COMPAT(ck);
+            free(cptr);
+            return PRTE_ERR_SILENT;
+        }
+        val = strdup(ptr);
+    } else {
+        cptr = strdup(ck[0]);
+        val = NULL;
+    }
+
     if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_SLOT)) {
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_BYSLOT);
 
@@ -575,6 +595,10 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
             (NULL != jdata && !prte_get_attribute(&jdata->attributes, PRTE_JOB_FILE, NULL, PMIX_STRING))) {
             pmix_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
             PMIX_ARGV_FREE_COMPAT(ck);
+            free(cptr);
+            if (NULL != val) {
+                free(val);
+            }
             return PRTE_ERR_BAD_PARAM;
         }
         /* if they asked for rankfile and didn't specify one, but did
@@ -585,6 +609,10 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                     /* also not allowed */
                     pmix_show_help("help-prte-rmaps-base.txt", "rankfile-no-filename", true);
                     PMIX_ARGV_FREE_COMPAT(ck);
+                    free(cptr);
+                    if (NULL != val) {
+                        free(val);
+                    }
                     return PRTE_ERR_BAD_PARAM;
                 }
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_FILE, PRTE_ATTR_GLOBAL,
@@ -608,41 +636,58 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
     } else if (PMIX_CHECK_CLI_OPTION(cptr, PRTE_CLI_PELIST)) {
         if (NULL == jdata) {
             pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-policy", true,
-                           "mapping policy", cptr);
+                           "mapping", cptr);
             PMIX_ARGV_FREE_COMPAT(ck);
-            return PRTE_ERR_SILENT;
-        }
-        ptr = strchr(cptr, '=');
-        if (NULL == ptr) {
-            /* malformed option */
-            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
-                           true, cptr);
-            PMIX_ARGV_FREE_COMPAT(ck);
-            return PRTE_ERR_SILENT;
-        }
-        ptr++; // move past the equal sign
-        if (NULL == ptr) {
-            /* malformed option */
-            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
-                           true, cptr);
-            PMIX_ARGV_FREE_COMPAT(ck);
-            return PRTE_ERR_SILENT;
-        }
-        /* Verify the list is composed of numeric tokens */
-        temp_parm = strdup(ptr);
-        temp_token = strtok(temp_parm, ",");
-        while (NULL != temp_token) {
-            (void)strtol(temp_token, &parm_delimiter, 10);
-            if ('\0' != *parm_delimiter) {
-                pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
-                               "mapping policy", "PE-LIST", ptr);
-                PMIX_ARGV_FREE_COMPAT(ck);
-                free(temp_parm);
-                return PRTE_ERR_SILENT;
+            free(cptr);
+            if (NULL != val) {
+                free(val);
             }
+            return PRTE_ERR_SILENT;
+        }
+        if (NULL == val) {
+            /* malformed option */
+            pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
+                           true, "mapping", ck[0]);
+            PMIX_ARGV_FREE_COMPAT(ck);
+            free(cptr);
+            if (NULL != val) {
+                free(val);
+            }
+            return PRTE_ERR_SILENT;
+        }
+        /* Verify the list is composed of comma-delimited ranges */
+        temp_token = strtok(val, ",");
+        while (NULL != temp_token) {
+            // check for range
+            range = PMIX_ARGV_SPLIT_COMPAT(temp_token, '-');
+            if (2 < PMIX_ARGV_COUNT_COMPAT(range)) {
+                // can only have one '-' delimiter
+                pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                               "mapping", "PE-LIST", ck[0]);
+                PMIX_ARGV_FREE_COMPAT(ck);
+                PMIX_ARGV_FREE_COMPAT(range);
+                free(cptr);
+                if (NULL != val) {
+                    free(val);
+                }
+             }
+             for (n=0; NULL != range[n]; n++) {
+                (void)strtol(range[n], &parm_delimiter, 10);
+                if ('\0' != *parm_delimiter) {
+                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                   "mapping", "PE-LIST", val);
+                    PMIX_ARGV_FREE_COMPAT(ck);
+                    PMIX_ARGV_FREE_COMPAT(range);
+                    free(cptr);
+                    if (NULL != val) {
+                        free(val);
+                    }
+                    return PRTE_ERR_SILENT;
+                }
+            }
+            PMIX_ARGV_FREE_COMPAT(range);
             temp_token = strtok(NULL, ",");
         }
-        free(temp_parm);
         prte_set_attribute(&jdata->attributes, PRTE_JOB_CPUSET, PRTE_ATTR_GLOBAL,
                            ptr, PMIX_STRING);
         PRTE_SET_MAPPING_POLICY(tmp, PRTE_MAPPING_PELIST);
@@ -655,9 +700,17 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
         pmix_show_help("help-prte-rmaps-base.txt", "unrecognized-policy",
                        true, "mapping", cptr);
         PMIX_ARGV_FREE_COMPAT(ck);
+        free(cptr);
+        if (NULL != val) {
+            free(val);
+        }
         return PRTE_ERR_SILENT;
     }
     PMIX_ARGV_FREE_COMPAT(ck);
+    free(cptr);
+    if (NULL != val) {
+        free(val);
+    }
     PRTE_SET_MAPPING_DIRECTIVE(tmp, PRTE_MAPPING_GIVEN);
 
 setpolicy:
