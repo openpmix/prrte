@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2024      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -80,7 +80,7 @@ static void _query(int sd, short args, void *cbdata)
     prte_node_t *node, *ndptr;
     int j, k, rc;
     size_t m, n, p;
-    uint32_t key, nodeid;
+    uint32_t key, nodeid, sessionid = UINT32_MAX;
     char **nspaces, *hostname, *uri;
     char *cmdline;
     char **ans, *tmp;
@@ -189,6 +189,10 @@ static void _query(int sd, short args, void *cbdata)
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_PSET_NAME)) {
                     psetname = q->qualifiers[n].value.data.string;
+
+                } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_SESSION_ID)) {
+                    PMIX_VALUE_GET_NUMBER(rc, &q->qualifiers[n].value, sessionid, uint32_t);
+
                 }
 
             }
@@ -775,6 +779,49 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 #endif
+
+#ifdef PMIX_QUERY_AVAILABLE_SLOTS
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_AVAILABLE_SLOTS)) {
+                /* compute the slots currently available for assignment. Note that
+                 * this is purely a point-in-time measurement as jobs may be working
+                 * there way thru the state machine for mapping, and more jobs may
+                 * be submitted at any moment.
+                 */
+                p = 0;
+                for (k=0; k < prte_node_pool->size; k++) {
+                    node = (prte_node_t*)pmix_pointer_array_get_item(prte_node_pool, k);
+                    if (NULL == node) {
+                        continue;
+                    }
+                    /* ignore nodes that are non-usable */
+                    if (PRTE_FLAG_TEST(node, PRTE_NODE_NON_USABLE)) {
+                        continue;
+                    }
+                    // ignore nodes that are down
+                    if (PRTE_NODE_STATE_DOWN == node->state) {
+                        continue;
+                    }
+                    // ignore nodes that are at/above max
+                    if (0 != node->slots_max && node->slots_inuse >= node->slots_max) {
+                        continue;
+                    }
+                    /* if the hnp was not allocated, then ignore it here */
+                    if (!prte_hnp_is_allocated && 0 == node->index) {
+                            continue;
+                    }
+                    // ignore oversubscribed nodes
+                    if (node->slots <= node->slots_inuse) {
+                        continue;
+                    }
+                    p += node->slots - node->slots_inuse;
+                }
+                PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_AVAILABLE_SLOTS, &p, PMIX_UINT32);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    goto done;
+                }
+#endif
+
             } else {
                 fprintf(stderr, "Query for unrecognized attribute: %s\n", q->keys[n]);
             }
