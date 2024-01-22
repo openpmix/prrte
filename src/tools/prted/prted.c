@@ -810,9 +810,6 @@ DONE:
     /* cleanup and leave */
     prte_finalize();
 
-    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-    PMIX_RELEASE(jdata);
-
     /* cleanup the process info */
     prte_proc_info_finalize();
 
