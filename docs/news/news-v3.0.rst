@@ -4,6 +4,16 @@ PRRTE v3.0 series
 This file contains all the NEWS updates for the PRRTE v3.0
 series, in reverse chronological order.
 
+3.0.4 -- TBD
+------------
+- PR #1910: Fix the map-by pe-list option
+- PR #1908: Multiple commits
+   - Use pmix_path_nfs to detect shared file systems
+   - Remove debug
+   - Remove extra character at end of error messages
+   - psets: fix some problems with PMIX_QUERY_PSET_MEMBERSHIP query.
+
+
 3.0.3 -- 19 Dec 2023
 --------------------
 - PR #1893: Check for stdatomic.h
