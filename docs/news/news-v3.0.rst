@@ -4,8 +4,12 @@ PRRTE v3.0 series
 This file contains all the NEWS updates for the PRRTE v3.0
 series, in reverse chronological order.
 
-3.0.4 -- TBD
-------------
+3.0.4 -- 4 Feb 2024
+-------------------
+- PR #1918: Multiple commits
+   - Support query for number of available slots
+   - Add an option '--allow-run-as-root' into prted
+   - Update the Python regex for doc build
 - PR #1910: Fix the map-by pe-list option
 - PR #1908: Multiple commits
    - Use pmix_path_nfs to detect shared file systems
