@@ -17,7 +17,7 @@
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
- * Copyright (c) 2023      Triad National Security, LLC. All rights
+ * Copyright (c) 2023-2024 Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
  *
@@ -84,7 +84,7 @@
  */
 static int plm_pals_init(void);
 static int plm_pals_launch_job(prte_job_t *jdata);
-static int plm_pals_terminate_orteds(void);
+static int plm_pals_terminate_prteds(void);
 static int plm_pals_signal_job(pmix_nspace_t jobid, int32_t signal);
 static int plm_pals_finalize(void);
 
@@ -98,7 +98,7 @@ prte_plm_base_module_t prte_plm_pals_module = {
     .set_hnp_name = prte_plm_base_set_hnp_name,
     .spawn = plm_pals_launch_job,
     .terminate_job = prte_plm_base_prted_terminate_job,
-    .terminate_orteds = plm_pals_terminate_orteds,
+    .terminate_orteds = plm_pals_terminate_prteds,
     .terminate_procs = prte_plm_base_prted_kill_local_procs,
     .signal_job = plm_pals_signal_job,
     .finalize = plm_pals_finalize
@@ -429,15 +429,15 @@ cleanup:
 }
 
 /**
- * Terminate the orteds for a given job
+ * Terminate the prteds for a given job
  */
-static int plm_pals_terminate_orteds(void)
+static int plm_pals_terminate_prteds(void)
 {
     int rc;
     prte_job_t *jdata;
 
     PMIX_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
-                         "%s plm:pals: terminating orteds", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s plm:pals: terminating prteds", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     /* deregister the waitpid callback to ensure we don't make it look like
      * pals failed when it didn't. Since the pals may have already completed,
@@ -453,11 +453,8 @@ static int plm_pals_terminate_orteds(void)
         PRTE_ERROR_LOG(rc);
     }
 
-    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
-    PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_DAEMONS_TERMINATED);
-
     PMIX_OUTPUT_VERBOSE((10, prte_plm_base_framework.framework_output,
-                         "%s plm:pals: terminated orteds", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                         "%s plm:pals: terminated orteds %d", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),rc));
     return rc;
 }
 
