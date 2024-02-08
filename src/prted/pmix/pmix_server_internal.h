@@ -75,9 +75,12 @@ typedef struct {
     bool flag;
     bool launcher;
     bool scheduler;
+    bool copy;  // info array has been copied and must be released
     uid_t uid;
     gid_t gid;
     pid_t pid;
+    pmix_alloc_directive_t allocdir;
+    uint32_t sessionID;
     pmix_info_t *info;
     size_t ninfo;
     char *data;
@@ -96,6 +99,7 @@ typedef struct {
     pmix_tool_connection_cbfunc_t toolcbfunc;
     pmix_info_cbfunc_t infocbfunc;
     void *cbdata;
+    void *rlcbdata;
 } pmix_server_req_t;
 PMIX_CLASS_DECLARATION(pmix_server_req_t);
 
@@ -122,8 +126,6 @@ typedef struct {
     size_t napps;
     pmix_query_t *queries;
     size_t nqueries;
-    pmix_alloc_directive_t allocdir;
-    uint32_t sessionID;
     pmix_op_cbfunc_t cbfunc;
     pmix_info_cbfunc_t infocbfunc;
     pmix_tool_connection_cbfunc_t toolcbfunc;
@@ -319,9 +321,21 @@ PRTE_EXPORT extern int prte_pmix_server_register_tool(pmix_nspace_t nspace);
 
 PRTE_EXPORT extern int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info);
 
+PRTE_EXPORT extern int prte_pmix_xfer_job_info(prte_job_t *jdata, pmix_info_t *info);
+
+PRTE_EXPORT extern int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *app);
+
 PRTE_EXPORT extern void pmix_server_alloc_request_resp(int status, pmix_proc_t *sender,
                                                 pmix_data_buffer_t *buffer, prte_rml_tag_t tg,
                                                 void *cbdata);
+
+PRTE_EXPORT extern pmix_status_t prte_pmix_set_scheduler(void);
+
+PRTE_EXPORT extern pmix_status_t prte_server_send_request(uint8_t cmd, pmix_server_req_t *req);
+
+#define PRTE_PMIX_ALLOC_REQ      0
+#define PRTE_PMIX_SESSION_CTRL   1
+
 
 #if PMIX_NUMERIC_VERSION >= 0x00050000
 PRTE_EXPORT extern pmix_status_t

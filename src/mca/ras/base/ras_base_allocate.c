@@ -15,7 +15,7 @@
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -999,7 +999,7 @@ proceed:
 
     /* We next check for and add any add-host options. Note this is
      * a -little- different than dash-host in that (a) we add these
-     * nodes to the global pool regardless of what may already be there,
+     * nodes to the global pool (avoiding duplication),
      * and (b) as a result, any job and/or app_context can access them.
      *
      * Note that any relative node syntax found in the add-host lists will

@@ -3,7 +3,7 @@
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
@@ -221,6 +221,11 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT   (PRTE_JOB_START_KEY + 110) // bool - display output in machine parsable format
 #define PRTE_JOB_EXTEND_DVM                 (PRTE_JOB_START_KEY + 111) // bool - DVM is being extended
 #define PRTE_JOB_SESSION_ID                 (PRTE_JOB_START_KEY + 112) // uint32_t - session id of this job
+#define PRTE_JOB_ALLOC_ID                   (PRTE_JOB_START_KEY + 113) // char* - string identifier assigned by the host for the session
+                                                                       //         within which the job is to execute
+#define PRTE_JOB_REF_ID                     (PRTE_JOB_START_KEY + 114) // char* - string identifier assigned by the user to an allocation
+                                                                       //         request - carried along with the session that resulted
+                                                                       //         from the request
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 

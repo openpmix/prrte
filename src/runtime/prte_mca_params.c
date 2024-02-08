@@ -54,7 +54,6 @@ static int prte_progress_thread_debug_level = -1;
 static char *prte_tmpdir_base = NULL;
 static char *prte_local_tmpdir_base = NULL;
 static char *prte_remote_tmpdir_base = NULL;
-static char *prte_top_session_dir = NULL;
 static char *local_setup_slots = NULL;
 
 char *prte_signal_string = NULL;

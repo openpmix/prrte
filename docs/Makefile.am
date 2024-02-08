@@ -2,7 +2,7 @@
 # Copyright (c) 2022-2023 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 #
-# Copyright (c) 2023      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -39,6 +39,8 @@ RST_SOURCE_FILES = \
         $(srcdir)/prrte-rst-content/*.rst \
         $(srcdir)/placement/*.rst \
         $(srcdir)/hosts/*.rst \
+        $(srcdir)/how-things-work/*.rst \
+        $(srcdir)/how-things-work/schedulers/*.rst \
         $(srcdir)/developers/*.rst \
         $(srcdir)/man/*.rst \
         $(srcdir)/man/man1/*.rst \

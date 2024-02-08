@@ -4,7 +4,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -70,6 +70,17 @@ void psched_request_init(int fd, short args, void *cbdata)
             req->user_refid = strdup(req->data[n].value.data.string);
         } else if (PMIX_CHECK_KEY(&req->data[n], PMIX_ALLOC_ID)) {
             req->alloc_refid = strdup(req->data[n].value.data.string);
+        } else if (PMIX_CHECK_KEY(&req->data[n], PMIX_SESSION_ID)) {
+            PMIX_VALUE_GET_NUMBER(rc, &req->data[n].value, req->sessionID, uint32_t);
+            if (PMIX_SUCCESS != rc) {
+                PMIX_ERROR_LOG(rc);
+                // track the first error
+                if (PMIX_SUCCESS == rcerr) {
+                    rcerr = rc;
+                }
+            }
+            // continue processing as we may need some of the info
+            // when reporting back the error
         } else if (PMIX_CHECK_KEY(&req->data[n], PMIX_ALLOC_NUM_NODES)) {
             PMIX_VALUE_GET_NUMBER(rc, &req->data[n].value, req->num_nodes, uint64_t);
             if (PMIX_SUCCESS != rc) {

@@ -31,6 +31,8 @@ Table of contents
    getting-help
    install
    configuration
+   terminology
+   how-things-work/index
    hosts/index
    placement/index
    notifications

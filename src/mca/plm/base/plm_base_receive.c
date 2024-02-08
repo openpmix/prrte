@@ -236,39 +236,71 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             goto ANSWER_LAUNCH;
         }
 
-        /* If an alloc id was given assign the according session - otherwise default to parent session */
+        /* If an alloc id was given specifying the session within which
+         * the job is to be spawned, then use it - otherwise default to parent session */
         session = NULL;
         ui32_ptr = &ui32;
-        if(prte_get_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID, (void **) &ui32_ptr, PMIX_UINT32)){
-            session = prte_get_session_object(ui32); 
+        if (prte_get_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID, (void **) &ui32_ptr, PMIX_UINT32)) {
+            session = prte_get_session_object(ui32);
+            if (NULL == session) {
+                /* if the caller specified a session and we don't know about it, then
+                 * that is an unrecoverable error */
+                rc = PRTE_ERR_NOT_FOUND;
+                goto ANSWER_LAUNCH;
+            }
 
-            /* Jobs are only allowed to be spawned in the the session of the requestor 
-             * or one of its child sessions. */
-            if(NULL == session || !prte_sessions_related(prte_get_job_data_object(nptr->nspace)->session, session)){
+        } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_ALLOC_ID, (void **) &tmp, PMIX_STRING)) {
+            session = prte_get_session_object_from_id(tmp);
+            if (NULL == session) {
+                /* if the caller specified a session and we don't know about it, then
+                 * that is an unrecoverable error */
+                rc = PRTE_ERR_NOT_FOUND;
+                goto ANSWER_LAUNCH;
+            }
+
+        } else if (prte_get_attribute(&jdata->attributes, PRTE_JOB_REF_ID, (void **) &tmp, PMIX_STRING)) {
+            session = prte_get_session_object_from_refid(tmp);
+            if (NULL == session) {
+                /* if the caller specified a session and we don't know about it, then
+                 * that is an unrecoverable error */
+                rc = PRTE_ERR_NOT_FOUND;
+                goto ANSWER_LAUNCH;
+            }
+
+        } else {
+            /* try defaulting to parent session */
+            if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
+                session = parent->session;
+
+            // (RHC) This next clause merits some thought - not sure I fully
+            // understand the conditionals
+            } else if (!prte_pmix_server_globals.scheduler_connected ||
+                       PMIX_CHECK_PROCID(nptr, &prte_pmix_server_globals.scheduler)) {
+                /* The proc requesting the spawn is a tool, hence does not have a session.
+                 * If we don't have a scheduler connected (or the tool itself is the scheduler) we allow
+                 * it to spawn into the default session, i.e. the global node pool
+                 */
+                session = prte_default_session;
+            } else {
                 PRTE_ERROR_LOG(PRTE_ERR_PERM);
                 rc = PRTE_ERR_PERM;
                 goto ANSWER_LAUNCH;
             }
-        }else{  
-            /* try defaulting to parent session */
-            if(NULL != (parent = prte_get_job_data_object(nptr->nspace))){
-                session = parent->session;
-            /* The proc requesting the spawn is a tool, hence does not have a session.
-             * If we don't have a scheduler connected (or the tool itself is the scheduler) we allow
-             * it to spawn into the default session, i.e. the global node pool
-             */
-            }else if(!prte_pmix_server_globals.scheduler_connected || 
-                    PMIX_CHECK_PROCID(nptr, &prte_pmix_server_globals.scheduler)){
-                    session = prte_default_session;
-            }else{
-                PRTE_ERROR_LOG(PRTE_ERR_PERM);
-                rc = PRTE_ERR_PERM;
-                goto ANSWER_LAUNCH;  
-            }
-            prte_set_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID,
-                               PRTE_ATTR_GLOBAL, &session->session_id, PMIX_UINT32);
         }
-        
+
+#if 0
+        // (RHC) I'm not sure the following is true - merits some thought
+
+        /* Jobs are only allowed to be spawned in the the session of the requestor
+         * or one of its child sessions. */
+        if (NULL == session ||
+            !prte_sessions_related(prte_get_job_data_object(nptr->nspace)->session, session)) {
+            PRTE_ERROR_LOG(PRTE_ERR_PERM);
+            rc = PRTE_ERR_PERM;
+            goto ANSWER_LAUNCH;
+        }
+#endif
+
         jdata->session = session;
         pmix_pointer_array_add(jdata->session->jobs, jdata);
 

@@ -209,11 +209,15 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_topology_t);
 /* Object for tracking allocations */
 typedef struct{
     pmix_object_t super;
+    int index;
     uint32_t session_id;
+    char *user_refid;  // PMIX_ALLOC_REQ_ID
+    char *alloc_refid; // PMIX_ALLOC_ID
+    struct timeval timeout;  // time limit on session
     pmix_pointer_array_t *nodes;
     pmix_pointer_array_t *jobs;
     pmix_pointer_array_t *children;
-}prte_session_t;
+} prte_session_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_session_t);
 
 /**
@@ -448,6 +452,8 @@ PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_proc_t);
 
 /** Get session object */
 PRTE_EXPORT prte_session_t *prte_get_session_object(const uint32_t session_id);
+PRTE_EXPORT prte_session_t *prte_get_session_object_from_id(const char *id);
+PRTE_EXPORT prte_session_t *prte_get_session_object_from_refid(const char *refid);
 
 PRTE_EXPORT int prte_set_session_object(prte_session_t *session);
 
