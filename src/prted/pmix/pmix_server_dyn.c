@@ -194,191 +194,24 @@ callback:
     PMIX_RELEASE(req);
 }
 
-static void interim(int sd, short args, void *cbdata)
+int prte_pmix_xfer_job_info(prte_job_t *jdata, pmix_info_t *inarray)
 {
-    prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
-    pmix_proc_t *requestor = &cd->proc;
-    pmix_envar_t envar;
-    prte_job_t *jdata, *djob;
-    prte_app_context_t *app;
-    pmix_app_t *papp;
-    pmix_info_t *info;
-    int rc, i;
-    char cwd[PRTE_PATH_MAX];
-    char *endptr;
+    pmix_info_t *iptr, *info;
+    size_t ninfo, n;
+    int i, rc;
     bool flag;
-    size_t m, n;
-    uint16_t u16;
     uint32_t u32;
-    pmix_rank_t rank;
-    prte_rmaps_options_t options;
-    prte_schizo_base_module_t *schizo;
-    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+    uint16_t u16;
+    prte_job_t *djob;
+    prte_app_context_t *app;
+    pmix_envar_t envar;
 
-    pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s spawn called from proc %s with %d apps",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(requestor),
-                        (int) cd->napps);
+    iptr = (pmix_info_t*)inarray->value.data.darray->array;
+    ninfo = inarray->value.data.darray->size;
 
-    /* create the job object */
-    jdata = PMIX_NEW(prte_job_t);
-    jdata->map = PMIX_NEW(prte_job_map_t);
-    /* default to the requestor as the originator */
-    PMIX_LOAD_PROCID(&jdata->originator, requestor->nspace, requestor->rank);
-    /* find the personality being passed - we need this info to direct
-     * option parsing */
-    for (n=0; n < cd->ninfo; n++) {
-        if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PERSONALITY)) {
-            jdata->personality = PMIX_ARGV_SPLIT_COMPAT(cd->info[n].value.data.string, ',');
-            jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(cd->info[n].value.data.string);
-            pmix_server_cache_job_info(jdata, &cd->info[n]);
-            break;
-        }
-    }
-    if (NULL == jdata->personality) {
-        /* use the default */
-        jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(NULL);
-    }
+    for (n = 0; n < ninfo; n++) {
+        info = &iptr[n];
 
-    /* transfer the apps across */
-    for (n = 0; n < cd->napps; n++) {
-        papp = &cd->apps[n];
-        app = PMIX_NEW(prte_app_context_t);
-        app->job = (struct prte_job_t*)jdata;
-        app->idx = pmix_pointer_array_add(jdata->apps, app);
-        jdata->num_apps++;
-        if (NULL != papp->cmd) {
-            app->app = strdup(papp->cmd);
-        } else if (NULL == papp->argv || NULL == papp->argv[0]) {
-            PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
-            PMIX_RELEASE(jdata);
-            rc = PRTE_ERR_BAD_PARAM;
-            goto complete;
-        } else {
-            app->app = strdup(papp->argv[0]);
-        }
-        if (NULL != papp->argv) {
-            app->argv = PMIX_ARGV_COPY_COMPAT(papp->argv);
-        }
-        if (NULL != papp->env) {
-            app->env = PMIX_ARGV_COPY_COMPAT(papp->env);
-        }
-        if (NULL != papp->cwd) {
-            app->cwd = strdup(papp->cwd);
-        }
-        app->num_procs = papp->maxprocs;
-
-        if (NULL != papp->info) {
-            for (m = 0; m < papp->ninfo; m++) {
-                info = &papp->info[m];
-                if (PMIX_CHECK_KEY(info, PMIX_HOST)) {
-                    prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL,
-                                       info->value.data.string, PMIX_STRING);
-                } else if (PMIX_CHECK_KEY(info, PMIX_HOSTFILE)) {
-                    prte_set_attribute(&app->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL,
-                                       info->value.data.string, PMIX_STRING);
-                } else if (PMIX_CHECK_KEY(info, PMIX_ADD_HOSTFILE)) {
-                    prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, PRTE_ATTR_GLOBAL,
-                                       info->value.data.string, PMIX_STRING);
-                } else if (PMIX_CHECK_KEY(info, PMIX_ADD_HOST)) {
-                    prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOST, PRTE_ATTR_GLOBAL,
-                                       info->value.data.string, PMIX_STRING);
-                } else if (PMIX_CHECK_KEY(info, PMIX_PREFIX)) {
-                    prte_set_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
-                                       info->value.data.string, PMIX_STRING);
-                } else if (PMIX_CHECK_KEY(info, PMIX_WDIR)) {
-                    /* if this is a relative path, convert it to an absolute path */
-                    if (pmix_path_is_absolute(info->value.data.string)) {
-                        app->cwd = strdup(info->value.data.string);
-                    } else {
-                        /* get the cwd */
-                        if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
-                            pmix_show_help("help-prted.txt", "cwd", true, "spawn", rc);
-                            PMIX_RELEASE(jdata);
-                            goto complete;
-                        }
-                        /* construct the absolute path */
-                        app->cwd = pmix_os_path(false, cwd, info->value.data.string, NULL);
-                    }
-                } else if (PMIX_CHECK_KEY(info, PMIX_WDIR_USER_SPECIFIED)) {
-                    flag = PMIX_INFO_TRUE(info);
-                    prte_set_attribute(&app->attributes, PRTE_APP_USER_CWD, PRTE_ATTR_GLOBAL,
-                                       &flag, PMIX_BOOL);
-                } else if (PMIX_CHECK_KEY(info, PMIX_SET_SESSION_CWD)) {
-                    flag = PMIX_INFO_TRUE(info);
-                    prte_set_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, PRTE_ATTR_GLOBAL,
-                                       &flag, PMIX_BOOL);
-                } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_FILES)) {
-                    prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, PRTE_ATTR_GLOBAL,
-                                       info->value.data.string, PMIX_STRING);
-
-                } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_BIN)) {
-                    prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, PRTE_ATTR_GLOBAL,
-                                       NULL, PMIX_BOOL);
-                    /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
-                    /* there can be multiple of these, so we add them to the attribute list */
-                } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
-                    envar.envar = info->value.data.envar.envar;
-                    envar.value = info->value.data.envar.value;
-                    envar.separator = info->value.data.envar.separator;
-                    prte_prepend_attribute(&app->attributes, PRTE_APP_SET_ENVAR,
-                                           PRTE_ATTR_GLOBAL,
-                                           &envar, PMIX_ENVAR);
-                } else if (PMIX_CHECK_KEY(info, PMIX_ADD_ENVAR)) {
-                    envar.envar = info->value.data.envar.envar;
-                    envar.value = info->value.data.envar.value;
-                    envar.separator = info->value.data.envar.separator;
-                    prte_prepend_attribute(&app->attributes, PRTE_APP_ADD_ENVAR,
-                                           PRTE_ATTR_GLOBAL,
-                                           &envar, PMIX_ENVAR);
-                } else if (PMIX_CHECK_KEY(info, PMIX_UNSET_ENVAR)) {
-                    prte_prepend_attribute(&app->attributes, PRTE_APP_UNSET_ENVAR,
-                                           PRTE_ATTR_GLOBAL,
-                                           info->value.data.string, PMIX_STRING);
-                } else if (PMIX_CHECK_KEY(info, PMIX_PREPEND_ENVAR)) {
-                    envar.envar = info->value.data.envar.envar;
-                    envar.value = info->value.data.envar.value;
-                    envar.separator = info->value.data.envar.separator;
-                    prte_prepend_attribute(&app->attributes, PRTE_APP_PREPEND_ENVAR,
-                                           PRTE_ATTR_GLOBAL,
-                                           &envar, PMIX_ENVAR);
-                } else if (PMIX_CHECK_KEY(info, PMIX_APPEND_ENVAR)) {
-                    envar.envar = info->value.data.envar.envar;
-                    envar.value = info->value.data.envar.value;
-                    envar.separator = info->value.data.envar.separator;
-                    prte_prepend_attribute(&app->attributes, PRTE_APP_APPEND_ENVAR,
-                                           PRTE_ATTR_GLOBAL,
-                                           &envar, PMIX_ENVAR);
-
-                } else if (PMIX_CHECK_KEY(info, PMIX_PSET_NAME)) {
-                    prte_set_attribute(&app->attributes, PRTE_APP_PSET_NAME, PRTE_ATTR_GLOBAL,
-                                       info->value.data.string, PMIX_STRING);
-                } else {
-                    /* unrecognized key */
-                    if (9 < pmix_output_get_verbosity(prte_pmix_server_globals.output)) {
-                        pmix_show_help("help-prted.txt", "bad-key", true, "spawn", "application",
-                                       info->key);
-                    }
-                }
-            }
-        }
-    }
-    /* initiate the default runtime options - had to delay this until
-     * after we parsed the apps as some runtime options are for
-     * the apps themselves */
-    memset(&options, 0, sizeof(prte_rmaps_options_t));
-    options.stream = prte_rmaps_base_framework.framework_output;
-    options.verbosity = 5;  // usual value for base-level functions
-    schizo = (prte_schizo_base_module_t*)jdata->schizo;
-    rc = schizo->set_default_rto(jdata, &options);
-    if (PRTE_SUCCESS != rc) {
-        PRTE_ERROR_LOG(rc);
-        goto complete;
-    }
-
-    /* transfer the job info across */
-    for (m = 0; m < cd->ninfo; m++) {
-        info = &cd->info[m];
             /***   REQUESTED MAPPER   ***/
         if (PMIX_CHECK_KEY(info, PMIX_MAPPER)) {
             jdata->map->req_mapper = strdup(info->value.data.string);
@@ -389,12 +222,21 @@ static void interim(int sd, short args, void *cbdata)
             prte_set_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_ALLOC,
                                PRTE_ATTR_GLOBAL, &flag, PMIX_BOOL);
 
-            /***   ALLOC ID   ***/
-        } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_ID)) {
-            
-            u32 = strtoul(info->value.data.string, &endptr, 10);
+            /***   ALLOC/SESSION IDs  ***/
+        } else if (PMIX_CHECK_KEY(info, PMIX_SESSION_ID)) {
+            PMIX_VALUE_GET_NUMBER(rc, &info->value, u32, uint32_t);
+            if (PMIX_SUCCESS != rc) {
+                return PRTE_ERR_BAD_PARAM;
+            }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID,
                                PRTE_ATTR_GLOBAL, &u32, PMIX_UINT32);
+        } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_ID)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_ALLOC_ID,
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+        } else if (PMIX_CHECK_KEY(info, PMIX_ALLOC_REQ_ID)) {
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_REF_ID,
+                               PRTE_ATTR_GLOBAL, info->value.data.string, PMIX_STRING);
+
             /***   DISPLAY MAP   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_DISPLAY_MAP)) {
             flag = PMIX_INFO_TRUE(info);
@@ -440,8 +282,7 @@ static void interim(int sd, short args, void *cbdata)
                 pmix_show_help("help-prte-rmaps-base.txt", "redefining-policy", true, "mapping",
                                info->value.data.string,
                                prte_rmaps_base_print_mapping(prte_rmaps_base.mapping));
-                rc = PRTE_ERR_BAD_PARAM;
-                goto complete;
+                return PRTE_ERR_BAD_PARAM;
             }
             PRTE_SET_MAPPING_DIRECTIVE(jdata->map->mapping, PRTE_MAPPING_PPR);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_PPR, PRTE_ATTR_GLOBAL,
@@ -451,7 +292,7 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_MAPBY)) {
             rc = prte_rmaps_base_set_mapping_policy(jdata, info->value.data.string);
             if (PRTE_SUCCESS != rc) {
-                goto complete;
+                return rc;
             }
 
             /*** colocation directives ***/
@@ -474,21 +315,21 @@ static void interim(int sd, short args, void *cbdata)
         } else if (PMIX_CHECK_KEY(info, PMIX_RANKBY)) {
             rc = prte_rmaps_base_set_ranking_policy(jdata, info->value.data.string);
             if (PRTE_SUCCESS != rc) {
-                goto complete;
+                return rc;
             }
 
             /***   BIND-TO   ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_BINDTO)) {
             rc = prte_hwloc_base_set_binding_policy(jdata, info->value.data.string);
             if (PRTE_SUCCESS != rc) {
-                goto complete;
+                return rc;
             }
 
             /***   RUNTIME OPTIONS  - SHOULD ONLY APPEAR IF NOT PRE-PROCESSED BY SCHIZO ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_RUNTIME_OPTIONS)) {
             rc = prte_state_base_set_runtime_options(jdata, info->value.data.string);
             if (PRTE_SUCCESS != rc) {
-                goto complete;
+                return rc;
             }
 
             /*** ABORT_NON_ZERO  ***/
@@ -765,8 +606,7 @@ static void interim(int sd, short args, void *cbdata)
             } else {
                 PMIX_VALUE_GET_NUMBER(i, &info->value, rc, int);
                 if (PMIX_SUCCESS != i) {
-                    rc = i;
-                    goto complete;
+                    return PRTE_ERR_BAD_PARAM;
                 }
             }
             prte_set_attribute(&jdata->attributes, PRTE_SPAWN_TIMEOUT,
@@ -782,8 +622,7 @@ static void interim(int sd, short args, void *cbdata)
             } else {
                 PMIX_VALUE_GET_NUMBER(i, &info->value, rc, int);
                 if (PMIX_SUCCESS != i) {
-                    rc = i;
-                    goto complete;
+                    return PRTE_ERR_BAD_PARAM;
                 }
             }
             prte_set_attribute(&jdata->attributes, PRTE_JOB_TIMEOUT,
@@ -813,6 +652,210 @@ static void interim(int sd, short args, void *cbdata)
         } else {
             pmix_server_cache_job_info(jdata, info);
         }
+    }
+    return PRTE_SUCCESS;
+}
+
+int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
+{
+    prte_app_context_t *app;
+    pmix_info_t *info;
+    size_t m;
+    int rc;
+    bool flag;
+    pmix_envar_t envar;
+    char cwd[PRTE_PATH_MAX];
+
+    app = PMIX_NEW(prte_app_context_t);
+    app->job = (struct prte_job_t*)jdata;
+    app->idx = pmix_pointer_array_add(jdata->apps, app);
+    jdata->num_apps++;
+    if (NULL != papp->cmd) {
+        app->app = strdup(papp->cmd);
+    } else if (NULL == papp->argv || NULL == papp->argv[0]) {
+        PRTE_ERROR_LOG(PRTE_ERR_BAD_PARAM);
+        PMIX_RELEASE(jdata);
+        return PRTE_ERR_BAD_PARAM;
+    } else {
+        app->app = strdup(papp->argv[0]);
+    }
+    if (NULL != papp->argv) {
+        app->argv = PMIX_ARGV_COPY_COMPAT(papp->argv);
+    }
+    if (NULL != papp->env) {
+        app->env = PMIX_ARGV_COPY_COMPAT(papp->env);
+    }
+    if (NULL != papp->cwd) {
+        app->cwd = strdup(papp->cwd);
+    }
+    app->num_procs = papp->maxprocs;
+
+    if (NULL != papp->info) {
+        for (m = 0; m < papp->ninfo; m++) {
+            info = &papp->info[m];
+            if (PMIX_CHECK_KEY(info, PMIX_HOST)) {
+                prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL,
+                                   info->value.data.string, PMIX_STRING);
+            } else if (PMIX_CHECK_KEY(info, PMIX_HOSTFILE)) {
+                prte_set_attribute(&app->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL,
+                                   info->value.data.string, PMIX_STRING);
+            } else if (PMIX_CHECK_KEY(info, PMIX_ADD_HOSTFILE)) {
+                prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, PRTE_ATTR_GLOBAL,
+                                   info->value.data.string, PMIX_STRING);
+            } else if (PMIX_CHECK_KEY(info, PMIX_ADD_HOST)) {
+                prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOST, PRTE_ATTR_GLOBAL,
+                                   info->value.data.string, PMIX_STRING);
+            } else if (PMIX_CHECK_KEY(info, PMIX_PREFIX)) {
+                prte_set_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
+                                   info->value.data.string, PMIX_STRING);
+            } else if (PMIX_CHECK_KEY(info, PMIX_WDIR)) {
+                /* if this is a relative path, convert it to an absolute path */
+                if (pmix_path_is_absolute(info->value.data.string)) {
+                    app->cwd = strdup(info->value.data.string);
+                } else {
+                    /* get the cwd */
+                    if (PRTE_SUCCESS != (rc = pmix_getcwd(cwd, sizeof(cwd)))) {
+                        pmix_show_help("help-prted.txt", "cwd", true, "spawn", rc);
+                        PMIX_RELEASE(jdata);
+                        return rc;
+                    }
+                    /* construct the absolute path */
+                    app->cwd = pmix_os_path(false, cwd, info->value.data.string, NULL);
+                }
+            } else if (PMIX_CHECK_KEY(info, PMIX_WDIR_USER_SPECIFIED)) {
+                flag = PMIX_INFO_TRUE(info);
+                prte_set_attribute(&app->attributes, PRTE_APP_USER_CWD, PRTE_ATTR_GLOBAL,
+                                   &flag, PMIX_BOOL);
+            } else if (PMIX_CHECK_KEY(info, PMIX_SET_SESSION_CWD)) {
+                flag = PMIX_INFO_TRUE(info);
+                prte_set_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, PRTE_ATTR_GLOBAL,
+                                   &flag, PMIX_BOOL);
+            } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_FILES)) {
+                prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, PRTE_ATTR_GLOBAL,
+                                   info->value.data.string, PMIX_STRING);
+
+            } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_BIN)) {
+                prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, PRTE_ATTR_GLOBAL,
+                                   NULL, PMIX_BOOL);
+                /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
+                /* there can be multiple of these, so we add them to the attribute list */
+            } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
+                envar.envar = info->value.data.envar.envar;
+                envar.value = info->value.data.envar.value;
+                envar.separator = info->value.data.envar.separator;
+                prte_prepend_attribute(&app->attributes, PRTE_APP_SET_ENVAR,
+                                       PRTE_ATTR_GLOBAL,
+                                       &envar, PMIX_ENVAR);
+            } else if (PMIX_CHECK_KEY(info, PMIX_ADD_ENVAR)) {
+                envar.envar = info->value.data.envar.envar;
+                envar.value = info->value.data.envar.value;
+                envar.separator = info->value.data.envar.separator;
+                prte_prepend_attribute(&app->attributes, PRTE_APP_ADD_ENVAR,
+                                       PRTE_ATTR_GLOBAL,
+                                       &envar, PMIX_ENVAR);
+            } else if (PMIX_CHECK_KEY(info, PMIX_UNSET_ENVAR)) {
+                prte_prepend_attribute(&app->attributes, PRTE_APP_UNSET_ENVAR,
+                                       PRTE_ATTR_GLOBAL,
+                                       info->value.data.string, PMIX_STRING);
+            } else if (PMIX_CHECK_KEY(info, PMIX_PREPEND_ENVAR)) {
+                envar.envar = info->value.data.envar.envar;
+                envar.value = info->value.data.envar.value;
+                envar.separator = info->value.data.envar.separator;
+                prte_prepend_attribute(&app->attributes, PRTE_APP_PREPEND_ENVAR,
+                                       PRTE_ATTR_GLOBAL,
+                                       &envar, PMIX_ENVAR);
+            } else if (PMIX_CHECK_KEY(info, PMIX_APPEND_ENVAR)) {
+                envar.envar = info->value.data.envar.envar;
+                envar.value = info->value.data.envar.value;
+                envar.separator = info->value.data.envar.separator;
+                prte_prepend_attribute(&app->attributes, PRTE_APP_APPEND_ENVAR,
+                                       PRTE_ATTR_GLOBAL,
+                                       &envar, PMIX_ENVAR);
+
+            } else if (PMIX_CHECK_KEY(info, PMIX_PSET_NAME)) {
+                prte_set_attribute(&app->attributes, PRTE_APP_PSET_NAME, PRTE_ATTR_GLOBAL,
+                                   info->value.data.string, PMIX_STRING);
+            } else {
+                /* unrecognized key */
+                if (9 < pmix_output_get_verbosity(prte_pmix_server_globals.output)) {
+                    pmix_show_help("help-prted.txt", "bad-key", true, "spawn", "application",
+                                   info->key);
+                }
+            }
+        }
+    }
+    return PRTE_SUCCESS;
+}
+
+static void interim(int sd, short args, void *cbdata)
+{
+    prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
+    pmix_proc_t *requestor = &cd->proc;
+    prte_job_t *jdata, *djob;
+    prte_app_context_t *app;
+    pmix_app_t *papp;
+    pmix_info_t *info;
+    int rc, i;
+    char *endptr;
+    bool flag;
+    size_t m, n;
+    uint16_t u16;
+    uint32_t u32;
+    pmix_rank_t rank;
+    prte_rmaps_options_t options;
+    prte_schizo_base_module_t *schizo;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s spawn called from proc %s with %d apps",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(requestor),
+                        (int) cd->napps);
+
+    /* create the job object */
+    jdata = PMIX_NEW(prte_job_t);
+    jdata->map = PMIX_NEW(prte_job_map_t);
+    /* default to the requestor as the originator */
+    PMIX_LOAD_PROCID(&jdata->originator, requestor->nspace, requestor->rank);
+    /* find the personality being passed - we need this info to direct
+     * option parsing */
+    for (n=0; n < cd->ninfo; n++) {
+        if (PMIX_CHECK_KEY(&cd->info[n], PMIX_PERSONALITY)) {
+            jdata->personality = PMIX_ARGV_SPLIT_COMPAT(cd->info[n].value.data.string, ',');
+            jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(cd->info[n].value.data.string);
+            pmix_server_cache_job_info(jdata, &cd->info[n]);
+            break;
+        }
+    }
+    if (NULL == jdata->personality) {
+        /* use the default */
+        jdata->schizo = (struct prte_schizo_base_module_t*)prte_schizo_base_detect_proxy(NULL);
+    }
+
+    /* transfer the apps across */
+    for (n = 0; n < cd->napps; n++) {
+        rc = prte_pmix_xfer_app(jdata, &cd->apps[n]);
+        if (PRTE_SUCCESS != rc) {
+            goto complete;
+        }
+    }
+
+    /* initiate the default runtime options - had to delay this until
+     * after we parsed the apps as some runtime options are for
+     * the apps themselves */
+    memset(&options, 0, sizeof(prte_rmaps_options_t));
+    options.stream = prte_rmaps_base_framework.framework_output;
+    options.verbosity = 5;  // usual value for base-level functions
+    schizo = (prte_schizo_base_module_t*)jdata->schizo;
+    rc = schizo->set_default_rto(jdata, &options);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+        goto complete;
+    }
+
+    /* transfer the job info across */
+    rc = prte_pmix_xfer_job_info(jdata, cd->info);
+    if (PRTE_SUCCESS != rc) {
+        goto complete;
     }
 
     /* set debugger flags on apps if needed */
