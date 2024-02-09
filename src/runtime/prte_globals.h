@@ -524,7 +524,7 @@ PRTE_EXPORT extern int prte_hostname_cutoff;
 PRTE_EXPORT extern bool prte_do_not_resolve;
 
 /* debug flags */
-PRTE_EXPORT extern int prted_debug_failure;
+PRTE_EXPORT extern pmix_rank_t prted_debug_failure;
 PRTE_EXPORT extern int prted_debug_failure_delay;
 
 PRTE_EXPORT extern bool prte_never_launched;
