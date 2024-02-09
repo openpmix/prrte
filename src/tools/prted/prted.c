@@ -19,7 +19,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -125,7 +125,6 @@ static void report_prted(void);
 static pmix_data_buffer_t *bucket, *mybucket = NULL;
 static int ncollected = 0;
 static bool node_regex_waiting = false;
-static bool prted_abort = false;
 static char *prte_parent_uri = NULL;
 static pmix_cli_result_t results;
 
@@ -200,6 +199,7 @@ int main(int argc, char *argv[])
     int pargc;
     prte_schizo_base_module_t *schizo;
     pmix_cli_item_t *opt;
+    prte_job_t *jdata;
 
     char *umask_str = getenv("PRTE_DAEMON_UMASK_VALUE");
     if (NULL != umask_str) {
@@ -322,6 +322,9 @@ int main(int argc, char *argv[])
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG_DAEMONS)) {
         prte_debug_daemons_flag = true;
     }
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG_DAEMONS_FILE)) {
+        prte_debug_daemons_file_flag = true;
+    }
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_LEAVE_SESSION_ATTACHED)) {
         prte_leave_session_attached = true;
     }
@@ -414,18 +417,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    if ((int) PMIX_RANK_INVALID != prted_debug_failure) {
-        prted_abort = false;
-        /* some vpid was ordered to fail. The value can be positive
-         * or negative, depending upon the desired method for failure,
-         * so need to check both here
-         */
-        if (0 > prted_debug_failure) {
-            prted_debug_failure = -1 * prted_debug_failure;
-            prted_abort = true;
-        }
+    if (PMIX_RANK_INVALID != prted_debug_failure) {
         /* are we the specified vpid? */
-        if ((int) PRTE_PROC_MY_NAME->rank == prted_debug_failure) {
+        if (PRTE_PROC_MY_NAME->rank == prted_debug_failure ||
+            prted_debug_failure == PMIX_RANK_WILDCARD) {
             /* if the user specified we delay, then setup a timer
              * and have it kill us
              */
@@ -433,21 +428,17 @@ int main(int argc, char *argv[])
                 PRTE_TIMER_EVENT(prted_debug_failure_delay, 0, shutdown_callback);
 
             } else {
-                pmix_output(0, "%s is executing clean %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                            prted_abort ? "abort" : "abnormal termination");
+                pmix_output(0, "%s is executing clean abnormal termination",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
                 /* do -not- call finalize as this will send a message to the HNP
                  * indicating clean termination! Instead, just forcibly cleanup
                  * the local session_dir tree and exit
                  */
-                prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+                jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                PMIX_RELEASE(jdata);
 
-                /* if we were ordered to abort, do so */
-                if (prted_abort) {
-                    abort();
-                }
-
-                /* otherwise, return with non-zero status */
+                /* return with non-zero status */
                 ret = PRTE_ERROR_DEFAULT_EXIT_CODE;
                 goto DONE;
             }
@@ -808,7 +799,6 @@ DONE:
     /* cleanup and leave */
     prte_finalize();
 
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
     /* cleanup the process info */
     prte_proc_info_finalize();
 
@@ -821,7 +811,7 @@ DONE:
 static void shutdown_callback(int fd, short flags, void *arg)
 {
     prte_timer_t *tm = (prte_timer_t *) arg;
-    bool suicide = false;
+    prte_job_t *jdata;
     PRTE_HIDE_UNUSED_PARAMS(fd, flags);
 
     if (NULL != tm) {
@@ -830,23 +820,6 @@ static void shutdown_callback(int fd, short flags, void *arg)
     }
 
     /* if we were ordered to abort, do so */
-    if (prted_abort) {
-        if (pmix_cmd_line_is_taken(&results, PRTE_CLI_TEST_SUICIDE)) {
-            suicide = true;
-        }
-        pmix_output(0, "%s is executing %s abort", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
-                    suicide ? "suicide" : "clean");
-        /* do -not- call finalize as this will send a message to the HNP
-         * indicating clean termination! Instead, just kill our
-         * local procs, forcibly cleanup the local session_dir tree, and abort
-         */
-        if (suicide) {
-            exit(1);
-        }
-        prte_odls.kill_local_procs(NULL);
-        prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
-        abort();
-    }
     pmix_output(0, "%s is executing clean abnormal termination",
                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
     /* do -not- call finalize as this will send a message to the HNP
@@ -854,7 +827,10 @@ static void shutdown_callback(int fd, short flags, void *arg)
      * the local session_dir tree and exit
      */
     prte_odls.kill_local_procs(NULL);
-    prte_session_dir_cleanup(PRTE_JOBID_WILDCARD);
+    // mark that we are finalizing so the session directory will cleanup
+    prte_finalizing = true;
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    PMIX_RELEASE(jdata);
     exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 

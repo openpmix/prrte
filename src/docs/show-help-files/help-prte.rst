@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -78,9 +78,6 @@ option to the help request as ``--help <option>``.
 
    * - ``--leave-session-attached``
      - Do not discard stdout/stderr of remote PRRTE daemons
-
-   * - ``--test-suicide <arg0>``
-     - Direct that the specified daemon suicide after delay
 
    * - ``--display <arg0>``
      - Comma-delimited list of options for displaying information
