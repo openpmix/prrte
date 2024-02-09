@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -106,9 +106,6 @@ option to the help request as ``--help <option>``.
    * - ``--stop-in-app``
      - Direct the specified processes to stop at an
        application-controlled location
-
-   * - ``--test-suicide <arg0>``
-     - Direct that the specified daemon suicide after delay
 
    * - ``--do-not-launch``
      - Perform all necessary operations to prepare to launch the

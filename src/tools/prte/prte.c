@@ -99,6 +99,7 @@
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 #include "src/runtime/prte_globals.h"
+#include "src/runtime/prte_wait.h"
 #include "src/runtime/runtime.h"
 
 #include "include/prte.h"
@@ -226,6 +227,32 @@ static void setup_sighandler(int signal, prte_event_t *ev, prte_event_cbfunc_t c
 {
     prte_event_signal_set(prte_event_base, ev, signal, cbfunc, ev);
     prte_event_signal_add(ev, NULL);
+}
+
+static void shutdown_callback(int fd, short flags, void *arg)
+{
+    prte_timer_t *tm = (prte_timer_t *) arg;
+    prte_job_t *jdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, flags);
+
+    if (NULL != tm) {
+        /* release the timer */
+        PMIX_RELEASE(tm);
+    }
+
+    /* if we were ordered to abort, do so */
+    pmix_output(0, "%s is executing clean abnormal termination",
+                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+    /* do -not- call finalize as this will send a message to the HNP
+     * indicating clean termination! Instead, just forcibly cleanup
+     * the local session_dir tree and exit
+     */
+    prte_odls.kill_local_procs(NULL);
+    // mark that we are finalizing so the session directory will cleanup
+    prte_finalizing = true;
+    jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    PMIX_RELEASE(jdata);
+    exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 
 int main(int argc, char *argv[])
@@ -848,6 +875,35 @@ int main(int argc, char *argv[])
     if (!prte_dvm_ready) {
         PRTE_UPDATE_EXIT_STATUS(PRTE_ERR_FATAL);
         goto DONE;
+    }
+
+    // see if we are to suicide
+    if (PMIX_RANK_INVALID != prted_debug_failure) {
+        /* are we the specified vpid? */
+        if (PRTE_PROC_MY_NAME->rank == prted_debug_failure ||
+            prted_debug_failure == PMIX_RANK_WILDCARD) {
+            /* if the user specified we delay, then setup a timer
+             * and have it kill us
+             */
+            if (0 < prted_debug_failure_delay) {
+                PRTE_TIMER_EVENT(prted_debug_failure_delay, 0, shutdown_callback);
+
+            } else {
+                pmix_output(0, "%s is executing clean abnormal termination",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
+
+                /* do -not- call finalize as this will send a message to the HNP
+                 * indicating clean termination! Instead, just forcibly cleanup
+                 * the local session_dir tree and exit
+                 */
+                jdata = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+                PMIX_RELEASE(jdata);
+
+                /* return with non-zero status */
+                ret = PRTE_ERROR_DEFAULT_EXIT_CODE;
+                goto DONE;
+            }
+        }
     }
 
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_REPORT_PID);

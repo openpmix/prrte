@@ -89,7 +89,7 @@ bool prte_show_resolved_nodenames = false;
 bool prte_do_not_resolve = false;
 int prte_hostname_cutoff = 1000;
 
-int prted_debug_failure = -1;
+pmix_rank_t prted_debug_failure = PMIX_RANK_INVALID;
 int prted_debug_failure_delay = -1;
 bool prte_never_launched = false;
 bool prte_devel_level_output = false;

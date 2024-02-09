@@ -327,7 +327,7 @@ void prte_job_session_dir_finalize(prte_job_t *jdata)
     if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, jdata->nspace)) {
         if (prte_finalizing) {
             if (NULL != prte_process_info.top_session_dir) {
-                pmix_os_dirpath_destroy(prte_process_info.top_session_dir, false, _check_file);
+                pmix_os_dirpath_destroy(prte_process_info.top_session_dir, true, _check_file);
                 rmdir(prte_process_info.top_session_dir);
                 free(prte_process_info.top_session_dir);
                 prte_process_info.top_session_dir = NULL;
@@ -336,7 +336,7 @@ void prte_job_session_dir_finalize(prte_job_t *jdata)
         return;
     }
 
-    pmix_os_dirpath_destroy(jdata->session_dir, false, _check_file);
+    pmix_os_dirpath_destroy(jdata->session_dir, true, _check_file);
     /* if the job-level session dir is now empty, remove it */
     rmdir(jdata->session_dir);
     free(jdata->session_dir);
