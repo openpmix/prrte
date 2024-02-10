@@ -534,6 +534,9 @@ int main(int argc, char *argv[])
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG_DAEMONS)) {
         prte_debug_daemons_flag = true;
     }
+    if (pmix_cmd_line_is_taken(&results, PRTE_CLI_DEBUG_DAEMONS_FILE)) {
+        prte_debug_daemons_file_flag = true;
+    }
     if (pmix_cmd_line_is_taken(&results, PRTE_CLI_LEAVE_SESSION_ATTACHED)) {
         prte_leave_session_attached = true;
     }

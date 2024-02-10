@@ -354,7 +354,8 @@ static bool _check_file(const char *root, const char *path)
      *  - non-zero files starting with "output-"
      */
     if (0 == strncmp(path, "output-", strlen("output-"))) {
-        fullpath = pmix_os_path(false, &fullpath, root, path, NULL);
+        memset(&st, 0, sizeof(struct stat));
+        fullpath = pmix_os_path(false, root, path, NULL);
         stat(fullpath, &st);
         free(fullpath);
         if (0 == st.st_size) {
