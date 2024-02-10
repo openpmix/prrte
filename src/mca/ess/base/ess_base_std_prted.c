@@ -530,12 +530,6 @@ int prte_ess_base_prted_finalize(void)
         signals_set = false;
     }
 
-    /* cleanup */
-    if (NULL != log_path) {
-        unlink(log_path);
-    }
-
-
     if (NULL != prte_errmgr.finalize) {
         prte_errmgr.finalize();
     }
