@@ -8,7 +8,7 @@
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -100,11 +100,12 @@ void prte_rml_open(void)
     PMIX_CONSTRUCT(&prte_rml_base.posted_recvs, pmix_list_t);
     PMIX_CONSTRUCT(&prte_rml_base.unmatched_msgs, pmix_list_t);
     PMIX_CONSTRUCT(&prte_rml_base.children, pmix_list_t);
-    prte_rml_base.lifeline = PRTE_PROC_MY_PARENT->rank;
 
     /* compute the routing tree - only thing we need to know is the
      * number of daemons in the DVM */
     prte_rml_compute_routing_tree();
+
+    prte_rml_base.lifeline = PRTE_PROC_MY_PARENT->rank;
 }
 
 void prte_rml_send_callback(int status, pmix_proc_t *peer,
