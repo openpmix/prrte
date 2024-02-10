@@ -298,12 +298,6 @@ int prte_register_params(void)
                                       PMIX_MCA_BASE_VAR_TYPE_STRING,
                                       &prte_prohibited_session_dirs);
 
-    prte_add_pid_to_session_dirname = false;
-    (void) pmix_mca_base_var_register("prte", "prte", NULL, "add_pid_to_session_dirname",
-                                      "Add pid to the DVM top-level session directory name",
-                                      PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                      &prte_add_pid_to_session_dirname);
-
     prte_fwd_environment = false;
     (void) pmix_mca_base_var_register("prte", "prte", NULL, "fwd_environment",
                                       "Forward the entire local environment",

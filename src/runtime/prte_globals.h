@@ -508,7 +508,6 @@ PRTE_EXPORT extern char *prte_data_server_uri;
 PRTE_EXPORT extern bool prte_dvm_ready;
 PRTE_EXPORT extern pmix_pointer_array_t *prte_cache;
 PRTE_EXPORT extern bool prte_persistent;
-PRTE_EXPORT extern bool prte_add_pid_to_session_dirname;
 PRTE_EXPORT extern bool prte_allow_run_as_root;
 PRTE_EXPORT extern bool prte_fwd_environment;
 

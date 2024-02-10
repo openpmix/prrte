@@ -73,7 +73,6 @@ char *prte_tool_actual = NULL;
 bool prte_dvm_ready = false;
 pmix_pointer_array_t *prte_cache = NULL;
 bool prte_persistent = true;
-bool prte_add_pid_to_session_dirname = false;
 bool prte_allow_run_as_root = false;
 bool prte_fwd_environment = false;
 bool prte_show_launch_progress = false;
