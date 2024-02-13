@@ -337,12 +337,14 @@ PRTE_EXPORT extern pmix_status_t prte_server_send_request(uint8_t cmd, pmix_serv
 #define PRTE_PMIX_SESSION_CTRL   1
 
 
-#if PMIX_NUMERIC_VERSION >= 0x00050000
+#ifdef PMIX_SESSION_INSTANTIATE
+
 PRTE_EXPORT extern pmix_status_t
 pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
                             uint32_t sessionID,
                             const pmix_info_t directives[], size_t ndirs,
                             pmix_info_cbfunc_t cbfunc, void *cbdata);
+
 #endif
 
 /* exposed shared variables */
