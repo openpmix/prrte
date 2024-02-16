@@ -31,7 +31,7 @@ static void localrelease(void *cbdata)
 static int process_directive(pmix_server_req_t *req)
 {
     char *user_refid = NULL, *alloc_refid = NULL;
-    pmix_info_t *personality = NULL;
+    pmix_info_t *personality = NULL, *iptr;
     pmix_proc_t *requestor = NULL;
     char *hosts = NULL;
     prte_session_t *session = NULL;
@@ -98,7 +98,9 @@ static int process_directive(pmix_server_req_t *req)
                 }
             }
             // transfer the job description across
-            rc = prte_pmix_xfer_job_info(jdata, &req->info[n]);
+            iptr = (pmix_info_t*)req->info[n].value.data.darray->array;
+            i = req->info[n].value.data.darray->size;
+            rc = prte_pmix_xfer_job_info(jdata, iptr, i);
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 rc = prte_pmix_convert_rc(rc);
