@@ -194,10 +194,12 @@ callback:
     PMIX_RELEASE(req);
 }
 
-int prte_pmix_xfer_job_info(prte_job_t *jdata, pmix_info_t *inarray)
+int prte_pmix_xfer_job_info(prte_job_t *jdata,
+                            pmix_info_t *iptr,
+                            size_t ninfo)
 {
-    pmix_info_t *iptr, *info;
-    size_t ninfo, n;
+    pmix_info_t *info;
+    size_t n;
     int i, rc;
     bool flag;
     uint32_t u32;
@@ -205,9 +207,6 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata, pmix_info_t *inarray)
     prte_job_t *djob;
     prte_app_context_t *app;
     pmix_envar_t envar;
-
-    iptr = (pmix_info_t*)inarray->value.data.darray->array;
-    ninfo = inarray->value.data.darray->size;
 
     for (n = 0; n < ninfo; n++) {
         info = &iptr[n];
@@ -693,21 +692,27 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
     if (NULL != papp->info) {
         for (m = 0; m < papp->ninfo; m++) {
             info = &papp->info[m];
+
             if (PMIX_CHECK_KEY(info, PMIX_HOST)) {
                 prte_set_attribute(&app->attributes, PRTE_APP_DASH_HOST, PRTE_ATTR_GLOBAL,
                                    info->value.data.string, PMIX_STRING);
+
             } else if (PMIX_CHECK_KEY(info, PMIX_HOSTFILE)) {
                 prte_set_attribute(&app->attributes, PRTE_APP_HOSTFILE, PRTE_ATTR_GLOBAL,
                                    info->value.data.string, PMIX_STRING);
+
             } else if (PMIX_CHECK_KEY(info, PMIX_ADD_HOSTFILE)) {
                 prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOSTFILE, PRTE_ATTR_GLOBAL,
                                    info->value.data.string, PMIX_STRING);
+
             } else if (PMIX_CHECK_KEY(info, PMIX_ADD_HOST)) {
                 prte_set_attribute(&app->attributes, PRTE_APP_ADD_HOST, PRTE_ATTR_GLOBAL,
                                    info->value.data.string, PMIX_STRING);
+
             } else if (PMIX_CHECK_KEY(info, PMIX_PREFIX)) {
                 prte_set_attribute(&app->attributes, PRTE_APP_PREFIX_DIR, PRTE_ATTR_GLOBAL,
                                    info->value.data.string, PMIX_STRING);
+
             } else if (PMIX_CHECK_KEY(info, PMIX_WDIR)) {
                 /* if this is a relative path, convert it to an absolute path */
                 if (pmix_path_is_absolute(info->value.data.string)) {
@@ -722,14 +727,17 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
                     /* construct the absolute path */
                     app->cwd = pmix_os_path(false, cwd, info->value.data.string, NULL);
                 }
+
             } else if (PMIX_CHECK_KEY(info, PMIX_WDIR_USER_SPECIFIED)) {
                 flag = PMIX_INFO_TRUE(info);
                 prte_set_attribute(&app->attributes, PRTE_APP_USER_CWD, PRTE_ATTR_GLOBAL,
                                    &flag, PMIX_BOOL);
+
             } else if (PMIX_CHECK_KEY(info, PMIX_SET_SESSION_CWD)) {
                 flag = PMIX_INFO_TRUE(info);
                 prte_set_attribute(&app->attributes, PRTE_APP_SSNDIR_CWD, PRTE_ATTR_GLOBAL,
                                    &flag, PMIX_BOOL);
+
             } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_FILES)) {
                 prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_FILES, PRTE_ATTR_GLOBAL,
                                    info->value.data.string, PMIX_STRING);
@@ -737,6 +745,7 @@ int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *papp)
             } else if (PMIX_CHECK_KEY(info, PMIX_PRELOAD_BIN)) {
                 prte_set_attribute(&app->attributes, PRTE_APP_PRELOAD_BIN, PRTE_ATTR_GLOBAL,
                                    NULL, PMIX_BOOL);
+
                 /***   ENVIRONMENTAL VARIABLE DIRECTIVES   ***/
                 /* there can be multiple of these, so we add them to the attribute list */
             } else if (PMIX_CHECK_KEY(info, PMIX_SET_ENVAR)) {
@@ -853,7 +862,7 @@ static void interim(int sd, short args, void *cbdata)
     }
 
     /* transfer the job info across */
-    rc = prte_pmix_xfer_job_info(jdata, cd->info);
+    rc = prte_pmix_xfer_job_info(jdata, cd->info, cd->ninfo);
     if (PRTE_SUCCESS != rc) {
         goto complete;
     }

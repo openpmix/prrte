@@ -321,7 +321,9 @@ PRTE_EXPORT extern int prte_pmix_server_register_tool(pmix_nspace_t nspace);
 
 PRTE_EXPORT extern int pmix_server_cache_job_info(prte_job_t *jdata, pmix_info_t *info);
 
-PRTE_EXPORT extern int prte_pmix_xfer_job_info(prte_job_t *jdata, pmix_info_t *info);
+PRTE_EXPORT extern int prte_pmix_xfer_job_info(prte_job_t *jdata,
+                                               pmix_info_t *iptr,
+                                               size_t ninfo);
 
 PRTE_EXPORT extern int prte_pmix_xfer_app(prte_job_t *jdata, pmix_app_t *app);
 

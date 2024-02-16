@@ -263,7 +263,11 @@ addknown:
      * this point either has the HNP node or nothing, and the HNP
      * node obviously has a daemon on it (us!)
      */
-    nd = (prte_node_t *) pmix_list_get_last(allocated_nodes);  
+    if (0 == pmix_list_get_size(allocated_nodes)) {
+        nd = NULL;
+    } else {
+        nd = (prte_node_t *) pmix_list_get_last(allocated_nodes);
+    }
     for (i = 0; i < jdata->session->nodes->size; i++) {
         if (NULL != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->session->nodes, i))) {
 
@@ -741,7 +745,7 @@ void prte_rmaps_base_get_cpuset(prte_job_t *jdata,
                                 prte_rmaps_options_t *options)
 {
     PRTE_HIDE_UNUSED_PARAMS(jdata);
-    
+
     if (NULL != options->cpuset) {
         options->job_cpuset = prte_hwloc_base_generate_cpuset(node->topology->topo,
                                                               options->use_hwthreads,
