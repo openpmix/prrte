@@ -486,6 +486,7 @@ keep_going:
             PRTE_FLAG_SET(jdata, PRTE_JOB_FLAG_ABORTED);
             /* kill the job */
             _terminate_job(jdata->nspace);
+            PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FAILED_TO_START);
         }
         /* if this was a daemon, report it */
         if (PMIX_CHECK_NSPACE(jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
@@ -493,7 +494,6 @@ keep_going:
             pmix_show_help("help-errmgr-base.txt", "failed-daemon-launch",
                            true, prte_tool_basename);
         }
-        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_FAILED_TO_START);
         break;
 
     case PRTE_PROC_STATE_CALLED_ABORT:
