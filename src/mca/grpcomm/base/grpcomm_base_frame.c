@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -126,11 +126,15 @@ PMIX_CLASS_INSTANCE(prte_grpcomm_base_active_t,
 
 static void scon(prte_grpcomm_signature_t *p)
 {
+    p->groupID = NULL;
     p->signature = NULL;
     p->sz = 0;
 }
 static void sdes(prte_grpcomm_signature_t *p)
 {
+    if (NULL != p->groupID) {
+        free(p->groupID);
+    }
     if (NULL != p->signature) {
         free(p->signature);
     }

@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -597,6 +597,38 @@ int prte_map_pack(pmix_data_buffer_t *bkt, struct prte_job_map_t *mp)
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
+    }
+
+    return PRTE_SUCCESS;
+}
+
+/*
+ * GRPCOMM SIGNATURE
+ */
+int prte_grpcomm_sig_pack(pmix_data_buffer_t *bkt,
+                          prte_grpcomm_signature_t *sig)
+{
+    pmix_status_t rc;
+
+    // always send the participating procs
+    rc = PMIx_Data_pack(NULL, bkt, &sig->sz, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    rc = PMIx_Data_pack(NULL, bkt, sig->signature, sig->sz, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
+    if (NULL != sig->groupID) {
+        // add the groupID if one is given
+        rc = PMIx_Data_pack(NULL, bkt, &sig->groupID, 1, PMIX_STRING);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
     }
 
     return PRTE_SUCCESS;

@@ -50,6 +50,7 @@
 #include "src/pmix/pmix-internal.h"
 #include "src/threads/pmix_threads.h"
 
+#include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/plm/plm_types.h"
 #include "src/rml/rml_types.h"
 #include "src/runtime/runtime.h"
@@ -503,6 +504,15 @@ PRTE_EXPORT int prte_node_pack(pmix_data_buffer_t *bkt, prte_node_t *node);
 PRTE_EXPORT int prte_node_unpack(pmix_data_buffer_t *bkt, prte_node_t **node);
 PRTE_EXPORT int prte_node_copy(prte_node_t **dest, prte_node_t *src);
 PRTE_EXPORT void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src);
+
+/** grpcomm signature */
+PRTE_EXPORT int prte_grpcomm_sig_pack(pmix_data_buffer_t *bkt,
+                                      prte_grpcomm_signature_t *sig);
+PRTE_EXPORT int prte_grpcomm_sig_unpack(pmix_data_buffer_t *bkt,
+                                        prte_grpcomm_signature_t **sig);
+PRTE_EXPORT int prte_grpcomm_sig_copy(prte_grpcomm_signature_t **d,
+                                      prte_grpcomm_signature_t *s);
+PRTE_EXPORT void prte_grpcomm_sig_print(char **output, prte_grpcomm_signature_t *s);
 
 /**
  * Get a proc data object

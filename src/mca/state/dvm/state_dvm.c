@@ -1031,6 +1031,7 @@ static void dvm_notify(int sd, short args, void *cbdata)
 
         /* we have to send the notification to all daemons so that
          * anyone watching for it can receive it */
+        PMIX_CONSTRUCT(&sig, prte_grpcomm_signature_t);
         PMIX_PROC_CREATE(sig.signature, 1);
         PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
         sig.sz = 1;

@@ -8,7 +8,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -121,15 +121,9 @@ static int allgather(prte_grpcomm_coll_t *coll,
 
     PMIX_DATA_BUFFER_CREATE(relay);
     /* pack the signature */
-    rc = PMIx_Data_pack(NULL, relay, &coll->sig->sz, 1, PMIX_SIZE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_DATA_BUFFER_RELEASE(relay);
-        return rc;
-    }
-    rc = PMIx_Data_pack(NULL, relay, coll->sig->signature, coll->sig->sz, PMIX_PROC);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    rc = prte_grpcomm_sig_pack(relay, coll->sig);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
         return rc;
     }
@@ -139,7 +133,7 @@ static int allgather(prte_grpcomm_coll_t *coll,
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
-        return rc;
+        return prte_pmix_convert_status(rc);
     }
 
     /* pass along the payload */
@@ -147,7 +141,7 @@ static int allgather(prte_grpcomm_coll_t *coll,
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_RELEASE(relay);
-        return rc;
+        return prte_pmix_convert_status(rc);
     }
 
     /* send this to ourselves for processing */
@@ -175,7 +169,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     pmix_data_array_t darray;
     pmix_status_t st;
     pmix_info_t *info, infostat;
-    prte_grpcomm_signature_t sig;
+    prte_grpcomm_signature_t *sig = NULL;
     pmix_byte_object_t ctrlsbo;
     pmix_data_buffer_t ctrlbuf;
     pmix_data_buffer_t *reply;
@@ -188,24 +182,15 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender)));
 
     /* unpack the signature */
-    cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &sig.sz, &cnt, PMIX_SIZE);
+    rc = prte_grpcomm_sig_unpack(buffer, &sig);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        return;
-    }
-    PMIX_PROC_CREATE(sig.signature, sig.sz);
-    cnt = sig.sz;
-    rc = PMIx_Data_unpack(NULL, buffer, sig.signature, &cnt, PMIX_PROC);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return;
     }
 
     /* check for the tracker and create it if not found */
-    if (NULL == (coll = prte_grpcomm_base_get_tracker(&sig, true))) {
+    if (NULL == (coll = prte_grpcomm_base_get_tracker(sig, true))) {
         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
-        PMIX_PROC_FREE(sig.signature, sig.sz);
+        PMIX_RELEASE(sig);
         return;
     }
 
@@ -214,14 +199,14 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, buffer, &ctrlsbo, &cnt, PMIX_BYTE_OBJECT);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PMIX_PROC_FREE(sig.signature, sig.sz);
+        PMIX_RELEASE(sig);
         return;
     }
     PMIX_DATA_BUFFER_CONSTRUCT(&ctrlbuf);
     rc = PMIx_Data_load(&ctrlbuf, &ctrlsbo);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PMIX_PROC_FREE(sig.signature, sig.sz);
+        PMIX_RELEASE(sig);
         PMIX_BYTE_OBJECT_DESTRUCT(&ctrlsbo);
         return;
     }
@@ -232,7 +217,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, &ctrlbuf, &ninfo, &cnt, PMIX_SIZE);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
-        PMIX_PROC_FREE(sig.signature, sig.sz);
+        PMIX_RELEASE(sig);
         PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
         return;
     }
@@ -242,7 +227,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
         rc = PMIx_Data_unpack(NULL, &ctrlbuf, info, &cnt, PMIX_INFO);
         if (PMIX_SUCCESS != rc) {
             PMIX_ERROR_LOG(rc);
-            PMIX_PROC_FREE(sig.signature, sig.sz);
+            PMIX_RELEASE(sig);
             PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
             return;
         }
@@ -255,7 +240,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             PMIX_VALUE_GET_NUMBER(rc, &info[n].value, timeout, int);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
+                PMIX_RELEASE(sig);
                 return;
             }
             if (coll->timeout < timeout) {
@@ -268,7 +253,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             PMIX_VALUE_GET_NUMBER(rc, &info[n].value, st, pmix_status_t);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
+                PMIX_RELEASE(sig);
                 return;
             }
             if (PMIX_SUCCESS != st &&
@@ -303,6 +288,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     rc = PMIx_Data_copy_payload(&coll->bucket, buffer);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(sig);
         return;
     }
 
@@ -320,18 +306,11 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             /* the allgather is complete - send the xcast */
             PMIX_DATA_BUFFER_CREATE(reply);
             /* pack the signature */
-            rc = PMIx_Data_pack(NULL, reply, &sig.sz, 1, PMIX_SIZE);
+            rc = prte_grpcomm_sig_pack(reply, sig);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
-                return;
-            }
-            rc = PMIx_Data_pack(NULL, reply, sig.signature, sig.sz, PMIX_PROC);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
+                PMIX_RELEASE(sig);
                 return;
             }
             /* pack the status */
@@ -339,7 +318,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
+                PMIX_RELEASE(sig);
                 return;
             }
             /* add some values to the payload in the bucket */
@@ -357,7 +336,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
                     PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
-                    PMIX_PROC_FREE(sig.signature, sig.sz);
+                    PMIX_RELEASE(sig);
                     return;
                 }
             }
@@ -381,7 +360,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                     PMIX_ERROR_LOG(rc);
                     PMIX_DATA_BUFFER_RELEASE(reply);
                     PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
-                    PMIX_PROC_FREE(sig.signature, sig.sz);
+                    PMIX_RELEASE(sig);
                     return;
                 }
             }
@@ -392,7 +371,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
+                PMIX_RELEASE(sig);
                 return;
             }
 
@@ -401,11 +380,11 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
+                PMIX_RELEASE(sig);
                 return;
             }
             /* send the release via xcast */
-            (void) prte_grpcomm.xcast(&sig, PRTE_RML_TAG_COLL_RELEASE, reply);
+            (void) prte_grpcomm.xcast(sig, PRTE_RML_TAG_COLL_RELEASE, reply);
         } else {
             PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                  "%s grpcomm:direct allgather rollup complete - sending to %s",
@@ -413,33 +392,26 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_PARENT)));
             PMIX_DATA_BUFFER_CREATE(reply);
             /* pack the signature */
-            rc = PMIx_Data_pack(NULL, reply, &sig.sz, 1, PMIX_SIZE);
+            rc = prte_grpcomm_sig_pack(reply, sig);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
+                PMIX_RELEASE(sig);
                 return;
             }
-            rc = PMIx_Data_pack(NULL, reply, sig.signature, sig.sz, PMIX_PROC);
-            if (PMIX_SUCCESS != rc) {
-                PMIX_ERROR_LOG(rc);
-                PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
-                return;
-            }
+            PMIX_RELEASE(sig);
+            sig = NULL;
             /* pass along the ctrls - we have updated the values
              * we collected along the way */
             rc = prte_pack_ctrl_options(&ctrlsbo, info, ninfo);
             if (PRTE_SUCCESS != rc) {
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
                 return;
             }
             rc = PMIx_Data_pack(NULL, reply, &ctrlsbo, 1, PMIX_BYTE_OBJECT);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
                 PMIx_Byte_object_destruct(&ctrlsbo);
                 return;
             }
@@ -450,7 +422,6 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
                 return;
             }
             /* send the info to our parent */
@@ -459,12 +430,13 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             if (PRTE_SUCCESS != rc) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
-                PMIX_PROC_FREE(sig.signature, sig.sz);
                 return;
             }
         }
     }
-    PMIX_PROC_FREE(sig.signature, sig.sz);
+    if (NULL != sig) {
+        PMIX_RELEASE(sig);
+    }
 }
 
 static void xcast_recv(int status, pmix_proc_t *sender,
@@ -478,7 +450,7 @@ static void xcast_recv(int status, pmix_proc_t *sender,
     bool compressed;
     prte_job_t *daemons;
     pmix_list_t coll;
-    prte_grpcomm_signature_t sig;
+    prte_grpcomm_signature_t *sig = NULL;
     prte_rml_tag_t tag;
     pmix_byte_object_t bo, pbo;
     pmix_value_t val;
@@ -562,8 +534,7 @@ static void xcast_recv(int status, pmix_proc_t *sender,
     data = &datbuf;
 
     /* get the signature that we do not need */
-    cnt = 1;
-    ret = PMIx_Data_unpack(NULL, data, &sig.sz, &cnt, PMIX_SIZE);
+    ret = prte_grpcomm_sig_unpack(data, &sig);
     if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
         PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
@@ -572,19 +543,7 @@ static void xcast_recv(int status, pmix_proc_t *sender,
         PMIX_DATA_BUFFER_RELEASE(rly);
         return;
     }
-    PMIX_PROC_CREATE(sig.signature, sig.sz);
-    cnt = sig.sz;
-    ret = PMIx_Data_unpack(NULL, data, sig.signature, &cnt, PMIX_PROC);
-    if (PMIX_SUCCESS != ret) {
-        PMIX_ERROR_LOG(ret);
-        PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-        PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
-        PMIX_DESTRUCT(&coll);
-        PMIX_DATA_BUFFER_RELEASE(rly);
-        PMIX_PROC_FREE(sig.signature, sig.sz);
-        return;
-    }
-    PMIX_PROC_FREE(sig.signature, sig.sz);
+    PMIX_RELEASE(sig);
 
     /* get the target tag */
     cnt = 1;
@@ -715,7 +674,7 @@ static void barrier_release(int status, pmix_proc_t *sender,
 {
     int32_t cnt;
     int rc, ret;
-    prte_grpcomm_signature_t sig;
+    prte_grpcomm_signature_t *sig = NULL;
     prte_grpcomm_coll_t *coll;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
@@ -724,15 +683,7 @@ static void barrier_release(int status, pmix_proc_t *sender,
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) buffer->bytes_used));
 
     /* unpack the signature */
-    cnt = 1;
-    rc = PMIx_Data_unpack(NULL, buffer, &sig.sz, &cnt, PMIX_SIZE);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return;
-    }
-    PMIX_PROC_CREATE(sig.signature, sig.sz);
-    cnt = sig.sz;
-    rc = PMIx_Data_unpack(NULL, buffer, sig.signature, &cnt, PMIX_PROC);
+    rc = prte_grpcomm_sig_unpack(buffer, &sig);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
         return;
@@ -743,14 +694,15 @@ static void barrier_release(int status, pmix_proc_t *sender,
     rc = PMIx_Data_unpack(NULL, buffer, &ret, &cnt, PMIX_INT32);
     if (PMIX_SUCCESS != rc) {
         PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(sig);
         return;
     }
 
     /* check for the tracker - it is not an error if not
      * found as that just means we wre not involved
      * in the collective */
-    if (NULL == (coll = prte_grpcomm_base_get_tracker(&sig, false))) {
-        PMIX_PROC_FREE(sig.signature, sig.sz);
+    if (NULL == (coll = prte_grpcomm_base_get_tracker(sig, false))) {
+        PMIX_RELEASE(sig);
         return;
     }
 
@@ -760,5 +712,5 @@ static void barrier_release(int status, pmix_proc_t *sender,
     }
     pmix_list_remove_item(&prte_grpcomm_base.ongoing, &coll->super);
     PMIX_RELEASE(coll);
-    PMIX_PROC_FREE(sig.signature, sig.sz);
+    PMIX_RELEASE(sig);
 }
