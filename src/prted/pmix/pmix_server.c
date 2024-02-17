@@ -2058,6 +2058,7 @@ PMIX_CLASS_INSTANCE(pmix_server_req_t,
 static void mdcon(prte_pmix_mdx_caddy_t *p)
 {
     p->sig = NULL;
+    p->grpid = NULL;
     p->buf = NULL;
     PMIX_BYTE_OBJECT_CONSTRUCT(&p->ctrls);
     p->procs = NULL;
@@ -2074,6 +2075,9 @@ static void mddes(prte_pmix_mdx_caddy_t *p)
 {
     if (NULL != p->sig) {
         PMIX_RELEASE(p->sig);
+    }
+    if (NULL != p->grpid) {
+        free(p->grpid);
     }
     if (NULL != p->buf) {
         PMIX_DATA_BUFFER_RELEASE(p->buf);

@@ -1234,8 +1234,8 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     }
 
     cd = PMIX_NEW(prte_pmix_mdx_caddy_t);
-    cd->grpid = grpid;
     cd->op = op;
+    cd->grpid = strdup(grpid);
     /* have to copy the procs in case we add members */
     PMIX_PROC_CREATE(cd->procs, nprocs);
     memcpy(cd->procs, procs, nprocs * sizeof(pmix_proc_t));
@@ -1245,8 +1245,9 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     cd->cbdata = cbdata;
 
     /* compute the signature of this collective */
+    cd->sig = PMIX_NEW(prte_grpcomm_signature_t);
+    cd->sig->groupID = strdup(grpid);
     if (NULL != procs) {
-        cd->sig = PMIX_NEW(prte_grpcomm_signature_t);
         cd->sig->sz = nprocs;
         cd->sig->signature = (pmix_proc_t *) malloc(cd->sig->sz * sizeof(pmix_proc_t));
         memcpy(cd->sig->signature, procs, cd->sig->sz * sizeof(pmix_proc_t));

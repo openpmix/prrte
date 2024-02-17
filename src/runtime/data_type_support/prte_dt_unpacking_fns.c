@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2013 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -703,5 +703,47 @@ int prte_map_unpack(pmix_data_buffer_t *bkt, struct prte_job_map_t **mp)
     }
 
     *mp = map;
+    return PRTE_SUCCESS;
+}
+
+int prte_grpcomm_sig_unpack(pmix_data_buffer_t *buffer,
+                            prte_grpcomm_signature_t **sig)
+{
+    pmix_status_t rc;
+    int32_t cnt;
+    prte_grpcomm_signature_t *s;
+    char *save;
+
+    s = PMIX_NEW(prte_grpcomm_signature_t);
+
+    // unpack the participating procs
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &s->sz, &cnt, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(s);
+        return prte_pmix_convert_status(rc);
+    }
+    PMIX_PROC_CREATE(s->signature, s->sz);
+    cnt = s->sz;
+    rc = PMIx_Data_unpack(NULL, buffer, s->signature, &cnt, PMIX_PROC);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(s);
+        return prte_pmix_convert_status(rc);
+    }
+
+    // try and unpack the groupID - error is okay, just means
+    // one wasn't provided
+    save = buffer->unpack_ptr;
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &s->groupID, &cnt, PMIX_STRING);
+    // ignore the return code
+    if (PMIX_SUCCESS != rc) {
+        buffer->unpack_ptr = save;  // reset location for next unpack
+        rc = PMIX_SUCCESS;
+    }
+
+    *sig = s;
     return PRTE_SUCCESS;
 }

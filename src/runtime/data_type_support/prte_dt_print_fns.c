@@ -100,7 +100,7 @@ static void display_cpus(prte_topology_t *t,
     if (NULL != coreset) {
         hwloc_bitmap_free(coreset);
     }
-    
+
     pmix_asprintf(output, "%s        </processors>\n", tmp1);
     free(tmp1);
     return;
@@ -198,7 +198,7 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
                       (NULL == src->name) ? "UNKNOWN" : src->name, (int) src->slots,
                       (int) src->slots_max);
 
-        pmix_asprintf(&tmp2,""); 
+        pmix_asprintf(&tmp2,"");
         for (j=0; j < prte_node_topologies->size; j++) {
             t = (prte_topology_t*)pmix_pointer_array_get_item(prte_node_topologies, j);
             if (NULL != t) {
@@ -218,7 +218,7 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
         free(tmp1);
         tmp1 = NULL;
         free(tmp);
-        tmp = tmp3; 
+        tmp = tmp3;
 
         /* loop through procs and print their rank */
         for (j = 0; j < src->procs->size; j++) {
@@ -368,11 +368,11 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
                           "%*c<package id=\"%d\">\n%s\n%*c</package>\n%*c</binding>\n%*c</rank>\n",
                           8, xmlsp, PRTE_VPID_PRINT(src->name.rank), (long) src->app_idx, 12, xmlsp,
                           16, xmlsp, pkgnum, cores, 16, xmlsp, 12, xmlsp, 8, xmlsp);
-            
+
             free (cores);
         } else {
-            pmix_asprintf(&tmp, "\n%*c<rank id=\"%s\">\n%*c<binding></binding>\n%*c</rank>\n", 
-                          8, xmlsp, PRTE_VPID_PRINT(src->name.rank), 12, xmlsp, 8, xmlsp);        
+            pmix_asprintf(&tmp, "\n%*c<rank id=\"%s\">\n%*c<binding></binding>\n%*c</rank>\n",
+                          8, xmlsp, PRTE_VPID_PRINT(src->name.rank), 12, xmlsp, 8, xmlsp);
         }
 
         /* set the return */
@@ -503,7 +503,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
         /* creating the output in an XML format */
         pmix_asprintf(&tmp4, "<?xml version=\"1.0\" ?>\n<map>\n");
-        pmix_asprintf(&tmp,""); 
+        pmix_asprintf(&tmp,"");
 
         /* loop through nodes */
         for (i = 0; i < src->nodes->size; i++) {
@@ -531,7 +531,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
             tmp = tmp2;
         }
 
-        /* end of the xml "map" tag */  
+        /* end of the xml "map" tag */
         pmix_asprintf(&tmp2, "%s%s</map>\n", tmp4,tmp);
         *output = tmp2;
         free(tmp);
@@ -638,5 +638,19 @@ void prte_map_print(char **output, prte_job_t *jdata)
     /* set the return */
     *output = tmp;
 
+    return;
+}
+
+/* GRPCOMM SIG */
+void prte_grpcomm_sig_print(char **output, prte_grpcomm_signature_t *s)
+{
+    char *tmp;
+
+    if (NULL != s->groupID) {
+        pmix_asprintf(&tmp, "Group ID: %s", s->groupID);
+    } else {
+        tmp = strdup("No GroupID - signature is array of procs");
+    }
+    *output = tmp;
     return;
 }
