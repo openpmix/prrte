@@ -320,6 +320,7 @@ static void vm_ready(int fd, short args, void *cbdata)
             }
 
             /* goes to all daemons */
+            PMIX_CONSTRUCT(&sig, prte_grpcomm_signature_t);
             PMIX_PROC_CREATE(sig.signature, 1);
             PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
             sig.sz = 1;

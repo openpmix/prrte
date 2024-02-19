@@ -25,6 +25,7 @@
 #include "src/class/pmix_list.h"
 #include "src/pmix/pmix-internal.h"
 
+#include "src/prted/pmix/pmix_server_internal.h"
 #include "src/mca/errmgr/errmgr.h"
 #include "src/rml/rml.h"
 #include "src/mca/state/state.h"
@@ -163,6 +164,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     int rc, timeout;
     size_t n, ninfo, memsize, m;
     bool assignID = false;
+    bool found;
     pmix_proc_t *addmembers = NULL;
     size_t num_members = 0;
     prte_namelist_t *nm;
@@ -183,8 +185,8 @@ static void allgather_recv(int status, pmix_proc_t *sender,
 
     /* unpack the signature */
     rc = prte_grpcomm_sig_unpack(buffer, &sig);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
     }
 
     /* check for the tracker and create it if not found */
@@ -271,12 +273,25 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             /* update the info with the collected value */
             info[n].value.type = PMIX_BOOL;
             info[n].value.data.flag = coll->assignID;
-        } else if (PMIX_CHECK_KEY(&info[n], PMIX_GROUP_ADD_MEMBERS)) {
-            addmembers = (pmix_proc_t*)info[n].value.data.darray->array;
-            num_members = info[n].value.data.darray->size;
-            for (m=0; m < num_members; m++) {
+        }
+    }
+
+    // check for any added members
+    if (NULL != sig->addmembers) {
+        // add them to the global collective
+        for (m=0; m < sig->nmembers; m++) {
+            // check to see if we already have this member
+            found = false;
+            PMIX_LIST_FOREACH(nm, &coll->addmembers, prte_namelist_t) {
+                if (PMIX_CHECK_PROCID(&nm->name, &sig->addmembers[m])) {
+                    // already have it
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
                 nm = PMIX_NEW(prte_namelist_t);
-                PMIX_XFER_PROCID(&nm->name, &addmembers[m]);
+                PMIX_XFER_PROCID(&nm->name, &sig->addmembers[m]);
                 pmix_list_append(&coll->addmembers, &nm->super);
             }
         }
@@ -305,8 +320,16 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
             /* the allgather is complete - send the xcast */
             PMIX_DATA_BUFFER_CREATE(reply);
+
+            /* if we were asked to provide a context id, do so */
+            if (assignID) {
+                coll->sig->ctxid = prte_grpcomm_base.context_id;
+                --prte_grpcomm_base.context_id;
+                coll->sig->ctxid_assigned = true;
+            }
+
             /* pack the signature */
-            rc = prte_grpcomm_sig_pack(reply, sig);
+            rc = prte_grpcomm_sig_pack(reply, coll->sig);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_RELEASE(reply);
@@ -324,12 +347,9 @@ static void allgather_recv(int status, pmix_proc_t *sender,
             /* add some values to the payload in the bucket */
             PMIX_DATA_BUFFER_CONSTRUCT(&ctrlbuf);
 
-            /* if we were asked to provide a context id, do so */
+            /* if we assigned a context id, include it in the bucket as well */
             if (assignID) {
-                size_t sz;
-                sz = prte_grpcomm_base.context_id;
-                --prte_grpcomm_base.context_id;
-                PMIX_INFO_LOAD(&infostat, PMIX_GROUP_CONTEXT_ID, &sz, PMIX_SIZE);
+                PMIX_INFO_LOAD(&infostat, PMIX_GROUP_CONTEXT_ID, &coll->sig->ctxid, PMIX_SIZE);
                 rc = PMIx_Data_pack(NULL, &ctrlbuf, &infostat, 1, PMIX_INFO);
                 PMIX_INFO_DESTRUCT(&infostat);
                 if (PMIX_SUCCESS != rc) {
@@ -383,6 +403,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 PMIX_RELEASE(sig);
                 return;
             }
+
             /* send the release via xcast */
             (void) prte_grpcomm.xcast(sig, PRTE_RML_TAG_COLL_RELEASE, reply);
         } else {
@@ -668,6 +689,14 @@ CLEANUP:
     PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
 }
 
+static void opcbfunc(pmix_status_t status, void *cbdata)
+{
+    prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t*)cbdata;
+
+    PMIX_INFO_FREE(cd->info, cd->ninfo);
+    PMIX_RELEASE(cd);
+}
+
 static void barrier_release(int status, pmix_proc_t *sender,
                             pmix_data_buffer_t *buffer,
                             prte_rml_tag_t tag, void *cbdata)
@@ -676,6 +705,9 @@ static void barrier_release(int status, pmix_proc_t *sender,
     int rc, ret;
     prte_grpcomm_signature_t *sig = NULL;
     prte_grpcomm_coll_t *coll;
+    pmix_data_array_t darray;
+    prte_pmix_server_op_caddy_t *cd;
+    void *values;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
@@ -696,6 +728,49 @@ static void barrier_release(int status, pmix_proc_t *sender,
         PMIX_ERROR_LOG(rc);
         PMIX_RELEASE(sig);
         return;
+    }
+
+    // if there are added members, notify any that are local to us
+    if (NULL != sig->addmembers) {
+        // we have to handle these even if we did not participate in
+        // the collective as an added member might be on a non-participating
+        // node. Start by providing the overall membership
+        cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
+        PMIX_INFO_LIST_START(values);
+
+        /* protect against infinite loops by marking that this notification was
+         * passed down to the server by me */
+        PMIX_INFO_LIST_ADD(rc, values, "prte.notify.donotloop", NULL, PMIX_BOOL);
+        // add the context ID, if one was given
+        if (sig->ctxid_assigned) {
+            PMIX_INFO_LIST_ADD(rc, values, PMIX_GROUP_CONTEXT_ID, &sig->ctxid, PMIX_SIZE);
+        }
+        // load the membership
+        cd->nprocs = sig->sz + sig->nmembers;
+        PMIX_PROC_CREATE(cd->procs, cd->nprocs);
+        memcpy(cd->procs, sig->signature, sig->sz * sizeof(pmix_proc_t));
+        memcpy(&cd->procs[sig->sz], sig->addmembers, sig->nmembers * sizeof(pmix_proc_t));
+        darray.type = PMIX_PROC;
+        darray.array = cd->procs;
+        darray.size = cd->nprocs;
+        // load the array - note: this copies the array!
+        PMIX_INFO_LIST_ADD(rc, values, PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY);
+        PMIX_PROC_FREE(cd->procs, cd->nprocs);
+        // provide the group ID
+        PMIX_INFO_LIST_ADD(rc, values, PMIX_GROUP_ID, sig->groupID, PMIX_STRING);
+        // set the range to be only procs that were added
+        darray.array = sig->addmembers;
+        darray.size = sig->nmembers;
+        // load the array - note: this copies the array!
+        PMIX_INFO_LIST_ADD(rc, values, PMIX_EVENT_CUSTOM_RANGE, &darray, PMIX_DATA_ARRAY);
+        // convert the list to an array
+        PMIX_INFO_LIST_CONVERT(rc, values, &darray);
+        cd->info = (pmix_info_t*)darray.array;
+        cd->ninfo = darray.size;
+        PMIX_INFO_LIST_RELEASE(values);
+        // notify local procs
+        PMIx_Notify_event(PMIX_GROUP_INVITED, PRTE_PROC_MY_NAME, PMIX_RANGE_CUSTOM,
+                          cd->info, cd->ninfo, opcbfunc, cd);
     }
 
     /* check for the tracker - it is not an error if not

@@ -195,7 +195,8 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
 {
     prte_grpcomm_coll_t *coll;
     int rc;
-    size_t n;
+    pmix_proc_t *p;
+    size_t n, nmb;
 
     /* search the existing tracker list to see if this already exists - we
      * default to using the groupID if one is given, otherwise we fallback
@@ -210,23 +211,21 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
             /* if only one is NULL, then we can't possibly match */
             break;
         }
-        if (sig->sz == coll->sig->sz) {
-            if (NULL != sig->groupID) {
-                // must match groupID's
-                if (NULL != coll->sig->groupID && 0 == strcmp(sig->groupID, coll->sig->groupID)) {
-                    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                                         "%s grpcomm:base:returning existing collective",
-                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-                    return coll;
-                }
-            } else {
-                // must match proc signature
-                if (0 == memcmp(sig->signature, coll->sig->signature, sig->sz * sizeof(pmix_proc_t))) {
-                    PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                                         "%s grpcomm:base:returning existing collective",
-                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-                    return coll;
-                }
+        if (NULL != sig->groupID) {
+            // must match groupID's
+            if (NULL != coll->sig->groupID && 0 == strcmp(sig->groupID, coll->sig->groupID)) {
+                PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+                                     "%s grpcomm:base:returning existing collective",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                goto checkmembers;
+            }
+        } else if (sig->sz == coll->sig->sz) {
+            // must match proc signature
+            if (0 == memcmp(sig->signature, coll->sig->signature, sig->sz * sizeof(pmix_proc_t))) {
+                PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
+                                     "%s grpcomm:base:returning existing collective",
+                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                goto checkmembers;
             }
         }
     }
@@ -267,6 +266,25 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
         if (coll->dmns[n] == PRTE_PROC_MY_NAME->rank) {
             coll->nexpected++;
             break;
+        }
+    }
+
+checkmembers:
+    // add any addmembers that were given
+    if (NULL != sig->addmembers) {
+        if (NULL == coll->sig->addmembers) {
+            PMIX_PROC_CREATE(coll->sig->addmembers, sig->nmembers);
+            coll->sig->nmembers = sig->nmembers;
+            memcpy(coll->sig->addmembers, sig->addmembers, coll->sig->nmembers * sizeof(pmix_proc_t));
+        } else {
+            // aggregate them
+            nmb = coll->sig->nmembers + sig->nmembers;
+            PMIX_PROC_CREATE(p, nmb);
+            memcpy(p, coll->sig->addmembers, coll->sig->nmembers * sizeof(pmix_proc_t));
+            memcpy(&p[coll->sig->nmembers], sig->addmembers, sig->nmembers * sizeof(pmix_proc_t));
+            PMIX_PROC_FREE(coll->sig->addmembers, coll->sig->nmembers);
+            coll->sig->addmembers = p;
+            coll->sig->nmembers = nmb;
         }
     }
 

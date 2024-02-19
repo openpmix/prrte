@@ -127,8 +127,12 @@ PMIX_CLASS_INSTANCE(prte_grpcomm_base_active_t,
 static void scon(prte_grpcomm_signature_t *p)
 {
     p->groupID = NULL;
+    p->ctxid = 0;
+    p->ctxid_assigned = false;
     p->signature = NULL;
     p->sz = 0;
+    p->addmembers = NULL;
+    p->nmembers = 0;
 }
 static void sdes(prte_grpcomm_signature_t *p)
 {
@@ -137,6 +141,9 @@ static void sdes(prte_grpcomm_signature_t *p)
     }
     if (NULL != p->signature) {
         free(p->signature);
+    }
+    if (NULL != p->addmembers) {
+        free(p->addmembers);
     }
 }
 PMIX_CLASS_INSTANCE(prte_grpcomm_signature_t,
