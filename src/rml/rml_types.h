@@ -191,41 +191,41 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 #define PRTE_RML_TAG_CLOSE_CHANNEL_ACCEPT 58
 
 /* error notifications */
-#define PRTE_RML_TAG_NOTIFICATION 59
+#define PRTE_RML_TAG_NOTIFICATION         59
 
 /* stacktrace for debug */
-#define PRTE_RML_TAG_STACK_TRACE 60
+#define PRTE_RML_TAG_STACK_TRACE          60
 
 /* memory profile */
-#define PRTE_RML_TAG_MEMPROFILE 61
+#define PRTE_RML_TAG_MEMPROFILE           61
 
 /* topology report */
-#define PRTE_RML_TAG_TOPOLOGY_REPORT 62
+#define PRTE_RML_TAG_TOPOLOGY_REPORT      62
 
 /* warmup connection - simply establishes the connection */
-#define PRTE_RML_TAG_WARMUP_CONNECTION 63
+#define PRTE_RML_TAG_WARMUP_CONNECTION    63
 
 /* node regex report */
-#define PRTE_RML_TAG_NODE_REGEX_REPORT 64
+#define PRTE_RML_TAG_NODE_REGEX_REPORT    64
 
 /* pmix log requests */
-#define PRTE_RML_TAG_LOGGING 65
+#define PRTE_RML_TAG_LOGGING              65
 
 /* error propagate  */
-#define PRTE_RML_TAG_RBCAST 66
+#define PRTE_RML_TAG_RBCAST               66
 
 /* heartbeat request */
-#define PRTE_RML_TAG_HEARTBEAT_REQUEST 70
+#define PRTE_RML_TAG_HEARTBEAT_REQUEST    70
 
 /* error propagate  */
-#define PRTE_RML_TAG_PROPAGATE 71
+#define PRTE_RML_TAG_PROPAGATE            71
 
 /* scheduler requests */
-#define PRTE_RML_TAG_SCHED 72
-#define PRTE_RML_TAG_SCHED_RESP 73
+#define PRTE_RML_TAG_SCHED                72
+#define PRTE_RML_TAG_SCHED_RESP           73
 
 
-#define PRTE_RML_TAG_MAX 100
+#define PRTE_RML_TAG_MAX                 100
 
 #define PRTE_RML_TAG_NTOH(t) ntohl(t)
 #define PRTE_RML_TAG_HTON(t) htonl(t)

@@ -22,4 +22,5 @@ libprrte_la_SOURCES += \
           prted/pmix/pmix_server_gen.c \
           prted/pmix/pmix_server_queries.c \
           prted/pmix/pmix_server_allocate.c \
-          prted/pmix/pmix_server_session.c
+          prted/pmix/pmix_server_session.c \
+          prted/pmix/pmix_server_group.c

@@ -64,8 +64,12 @@ typedef int (*prte_grpcomm_rbcast_cb_t)(pmix_data_buffer_t *buffer);
 typedef struct {
     pmix_object_t super;
     char *groupID;
+    size_t ctxid;
+    bool ctxid_assigned;
     pmix_proc_t *signature;
     size_t sz;
+    pmix_proc_t *addmembers;
+    size_t nmembers;
 } prte_grpcomm_signature_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_signature_t);
 
