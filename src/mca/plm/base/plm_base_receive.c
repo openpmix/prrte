@@ -271,7 +271,10 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             /* try defaulting to parent session */
             if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
                 session = parent->session;
-
+		if (NULL == session) {
+                    rc = PRTE_ERR_NOT_FOUND;
+                    goto ANSWER_LAUNCH;
+                }
             // (RHC) This next clause merits some thought - not sure I fully
             // understand the conditionals
             } else if (!prte_pmix_server_globals.scheduler_connected ||
