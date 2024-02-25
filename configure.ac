@@ -27,7 +27,7 @@
 #                         All Rights reserved.
 # Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
 # Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
-# Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
+# Copyright (c) 2023-2024 Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -720,7 +720,8 @@ AC_INCLUDES_DEFAULT
 # Setup Sphinx processing
 #
 
-OAC_SETUP_SPHINX([$srcdir/docs/_build/html/index.html], [])
+OAC_SETUP_SPHINX([$srcdir/docs/_build/html/index.html], [],
+                 [$srcdir/docs/requirements.txt])
 AC_CHECK_PROGS(PYTHON, [python3 python python2])
 
 AS_IF([test -n "$OAC_MAKEDIST_DISABLE"],
