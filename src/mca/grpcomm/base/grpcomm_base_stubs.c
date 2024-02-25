@@ -197,6 +197,9 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
     int rc;
     pmix_proc_t *p;
     size_t n, nmb;
+    pmix_list_t plist;
+    prte_namelist_t *nm;
+    bool found;
 
     /* search the existing tracker list to see if this already exists - we
      * default to using the groupID if one is given, otherwise we fallback
@@ -217,6 +220,42 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
                 PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                                      "%s grpcomm:base:returning existing collective",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                // if this is a bootstrap, adjust the membership
+                if (0 < sig->bootstrap) {
+                    PMIX_CONSTRUCT(&plist, pmix_list_t);
+                    for (n=0; n < sig->sz; n++) {
+                        // see if we already have this proc
+                        found = false;
+                        for (nmb=0; nmb < coll->sig->sz; nmb++) {
+                            if (PMIX_CHECK_PROCID(&sig->signature[n], &coll->sig->signature[nmb])) {
+                                // yes, we do
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            // cache the proc
+                            nm = PMIX_NEW(prte_namelist_t);
+                            memcpy(&nm->name, &sig->signature[n], sizeof(pmix_proc_t));
+                            pmix_list_append(&plist, &nm->super);
+                        }
+                    }
+                    // add any missing procs to the signature
+                    if (0 < pmix_list_get_size(&plist)) {
+                        n = coll->sig->sz + pmix_list_get_size(&plist);
+                        PMIX_PROC_CREATE(p, n);
+                        memcpy(p, coll->sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
+                        n = coll->sig->sz;
+                        PMIX_LIST_FOREACH(nm, &plist, prte_namelist_t) {
+                            memcpy(&p[n], &nm->name, sizeof(pmix_proc_t));
+                            ++n;
+                        }
+                        PMIX_LIST_DESTRUCT(&plist);
+                        PMIX_PROC_FREE(coll->sig->signature, coll->sig->sz);
+                        coll->sig->signature = p;
+                        coll->sig->sz = n;
+                    }
+                }
                 goto checkmembers;
             }
         } else if (sig->sz == coll->sig->sz) {
@@ -247,8 +286,16 @@ prte_grpcomm_coll_t *prte_grpcomm_base_get_tracker(prte_grpcomm_signature_t *sig
     coll->sig->sz = sig->sz;
     coll->sig->signature = (pmix_proc_t *) malloc(coll->sig->sz * sizeof(pmix_proc_t));
     memcpy(coll->sig->signature, sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
-
+    // need to know the bootstrap in case one is ongoing
+    coll->sig->bootstrap = sig->bootstrap;
     pmix_list_append(&prte_grpcomm_base.ongoing, &coll->super);
+
+    /* if this is a bootstrap operation, then there is no "rollup"
+     * collective - each daemon reports directly to the DVM controller */
+    if (0 < coll->sig->bootstrap) {
+        coll->nexpected = coll->sig->bootstrap;
+        goto checkmembers;
+    }
 
     /* now get the daemons involved */
     if (PRTE_SUCCESS != (rc = create_dmns(sig, &coll->dmns, &coll->ndmns))) {
@@ -274,17 +321,43 @@ checkmembers:
     if (NULL != sig->addmembers) {
         if (NULL == coll->sig->addmembers) {
             PMIX_PROC_CREATE(coll->sig->addmembers, sig->nmembers);
+            memcpy(coll->sig->addmembers, sig->addmembers, sig->nmembers * sizeof(pmix_proc_t));
             coll->sig->nmembers = sig->nmembers;
-            memcpy(coll->sig->addmembers, sig->addmembers, coll->sig->nmembers * sizeof(pmix_proc_t));
         } else {
             // aggregate them
-            nmb = coll->sig->nmembers + sig->nmembers;
-            PMIX_PROC_CREATE(p, nmb);
-            memcpy(p, coll->sig->addmembers, coll->sig->nmembers * sizeof(pmix_proc_t));
-            memcpy(&p[coll->sig->nmembers], sig->addmembers, sig->nmembers * sizeof(pmix_proc_t));
-            PMIX_PROC_FREE(coll->sig->addmembers, coll->sig->nmembers);
-            coll->sig->addmembers = p;
-            coll->sig->nmembers = nmb;
+            PMIX_CONSTRUCT(&plist, pmix_list_t);
+            for (n=0; n < sig->nmembers; n++) {
+                // see if we already have this proc
+                found = false;
+                for (nmb=0; nmb < coll->sig->nmembers; nmb++) {
+                    if (PMIX_CHECK_PROCID(&sig->addmembers[n], &coll->sig->addmembers[nmb])) {
+                        // yes, we do
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    // cache the proc
+                    nm = PMIX_NEW(prte_namelist_t);
+                    memcpy(&nm->name, &sig->addmembers[n], sizeof(pmix_proc_t));
+                    pmix_list_append(&plist, &nm->super);
+                }
+            }
+            // add any missing procs to the members
+            if (0 < pmix_list_get_size(&plist)) {
+                n = coll->sig->nmembers + pmix_list_get_size(&plist);
+                PMIX_PROC_CREATE(p, n);
+                memcpy(p, coll->sig->addmembers, coll->sig->nmembers * sizeof(pmix_proc_t));
+                n = coll->sig->nmembers;
+                PMIX_LIST_FOREACH(nm, &plist, prte_namelist_t) {
+                    memcpy(&p[n], &nm->name, sizeof(pmix_proc_t));
+                    ++n;
+                }
+                PMIX_LIST_DESTRUCT(&plist);
+                PMIX_PROC_FREE(coll->sig->addmembers, coll->sig->nmembers);
+                coll->sig->addmembers = p;
+                coll->sig->nmembers = n;
+            }
         }
     }
 

@@ -650,6 +650,13 @@ int prte_grpcomm_sig_pack(pmix_data_buffer_t *bkt,
         }
     }
 
+    // pack bootstrap number
+    rc = PMIx_Data_pack(NULL, bkt, &sig->bootstrap, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+
     if (NULL != sig->groupID) {
         // add the groupID if one is given
         rc = PMIx_Data_pack(NULL, bkt, &sig->groupID, 1, PMIX_STRING);

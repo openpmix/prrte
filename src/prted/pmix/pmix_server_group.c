@@ -76,8 +76,8 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     bool assignedID = false;
     bool procsadded = false;
     size_t cid;
-    pmix_proc_t *procs, *members;
-    size_t n, num_members;
+    pmix_proc_t *procs, *members, *finmembers = NULL;
+    size_t n, num_members, nfinmembers;
     pmix_data_array_t darray;
     pmix_info_t info;
     pmix_data_buffer_t dbuf;
@@ -150,6 +150,10 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
             cd->procs = procs;
             cd->nprocs += num_members;
             procsadded = true;
+        } else if (PMIX_CHECK_KEY(&info, PMIX_GROUP_MEMBERSHIP)) {
+            nfinmembers = info.value.data.darray->size;
+            PMIX_PROC_CREATE(finmembers, nfinmembers);
+            memcpy(finmembers, info.value.data.darray->array, nfinmembers * sizeof(pmix_proc_t));
         }
         /* cleanup */
         PMIX_INFO_DESTRUCT(&info);
@@ -171,9 +175,15 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
        /* add it to our list of known groups */
         pset = PMIX_NEW(pmix_server_pset_t);
         pset->name = strdup(cd->grpid);
-        pset->num_members = cd->nprocs;
-        PMIX_PROC_CREATE(pset->members, pset->num_members);
-        memcpy(pset->members, cd->procs, cd->nprocs * sizeof(pmix_proc_t));
+        if (NULL != finmembers) {
+            pset->num_members = nfinmembers;
+            PMIX_PROC_CREATE(pset->members, pset->num_members);
+            memcpy(pset->members, finmembers, nfinmembers * sizeof(pmix_proc_t));
+        } else {
+            pset->num_members = cd->nprocs;
+            PMIX_PROC_CREATE(pset->members, pset->num_members);
+            memcpy(pset->members, cd->procs, cd->nprocs * sizeof(pmix_proc_t));
+        }
         pmix_list_append(&prte_pmix_server_globals.groups, &pset->super);
     }
 
@@ -193,10 +203,20 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     n = 0;
     // pass back the final group membership
     darray.type = PMIX_PROC;
-    darray.array = cd->procs;
-    darray.size = cd->nprocs;
+    if (NULL != finmembers) {
+        darray.array = finmembers;
+        darray.size = nfinmembers;
+    } else {
+        darray.array = cd->procs;
+        darray.size = cd->nprocs;
+    }
     PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY);
-    PMIX_PROC_FREE(cd->procs, cd->nprocs);
+    if (NULL != cd->procs) {
+        PMIX_PROC_FREE(cd->procs, cd->nprocs);
+    }
+    if (NULL != finmembers) {
+        PMIX_PROC_FREE(finmembers, nfinmembers);
+    }
     ++n;
     if (assignedID) {
         PMIX_INFO_LOAD(&cd->info[n], PMIX_GROUP_CONTEXT_ID, &cid, PMIX_SIZE);
@@ -235,6 +255,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     pmix_proc_t *mbrs, *p;
     size_t num_members = 0;
     size_t nmembers;
+    size_t bootstrap = 0;
     bool copied = false;
     pmix_byte_object_t *bo = NULL;
     struct timeval tv = {0, 0};
@@ -253,14 +274,27 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
         /* see if they want a context id assigned */
         if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ASSIGN_CONTEXT_ID)) {
             assignID = PMIX_INFO_TRUE(&directives[i]);
+
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
             fence = PMIX_INFO_TRUE(&directives[i]);
+
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ENDPT_DATA)) {
             bo = (pmix_byte_object_t *) &directives[i].value.data.bo;
+
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_TIMEOUT)) {
             tv.tv_sec = directives[i].value.data.uint32;
+
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_LOCAL_ONLY)) {
             force_local = PMIX_INFO_TRUE(&directives[i]);
+
+#ifdef PMIX_GROUP_BOOTSTRAP
+        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_BOOTSTRAP)) {
+            PMIX_VALUE_GET_NUMBER(rc, &directives[i].value, bootstrap, size_t);
+            if (PMIX_SUCCESS != rc) {
+                return rc;
+            }
+#endif
+
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ADD_MEMBERS)) {
             // there can be more than one entry here as this is the aggregate
             // of info keys from local procs that called group_construct
@@ -298,7 +332,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
             /* add it to our list of known groups */
             pset = PMIX_NEW(pmix_server_pset_t);
             pset->name = strdup(grpid);
-            if (NULL != members) {}
             pset->num_members = nprocs;
             if (NULL != members) {
                 pset->num_members += num_members;
@@ -342,6 +375,7 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
         cd->sig->signature = (pmix_proc_t *) malloc(cd->sig->sz * sizeof(pmix_proc_t));
         memcpy(cd->sig->signature, procs, cd->sig->sz * sizeof(pmix_proc_t));
     }
+    cd->sig->bootstrap = bootstrap;
     if (NULL != members) {
         cd->sig->nmembers = num_members;
         if (copied) {

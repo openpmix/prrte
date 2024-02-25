@@ -133,6 +133,7 @@ static void scon(prte_grpcomm_signature_t *p)
     p->sz = 0;
     p->addmembers = NULL;
     p->nmembers = 0;
+    p->bootstrap = 0;
 }
 static void sdes(prte_grpcomm_signature_t *p)
 {

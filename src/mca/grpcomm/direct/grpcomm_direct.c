@@ -145,6 +145,13 @@ static int allgather(prte_grpcomm_coll_t *coll,
         return prte_pmix_convert_status(rc);
     }
 
+    /* if this is a bootstrap operation, send it to the HNP */
+    if (0 < coll->sig->bootstrap) {
+        PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, relay,
+                      PRTE_RML_TAG_ALLGATHER_DIRECT);
+        return rc;
+    }
+
     /* send this to ourselves for processing */
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
                          "%s grpcomm:direct:allgather sending to ourself",
@@ -360,20 +367,35 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                     return;
                 }
             }
-            /* if we added members, add them here */
-            if (0 < pmix_list_get_size(&coll->addmembers)) {
-                num_members = pmix_list_get_size(&coll->addmembers);
+            /* if this is a group operation, provide group info */
+            if (NULL != coll->sig->groupID) {
+                // provide the group ID
+                PMIX_INFO_LOAD(&infostat, PMIX_GROUP_ID, sig->groupID, PMIX_STRING);
+                rc = PMIx_Data_pack(NULL, &ctrlbuf, &infostat, 1, PMIX_INFO);
+                PMIX_INFO_DESTRUCT(&infostat);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    PMIX_DATA_BUFFER_RELEASE(reply);
+                    PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+                    PMIX_RELEASE(sig);
+                    return;
+                }
+                // construct the final membership
+                num_members = coll->sig->sz + pmix_list_get_size(&coll->addmembers);
                 PMIX_PROC_CREATE(addmembers, num_members);
-                n=0;
+                memcpy(addmembers, coll->sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
+                n = coll->sig->sz;
                 PMIX_LIST_FOREACH(nm, &coll->addmembers, prte_namelist_t) {
                     memcpy(&addmembers[n], &nm->name, sizeof(pmix_proc_t));
                     ++n;
                 }
+                /* sort the procs so everyone gets the same order */
+                qsort(addmembers, num_members, sizeof(pmix_proc_t), pmix_util_compare_proc);
                 darray.type = PMIX_PROC;
                 darray.array = addmembers;
                 darray.size = num_members;
-                PMIX_INFO_LOAD(&infostat, PMIX_GROUP_ADD_MEMBERS, &darray, PMIX_DATA_ARRAY);
-                PMIX_PROC_FREE(addmembers, num_members);
+                PMIX_INFO_LOAD(&infostat, PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY); // copies array
+                PMIX_DATA_ARRAY_DESTRUCT(&darray);
                 rc = PMIx_Data_pack(NULL, &ctrlbuf, &infostat, 1, PMIX_INFO);
                 PMIX_INFO_DESTRUCT(&infostat);
                 if (PMIX_SUCCESS != rc) {
@@ -708,6 +730,7 @@ static void barrier_release(int status, pmix_proc_t *sender,
     pmix_data_array_t darray;
     prte_pmix_server_op_caddy_t *cd;
     void *values;
+    size_t n;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
@@ -750,6 +773,8 @@ static void barrier_release(int status, pmix_proc_t *sender,
         PMIX_PROC_CREATE(cd->procs, cd->nprocs);
         memcpy(cd->procs, sig->signature, sig->sz * sizeof(pmix_proc_t));
         memcpy(&cd->procs[sig->sz], sig->addmembers, sig->nmembers * sizeof(pmix_proc_t));
+        /* sort the procs so everyone gets the same order */
+        qsort(cd->procs, cd->nprocs, sizeof(pmix_proc_t), pmix_util_compare_proc);
         darray.type = PMIX_PROC;
         darray.array = cd->procs;
         darray.size = cd->nprocs;
