@@ -770,6 +770,15 @@ int prte_grpcomm_sig_unpack(pmix_data_buffer_t *buffer,
         }
     }
 
+    // unpack the bootstrap count
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &s->bootstrap, &cnt, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(s);
+        return prte_pmix_convert_status(rc);
+    }
+
     // try and unpack the groupID - error is okay, just means
     // one wasn't provided
     save = buffer->unpack_ptr;
