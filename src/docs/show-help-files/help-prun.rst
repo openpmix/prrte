@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -1006,3 +1006,11 @@ is one not recognized:
 Please see "%s --help dvm" for a list of recognized
 options and examples
 
+[appfile-failure]
+
+The --app <arg> option was provided, but the specified
+file was not found or could not be opened:
+
+  file: %s
+
+Please correct the option and try again.
