@@ -507,9 +507,6 @@ int main(int argc, char *argv[])
         }
         fclose(fp);
     }
-    for (n=0; NULL != pargv[n]; n++) {
-        fprintf(stderr, "APP: %s\n", pargv[n]);
-    }
 
     /* decide if we are to use a persistent DVM, or act alone */
     opt = pmix_cmd_line_get_param(&results, PRTE_CLI_DVM);
