@@ -86,6 +86,7 @@
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_getcwd.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "src/class/pmix_pointer_array.h"
 #include "src/runtime/prte_progress_threads.h"
@@ -255,6 +256,23 @@ static void shutdown_callback(int fd, short flags, void *arg)
     exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 
+#if PMIX_NUMERIC_VERSION < 0x00040208
+static char *pmix_getline(FILE *fp)
+{
+    char *ret, *buff;
+    char input[1024];
+
+    ret = fgets(input, 1024, fp);
+    if (NULL != ret) {
+        input[strlen(input) - 1] = '\0'; /* remove newline */
+        buff = strdup(input);
+        return buff;
+    }
+
+    return NULL;
+}
+#endif
+
 int main(int argc, char *argv[])
 {
     int rc = 1, i;
@@ -270,11 +288,11 @@ int main(int argc, char *argv[])
     size_t napps;
     mylock_t mylock;
     uint32_t ui32;
-    char **pargv;
+    char **pargv, **split;
     int pargc;
     prte_job_t *jdata;
     prte_app_context_t *dapp;
-    bool proxyrun = false;
+    bool proxyrun = false, first;
     void *jinfo;
     pmix_proc_t pname;
     pmix_value_t *val;
@@ -287,6 +305,7 @@ int main(int argc, char *argv[])
     char *personality;
     pmix_cli_result_t results;
     pmix_cli_item_t *opt;
+    FILE *fp;
 
     /* init the globals */
     PMIX_CONSTRUCT(&apps, pmix_list_t);
@@ -459,6 +478,37 @@ int main(int argc, char *argv[])
      */
     if (0 == geteuid()) {
         schizo->allow_run_as_root(&results); // will exit us if not allowed
+    }
+
+    // check for an appfile
+    opt = pmix_cmd_line_get_param(&results, PRTE_CLI_APPFILE);
+    if (NULL != opt) {
+        // parse the file and add its context to the argv array
+        fp = fopen(opt->values[0], "r");
+        if (NULL == fp) {
+            pmix_show_help("help-prun", "appfile-failure", true, opt->values[0]);
+            return 1;
+        }
+        first = true;
+        while (NULL != (param = pmix_getline(fp))) {
+            if (!first) {
+                // add a colon delimiter
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&pargv, ":");
+                ++pargc;
+            }
+            // break the line down into parts
+            split = PMIX_ARGV_SPLIT_COMPAT(param, ' ');
+            for (n=0; NULL != split[n]; n++) {
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&pargv, split[n]);
+                ++pargc;
+            }
+            PMIX_ARGV_FREE_COMPAT(split);
+            first = false;
+        }
+        fclose(fp);
+    }
+    for (n=0; NULL != pargv[n]; n++) {
+        fprintf(stderr, "APP: %s\n", pargv[n]);
     }
 
     /* decide if we are to use a persistent DVM, or act alone */
