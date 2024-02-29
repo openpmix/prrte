@@ -712,7 +712,6 @@ int prte_grpcomm_sig_unpack(pmix_data_buffer_t *buffer,
     pmix_status_t rc;
     int32_t cnt;
     prte_grpcomm_signature_t *s;
-    char *save;
 
     s = PMIX_NEW(prte_grpcomm_signature_t);
 
@@ -724,13 +723,15 @@ int prte_grpcomm_sig_unpack(pmix_data_buffer_t *buffer,
         PMIX_RELEASE(s);
         return prte_pmix_convert_status(rc);
     }
-    PMIX_PROC_CREATE(s->signature, s->sz);
-    cnt = s->sz;
-    rc = PMIx_Data_unpack(NULL, buffer, s->signature, &cnt, PMIX_PROC);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        PMIX_RELEASE(s);
-        return prte_pmix_convert_status(rc);
+    if (0 < s->sz) {
+        PMIX_PROC_CREATE(s->signature, s->sz);
+        cnt = s->sz;
+        rc = PMIx_Data_unpack(NULL, buffer, s->signature, &cnt, PMIX_PROC);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_RELEASE(s);
+            return prte_pmix_convert_status(rc);
+        }
     }
 
     // unpack the context ID, if one was assigned
@@ -779,14 +780,13 @@ int prte_grpcomm_sig_unpack(pmix_data_buffer_t *buffer,
         return prte_pmix_convert_status(rc);
     }
 
-    // try and unpack the groupID - error is okay, just means
-    // one wasn't provided
-    save = buffer->unpack_ptr;
+    // unpack the groupID
     cnt = 1;
     rc = PMIx_Data_unpack(NULL, buffer, &s->groupID, &cnt, PMIX_STRING);
-    // ignore the return code
     if (PMIX_SUCCESS != rc) {
-        buffer->unpack_ptr = save;  // reset location for next unpack
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(s);
+        return prte_pmix_convert_status(rc);
     }
 
     *sig = s;

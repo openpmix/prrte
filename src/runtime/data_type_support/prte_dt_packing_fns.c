@@ -616,10 +616,12 @@ int prte_grpcomm_sig_pack(pmix_data_buffer_t *bkt,
         PMIX_ERROR_LOG(rc);
         return prte_pmix_convert_status(rc);
     }
-    rc = PMIx_Data_pack(NULL, bkt, sig->signature, sig->sz, PMIX_PROC);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_ERROR_LOG(rc);
-        return prte_pmix_convert_status(rc);
+    if (0 < sig->sz) {
+        rc = PMIx_Data_pack(NULL, bkt, sig->signature, sig->sz, PMIX_PROC);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
     }
 
     // pack the context ID, if one was given
@@ -657,13 +659,11 @@ int prte_grpcomm_sig_pack(pmix_data_buffer_t *bkt,
         return prte_pmix_convert_status(rc);
     }
 
-    if (NULL != sig->groupID) {
-        // add the groupID if one is given
-        rc = PMIx_Data_pack(NULL, bkt, &sig->groupID, 1, PMIX_STRING);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            return prte_pmix_convert_status(rc);
-        }
+    // add the groupID if one is given
+    rc = PMIx_Data_pack(NULL, bkt, &sig->groupID, 1, PMIX_STRING);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
     }
 
     return PRTE_SUCCESS;
