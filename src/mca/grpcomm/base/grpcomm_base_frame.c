@@ -134,6 +134,8 @@ static void scon(prte_grpcomm_signature_t *p)
     p->addmembers = NULL;
     p->nmembers = 0;
     p->bootstrap = 0;
+    p->finalmembership = NULL;
+    p->nfinal = 0;
 }
 static void sdes(prte_grpcomm_signature_t *p)
 {
@@ -145,6 +147,9 @@ static void sdes(prte_grpcomm_signature_t *p)
     }
     if (NULL != p->addmembers) {
         free(p->addmembers);
+    }
+    if (NULL != p->finalmembership) {
+        free(p->finalmembership);
     }
 }
 PMIX_CLASS_INSTANCE(prte_grpcomm_signature_t,

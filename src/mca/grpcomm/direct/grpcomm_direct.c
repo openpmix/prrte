@@ -174,7 +174,8 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     bool found;
     pmix_proc_t *addmembers = NULL;
     size_t num_members = 0;
-    prte_namelist_t *nm;
+    pmix_list_t nmlist;
+    prte_namelist_t *nm, *nm2;
     pmix_data_array_t darray;
     pmix_status_t st;
     pmix_info_t *info, infostat;
@@ -293,6 +294,10 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 if (PMIX_CHECK_PROCID(&nm->name, &sig->addmembers[m])) {
                     // already have it
                     found = true;
+                    // if the new rank is wildcard, keep it
+                    if (PMIX_RANK_WILDCARD == sig->addmembers[m].rank) {
+                        nm->name.rank = PMIX_RANK_WILDCARD;
+                    }
                     break;
                 }
             }
@@ -333,6 +338,63 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                 coll->sig->ctxid = prte_grpcomm_base.context_id;
                 --prte_grpcomm_base.context_id;
                 coll->sig->ctxid_assigned = true;
+            }
+
+            if (NULL != coll->sig->groupID) {
+                // construct the final membership
+                PMIX_CONSTRUCT(&nmlist, pmix_list_t);
+                // sadly, an exhaustive search
+                for (m=0; m < coll->sig->sz; m++) {
+                    found = false;
+                    PMIX_LIST_FOREACH(nm, &nmlist, prte_namelist_t) {
+                        if (PMIX_CHECK_PROCID(&coll->sig->signature[m], &nm->name)) {
+                            // if the new one is rank=WILDCARD, then ensure
+                            // we keep it as wildcard
+                            if (PMIX_RANK_WILDCARD == coll->sig->signature[m].rank) {
+                                nm->name.rank = PMIX_RANK_WILDCARD;
+                            }
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        nm = PMIX_NEW(prte_namelist_t);
+                        memcpy(&nm->name, &coll->sig->signature[m], sizeof(pmix_proc_t));
+                        pmix_list_append(&nmlist, &nm->super);
+                    }
+                }
+                // now check any added members
+                PMIX_LIST_FOREACH(nm, &coll->addmembers, prte_namelist_t) {
+                    found = false;
+                    PMIX_LIST_FOREACH(nm2, &nmlist, prte_namelist_t) {
+                        if (PMIX_CHECK_PROCID(&nm->name, &nm2->name)) {
+                            // if the new one is rank=WILDCARD, then ensure
+                            // we keep it as wildcard
+                            if (PMIX_RANK_WILDCARD == nm->name.rank) {
+                                nm2->name.rank = PMIX_RANK_WILDCARD;
+                            }
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        nm2 = PMIX_NEW(prte_namelist_t);
+                        memcpy(&nm2->name, &nm->name, sizeof(pmix_proc_t));
+                        pmix_list_append(&nmlist, &nm2->super);
+                    }
+                }
+                // create the array of members
+                coll->sig->nfinal = pmix_list_get_size(&nmlist);
+                PMIX_PROC_CREATE(coll->sig->finalmembership, coll->sig->nfinal);
+                m = 0;
+                PMIX_LIST_FOREACH(nm, &nmlist, prte_namelist_t) {
+                    memcpy(&coll->sig->finalmembership[m], &nm->name, sizeof(pmix_proc_t));
+                    ++m;
+                }
+                PMIX_LIST_DESTRUCT(&nmlist);
+
+                /* sort the procs so everyone gets the same order */
+                qsort(coll->sig->finalmembership, coll->sig->nfinal, sizeof(pmix_proc_t), pmix_util_compare_proc);
             }
 
             /* pack the signature */
@@ -380,22 +442,12 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                     PMIX_RELEASE(sig);
                     return;
                 }
-                // construct the final membership
-                num_members = coll->sig->sz + pmix_list_get_size(&coll->addmembers);
-                PMIX_PROC_CREATE(addmembers, num_members);
-                memcpy(addmembers, coll->sig->signature, coll->sig->sz * sizeof(pmix_proc_t));
-                n = coll->sig->sz;
-                PMIX_LIST_FOREACH(nm, &coll->addmembers, prte_namelist_t) {
-                    memcpy(&addmembers[n], &nm->name, sizeof(pmix_proc_t));
-                    ++n;
-                }
-                /* sort the procs so everyone gets the same order */
-                qsort(addmembers, num_members, sizeof(pmix_proc_t), pmix_util_compare_proc);
+                // provide the final membership in an attribute
                 darray.type = PMIX_PROC;
-                darray.array = addmembers;
-                darray.size = num_members;
+                darray.array = coll->sig->finalmembership;
+                darray.size = coll->sig->nfinal;
                 PMIX_INFO_LOAD(&infostat, PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY); // copies array
-                PMIX_DATA_ARRAY_DESTRUCT(&darray);
+                // do not destruct the array
                 rc = PMIx_Data_pack(NULL, &ctrlbuf, &infostat, 1, PMIX_INFO);
                 PMIX_INFO_DESTRUCT(&infostat);
                 if (PMIX_SUCCESS != rc) {
@@ -406,6 +458,8 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                     return;
                 }
             }
+
+            // pack the ctrl object
             PMIX_DATA_BUFFER_UNLOAD(&ctrlbuf, ctrlsbo.bytes, ctrlsbo.size);
             PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
             rc = PMIx_Data_pack(NULL, reply, &ctrlsbo, 1, PMIX_BYTE_OBJECT);
@@ -768,19 +822,11 @@ static void barrier_release(int status, pmix_proc_t *sender,
         if (sig->ctxid_assigned) {
             PMIX_INFO_LIST_ADD(rc, values, PMIX_GROUP_CONTEXT_ID, &sig->ctxid, PMIX_SIZE);
         }
-        // load the membership
-        cd->nprocs = sig->sz + sig->nmembers;
-        PMIX_PROC_CREATE(cd->procs, cd->nprocs);
-        memcpy(cd->procs, sig->signature, sig->sz * sizeof(pmix_proc_t));
-        memcpy(&cd->procs[sig->sz], sig->addmembers, sig->nmembers * sizeof(pmix_proc_t));
-        /* sort the procs so everyone gets the same order */
-        qsort(cd->procs, cd->nprocs, sizeof(pmix_proc_t), pmix_util_compare_proc);
+        // load the membership into the info list array - note: this copies the array!
         darray.type = PMIX_PROC;
-        darray.array = cd->procs;
-        darray.size = cd->nprocs;
-        // load the array - note: this copies the array!
+        darray.array = sig->finalmembership;
+        darray.size = sig->nfinal;
         PMIX_INFO_LIST_ADD(rc, values, PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY);
-        PMIX_PROC_FREE(cd->procs, cd->nprocs);
         // provide the group ID
         PMIX_INFO_LIST_ADD(rc, values, PMIX_GROUP_ID, sig->groupID, PMIX_STRING);
         // set the range to be only procs that were added
