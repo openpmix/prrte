@@ -789,6 +789,25 @@ int prte_grpcomm_sig_unpack(pmix_data_buffer_t *buffer,
         return prte_pmix_convert_status(rc);
     }
 
+    // unpack the final membership
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &s->nfinal, &cnt, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(s);
+        return prte_pmix_convert_status(rc);
+    }
+    if (0 < s->nfinal) {
+        PMIX_PROC_CREATE(s->finalmembership, s->nfinal);
+        cnt = s->nfinal;
+        rc = PMIx_Data_unpack(NULL, buffer, s->finalmembership, &cnt, PMIX_PROC);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            PMIX_RELEASE(s);
+            return prte_pmix_convert_status(rc);
+        }
+    }
+
     *sig = s;
     return PRTE_SUCCESS;
 }

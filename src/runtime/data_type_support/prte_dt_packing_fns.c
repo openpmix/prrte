@@ -666,5 +666,19 @@ int prte_grpcomm_sig_pack(pmix_data_buffer_t *bkt,
         return prte_pmix_convert_status(rc);
     }
 
+    // pack final membership, if given
+    rc = PMIx_Data_pack(NULL, bkt, &sig->nfinal, 1, PMIX_SIZE);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        return prte_pmix_convert_status(rc);
+    }
+    if (0 < sig->nfinal) {
+        rc = PMIx_Data_pack(NULL, bkt, sig->finalmembership, sig->nfinal, PMIX_PROC);
+        if (PMIX_SUCCESS != rc) {
+            PMIX_ERROR_LOG(rc);
+            return prte_pmix_convert_status(rc);
+        }
+    }
+
     return PRTE_SUCCESS;
 }

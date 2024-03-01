@@ -71,6 +71,8 @@ typedef struct {
     pmix_proc_t *addmembers;
     size_t nmembers;
     size_t bootstrap;
+    pmix_proc_t *finalmembership;
+    size_t nfinal;
 } prte_grpcomm_signature_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_grpcomm_signature_t);
 
