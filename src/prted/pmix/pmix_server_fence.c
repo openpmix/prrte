@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -86,7 +86,6 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
 {
     prte_pmix_mdx_caddy_t *cd = NULL;
     pmix_data_buffer_t buf;
-    pmix_byte_object_t payload;
     int rc;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,

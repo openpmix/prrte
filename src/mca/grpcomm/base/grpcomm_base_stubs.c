@@ -506,7 +506,6 @@ static int pack_xcast(prte_grpcomm_signature_t *sig, pmix_data_buffer_t *buffer,
     bool compressed;
     pmix_byte_object_t bo;
     size_t sz;
-    uint8_t flag;
 
     /* setup an intermediate buffer */
     PMIX_DATA_BUFFER_CONSTRUCT(&data);

@@ -16,7 +16,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -74,7 +74,7 @@ const char *prte_info_type_all = "all";
 const char *prte_info_type_prte = "prte";
 const char *prte_info_type_base = "base";
 
-pmix_pointer_array_t mca_types = {{0}};
+pmix_pointer_array_t mca_types = PMIX_POINTER_ARRAY_STATIC_INIT;
 
 int main(int argc, char *argv[])
 {
@@ -83,7 +83,6 @@ int main(int argc, char *argv[])
     bool want_all = false;
     int i;
     char *str;
-    int option_index = 0;   /* getopt_long stores the option index here. */
     char *ptr;
     char *personality;
     prte_schizo_base_module_t *schizo;

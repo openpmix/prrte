@@ -299,9 +299,8 @@ int psched_server_init(pmix_cli_result_t *results)
     char *tmp;
     pmix_status_t prc;
     prte_pmix_lock_t lock;
-    bool flag;
     pmix_proc_t myproc;
-    pmix_cli_item_t *opt;
+    PRTE_HIDE_UNUSED_PARAMS(results);
 
     if (psched_globals.initialized) {
         return PRTE_SUCCESS;

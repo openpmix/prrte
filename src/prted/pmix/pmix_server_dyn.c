@@ -800,17 +800,10 @@ static void interim(int sd, short args, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
     pmix_proc_t *requestor = &cd->proc;
-    prte_job_t *jdata, *djob;
+    prte_job_t *jdata;
     prte_app_context_t *app;
-    pmix_app_t *papp;
-    pmix_info_t *info;
-    int rc, i;
-    char *endptr;
-    bool flag;
-    size_t m, n;
-    uint16_t u16;
-    uint32_t u32;
-    pmix_rank_t rank;
+    int rc;
+    size_t n;
     prte_rmaps_options_t options;
     prte_schizo_base_module_t *schizo;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);

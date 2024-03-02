@@ -74,7 +74,6 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     int rc = PRTE_SUCCESS;
     pmix_status_t ret;
     bool assignedID = false;
-    bool procsadded = false;
     size_t cid;
     pmix_proc_t *procs, *members, *finmembers = NULL;
     size_t n, num_members, nfinmembers;
@@ -149,7 +148,6 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
             PMIX_PROC_FREE(cd->procs, cd->nprocs);
             cd->procs = procs;
             cd->nprocs += num_members;
-            procsadded = true;
         } else if (PMIX_CHECK_KEY(&info, PMIX_GROUP_MEMBERSHIP)) {
             nfinmembers = info.value.data.darray->size;
             PMIX_PROC_CREATE(finmembers, nfinmembers);
@@ -261,8 +259,8 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     struct timeval tv = {0, 0};
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s Group request recvd with %u directives",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ndirs);
+                        "%s Group request recvd with %lu directives",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned long)ndirs);
 
     /* they are required to pass us an id */
     if (NULL == grpid) {
@@ -318,6 +316,9 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
                 num_members = num_members + nmembers;
             }
         }
+    }
+    if (0 < tv.tv_sec) {
+        return PMIX_ERR_NOT_SUPPORTED;
     }
 
     /* if they don't want us to do a fence and they don't want a

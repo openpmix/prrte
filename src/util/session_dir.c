@@ -261,7 +261,6 @@ int prte_session_dir(pmix_proc_t *proc)
 {
     int rc = PRTE_SUCCESS;
     prte_job_t *jdata;
-    prte_proc_t *p;
 
     /*
      * Get the session directory full name

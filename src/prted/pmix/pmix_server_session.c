@@ -48,7 +48,7 @@ static int process_directive(pmix_server_req_t *req)
     bool restore = false;
     bool signal = false;
     bool extend = false;
-    int sigvalue, tval;
+    int sigvalue = 0, tval = 0;
 
     /* cycle across the directives to see what we are being asked to do */
     for (n = 0; n < req->ninfo; n++) {
@@ -213,6 +213,10 @@ static int process_directive(pmix_server_req_t *req)
             return PRTE_ERR_NOT_FOUND;
         }
         // TODO: execute the specified operation on this session
+        if (terminate || pause || resume || restore || preempt ||
+            signal || extend || 0 < tval || 0 < sigvalue) {
+            return PRTE_ERR_NOT_SUPPORTED;
+        }
         return PRTE_SUCCESS;
     }
 
@@ -275,6 +279,7 @@ ANSWER:
 static void passthru(int sd, short args, void *cbdata)
 {
     pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     if (NULL != req->infocbfunc) {
         // call the requestor's callback with the returned info
@@ -318,6 +323,7 @@ static void pass_request(int sd, short args, void *cbdata)
     pmix_status_t rc;
     size_t n;
     pmix_info_t *xfer;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     /* add this request to our local request tracker array */
     req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);

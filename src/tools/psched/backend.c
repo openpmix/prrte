@@ -101,10 +101,7 @@ static void _toolconn(int sd, short args, void *cbdata)
 {
     pmix_server_req_t *cd = (pmix_server_req_t *) cbdata;
     int rc;
-    char *tmp;
     size_t n;
-    pmix_data_buffer_t *buf;
-    prte_plm_cmd_flag_t command = PRTE_PLM_ALLOC_JOBID_CMD;
     pmix_status_t xrc;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 

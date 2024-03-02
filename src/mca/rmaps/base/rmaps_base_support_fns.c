@@ -54,7 +54,7 @@
 int prte_rmaps_base_filter_nodes(prte_app_context_t *app, pmix_list_t *nodes, bool remove)
 {
     int rc = PRTE_ERR_TAKE_NEXT_OPTION;
-    char *hosts, *alloc_id;
+    char *hosts;
 
     /* did the app_context contain a hostfile? */
     hosts = NULL;

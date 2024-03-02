@@ -169,11 +169,9 @@ static void allgather_recv(int status, pmix_proc_t *sender,
 {
     int32_t cnt;
     int rc, timeout;
-    size_t n, ninfo, memsize, m;
+    size_t n, ninfo, m;
     bool assignID = false;
     bool found;
-    pmix_proc_t *addmembers = NULL;
-    size_t num_members = 0;
     pmix_list_t nmlist;
     prte_namelist_t *nm, *nm2;
     pmix_data_array_t darray;
@@ -184,7 +182,6 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     pmix_data_buffer_t ctrlbuf;
     pmix_data_buffer_t *reply;
     prte_grpcomm_coll_t *coll;
-    pmix_status_t local_status;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
@@ -744,7 +741,6 @@ static void xcast_recv(int status, pmix_proc_t *sender,
         }
     }
 
-CLEANUP:
     /* cleanup */
     PMIX_LIST_DESTRUCT(&coll);
     PMIX_DATA_BUFFER_RELEASE(rly); // retain accounting
@@ -768,6 +764,7 @@ CLEANUP:
 static void opcbfunc(pmix_status_t status, void *cbdata)
 {
     prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t*)cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(status);
 
     PMIX_INFO_FREE(cd->info, cd->ninfo);
     PMIX_RELEASE(cd);
@@ -784,7 +781,6 @@ static void barrier_release(int status, pmix_proc_t *sender,
     pmix_data_array_t darray;
     prte_pmix_server_op_caddy_t *cd;
     void *values;
-    size_t n;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,

@@ -979,7 +979,6 @@ int main(int argc, char *argv[])
                 close(outpipe);
             } else {
                 /* must be a file */
-                FILE *fp;
                 fp = fopen(opt->values[0], "w");
                 if (NULL == fp) {
                     pmix_output(0, "Impossible to open the file %s in write mode\n", opt->values[0]);
@@ -1111,7 +1110,7 @@ int main(int argc, char *argv[])
             /* both cannot be present, or they must agree */
             if (NULL != opt) {
                 n = strtol(opt->values[0], NULL, 10);
-                if (i != n) {
+                if (i != (int)n) {
                     pmix_show_help("help-prun.txt", "prun:timeoutconflict", false,
                                    prte_tool_basename, n, timeoutenv);
                     PRTE_UPDATE_EXIT_STATUS(1);

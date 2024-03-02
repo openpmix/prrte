@@ -95,9 +95,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     pmix_topology_t topo;
     pmix_data_array_t darray, lparray;
     bool flag, *fptr;
-    size_t size, sz;
-    pmix_info_t *iptr;
-    void *next;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s register nspace for %s",
@@ -128,7 +125,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     /* pass the session ID */
     ui32_ptr = &ui32;
     if(prte_get_attribute(&jdata->attributes, PRTE_JOB_SESSION_ID, (void **) &ui32_ptr, PMIX_UINT32)){
-        PMIX_INFO_LIST_ADD(ret, info, PMIX_SESSION_ID, &ui32, PMIX_UINT32); 
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_SESSION_ID, &ui32, PMIX_UINT32);
         if (PMIX_SUCCESS != ret) {
             PMIX_ERROR_LOG(ret);
             PMIX_INFO_LIST_RELEASE(info);

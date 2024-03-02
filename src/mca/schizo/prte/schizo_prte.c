@@ -426,7 +426,7 @@ static struct option ptermoptions[] = {
 
     PMIX_OPTION_END
 };
-static char *ptermshorts = "hvV";
+static char *ptermshorts = "hvVp";
 
 static struct option pinfooptions[] = {
     /* basic options */

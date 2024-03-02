@@ -207,6 +207,7 @@ pmix_status_t prte_server_send_request(uint8_t cmd, pmix_server_req_t *req)
 static void passthru(int sd, short args, void *cbdata)
 {
     pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     if (NULL != req->infocbfunc) {
         // call the requestor's callback with the returned info
@@ -249,6 +250,7 @@ static void pass_request(int sd, short args, void *cbdata)
     pmix_status_t rc;
     size_t n;
     pmix_info_t *xfer;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     /* add this request to our local request tracker array */
     req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);

@@ -435,7 +435,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
     prte_mapping_policy_t tmp;
     int rc, n;
     bool ppr = false;
-    char *temp_parm, *temp_token, *parm_delimiter;
+    char *temp_token, *parm_delimiter;
 
     /* set defaults */
     tmp = 0;
