@@ -280,7 +280,6 @@ static void display_cpus(prte_topology_t *t,
 void prte_ras_base_display_cpus(prte_job_t *jdata, char *nodelist)
 {
     char **nodes = NULL;
-    char *ptr;
     int i, j, m;
     prte_topology_t *t;
     prte_node_t *nptr;

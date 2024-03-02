@@ -54,6 +54,7 @@ static void display_cpus(prte_topology_t *t,
     hwloc_cpuset_t avail = NULL;
     hwloc_cpuset_t allowed;
     hwloc_cpuset_t coreset = NULL;
+    PRTE_HIDE_UNUSED_PARAMS(node);
 
     char *tmp1, *tmp2;
 
@@ -198,7 +199,8 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
                       (NULL == src->name) ? "UNKNOWN" : src->name, (int) src->slots,
                       (int) src->slots_max);
 
-        pmix_asprintf(&tmp2,"");
+        tmp2 = (char*)malloc(1);
+        tmp2[0] = '\0';
         for (j=0; j < prte_node_topologies->size; j++) {
             t = (prte_topology_t*)pmix_pointer_array_get_item(prte_node_topologies, j);
             if (NULL != t) {
@@ -488,13 +490,11 @@ void prte_map_print(char **output, prte_job_t *jdata)
 {
     char *tmp = NULL, *tmp2 = NULL, *tmp3 = NULL, *tmp4 = NULL;
     char *tmp_node = NULL;
-    int32_t i, j;
+    int32_t i;
     prte_node_t *node;
-    prte_proc_t *proc;
     prte_job_map_t *src = jdata->map;
     uint16_t u16, *u16ptr = &u16;
     char *ppr, *cpus_per_rank, *cpu_type, *cpuset = NULL;
-    prte_topology_t *t;
 
     /* set default result */
     *output = NULL;
@@ -503,7 +503,8 @@ void prte_map_print(char **output, prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
         /* creating the output in an XML format */
         pmix_asprintf(&tmp4, "<?xml version=\"1.0\" ?>\n<map>\n");
-        pmix_asprintf(&tmp,"");
+        tmp = (char*)malloc(1);
+        tmp[0] = '\0';
 
         /* loop through nodes */
         for (i = 0; i < src->nodes->size; i++) {

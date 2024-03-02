@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -87,7 +87,6 @@ static void _query(int sd, short args, void *cbdata)
     prte_app_context_t *app;
     int matched;
     pmix_proc_info_t *procinfo;
-    pmix_info_t *info;
     pmix_data_array_t dry;
     prte_proc_t *proct;
     pmix_proc_t *proc;
@@ -697,9 +696,7 @@ static void _query(int sd, short args, void *cbdata)
                 /* cycle thru the job and create an entry for each proc */
                 PMIX_DATA_ARRAY_CONSTRUCT(&dry, grp->num_members, PMIX_PROC);
                 proc = (pmix_proc_t *) dry.array;
-                for (k = 0; k < grp->num_members; k++) {
-                    PMIX_LOAD_PROCID(&proc[k], grp->members[k].nspace, grp->members[k].rank);
-                }
+                memcpy(proc, grp->members, grp->num_members * sizeof(pmix_proc_t));
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_GROUP_MEMBERSHIP, &dry, PMIX_DATA_ARRAY);
                 PMIX_DATA_ARRAY_DESTRUCT(&dry);
                 if (PMIX_SUCCESS != rc) {

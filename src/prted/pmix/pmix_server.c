@@ -1458,6 +1458,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         }
         req->inprogress = false;
         pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, req->local_index, NULL);
+        rc = prte_pmix_convert_status(prc);
         send_error(rc, &pproc, sender, index);
         return;
     }
@@ -1746,11 +1747,11 @@ static void pmix_server_log(int status, pmix_proc_t *sender,
 }
 
 /* alloc callback to send the results to the requesting daemon */
-void send_alloc_resp(pmix_status_t status,
-                     pmix_info_t info[], size_t ninfo,
-                     void *cbdata,
-                     pmix_release_cbfunc_t release_fn,
-                     void *release_cbdata)
+static void send_alloc_resp(pmix_status_t status,
+                            pmix_info_t info[], size_t ninfo,
+                            void *cbdata,
+                            pmix_release_cbfunc_t release_fn,
+                            void *release_cbdata)
 {
     pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
     pmix_data_buffer_t *buf;
@@ -1810,15 +1811,12 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     pmix_status_t rc;
     uint8_t cmd;
     int32_t cnt;
-    size_t ninfo, need_id, n;
+    size_t ninfo;
     pmix_alloc_directive_t allocdir;
     uint32_t sessionID;
     pmix_info_t *info = NULL;
     pmix_proc_t source;
     pmix_server_req_t *req;
-    prte_session_t *session;
-    prte_job_t *client_job;
-    char alloc_id[64];
     int refid;
     PRTE_HIDE_UNUSED_PARAMS(status, tg, cbdata);
 

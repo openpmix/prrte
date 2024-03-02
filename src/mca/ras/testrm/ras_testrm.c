@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  *
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,6 +40,7 @@ prte_ras_base_module_t prte_ras_testrm_module = {
 static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
 {
     int rc;
+    PRTE_HIDE_UNUSED_PARAMS(jdata);
 
     rc = prte_util_add_hostfile_nodes(nodes, prte_mca_ras_testrm_component.hostfile);
     return rc;

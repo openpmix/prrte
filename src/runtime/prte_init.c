@@ -183,7 +183,6 @@ int prte_init_util(prte_proc_type_t flags)
 {
     int ret;
     char *error = NULL;
-    char *path = NULL;
 
     if (util_initialized) {
         return PRTE_SUCCESS;

@@ -111,31 +111,9 @@ typedef struct {
     size_t ninfo;
 } myxfer_t;
 
-static void infocbfunc(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *cbdata,
-                       pmix_release_cbfunc_t release_fn, void *release_cbdata)
-{
-    myxfer_t *xfer = (myxfer_t *) cbdata;
-    size_t n;
-
-    xfer->status = status;
-    if (NULL != info) {
-        xfer->ninfo = ninfo;
-        PMIX_INFO_CREATE(xfer->info, xfer->ninfo);
-        for (n = 0; n < ninfo; n++) {
-            PMIX_INFO_XFER(&xfer->info[n], &info[n]);
-        }
-    }
-
-    if (NULL != release_fn) {
-        release_fn(release_cbdata);
-    }
-    PRTE_PMIX_WAKEUP_THREAD(&xfer->lock);
-}
-
 static bool forcibly_die = false;
 static int wait_pipe[2];
 static prte_event_t term_handler;
-static prte_event_t epipe_handler;
 static int term_pipe[2];
 static pmix_mutex_t abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static void clean_abort(int fd, short flags, void *arg);
@@ -143,10 +121,10 @@ static void abort_signal_callback(int signal);
 
 static void parent_died_fn(size_t evhdlr_registration_id, pmix_status_t status,
                            const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
-                           pmix_info_t results[], size_t nresults,
+                           pmix_info_t res[], size_t nres,
                            pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
 {
-    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status, source, info, ninfo, results, nresults);
+    PRTE_HIDE_UNUSED_PARAMS(evhdlr_registration_id, status, source, info, ninfo, res, nres);
     clean_abort(0, 0, NULL);
     cbfunc(PMIX_EVENT_ACTION_COMPLETE, NULL, 0, NULL, NULL, cbdata);
 }
@@ -195,20 +173,12 @@ static bool check_exist(char *path)
 int main(int argc, char *argv[])
 {
     int ret = 0;
-    int i, code;
-    pmix_data_buffer_t *buffer;
-    pmix_value_t val;
-    pmix_proc_t proc, pname;
+    int code;
+    pmix_proc_t pname;
     pmix_status_t prc;
     myxfer_t xfer;
-    pmix_data_buffer_t pbuf, *wbuf;
-    pmix_byte_object_t pbo;
-    int8_t flag;
-    uint8_t naliases, ni;
-    char **nonlocal = NULL, *personality, *mypidfile;
-    int n;
+    char *mypidfile = NULL;
     pmix_info_t info;
-    pmix_value_t *vptr;
     char **pargv;
     int pargc;
     prte_schizo_base_module_t *schizo;
@@ -529,6 +499,9 @@ int main(int argc, char *argv[])
                 pmix_asprintf(&leftover, "%lu", (unsigned long) getpid());
                 /* output to the pipe */
                 prc = pmix_fd_write(outpipe, strlen(leftover) + 1, leftover);
+                if (PMIX_SUCCESS != prc) {
+                    fprintf(stderr, "Error writing PID to pipe: %s\n", strerror(errno));
+                }
                 free(leftover);
                 close(outpipe);
             } else {
@@ -715,6 +688,9 @@ DONE:
     PRTE_UPDATE_EXIT_STATUS(ret);
 
     /* cleanup and leave */
+    if (NULL != mypidfile) {
+        unlink(mypidfile);
+    }
     psched_server_finalize();
 
     /* release our internal job object - this

@@ -59,6 +59,7 @@ void psched_request_init(int fd, short args, void *cbdata)
     size_t n;
     pmix_status_t rc, rcerr = PMIX_SUCCESS;
     bool notwaiting = false;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     pmix_output_verbose(2, psched_globals.output,
                         "%s scheduler:psched: init request",
@@ -176,6 +177,7 @@ void psched_request_init(int fd, short args, void *cbdata)
 void psched_request_queue(int fd, short args, void *cbdata)
 {
     psched_req_t *req = (psched_req_t*)cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     pmix_output_verbose(2, psched_globals.output,
                         "%s scheduler:psched: queue request",
@@ -193,6 +195,7 @@ void psched_request_queue(int fd, short args, void *cbdata)
 void psched_session_complete(int fd, short args, void *cbdata)
 {
     psched_req_t *req = (psched_req_t*)cbdata;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args, req);
 
     pmix_output_verbose(2, psched_globals.output,
                         "%s scheduler:psched: session complete",

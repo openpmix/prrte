@@ -18,7 +18,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2021 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -304,7 +304,6 @@ static char *genhelp =
     "    -skip-launch-node                do not run MPI processes on the launch node\n"
     "    -gpus-per-proc                   number of GPUs per process (default: auto)\n"
 ;
-#endif
 
 static void check_and_replace(char **argv, int idx,
                               char *replacement)
@@ -322,11 +321,14 @@ static void check_and_replace(char **argv, int idx,
         free(tmp);
     }
 }
+#endif
 
 static int convert_deprecated_cli(pmix_cli_result_t *results,
                                   bool silent)
 {
+    PRTE_HIDE_UNUSED_PARAMS(results, silent);
 #if 0
+
     char **pargs, *p2;
     int rc = PRTE_SUCCESS;
 
@@ -416,10 +418,11 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
     return PRTE_SUCCESS;
 }
 
+#if 0
 static int parse_deprecated_cli(pmix_cli_result_t *results,
                                 bool silent)
 {
-#if 0
+    PRTE_HIDE_UNUSED_PARAMS(results, silent);
     pmix_status_t rc;
 
     char *options[] = {"--genv",
@@ -468,9 +471,9 @@ static int parse_deprecated_cli(pmix_cli_result_t *results,
                                                  true, convert_deprecated_cli);
 
     return rc;
-#endif
     return PRTE_SUCCESS;
 }
+#endif
 
 static int parse_cli(char **argv, pmix_cli_result_t *results,
                      bool silent)
@@ -530,6 +533,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
 static int parse_env(char **srcenv, char ***dstenv,
                      pmix_cli_result_t *cli)
 {
+    PRTE_HIDE_UNUSED_PARAMS(srcenv, dstenv, cli);
 #if 0
     char *p1, *p2;
     prte_value_t *pval;
@@ -599,6 +603,7 @@ static int detect_proxy(char *personalities)
 
 static void allow_run_as_root(pmix_cli_result_t *results)
 {
+    PRTE_HIDE_UNUSED_PARAMS(results);
     /* mpich always allows run-as-root */
     return;
 }
@@ -612,6 +617,7 @@ static void job_info(pmix_cli_result_t *results,
 
 static int check_sanity(pmix_cli_result_t *cmd_line)
 {
+    PRTE_HIDE_UNUSED_PARAMS(cmd_line);
 #if 0
     prte_value_t *pval;
     char *mappers[] = {"slot", "hwthread", "core", "l1cache", "l2cache",  "l3cache", "l4cache", "l5cache", "package",

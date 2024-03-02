@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -129,19 +129,6 @@ pmix_status_t psched_deregister_events_fn(pmix_status_t *codes, size_t ncodes,
     PMIX_POST_OBJECT(cd);
     prte_event_active(&(cd->ev), PRTE_EV_WRITE, 1);
     return PRTE_SUCCESS;
-}
-
-static void _notify_release(int status, void *cbdata)
-{
-    prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t *) cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(status);
-
-    PMIX_ACQUIRE_OBJECT(cd);
-
-    if (NULL != cd->info) {
-        PMIX_INFO_FREE(cd->info, cd->ninfo);
-    }
-    PMIX_RELEASE(cd);
 }
 
 pmix_status_t psched_notify_event(pmix_status_t code, const pmix_proc_t *source,

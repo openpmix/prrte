@@ -52,7 +52,6 @@ int prte_finalize(void)
     prte_job_t *jdata = NULL, *child_jdata = NULL, *next_jdata = NULL;
     prte_app_context_t *app;
     prte_proc_t *p;
-    pmix_pointer_array_t *array;
     prte_node_t *node;
     prte_topology_t *topo;
 

@@ -366,7 +366,7 @@ int prte_set_session_object(prte_session_t *session)
 }
 
 bool prte_sessions_related(prte_session_t *session1, prte_session_t *session2){
-    size_t n;
+    int n;
     prte_session_t *session_ptr;
 
     if(session1->session_id == session2->session_id){

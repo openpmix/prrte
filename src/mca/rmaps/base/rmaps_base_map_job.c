@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      UT-Battelle, LLC. All rights reserved.
  *
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -64,7 +64,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     pmix_proc_t *pptr;
     int rc = PRTE_SUCCESS;
     int n;
-    bool did_map, pernode = false, ppr_node = false, ppr_socket = false;
+    bool did_map, pernode = false;
     prte_rmaps_base_selected_module_t *mod;
     prte_job_t *parent = NULL;
     prte_app_context_t *app;
@@ -1095,7 +1095,7 @@ static int map_colocate(prte_job_t *jdata,
                     }
                     jdata->num_procs += 1;
                     app->num_procs += 1;
-                    PMIX_RELEASE(proc); 
+                    PMIX_RELEASE(proc);
                 }
             }
         }

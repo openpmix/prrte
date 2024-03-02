@@ -4,7 +4,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -83,13 +83,6 @@ static void force_quit(int fd, short args, void *cbdata)
 static int add_psched_state(prte_sched_state_t state,
                             prte_state_cbfunc_t cbfunc);
 static void psched_print_state_machine(void);
-
-/************************
- * Local variables
- ************************/
-static bool terminate_dvm = false;
-static bool dvm_terminated = false;
-
 
 prte_state_base_module_t psched_state_module = {
     .init = init,

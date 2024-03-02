@@ -20,7 +20,7 @@
  *                         All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2019-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -61,8 +61,6 @@
 #include "src/util/pmix_show_help.h"
 
 #include "src/hwloc/hwloc-internal.h"
-
-static bool topo_in_shmem = false;
 
 bool prte_hwloc_base_core_cpus(hwloc_topology_t topo)
 {
@@ -542,6 +540,9 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
                                                 unsigned cache_level)
 {
     int rc;
+#if HWLOC_API_VERSION >= 0x20000
+    PRTE_HIDE_UNUSED_PARAMS(cache_level);
+#endif
 
     /* bozo check */
     if (NULL == topo) {
@@ -591,6 +592,10 @@ unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo, hwloc_obj
 hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo, hwloc_obj_type_t target,
                                             unsigned cache_level, unsigned int instance)
 {
+#if HWLOC_API_VERSION >= 0x20000
+    PRTE_HIDE_UNUSED_PARAMS(cache_level);
+#endif
+
     /* bozo check */
     if (NULL == topo) {
         return NULL;
@@ -1243,9 +1248,9 @@ void prte_hwloc_build_map(hwloc_topology_t topo,
 }
 
 /* formatting core/hwt binding information as xml elements */
-int hwloc_bitmap_list_snprintf_exp(char *__hwloc_restrict buf, size_t buflen, 
-                                   const struct hwloc_bitmap_s *__hwloc_restrict set,
-                                   char *type)
+static int bitmap_list_snprintf_exp(char *__hwloc_restrict buf, size_t buflen,
+                                    const struct hwloc_bitmap_s *__hwloc_restrict set,
+                                    char *type)
 {
     int ret = 0;
     char *tmp = buf;
@@ -1311,7 +1316,7 @@ int hwloc_bitmap_list_snprintf_exp(char *__hwloc_restrict buf, size_t buflen,
  * Output is undefined if a rank is bound to more than 1 package
  */
 void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
-                               bool use_hwthread_cpus, hwloc_topology_t topo, 
+                               bool use_hwthread_cpus, hwloc_topology_t topo,
                                int *pkgnum, char *cores, int sz)
 {
     int n, npkgs, npus, ncores;
@@ -1360,14 +1365,14 @@ void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
 
         if (bits_as_cores) {
             /* can just use the hwloc fn directly */
-            hwloc_bitmap_list_snprintf_exp(cores, sz, avail, "core");
+            bitmap_list_snprintf_exp(cores, sz, avail, "core");
         } else if (use_hwthread_cpus) {
             /* can just use the hwloc fn directly */
-            hwloc_bitmap_list_snprintf_exp(cores, sz, avail, "hwt");
+            bitmap_list_snprintf_exp(cores, sz, avail, "hwt");
         } else {
             prte_hwloc_build_map(topo, avail, use_hwthread_cpus | bits_as_cores, coreset);
             /* now print out the string */
-            hwloc_bitmap_list_snprintf_exp(cores, sz, coreset, "core");
+            bitmap_list_snprintf_exp(cores, sz, coreset, "core");
         }
         *pkgnum = n;
     }
@@ -1725,6 +1730,9 @@ char *prte_hwloc_base_get_location(char *locality, hwloc_obj_type_t type, unsign
     char **loc;
     char *srch, *ans = NULL;
     size_t n;
+#if HWLOC_API_VERSION >= 0x20000
+    PRTE_HIDE_UNUSED_PARAMS(index);
+#endif
 
     if (NULL == locality) {
         return NULL;
