@@ -486,8 +486,8 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
                 prte_set_job_data_object(jdata);
                 /* unpack the location of each proc in this job */
                 for (v = 0; v < jdata->num_procs; v++) {
-                    if (NULL
-                        == (pptr = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, v))) {
+                    pptr = (prte_proc_t *) pmix_pointer_array_get_item(jdata->procs, v);
+                    if (NULL == pptr) {
                         pptr = PMIX_NEW(prte_proc_t);
                         PMIX_LOAD_PROCID(&pptr->name, jdata->nspace, v);
                         pmix_pointer_array_set_item(jdata->procs, v, pptr);
@@ -501,9 +501,8 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
                         goto REPORT_ERROR;
                     }
                     /* lookup the daemon */
-                    if (NULL
-                        == (dmn = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs,
-                                                                              dmnvpid))) {
+                    dmn = (prte_proc_t *) pmix_pointer_array_get_item(daemons->procs, dmnvpid);
+                    if (NULL == dmn) {
                         PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
                         rc = PRTE_ERR_NOT_FOUND;
                         PMIX_DATA_BUFFER_DESTRUCT(&dbuf);
@@ -528,11 +527,16 @@ int prte_odls_base_default_construct_child_list(pmix_data_buffer_t *buffer, pmix
                 }
                 /* reset the mapped flags */
                 for (n = 0; n < jdata->map->nodes->size; n++) {
-                    if (NULL
-                        != (node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, n))) {
+                    node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, n);
+                    if (NULL != node) {
                         PRTE_FLAG_UNSET(node, PRTE_NODE_FLAG_MAPPED);
                     }
 
+                }
+                // now register this job
+                rc = prte_pmix_server_register_nspace(jdata);
+                if (PRTE_SUCCESS != rc) {
+                    PRTE_ERROR_LOG(rc);
                 }
             }
             /* release the buffer */

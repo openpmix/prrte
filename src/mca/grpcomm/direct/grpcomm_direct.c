@@ -182,6 +182,7 @@ static void allgather_recv(int status, pmix_proc_t *sender,
     pmix_data_buffer_t ctrlbuf;
     pmix_data_buffer_t *reply;
     prte_grpcomm_coll_t *coll;
+    pmix_proc_t *addmembers;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
@@ -453,6 +454,31 @@ static void allgather_recv(int status, pmix_proc_t *sender,
                     PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
                     PMIX_RELEASE(sig);
                     return;
+                }
+                // provide the add-members in an attribute
+                if (0 < pmix_list_get_size(&coll->addmembers)) {
+                    m = pmix_list_get_size(&coll->addmembers);
+                    PMIX_PROC_CREATE(addmembers, m);
+                    // create the array of add-members
+                    n = 0;
+                    PMIX_LIST_FOREACH(nm, &coll->addmembers, prte_namelist_t) {
+                        memcpy(&addmembers[n], &nm->name, sizeof(pmix_proc_t));
+                        ++n;
+                    }
+                    darray.type = PMIX_PROC;
+                    darray.array = addmembers;
+                    darray.size = m;
+                    PMIX_INFO_LOAD(&infostat, PMIX_GROUP_ADD_MEMBERS, &darray, PMIX_DATA_ARRAY); // copies array
+                    PMIX_DATA_ARRAY_DESTRUCT(&darray);
+                    rc = PMIx_Data_pack(NULL, &ctrlbuf, &infostat, 1, PMIX_INFO);
+                    PMIX_INFO_DESTRUCT(&infostat);
+                    if (PMIX_SUCCESS != rc) {
+                        PMIX_ERROR_LOG(rc);
+                        PMIX_DATA_BUFFER_RELEASE(reply);
+                        PMIX_DATA_BUFFER_DESTRUCT(&ctrlbuf);
+                        PMIX_RELEASE(sig);
+                        return;
+                    }
                 }
             }
 
@@ -778,9 +804,6 @@ static void barrier_release(int status, pmix_proc_t *sender,
     int rc, ret;
     prte_grpcomm_signature_t *sig = NULL;
     prte_grpcomm_coll_t *coll;
-    pmix_data_array_t darray;
-    prte_pmix_server_op_caddy_t *cd;
-    void *values;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
@@ -803,45 +826,8 @@ static void barrier_release(int status, pmix_proc_t *sender,
         return;
     }
 
-    // if there are added members, notify any that are local to us
-    if (NULL != sig->addmembers) {
-        // we have to handle these even if we did not participate in
-        // the collective as an added member might be on a non-participating
-        // node. Start by providing the overall membership
-        cd = PMIX_NEW(prte_pmix_server_op_caddy_t);
-        PMIX_INFO_LIST_START(values);
-
-        /* protect against infinite loops by marking that this notification was
-         * passed down to the server by me */
-        PMIX_INFO_LIST_ADD(rc, values, "prte.notify.donotloop", NULL, PMIX_BOOL);
-        // add the context ID, if one was given
-        if (sig->ctxid_assigned) {
-            PMIX_INFO_LIST_ADD(rc, values, PMIX_GROUP_CONTEXT_ID, &sig->ctxid, PMIX_SIZE);
-        }
-        // load the membership into the info list array - note: this copies the array!
-        darray.type = PMIX_PROC;
-        darray.array = sig->finalmembership;
-        darray.size = sig->nfinal;
-        PMIX_INFO_LIST_ADD(rc, values, PMIX_GROUP_MEMBERSHIP, &darray, PMIX_DATA_ARRAY);
-        // provide the group ID
-        PMIX_INFO_LIST_ADD(rc, values, PMIX_GROUP_ID, sig->groupID, PMIX_STRING);
-        // set the range to be only procs that were added
-        darray.array = sig->addmembers;
-        darray.size = sig->nmembers;
-        // load the array - note: this copies the array!
-        PMIX_INFO_LIST_ADD(rc, values, PMIX_EVENT_CUSTOM_RANGE, &darray, PMIX_DATA_ARRAY);
-        // convert the list to an array
-        PMIX_INFO_LIST_CONVERT(rc, values, &darray);
-        cd->info = (pmix_info_t*)darray.array;
-        cd->ninfo = darray.size;
-        PMIX_INFO_LIST_RELEASE(values);
-        // notify local procs
-        PMIx_Notify_event(PMIX_GROUP_INVITED, PRTE_PROC_MY_NAME, PMIX_RANGE_CUSTOM,
-                          cd->info, cd->ninfo, opcbfunc, cd);
-    }
-
     /* check for the tracker - it is not an error if not
-     * found as that just means we wre not involved
+     * found as that just means we are not involved
      * in the collective */
     if (NULL == (coll = prte_grpcomm_base_get_tracker(sig, false))) {
         PMIX_RELEASE(sig);
