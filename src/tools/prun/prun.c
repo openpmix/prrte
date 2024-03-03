@@ -194,16 +194,21 @@ int prun(int argc, char *argv[])
 
     /* parse the input argv to get values, including everyone's MCA params */
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
-    rc = schizo->parse_cli(pargv, &results, PMIX_CLI_WARN);
-    if (PRTE_SUCCESS != rc) {
-        PMIX_DESTRUCT(&results);
-        if (PRTE_OPERATION_SUCCEEDED == rc) {
-            return PRTE_SUCCESS;
+    // check for special case of executable immediately following tool
+    if ('-' != pargv[1][0]) {
+        results.tail = PMIx_Argv_copy(&pargv[1]);
+    } else {
+        rc = schizo->parse_cli(pargv, &results, PMIX_CLI_WARN);
+        if (PRTE_SUCCESS != rc) {
+            PMIX_DESTRUCT(&results);
+            if (PRTE_OPERATION_SUCCEEDED == rc) {
+                return PRTE_SUCCESS;
+            }
+            if (PRTE_ERR_SILENT != rc) {
+                fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
+            }
+            return rc;
         }
-        if (PRTE_ERR_SILENT != rc) {
-            fprintf(stderr, "%s: command line error (%s)\n", prte_tool_basename, prte_strerror(rc));
-        }
-        return rc;
     }
 
     /* check if we are running as root - if we are, then only allow
