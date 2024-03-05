@@ -74,8 +74,8 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     pmix_status_t rc = PMIX_SUCCESS;
     bool assignedID = false;
     size_t cid;
-    pmix_proc_t *procs, *members = NULL, *finmembers = NULL;
-    size_t n, num_members, nfinmembers;
+    pmix_proc_t *members = NULL, *finmembers = NULL;
+    size_t num_members, nfinmembers;
     pmix_data_array_t darray;
     pmix_info_t info;
     pmix_data_buffer_t dbuf;
@@ -185,7 +185,7 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     }
 
     PMIX_INFO_LIST_START(ilist);
-    n = 0;
+
     // pass back the final group membership
     darray.type = PMIX_PROC;
     if (NULL != finmembers) {

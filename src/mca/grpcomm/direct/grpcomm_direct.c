@@ -787,15 +787,6 @@ static void xcast_recv(int status, pmix_proc_t *sender,
     PMIX_DATA_BUFFER_DESTRUCT(&datbuf);
 }
 
-static void opcbfunc(pmix_status_t status, void *cbdata)
-{
-    prte_pmix_server_op_caddy_t *cd = (prte_pmix_server_op_caddy_t*)cbdata;
-    PRTE_HIDE_UNUSED_PARAMS(status);
-
-    PMIX_INFO_FREE(cd->info, cd->ninfo);
-    PMIX_RELEASE(cd);
-}
-
 static void barrier_release(int status, pmix_proc_t *sender,
                             pmix_data_buffer_t *buffer,
                             prte_rml_tag_t tag, void *cbdata)
