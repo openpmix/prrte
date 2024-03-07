@@ -564,10 +564,10 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
         }
-        /* --use-hwthread-cpus -> --bind-to hwthread */
+        /* --use-hwthread-cpus -> --map-by hwtcpus */
         else if (0 == strcmp(option, "use-hwthread-cpus")) {
             rc = prte_schizo_base_add_qualifier(results, option,
-                                                PRTE_CLI_BINDTO, PRTE_CLI_HWT,
+                                                PRTE_CLI_MAPBY, PRTE_CLI_HWTCPUS,
                                                 warn);
             PMIX_CLI_REMOVE_DEPRECATED(results, opt);
             if (NULL != prte_set_slots) {
