@@ -996,10 +996,16 @@ if (-f ".gitmodules") {
         }
         my $path = $1;
         print("CHECKING \"$path\"\n");
+        if (-e $path) {
+            print("EXISTS");
+        } else {
+            print("DOES NOT EXIST");
+        }
         # Check that the path exists and is non-empty.
         my $happy = 1;
         my $havefiles = 1;
         if (! -d $path) {
+            print("IS NOT A DIRECTORY OR DOES NOT EXIST");
             $happy = 0;
         } else {
             opendir(DIR, $path) ||
