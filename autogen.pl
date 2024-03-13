@@ -994,7 +994,7 @@ if (-f ".gitmodules") {
             next;
         }
         my $path = $1;
-
+        print("CHECKING \"$path\"\n");
         # Check that the path exists and is non-empty.
         my $happy = 1;
         my $havefiles = 1;
