@@ -981,7 +981,8 @@ verbose "\n$step. Checking for git submodules\n\n";
 # Make sure we got a submodule-full clone.  If not, abort and let a
 # human figure it out.
 if (-f ".gitmodules") {
-    print("   Doing some sanity checks for required submodule(s)...\n");
+    my $mycwd = getcwd;
+    print("   Doing some sanity checks for required submodule(s)...in \"$mycwd\" \n");
 
     # Do a quick sanity check to ensure that required
     # submodule(s) are at least present (e.g., they won't be present
