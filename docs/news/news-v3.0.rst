@@ -4,6 +4,23 @@ PRRTE v3.0 series
 This file contains all the NEWS updates for the PRRTE v3.0
 series, in reverse chronological order.
 
+3.0.5 -- TBD
+------------
+- PR #1949: Update VERSION and NEWS for release
+- PR #1946: Correct deprecation translation for use-hwthread-cpus
+- PR #1936: Add missing show_help text
+- PR #1933: Check for appfile and ingest it if found
+- PR #1931: Multiple commits
+   - Fix testing of suicide for daemons
+   - Fix daemon suicide and preserve output files
+   - Remove unused MCA param
+   - Only trigger job failed to start once
+   - Add "close stale issues" actions
+   - oac: strengthen Sphinx check
+   - Revamp the session directory system
+   - guard against possible segfault in prted
+
+
 3.0.4 -- 4 Feb 2024
 -------------------
 - PR #1918: Multiple commits
