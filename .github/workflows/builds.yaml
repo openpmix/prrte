@@ -22,6 +22,7 @@ jobs:
     - name: Build OpenPMIx
       run: |
         cd openpmix/master
+        git submodule update --init --recursive
         ./autogen.pl
         ./configure --prefix=$RUNNER_TEMP/pmixinstall
         make -j
@@ -33,6 +34,7 @@ jobs:
             clean: false
     - name: Build PRRTE
       run: |
+        git submodule update --init --recursive
         ./autogen.pl
 
         sphinx=
@@ -74,6 +76,7 @@ jobs:
     - name: Build OpenPMIx
       run: |
         cd openpmix/master
+        git submodule update --init --recursive
         ./autogen.pl
         ./configure --prefix=$RUNNER_TEMP/pmixinstall
         make -j
@@ -85,6 +88,7 @@ jobs:
             clean: false
     - name: Build PRRTE
       run: |
+        git submodule update --init --recursive
         ./autogen.pl
 
         sphinx=
