@@ -4,7 +4,7 @@
 #                         reserved.
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -17,6 +17,9 @@ AM_CPPFLAGS = $(grpcomm_direct_CPPFLAGS)
 sources = \
 	grpcomm_direct.h \
 	grpcomm_direct.c \
+	grpcomm_direct_xcast.c \
+	grpcomm_direct_fence.c \
+	grpcomm_direct_group.c \
 	grpcomm_direct_component.c
 
 # Make the output library in this directory, and name it either

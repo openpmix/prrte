@@ -48,34 +48,6 @@
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 
-static void relcb(void *cbdata)
-{
-    uint8_t *data = (uint8_t *) cbdata;
-
-    if (NULL != data) {
-        free(data);
-    }
-}
-static void pmix_server_release(int status, pmix_data_buffer_t *buf, void *cbdata)
-{
-    prte_pmix_mdx_caddy_t *cd = (prte_pmix_mdx_caddy_t *) cbdata;
-    pmix_byte_object_t bo;
-    int rc = PRTE_SUCCESS;
-
-    PMIX_ACQUIRE_OBJECT(cd);
-
-    /* unload the buffer */
-    PMIX_BYTE_OBJECT_CONSTRUCT(&bo);
-    if (NULL != buf) {
-        rc = PMIx_Data_unload(buf, &bo);
-    }
-    if (PRTE_SUCCESS == rc) {
-        rc = status;
-    }
-    cd->mdxcbfunc(rc, bo.bytes, bo.size, cd->cbdata, relcb, bo.bytes);
-    PMIX_RELEASE(cd);
-}
-
 /* this function is called when all the local participants have
  * called fence - thus, the collective is already locally
  * complete at this point. We therefore just need to create the
@@ -84,8 +56,6 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
                                      const pmix_info_t info[], size_t ninfo, char *data,
                                      size_t ndata, pmix_modex_cbfunc_t cbfunc, void *cbdata)
 {
-    prte_pmix_mdx_caddy_t *cd = NULL;
-    pmix_data_buffer_t buf;
     int rc;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
@@ -93,50 +63,10 @@ pmix_status_t pmix_server_fencenb_fn(const pmix_proc_t procs[], size_t nprocs,
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         prte_process_info.nodename);
 
-    cd = PMIX_NEW(prte_pmix_mdx_caddy_t);
-    cd->mdxcbfunc = cbfunc;
-    cd->cbdata = cbdata;
-    cd->grpcbfunc = pmix_server_release;
-    cd->buf = PMIx_Data_buffer_create();
-
-    /* compute the signature of this collective */
-    if (NULL != procs) {
-        cd->sig = PMIX_NEW(prte_grpcomm_signature_t);
-        cd->sig->sz = nprocs;
-        cd->sig->signature = (pmix_proc_t *) malloc(cd->sig->sz * sizeof(pmix_proc_t));
-        memcpy(cd->sig->signature, procs, cd->sig->sz * sizeof(pmix_proc_t));
-    }
-
-    rc = prte_pack_ctrl_options(&cd->ctrls, info, ninfo);
-    if (PMIX_SUCCESS != rc) {
-        PMIX_RELEASE(cd);
-        return rc;
-    }
-
-    if (NULL != data) {
-        /* do not use PMIx_Data_load as it would modify
-         * the data and we don't own it */
-        PMIx_Data_buffer_construct(&buf);
-        buf.base_ptr = (char*)data;
-        buf.pack_ptr = buf.base_ptr + ndata;
-        buf.unpack_ptr = buf.base_ptr;
-        buf.bytes_used = ndata;
-        buf.bytes_allocated = ndata;
-        rc = PMIx_Data_copy_payload(cd->buf, &buf);
-        if (PMIX_SUCCESS != rc) {
-            PMIX_ERROR_LOG(rc);
-            PMIX_RELEASE(cd);
-            return rc;
-        }
-    }
-
-    /* pass it to the global collective algorithm */
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.allgather(cd))) {
-        PRTE_ERROR_LOG(rc);
-        PMIX_RELEASE(cd);
-        return PMIX_ERROR;
-    }
-    return PMIX_SUCCESS;
+    // just pass this along
+    rc = prte_grpcomm.fence(procs, nprocs, info, ninfo,
+                            data, ndata, cbfunc, cbdata);
+    return rc;
 }
 
 

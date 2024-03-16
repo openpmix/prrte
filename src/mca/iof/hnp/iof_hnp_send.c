@@ -13,7 +13,7 @@
  * Copyright (c) 2012      Los Alamos National Security, LLC
  *                         All rights reserved
  * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,7 +49,6 @@ int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
 {
     pmix_data_buffer_t *buf;
     int rc;
-    prte_grpcomm_signature_t sig;
 
     /* if the host is a daemon and we are in the process of aborting,
      * then ignore this request. We leave it alone if the host is not
@@ -96,12 +95,8 @@ int prte_iof_hnp_send_data_to_endpoint(const pmix_proc_t *host,
     if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, host->nspace)
         && PMIX_RANK_WILDCARD == host->rank) {
         /* xcast this to everyone - the local daemons will know how to handle it */
-        PMIX_PROC_CREATE(sig.signature, 1);
-        sig.sz = 1;
-        PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-        (void) prte_grpcomm.xcast(&sig, PRTE_RML_TAG_IOF_PROXY, buf);
+        (void) prte_grpcomm.xcast(PRTE_RML_TAG_IOF_PROXY, buf);
         PMIX_DATA_BUFFER_RELEASE(buf);
-        PMIX_PROC_FREE(sig.signature, 1);
         return PRTE_SUCCESS;
     }
 

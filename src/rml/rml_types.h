@@ -106,13 +106,7 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 #define PRTE_RML_TAG_ROLLUP               11
 #define PRTE_RML_TAG_REPORT_REMOTE_LAUNCH 12
 
-#define PRTE_RML_TAG_CKPT 13
-
-#define PRTE_RML_TAG_RML_ROUTE 14
 #define PRTE_RML_TAG_XCAST     15
-
-#define PRTE_RML_TAG_UPDATE_ROUTE_ACK 19
-#define PRTE_RML_TAG_SYNC             20
 
 /* For FileM Base */
 #define PRTE_RML_TAG_FILEM_BASE      21
@@ -123,23 +117,13 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 
 #define PRTE_RML_TAG_JOBID_RESP      24
 
-/* For tools */
-#define PRTE_RML_TAG_TOOL 26
-
 /* support data store/lookup */
 #define PRTE_RML_TAG_DATA_SERVER 27
 #define PRTE_RML_TAG_DATA_CLIENT 28
 
-/* timing related */
-#define PRTE_RML_TAG_COLLECTIVE_TIMER 29
-
 /* collectives */
-#define PRTE_RML_TAG_COLLECTIVE       30
-#define PRTE_RML_TAG_COLL_RELEASE     31
-#define PRTE_RML_TAG_DAEMON_COLL      32
-#define PRTE_RML_TAG_ALLGATHER_DIRECT 33
-#define PRTE_RML_TAG_ALLGATHER_BRUCKS 34
-#define PRTE_RML_TAG_ALLGATHER_RCD    35
+#define PRTE_RML_TAG_FENCE_RELEASE     31
+#define PRTE_RML_TAG_FENCE             33
 
 /* debugger release */
 #define PRTE_RML_TAG_DEBUGGER_RELEASE 37
@@ -150,45 +134,12 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 /* report a missed msg */
 #define PRTE_RML_TAG_MISSED_MSG 39
 
-/* tag for receiving ack of abort msg */
-#define PRTE_RML_TAG_ABORT 40
-
-/* tag for receiving heartbeats */
-#define PRTE_RML_TAG_HEARTBEAT 41
-
-/* Process Migration Tool Tag */
-#define PRTE_RML_TAG_MIGRATE 42
-
-/* For SStore Framework */
-#define PRTE_RML_TAG_SSTORE          43
-#define PRTE_RML_TAG_SSTORE_INTERNAL 44
-
-#define PRTE_RML_TAG_SUBSCRIBE 45
-
-/* Notify of failed processes */
-#define PRTE_RML_TAG_FAILURE_NOTICE 46
-
-/* distributed file system */
-#define PRTE_RML_TAG_DFS_CMD  47
-#define PRTE_RML_TAG_DFS_DATA 48
-
 /* sensor data */
 #define PRTE_RML_TAG_SENSOR_DATA 49
 
 /* direct modex support */
 #define PRTE_RML_TAG_DIRECT_MODEX      50
 #define PRTE_RML_TAG_DIRECT_MODEX_RESP 51
-
-/* notifier support */
-#define PRTE_RML_TAG_NOTIFIER_HNP    52
-#define PRTE_RML_TAG_NOTIFY_COMPLETE 53
-
-/*** QOS specific  RML TAGS ***/
-#define PRTE_RML_TAG_OPEN_CHANNEL_REQ     54
-#define PRTE_RML_TAG_OPEN_CHANNEL_RESP    55
-#define PRTE_RML_TAG_MSG_ACK              56
-#define PRTE_RML_TAG_CLOSE_CHANNEL_REQ    57
-#define PRTE_RML_TAG_CLOSE_CHANNEL_ACCEPT 58
 
 /* error notifications */
 #define PRTE_RML_TAG_NOTIFICATION         59
@@ -211,19 +162,13 @@ typedef void (*prte_rml_buffer_callback_fn_t)(int status, pmix_proc_t *peer,
 /* pmix log requests */
 #define PRTE_RML_TAG_LOGGING              65
 
-/* error propagate  */
-#define PRTE_RML_TAG_RBCAST               66
-
-/* heartbeat request */
-#define PRTE_RML_TAG_HEARTBEAT_REQUEST    70
-
-/* error propagate  */
-#define PRTE_RML_TAG_PROPAGATE            71
-
 /* scheduler requests */
 #define PRTE_RML_TAG_SCHED                72
 #define PRTE_RML_TAG_SCHED_RESP           73
 
+/* group construct */
+#define PRTE_RML_TAG_GROUP         74
+#define PRTE_RML_TAG_GROUP_RELEASE 75
 
 #define PRTE_RML_TAG_MAX                 100
 

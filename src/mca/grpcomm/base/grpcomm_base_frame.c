@@ -47,56 +47,17 @@
  * Global variables
  */
 prte_grpcomm_base_t prte_grpcomm_base = {
-    .actives = PMIX_LIST_STATIC_INIT,
-    .ongoing = PMIX_LIST_STATIC_INIT,
-    .sig_table = PMIX_HASH_TABLE_STATIC_INIT,
-    .transports = NULL,
-    .context_id = 0
+    .context_id = UINT32_MAX
 };
 
-prte_grpcomm_API_module_t prte_grpcomm = {
-    .xcast = prte_grpcomm_API_xcast,
-    .allgather = prte_grpcomm_API_allgather
-};
+prte_grpcomm_base_module_t prte_grpcomm = {0};
 
-static int base_register(pmix_mca_base_register_flag_t flags)
-{
-    PRTE_HIDE_UNUSED_PARAMS(flags);
-
-    prte_grpcomm_base.context_id = 1;
-    pmix_mca_base_var_register("prte", "grpcomm", "base", "starting_context_id",
-                               "Starting value for assigning context id\'s",
-                               PMIX_MCA_BASE_VAR_TYPE_INT,
-                               &prte_grpcomm_base.context_id);
-
-    return PRTE_SUCCESS;
-}
 
 static int prte_grpcomm_base_close(void)
 {
-    prte_grpcomm_base_active_t *active;
-    void *key;
-    size_t size;
-    uint32_t *seq_number;
-
-    PRTE_RML_CANCEL(PRTE_NAME_WILDCARD, PRTE_RML_TAG_XCAST);
-
-    /* Close the active modules */
-    PMIX_LIST_FOREACH(active, &prte_grpcomm_base.actives, prte_grpcomm_base_active_t)
-    {
-        if (NULL != active->module->finalize) {
-            active->module->finalize();
-        }
+    if (NULL != prte_grpcomm.finalize) {
+        prte_grpcomm.finalize();
     }
-    PMIX_LIST_DESTRUCT(&prte_grpcomm_base.actives);
-    PMIX_LIST_DESTRUCT(&prte_grpcomm_base.ongoing);
-    for (void *_nptr = NULL;
-         PRTE_SUCCESS
-         == pmix_hash_table_get_next_key_ptr(&prte_grpcomm_base.sig_table, &key, &size,
-                                             (void **) &seq_number, _nptr, &_nptr);) {
-        free(seq_number);
-    }
-    PMIX_DESTRUCT(&prte_grpcomm_base.sig_table);
 
     return pmix_mca_base_framework_components_close(&prte_grpcomm_base_framework, NULL);
 }
@@ -107,82 +68,37 @@ static int prte_grpcomm_base_close(void)
  */
 static int prte_grpcomm_base_open(pmix_mca_base_open_flag_t flags)
 {
-    PMIX_CONSTRUCT(&prte_grpcomm_base.actives, pmix_list_t);
-    PMIX_CONSTRUCT(&prte_grpcomm_base.ongoing, pmix_list_t);
-    PMIX_CONSTRUCT(&prte_grpcomm_base.sig_table, pmix_hash_table_t);
-    pmix_hash_table_init(&prte_grpcomm_base.sig_table, 128);
-    prte_grpcomm_base.context_id = UINT32_MAX;
-
     return pmix_mca_base_framework_components_open(&prte_grpcomm_base_framework, flags);
 }
 
-PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, grpcomm, "GRPCOMM", base_register, prte_grpcomm_base_open,
+PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, grpcomm, "GRPCOMM", NULL, prte_grpcomm_base_open,
                                 prte_grpcomm_base_close, prte_grpcomm_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
 
-PMIX_CLASS_INSTANCE(prte_grpcomm_base_active_t,
-                    pmix_list_item_t,
-                    NULL, NULL);
-
-static void scon(prte_grpcomm_signature_t *p)
+static void grpcon(prte_pmix_grp_caddy_t *p)
 {
-    p->groupID = NULL;
-    p->ctxid = 0;
-    p->ctxid_assigned = false;
-    p->signature = NULL;
-    p->sz = 0;
-    p->addmembers = NULL;
-    p->nmembers = 0;
-    p->bootstrap = 0;
-    p->finalmembership = NULL;
-    p->nfinal = 0;
-}
-static void sdes(prte_grpcomm_signature_t *p)
-{
-    if (NULL != p->groupID) {
-        free(p->groupID);
-    }
-    if (NULL != p->signature) {
-        free(p->signature);
-    }
-    if (NULL != p->addmembers) {
-        free(p->addmembers);
-    }
-    if (NULL != p->finalmembership) {
-        free(p->finalmembership);
-    }
-}
-PMIX_CLASS_INSTANCE(prte_grpcomm_signature_t,
-                    pmix_object_t,
-                    scon, sdes);
-
-static void ccon(prte_grpcomm_coll_t *p)
-{
-    p->sig = NULL;
-    p->status = PMIX_SUCCESS;
-    PMIX_DATA_BUFFER_CONSTRUCT(&p->bucket);
-    p->dmns = NULL;
-    p->ndmns = 0;
-    p->nexpected = 0;
-    p->nreported = 0;
-    p->assignID = false;
-    p->timeout = 0;
-    p->memsize = 0;
-    PMIX_CONSTRUCT(&p->addmembers, pmix_list_t);
+    PMIX_CONSTRUCT_LOCK(&p->lock);
+    p->op = PMIX_GROUP_NONE;
+    p->grpid = NULL;
+    p->procs = NULL;
+    p->nprocs = 0;
+    p->directives = NULL;
+    p->ndirs = 0;
+    p->info = NULL;
+    p->ninfo = 0;
     p->cbfunc = NULL;
     p->cbdata = NULL;
-    p->buffers = NULL;
 }
-static void cdes(prte_grpcomm_coll_t *p)
+static void grpdes(prte_pmix_grp_caddy_t *p)
 {
-    if (NULL != p->sig) {
-        PMIX_RELEASE(p->sig);
+    PMIX_DESTRUCT_LOCK(&p->lock);
+    if (NULL != p->grpid) {
+        free(p->grpid);
     }
-    PMIX_DATA_BUFFER_DESTRUCT(&p->bucket);
-    PMIX_LIST_DESTRUCT(&p->addmembers);
-    free(p->dmns);
-    free(p->buffers);
+    if (NULL != p->info) {
+        PMIX_INFO_FREE(p->info, p->ninfo);
+    }
 }
-PMIX_CLASS_INSTANCE(prte_grpcomm_coll_t,
-                    pmix_list_item_t,
-                    ccon, cdes);
+PMIX_CLASS_INSTANCE(prte_pmix_grp_caddy_t,
+                    pmix_object_t,
+                    grpcon, grpdes);

@@ -142,8 +142,7 @@ static int process_directive(pmix_server_req_t *req)
                 PMIX_LOAD_PROCID(&jdata->originator, requestor->nspace, requestor->rank);
             }
 
-        } else if (PMIX_CHECK_KEY(&req->info[n], PMIX_SESSION_PROVISION) ||
-                   PMIX_CHECK_KEY(&req->info[n], PMIX_SESSION_PROVISION_NODES) ||
+        } else if (PMIX_CHECK_KEY(&req->info[n], PMIX_SESSION_PROVISION_NODES) ||
                    PMIX_CHECK_KEY(&req->info[n], PMIX_SESSION_PROVISION_IMAGE)) {
             // we don't support these directives
             rc = PMIX_ERR_NOT_SUPPORTED;

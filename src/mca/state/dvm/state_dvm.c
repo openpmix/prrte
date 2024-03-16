@@ -262,7 +262,6 @@ static void vm_ready(int fd, short args, void *cbdata)
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     int rc, i;
     pmix_data_buffer_t buf;
-    prte_grpcomm_signature_t sig;
     prte_job_t *jptr;
     prte_proc_t *dmn;
     int32_t v;
@@ -321,19 +320,13 @@ static void vm_ready(int fd, short args, void *cbdata)
             }
 
             /* goes to all daemons */
-            PMIX_CONSTRUCT(&sig, prte_grpcomm_signature_t);
-            PMIX_PROC_CREATE(sig.signature, 1);
-            PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-            sig.sz = 1;
-            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(&sig, PRTE_RML_TAG_WIREUP, &buf))) {
+            if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_WIREUP, &buf))) {
                 PRTE_ERROR_LOG(rc);
                 PMIX_DATA_BUFFER_DESTRUCT(&buf);
-                PMIX_PROC_FREE(sig.signature, 1);
                 PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
                 return;
             }
             PMIX_DATA_BUFFER_DESTRUCT(&buf);
-            PMIX_PROC_FREE(sig.signature, 1);
         }
     }
     if (PMIX_CHECK_NSPACE(PRTE_PROC_MY_NAME->nspace, caddy->jdata->nspace)) {
@@ -898,7 +891,6 @@ static void dvm_notify(int sd, short args, void *cbdata)
     int rc;
     pmix_data_buffer_t *reply;
     prte_daemon_cmd_flag_t command;
-    prte_grpcomm_signature_t sig;
     bool notify = true, flag;
     pmix_proc_t *proc, pnotify;
     pmix_info_t *info;
@@ -1043,14 +1035,9 @@ static void dvm_notify(int sd, short args, void *cbdata)
 
         /* we have to send the notification to all daemons so that
          * anyone watching for it can receive it */
-        PMIX_CONSTRUCT(&sig, prte_grpcomm_signature_t);
-        PMIX_PROC_CREATE(sig.signature, 1);
-        PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-        sig.sz = 1;
-        if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(&sig, PRTE_RML_TAG_NOTIFICATION, reply))) {
+        if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_NOTIFICATION, reply))) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_RELEASE(reply);
-            PMIX_PROC_FREE(sig.signature, 1);
             PMIX_RELEASE(caddy);
             return;
         }
@@ -1058,8 +1045,6 @@ static void dvm_notify(int sd, short args, void *cbdata)
                              "%s state:dvm:dvm_notify notification sent",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
         PMIX_DATA_BUFFER_RELEASE(reply);
-        /* maintain accounting */
-        PMIX_PROC_FREE(sig.signature, 1);
     }
 
     if (prte_persistent) {
@@ -1083,12 +1068,8 @@ static void dvm_notify(int sd, short args, void *cbdata)
             PMIX_DATA_BUFFER_RELEASE(reply);
             return;
         }
-        PMIX_PROC_CREATE(sig.signature, 1);
-        PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-        sig.sz = 1;
-        prte_grpcomm.xcast(&sig, PRTE_RML_TAG_DAEMON, reply);
+        prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, reply);
         PMIX_DATA_BUFFER_RELEASE(reply);
-        PMIX_PROC_FREE(sig.signature, 1);
     }
 
     // We are done with our use of job data and have notified the other daemons

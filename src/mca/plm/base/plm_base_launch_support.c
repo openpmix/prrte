@@ -563,7 +563,6 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
          * if we cannot do so */
         prte_daemon_cmd_flag_t command = PRTE_DAEMON_GET_STACK_TRACES;
         pmix_data_buffer_t buffer;
-        prte_grpcomm_signature_t *sig;
 
         bo.bytes = "Waiting for stack traces (this may take a few moments)...\n";
         bo.size = strlen(bo.bytes);
@@ -590,18 +589,12 @@ static void job_timeout_cb(int fd, short event, void *cbdata)
             goto giveup;
         }
         /* goes to all daemons */
-        sig = PMIX_NEW(prte_grpcomm_signature_t);
-        sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-        PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-        sig->sz = 1;
-        if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, &buffer))) {
+        if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &buffer))) {
             PRTE_ERROR_LOG(rc);
             PMIX_DATA_BUFFER_DESTRUCT(&buffer);
             goto giveup;
         }
         PMIX_DATA_BUFFER_DESTRUCT(&buffer);
-        /* maintain accounting */
-        PMIX_RELEASE(sig);
         /* we will terminate after we get the stack_traces, but set a timeout
          * just in case we never hear back from everyone */
         if (prte_stack_trace_wait_timeout > 0) {
@@ -801,7 +794,6 @@ void prte_plm_base_launch_apps(int fd, short args, void *cbdata)
 void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
-    prte_grpcomm_signature_t *sig;
     prte_job_t *jdata;
     int rc;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
@@ -833,21 +825,14 @@ void prte_plm_base_send_launch_msg(int fd, short args, void *cbdata)
     }
 
     /* goes to all daemons */
-    sig = PMIX_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-    PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    sig->sz = 1;
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, &jdata->launch_msg))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &jdata->launch_msg))) {
         PRTE_ERROR_LOG(rc);
-        PMIX_RELEASE(sig);
         PRTE_ACTIVATE_JOB_STATE(caddy->jdata, PRTE_JOB_STATE_NEVER_LAUNCHED);
         PMIX_RELEASE(caddy);
         return;
     }
     PMIX_DATA_BUFFER_DESTRUCT(&jdata->launch_msg);
     PMIX_DATA_BUFFER_CONSTRUCT(&jdata->launch_msg);
-    /* maintain accounting */
-    PMIX_RELEASE(sig);
 
     /* track that we automatically are considered to have reported - used
      * only to report launch progress
