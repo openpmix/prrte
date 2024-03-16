@@ -17,7 +17,7 @@
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -51,9 +51,9 @@ int main(int argc, char **argv)
     pmix_app_t *app;
     char hostname[1024], dir[1024];
     pmix_proc_t *peers;
-    size_t npeers, ntmp = 0;
+    size_t npeers, ntmp = 0, n;
     char *nodelist;
-    char *cmd;
+    char *cmd, *tmp;
 
     if (0 > gethostname(hostname, sizeof(hostname))) {
         exit(1);
@@ -95,6 +95,51 @@ int main(int argc, char **argv)
     nprocs = val->data.uint32;
     PMIX_VALUE_RELEASE(val);
     fprintf(stderr, "Client %s:%d universe size %d\n", myproc.nspace, myproc.rank, nprocs);
+
+
+    // put some values
+    if (0 > asprintf(&tmp, "%s-%d-remote1", myproc.nspace, myproc.rank)) {
+        exit(1);
+    }
+    value.type = PMIX_UINT64;
+    value.data.uint64 = 1234;
+    if (PMIX_SUCCESS != (rc = PMIx_Put(PMIX_REMOTE, tmp, &value))) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Put internal failed: %d\n", myproc.nspace,
+                myproc.rank, rc);
+        goto done;
+    }
+    free(tmp);
+
+    if (0 > asprintf(&tmp, "%s-%d-remote2", myproc.nspace, myproc.rank)) {
+        exit(1);
+    }
+    value.type = PMIX_UINT64;
+    value.data.uint64 = 12345;
+    if (PMIX_SUCCESS != (rc = PMIx_Put(PMIX_REMOTE, tmp, &value))) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Put internal failed: %d\n", myproc.nspace,
+                myproc.rank, rc);
+        goto done;
+    }
+    free(tmp);
+
+    if (0 > asprintf(&tmp, "%s-%d-remote3", myproc.nspace, myproc.rank)) {
+        exit(1);
+    }
+    value.type = PMIX_UINT64;
+    value.data.uint64 = 123456;
+    if (PMIX_SUCCESS != (rc = PMIx_Put(PMIX_REMOTE, tmp, &value))) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Put internal failed: %d\n", myproc.nspace,
+                myproc.rank, rc);
+        goto done;
+    }
+    free(tmp);
+
+    /* push the data to our PMIx server */
+    if (PMIX_SUCCESS != (rc = PMIx_Commit())) {
+        fprintf(stderr, "Client ns %s rank %d: PMIx_Commit failed: %d\n", myproc.nspace,
+                myproc.rank, rc);
+        goto done;
+    }
 
     /* call fence to sync */
     (void) strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
@@ -173,15 +218,10 @@ int main(int argc, char **argv)
             exitcode = rc;
             goto done;
         }
-        if ((nprocs + ntmp) != npeers) {
-            fprintf(stderr,
-                    "Client ns %s rank %d: PMIx_Resolve_peers returned incorrect npeers: %d vs %d\n",
-                    myproc.nspace, myproc.rank, (int) (nprocs + ntmp), (int) npeers);
-            exitcode = 1;
-            goto done;
+        fprintf(stderr, "Client ns %s rank %d PEERS:\n", myproc.nspace, myproc.rank);
+        for (n=0; n < npeers; n++) {
+            fprintf(stderr, "\t%s:%d\n", peers[n].nspace, peers[n].rank);
         }
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_peers returned %d npeers\n",
-                myproc.nspace, myproc.rank, (int) npeers);
         if (PMIX_SUCCESS != (rc = PMIx_Resolve_nodes(nsp2, &nodelist))) {
             fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_nodes failed for nspace %s: %d\n",
                     myproc.nspace, myproc.rank, nsp2, rc);
@@ -197,15 +237,10 @@ int main(int argc, char **argv)
             exitcode = rc;
             goto done;
         }
-        if (nprocs != npeers) {
-            fprintf(stderr,
-                    "Client ns %s rank %d: PMIx_Resolve_peers returned incorrect npeers: %d vs %d\n",
-                    myproc.nspace, myproc.rank, nprocs, (int) npeers);
-            exitcode = rc;
-            goto done;
+        fprintf(stderr, "Client ns %s rank %d PEERS:\n", myproc.nspace, myproc.rank);
+        for (n=0; n < npeers; n++) {
+            fprintf(stderr, "\t%s:%d\n", peers[n].nspace, peers[n].rank);
         }
-        fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_peers returned %d npeers\n",
-                myproc.nspace, myproc.rank, (int) npeers);
         if (PMIX_SUCCESS != (rc = PMIx_Resolve_nodes(NULL, &nodelist))) {
             fprintf(stderr, "Client ns %s rank %d: PMIx_Resolve_nodes failed: %d\n", myproc.nspace,
                     myproc.rank, rc);

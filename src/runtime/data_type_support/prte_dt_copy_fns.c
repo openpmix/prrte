@@ -161,14 +161,3 @@ int prte_map_copy(struct prte_job_map_t **d, struct prte_job_map_t *s)
 
     return PRTE_SUCCESS;
 }
-
-/*
- * GRPCOMM SIGNATURE
- */
-int prte_grpcomm_sig_copy(prte_grpcomm_signature_t **d,
-                          prte_grpcomm_signature_t *s)
-{
-    *d = s;
-    PMIX_RETAIN(s);
-    return PRTE_SUCCESS;
-}

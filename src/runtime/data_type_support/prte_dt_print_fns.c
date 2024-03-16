@@ -641,17 +641,3 @@ void prte_map_print(char **output, prte_job_t *jdata)
 
     return;
 }
-
-/* GRPCOMM SIG */
-void prte_grpcomm_sig_print(char **output, prte_grpcomm_signature_t *s)
-{
-    char *tmp;
-
-    if (NULL != s->groupID) {
-        pmix_asprintf(&tmp, "Group ID: %s", s->groupID);
-    } else {
-        tmp = strdup("No GroupID - signature is array of procs");
-    }
-    *output = tmp;
-    return;
-}

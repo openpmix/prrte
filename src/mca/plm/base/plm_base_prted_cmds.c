@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -50,28 +50,11 @@
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
 
-#if 0
-static void failed_cmd(int fd, short event, void *cbdata)
-{
-    prte_timer_t *tm = (prte_timer_t*)cbdata;
-
-    /* we get called if an abnormal term
-     * don't complete in time - just force exit
-     */
-    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
-                         "%s plm:base:orted_cmd command timed out",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
-    PMIX_RELEASE(tm);
-    PRTE_ACTIVATE_JOB_STATE(NULL, PRTE_JOB_STATE_FORCED_EXIT);
-}
-#endif
-
 int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
 {
     int rc;
     pmix_data_buffer_t cmd;
     prte_daemon_cmd_flag_t cmmnd;
-    prte_grpcomm_signature_t *sig;
 
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:prted_cmd sending prted_exit commands",
@@ -106,24 +89,11 @@ int prte_plm_base_prted_exit(prte_daemon_cmd_flag_t command)
         return rc;
     }
     /* goes to all daemons */
-    sig = PMIX_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-    sig->sz = 1;
-    PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, &cmd))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &cmd))) {
         PRTE_ERROR_LOG(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&cmd);
-    PMIX_RELEASE(sig);
 
-#if 0
-    /* if we are abnormally ordering the termination, then
-     * set a timeout in case it never finishes
-     */
-    if (prte_abnormal_term_ordered) {
-        PRTE_DETECT_TIMEOUT(prte_process_info.num_procs, 100, 3, failed_cmd, NULL);
-    }
-#endif
     return rc;
 }
 
@@ -157,7 +127,6 @@ int prte_plm_base_prted_kill_local_procs(pmix_pointer_array_t *procs)
     prte_daemon_cmd_flag_t command = PRTE_DAEMON_KILL_LOCAL_PROCS;
     int v;
     prte_proc_t *proc;
-    prte_grpcomm_signature_t *sig;
 
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:orted_cmd sending kill_local_procs cmds",
@@ -187,15 +156,10 @@ int prte_plm_base_prted_kill_local_procs(pmix_pointer_array_t *procs)
         }
     }
     /* goes to all daemons */
-    sig = PMIX_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-    sig->sz = 1;
-    PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, &cmd))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &cmd))) {
         PRTE_ERROR_LOG(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&cmd);
-    PMIX_RELEASE(sig);
 
     /* we're done! */
     return rc;
@@ -206,7 +170,6 @@ int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
     int rc;
     pmix_data_buffer_t cmd;
     prte_daemon_cmd_flag_t command = PRTE_DAEMON_SIGNAL_LOCAL_PROCS;
-    prte_grpcomm_signature_t *sig;
 
     PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                          "%s plm:base:prted_cmd sending signal_local_procs cmds",
@@ -239,15 +202,10 @@ int prte_plm_base_prted_signal_local_procs(pmix_nspace_t job, int32_t signal)
     }
 
     /* goes to all daemons */
-    sig = PMIX_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-    sig->sz = 1;
-    PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_DAEMON, &cmd))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_DAEMON, &cmd))) {
         PRTE_ERROR_LOG(rc);
     }
     PMIX_DATA_BUFFER_DESTRUCT(&cmd);
-    PMIX_RELEASE(sig);
 
     /* we're done! */
     return PRTE_SUCCESS;

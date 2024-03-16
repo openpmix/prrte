@@ -577,7 +577,6 @@ static void check_send_notification(prte_job_t *jdata,
                                     prte_proc_t *proc,
                                     pmix_status_t event)
 {
-    prte_grpcomm_signature_t sig;
     int rc;
     pmix_info_t *info;
     size_t ninfo;
@@ -673,14 +672,8 @@ static void check_send_notification(prte_job_t *jdata,
     PMIX_INFO_FREE(info, ninfo);
 
     /* xcast it to everyone */
-    PMIX_CONSTRUCT(&sig, prte_grpcomm_signature_t);
-    sig.signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-    PMIX_LOAD_PROCID(&sig.signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    sig.sz = 1;
-
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(&sig, PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_NOTIFICATION, &pbkt))) {
         PRTE_ERROR_LOG(rc);
     }
-    PMIX_DESTRUCT(&sig);
     PMIX_DATA_BUFFER_DESTRUCT(&pbkt);
 }

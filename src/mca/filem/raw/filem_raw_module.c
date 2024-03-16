@@ -709,7 +709,6 @@ static void send_chunk(int xxx, short argc, void *cbdata)
     int32_t numbytes;
     int rc;
     pmix_data_buffer_t chunk;
-    prte_grpcomm_signature_t *sig;
     PRTE_HIDE_UNUSED_PARAMS(xxx, argc);
 
     PMIX_ACQUIRE_OBJECT(rev);
@@ -786,18 +785,13 @@ static void send_chunk(int xxx, short argc, void *cbdata)
     }
 
     /* goes to all daemons */
-    sig = PMIX_NEW(prte_grpcomm_signature_t);
-    sig->signature = (pmix_proc_t *) malloc(sizeof(pmix_proc_t));
-    sig->sz = 1;
-    PMIX_LOAD_PROCID(&sig->signature[0], PRTE_PROC_MY_NAME->nspace, PMIX_RANK_WILDCARD);
-    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(sig, PRTE_RML_TAG_FILEM_BASE, &chunk))) {
+    if (PRTE_SUCCESS != (rc = prte_grpcomm.xcast(PRTE_RML_TAG_FILEM_BASE, &chunk))) {
         PRTE_ERROR_LOG(rc);
         PMIX_DATA_BUFFER_DESTRUCT(&chunk);
         close(fd);
         return;
     }
     PMIX_DATA_BUFFER_DESTRUCT(&chunk);
-    PMIX_RELEASE(sig);
     rev->nchunk++;
 
     /* if num_bytes was zero, then we need to terminate the event

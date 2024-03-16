@@ -270,7 +270,7 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
             /* try defaulting to parent session */
             if (NULL != (parent = prte_get_job_data_object(nptr->nspace))) {
                 session = parent->session;
-		if (NULL == session) {
+                if (NULL == session) {
                     rc = PRTE_ERR_NOT_FOUND;
                     goto ANSWER_LAUNCH;
                 }
@@ -289,19 +289,6 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
                 goto ANSWER_LAUNCH;
             }
         }
-
-#if 0
-        // (RHC) I'm not sure the following is true - merits some thought
-
-        /* Jobs are only allowed to be spawned in the the session of the requestor
-         * or one of its child sessions. */
-        if (NULL == session ||
-            !prte_sessions_related(prte_get_job_data_object(nptr->nspace)->session, session)) {
-            PRTE_ERROR_LOG(PRTE_ERR_PERM);
-            rc = PRTE_ERR_PERM;
-            goto ANSWER_LAUNCH;
-        }
-#endif
 
         jdata->session = session;
         pmix_pointer_array_add(jdata->session->jobs, jdata);

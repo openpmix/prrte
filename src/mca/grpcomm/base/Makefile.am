@@ -12,7 +12,7 @@
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -25,5 +25,4 @@ headers += \
 
 libprtemca_grpcomm_la_SOURCES += \
         base/grpcomm_base_select.c \
-        base/grpcomm_base_frame.c \
-        base/grpcomm_base_stubs.c
+        base/grpcomm_base_frame.c

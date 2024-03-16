@@ -2053,39 +2053,6 @@ PMIX_CLASS_INSTANCE(pmix_server_req_t,
                     pmix_object_t,
                     rqcon, rqdes);
 
-static void mdcon(prte_pmix_mdx_caddy_t *p)
-{
-    p->sig = NULL;
-    p->grpid = NULL;
-    p->buf = NULL;
-    PMIX_BYTE_OBJECT_CONSTRUCT(&p->ctrls);
-    p->procs = NULL;
-    p->nprocs = 0;
-    p->info = NULL;
-    p->ninfo = 0;
-    p->cbdata = NULL;
-    p->grpcbfunc = NULL;
-    p->mdxcbfunc = NULL;
-    p->infocbfunc = NULL;
-    p->opcbfunc = NULL;
-}
-static void mddes(prte_pmix_mdx_caddy_t *p)
-{
-    if (NULL != p->sig) {
-        PMIX_RELEASE(p->sig);
-    }
-    if (NULL != p->grpid) {
-        free(p->grpid);
-    }
-    if (NULL != p->buf) {
-        PMIX_DATA_BUFFER_RELEASE(p->buf);
-    }
-    PMIX_BYTE_OBJECT_DESTRUCT(&p->ctrls);
-}
-PMIX_CLASS_INSTANCE(prte_pmix_mdx_caddy_t,
-                    pmix_object_t,
-                    mdcon, mddes);
-
 static void pscon(pmix_server_pset_t *p)
 {
     p->name = NULL;
