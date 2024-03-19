@@ -1314,7 +1314,8 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
 {
     prte_pmix_server_op_caddy_t *op;
 
-    pmix_output_verbose(2, prte_pmix_server_globals.output, "%s connect called with %d procs",
+    pmix_output_verbose(2, prte_pmix_server_globals.output,
+                        "%s connect called with %d procs",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (int) nprocs);
 
     /* protect ourselves */
