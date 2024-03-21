@@ -17,7 +17,7 @@
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
 # Copyright (c) 2021-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
@@ -131,18 +131,6 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                       [AC_MSG_RESULT(no)
                        AC_MSG_WARN([PRRTE requires PMIx v$prte_pmix_min_num_version or above.])
                        AC_MSG_ERROR([Please select a supported version and configure again])])
-
-    AC_MSG_CHECKING([version at or above v6.0])
-    AC_PREPROC_IFELSE([AC_LANG_PROGRAM([
-                                        #include <pmix_version.h>
-                                        #if (PMIX_NUMERIC_VERSION < 0x00060000)
-                                        #error "not version v6.0 or above"
-                                        #endif
-                                       ], [])],
-                      [AC_MSG_RESULT([yes])
-                       prte_pmix_low_version=0],
-                      [AC_MSG_RESULT(no)
-                       prte_pmix_low_version=1])
 
     AC_CHECK_HEADER([src/util/pmix_argv.h], [],
                     [AC_MSG_ERROR([Could not find PMIx devel headers.  Can not continue.])])
