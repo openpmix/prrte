@@ -1,8 +1,100 @@
 PRRTE v3.x series
 =================
 
-This file contains all the NEWS updates for the PRRTE v3.0
+This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
+
+3.0.5 -- TBD
+------------
+- PR #1949: Update VERSION and NEWS for release
+- PR #1946: Correct deprecation translation for use-hwthread-cpus
+- PR #1936: Add missing show_help text
+- PR #1933: Check for appfile and ingest it if found
+- PR #1931: Multiple commits
+   - Fix testing of suicide for daemons
+   - Fix daemon suicide and preserve output files
+   - Remove unused MCA param
+   - Only trigger job failed to start once
+   - Add "close stale issues" actions
+   - oac: strengthen Sphinx check
+   - Revamp the session directory system
+   - guard against possible segfault in prted
+
+
+3.0.4 -- 4 Feb 2024
+-------------------
+- PR #1918: Multiple commits
+   - Support query for number of available slots
+   - Add an option '--allow-run-as-root' into prted
+   - Update the Python regex for doc build
+- PR #1910: Fix the map-by pe-list option
+- PR #1908: Multiple commits
+   - Use pmix_path_nfs to detect shared file systems
+   - Remove debug
+   - Remove extra character at end of error messages
+   - psets: fix some problems with PMIX_QUERY_PSET_MEMBERSHIP query.
+
+
+3.0.3 -- 19 Dec 2023
+--------------------
+- PR #1893: Check for stdatomic.h
+- PR #1891: add nodes to job data for ALL jobs included in the launch message
+- PR #1888: Multiple commits
+   - Minor tweaks of cmd line processing
+   - Preserve the clichk test code for future use
+- PR #1884: Multiple commits
+   - Fix copy/paste error
+   - Remove daemonize option from prterun
+   - Fix the ras simulator module
+   - Preserve backward compatibility
+   - Check the PMIx version for min required
+   - Correct min version for pmix_getline util
+- PR #1877: Multiple commits
+   - Remove the "refresh" key before requesting dmodx from PMIx server
+   - Shift a code block to enable MCA param directive for ppr mapping
+- PR #1870: Multiple commits
+   - Begin to restore the detailed help topics
+   - docs: add prrte-rst-content to conf.py's exclude_patterns
+   - src/docs: update README.txt
+   - Consolidate non-component show_help files
+   - Add missing file
+- PR #1865: Fix the seq mapper
+- PR #1860: Multiple commits
+   - prte.c: a prefix of "/" is ok
+   - Correctly translate the plm_rsh MCA params
+   - Fix add-hostfile and add-host operations
+   - Add print functions for node, job, and proc flags
+   - Add missing "acquire_object"
+   - Fix handling of "--" in cmd line
+   - Use global PRRTE event base for sigchld callback
+   - Remove the event base param to prte_wait_cb
+   - Fix OMPI cmd line processing
+- PR #1846: Multiple commits
+   - Restore the prun help strings
+   - Restore prte_info show help topics
+   - Recover the pterm show-help strings
+- PR #1843: Avoid adding NULL prefix value to app attributes
+- PR #1841: Multiple commits
+   - Error out of attempts for 32-bit builds
+   - Convert OMPI MCA params from legacy orte
+   - Fix display of DVM allocation
+
+
+3.0.2 -- 23 Oct 2023
+--------------------
+- PR #1832: Update NEWS for release
+- PR #1831: Silence error log
+- PR #1829: Multiple commits
+   - docs/show-help-files: Re-enable Sphinx warning checks
+   - Correctly forward stdin to remote procs
+- PR #1826: Multiple commits
+   - docs: document minimum PMIx version needed
+   - prte_setup_pmix.m4: use PMIx min version from VERSION
+   - Make checking min versions consistent
+   - Update CPPFLAGS for HWLOC config tests
+- PR #1822: Fix rpmbuild error
+- PR #1821: Roll VERSION to v3.0.2
+
 
 3.0.1 -- 27 Sep 2023
 --------------------
@@ -14,6 +106,9 @@ series, in reverse chronological order.
                continue to improve and correct the documents in future
                releases.
 
+- PR #1818: Update VERSION and rename news file
+- PR #1816: Correct confusion over help file names
+- PR #1814: Update NEWS infrastructure
 - PR #1810: Blacklist the HWLOC GL component to avoid deadlock
 - PR #1807: Multiple commits
    - src/docs/show-help-files/Makefile.am: fix syntax
