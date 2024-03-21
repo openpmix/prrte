@@ -17,7 +17,7 @@
 # Copyright (c) 2014-2019 Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
-# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
 # Copyright (c) 2021-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
@@ -27,6 +27,40 @@
 #
 # $HEADER$
 #
+
+dnl $1 is the base cap name (i.e., what comes after "PMIX_CAP_")
+dnl $2 is the action if happy
+dnl $3 is the action if not happy
+AC_DEFUN([PRTE_CHECK_PMIX_CAP],[
+    PRTE_VAR_SCOPE_PUSH([prte_cpp_save])
+
+    AC_MSG_CHECKING([for PMIX_CAP_$1])
+
+    prte_cpp_save=$CPP
+    CPP="$PMIXCC_PATH -E"
+    AC_PREPROC_IFELSE(
+        [AC_LANG_PROGRAM([#include <pmix_version.h>],
+                         [#if !defined(PMIX_CAPABILITIES)
+                          #error This PMIx does not have any capability flags
+                          #endif
+                          #if !defined(PMIX_CAP_$1)
+                          #error This PMIx does not have the PMIX_CAP_$1 capability flag at all
+                          #endif
+                          #if (PMIX_CAPABILITIES & PMIX_CAP_$1) == 0
+                          #error This PMIx does not have the PMIX_CAP_$1 capability flag set
+                          #endif
+                         ]
+                        )
+        ],
+        [AC_MSG_RESULT([found])
+         $2],
+        [AC_MSG_RESULT([not found])
+         $3])
+
+    CPP=$prte_cpp_save
+
+    PRTE_VAR_SCOPE_POP
+])
 
 AC_DEFUN([PRTE_CHECK_PMIX],[
 
@@ -119,6 +153,27 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
            PMIXCC_PATH=])
     AM_CONDITIONAL([PRTE_HAVE_PMIXCC], [test $found_pmixcc -eq 1])
     AC_SUBST([PMIXCC_PATH])
+
+    # Check for any needed capabilities from the PMIx we found.
+    #
+    # Note: if the PMIx we found does not define capability flags,
+    # then it definitely does not have the capability flags we're
+    # looking for.
+
+    # For now, we just check for the "base" capability to exercise
+    # this feature - essentially retaining this as an example for
+    # future times when we actually need to check capabilities
+    PRTE_CHECK_PMIX_CAP([BASE],
+                        [PRTE_PMIX_BASE_CAPABILITY=1],
+                        [AC_MSG_WARN([Your PMIx version is either does not])
+                         AC_MSG_WARN([the capabilities feature or does not])
+                         AC_MSG_WARN([include the PMIX_CAP_BASE capability flag])
+                         AC_MSG_WARN([Ignoring this for now])
+                         PRTE_PMIX_BASE_CAPABILITY=0])
+
+    AC_DEFINE_UNQUOTED([PRTE_PMIX_BASE_CAPABILITY],
+                       [$PRTE_PMIX_BASE_CAPABILITY],
+                       [Whether or not PMIx has the BASE capability flag set])
 
     PRTE_SUMMARY_ADD([Required Packages], [PMIx], [], [$prte_pmix_SUMMARY])
 
