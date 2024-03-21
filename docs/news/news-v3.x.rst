@@ -1,7 +1,7 @@
-PRRTE v3.0 series
+PRRTE v3.x series
 =================
 
-This file contains all the NEWS updates for the PRRTE v3.0
+This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
 3.0.5 -- TBD
