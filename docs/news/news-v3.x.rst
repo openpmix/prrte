@@ -4,8 +4,13 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
-3.0.5 -- TBD
-------------
+3.0.5 -- 21 Mar 2024
+--------------------
+- PR #1952: Multiple commits
+   - Update docs
+   - Update PMIx-related configure code
+   - update the hwloc utility code
+   - Add missing doc
 - PR #1949: Update VERSION and NEWS for release
 - PR #1946: Correct deprecation translation for use-hwthread-cpus
 - PR #1936: Add missing show_help text
