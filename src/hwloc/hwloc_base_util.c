@@ -1865,18 +1865,12 @@ int prte_hwloc_base_topology_set_flags(hwloc_topology_t topology, unsigned long 
 {
     if (io) {
 #if HWLOC_API_VERSION < 0x00020000
-        flags |= HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM;
         flags |= HWLOC_TOPOLOGY_FLAG_IO_DEVICES;
 #else
         int ret = hwloc_topology_set_io_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
         if (0 != ret) {
             return ret;
         }
-#    if HWLOC_API_VERSION < 0x00020100
-        flags |= HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM;
-#    else
-        flags |= HWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED;
-#    endif
 #endif
     }
     // Blacklist the "gl" component due to potential conflicts.
