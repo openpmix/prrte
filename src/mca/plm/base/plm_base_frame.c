@@ -15,7 +15,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2018-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,8 +30,13 @@
 #include "src/mca/base/pmix_mca_base_alias.h"
 #include "src/mca/mca.h"
 #include "src/util/pmix_output.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
+#include "src/mca/ras/base/base.h"
+#include "src/mca/rmaps/base/base.h"
+#include "src/mca/state/state.h"
+
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/base/plm_private.h"
 #include "src/mca/plm/plm.h"
@@ -61,7 +66,21 @@ prte_plm_globals_t prte_plm_globals = {
 /*
  * The default module
  */
-prte_plm_base_module_t prte_plm = {0};
+static int local_init(void);
+static int local_spawn(prte_job_t *jdata);
+static int term_orteds(void);
+
+prte_plm_base_module_t prte_plm = {
+    .init = local_init,
+    .set_hnp_name = prte_plm_base_set_hnp_name,
+    .spawn = local_spawn,
+    .remote_spawn = NULL,
+    .terminate_job = prte_plm_base_prted_terminate_job,
+    .terminate_orteds = term_orteds,
+    .terminate_procs = prte_plm_base_prted_kill_local_procs,
+    .signal_job = prte_plm_base_prted_signal_local_procs,
+    .finalize = NULL
+};
 
 static int mca_plm_base_register(pmix_mca_base_register_flag_t flags)
 {
@@ -145,3 +164,122 @@ static int prte_plm_base_open(pmix_mca_base_open_flag_t flags)
 PMIX_MCA_BASE_FRAMEWORK_DECLARE(prte, plm, NULL, mca_plm_base_register, prte_plm_base_open,
                                 prte_plm_base_close, prte_plm_base_static_components,
                                 PMIX_MCA_BASE_FRAMEWORK_FLAG_DEFAULT);
+
+
+// the LOCAL ONLY plm module
+static void launch_daemons(int fd, short args, void *cbdata);
+
+static int local_init(void)
+{
+    int rc;
+
+    rc = prte_state.add_job_state(PRTE_JOB_STATE_LAUNCH_DAEMONS, launch_daemons);
+    if (PRTE_SUCCESS != rc) {
+        PRTE_ERROR_LOG(rc);
+    }
+
+    /* start the recvs */
+    if (PRTE_SUCCESS != (rc = prte_plm_base_comm_start())) {
+        PRTE_ERROR_LOG(rc);
+    }
+
+    /* we assign daemon nodes at launch */
+    prte_plm_globals.daemon_nodes_assigned_at_launch = true;
+
+    return rc;
+}
+
+static int local_spawn(prte_job_t *jdata)
+{
+    if (PRTE_FLAG_TEST(jdata, PRTE_JOB_FLAG_RESTART)) {
+        /* this is a restart situation - skip to the mapping stage */
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_MAP);
+    } else {
+        /* new job - set it up */
+        PRTE_ACTIVATE_JOB_STATE(jdata, PRTE_JOB_STATE_INIT);
+    }
+    return PRTE_SUCCESS;
+}
+
+static int term_orteds(void)
+{
+    int rc;
+
+    if (PRTE_SUCCESS != (rc = prte_plm_base_prted_exit(PRTE_DAEMON_EXIT_CMD))) {
+        PRTE_ERROR_LOG(rc);
+    }
+
+    return rc;
+}
+
+static void launch_daemons(int fd, short args, void *cbdata)
+{
+    prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
+    prte_job_t *daemons;
+    int rc;
+    prte_job_map_t *map = NULL;
+    prte_node_t *node;
+
+    /* setup the virtual machine */
+    daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
+    if (PRTE_SUCCESS != (rc = prte_plm_base_setup_virtual_machine(state->jdata))) {
+        PRTE_ERROR_LOG(rc);
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+        PMIX_RELEASE(state);
+        return;
+    }
+
+    /* if we don't want to launch, then don't attempt to
+     * launch the daemons - the user really wants to just
+     * look at the proposed process map
+     */
+    if (prte_get_attribute(&daemons->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
+        /* set the state to indicate the daemons reported - this
+         * will trigger the daemons_reported event and cause the
+         * job to move to the following step
+         */
+        state->jdata->state = PRTE_JOB_STATE_DAEMONS_LAUNCHED;
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
+        PMIX_RELEASE(state);
+        return;
+    }
+
+    /* Get the map for this job */
+    if (NULL == (map = daemons->map)) {
+        PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+        PMIX_RELEASE(state);
+        return;
+    }
+
+    if (0 == map->num_new_daemons) {
+        if (!prte_managed_allocation || prte_set_slots_override) {
+            // set the number of slots on our node
+            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
+            prte_plm_base_set_slots(node);
+            state->jdata->total_slots_alloc = node->slots;
+        } else {
+            /* for managed allocations, the total slots allocated is fixed at time of allocation */
+            state->jdata->total_slots_alloc = prte_ras_base.total_slots_alloc;
+        }
+
+        // check for topology limitations
+        prte_rmaps_base.require_hwtcpus = !prte_hwloc_base_core_cpus(node->topology->topo);
+
+        // display the allocation, if requested
+        if (prte_get_attribute(&state->jdata->attributes, PRTE_JOB_DISPLAY_ALLOC, NULL, PMIX_BOOL)) {
+            prte_ras_base_display_alloc(state->jdata);
+        }
+
+        /* jump to mapping */
+        state->jdata->state = PRTE_JOB_STATE_VM_READY;
+        PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_DAEMONS_REPORTED);
+        PMIX_RELEASE(state);
+        return;
+    }
+
+    // otherwise, this is an error
+    pmix_show_help("help-plm-base.txt", "no-available-pls", true);
+    PRTE_ACTIVATE_JOB_STATE(state->jdata, PRTE_JOB_STATE_FAILED_TO_START);
+    PMIX_RELEASE(state);
+}
