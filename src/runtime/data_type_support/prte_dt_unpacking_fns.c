@@ -196,7 +196,6 @@ int prte_job_unpack(pmix_data_buffer_t *bkt, prte_job_t **job)
     if (0 < jptr->num_procs) {
         prte_proc_t *proc;
         for (j = 0; j < jptr->num_procs; j++) {
-            n = 1;
             rc = prte_proc_unpack(bkt, &proc);
             if (PMIX_SUCCESS != rc) {
                 PMIX_ERROR_LOG(rc);
