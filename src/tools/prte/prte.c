@@ -256,7 +256,7 @@ static void shutdown_callback(int fd, short flags, void *arg)
     exit(PRTE_ERROR_DEFAULT_EXIT_CODE);
 }
 
-#if PMIX_NUMERIC_VERSION < 0x00040208
+#if PMIX_NUMERIC_VERSION < 0x00040205
 static char *pmix_getline(FILE *fp)
 {
     char *ret, *buff;
