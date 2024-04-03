@@ -128,8 +128,8 @@ void prte_plm_base_daemons_reported(int fd, short args, void *cbdata)
 
     /* if we are not launching, then we just assume that all
      * daemons share our topology */
-    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)
-        && PMIX_CHECK_NSPACE(caddy->jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
+    if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
+        PMIX_CHECK_NSPACE(caddy->jdata->nspace, PRTE_PROC_MY_NAME->nspace)) {
         node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, 0);
         t = node->topology;
         for (i = 1; i < prte_node_pool->size; i++) {
@@ -345,7 +345,7 @@ static void stack_trace_recv(int status, pmix_proc_t *sender, pmix_data_buffer_t
     int rc;
     pmix_byte_object_t bo;
 
-    PMIX_DATA_BUFFER_CONSTRUCT(&blob);    
+    PMIX_DATA_BUFFER_CONSTRUCT(&blob);
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     pmix_output_verbose(5, prte_plm_base_framework.framework_output,
@@ -640,7 +640,8 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(caddy);
 
-    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output, "%s plm:base:setup_job",
+    PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
+                         "%s plm:base:setup_job",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     if (PRTE_JOB_STATE_INIT != caddy->job_state) {
@@ -687,6 +688,16 @@ void prte_plm_base_setup_job(int fd, short args, void *cbdata)
         prte_set_attribute(&caddy->jdata->attributes, PRTE_JOB_TIMEOUT_EVENT, PRTE_ATTR_LOCAL, timer, PMIX_POINTER);
         PMIX_POST_OBJECT(timer);
         prte_event_evtimer_add(timer->ev, &timer->tv);
+    }
+
+    // if we are not going to launch this job, then ensure we output something - otherwise,
+    // we will simply silently exit
+    if (!prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL) &&
+        !prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_MAP, NULL, PMIX_BOOL) &&
+        !prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
+        // default to the devel map
+        prte_set_attribute(&caddy->jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, PRTE_ATTR_GLOBAL,
+                           NULL, PMIX_BOOL);
     }
 
     /* set the job state to the next position */
