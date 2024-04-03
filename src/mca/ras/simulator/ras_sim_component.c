@@ -16,7 +16,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,13 +60,13 @@ static int ras_sim_register(void)
 {
     pmix_mca_base_component_t *component = &prte_mca_ras_simulator_component.super;
 
-    prte_mca_ras_simulator_component.slots = "1";
+    prte_mca_ras_simulator_component.slots = NULL;
     (void) pmix_mca_base_component_var_register(component, "slots",
                                                 "Comma-separated list of number of slots on each node to simulate",
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
                                                 &prte_mca_ras_simulator_component.slots);
 
-    prte_mca_ras_simulator_component.slots_max = "0";
+    prte_mca_ras_simulator_component.slots_max = NULL;
     (void) pmix_mca_base_component_var_register(component, "max_slots",
                                                 "Comma-separated list of number of max slots on each node to simulate",
                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
