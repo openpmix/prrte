@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  *
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -132,18 +132,17 @@ static int allocate(prte_job_t *jdata, pmix_list_t *nodes)
             pmix_asprintf(&node->name, "%s%0*d", prefix, dig, i);
             node->state = PRTE_NODE_STATE_UP;
             node->slots_inuse = 0;
-            if (NULL == max_slot_cnt || NULL == max_slot_cnt[n]) {
-                node->slots_max = 0;
-            } else {
-                obj = hwloc_get_root_obj(t->topo);
-                node->slots_max = prte_hwloc_base_get_npus(t->topo, use_hwthread_cpus, available,
-                                                           obj);
-            }
             if (NULL == slot_cnt || NULL == slot_cnt[n]) {
                 obj = hwloc_get_root_obj(t->topo);
                 node->slots = prte_hwloc_base_get_npus(t->topo, use_hwthread_cpus, available, obj);
             } else {
                 node->slots = strtol(slot_cnt[n], NULL, 10);
+            }
+            if (NULL == max_slot_cnt || NULL == max_slot_cnt[n]) {
+                obj = hwloc_get_root_obj(t->topo);
+                node->slots_max = prte_hwloc_base_get_npus(t->topo, use_hwthread_cpus, available, obj);
+            } else {
+                node->slots_max = strtol(max_slot_cnt[n], NULL, 10);
             }
             PMIX_RETAIN(t);
             node->topology = t;
