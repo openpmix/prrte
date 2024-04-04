@@ -33,6 +33,6 @@ harmelss by-products; we ignore them.
 
    Util <help-prte-util>
 
-   Hostfiles <help-hostfiles>
+   Hostfiles <help-hostfile>
 
    Dash host <help-dash-host>
