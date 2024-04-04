@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2022-2023 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
-# Copyright (c) 2023      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023-2024 Nanook Consulting  All rights reserved.
 #
 # $COPYRIGHT$
 #
@@ -44,7 +44,7 @@ RST_SOURCE_FILES = \
         $(srcdir)/help-pterm.rst \
         $(srcdir)/help-cli.rst \
         $(srcdir)/help-dash-host.rst \
-        $(srcdir)/help-hostfiles.rst \
+        $(srcdir)/help-hostfile.rst \
         $(srcdir)/help-prte-hwloc-base.rst \
         $(srcdir)/help-prte-runtime.rst \
         $(srcdir)/help-prte-util.rst
@@ -64,7 +64,7 @@ ALL_TXT_BUILT = \
         $(TXT_OUTDIR)/help-pterm.txt \
         $(TXT_OUTDIR)/help-cli.txt \
         $(TXT_OUTDIR)/help-dash-host.txt \
-        $(TXT_OUTDIR)/help-hostfiles.txt \
+        $(TXT_OUTDIR)/help-hostfile.txt \
         $(TXT_OUTDIR)/help-prte-hwloc-base.txt \
         $(TXT_OUTDIR)/help-prte-runtime.txt \
         $(TXT_OUTDIR)/help-prte-util.txt
