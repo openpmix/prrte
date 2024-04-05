@@ -16,7 +16,7 @@
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Inria.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -61,6 +61,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     hwloc_obj_type_t type;
     hwloc_obj_t target;
     hwloc_cpuset_t tgtcpus, tmpcpus;
+    int nobjs, n;
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind %s with policy %s",
@@ -82,18 +83,18 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
 #endif
     hwloc_bitmap_and(prte_rmaps_base.baseset, options->target, tgtcpus);
 
-    trg_obj = NULL;
-    /* find the first object of that type in the target that has at least one available CPU */
-    tmp_obj = hwloc_get_next_obj_inside_cpuset_by_type(node->topology->topo,
-                                                       prte_rmaps_base.baseset,
-                                                       options->hwb, NULL);
-    while (NULL != tmp_obj) {
+    nobjs = hwloc_get_nbobjs_by_type(node->topology->topo, options->hwb);
+
+    for (n=0; n < nobjs; n++) {
+        tmp_obj = hwloc_get_obj_by_type(node->topology->topo, options->hwb, n);
 #if HWLOC_API_VERSION < 0x20000
         tmpcpus = tmp_obj->allowed_cpuset;
 #else
         tmpcpus = tmp_obj->cpuset;
 #endif
         hwloc_bitmap_and(prte_rmaps_base.available, node->available, tmpcpus);
+        hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, prte_rmaps_base.baseset);
+
         if (options->use_hwthreads) {
             ncpus = hwloc_bitmap_weight(prte_rmaps_base.available);
         } else {
@@ -112,9 +113,6 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
             trg_obj = tmp_obj;
             break;
         }
-        tmp_obj = hwloc_get_next_obj_inside_cpuset_by_type(node->topology->topo,
-                                                           prte_rmaps_base.baseset,
-                                                           options->hwb, tmp_obj);
     }
     if (NULL == trg_obj) {
         /* there aren't any appropriate targets under this object */
