@@ -631,27 +631,18 @@ int prte_rmaps_base_get_ncpus(prte_node_t *node,
 {
     int ncpus;
 
+    if (NULL == options->job_cpuset) {
+        hwloc_bitmap_copy(prte_rmaps_base.available, node->available);
+    } else {
+        hwloc_bitmap_and(prte_rmaps_base.available, node->available, options->job_cpuset);
+    }
+    if (NULL != obj) {
 #if HWLOC_API_VERSION < 0x20000
-    hwloc_obj_t root;
-    root = hwloc_get_root_obj(node->topology->topo);
-    if (NULL == options->job_cpuset) {
-        hwloc_bitmap_copy(prte_rmaps_base.available, root->allowed_cpuset);
-    } else {
-        hwloc_bitmap_and(prte_rmaps_base.available, root->allowed_cpuset, options->job_cpuset);
-    }
-    if (NULL != obj) {
         hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, obj->allowed_cpuset);
-    }
 #else
-    if (NULL == options->job_cpuset) {
-        hwloc_bitmap_copy(prte_rmaps_base.available, hwloc_topology_get_allowed_cpuset(node->topology->topo));
-    } else {
-        hwloc_bitmap_and(prte_rmaps_base.available, hwloc_topology_get_allowed_cpuset(node->topology->topo), options->job_cpuset);
-    }
-    if (NULL != obj) {
         hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, obj->cpuset);
-    }
 #endif
+    }
     if (options->use_hwthreads) {
         ncpus = hwloc_bitmap_weight(prte_rmaps_base.available);
     } else {
@@ -664,6 +655,7 @@ int prte_rmaps_base_get_ncpus(prte_node_t *node,
          */
         ncpus = hwloc_get_nbobjs_inside_cpuset_by_type(node->topology->topo, prte_rmaps_base.available, HWLOC_OBJ_CORE);
     }
+
     return ncpus;
 }
 
