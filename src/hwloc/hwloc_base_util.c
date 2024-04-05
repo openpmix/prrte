@@ -1326,7 +1326,7 @@ void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
 
     /* if the cpuset is all zero, then something is wrong */
     if (hwloc_bitmap_iszero(cpuset)) {
-        snprintf(cores, sz, "\n%*c<NOT MAPPED/>\n", 20, ' ');
+        snprintf(cores, sz, "\n%*c<EMPTY CPUSET/>\n", 20, ' ');
     }
 
     /* if the cpuset includes all available cpus, and
@@ -1399,7 +1399,7 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
 
     /* if the cpuset is all zero, then something is wrong */
     if (hwloc_bitmap_iszero(cpuset)) {
-        return strdup("NOT MAPPED");
+        return strdup("EMPTY CPUSET");
     }
 
     /* if the cpuset includes all available cpus, and
