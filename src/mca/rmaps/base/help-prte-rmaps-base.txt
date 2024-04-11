@@ -14,7 +14,7 @@
 # Copyright (c) 2011      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -176,24 +176,13 @@ Please check that only one policy is defined.
 A request was made to bind to %s, but an appropriate target could not
 be found on node %s.
 #
-[rmaps:binding-overload]
-A request was made to bind to that would result in binding more
-processes than cpus on a resource:
-
-   Bind to:     %s
-   Node:        %s
-   #processes:  %d
-   #cpus:       %d
-
-You can override this protection by adding the "overload-allowed"
-option to your binding directive.
-#
 [allocation-overload]
-A request was made to bind to that would result in binding more
-processes than cpus available in your allocation:
+A request was made to bind that would require binding
+processes to more cpus than are available in your allocation:
 
    Application:     %s
    #processes:      %d
+   Mapping policy:  %s
    Binding policy:  %s
 
 You can override this protection by adding the "overload-allowed"
@@ -546,7 +535,7 @@ Please provide a valid value for this policy, or remove it.
 #
 [rankfile-no-filename]
 The request to map processes using a rankfile could not be completed
-because the filename of the rankfile was not specified. Please 
+because the filename of the rankfile was not specified. Please
 specify the name of the rankfile.
 #
 [missing-modifier]
