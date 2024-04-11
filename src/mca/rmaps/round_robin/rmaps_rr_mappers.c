@@ -714,6 +714,7 @@ errout:
                        "allocation-overload", true,
                        (NULL == app) ? "N/A" : app->app,
                        (NULL == app) ? -1 : app->num_procs,
+                       prte_rmaps_base_print_mapping(options->map),
                        prte_hwloc_base_print_binding(options->bind));
         return PRTE_ERR_SILENT;
     }
