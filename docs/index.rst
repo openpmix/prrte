@@ -36,7 +36,6 @@ Table of contents
    placement/index
    notifications
    session-directory
-   resilience
    developers/index
    contributing
    license
