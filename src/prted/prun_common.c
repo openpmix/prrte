@@ -661,6 +661,13 @@ int prun_common(pmix_cli_result_t *results,
         PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_LOG_AGG, &flag, PMIX_BOOL);
     }
 
+#ifdef PMIX_MEM_ALLOC_KIND
+    opt = pmix_cmd_line_get_param(results, PRTE_CLI_MEM_ALLOC_KIND);
+    if (NULL != opt) {
+        PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_MEM_ALLOC_KIND, opt->values[0], PMIX_STRING);
+    }
+#endif
+
     /* give the schizo components a chance to add to the job info */
     schizo->job_info(results, jinfo);
 
