@@ -4,6 +4,8 @@
    Copyright (c) 2022      Cisco Systems, Inc.  All rights reserved.
    Copyright (c) 2022      IBM Corporation.  All rights reserved.
    Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
+   Copyright (c) 2024      Triad National Security, LLC. All rights reserved.
+
    $COPYRIGHT$
 
    Additional copyrights may follow
@@ -159,6 +161,8 @@ MPI Options
 
 * ``--initial-errhandler``: Specify the initial error handler that is
   attached to predefined communicators during the first MPI call.
+* ``--memory-alloc-kinds``: Value is a comma separated list of
+   memory allocation kinds.
 * ``--display-comm``: Display table of communication methods between
   MPI_COMM_WORLD ranks during MPI_Init
 * ``--display-comm-finalize``: Display table of communication methods
