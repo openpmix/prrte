@@ -90,7 +90,8 @@ static void _query(int sd, short args, void *cbdata)
     pmix_proc_info_t *procinfo;
     pmix_data_array_t dry;
     prte_proc_t *proct;
-    pmix_proc_t *proc;
+    pmix_proc_t *proc, pproc;
+    pmix_info_t info;
     size_t sz;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
@@ -823,6 +824,27 @@ static void _query(int sd, short args, void *cbdata)
                 }
 #endif
 
+#ifdef PMIX_MEM_ALLOC_KIND
+            } else if (0 == strcmp(q->keys[n], PMIX_MEM_ALLOC_KIND)) {
+                pmix_value_t *value;
+                jdata = prte_get_job_data_object(jobid);
+                if (NULL == jdata) {
+                    ret = PMIX_ERR_NOT_FOUND;
+                    goto done;
+                }
+                PMIX_LOAD_PROCID(&pproc, jobid, PMIX_RANK_WILDCARD);
+                PMIX_INFO_LOAD(&info, PMIX_IMMEDIATE, NULL, PMIX_BOOL);
+                ret = PMIx_Get(&pproc, PMIX_MEM_ALLOC_KIND, &info, 1, (void**)&value);
+                if (PMIX_SUCCESS != ret) {
+                    goto done;
+                }
+                PMIX_INFO_LIST_ADD(rc, results, PMIX_MEM_ALLOC_KIND, value->data.string, PMIX_STRING);
+                PMIX_VALUE_RELEASE(value);
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    goto done;
+                }
+#endif
             } else {
                 fprintf(stderr, "Query for unrecognized attribute: %s\n", q->keys[n]);
             }

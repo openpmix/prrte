@@ -15,7 +15,7 @@
  * Copyright (c) 2016-2017 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2017-2022 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -108,6 +108,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_SET_CWD_SESSION        "set-cwd-to-session-dir"    // none
 #define PRTE_CLI_ENABLE_RECOVERY        "enable-recovery"           // none
 #define PRTE_CLI_DISABLE_RECOVERY       "disable-recovery"          // none
+#define PRTE_CLI_MEM_ALLOC_KIND			"memory-alloc-kinds"        // required
 
 // Placement options
 #define PRTE_CLI_MAPBY                  "map-by"                    // required
