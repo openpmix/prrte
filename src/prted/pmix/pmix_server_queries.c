@@ -833,7 +833,7 @@ static void _query(int sd, short args, void *cbdata)
                 }
                 PMIX_LOAD_PROCID(&pproc, jobid, PMIX_RANK_WILDCARD);
                 PMIX_INFO_LOAD(&info, PMIX_IMMEDIATE, NULL, PMIX_BOOL);
-                ret = PMIx_Get(&pproc, PMIX_MEM_ALLOC_KIND, &info, 1, (void**)&value);
+                ret = PMIx_Get(&pproc, PMIX_MEM_ALLOC_KIND, &info, 1, &value);
                 if (PMIX_SUCCESS != ret) {
                     goto done;
                 }
