@@ -68,8 +68,10 @@ AC_DEFUN([PRTE_CHECK_LSF],[
           AS_IF([test "$prte_check_lsf_happy" = "yes"],
                 [PRTE_SEARCH_LIBS_COMPONENT([yp_all_nsl], [yp_all], [nsl bsd BSD sun],
                               [prte_check_lsf_happy="yes"],
-                              [AC_MSG_WARN([[Could not find yp_all. Please see https://github.com/openpmix/prrte/wiki/Building-LSF-support for more details.]])
-                              prte_check_lsf_happy="no"])])
+                              [AS_IF([test "${with_lsf}" = "yes"],
+                                     [AC_MSG_WARN([[Could not find yp_all. Please see https://github.com/openpmix/prrte/wiki/Building-LSF-support for more details.]])
+                                      AC_MSG_ERROR([Cannot build requested LSF support])])
+                               prte_check_lsf_happy="no"])])
 
           # liblsf requires shm_open, shm_unlink, which are in librt
           AS_IF([test "$prte_check_lsf_happy" = "yes"],
@@ -101,10 +103,8 @@ AC_DEFUN([PRTE_CHECK_LSF],[
 
           # Some versions of LSF ship with a libevent.so in their library path.
           # This is _not_ a copy of Libevent, but something specific to their project.
-          # The Open MPI components should not need to link against LSF's libevent.so
+          # The PRRTE components should not need to link against LSF's libevent.so
           # However, the presence of it in the linker search path can cause a problem
-          # if there is a system installed Libevent and Open MPI chooses the 'external'
-          # event component prior to this stage.
           #
           # Add a check here to see if we are in a scenario where the two are conflicting.
           # In which case the earlier checks for successful compile of an LSF program will
@@ -124,7 +124,7 @@ AC_DEFUN([PRTE_CHECK_LSF],[
           # Split libs into an array, see if -levent is in that list
           prte_check_lsf_libevent_present=`echo "$LIBS" | awk '{split([$]0, a, " "); {for (k in a) {if (a[[k]] == "-levent") {print a[[k]]}}}}' | wc -l | tr -d '[[:space:]]'`
           # (1) LSF check must have failed above. We need to know why...
-          AS_IF([test "$prte_check_lsf_happy" = "no"],
+          AS_IF([test "${with_lsf}" = "yes" && test "$prte_check_lsf_happy" = "no"],
                 [# (2) If there is a -levent in the $LIBS then that might be the problem
                  AS_IF([test "$prte_check_lsf_libevent_present" != "0"],
                        [AS_IF([test "$prte_check_lsf_libdir" = "" ],
