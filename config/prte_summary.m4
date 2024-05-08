@@ -6,7 +6,7 @@ dnl Copyright (c) 2016-2023 Cisco Systems, Inc.  All rights reserved.
 dnl Copyright (c) 2016      Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+dnl Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
 dnl Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
 dnl                         All Rights reserved.
 dnl $COPYRIGHT$
@@ -41,6 +41,12 @@ EOF
         echo "Debug build: no" >&2
     else
         echo "Debug build: yes" >&2
+    fi
+
+    if test $WANT_PICKY_COMPILER = 0 ; then
+        echo "Devel check enabled: no" >& 2
+    else
+        echo "Devel check enabled: yes" >& 2
     fi
 
     if test ! -z $with_prte_platform ; then

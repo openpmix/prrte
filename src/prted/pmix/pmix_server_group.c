@@ -242,6 +242,7 @@ static void local_complete(int sd, short args, void *cbdata)
     pmix_server_pset_t *pset;
     pmix_data_array_t *members;
     pmix_proc_t *p;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     if (PMIX_GROUP_CONSTRUCT == cd->op) {
 
@@ -303,7 +304,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     int rc;
     size_t i;
     bool assignID = false;
-    pmix_server_pset_t *pset;
     bool fence = false;
     bool force_local = false;
     pmix_proc_t *members = NULL;

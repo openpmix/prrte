@@ -110,11 +110,6 @@ pmix_nspace_t prte_nspace_wildcard = {0};
 static bool util_initialized = false;
 static bool min_initialized = false;
 
-#if PRTE_CC_USE_PRAGMA_IDENT
-#    pragma ident PRTE_IDENT_STRING
-#elif PRTE_CC_USE_IDENT
-#    ident PRTE_IDENT_STRING
-#endif
 const char prte_version_string[] = PRTE_IDENT_STRING;
 
 static bool check_exist(char *path)
