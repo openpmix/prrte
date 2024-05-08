@@ -219,6 +219,7 @@ static void launch_daemons(int fd, short args, void *cbdata)
     int rc;
     prte_job_map_t *map = NULL;
     prte_node_t *node;
+    PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     /* setup the virtual machine */
     daemons = prte_get_job_data_object(PRTE_PROC_MY_NAME->nspace);
