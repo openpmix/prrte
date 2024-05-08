@@ -88,12 +88,11 @@ static void _query(int sd, short args, void *cbdata)
     prte_app_context_t *app;
     int matched;
     pmix_proc_info_t *procinfo;
-    pmix_info_t *info;
     pmix_data_array_t dry;
     prte_proc_t *proct;
     pmix_proc_t *proc;
     size_t sz;
-    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+    PRTE_HIDE_UNUSED_PARAMS(sd, args, sessionid);
 
     PMIX_ACQUIRE_OBJECT(cd);
 
@@ -703,8 +702,8 @@ static void _query(int sd, short args, void *cbdata)
                 /* cycle thru the job and create an entry for each proc */
                 PMIX_DATA_ARRAY_CONSTRUCT(&dry, grp->num_members, PMIX_PROC);
                 proc = (pmix_proc_t *) dry.array;
-                for (k = 0; k < grp->num_members; k++) {
-                    PMIX_LOAD_PROCID(&proc[k], grp->members[k].nspace, grp->members[k].rank);
+                for (p = 0; p < grp->num_members; p++) {
+                    PMIX_LOAD_PROCID(&proc[p], grp->members[p].nspace, grp->members[p].rank);
                 }
                 PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_GROUP_MEMBERSHIP, &dry, PMIX_DATA_ARRAY);
                 PMIX_DATA_ARRAY_DESTRUCT(&dry);

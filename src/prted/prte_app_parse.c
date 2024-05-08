@@ -18,7 +18,7 @@
  * Copyright (c) 2016-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022-2023 Triad National Security, LLC.
  *                         All rights reserved.
  * $COPYRIGHT$
@@ -332,7 +332,7 @@ int prte_parse_locals(prte_schizo_base_module_t *schizo,
                       pmix_list_t *jdata, char *argv[],
                       char ***hostfiles, char ***hosts)
 {
-    int i, j, rc;
+    int i, rc;
     char **temp_argv, **env;
     prte_pmix_app_t *app;
     bool made_app;

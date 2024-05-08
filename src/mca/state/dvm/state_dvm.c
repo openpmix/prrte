@@ -514,7 +514,6 @@ static void check_complete(int fd, short args, void *cbdata)
     uint8_t command = PRTE_PMIX_PURGE_PROC_CMD;
     pmix_data_buffer_t *buf;
     pmix_pointer_array_t procs;
-    char *tmp;
     prte_timer_t *timer;
     prte_app_context_t *app;
     hwloc_obj_t obj;

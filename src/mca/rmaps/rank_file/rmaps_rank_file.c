@@ -100,7 +100,6 @@ static int num_ranks = 0;
 static int prte_rmaps_rf_map(prte_job_t *jdata,
                              prte_rmaps_options_t *options)
 {
-    prte_job_map_t *map;
     prte_app_context_t *app = NULL;
     int32_t i, k;
     pmix_list_t node_list;
@@ -115,7 +114,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
     char *slots = NULL;
     bool initial_map = true;
     char *rankfile = NULL;
-    hwloc_obj_t obj = NULL;
     char *affinity_file = NULL;
     hwloc_cpuset_t proc_bitmap, bitmap;
     char *cpu_bitmap;
@@ -178,9 +176,6 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
         free(jdata->map->last_mapper);
     }
     jdata->map->last_mapper = strdup(c->pmix_mca_component_name);
-
-    /* convenience def */
-    map = jdata->map;
 
     /* setup the node list */
     PMIX_CONSTRUCT(&node_list, pmix_list_t);
@@ -771,7 +766,7 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
     int fp_rank, cur_rank = 0;
     char *hstname = NULL;
     char *sep, *eptr, *membind_opt;
-    char *tmp_str = NULL, *tmp_rid = NULL;
+    char *tmp_str = NULL;
     size_t len;
     char **cpus;
     int i;

@@ -95,9 +95,6 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     pmix_topology_t topo;
     pmix_data_array_t darray, lparray;
     bool flag, *fptr;
-    size_t size, sz;
-    pmix_info_t *iptr;
-    void *next;
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s register nspace for %s",

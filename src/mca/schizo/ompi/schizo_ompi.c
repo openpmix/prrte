@@ -424,7 +424,7 @@ static bool mcaoption(char *s)
 static int parse_cli(char **argv, pmix_cli_result_t *results,
                      bool silent)
 {
-    int rc, m, n;
+    int rc, n;
     pmix_cli_item_t *opt;
     char *p1, *p2;
     char **pargv;
@@ -477,7 +477,7 @@ static int parse_cli(char **argv, pmix_cli_result_t *results,
         /* check for single-dash errors */
         if ('-' != pargv[n][1] && 2 < strlen(pargv[n])) {
             /* we know this is incorrect */
-            char *p2 = pargv[n];
+            p2 = pargv[n];
             pmix_asprintf(&pargv[n], "-%s", p2);
             if(warn) {
                 caught_single_dashes[cur_caught_pos] = strdup(p2);

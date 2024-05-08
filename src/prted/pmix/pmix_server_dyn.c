@@ -208,7 +208,6 @@ static void interim(int sd, short args, void *cbdata)
     bool flag;
     size_t m, n;
     uint16_t u16;
-    pmix_rank_t rank;
     prte_rmaps_options_t options;
     prte_schizo_base_module_t *schizo;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);

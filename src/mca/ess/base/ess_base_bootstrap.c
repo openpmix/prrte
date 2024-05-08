@@ -18,7 +18,7 @@
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
@@ -97,11 +97,7 @@ int prte_ess_base_bootstrap(void)
     char *dvmnodes = NULL;
     char *dvmtmpdir = NULL;
     char *sessiontmpdir = NULL;
-    bool ctrllogjobstate = false;
-    bool ctrllogprocstate = false;
     char *ctrllogpath = NULL;
-    bool prtedlogjobstate = false;
-    bool prtedlogprocstate = false;
     char *prtedlogpath = NULL;
     char **nodes = NULL;
     int rc = PRTE_ERR_SILENT;
@@ -164,28 +160,8 @@ int prte_ess_base_bootstrap(void)
             dvmtmpdir = strdup(ptr);
         } else if (0 == strcmp(line, "SessionTmpDir")) {
             sessiontmpdir = strdup(ptr);
-        } else if (0 == strcmp(line, "ControllerLogJobState")) {
-            if (0 == strcasecmp(ptr, "on") ||
-                0 == strncasecmp(ptr, "true", 1)) {
-                ctrllogjobstate = true;
-            }
-        } else if (0 == strcmp(line, "ControllerLogProcState")) {
-            if (0 == strcasecmp(ptr, "on") ||
-                0 == strncasecmp(ptr, "true", 1)) {
-                ctrllogprocstate = true;
-            }
         } else if (0 == strcmp(line, "ControllerLogPath")) {
             ctrllogpath = strdup(ptr);
-        } else if (0 == strcmp(line, "PRTEDLogJobState")) {
-            if (0 == strcasecmp(ptr, "on") ||
-                0 == strncasecmp(ptr, "true", 1)) {
-                prtedlogjobstate = true;
-            }
-        } else if (0 == strcmp(line, "PRTEDLogProcState")) {
-            if (0 == strcasecmp(ptr, "on") ||
-                0 == strncasecmp(ptr, "true", 1)) {
-                prtedlogprocstate = true;
-            }
         } else if (0 == strcmp(line, "PRTEDLogPath")) {
             prtedlogpath = strdup(ptr);
         }
@@ -467,7 +443,6 @@ static pmix_status_t regex_parse_value_range(char *base, char *range, int num_di
     size_t i, k, start, end;
     size_t base_len, len;
     bool found;
-    pmix_status_t ret;
 
     if (NULL == base || NULL == range) {
         return PMIX_ERROR;

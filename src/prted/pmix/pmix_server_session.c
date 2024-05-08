@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,6 +49,7 @@ static void pass_request(int sd, short args, void *cbdata)
     pmix_data_buffer_t *buf;
     uint8_t command;
     pmix_status_t rc;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     /* create a request tracker for this operation */
     req = PMIX_NEW(pmix_server_req_t);

@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -99,9 +99,6 @@ typedef struct {
     pmix_info_t *info;
     size_t ninfo;
 } mylock_t;
-
-static pmix_proc_t myproc;
-static bool verbose = false;
 
 int prun(int argc, char *argv[])
 {

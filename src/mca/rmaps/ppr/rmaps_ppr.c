@@ -5,7 +5,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -48,15 +48,14 @@ static int ppr_mapper(prte_job_t *jdata,
     pmix_mca_base_component_t *c = &prte_mca_rmaps_ppr_component;
     prte_node_t *node, *nd;
     prte_app_context_t *app;
-    pmix_rank_t nprocs_mapped;
+    int nprocs_mapped;
     prte_mapping_policy_t mapping = 0;
     prte_ranking_policy_t ranking;
     hwloc_obj_t obj;
     unsigned int nobjs, i;
     pmix_list_t node_list;
     int32_t num_slots;
-    char **ck, *jobppr = NULL;
-    size_t len;
+    char *jobppr = NULL;
     bool initial_map = true;
     prte_binding_policy_t savebind = options->bind;
 
@@ -267,13 +266,13 @@ static int ppr_mapper(prte_job_t *jdata,
                     jdata->map->binding = PRTE_BIND_TO_NONE;
                 }
                 /* map the specified number of procs to each such resource on this node */
-                for (j = 0; j < nobjs && nprocs_mapped < app->num_procs; j++) {
+                for (i = 0; i < nobjs && nprocs_mapped < app->num_procs; i++) {
                     obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                          options->maptype, options->cmaplvl, j);
+                                                          options->maptype, options->cmaplvl, i);
                     if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, obj, options)) {
                         continue;
                     }
-                    for (i=0; i < options->pprn && app->num_procs; i++) {
+                    for (j=0; j < options->pprn && app->num_procs; j++) {
                         proc = prte_rmaps_base_setup_proc(jdata, idx, node, obj, options);
                         if (NULL == proc) {
                             rc = PRTE_ERR_OUT_OF_RESOURCE;

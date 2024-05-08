@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -109,27 +109,6 @@ static prte_event_base_t *myevbase = NULL;
 static bool proxyrun = false;
 static bool verbose = false;
 
-/* prun-specific options */
-static struct option myoptions[] = {
-    /* basic options */
-    PMIX_OPTION_SHORT_DEFINE("help", PMIX_ARG_OPTIONAL, 'h'),
-    PMIX_OPTION_SHORT_DEFINE("version", PMIX_ARG_NONE, 'V'),
-    PMIX_OPTION_SHORT_DEFINE("verbose", PMIX_ARG_NONE, 'v'),
-
-    // DVM options
-    PMIX_OPTION_DEFINE("system-server-first", PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE("system-server-only", PMIX_ARG_NONE),
-    PMIX_OPTION_DEFINE("wait-to-connect", PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE("num-connect-retries", PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE("pid", PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE("namespace", PMIX_ARG_REQD),
-    PMIX_OPTION_DEFINE("dvm-uri", PMIX_ARG_REQD),
-
-    PMIX_OPTION_END
-};
-
-static char *shorts = "hvVp";
-
 static void abort_signal_callback(int signal);
 static void clean_abort(int fd, short flags, void *arg);
 
@@ -145,6 +124,8 @@ static void infocb(pmix_status_t status, pmix_info_t *info, size_t ninfo, void *
     if (PMIX_ERR_COMM_FAILURE == status) {
         return;
     }
+#else
+    PRTE_HIDE_UNUSED_PARAMS(status);
 #endif
     PMIX_ACQUIRE_OBJECT(lock);
 
