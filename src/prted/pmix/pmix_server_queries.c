@@ -91,8 +91,7 @@ static void _query(int sd, short args, void *cbdata)
     pmix_info_t *info;
     pmix_data_array_t dry;
     prte_proc_t *proct;
-    pmix_proc_t *proc, pproc;
-    pmix_info_t info;
+    pmix_proc_t *proc;
     size_t sz;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
@@ -825,6 +824,8 @@ static void _query(int sd, short args, void *cbdata)
 
 #ifdef PMIX_MEM_ALLOC_KIND
             } else if (0 == strcmp(q->keys[n], PMIX_MEM_ALLOC_KIND)) {
+                pmix_proc_t pproc;
+                pmix_info_t info;
                 pmix_value_t *value;
                 jdata = prte_get_job_data_object(jobid);
                 if (NULL == jdata) {
