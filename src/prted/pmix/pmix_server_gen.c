@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -997,7 +997,6 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
     int rc = PRTE_SUCCESS;
     pmix_status_t ret;
     bool assignedID = false;
-    bool procsadded = false;
     size_t cid;
     pmix_proc_t *procs, *members;
     size_t n, num_members;
@@ -1072,7 +1071,6 @@ static void group_release(int status, pmix_data_buffer_t *buf, void *cbdata)
             PMIX_PROC_FREE(cd->procs, cd->nprocs);
             cd->procs = procs;
             cd->nprocs += num_members;
-            procsadded = true;
         }
         /* cleanup */
         PMIX_INFO_DESTRUCT(&info);
@@ -1154,7 +1152,6 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     bool fence = false;
     bool force_local = false;
     pmix_byte_object_t *bo = NULL;
-    struct timeval tv = {0, 0};
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
                         "%s group request recvd",
@@ -1175,7 +1172,10 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ENDPT_DATA)) {
             bo = (pmix_byte_object_t *) &directives[i].value.data.bo;
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_TIMEOUT)) {
-            tv.tv_sec = directives[i].value.data.uint32;
+            if (PMIX_INFO_IS_REQUIRED(&directives[i])) {
+                // we don't currently support timeout here
+                return PMIX_ERR_NOT_SUPPORTED;
+            }
         } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_LOCAL_ONLY)) {
             force_local = PMIX_INFO_TRUE(&directives[i]);
         }

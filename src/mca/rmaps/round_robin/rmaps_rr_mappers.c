@@ -13,7 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -564,16 +564,13 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                         pmix_rank_t num_procs,
                         prte_rmaps_options_t *options)
 {
-    int i, k, rc, nprocs_mapped, nprocs;
+    int rc, nprocs_mapped;
     prte_node_t *node, *nnext;
     int ncpus;
-    float balance;
     prte_proc_t *proc;
-    bool second_pass = false;
     bool nodefull, allfull, outofcpus;
     hwloc_obj_t obj = NULL;
-    unsigned j, total_nobjs, nobjs;
-    prte_binding_policy_t savebind = options->bind;
+    unsigned j, nobjs;
 
     pmix_output_verbose(2, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps:rr:byobj mapping by %s for job %s slots %d num_procs %lu",
@@ -592,7 +589,6 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
             if (!PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
                 jdata->map->binding = PRTE_BIND_TO_NONE;
                 options->bind = PRTE_BIND_TO_NONE;
-                savebind = PRTE_BIND_TO_NONE;
             }
         }
     }

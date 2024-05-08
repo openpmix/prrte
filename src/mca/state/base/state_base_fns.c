@@ -427,7 +427,6 @@ void prte_state_base_track_procs(int fd, short argc, void *cbdata)
 {
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     pmix_proc_t *proc;
-    pmix_rank_t tgt, *tptr;
     prte_proc_state_t state;
     prte_job_t *jdata;
     prte_proc_t *pdata;

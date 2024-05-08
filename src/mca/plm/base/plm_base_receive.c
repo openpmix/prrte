@@ -132,7 +132,6 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
     int i, room, *rmptr = &room;
     char **env;
     char *prefix_dir, *tmp;
-    pmix_rank_t tgt, *tptr;
     pmix_value_t pidval = PMIX_VALUE_STATIC_INIT;
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
@@ -493,7 +492,6 @@ void prte_plm_base_recv(int status, pmix_proc_t *sender,
                  * the state cbfunc update it as it may need to compare this
                  * state against the prior proc state */
                 proc->pid = pid;
-                tptr = &tgt;
                 if (debugging) {
                     jdata->num_ready_for_debug++;
                 }

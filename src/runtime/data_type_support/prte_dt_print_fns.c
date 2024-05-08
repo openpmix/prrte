@@ -54,8 +54,8 @@ static void display_cpus(prte_topology_t *t,
     hwloc_cpuset_t avail = NULL;
     hwloc_cpuset_t allowed;
     hwloc_cpuset_t coreset = NULL;
-
     char *tmp1, *tmp2;
+    PRTE_HIDE_UNUSED_PARAMS(node);
 
     npus = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
     ncores = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
@@ -100,7 +100,7 @@ static void display_cpus(prte_topology_t *t,
     if (NULL != coreset) {
         hwloc_bitmap_free(coreset);
     }
-    
+
     pmix_asprintf(output, "%s        </processors>\n", tmp1);
     free(tmp1);
     return;
@@ -198,7 +198,8 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
                       (NULL == src->name) ? "UNKNOWN" : src->name, (int) src->slots,
                       (int) src->slots_max);
 
-        pmix_asprintf(&tmp2,""); 
+        tmp2 = malloc(1);
+        tmp2[0] = '\0';
         for (j=0; j < prte_node_topologies->size; j++) {
             t = (prte_topology_t*)pmix_pointer_array_get_item(prte_node_topologies, j);
             if (NULL != t) {
@@ -218,7 +219,7 @@ void prte_node_print(char **output, prte_job_t *jdata, prte_node_t *src)
         free(tmp1);
         tmp1 = NULL;
         free(tmp);
-        tmp = tmp3; 
+        tmp = tmp3;
 
         /* loop through procs and print their rank */
         for (j = 0; j < src->procs->size; j++) {
@@ -368,11 +369,11 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
                           "%*c<package id=\"%d\">\n%s\n%*c</package>\n%*c</binding>\n%*c</rank>\n",
                           8, xmlsp, PRTE_VPID_PRINT(src->name.rank), (long) src->app_idx, 12, xmlsp,
                           16, xmlsp, pkgnum, cores, 16, xmlsp, 12, xmlsp, 8, xmlsp);
-            
+
             free (cores);
         } else {
-            pmix_asprintf(&tmp, "\n%*c<rank id=\"%s\">\n%*c<binding></binding>\n%*c</rank>\n", 
-                          8, xmlsp, PRTE_VPID_PRINT(src->name.rank), 12, xmlsp, 8, xmlsp);        
+            pmix_asprintf(&tmp, "\n%*c<rank id=\"%s\">\n%*c<binding></binding>\n%*c</rank>\n",
+                          8, xmlsp, PRTE_VPID_PRINT(src->name.rank), 12, xmlsp, 8, xmlsp);
         }
 
         /* set the return */
@@ -488,13 +489,11 @@ void prte_map_print(char **output, prte_job_t *jdata)
 {
     char *tmp = NULL, *tmp2 = NULL, *tmp3 = NULL, *tmp4 = NULL;
     char *tmp_node = NULL;
-    int32_t i, j;
+    int32_t i;
     prte_node_t *node;
-    prte_proc_t *proc;
     prte_job_map_t *src = jdata->map;
     uint16_t u16, *u16ptr = &u16;
     char *ppr, *cpus_per_rank, *cpu_type, *cpuset = NULL;
-    prte_topology_t *t;
 
     /* set default result */
     *output = NULL;
@@ -503,7 +502,8 @@ void prte_map_print(char **output, prte_job_t *jdata)
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_PARSEABLE_OUTPUT, NULL, PMIX_BOOL)) {
         /* creating the output in an XML format */
         pmix_asprintf(&tmp4, "<?xml version=\"1.0\" ?>\n<map>\n");
-        pmix_asprintf(&tmp,""); 
+        tmp = malloc(1);
+        tmp[0] = '\0';
 
         /* loop through nodes */
         for (i = 0; i < src->nodes->size; i++) {
@@ -531,7 +531,7 @@ void prte_map_print(char **output, prte_job_t *jdata)
             tmp = tmp2;
         }
 
-        /* end of the xml "map" tag */  
+        /* end of the xml "map" tag */
         pmix_asprintf(&tmp2, "%s%s</map>\n", tmp4,tmp);
         *output = tmp2;
         free(tmp);

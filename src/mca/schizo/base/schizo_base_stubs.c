@@ -3,7 +3,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -264,7 +264,7 @@ bool prte_schizo_base_check_prte_param(char *param)
 
 int prte_schizo_base_parse_prte(int argc, int start, char **argv, char ***target)
 {
-    int i, j;
+    int i;
     bool use;
     char *p1, *p2, *param;
 
@@ -408,7 +408,7 @@ bool prte_schizo_base_check_pmix_param(char *param)
 
 int prte_schizo_base_parse_pmix(int argc, int start, char **argv, char ***target)
 {
-    int i, j;
+    int i;
     bool use;
     char *p1, *p2, *param;
 

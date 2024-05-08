@@ -19,7 +19,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Geoffroy Vallee. All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * $COPYRIGHT$
@@ -106,17 +106,10 @@ static pmix_nspace_t spawnednspace;
 
 static size_t evid = INT_MAX;
 static pmix_proc_t myproc;
-static bool forcibly_die = false;
-static prte_event_t term_handler;
-static int term_pipe[2];
-static pmix_mutex_t prun_abort_inprogress_lock = PMIX_MUTEX_STATIC_INIT;
 static bool verbose = false;
 static pmix_list_t forwarded_signals;
 
-static void abort_signal_callback(int signal);
-static void clean_abort(int fd, short flags, void *arg);
 static void signal_forward_callback(int signal);
-static void epipe_signal_callback(int signal);
 
 static void regcbfunc(pmix_status_t status, size_t ref, void *cbdata)
 {
@@ -887,83 +880,6 @@ DONE:
     return rc;
 }
 
-static void clean_abort(int fd, short flags, void *arg)
-{
-    pmix_proc_t target;
-    pmix_info_t directive;
-    pmix_status_t rc;
-    PRTE_HIDE_UNUSED_PARAMS(fd, flags, arg);
-
-    /* if we have already ordered this once, don't keep
-     * doing it to avoid race conditions
-     */
-    if (pmix_mutex_trylock(&prun_abort_inprogress_lock)) { /* returns 1 if already locked */
-        if (forcibly_die) {
-            PMIx_tool_finalize();
-            /* exit with a non-zero status */
-            exit(1);
-        }
-        fprintf(stderr,
-                "prun: abort is already in progress...hit ctrl-c again to forcibly terminate\n\n");
-        forcibly_die = true;
-        /* reset the event */
-        prte_event_add(&term_handler, NULL);
-        return;
-    }
-
-    /* tell PRTE to terminate our job */
-    PMIX_LOAD_PROCID(&target, spawnednspace, PMIX_RANK_WILDCARD);
-    PMIX_INFO_LOAD(&directive, PMIX_JOB_CTRL_KILL, NULL, PMIX_BOOL);
-    rc = PMIx_Job_control_nb(&target, 1, &directive, 1, NULL, NULL);
-    if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
-        PMIx_tool_finalize();
-        /* exit with a non-zero status */
-        exit(1);
-    }
-}
-
-static struct timeval current, last = {0, 0};
-static bool first = true;
-
-/*
- * Attempt to terminate the job and wait for callback indicating
- * the job has been aborted.
- */
-static void abort_signal_callback(int fd)
-{
-    uint8_t foo = 1;
-    char *msg
-        = "Abort is in progress...hit ctrl-c again within 5 seconds to forcibly terminate\n\n";
-    PRTE_HIDE_UNUSED_PARAMS(fd);
-
-    /* if this is the first time thru, just get
-     * the current time
-     */
-    if (first) {
-        first = false;
-        gettimeofday(&current, NULL);
-    } else {
-        /* get the current time */
-        gettimeofday(&current, NULL);
-        /* if this is within 5 seconds of the
-         * last time we were called, then just
-         * exit - we are probably stuck
-         */
-        if ((current.tv_sec - last.tv_sec) < 5) {
-            exit(1);
-        }
-        if (-1 == write(1, (void *) msg, strlen(msg))) {
-            exit(1);
-        }
-    }
-    /* save the time */
-    last.tv_sec = current.tv_sec;
-    /* tell the event lib to attempt to abnormally terminate */
-    if (-1 == write(term_pipe[1], &foo, 1)) {
-        exit(1);
-    }
-}
-
 static void signal_forward_callback(int signum)
 {
     pmix_status_t rc;
@@ -982,22 +898,4 @@ static void signal_forward_callback(int signum)
         fprintf(stderr, "Signal %d could not be sent to job %s (returned %s)", signum,
                 spawnednspace, PMIx_Error_string(rc));
     }
-}
-
-/**
- * Deal with sigpipe errors
- */
-static int sigpipe_error_count = 0;
-static void epipe_signal_callback(int signal)
-{
-    sigpipe_error_count++;
-    PRTE_HIDE_UNUSED_PARAMS(signal);
-
-    if (10 < sigpipe_error_count) {
-        /* time to abort */
-        pmix_output(0, "%s: SIGPIPE detected - aborting", prte_tool_basename);
-        clean_abort(0, 0, NULL);
-    }
-
-    return;
 }

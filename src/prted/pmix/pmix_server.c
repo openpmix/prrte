@@ -1452,6 +1452,7 @@ static void pmix_server_dmdx_recv(int status, pmix_proc_t *sender,
         }
         req->inprogress = false;
         pmix_pointer_array_set_item(&prte_pmix_server_globals.remote_reqs, req->local_index, NULL);
+        rc = prte_pmix_convert_status(prc);
         send_error(rc, &pproc, sender, index);
         return;
     }

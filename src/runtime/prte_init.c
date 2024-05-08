@@ -18,7 +18,7 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -178,7 +178,6 @@ int prte_init_util(prte_proc_type_t flags)
 {
     int ret;
     char *error = NULL;
-    char *path = NULL;
 
     if (util_initialized) {
         return PRTE_SUCCESS;

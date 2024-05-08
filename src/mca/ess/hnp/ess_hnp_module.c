@@ -100,7 +100,6 @@ static int rte_init(int argc, char **argv)
 {
     int ret;
     char *error = NULL;
-    char *contact_path;
     char *tmp;
     prte_job_t *jdata = NULL;
     prte_node_t *node;
@@ -468,9 +467,6 @@ error:
 
 static int rte_finalize(void)
 {
-    char *contact_path;
-    prte_job_t *jdata;
-
     /* first stage shutdown of the errmgr, deregister the handler but keep
      * the required facilities until the rml and oob are offline */
     prte_errmgr.finalize();
