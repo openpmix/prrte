@@ -18,7 +18,7 @@ dnl                         reserved.
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
 dnl
 dnl Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-dnl Copyright (c) 2021-2023 Nanook Consulting  All rights reserved.
+dnl Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
 dnl Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
 dnl                         All Rights reserved.
 dnl $COPYRIGHT$
@@ -31,6 +31,17 @@ dnl
 
 AC_DEFUN([PRTE_CONFIGURE_OPTIONS],[
 prte_show_subtitle "PRTE Configuration options"
+
+# A hint to tell us if we are working with a build from Git or a tarball.
+# Helpful when preparing diagnostic output.
+if test -e $PRTE_TOP_SRCDIR/.git; then
+    AC_DEFINE_UNQUOTED([PRTE_GIT_REPO_BUILD], ["1"],
+                       [If built from a git repo])
+    prte_git_repo_build=yes
+else
+    prte_git_repo_build=no
+fi
+
 
 #
 # Do we want prte's --prefix behavior to be enabled by default?
@@ -51,14 +62,31 @@ AC_DEFINE_UNQUOTED([PRTE_WANT_PRTE_PREFIX_BY_DEFAULT],
                    [Whether we want prte to effect "--prefix $prefix" by default])
 
 #
-# Is this a developer copy?
+# Developer debugging
 #
-
-if test -d .git; then
-    PRTE_DEVEL=1
+AC_MSG_CHECKING([if want developer-level debugging code])
+AC_ARG_ENABLE(debug,
+    AS_HELP_STRING([--enable-debug],
+                   [enable developer-level debugging code (not for general MPI users!) (default: disabled)]))
+if test "$enable_debug" = "yes"; then
+    AC_MSG_RESULT([yes])
+    WANT_DEBUG=1
 else
-    PRTE_DEVEL=0
+    AC_MSG_RESULT([no])
+    WANT_DEBUG=0
 fi
+
+
+if test "$WANT_DEBUG" = "0"; then
+    CFLAGS="-DNDEBUG $CFLAGS"
+    CXXFLAGS="-DNDEBUG $CXXFLAGS"
+fi
+AC_DEFINE_UNQUOTED(PRTE_ENABLE_DEBUG, $WANT_DEBUG,
+    [Whether we want developer-level debugging code or not])
+
+AC_ARG_ENABLE(debug-symbols,
+    AS_HELP_STRING([--disable-debug-symbols],
+        [Disable adding compiler flags to enable debugging symbols if --enable-debug is specified.  For non-debugging builds, this flag has no effect.]))
 
 #
 # Developer picky compiler options
@@ -67,8 +95,14 @@ fi
 AC_MSG_CHECKING([if want developer-level compiler pickyness])
 AC_ARG_ENABLE(devel-check,
     AS_HELP_STRING([--enable-devel-check],
-                   [enable developer-level compiler pickyness when building Open MPI (default: disabled)]))
+                   [enable developer-level compiler pickyness when building PRRTE (default: disabled)]))
 if test "$enable_devel_check" = "yes"; then
+    AC_MSG_RESULT([yes])
+    WANT_PICKY_COMPILER=1
+elif test "$enable_devel_check" = "no"; then
+    AC_MSG_RESULT([no])
+    WANT_PICKY_COMPILER=0
+elif test "$prte_git_repo_build" = "yes" && test "$WANT_DEBUG" = "1"; then
     AC_MSG_RESULT([yes])
     WANT_PICKY_COMPILER=1
 else
@@ -97,33 +131,6 @@ fi
 
 AC_DEFINE_UNQUOTED(PRTE_MEMORY_SANITIZERS, $WANT_MEMORY_SANITIZERS,
                    [Whether or not we are using memory sanitizers])
-
-#
-# Developer debugging
-#
-AC_MSG_CHECKING([if want developer-level debugging code])
-AC_ARG_ENABLE(debug,
-    AS_HELP_STRING([--enable-debug],
-                   [enable developer-level debugging code (not for general MPI users!) (default: disabled)]))
-if test "$enable_debug" = "yes"; then
-    AC_MSG_RESULT([yes])
-    WANT_DEBUG=1
-else
-    AC_MSG_RESULT([no])
-    WANT_DEBUG=0
-fi
-
-
-if test "$WANT_DEBUG" = "0"; then
-    CFLAGS="-DNDEBUG $CFLAGS"
-    CXXFLAGS="-DNDEBUG $CXXFLAGS"
-fi
-AC_DEFINE_UNQUOTED(PRTE_ENABLE_DEBUG, $WANT_DEBUG,
-    [Whether we want developer-level debugging code or not])
-
-AC_ARG_ENABLE(debug-symbols,
-    AS_HELP_STRING([--disable-debug-symbols],
-        [Disable adding compiler flags to enable debugging symbols if --enable-debug is specified.  For non-debugging builds, this flag has no effect.]))
 
 #
 # Do we want to install the internal devel headers?
