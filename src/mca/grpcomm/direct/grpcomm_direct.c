@@ -795,6 +795,7 @@ static void barrier_release(int status, pmix_proc_t *sender,
     int rc, ret;
     prte_grpcomm_signature_t *sig = NULL;
     prte_grpcomm_coll_t *coll;
+    pmix_byte_object_t bo;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
@@ -816,6 +817,16 @@ static void barrier_release(int status, pmix_proc_t *sender,
         PMIX_RELEASE(sig);
         return;
     }
+
+    /* unpack the ctrls byte object */
+    cnt = 1;
+    rc = PMIx_Data_unpack(NULL, buffer, &bo, &cnt, PMIX_BYTE_OBJECT);
+    if (PMIX_SUCCESS != rc) {
+        PMIX_ERROR_LOG(rc);
+        PMIX_RELEASE(sig);
+        return;
+    }
+    PMIX_BYTE_OBJECT_DESTRUCT(&bo); // don't need it here
 
     /* check for the tracker - it is not an error if not
      * found as that just means we are not involved
