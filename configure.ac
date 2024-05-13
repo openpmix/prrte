@@ -25,7 +25,7 @@
 # Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
 # Copyright (c) 2018-2022 Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
-# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
 # Copyright (c) 2021      FUJITSU LIMITED.  All rights reserved.
 # Copyright (c) 2023-2024 Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
@@ -135,7 +135,7 @@ PRTE_VAR_SCOPE_POP
 # Init automake
 #
 
-AM_INIT_AUTOMAKE([foreign dist-bzip2 subdir-objects no-define 1.12.2])
+AM_INIT_AUTOMAKE([foreign dist-bzip2 subdir-objects no-define 1.13.4 tar-pax])
 
 # SILENT_RULES is new in AM 1.11, but we require 1.11 or higher via
 # autogen.  Limited testing shows that calling SILENT_RULES directly
