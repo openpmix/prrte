@@ -320,8 +320,7 @@ int main(int argc, char *argv[])
         prte_tool_actual = "prte";
     }
     pargc = argc;
-    pargv = pmix_argv_copy_strip(argv); // strip any incoming quoted arguments
-
+    pargv = PMIx_Argv_copy(argv);
     /* save a pristine copy of the environment for launch purposes.
      * This MUST be done so that we can pass it to any local procs we
      * spawn - otherwise, those local procs will get a bunch of
