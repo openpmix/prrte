@@ -502,7 +502,6 @@ void prte_daemon_recv(int status, pmix_proc_t *sender,
         PMIX_LOAD_PROCID(&pname, job, PMIX_RANK_WILDCARD);
         prte_pmix_server_clear(&pname);
 
-        PMIX_RELEASE(jdata);
         break;
 
         /****     REPORT TOPOLOGY COMMAND    ****/
