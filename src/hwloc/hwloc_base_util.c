@@ -516,6 +516,7 @@ static hwloc_obj_t df_search(hwloc_topology_t topo, hwloc_obj_t start, hwloc_obj
                              unsigned cache_level, unsigned int nobj, unsigned int *num_objs)
 {
     int search_depth;
+    PRTE_HIDE_UNUSED_PARAMS(start);
 
     search_depth = hwloc_get_type_depth(topo, target);
     if (HWLOC_TYPE_DEPTH_MULTIPLE == search_depth) {
@@ -1304,6 +1305,7 @@ static int bitmap_list_snprintf_exp(char *__hwloc_restrict buf, size_t buflen,
         }
     }
 #else
+    PRTE_HIDE_UNUSED_PARAMS(set, type);
     if (buflen > 0) {
         tmp[0] = '\0';
     }
@@ -1876,10 +1878,12 @@ int prte_hwloc_base_topology_set_flags(hwloc_topology_t topology, unsigned long 
     // Blacklist the "gl" component due to potential conflicts.
     // See "https://github.com/open-mpi/ompi/issues/10025" for
     // an explanation
+#ifdef HWLOC_VERSION_MAJOR
 #if HWLOC_VERSION_MAJOR > 2
     hwloc_topology_set_components(topology, HWLOC_TOPOLOGY_COMPONENTS_FLAG_BLACKLIST, "gl");
 #elif HWLOC_VERSION_MAJOR == 2 && HWLOC_VERSION_MINOR >= 1
     hwloc_topology_set_components(topology, HWLOC_TOPOLOGY_COMPONENTS_FLAG_BLACKLIST, "gl");
+#endif
 #endif
     return hwloc_topology_set_flags(topology, flags);
 }
