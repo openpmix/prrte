@@ -85,6 +85,18 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
 
     nobjs = hwloc_get_nbobjs_by_type(node->topology->topo, options->hwb);
 
+    // check for target object existence
+    if (0 == nobjs) {
+        // if this is not a default binding policy, then error out
+        if (PRTE_BINDING_POLICY_IS_SET(jdata->map->binding)) {
+            pmix_show_help("help-prte-rmaps-base.txt", "rmaps:binding-target-not-found",
+                           true, prte_hwloc_base_print_binding(jdata->map->binding), node->name);
+            return PRTE_ERR_SILENT;
+        }
+        // fallback to not binding
+        return PRTE_SUCCESS;
+    }
+
     for (n=0; n < nobjs; n++) {
         tmp_obj = hwloc_get_obj_by_type(node->topology->topo, options->hwb, n);
 #if HWLOC_API_VERSION < 0x20000
@@ -129,6 +141,9 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
 #else
     tgtcpus = trg_obj->cpuset;
 #endif
+    if (NULL == tgtcpus) {
+        return PRTE_ERROR;
+    }
     hwloc_bitmap_list_asprintf(&proc->cpuset, tgtcpus); // bind to the entire target object
     if (4 < pmix_output_get_verbosity(prte_rmaps_base_framework.framework_output)) {
         char *tmp1;
