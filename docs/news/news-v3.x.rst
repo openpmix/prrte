@@ -4,6 +4,41 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
+3.0.6 -- 8 Jul 2024
+-------------------
+- PR #1992: Update NEWS and VERSION for release
+- PR #1991: Multiple commits
+   - Protect against missing HWLOC object types
+   - Minor fixes to allow compile with pre-stone age HWLOC
+- PR #1988: Github action: bring back MacOS builds
+- PR #1986: Tailored backport of "various fixes for singleton support"
+- PR #1985: Multiple commits
+   - Don't strip quotes from cmd line entries
+   - Update tar format to tar-pax
+- PR #1983: Check the runtime version of PMIx
+- PR #1979: Multiple commits
+   - Cleanup issues surfaced by devel-check
+   - Cleanup unused var warning
+   - Add CI build with clang
+   - Enable devel-check by default in Git repos
+   - Stop warning on LSF detection when not requested
+   - Silence warning
+   - MPI 4.1: add support for memory-alloc-kinds
+   - Remove MacOS CI builds
+   - Add support for PMIX_MEM_ALLOC_KIND
+- PR #1971: Remove stale resilience document
+- PR #1968: Try to improve an error message a bit
+- PR #1966: Fix typo
+- PR #1964: Repair the binding algorithm
+- PR #1962: Correct name of help file for --hostfile
+- PR #1959: Multiple commits
+   - Update the allocation simulator
+   - Use of pmix_getline from PMIx started in v4.2.5
+- PR #1956: Multiple commits
+   - Allow execution without an active plm component
+   - Fix the binding algorithm to handle partial disablement
+
+
 3.0.5 -- 21 Mar 2024
 --------------------
 - PR #1952: Multiple commits
