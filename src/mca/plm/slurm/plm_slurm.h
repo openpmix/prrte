@@ -13,7 +13,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,6 +33,7 @@ BEGIN_C_DECLS
 
 struct prte_mca_plm_slurm_component_t {
     prte_plm_base_component_t super;
+    int custom_args_index;
     char *custom_args;
     bool slurm_warning_msg;
 };
