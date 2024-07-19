@@ -931,6 +931,19 @@ CPPFLAGS="$CPP_INCLUDES $CPPFLAGS $PRTE_FINAL_CPPFLAGS"
 LDFLAGS="$LDFLAGS $PRTE_FINAL_LDFLAGS"
 LIBS="$LIBS $PRTE_FINAL_LIBS"
 
+
+# We do not currently support the "lto" optimizer as it
+# aggregates all the headers from our plugins, resulting
+# in a configuration that generates warnings/errors when
+# passed through their optimizer phase. We therefore check
+# for the flag, and if found, output a message explaining
+# the situation and aborting configure
+_PRTE_CHECK_LTO_FLAG($CPPFLAGS, CPPFLAGS)
+_PRTE_CHECK_LTO_FLAG($CFLAGS, CFLAGS)
+_PRTE_CHECK_LTO_FLAG($LDFLAGS, LDFLAGS)
+_PRTE_CHECK_LTO_FLAG($LIBS, LIBS)
+
+
 # restore any user-provided Werror flags
 AS_IF([test ! -z "$PRTE_CFLAGS_cache"], [CFLAGS="$CFLAGS $PRTE_CFLAGS_cache"])
 
