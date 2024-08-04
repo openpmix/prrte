@@ -335,6 +335,10 @@ int main(int argc, char *argv[])
         }
     }
 
+    /* do a minimal setup of key infrastructure, including
+     * parsing the install-level and user-level PRRTE param
+     * files
+     */
     rc = prte_init_minimum();
     if (PRTE_SUCCESS != rc) {
         return rc;
@@ -1145,49 +1149,6 @@ int main(int argc, char *argv[])
 
     /* give the schizo components a chance to add to the job info */
     schizo->job_info(&results, jinfo);
-
-    /* pickup any relevant envars */
-    ninfo = 4;
-    PMIX_INFO_CREATE(iptr, ninfo);
-    flag = true;
-    PMIX_INFO_LOAD(&iptr[0], PMIX_SETUP_APP_ENVARS, &flag, PMIX_BOOL);
-    ui32 = geteuid();
-    PMIX_INFO_LOAD(&iptr[1], PMIX_USERID, &ui32, PMIX_UINT32);
-    ui32 = getegid();
-    PMIX_INFO_LOAD(&iptr[2], PMIX_GRPID, &ui32, PMIX_UINT32);
-    PMIX_INFO_LOAD(&iptr[3], PMIX_PERSONALITY, personality, PMIX_STRING);
-
-    PRTE_PMIX_CONSTRUCT_LOCK(&mylock.lock);
-    ret = PMIx_server_setup_application(prte_process_info.myproc.nspace, iptr, ninfo, setupcbfunc,
-                                        &mylock);
-    if (PMIX_SUCCESS != ret) {
-        pmix_output(0, "Error setting up application: %s", PMIx_Error_string(ret));
-        PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
-        PRTE_UPDATE_EXIT_STATUS(ret);
-        goto DONE;
-    }
-    PRTE_PMIX_WAIT_THREAD(&mylock.lock);
-    PMIX_INFO_FREE(iptr, ninfo);
-    if (PMIX_SUCCESS != mylock.status) {
-        pmix_output(0, "Error setting up application: %s", PMIx_Error_string(mylock.status));
-        PRTE_UPDATE_EXIT_STATUS(mylock.status);
-        PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
-        goto DONE;
-    }
-    PRTE_PMIX_DESTRUCT_LOCK(&mylock.lock);
-    /* transfer any returned ENVARS to the job_info */
-    if (NULL != mylock.info) {
-        for (n = 0; n < mylock.ninfo; n++) {
-            if (PMIX_CHECK_KEY(&mylock.info[n], PMIX_SET_ENVAR) ||
-                PMIX_CHECK_KEY(&mylock.info[n], PMIX_ADD_ENVAR) ||
-                PMIX_CHECK_KEY(&mylock.info[n], PMIX_UNSET_ENVAR) ||
-                PMIX_CHECK_KEY(&mylock.info[n], PMIX_PREPEND_ENVAR) ||
-                PMIX_CHECK_KEY(&mylock.info[n], PMIX_APPEND_ENVAR)) {
-                PMIX_INFO_LIST_XFER(ret, jinfo, &mylock.info[n]);
-            }
-        }
-        PMIX_INFO_FREE(mylock.info, mylock.ninfo);
-    }
 
     /* convert the job info into an array */
     PMIX_INFO_LIST_CONVERT(ret, jinfo, &darray);
