@@ -60,6 +60,7 @@
 #include "src/hwloc/hwloc-internal.h"
 #include "src/prted/pmix/pmix_server.h"
 #include "src/threads/pmix_threads.h"
+#include "src/include/prte_frameworks.h"
 
 #include "src/mca/base/pmix_base.h"
 #include "src/mca/base/pmix_mca_base_var.h"
@@ -142,8 +143,9 @@ static void print_error(unsigned major,
 
 int prte_init_minimum(void)
 {
-    int ret;
+    int ret, n;
     char *path = NULL;
+    char *evar, **prefixes;
     const char *rvers;
     char token[100];
     unsigned int major, minor, release;
@@ -174,6 +176,19 @@ int prte_init_minimum(void)
 
     /* carry across the toolname */
     pmix_tool_basename = prte_tool_basename;
+
+    // publish MCA prefixes
+    prefixes = NULL;
+    for (n=0; NULL != prte_framework_names[n]; n++) {
+        if (0 == strcmp("common", prte_framework_names[n])) {
+            continue;
+        }
+        PMIx_Argv_append_nosize(&prefixes, prte_framework_names[n]);
+    }
+    evar = PMIx_Argv_join(prefixes, ',');
+    pmix_setenv("PRTE_MCA_PREFIXES", evar, true, &environ);
+    free(evar);
+    PMIx_Argv_free(prefixes);
 
     /* initialize install dirs code */
     ret = pmix_mca_base_framework_open(&prte_prteinstalldirs_base_framework,
@@ -498,7 +513,13 @@ void prte_preload_default_mca_params(void)
      * user already has the param in our environment as their
      * environment settings override all defaults */
     PMIX_LIST_FOREACH(fv, &pfinal, pmix_mca_base_var_file_value_t) {
-        if (pmix_pmdl_base_check_prte_param(fv->mbvfv_var)) {
+        if (pmix_pmdl_base_check_pmix_param(fv->mbvfv_var)) {
+            pmix_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
+            // set it, but don't overwrite if they already
+            // have a value in our environment
+            setenv(tmp, fv->mbvfv_value, false);
+            free(tmp);
+        } else {
             pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
             // set it, but don't overwrite if they already
             // have a value in our environment
@@ -508,12 +529,6 @@ void prte_preload_default_mca_params(void)
             // or mca frameworks, then we also need to set
             // the equivalent PMIx value
             check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
-        } else if (pmix_pmdl_base_check_pmix_param(fv->mbvfv_var)) {
-            pmix_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
-            // set it, but don't overwrite if they already
-            // have a value in our environment
-            setenv(tmp, fv->mbvfv_value, false);
-            free(tmp);
         }
     }
 

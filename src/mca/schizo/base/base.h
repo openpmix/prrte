@@ -2,7 +2,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -95,8 +95,6 @@ PRTE_EXPORT bool prte_schizo_base_check_directives(char *directive,
 PRTE_EXPORT bool prte_schizo_base_check_qualifiers(char *directive,
                                                    char **valid,
                                                    char *qual);
-PRTE_EXPORT bool prte_schizo_base_check_prte_param(char *param);
-PRTE_EXPORT bool prte_schizo_base_check_pmix_param(char *param);
 PRTE_EXPORT void prte_schizo_base_expose(char *param, char *prefix);
 PRTE_EXPORT int prte_schizo_base_add_directive(pmix_cli_result_t *results,
                                                const char *deprecated, const char *target,
