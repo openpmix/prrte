@@ -141,33 +141,6 @@ static void opcbfunc(pmix_status_t status, void *cbdata)
     PRTE_PMIX_WAKEUP_THREAD(lock);
 }
 
-static void setupcbfunc(pmix_status_t status, pmix_info_t info[], size_t ninfo,
-                        void *provided_cbdata, pmix_op_cbfunc_t cbfunc, void *cbdata)
-{
-    mylock_t *mylock = (mylock_t *) provided_cbdata;
-    size_t n;
-
-    if (NULL != info) {
-        mylock->ninfo = ninfo;
-        PMIX_INFO_CREATE(mylock->info, mylock->ninfo);
-        /* cycle across the provided info */
-        for (n = 0; n < ninfo; n++) {
-            PMIX_INFO_XFER(&mylock->info[n], &info[n]);
-        }
-    } else {
-        mylock->info = NULL;
-        mylock->ninfo = 0;
-    }
-    mylock->status = status;
-
-    /* release the caller */
-    if (NULL != cbfunc) {
-        cbfunc(PMIX_SUCCESS, cbdata);
-    }
-
-    PRTE_PMIX_WAKEUP_THREAD(&mylock->lock);
-}
-
 static void spcbfunc(pmix_status_t status, char nspace[], void *cbdata)
 {
     prte_pmix_lock_t *lock = (prte_pmix_lock_t *) cbdata;
