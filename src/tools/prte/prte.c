@@ -437,7 +437,7 @@ int main(int argc, char *argv[])
     /* parse the input argv to get values, including everyone's MCA params */
     PMIX_CONSTRUCT(&results, pmix_cli_result_t);
     // check for special case of executable immediately following tool
-    if (proxyrun && '-' != pargv[1][0]) {
+    if (proxyrun && pargc > 1 && '-' != pargv[1][0]) {
         results.tail = PMIx_Argv_copy(&pargv[1]);
     } else {
         rc = schizo->parse_cli(pargv, &results, PMIX_CLI_WARN);
