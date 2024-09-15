@@ -2,7 +2,7 @@
 #
 # Copyright 2023 Jeffrey M. Squyres.  All rights reserved.
 #
-# Copyright (c) 2023      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -57,7 +57,7 @@ for outfile in sys.argv:
     # Find all the "[section]" lines.
     sections = list()
     for line in src_rst:
-        match = re.search('\s*\[(.+)\]\s*$', line)
+        match = re.search(r"\s*\[(.+)\]\s*$", line)
         if match:
             sections.append(match.group(1))
 
