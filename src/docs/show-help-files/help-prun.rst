@@ -598,7 +598,8 @@ This is a fatal error; %s will now abort.  No processes were launched.
 %s was unable to launch the specified application as it encountered an error:
 
 Error: system limit exceeded on number of pipes that can be open
-Node: %s
+
+  Node: %s
 
 when attempting to start process rank %lu.
 
@@ -612,7 +613,8 @@ by rearranging your processes to place fewer of them on that node.
 %s was unable to launch the specified application as it encountered an error:
 
 Error: system limit exceeded on number of files that can be open
-Node: %s
+
+  Node: %s
 
 when attempting to start process rank %lu.
 
@@ -626,7 +628,8 @@ by rearranging your processes to place fewer of them on that node.
 %s was unable to launch the specified application as it encountered an error:
 
 Error: pipe function call failed when setting up I/O forwarding subsystem
-Node: %s
+
+  Node: %s
 
 while attempting to start process rank %lu.
 
@@ -635,7 +638,8 @@ while attempting to start process rank %lu.
 %s was unable to launch the specified application as it encountered an error:
 
 Error: system limit exceeded on number of processes that can be started
-Node: %s
+
+  Node: %s
 
 when attempting to start process rank %lu.
 
@@ -649,7 +653,8 @@ on that node.
 
 Error: reading tty attributes function call failed while setting up
 I/O forwarding system
-Node: %s
+
+  Node: %s
 
 while attempting to start process rank %lu.
 
@@ -658,8 +663,8 @@ while attempting to start process rank %lu.
 %s was unable to launch the specified application as it could not
 find the specified working directory:
 
-Working directory: %s
-Node: %s
+|  Working directory: %s
+|  Node: %s
 
 while attempting to start process rank %lu.
 
@@ -668,8 +673,8 @@ while attempting to start process rank %lu.
 %s was unable to launch the specified application as it lacks
 permissions to change to the specified working directory:
 
-Working directory: %s
-Node: %s
+|  Working directory: %s
+|  Node: %s
 
 while attempting to start process rank %lu.
 
@@ -683,16 +688,16 @@ NOTE: A common cause for this error is misspelling a %s command
       line parameter option (remember that %s interprets the first
       unrecognized command line token as the executable).
 
-Node:       %s
-Executable: %s
+|  Node:       %s
+|  Executable: %s
 
 [prun:exe-not-accessible]
 
 %s was unable to launch the specified application as it lacked
 permissions to execute an executable:
 
-Executable: %s
-Node: %s
+|  Executable: %s
+|  Node: %s
 
 while attempting to start process rank %lu.
 
@@ -701,7 +706,8 @@ while attempting to start process rank %lu.
 %s was unable to launch the specified application as it encountered an error:
 
 Error: reading from a pipe function call failed while spawning a local process
-Node: %s
+
+  Node: %s
 
 while attempting to start process rank %lu.
 
@@ -710,9 +716,9 @@ while attempting to start process rank %lu.
 %s was unable to start the specified application as it encountered an
 error:
 
-Error code: %d
-Error name: %s
-Node: %s
+|  Error code: %d
+|  Error name: %s
+|  Node: %s
 
 when attempting to start process rank %lu.
 
@@ -726,13 +732,13 @@ error on node %s. More information may be available above.
 %s was unable to parse the filename where contact info for the
 prte-server was to be found. The option we were given was:
 
---prte-server %s
+  --prte-server %s
 
 This appears to be missing the required ':' following the
 keyword "file". Please remember that the correct format for this
 command line option is:
 
---prte-server file:path-to-file
+  --prte-server file:path-to-file
 
 where path-to-file can be either relative to the cwd or absolute.
 
@@ -741,12 +747,12 @@ where path-to-file can be either relative to the cwd or absolute.
 %s was unable to parse the filename where contact info for the
 prte-server was to be found. The option we were given was:
 
---prte-server %s
+  --prte-server %s
 
 This appears to be missing a filename following the ':'. Please
 remember that the correct format for this command line option is:
 
---prte-server file:path-to-file
+  --prte-server file:path-to-file
 
 where path-to-file can be either relative to the cwd or absolute.
 
@@ -755,11 +761,11 @@ where path-to-file can be either relative to the cwd or absolute.
 %s was unable to access the filename where contact info for the
 prte-server was to be found. The option we were given was:
 
---prte-server %s
+  --prte-server %s
 
 Please remember that the correct format for this command line option is:
 
---prte-server file:path-to-file
+  --prte-server file:path-to-file
 
 where path-to-file can be either relative to the cwd or absolute, and that
 you must have read access permissions to that file.
@@ -788,8 +794,8 @@ uri in a file, and then giving %s that filename.
 Multiple processor affinity schemes were specified (can only specify
 one):
 
-Slot list: %s
-prte_paffinity_alone:  true
+|  Slot list: %s
+|  prte_paffinity_alone:  true
 
 Please specify only the one desired method.
 
@@ -821,18 +827,18 @@ functionality (e.g., Linux Kernels newer than v2.6.18).
 Systems that do not support processor topology-aware functionality
 cannot use "bind to package" and other related functionality.
 
-  Local host:        %s
-  Action attempted:  %s %s
-  Application name:  %s
+|  Local host:        %s
+|  Action attempted:  %s %s
+|  Application name:  %s
 
 [prun:not-enough-resources]
 
 Not enough %s were found on the local host to meet the requested
 binding action:
 
-  Local host:        %s
-  Action requested:  %s
-  Application name:  %s
+|  Local host:        %s
+|  Action requested:  %s
+|  Application name:  %s
 
 Please revise the request and try again.
 
@@ -841,8 +847,8 @@ Please revise the request and try again.
 A slot list was provided that exceeds the boundaries on available
 resources:
 
-  Local host: %s
-  Slot list:  %s
+|  Local host: %s
+|  Slot list:  %s
 
 Please check your boundaries and try again.
 
@@ -850,16 +856,16 @@ Please check your boundaries and try again.
 
 A critical communication path was lost to:
 
-  My name:      %s
-  Process name: %s
-  Node:         %s
+|  My name:      %s
+|  Process name: %s
+|  Node:         %s
 
 [prun:proc-mem-exceeded]
 
 A process exceeded memory limits:
 
-  Process name: %s
-  Node:         %s
+|  Process name: %s
+|  Node:         %s
 
 [prun:proc-stalled]
 
@@ -876,24 +882,24 @@ no further info is available.
 %s failed to receive scheduled heartbeat communications from a remote
 process:
 
-  Process name: %s
-  Node:         %s
+|  Process name: %s
+|  Node:         %s
 
 [prun:non-zero-exit]
 
 %s detected that one or more processes exited with non-zero status, thus causing
 the job to be terminated. The first process to do so was:
 
-  Process name: %s
-  Exit code:    %d
+|  Process name: %s
+|  Exit code:    %d
 
 [prun:negative-nprocs]
 
 %s has detected that one or more applications was given a negative
 number of processes to run:
 
-  Application:  %s
-  Num procs:    %d
+|  Application:  %s
+|  Num procs:    %d
 
 Please correct this value and try again.
 
@@ -941,9 +947,9 @@ correct and retry.
 
 %s was unable to stop the executable at first instruction:
 
-  Error:     %s
-  Nodename:  %s
-  Rank:      %lu
+|  Error:     %s
+|  Nodename:  %s
+|  Rank:      %lu
 
 [use-pterm]
 
@@ -970,9 +976,9 @@ to start the persistent DVM - it cannot be used with an application.
 
 %s was given an option that expected a string argument:
 
-  option: %s
-  argument: %s
-  expected: %s
+|  option: %s
+|  argument: %s
+|  expected: %s
 
 Please correct the option and try again.
 
@@ -980,9 +986,9 @@ Please correct the option and try again.
 
 %s was unable to open the specified file provided as an option:
 
-  option: %s
-  argument: %s
-  file: %s
+|  option: %s
+|  argument: %s
+|  file: %s
 
 Please correct the option and try again.
 
@@ -990,9 +996,9 @@ Please correct the option and try again.
 
 %s was unable to read the necessary info from the provided file:
 
-  option: %s
-  argument: %s
-  file: %s
+|  option: %s
+|  argument: %s
+|  file: %s
 
 Please correct the option or the file and try again.
 
