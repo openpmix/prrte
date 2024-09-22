@@ -1,0 +1,318 @@
+[bogus section]
+
+This section is not used by PRTE code.  But we have to put a RST
+section title in this file somewhere, or Sphinx gets unhappy.  So we
+put it in a section that is ignored by PRTE code.
+
+
+Hello, world
+============
+
+[usage]
+
+%s (%s) %s
+
+Usage: %s [OPTION]...
+
+The following list of command line options are available. Note that
+more detailed help for any option can be obtained by adding that
+option to the help request as "--help <option>".
+
++----------------------+-----------------------------------------------+
+|                      | General Options                               |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "-h" | "--help"      | This help message                             |
++----------------------+-----------------------------------------------+
+| "-h" | "--help       | Help for the specified option                 |
+| <arg0>"              |                                               |
++----------------------+-----------------------------------------------+
+| "-v" | "--verbose"   | Enable typical debug options                  |
++----------------------+-----------------------------------------------+
+| "-V" | "--version"   | Print version and exit                        |
++----------------------+-----------------------------------------------+
+| "--pmixmca <key>     | Pass context-specific PMIx MCA parameters;    |
+| <value>"             | they are considered global if only one        |
+|                      | context is specified ("key" is the parameter  |
+|                      | name; "value" is the parameter value)         |
++----------------------+-----------------------------------------------+
+| "--prtemca <key>     | Pass context-specific PRTE MCA parameters;    |
+| <value>"             | they are considered global if "--gmca" is not |
+|                      | used and only one context is specified ("key" |
+|                      | is the parameter name; "value" is the         |
+|                      | parameter value)                              |
++----------------------+-----------------------------------------------+
+| "--tune <files>"     | File(s) containing MCA params for tuning      |
+|                      | scheduler operations                          |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Resource Options                              |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--default-hostfile  | Provide a default hostfile                    |
+| <filename>"          |                                               |
++----------------------+-----------------------------------------------+
+| "-H" | "--host       | List of hosts to invoke processes on          |
+| <hosts>"             |                                               |
++----------------------+-----------------------------------------------+
+| "--hostfile <file>"  | Provide a hostfile                            |
++----------------------+-----------------------------------------------+
+| "--machinefile       | Provide a hostfile (synonym for "--hostfile") |
+| <file>"              |                                               |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Specific Options                              |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--allow-run-as-     | Allow execution as root (**STRONGLY           |
+| root"                | DISCOURAGED**)                                |
++----------------------+-----------------------------------------------+
+| "--daemonize"        | Daemonize the scheduler into the background   |
++----------------------+-----------------------------------------------+
+| "--no-ready-msg"     | Do not print a "DVM ready" message            |
++----------------------+-----------------------------------------------+
+| "--set-sid"          | Direct the scheduler to separate from the     |
+|                      | current session                               |
++----------------------+-----------------------------------------------+
+| "--tmpdir <dir>"     | Set the filesystem root for the session       |
+|                      | directory tree                                |
++----------------------+-----------------------------------------------+
+| "--report-pid <arg>" | Print out PID on stdout ("-"), stderr ("+"),  |
+|                      | or a file (anything else)                     |
++----------------------+-----------------------------------------------+
+| "--report-uri <arg>" | Print out URI on stdout ("-"), stderr ("+"),  |
+|                      | or a file (anything else)                     |
++----------------------+-----------------------------------------------+
+| "--keepalive <arg0>" | Pipe to monitor - scheduler will terminate    |
+|                      | upon closure                                  |
++----------------------+-----------------------------------------------+
+
+Report bugs to %s
+
+[version]
+
+%s (%s) %s
+
+Report bugs to %s
+
+[pmixmca]
+
+Pass a PMIx MCA parameter
+
+Syntax: "--pmixmca <key> <value>", where "key" is the parameter name
+and "value" is the parameter value.
+
+[prtemca]
+
+Pass a PRRTE MCA parameter.
+
+Syntax: "--prtemca <key> <value>", where "key" is the parameter name
+and "value" is the parameter value.
+
+[tune]
+
+Comma-delimited list of one or more files containing PRRTE and PMIx
+MCA params for tuning DVM and/or application operations. Parameters in
+the file will be treated as *generic* parameters and subject to the
+translation rules/uncertainties.  See "--help mca" for more
+information.
+
+Syntax in the file is:
+
+   param = value
+
+with one parameter and its associated value per line. Empty lines and
+lines beginning with the "#" character are ignored, as is any
+whitespace around the "=" character.
+
+[default-hostfile]
+
+Specify a default hostfile.
+
+Also see "--help hostfile".
+
+[host]
+
+Host syntax consists of a comma-delimited list of node names, each
+entry optionally containing a ":N" extension indicating the number of
+slots to assign to that entry:
+
+   --host node01:5,node02
+
+In the absence of the slot extension, one slot will be assigned to the
+node. Duplicate entries are aggregated and the number of slots
+assigned to that node are summed together.
+
+Note:
+
+  A "slot" is the PRRTE term for an allocatable unit where we can
+  launch a process. Thus, the number of slots equates to the maximum
+  number of processes PRRTE may start on that node without
+  oversubscribing it.
+
+[hostfile]
+
+PRRTE supports several levels of user-specified host lists based on an
+established precedence order. Users can specify a default hostfile
+that contains a list of nodes to be used by the DVM. Only one default
+hostfile can be provided for a given DVM. In addition, users can
+specify a hostfile that contains a list of nodes to be used for a DVM,
+or can provide a comma-delimited list of nodes to be used for that DVM
+via the "--host" command line option.
+
+The precedence order applied to these various options depends to some
+extent on the local environment. The following table illustrates how
+host and hostfile directives work together to define the set of hosts
+upon which a DVM will execute in the absence of a resource manager
+(RM):
+
++------------+---------+------------+----------------------------------+
+| Default    | host    | hostfile   | Result                           |
+| hostfile   |         |            |                                  |
+|============|=========|============|==================================|
+| unset      | unset   | unset      | The DVN will consist solely of   |
+|            |         |            | the local host where the DVM was |
+|            |         |            | started.                         |
++------------+---------+------------+----------------------------------+
+| unset      | set     | unset      | Host option defines resource     |
+|            |         |            | list for the DVM.                |
++------------+---------+------------+----------------------------------+
+| unset      | unset   | set        | Hostfile option defines resource |
+|            |         |            | list for the DVM.                |
++------------+---------+------------+----------------------------------+
+| unset      | set     | set        | Hostfile option defines resource |
+|            |         |            | list for the DVM, then host      |
+|            |         |            | filters the list to define the   |
+|            |         |            | final set of nodes to be used by |
+|            |         |            | the DVM                          |
++------------+---------+------------+----------------------------------+
+| set        | unset   | unset      | Default hostfile defines         |
+|            |         |            | resource list for the DVM        |
++------------+---------+------------+----------------------------------+
+| set        | set     | unset      | Default hostfile defines         |
+|            |         |            | resource list for the DVM, then  |
+|            |         |            | host filters the list to define  |
+|            |         |            | the final set of nodes to be     |
+|            |         |            | used by the DVM                  |
++------------+---------+------------+----------------------------------+
+| set        | set     | set        | Default hostfile defines         |
+|            |         |            | resource list for the DVM, then  |
+|            |         |            | hostfile filters the list, and   |
+|            |         |            | then host filters the list to    |
+|            |         |            | define the final set of nodes to |
+|            |         |            | be used by the DVM               |
++------------+---------+------------+----------------------------------+
+
+This changes somewhat in the presence of an RM as that entity
+specifies the initial allocation of nodes. In this case, the default
+hostfile, hostfile and host directives are all used to filter the RM's
+specification so that a user can utilize different portions of the
+allocation for different DVMs. This is done according to the same
+precedence order as in the prior table, with the RM providing the
+initial pool of nodes.
+
+Hostfiles (sometimes called "machine files") are a combination of two
+things:
+
+1. A listing of hosts on which to launch processes.
+
+2. Optionally, limit the number of processes which can be launched on
+   each host.
+
+Hostfile syntax consists of one node name on each line, optionally
+including a designated number of "slots":
+
+   # This is a comment line, and will be ignored
+   node01  slots=10
+   node13  slots=5
+
+   node15
+   node16
+   node17  slots=3
+   ...
+
+Blank lines and lines beginning with a "#" are ignored.
+
+A "slot" is the PRRTE term for an allocatable unit where we can launch
+a process.  See the section on definition of the term "slot" for a
+longer description of slots.
+
+In the absence of the "slot" parameter, PRRTE will assign either the
+number of slots to be the number of CPUs detected on the node or the
+resource manager-assigned value if operating in the presence of an RM.
+
+Important:
+
+  If using a resource manager, the user-specified number of slots is
+  capped by the RM-assigned value.
+
+See the "Host specification" HTML documentation for details about the
+format and content of hostfiles.
+
+[machinefile]
+
+Provide a hostfile.  This option is a synonym for "--hostfile"; see
+that option for more information.
+
+[allow-run-as-root]
+
+Allow execution as root **(STRONGLY DISCOURAGED)**.
+
+Running as root exposes the user to potentially catastrophic file
+system corruption and damage — e.g., if the user accidentally points
+the root of the session directory to a system required point, this
+directory and all underlying elements will be deleted upon job
+completion, thereby rendering the system inoperable.
+
+It is recognized that some environments (e.g., containers) may require
+operation as root, and that the user accepts the risks in those
+scenarios. Accordingly, one can override PRRTE's run-as-root
+protection by providing one of the following:
+
+* The "--allow-run-as-root" command line directive
+
+* Adding **BOTH** of the following environmental parameters:
+
+     * "PRTE_ALLOW_RUN_AS_ROOT=1"
+
+     * "PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1"
+
+Again, we recommend this only be done if absolutely necessary.
+
+[daemonize]
+
+Daemonize the scheduler into the background
+
+[no-ready-msg]
+
+Do not print a scheduler ready message
+
+[set-sid]
+
+Direct the scheduler to separate from the current session
+
+[tmpdir]
+
+Define the root location for the PRRTE session directory tree
+
+See the "Session directory" HTML documentation for additional details
+about the PRRTE session directory.
+
+[report-pid]
+
+Printout scheduler's PID on stdout [-], stderr [+], or a file
+[anything else]
+
+[report-uri]
+
+Printout scheduler's URI on stdout [-], stderr [+], or a file
+[anything else]
+
+[keepalive]
+
+Pipe for scheduler to monitor - scheduler will terminate upon closure
