@@ -1,0 +1,2669 @@
+[bogus section]
+
+This section is not used by PRTE code.  But we have to put a RST
+section title in this file somewhere, or Sphinx gets unhappy.  So we
+put it in a section that is ignored by PRTE code.
+
+
+Hello, world
+============
+
+[version]
+
+%s (%s) %s
+
+%s
+
+[usage]
+
+%s (%s) %s
+
+Usage: %s [OPTION]...
+
+Initiate an instance of the PMIx Reference RTE (PRRTE) DVM
+
+The following list of command line options are available. Note that
+more detailed help for any option can be obtained by adding that
+option to the help request as "--help <option>".
+
++----------------------+-----------------------------------------------+
+|                      | General Options                               |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "-h" | "--help"      | This help message                             |
++----------------------+-----------------------------------------------+
+| "-h" | "--help       | Help for the specified option                 |
+| <arg0>"              |                                               |
++----------------------+-----------------------------------------------+
+| "-v" | "--verbose"   | Enable typical debug options                  |
++----------------------+-----------------------------------------------+
+| "-V" | "--version"   | Print version and exit                        |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Debug Options                                 |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--debug-daemons"    | Debug daemons — if not set, any "verbose"     |
+|                      | settings will be limited to the prterun       |
+|                      | itself to reduce clutter                      |
++----------------------+-----------------------------------------------+
+| "--debug-daemons-    | Enable debugging of any PRRTE daemons used by |
+| file"                | this application, storing their verbose       |
+|                      | output in files                               |
++----------------------+-----------------------------------------------+
+| "--display <arg0>"   | Options for displaying information about the  |
+|                      | allocation and job.                           |
++----------------------+-----------------------------------------------+
+| "--spawn-timeout     | Timeout the job if spawn takes more than the  |
+| <seconds>"           | specified number of seconds                   |
++----------------------+-----------------------------------------------+
+| "--timeout           | Timeout the job if execution is not complete  |
+| <seconds>"           | after the specified number of seconds         |
++----------------------+-----------------------------------------------+
+| "--get-stack-traces" | Get stack traces of all application procs on  |
+|                      | timeout                                       |
++----------------------+-----------------------------------------------+
+| "--leave-session-    | Do not discard stdout/stderr of remote PRRTE  |
+| attached"            | daemons                                       |
++----------------------+-----------------------------------------------+
+| "--report-state-on-  | Report all job and process states upon        |
+| timeout"             | timeout                                       |
++----------------------+-----------------------------------------------+
+| "--stop-on-exec"     | If supported, stop each specified process at  |
+|                      | start of execution                            |
++----------------------+-----------------------------------------------+
+| "--stop-in-init"     | Direct the specified processes to stop in     |
+|                      | "PMIx_Init"                                   |
++----------------------+-----------------------------------------------+
+| "--stop-in-app"      | Direct the specified processes to stop at an  |
+|                      | application-controlled location               |
++----------------------+-----------------------------------------------+
+| "--do-not-launch"    | Perform all necessary operations to prepare   |
+|                      | to launch the application, but do not         |
+|                      | actually launch it (usually used to test      |
+|                      | mapping patterns)                             |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Output Options                                |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--output <arg0>"    | Comma-delimited list of options that control  |
+|                      | how output is generated.                      |
++----------------------+-----------------------------------------------+
+| "--report-child-     | Return the exit status of the primary job     |
+| jobs-separately"     | only                                          |
++----------------------+-----------------------------------------------+
+| "--xterm <ranks>"    | Create a new xterm window for each of the     |
+|                      | comma-delimited ranges of application process |
+|                      | ranks                                         |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Input Options                                 |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--stdin <ranks>"    | Specify application rank(s) to receive stdin  |
+|                      | [integer ranks, "rank", "all", "none"]        |
+|                      | (default: "0", indicating rank 0)             |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Placement Options                             |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--map-by <type>"    | Mapping Policy for job                        |
++----------------------+-----------------------------------------------+
+| "--rank-by <type>"   | Ranking Policy for job                        |
++----------------------+-----------------------------------------------+
+| "--bind-to <type>"   | Binding policy for job.                       |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Launch Options                                |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--runtime-options   | Comma-delimited list of runtime directives    |
+| <arg0>"              | for the job (e.g., do not abort if a process  |
+|                      | exits on non-zero status)                     |
++----------------------+-----------------------------------------------+
+| "-c" | "--np <num>"  | Number of processes to run                    |
++----------------------+-----------------------------------------------+
+| "-n" | "--n <num>"   | Number of processes to run                    |
++----------------------+-----------------------------------------------+
+| "-N" | "--npernode   | Run designated number of processes on each    |
+| <num>"               | node                                          |
++----------------------+-----------------------------------------------+
+| "--personality       | Specify the personality to be used            |
+| <name>"              |                                               |
++----------------------+-----------------------------------------------+
+| "-H" | "--host       | List of hosts to invoke processes on          |
+| <hosts>"             |                                               |
++----------------------+-----------------------------------------------+
+| "--add-host <hosts>" | List of hosts to add to the DVM prior to      |
+|                      | launching the given app                       |
++----------------------+-----------------------------------------------+
+| "--hostfile <file>"  | Provide a hostfile                            |
++----------------------+-----------------------------------------------+
+| "--machinefile       | Provide a hostfile (synonym for "--hostfile") |
+| <file>"              |                                               |
++----------------------+-----------------------------------------------+
+| "--add-hostfile      | Provide a hostfile listing hosts to add to    |
+| <file>"              | the DVM prior to launching the given app      |
++----------------------+-----------------------------------------------+
+| "--pmixmca <key>     | Pass context-specific PMIx MCA parameters;    |
+| <value>"             | they are considered global if only one        |
+|                      | context is specified ("key" is the parameter  |
+|                      | name; "value" is the parameter value)         |
++----------------------+-----------------------------------------------+
+| "--gpmixmca <key>    | Pass global PMIx MCA parameters that are      |
+| <value>"             | applicable to all contexts ("key" is the      |
+|                      | parameter name; "value" is the parameter      |
+|                      | value)                                        |
++----------------------+-----------------------------------------------+
+| "--preload-files     | Preload the comma separated list of files to  |
+| <files>"             | the remote machines current working directory |
+|                      | before starting the remote process.           |
++----------------------+-----------------------------------------------+
+| "--prtemca <key>     | Pass context-specific PRRTE MCA parameters to |
+| <value>"             | the DVM                                       |
++----------------------+-----------------------------------------------+
+| "--pset <name>"      | User-specified name assigned to the processes |
+|                      | in their given application                    |
++----------------------+-----------------------------------------------+
+| "-s" | "--preload-   | Preload the binary on the remote machine      |
+| binary"              | before starting the remote process.           |
++----------------------+-----------------------------------------------+
+| "--set-cwd-to-       | Set the working directory of the started      |
+| session-dir"         | processes to their session directory          |
++----------------------+-----------------------------------------------+
+| "--show-progress"    | Output a brief periodic report on launch      |
+|                      | progress                                      |
++----------------------+-----------------------------------------------+
+| "--wd <dir>"         | Synonym for "--wdir"                          |
++----------------------+-----------------------------------------------+
+| "--wdir <dir>"       | Set the working directory of the started      |
+|                      | processes                                     |
++----------------------+-----------------------------------------------+
+| "-x <name>"          | Export an environment variable, optionally    |
+|                      | specifying a value                            |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Specific Options                              |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--allow-run-as-     | Allow execution as root (**STRONGLY           |
+| root"                | DISCOURAGED**)                                |
++----------------------+-----------------------------------------------+
+| "--forward-signals   | Comma-delimited list of additional signals    |
+| <signals>"           | (names or integers) to forward to application |
+|                      | processes ["none" => forward nothing].        |
++----------------------+-----------------------------------------------+
+| "--keepalive <arg0>" | Pipe to monitor — DVM will terminate upon     |
+|                      | closure                                       |
++----------------------+-----------------------------------------------+
+| "--launch-agent      | Name of daemon executable used to start       |
+| <exe>"               | processes on remote nodes (default: "prted")  |
++----------------------+-----------------------------------------------+
+| "--max-vm-size       | Number of daemons to start                    |
+| <num>"               |                                               |
++----------------------+-----------------------------------------------+
+| "--no-ready-msg"     | Do not print a DVM ready message              |
++----------------------+-----------------------------------------------+
+| "--noprefix"         | Disable automatic "--prefix" behavior         |
++----------------------+-----------------------------------------------+
+| "--prefix <dir>"     | Prefix to be used to look for RTE executables |
++----------------------+-----------------------------------------------+
+| "--report-pid        | Print out PID on stdout ("-"), stderr ("+"),  |
+| <arg0>"              | or a file [anything else]                     |
++----------------------+-----------------------------------------------+
+| "--report-uri        | Print out URI on stdout ("-"), stderr ("+"),  |
+| <arg0>"              | or a file [anything else]                     |
++----------------------+-----------------------------------------------+
+| "--set-sid"          | Direct the DVM daemons to separate from the   |
+|                      | current session                               |
++----------------------+-----------------------------------------------+
+| "--singleton <id>"   | ID of the singleton process that started us   |
++----------------------+-----------------------------------------------+
+| "--tmpdir <dir>"     | Set the root for the session directory tree   |
++----------------------+-----------------------------------------------+
+| "--tune <files>"     | File(s) containing MCA params for tuning DVM  |
+|                      | operations                                    |
++----------------------+-----------------------------------------------+
+| "--dvm <arg>"        | Use a persistent DVM instead of instantiating |
+|                      | independent runtime infrastructure. The       |
+|                      | argument indicates the PID, URI, file         |
+|                      | containing the URI, or namespace of the DVM.  |
++----------------------+-----------------------------------------------+
+
+Report bugs to %s
+
+[dvm]
+
+Utilize an existing persistent DVM instead of instantiating an
+independent runtime infrastructure. This mimics the "prun" command,
+but is provided as a convenience option for those wanting to embed the
+"prterun" command in a script that can be optionally used to run
+either independently or under a persistent DVM.
+
+A required argument is passed to the "--dvm" directive to specify the
+location of the DVM controller (e.g., "--dvm pid:12345") or by passing
+the string "search" to instead search for an existing controller.
+
+Supported options include:
+
+* "search": directs the tool to search for available DVM controllers
+  it is authorized to use, connecting to the first such candidate it
+  finds.
+
+* "pid:<arg>": provides the PID of the target DVM controller. This can
+  be given as either the PID itself (arg = int) or the path to a file
+  that contains the PID (arg = "file:<path>")
+
+* "file:<path>": provides the path to a PMIx rendezvous file that is
+  output by PMIx servers — the file contains all the required
+  information for completing the connection
+
+* "uri:<arg>": specifies the URI of the DVM controller, or the name of
+  the file (specified as "file:filename") that contains that info
+
+* "ns:<arg>": specifies the namespace of the DVM controller
+
+* "system": exclusively find and use the system-level DVM controller
+
+* "system-first": look for a system-level DVM controller, fall back to
+  searching for an available DVM controller the command is authorized
+  to use if a system-level controller is not found
+
+Examples:
+
+   prterun --dvm file:dvm_uri.txt --np 4 ./a.out
+
+   prterun --dvm pid:12345 --np 4 ./a.out
+
+   prterun --dvm uri:file:dvm_uri.txt --np 4 ./a.out
+
+   prterun --dvm ns:prte-node1-2095 --np 4 ./a.out
+
+   prterun --dvm pid:file:prte_pid.txt --np 4 ./a.out
+
+   prterun --dvm search --np 4 ./a.out
+
+[prtemca]
+
+Pass a PRRTE MCA parameter.
+
+Syntax: "--prtemca <key> <value>", where "key" is the parameter name
+and "value" is the parameter value.
+
+[pmixmca]
+
+Pass a PMIx MCA parameter
+
+Syntax: "--pmixmca <key> <value>", where "key" is the parameter name
+and "value" is the parameter value.
+
+[gpmixmca]
+
+Syntax: "--gpmixmca <key> <value>"
+
+where "key" is the parameter name and "value" is the parameter value.
+The "g" prefix indicates that this PMIx parameter is to be applied to
+_all_ application contexts and not just the one in which the directive
+appears.
+
+[tune]
+
+Comma-delimited list of one or more files containing PRRTE and PMIx
+MCA params for tuning DVM and/or application operations. Parameters in
+the file will be treated as *generic* parameters and subject to the
+translation rules/uncertainties.  See "--help mca" for more
+information.
+
+Syntax in the file is:
+
+   param = value
+
+with one parameter and its associated value per line. Empty lines and
+lines beginning with the "#" character are ignored, as is any
+whitespace around the "=" character.
+
+[stream]
+
+Adjust buffering for stdout/stderr.  Allowable values:
+
+* 0: unbuffered
+
+* 1: line buffered
+
+* 2: fully buffered
+
+[system-server]
+
+Start prterun and its daemons as the system server on their nodes
+
+[set-sid]
+
+Direct the DVM (controller and daemons) to separate from the current
+session
+
+[report-pid]
+
+Printout prterun's PID on stdout ("-"), stderr ("+"), or a file
+(anything else).
+
+[report-uri]
+
+Printout prterun's URI on stdout ("-"), stderr ("+"), or a file
+(anything else).
+
+[test-suicide]
+
+Test DVM cleanup upon daemon failure by having one daemon suicide
+after delay
+
+[singleton]
+
+"prterun" is being started by a singleton process (i.e., one not
+started by prterun) — the argument must be the PMIx ID of the
+singleton process that started us
+
+[keepalive]
+
+Pipe for prterun to monitor — job will terminate upon closure
+
+[launch-agent]
+
+Name of daemon executable used to start processes on remote nodes
+(default: "prted").
+
+This is the executable prterun shall start on each remote node when
+establishing the DVM.
+
+[max-vm-size]
+
+Maximum number of daemons to start
+
+[debug-daemons]
+
+Debug daemon output enabled. This is a somewhat limited stream of
+information normally used to simply confirm that the daemons started.
+Includes leaving the output streams open.
+
+[debug-daemons-file]
+
+Debug daemon output is enabled and all output from the daemons is
+redirected into files with names of the form:
+
+   output-prted-<daemon-nspace>-<nodename>.log
+
+These names avoid conflict on shared file systems. The files are
+located in the top-level session directory assigned to the DVM.
+
+See the "Session directory" HTML documentation for additional details
+about the PRRTE session directory.
+
+[leave-session-attached]
+
+Do not discard stdout/stderr of remote PRRTE daemons. The primary use
+for this option is to ensure that the daemon output streams (i.e.,
+stdout and stderr) remain open after launch, thus allowing the user to
+see any daemon-generated error messages. Otherwise, the daemon will
+"daemonize" itself upon launch, thereby closing its output streams.
+
+[tmpdir]
+
+Define the root location for the PRRTE session directory tree
+
+See the "Session directory" HTML documentation for additional details
+about the PRRTE session directory.
+
+[prefix]
+
+Prefix to be used to look for PRRTE executables. PRRTE automatically
+sets the prefix for remote daemons if it was either configured with
+the "--enable-prte-prefix-by-default" option OR prte itself was
+executed with an absolute path to the prte command. This option
+overrides those settings, if present, and forces use of the provided
+path.
+
+[noprefix]
+
+Disable automatic "--prefix" behavior. PRRTE automatically sets the
+prefix for remote daemons if it was either configured with the "--
+enable-prte-prefix-by-default" option OR prte itself was executed with
+an absolute path to the "prte" command. This option disables that
+behavior.
+
+[forward-signals]
+
+Comma-delimited list of additional signals (names or integers) to
+forward to application processes ("none" = forward nothing). Signals
+provided by default include SIGTSTP, SIGUSR1, SIGUSR2, SIGABRT,
+SIGALRM, and SIGCONT.
+
+[allow-run-as-root]
+
+Allow execution as root **(STRONGLY DISCOURAGED)**.
+
+Running as root exposes the user to potentially catastrophic file
+system corruption and damage — e.g., if the user accidentally points
+the root of the session directory to a system required point, this
+directory and all underlying elements will be deleted upon job
+completion, thereby rendering the system inoperable.
+
+It is recognized that some environments (e.g., containers) may require
+operation as root, and that the user accepts the risks in those
+scenarios. Accordingly, one can override PRRTE's run-as-root
+protection by providing one of the following:
+
+* The "--allow-run-as-root" command line directive
+
+* Adding **BOTH** of the following environmental parameters:
+
+     * "PRTE_ALLOW_RUN_AS_ROOT=1"
+
+     * "PRTE_ALLOW_RUN_AS_ROOT_CONFIRM=1"
+
+Again, we recommend this only be done if absolutely necessary.
+
+[report-child-jobs-separately]
+
+Return the exit status of the primary job only
+
+[timeout]
+
+Timeout the job if execution time exceeds the specified number of
+seconds
+
+[report-state-on-timeout]
+
+Report all job and process states upon timeout
+
+[get-stack-traces]
+
+Get stack traces of all application procs on timeout
+
+[spawn-timeout]
+
+Timeout the job if spawn takes more than the specified number of
+seconds
+
+[np]
+
+Specify number of application processes to be started
+
+[n] Specify number of application processes to be started
+
+[N]
+
+Specify number of application processes per node to be started
+
+[app]
+
+Provide an appfile; ignore all other command line options
+
+[xterm]
+
+Create a new xterm window and display output from the specified ranks
+there.  Ranks are specified as a comma-delimited list of ranges —
+e.g., "1,3-6,9", or as "all".
+
+[stop-on-exec]
+
+If supported, stop each process at start of execution
+
+[stop-in-init]
+
+Include the "PMIX_DEBUG_STOP_IN_INIT" attribute in the application's
+job info directing that the specified ranks stop in PMIx_Init pending
+release. Ranks are specified as a comma-delimited list of ranges —
+e.g., "1,3-6,9", or as "all".
+
+[stop-in-app]
+
+Include the "PMIX_DEBUG_STOP_IN_APP" attribute in the application's
+job info directing that the specified ranks stop at an application-
+determined point pending release. Ranks are specified as a comma-
+delimited list of ranges — e.g., "1,3-6,9", or as "all".
+
+[x]
+
+Export an environment variable, optionally specifying a value. For
+example:
+
+* "-x foo" exports the environment variable "foo" and takes its value
+  from the current environment.
+
+* "-x foo=bar" exports the environment variable name "foo" and sets
+  its value to "bar" in the started processes.
+
+* "-x foo*" exports all current environmental variables starting with
+  "foo".
+
+[wdir]
+
+Set the working directory of the started processes
+
+[wd]
+
+Synonym for --wdir
+
+[set-cwd-to-session-dir]
+
+Set the working directory of the started processes to their session
+directory
+
+[path]
+
+Path to be used to look for executables to start processes
+
+[show-progress]
+
+Output a brief periodic report on launch progress
+
+[pset]
+
+User-specified name assigned to the processes in their given
+application
+
+[hostfile]
+
+PRRTE supports several levels of user-specified hostfiles based on an
+established precedence order. Users can specify a hostfile that
+contains a list of nodes to be used for the job, or can provide a
+comma-delimited list of nodes to be used for that job via the "--host"
+command line option.
+
+The precedence order applied to these various options depends to some
+extent on the local environment. The following table illustrates how
+host and hostfile directives work together to define the set of hosts
+upon which a DVM will execute the job in the absence of a resource
+manager (RM):
+
++---------+------------+-----------------------------------------------+
+| host    | hostfile   | Result                                        |
+|=========|============|===============================================|
+| unset   | unset      | The DVM will utilize all its available        |
+|         |            | resources when mapping the job.               |
++---------+------------+-----------------------------------------------+
+| set     | unset      | Host option defines resource list for the job |
++---------+------------+-----------------------------------------------+
+| unset   | set        | Hostfile defines resource list for the job    |
++---------+------------+-----------------------------------------------+
+| set     | set        | Hostfile defines resource list for the job,   |
+|         |            | then host filters the list to define the      |
+|         |            | final set of nodes to be used for the job     |
++---------+------------+-----------------------------------------------+
+
+Hostfiles (sometimes called "machine files") are a combination of two
+things:
+
+1. A listing of hosts on which to launch processes.
+
+2. Optionally, limit the number of processes which can be launched on
+   each host.
+
+Hostfile syntax consists of one node name on each line, optionally
+including a designated number of "slots":
+
+   # This is a comment line, and will be ignored
+   node01  slots=10
+   node13  slots=5
+
+   node15
+   node16
+   node17  slots=3
+   ...
+
+Blank lines and lines beginning with a "#" are ignored.
+
+A "slot" is the PRRTE term for an allocatable unit where we can launch
+a process.  See the section on definition of the term "slot" for a
+longer description of slots.
+
+In the absence of the "slot" parameter, PRRTE will assign either the
+number of slots to be the number of CPUs detected on the node or the
+resource manager-assigned value if operating in the presence of an RM.
+
+Important:
+
+  If using a resource manager, the user-specified number of slots is
+  capped by the RM-assigned value.
+
+
+Relative host indexing
+----------------------
+
+Hostfile and "--host" specifications can also be made using relative
+indexing. This allows a user to stipulate which hosts are to be used
+for a given app context without specifying the particular host name,
+but rather its relative position in the allocation.
+
+This can probably best be understood through consideration of a few
+examples. Consider the case where a DVM is comprised of a set of nodes
+named "foo1", "foo2", "foo3", "foo4". The user wants the first app
+context to have exclusive use of the first two nodes, and a second app
+context to use the last two nodes. Of course, the user could printout
+the allocation to find the names of the nodes allocated to them and
+then use "--host" to specify this layout, but this is cumbersome and
+would require hand-manipulation for every invocation.
+
+A simpler method is to utilize PRRTE's relative indexing capability to
+specify the desired layout. In this case, a command line containing:
+
+   --host +n1,+n2 ./app1 : --host +n3,+n4 ./app2
+
+would provide the desired pattern. The "+" syntax indicates that the
+information is being provided as a relative index into the existing
+allocation. Two methods of relative indexing are supported:
+
+* "+n#": A relative index into the allocation referencing the "#"
+  node. PRRTE will substitute the "#" node in the allocation
+
+* "+e[:#]": A request for "#" empty nodes — i.e., PRRTE is to
+  substitute this reference with nodes that have not yet been used by
+  any other app_context. If the ":#" is not provided, PRRTE will
+  substitute the reference with all empty nodes. Note that PRRTE does
+  track the empty nodes that have been assigned in this manner, so
+  multiple uses of this option will result in assignment of unique
+  nodes up to the limit of the available empty nodes. Requests for
+  more empty nodes than are available will generate an error.
+
+Relative indexing can be combined with absolute naming of hosts in any
+arbitrary manner, and can be used in hostfiles as well as with the "--
+host" command line option. In addition, any slot specification
+provided in hostfiles will be respected — thus, a user can specify
+that only a certain number of slots from a relative indexed host are
+to be used for a given app context.
+
+Another example may help illustrate this point. Consider the case
+where the user has a hostfile containing:
+
+   dummy1 slots=4
+   dummy2 slots=4
+   dummy3 slots=4
+   dummy4 slots=4
+   dummy5 slots=4
+
+This may, for example, be a hostfile that describes a set of commonly-
+used resources that the user wishes to execute applications against.
+For this particular application, the user plans to map byslot, and
+wants the first two ranks to be on the second node of any allocation,
+the next ranks to land on an empty node, have one rank specifically on
+"dummy4", the next rank to be on the second node of the allocation
+again, and finally any remaining ranks to be on whatever empty nodes
+are left. To accomplish this, the user provides a hostfile of:
+
+   +n2 slots=2
+   +e:1
+   dummy4 slots=1
+   +n2
+   +e
+
+The user can now use this information in combination with PRRTE's
+sequential mapper to obtain their specific layout:
+
+   <launcher> --hostfile dummyhosts --hostfile mylayout --prtemca rmaps seq ./my_app
+
+which will result in:
+
+   rank0 being mapped to dummy3
+   rank1 to dummy1 as the first empty node
+   rank2 to dummy4
+   rank3 to dummy3
+   rank4 to dummy2 and rank5 to dummy5 as the last remaining unused nodes
+
+Note that the sequential mapper ignores the number of slots arguments
+as it only maps one rank at a time to each node in the list.
+
+If the default round-robin mapper had been used, then the mapping
+would have resulted in:
+
+* ranks 0 and 1 being mapped to dummy3 since two slots were specified
+
+* ranks 2-5 on dummy1 as the first empty node, which has four slots
+
+* rank6 on dummy4 since the hostfile specifies only a single slot from
+  that node is to be used
+
+* ranks 7 and 8 on dummy3 since only two slots remain available
+
+* ranks 9-12 on dummy2 since it is the next available empty node and
+  has four slots
+
+* ranks 13-16 on dummy5 since it is the last remaining unused node and
+  has four slots
+
+Thus, the use of relative indexing can allow for complex mappings to
+be ported across allocations, including those obtained from automated
+resource managers, without the need for manual manipulation of scripts
+and/or command lines.
+
+See the "Host specification" HTML documentation for details about the
+format and content of hostfiles.
+
+[machinefile]
+
+Provide a hostfile.  This option is a synonym for "--hostfile"; see
+that option for more information.
+
+[add-hostfile]
+
+PRRTE allows a user to expand an existing DVM prior to launching an
+application.  Users can specify a hostfile that contains a list of
+nodes to be added to the DVM using normal hostfile syntax.
+
+The list can include nodes that are already part of the DVM — in this
+case, the number of slots available on those nodes will be set to the
+new specification, or adjusted as directed:
+
+   node01  slots=5
+
+would direct that node01 be set to 5 slots, while
+
+   node01 slots+=5
+
+would add 5 slots to the current value for node01, and
+
+   node01  slots-=5
+
+would subtract 5 slots from the current value.
+
+Slot adjustments for existing nodes will have no impact on currently
+executing jobs, but will be applied to any new spawn requests. Nodes
+contained in the add-hostfile specification are available for
+immediate use by the accompanying application.
+
+Users desiring to constrain the accompanying application to the newly
+added nodes should also include the "--hostfile" command line
+directive, giving the same hostfile as its argument:
+
+   --add-hostfile <filename> --hostfile <filename>
+
+[host]
+
+Host syntax consists of a comma-delimited list of node names, each
+entry optionally containing a ":N" extension indicating the number of
+slots to assign to that entry:
+
+   --host node01:5,node02
+
+In the absence of the slot extension, one slot will be assigned to the
+node. Duplicate entries are aggregated and the number of slots
+assigned to that node are summed together.
+
+Note:
+
+  A "slot" is the PRRTE term for an allocatable unit where we can
+  launch a process. Thus, the number of slots equates to the maximum
+  number of processes PRRTE may start on that node without
+  oversubscribing it.
+
+See the "Host specification" HTML documentation for details about the
+format and content of hostfiles.
+
+[add-host]
+
+PRRTE allows a user to expand an existing DVM prior to launching an
+application.  Users can specify a a comma-delimited list of node
+names, each entry optionally containing a ":N" extension indicating
+the number of slots to assign to that entry:
+
+   --host node01:5,node02
+
+In the absence of the slot extension, one slot will be assigned to the
+node. Duplicate entries are aggregated and the number of slots
+assigned to that node are summed together.
+
+Note:
+
+  A "slot" is the PRRTE term for an allocatable unit where we can
+  launch a process. Thus, the number of slots equates to the maximum
+  number of processes PRRTE may start on that node without
+  oversubscribing it.
+
+The list can include nodes that are already part of the DVM — in this
+case, the number of slots available on those nodes will be set to the
+new specification, or adjusted as directed:
+
+   --host node01:5,node02
+
+would direct that node01 be set to 5 slots and node02 will have 1
+slot, while
+
+   --host node01:+5,node02
+
+would add 5 slots to the current value for node01, and
+
+   --host node01:-5,node02
+
+would subtract 5 slots from the current value.
+
+Slot adjustments for existing nodes will have no impact on currently
+executing jobs, but will be applied to any new spawn requests. Nodes
+contained in the add-host specification are available for immediate
+use by the accompanying application.
+
+Users desiring to constrain the accompanying application to the newly
+added nodes should also include the "--host" command line directive,
+giving the same hosts in its argument:
+
+   --add-host node01:+5,node02 --host node01:5,node02
+
+Note that the "--host" argument indicates the number of slots to
+assign node01 for this spawn request, and not the number of slots
+being added to the node01 allocation.
+
+[personality]
+
+Specify the personality to be used. This governs selection of the
+plugin responsible for defining and parsing the command line,
+harvesting and forwarding environmental variables, and providing
+library-dependent support to the launched processes. Examples include
+"ompi" for an application compiled with Open MPI, "mpich" for one
+built against the MPICH library, or "oshmem" for an OpenSHMEM
+application compiled against SUNY's reference library.
+
+[preload-files]
+
+Syntax: "--preload-files <files>"
+
+Preload the comma separated list of files to the remote machines
+current working directory before starting the remote process.
+
+[preload-binary]
+
+Syntax: "--preload-binary"
+
+Preload the binary on the remote machine before starting the remote
+process.
+
+[output]
+
+The "output" command line directive must be accompanied by a comma-
+delimited list of case-insensitive options that control how output is
+generated. The full directive need not be provided — only enough
+characters are required to uniquely identify the directive. For
+example, "MERGE" is sufficient to represent the "MERGE-STDERR-TO-
+STDOUT" directive — while "TAG" can not be used to represent "TAG-
+DETAILED" (though "TAG-D" would suffice).
+
+Supported values include:
+
+* "TAG" marks each output line with the "[job,rank]<stream>:" of the
+  process that generated it
+
+* "TAG-DETAILED" marks each output line with a detailed annotation
+  containing "[namespace,rank][hostname:pid]<stream>:" of the process
+  that generated it
+
+* "TAG-FULLNAME" marks each output line with the
+  "[namespace,rank]<stream>:" of the process that generated it
+
+* "TAG-FULLNAME" marks each output line with the
+  "[namespace,rank]<stream>:" of the process that generated it
+
+* "TIMESTAMP" prefixes each output line with a "[datetime]<stream>:"
+  stamp. Note that the timestamp will be the time when the line is
+  output by the DVM and not the time when the source output it
+
+* "XML" provides all output in a pseudo-XML format "MERGE-STDERR-TO-
+  STDOUT" merges stderr into stdout
+
+* "DIR=DIRNAME" redirects output from application processes into
+  "DIRNAME/job/rank/std[out,err,diag]". The provided name will be
+  converted to an absolute path
+
+* "FILE=FILENAME" redirects output from application processes into
+  "filename.rank." The provided name will be converted to an absolute
+  path
+
+Supported qualifiers include "NOCOPY" (do not copy the output to the
+stdout/err streams), and "RAW" (do not buffer the output into complete
+lines, but instead output it as it is received).
+
+[stdin]
+
+Specify procs to receive stdin [integer ranks, "all", "none"]
+(default: "0", indicating rank 0)
+
+[map-by]
+
+Processes are mapped based on one of the following directives as
+applied at the job level:
+
+* "SLOT" assigns procs to each node up to the number of available
+  slots on that node before moving to the next node in the allocation
+
+* "HWTHREAD" assigns a proc to each hardware thread on a node in a
+  round-robin manner up to the number of available slots on that node
+  before moving to the next node in the allocation
+
+* "CORE" (default) assigns a proc to each core on a node in a round-
+  robin manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "L1CACHE" assigns a proc to each L1 cache on a node in a round-robin
+  manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "L2CACHE" assigns a proc to each L2 cache on a node in a round-robin
+  manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "L3CACHE" assigns a proc to each L3 cache on a node in a round-robin
+  manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "NUMA" assigns a proc to each NUMA region on a node in a round-robin
+  manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "PACKAGE" assigns a proc to each package on a node in a round-robin
+  manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "NODE" assigns processes in a round-robin fashion to all nodes in
+  the allocation, with the number assigned to each node capped by the
+  number of available slots on that node
+
+* "SEQ" (often accompanied by the file=<path> qualifier) assigns one
+  process to each node specified in the file. The sequential file is
+  to contain an entry for each desired process, one per line of the
+  file.
+
+* "PPR:N":resource maps N procs to each instance of the specified
+  resource type in the allocation
+
+* "RANKFILE" (often accompanied by the file=<path> qualifier) assigns
+  one process to the node/resource specified in each entry of the
+  file, one per line of the file.
+
+* "PE-LIST=a,b" assigns procs to each node in the allocation based on
+  the ORDERED qualifier. The list is comprised of comma-delimited
+  ranges of CPUs to use for this job. If the ORDERED qualifier is not
+  provided, then each node will be assigned procs up to the number of
+  available slots, capped by the availability of the specified CPUs.
+  If ORDERED is given, then one proc will be assigned to each of the
+  specified CPUs, if available, capped by the number of slots on each
+  node and the total number of specified processes. Providing the
+  OVERLOAD qualifier to the "bind-to" option removes the check on
+  availability of the CPU in both cases.
+
+Any directive can include qualifiers by adding a colon (":") and any
+combination of one or more of the following (delimited by colons) to
+the "--map-by" option (except where noted):
+
+* "PE=n" bind n CPUs to each process (can not be used in combination
+  with rankfile or pe-list directives)
+
+* "SPAN" load balance the processes across the allocation by treating
+  the allocation as a single "super-node" (can not be used in
+  combination with "slot", "node", "seq", "ppr", "rankfile", or "pe-
+  list" directives)
+
+* "OVERSUBSCRIBE" allow more processes on a node than processing
+  elements
+
+* "NOOVERSUBSCRIBE" means "!OVERSUBSCRIBE"
+
+* "NOLOCAL" do not launch processes on the same node as "prun"
+
+* "HWTCPUS" use hardware threads as CPU slots
+
+* "CORECPUS" use cores as CPU slots (default)
+
+* "INHERIT" indicates that a child job (i.e., one spawned from within
+  an application) shall inherit the placement policies of the parent
+  job that spawned it.
+
+* "NOINHERIT" means "`!INHERIT"
+
+* "FILE=<path>" (path to file containing sequential or rankfile
+  entries).
+
+* "ORDERED" only applies to the "PE-LIST" option to indicate that
+  procs are to be bound to each of the specified CPUs in the order in
+  which they are assigned (i.e., the first proc on a node shall be
+  bound to the first CPU in the list, the second proc shall be bound
+  to the second CPU, etc.)
+
+Note:
+
+  Directives and qualifiers are case-insensitive and can be shortened
+  to the minimum number of characters to uniquely identify them. Thus,
+  "L1CACHE" can be given as "l1cache" or simply as "L1".
+
+The type of CPU (core vs hwthread) used in the mapping algorithm is
+determined as follows:
+
+* by user directive on the command line via the HWTCPUS qualifier to
+  the "--map-by" directive
+
+* by setting the "rmaps_default_mapping_policy" MCA parameter to
+  include the "HWTCPUS" qualifier. This parameter sets the default
+  value for a PRRTE DVM — qualifiers are carried across to DVM jobs
+  started via "prun" unless overridden by the user's command line
+
+* defaults to CORE in topologies where core CPUs are defined, and to
+  hwthreads otherwise.
+
+If your application uses threads, then you probably want to ensure
+that you are either not bound at all (by specifying "--bind-to none"),
+or bound to multiple cores using an appropriate binding level or
+specific number of processing elements per application process via the
+"PE=#" qualifier to the "--map-by" command line directive.
+
+A more detailed description of the mapping, ranking, and binding
+procedure can be obtained via the "--help placement" option.
+
+[rank-by]
+
+PRRTE automatically ranks processes for each job starting from zero.
+Regardless of the algorithm used, rank assignments span applications
+in the same job — i.e., a command line of
+
+   -n 3 app1 : -n 2 app2
+
+will result in "app1" having three processes ranked 0-2 and "app2"
+having two processes ranked 3-4.
+
+By default, process ranks are assigned in accordance with the mapping
+directive — e.g., jobs that are mapped by-node will have the process
+ranks assigned round-robin on a per-node basis. However, users can
+override the default by specifying any of the following directives
+using the "--rank-by" command line option:
+
+* "SLOT" assigns ranks to each process on a node in the order in which
+  the mapper assigned them. This is the default behavior, but is
+  provided as an explicit option to allow users to override any
+  alternative default specified in the environment. When mapping to a
+  specific resource type, procs assigned to a given instance of that
+  resource on a node will be ranked on a per-resource basis on that
+  node before moving to the next node.
+
+* "NODE" assigns ranks round-robin on a per-node basis
+
+* "FILL" assigns ranks to procs mapped to a particular resource type
+  on each node, filling all ranks on that resource before moving to
+  the next resource on that node. For example, procs mapped by
+  "L1cache" would have all procs on the first "L1cache" ranked
+  sequentially before moving to the second "L1cache" on the node. Once
+  all procs on the node have been ranked, ranking would continue on
+  the next node.
+
+* "SPAN" assigns ranks round-robin to procs mapped to a particular
+  resource type, treating the collection of resource instances
+  spanning the entire allocation as a single "super node" before
+  looping around for the next pass. Thus, ranking would begin with the
+  first proc on the first "L1cache" on the first node, then the next
+  rank would be assigned to the first proc on the second "L1cache" on
+  that node, proceeding across until the first proc had been ranked on
+  all "L1cache" used by the job before circling around to rank the
+  second proc on each object.
+
+The "rank-by" command line option has no qualifiers.
+
+Note:
+
+  Directives are case-insensitive.  "SPAN" is the same as "span".
+
+A more detailed description of the mapping, ranking, and binding
+procedure can be obtained via the "--help placement" option.
+
+[bind-to]
+
+By default, processes are bound to individual CPUs (either COREs or
+HWTHREADs, as defined by default or by user specification for the
+job). On nodes that are OVERSUBSCRIBEd (i.e., where the number of
+procs exceeds the number of assigned slots), the default is to not
+bind the processes.
+
+Note:
+
+  Processes from prior jobs that are already executing on a node are
+  not "unbound" when a new job mapping results in the node becoming
+  oversubscribed.
+
+Binding is performed to the first available specified object type
+within the object where the process was mapped. In other words,
+binding can only be done to the mapped object or to a resource located
+beneath that object.
+
+An object is considered completely consumed when the number of
+processes bound to it equals the number of CPUs within it. Unbound
+processes are not considered in this computation. Additional processes
+cannot be mapped to consumed objects unless the "OVERLOAD" qualifier
+is provided via the "--bind-to" command line option.
+
+Note that directives and qualifiers are case-insensitive and can be
+shortened to the minimum number of characters to uniquely identify
+them. Thus, "L1CACHE" can be given as "l1cache" or simply as "L1".
+
+Supported binding directives include:
+
+* "NONE" does not bind the processes
+
+* "HWTHREAD" binds each process to a single hardware thread/ This
+  requires that hwthreads be treated as independent CPUs (i.e., that
+  either the "HWTCPUS" qualifier be provided to the "map-by" option or
+  that "hwthreads" be designated as CPUs by default).
+
+* "CORE" binds each process to a single core. This can be done whether
+  "hwthreads" or "cores" are being treated as independent CPUs
+  provided that mapping is performed at the core or higher level.
+
+* "L1CACHE" binds each process to all the CPUs in an "L1" cache.
+
+* "L2CACHE" binds each process to all the CPUs in an "L2" cache
+
+* "L3CACHE" binds each process to all the CPUs in an "L3" cache
+
+* "NUMA" binds each process to all the CPUs in a "NUMA" region
+
+* "PACKAGE" binds each process to all the CPUs in a "PACKAGE"
+
+Any directive can include qualifiers by adding a colon (:) and any
+combination of one or more of the following to the "--bind-to" option:
+
+* "OVERLOAD" indicates that objects can have more processes bound to
+  them than CPUs within them
+
+* "IF-SUPPORTED" indicates that the job should continue to be launched
+  and executed even if binding cannot be performed as requested.
+
+Note:
+
+  Directives and qualifiers are case-insensitive. "OVERLOAD" is the
+  same as "overload".
+
+[runtime-options]
+
+The "--runtime-options" command line directive must be accompanied by
+a comma-delimited list of case-insensitive options that control the
+runtime behavior of the job. The full directive need not be provided —
+only enough characters are required to uniquely identify the
+directive.
+
+Runtime options are typically "true" or "false", though this is not a
+requirement on developers. Since the value of each option may need to
+be set (e.g., to override a default set by MCA parameter), the syntax
+of the command line directive includes the use of an "=" character to
+allow inclusion of a value for the option. For example, one can set
+the "ABORT-NONZERO-STATUS" option to "true" by specifying it as
+"ABORT-NONZERO-STATUS=1". Note that boolean options can be set to
+"true" using a non-zero integer or a case-insensitive string of the
+word "true".  For the latter representation, the user need only
+provide at least the "T" character. The same policy applies to setting
+a boolean option to "false".
+
+Note that a boolean option will default to "true" if provided without
+a value. Thus, "--runtime-options abort-nonzero" is sufficient to set
+the "ABORT-NONZERO-STATUS" option to "true".
+
+Supported values include:
+
+* "ERROR-NONZERO-STATUS[=(bool)]": if set to false, this directs the
+  runtime to treat a process that exits with non-zero status as a
+  normal termination.  If set to true, the runtime will consider such
+  an occurrence as an error termination and take appropriate action —
+  i.e., the job will be terminated unless a runtime option directs
+  otherwise. This option defaults to a true value if the option is
+  given without a value.
+
+* "DONOTLAUNCH": directs the runtime to map but not launch the
+  specified job. This is provided to help explore possible process
+  placement patterns before actually starting execution. No value need
+  be passed as this is not an option that can be set by default in
+  PRRTE.
+
+* "SHOW-PROGRESS[=(bool)]": requests that the runtime provide progress
+  reports on its startup procedure — i.e., the launch of its daemons
+  in support of a job. This is typically used to debug DVM startup on
+  large systems.  This option defaults to a true value if the option
+  is given without a value.
+
+* "NOTIFYERRORS[=(bool)]": if set to true, requests that the runtime
+  provide a PMIx event whenever a job encounters an error — e.g., a
+  process fails.  The event is to be delivered to each remaining
+  process in the job. This option defaults to a true value if the
+  option is given without a value.  See "--help notifications" for
+  more detail as to the PMIx event codes available for capturing
+  failure events.
+
+* "RECOVERABLE[=(bool)]": if set to true, this indicates that the
+  application wishes to consider the job as recoverable — i.e., the
+  application is assuming responsibility for recovering from any
+  process failure. This could include application-driven spawn of a
+  substitute process or internal compensation for the missing process.
+  This option defaults to a true value if the option is given without
+  a value.
+
+* "AUTORESTART[=(bool)]": if set to true, this requests that the
+  runtime automatically restart failed processes up to "max restarts"
+  number of times. This option defaults to a true value if the option
+  is given without a value.
+
+* "CONTINUOUS[=(bool)]": if set to true, this informs the runtime that
+  the processes in this job are to run until explicitly terminated.
+  Processes that fail are to be automatically restarted up to "max
+  restarts" number of times. Notification of process failure is to be
+  delivered to all processes in the application. This is the
+  equivalent of specifying "RECOVERABLE", "NOTIFYERRORS", and
+  "AUTORESTART" options except that the runtime, not the application,
+  assumes responsibility for process recovery. This option defaults to
+  a true value if the option is given without a value.
+
+* "MAX-RESTARTS=<int>": indicates the maximum number of times a given
+  process is to be restarted. This can be set at the application or
+  job level (which will then apply to all applications in that job).
+
+* "EXEC-AGENT=<path>" indicates the executable that shall be used to
+  start an application process. The resulting command for starting an
+  application process will be "<path> app <app-argv>". The path may
+  contain its own command line arguments.
+
+* "DEFAULT-EXEC-AGENT": directs the runtime to use the system default
+  exec agent to start an application process. No value need be passed
+  as this is not an option that can be set by default in PRRTE.
+
+* "OUTPUT-PROCTABLE[(=channel)]": directs the runtime to report the
+  convential debugger process table (includes PID and host location of
+  each process in the application). Output is directed to stdout if
+  the channel is "-", stderr if "+", or into the specified file
+  otherwise. If no channel is specified, output will be directed to
+  stdout.
+
+* "STOP-ON-EXEC": directs the runtime to stop the application
+  process(es) immediately upon exec'ing them. The directive will apply
+  to all processes in the job.
+
+* "STOP-IN-INIT": indicates that the runtime should direct the
+  application process(es) to stop in "PMIx_Init()". The directive will
+  apply to all processes in the job.
+
+* "STOP-IN-APP": indicates that the runtime should direct application
+  processes to stop at some application-defined place and notify they
+  are ready-to-debug. The directive will apply to all processes in the
+  job.
+
+* "TIMEOUT=<string>": directs the runtime to terminate the job after
+  it has executed for the specified time. Time is specified in colon-
+  delimited format — e.g., "01:20:13:05" to indicate 1 day, 20 hours,
+  13 minutes and 5 seconds. Time specified without colons will be
+  assumed to have been given in seconds.
+
+* "SPAWN-TIMEOUT=<string>": directs the runtime to terminate the job
+  if job launch is not completed within the specified time. Time is
+  specified in colon-delimited format — e.g., "01:20:13:05" to
+  indicate 1 day, 20 hours, 13 minutes and 5 seconds.  Time specified
+  without colons will be assumed to have been given in seconds.
+
+* "REPORT-STATE-ON-TIMEOUT[(=bool)]": directs the runtime to provide a
+  detailed report on job and application process state upon job
+  timeout. This option defaults to a true value if the option is given
+  without a value.
+
+* "GET-STACK-TRACES[(=bool)]": requests that the runtime provide stack
+  traces on all application processes still executing upon timeout.
+  This option defaults to a true value if the option is given without
+  a value.
+
+* "REPORT-CHILD-JOBS-SEPARATELY[(=bool)]": directs the runtime to
+  report the exit status of any child jobs spawned by the primary job
+  separately. If false, then the final exit status reported will be
+  zero if the primary job and all spawned jobs exit normally, or the
+  first non-zero status returned by either primary or child jobs. This
+  option defaults to a true value if the option is given without a
+  value.
+
+* "AGGREGATE-HELP-MESSAGES[(=bool)]": directs the runtime to aggregate
+  help messages, reporting each unique help message once accompanied
+  by the number of processes that reported it. This option defaults to
+  a true value if the option is given without a value.
+
+* "FWD-ENVIRONMENT[(=bool)]": directs the runtime to forward the
+  entire local environment in support of the application. This option
+  defaults to a true value if the option is given without a value.
+
+The "--runtime-options" command line option has no qualifiers.
+
+Note:
+
+  Directives are case-insensitive.  "FWD-ENVIRONMENT" is the same as
+  "fwd-environment".
+
+[rankfile]
+
+Name of file to specify explicit task mapping [display]
+
+The "display" command line directive must be accompanied by a comma-
+delimited list of case-insensitive options indicating what information
+about the job and/or allocation is to be displayed. The full directive
+need not be provided — only enough characters are required to uniquely
+identify the directive. For example, "ALL" is sufficient to represent
+the "ALLOCATION" directive — while "MAP" can not be used to represent
+"MAP-DEVEL" (though "MAP-D" would suffice).
+
+Supported values include:
+
+* "ALLOCATION" displays the detected hosts and slot assignments for
+  this job
+
+* "BINDINGS" displays the resulting bindings applied to processes in
+  this job
+
+* "MAP" displays the resulting locations assigned to processes in this
+  job
+
+* "MAP-DEVEL" displays a more detailed report on the locations
+  assigned to processes in this job that includes local and node
+  ranks, assigned bindings, and other data
+
+* "TOPO=LIST" displays the topology of each node in the semicolon-
+  delimited list that is allocated to the job
+
+* "CPUS[=LIST]" displays the available CPUs on the provided semicolon-
+  delimited list of nodes (defaults to all nodes)
+
+The display command line directive can include qualifiers by adding a
+colon (":") and any combination of one or more of the following
+(delimited by colons):
+
+* "PARSEABLE" directs that the output be provided in a format that is
+  easily parsed by machines. Note that "PARSABLE" is also accepted as
+  a typical spelling for the qualifier.
+
+Provided qualifiers will apply to *all* of the display directives.
+
+[do-not-launch]
+
+Perform all necessary operations to prepare to launch the application,
+but do not actually launch it (usually used to test mapping patterns)
+
+[mca]
+
+Syntax: "--mca <key> <value>", where "key" is the parameter name and
+"value" is the parameter value.
+
+Pass generic MCA parameters — i.e., parameters whose project
+affiliation must be determined by PRRTE based on matching the name of
+the parameter with defined values from various projects that PRRTE
+knows about.
+
+Deprecated: This translation can be incomplete (e.g., if a project
+adds or changes parameters) — thus, it is strongly recommended that
+users use project-specific parameters such as "--prtemca" or "--
+pmixmca".
+
+[gmca]
+
+Syntax: "--gmca <key> <value>", where "key" is the parameter name and
+"value" is the parameter value. The "g" prefix indicates that this
+parameter is "global", and to be applied to *all* application contexts
+— not just the one in which the directive appears.
+
+Pass generic MCA parameters — i.e., parameters whose project
+affiliation must be determined by PRRTE based on matching the name of
+the parameter with defined values from various projects that PRRTE
+knows about.
+
+Deprecated: This translation can be incomplete (e.g., if known project
+adds or changes parameters) — thus, it is strongly recommended that
+users use project-specific parameters such as "--gprtemca" or "--
+gpmixmca".
+
+[xml]
+
+Provide all output in XML format.
+
+Deprecated: This option is deprecated.  Please use "--output".
+
+[bind-to-core]
+
+Bind each process to its own core.
+
+Deprecated: This option is deprecated.  Please use "--bind-to core".
+
+[tag-output]
+
+Tag all output with "[job,rank]".
+
+Deprecated: This option is deprecated.  Please use "--output".
+
+[timestamp-output]
+
+Timestamp all application process output.
+
+Deprecated: This option is deprecated.  Please use "--output
+timestamp".
+
+[output-directory]
+
+Redirect output from application processes into
+"filename/job/rank/std[out,err,diag]". A relative path value will be
+converted to an absolute path. The directory name may include a colon
+followed by a comma-delimited list of optional case-insensitive
+directives. Supported directives currently include "NOJOBID" (do not
+include a job-id directory level) and "NOCOPY" (do not copy the output
+to the stdout/err streams).
+
+Deprecated: This option is deprecated.  Please use "--output
+dir=<path>".
+
+[output-filename]
+
+Redirect output from application processes into "filename.rank". A
+relative path value will be converted to an absolute path. The
+directory name may include a colon followed by a comma-delimited list
+of optional case-insensitive directives. Supported directives
+currently include "NOCOPY" (do not copy the output to the stdout/err
+streams).
+
+Deprecated: This option is deprecated.  Please use "--output
+file=<path>"
+
+[merge-stderr-to-stdout]
+
+Merge stderr to stdout for each process.
+
+Deprecated: This option is deprecated.  Please use "--output merge"
+
+[display-devel-map]
+
+Display a detailed process map (mostly intended for developers) just
+before launch.
+
+Deprecated: This option is deprecated.  Please use "--display map-
+devel".
+
+[display-topo]
+
+Display the topology as part of the process map (mostly intended for
+developers) just before launch.
+
+Deprecated: This option is deprecated.  Please use "--display topo".
+
+[report-bindings]
+
+Display process bindings to stderr.
+
+Deprecated: This option is deprecated.  Please use "--display
+bindings".
+
+[display-devel-allocation]
+
+Display a detailed list (mostly intended for developers) of the
+allocation being used by this job.
+
+Deprecated: This option is deprecated.  Please use "--display alloc-
+devel".
+
+[display-map]
+
+Display the process map just before launch.
+
+Deprecated: This option is deprecated.  Please use "--display map".
+
+[display-allocation]
+
+Display the allocation being used by this job.
+
+Deprecated: This option is deprecated.  Please use "--display alloc".
+
+[placement]
+
+
+Overview
+--------
+
+PRRTE provides a set of three controls for assigning process locations
+and ranks:
+
+1. Mapping: Assigns a default location to each process
+
+2. Ranking: Assigns a unique integer rank value to each process
+
+3. Binding: Constrains each process to run on specific processors
+
+This section provides an overview of these three controls.  Unless
+otherwise this behavior is shared by "prun(1)" (working with a PRRTE
+DVM), and "prterun(1)". More detail about PRRTE process placement is
+available in the following sections (using "--help
+placement-<section>"):
+
+* "examples": some examples of the interactions between mapping,
+  ranking, and binding options.
+
+* "fundamentals": provides deeper insight into PRRTE's mapping,
+  ranking, and binding options.
+
+* "limits": explains the difference between *overloading* and
+  *oversubscribing* resources.
+
+* "diagnostics": describes options for obtaining various diagnostic
+  reports that aid the user in verifying and tuning the placement for
+  a specific job.
+
+* "rankfiles": explains the format and use of the rankfile mapper for
+  specifying arbitrary process placements.
+
+* "deprecated": a list of deprecated options and their new
+  equivalents.
+
+* "all": outputs all the placement help except for the "deprecated"
+  section.
+
+
+Quick Summary
+=============
+
+The two binaries that most influence process layout are "prte(1)" and
+"prun(1)".  The "prte(1)" process discovers the allocation,
+establishes a Distributed Virtual Machine by starting a "prted(1)"
+daemon on each node of the allocation, and defines the efault
+mapping/ranking/binding policies for all jobs.  The "prun(1)" process
+defines the specific mapping/ranking/binding for a specific job. Most
+of the command line controls are targeted to "prun(1)" since each job
+has its own unique requirements.
+
+"prterun(1)" is just a wrapper around "prte(1)" for a single job PRRTE
+DVM. It is doing the job of both "prte(1)" and "prun(1)", and, as
+such, accepts the sum all of their command line arguments. Any example
+that uses "prun(1)" can substitute the use of "prterun(1)" except
+where otherwise noted.
+
+The "prte(1)" process attempts to automatically discover the nodes in
+the allocation by querying supported resource managers. If a supported
+resource manager is not present then "prte(1)" relies on a hostfile
+provided by the user.  In the absence of such a hostfile it will run
+all processes on the localhost.
+
+If running under a supported resource manager, the "prte(1)" process
+will start the daemon processes ("prted(1)") on the remote nodes using
+the corresponding resource manager process starter. If no such starter
+is available then "ssh" (or "rsh") is used.
+
+Minus user direction, PRRTE will automatically map processes in a
+round-robin fashion by CPU, binding each process to its own CPU. The
+type of CPU used (core vs hwthread) is determined by (in priority
+order):
+
+* user directive on the command line via the HWTCPUS qualifier to the
+  "--map-by" directive
+
+* setting the "rmaps_default_mapping_policy" MCA parameter to include
+  the "HWTCPUS" qualifier. This parameter sets the default value for a
+  PRRTE DVM — qualifiers are carried across to DVM jobs started via
+  "prun" unless overridden by the user's command line
+
+* defaulting to "CORE" in topologies where core CPUs are defined, and
+  to "hwthreads" otherwise.
+
+By default, the ranks are assigned in accordance with the mapping
+directive — e.g., jobs that are mapped by-node will have the process
+ranks assigned round-robin on a per-node basis.
+
+PRRTE automatically binds processes unless directed not to do so by
+the user. Minus direction, PRRTE will bind individual processes to
+their own CPU within the object to which they were mapped. Should a
+node become oversubscribed during the mapping process, and if
+oversubscription is allowed, all subsequent processes assigned to that
+node will *not* be bound.
+
+
+Definition of 'slot'
+--------------------
+
+The term "slot" is used extensively in the rest of this documentation.
+A slot is an allocation unit for a process.  The number of slots on a
+node indicate how many processes can potentially execute on that node.
+By default, PRRTE will allow one process per slot.
+
+If PRRTE is not explicitly told how many slots are available on a node
+(e.g., if a hostfile is used and the number of slots is not specified
+for a given node), it will determine a maximum number of slots for
+that node in one of two ways:
+
+1. Default behavior: By default, PRRTE will attempt to discover the
+   number of processor cores on the node, and use that as the number
+   of slots available.
+
+2. When "--use-hwthread-cpus" is used: If "--use-hwthread-cpus" is
+   specified on the command line, then PRRTE will attempt to discover
+   the number of hardware threads on the node, and use that as the
+   number of slots available.
+
+This default behavior also occurs when specifying the "--host" option
+with a single host.  Thus, the command:
+
+   shell$ prun --host node1 ./a.out
+
+launches a number of processes equal to the number of cores on node
+"node1", whereas:
+
+   shell$ prun --host node1 --use-hwthread-cpus ./a.out
+
+launches a number of processes equal to the number of hardware threads
+on "node1".
+
+When PRRTE applications are invoked in an environment managed by a
+resource manager (e.g., inside of a Slurm job), and PRRTE was built
+with appropriate support for that resource manager, then PRRTE will be
+informed of the number of slots for each node by the resource manager.
+For example:
+
+   shell$ prun ./a.out
+
+launches one process for every slot (on every node) as dictated by the
+resource manager job specification.
+
+Also note that the one-process-per-slot restriction can be overridden
+in unmanaged environments (e.g., when using hostfiles without a
+resource manager) if oversubscription is enabled (by default, it is
+disabled).  Most parallel applications and HPC environments do not
+oversubscribe; for simplicity, the majority of this documentation
+assumes that oversubscription is not enabled.
+
+
+Slots are not hardware resources
+================================
+
+Slots are frequently incorrectly conflated with hardware resources. It
+is important to realize that slots are an entirely different metric
+than the number (and type) of hardware resources available.
+
+Here are some examples that may help illustrate the difference:
+
+1. More processor cores than slots: Consider a resource manager job
+   environment that tells PRRTE that there is a single node with 20
+   processor cores and 2 slots available.  By default, PRRTE will only
+   let you run up to 2 processes.
+
+   Meaning: you run out of slots long before you run out of processor
+   cores.
+
+2. More slots than processor cores: Consider a hostfile with a single
+   node listed with a "slots=50" qualification.  The node has 20
+   processor cores.  By default, PRRTE will let you run up to 50
+   processes.
+
+   Meaning: you can run many more processes than you have processor
+   cores.
+
+
+Definition of "processor element"
+---------------------------------
+
+By default, PRRTE defines that a "processing element" is a processor
+core.  However, if "--use-hwthread-cpus" is specified on the command
+line, then a "processing element" is a hardware thread.
+
+[placement-examples]
+
+
+Examples
+--------
+
+Listed here are the subset of command line options that will be used
+in the process mapping/ranking/binding examples below.
+
+
+Specifying Host Nodes
+=====================
+
+Use one of the following options to specify which hosts (nodes) within
+the PRRTE DVM environment to run on.
+
+   --host <host1,host2,...,hostN>
+
+   # or
+
+   --host <host1:X,host2:Y,...,hostN:Z>
+
+* List of hosts on which to invoke processes. After each hostname a
+  colon (":") followed by a positive integer can be used to specify
+  the number of slots on that host (":X", ":Y", and ":Z"). The default
+  is "1".
+
+   --hostfile <hostfile>
+
+* Provide a hostfile to use.
+
+
+Process Mapping / Ranking / Binding Options
+===========================================
+
+* "-c #", "-n #", "--n #", "--np <#>": Run this many copies of the
+  program on the given nodes. This option indicates that the specified
+  file is an executable program and not an application context. If no
+  value is provided for the number of copies to execute (i.e., neither
+  the "-np" nor its synonyms are provided on the command line), "prun"
+  will automatically execute a copy of the program on each process
+  slot (see below for description of a "process slot"). This feature,
+  however, can only be used in the SPMD model and will return an error
+  (without beginning execution of the application) otherwise.
+
+  Note:
+
+    These options specify the number of processes to launch. None of
+    the options imply a particular binding policy — e.g., requesting
+    "N" processes for each package does not imply that the processes
+    will be bound to the package.
+
+* "--map-by <object>": Map to the specified object. Supported objects
+  include:
+
+  * "slot"
+
+  * "hwthread"
+
+  * "core" (default)
+
+  * "l1cache"
+
+  * "l2cache"
+
+  * "l3cache"
+
+  * "numa"
+
+  * "package"
+
+  * "node"
+
+  * "seq"
+
+  * "ppr"
+
+  * "rankfile"
+
+  * "pe-list"
+
+  Any object can include qualifiers by adding a colon (":") and any
+  colon-delimited combination of one or more of the following to the "
+  --map-by" options:
+
+  * "PE=n" bind "n" processing elements to each process (can not be
+    used in combination with rankfile or pe-list directives)
+
+    Error:
+
+      JMS Several of the options below refer to "pe-list". Is this
+      option supposed to be "PE-LIST=n", not "PE=n"?
+
+  * "SPAN" load balance the processes across the allocation (cannot be
+    used in combination with "slot", "node", "seq", "ppr", "rankfile",
+    or "pe-list" directives)
+
+  * "OVERSUBSCRIBE" allow more processes on a node than processing
+    elements
+
+  * "NOOVERSUBSCRIBE" means "!OVERSUBSCRIBE"
+
+  * "NOLOCAL" do not launch processes on the same node as "prun"
+
+  * "HWTCPUS" use hardware threads as CPU slots
+
+  * "CORECPUS" use cores as CPU slots (default)
+
+  * "INHERIT" indicates that a child job (i.e., one spawned from
+    within an application) shall inherit the placement policies of the
+    parent job that spawned it.
+
+  * "NOINHERIT" means "!INHERIT"
+
+  * "FILE=<path>" (path to file containing sequential or rankfile
+    entries).
+
+  * "ORDERED" only applies to the PE-LIST option to indicate that
+    procs are to be bound to each of the specified CPUs in the order
+    in which they are assigned (i.e., the first proc on a node shall
+    be bound to the first CPU in the list, the second proc shall be
+    bound to the second CPU, etc.)
+
+  "ppr" policy example: "--map-by ppr:N:<object>" will launch "N"
+  times the number of objects of the specified type on each node.
+
+  Note:
+
+    Directives and qualifiers are case-insensitive and can be
+    shortened to the minimum number of characters to uniquely identify
+    them. Thus, "L1CACHE" can be given as "l1cache" or simply as "L1".
+
+* "--rank-by <object>": This assigns ranks in round-robin fashion
+  according to the specified object. The default follows the mapping
+  pattern. Supported rank-by objects include:
+
+  * "slot"
+
+  * "node"
+
+  * "fill"
+
+  * "span"
+
+  There are no qualifiers for the "--rank-by" directive.
+
+* "--bind-to <object>": This binds processes to the specified object.
+  See defaults in Quick Summary.  Supported bind-to objects include:
+
+  * "none"
+
+  * "hwthread"
+
+  * "core"
+
+  * "l1cache"
+
+  * "l2cache"
+
+  * "l3cache"
+
+  * "numa"
+
+  * "package"
+
+  Any object can include qualifiers by adding a colon (":") and any
+  colon-delimited combination of one or more of the following to the "
+  --bind-to" options:
+
+  * "overload-allowed" allows for binding more than one process in
+    relation to a CPU
+
+  * "if-supported" if binding to that object is supported on this
+    system.
+
+
+Specifying Host Nodes
+=====================
+
+Host nodes can be identified on the command line with the "--host"
+option or in a hostfile.
+
+For example, assuming no other resource manager or scheduler is
+involved:
+
+   prun --host aa,aa,bb ./a.out
+
+This launches two processes on node "aa" and one on "bb".
+
+   prun --host aa ./a.out
+
+This launches one process on node "aa".
+
+   prun --host aa:5 ./a.out
+
+This launches five processes on node "aa".
+
+Or, consider the hostfile:
+
+   $ cat myhostfile
+   aa slots=2
+   bb slots=2
+   cc slots=2
+
+Here, we list both the host names ("aa", "bb", and "cc") but also how
+many "slots" there are for each. Slots indicate how many processes can
+potentially execute on a node. For best performance, the number of
+slots may be chosen to be the number of cores on the node or the
+number of processor sockets.
+
+If the hostfile does not provide slots information, the PRRTE DVM will
+attempt to discover the number of cores (or hwthreads, if the
+":HWTCPUS" qualifier to the "--map-by" option is set) and set the
+number of slots to that value.
+
+Examples using the hostfile above with and without the "--host"
+option:
+
+   prun --hostfile myhostfile ./a.out
+
+This will launch two processes on each of the three nodes.
+
+   prun --hostfile myhostfile --host aa ./a.out
+
+This will launch two processes, both on node "aa".
+
+   prun --hostfile myhostfile --host dd ./a.out
+
+This will find no hosts to run on and abort with an error. That is,
+the specified host "dd" is not in the specified hostfile.
+
+When running under resource managers (e.g., SLURM, Torque, etc.), PRTE
+will obtain both the hostnames and the number of slots directly from
+the resource manger. The behavior of "--host" in that environment will
+behave the same as if a hostfile was provided (since it is provided by
+the resource manager).
+
+
+Specifying Number of Processes
+==============================
+
+As we have just seen, the number of processes to run can be set using
+the hostfile. Other mechanisms exist.
+
+The number of processes launched can be specified as a multiple of the
+number of nodes or processor sockets available. Consider the hostfile
+below for the examples that follow.
+
+   $ cat myhostfile
+   aa
+   bb
+
+For example:
+
+   prun --hostfile myhostfile --map-by ppr:2:package ./a.out
+
+This launches processes 0-3 on node "aa" and process 4-7 on node "bb",
+where "aa" and "bb" are both dual-package nodes. The "--map-by
+ppr:2:package" option also turns on the "--bind-to package" option,
+which is discussed in a later section.
+
+   prun --hostfile myhostfile --map-by ppr:2:node ./a.out
+
+This launches processes 0-1 on node "aa" and processes 2-3 on node
+"bb".
+
+   prun --hostfile myhostfile --map-by ppr:1:node ./a.out
+
+This launches one process per host node.
+
+Another alternative is to specify the number of processes with the "--
+np" option. Consider now the hostfile:
+
+   $ cat myhostfile
+   aa slots=4
+   bb slots=4
+   cc slots=4
+
+With this hostfile:
+
+   prun --hostfile myhostfile --np 6 ./a.out
+
+This will launch processes 0-3 on node "aa" and processes 4-5 on node
+"bb".  The remaining slots in the hostfile will not be used since the
+"-np" option indicated that only 6 processes should be launched.
+
+
+Mapping Processes to Nodes Using Policies
+=========================================
+
+The examples above illustrate the default mapping of process processes
+to nodes. This mapping can also be controlled with various "prun" /
+"prterun" options that describe mapping policies.
+
+   $ cat myhostfile
+   aa slots=4
+   bb slots=4
+   cc slots=4
+
+Consider the hostfile above, with "--np 6":
+
++---------------------------+---------------------------+---------------------------+---------------------------+
+| Command                   | Ranks on "aa"             | Ranks on "bb"             | Ranks on "cc"             |
+|===========================|===========================|===========================|===========================|
+| "prun"                    | 0 1 2 3                   | 4 5                       |                           |
++---------------------------+---------------------------+---------------------------+---------------------------+
+| "prun --map-by node"      | 0 3                       | 1 4                       | 2 5                       |
++---------------------------+---------------------------+---------------------------+---------------------------+
+| "prun --map-by            |                           | 0 2 4                     | 1 3 5                     |
+| node:NOLOCAL"             |                           |                           |                           |
++---------------------------+---------------------------+---------------------------+---------------------------+
+
+The "--map-by node" option will load balance the processes across the
+available nodes, numbering each process by node in a round-robin
+fashion.
+
+The ":NOLOCAL" qualifier to "--map-by" prevents any processes from
+being mapped onto the local host (in this case node "aa"). While
+"prun" typically consumes few system resources, the ":NOLOCAL"
+qualifier can be helpful for launching very large jobs where "prun"
+may actually need to use noticeable amounts of memory and/or
+processing time.
+
+Just as "--np" can specify fewer processes than there are slots, it
+can also oversubscribe the slots. For example, with the same hostfile:
+
+   prun --hostfile myhostfile --np 14 ./a.out
+
+This will produce an error since the default ":NOOVERSUBSCRIBE"
+qualifier to "--map-by" prevents oversubscription.
+
+To oversubscribe the nodes you can use the ":OVERSUBSCRIBE" qualifier
+to "--map-by":
+
+   prun --hostfile myhostfile --np 14 --map-by :OVERSUBSCRIBE ./a.out
+
+This will launch processes 0-5 on node "aa", 6-9 on "bb", and 10-13 on
+"cc".
+
+Limits to oversubscription can also be specified in the hostfile
+itself with the "max_slots" field:
+
+   $ cat myhostfile
+   aa slots=4 max_slots=4
+   bb         max_slots=8
+   cc slots=4
+
+The "max_slots" field specifies such a limit. When it does, the
+"slots" value defaults to the limit. Now:
+
+   prun --hostfile myhostfile --np 14 --map-by :OVERSUBSCRIBE ./a.out
+
+This causes the first 12 processes to be launched as before, but the
+remaining two processes will be forced onto node cc. The other two
+nodes are protected by the hostfile against oversubscription by this
+job.
+
+Using the ":NOOVERSUBSCRIBE" qualifier to "--map-by" option can be
+helpful since the PRTE DVM currently does not get "max_slots" values
+from the resource manager.
+
+Of course, "--np" can also be used with the "--host" option. For
+example,
+
+   prun --host aa,bb --np 8 ./a.out
+
+This will produce an error since the default ":NOOVERSUBSCRIBE"
+qualifier to "--map-by" prevents oversubscription.
+
+   prun --host aa,bb --np 8 --map-by :OVERSUBSCRIBE ./a.out
+
+This launches 8 processes. Since only two hosts are specified, after
+the first two processes are mapped, one to "aa" and one to "bb", the
+remaining processes oversubscribe the specified hosts evenly.
+
+   prun --host aa:2,bb:6 --np 8 ./a.out
+
+This launches 8 processes. Processes 0-1 on node "aa" since it has 2
+slots and processes 2-7 on node "bb" since it has 6 slots.
+
+And here is a MIMD example:
+
+   prun --host aa --np 1 hostname : --host bb,cc --np 2 uptime
+
+This will launch process 0 running "hostname" on node "aa" and
+processes 1 and 2 each running "uptime" on nodes "bb" and "cc",
+respectively.
+
+[placement-rankfiles]
+
+
+Rankfiles
+---------
+
+Another way to specify arbitrary mappings is with a rankfile, which
+gives you detailed control over process binding as well.
+
+Rankfiles are text files that specify detailed information about how
+individual processes should be mapped to nodes, and to which
+processor(s) they should be bound. Each line of a rankfile specifies
+the location of one process. The general form of each line in the
+rankfile is:
+
+   rank <N>=<hostname> slot=<slot list>
+
+For example:
+
+   $ cat myrankfile
+   rank 0=aa slot=10-12
+   rank 1=bb slot=0,1,4
+   rank 2=cc slot=1-2
+   $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
+
+Means that:
+
+* Rank 0 runs on node aa, bound to logical cores 10-12.
+
+* Rank 1 runs on node bb, bound to logical cores 0, 1, and 4.
+
+* Rank 2 runs on node cc, bound to logical cores 1 and 2.
+
+Similarly:
+
+   $ cat myrankfile
+   rank 0=aa slot=1:0-2
+   rank 1=bb slot=0:0,1,4
+   rank 2=cc slot=1-2
+   $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
+
+Means that:
+
+* Rank 0 runs on node aa, bound to logical package 1, cores 10-12 (the
+  0th through 2nd cores on that package).
+
+* Rank 1 runs on node bb, bound to logical package 0, cores 0, 1, and
+  4.
+
+* Rank 2 runs on node cc, bound to logical cores 1 and 2.
+
+The hostnames listed above are "absolute," meaning that actual
+resolvable hostnames are specified. However, hostnames can also be
+specified as "relative," meaning that they are specified in relation
+to an externally-specified list of hostnames (e.g., by "prun"'s "--
+host" argument, a hostfile, or a job scheduler).
+
+The "relative" specification is of the form ""+n<X>"", where "X" is an
+integer specifying the Xth hostname in the set of all available
+hostnames, indexed from 0. For example:
+
+   $ cat myrankfile
+   rank 0=+n0 slot=10-12
+   rank 1=+n1 slot=0,1,4
+   rank 2=+n2 slot=1-2
+   $ prun --host aa,bb,cc,dd --map-by rankfile:FILE=myrankfile ./a.out
+
+All package/core slot locations are be specified as *logical* indexes.
+You can use tools such as HWLOC's "lstopo" to find the logical indexes
+of packages and cores.
+
+[placement-deprecated]
+
+
+Deprecated options
+------------------
+
+These deprecated options will be removed in a future release.
+
++----------------------+----------------------+--------------------------------+
+| Deprecated Option    | Replacement          | Description                    |
+|======================|======================|================================|
+| "--bind-to-core"     | "--bind-to core"     | Bind processes to cores        |
++----------------------+----------------------+--------------------------------+
+| "--bind-to-socket"   | "--bind-to package"  | Bind processes to processor    |
+|                      |                      | sockets                        |
++----------------------+----------------------+--------------------------------+
+| "--bycore"           | "--map-by core"      | Map processes by core          |
++----------------------+----------------------+--------------------------------+
+| "--bynode"           | "--map-by node"      | Launch processes one per node, |
+|                      |                      | cycling by node in a round-    |
+|                      |                      | robin fashion. This spreads    |
+|                      |                      | processes evenly among nodes   |
+|                      |                      | and assigns ranks in a round-  |
+|                      |                      | robin, "by node" manner.       |
++----------------------+----------------------+--------------------------------+
+| "--byslot"           | "--map-by slot"      | Map and rank processes round-  |
+|                      |                      | robin by slot                  |
++----------------------+----------------------+--------------------------------+
+| "--cpus-per-proc     | *--map-by <obj>:PE=  | Bind each process to the       |
+| <#perproc>"          | <#perproc>`*         | specified number of CPUs       |
++----------------------+----------------------+--------------------------------+
+| "--cpus-per-rank     | "--map-by            | Alias for "--cpus-per-proc"    |
+| <#perrank>"          | <obj>:PE=<#perrank>" |                                |
++----------------------+----------------------+--------------------------------+
+| "--display-          | "--display ALLOC"    | Display the detected resource  |
+| allocation"          |                      | allocation                     |
++----------------------+----------------------+--------------------------------+
+| "-display-devel-map" | "--display MAP-      | Display a detailed process map |
+|                      | DEVEL"               | (mostly intended for           |
+|                      |                      | developers) just before        |
+|                      |                      | launch.                        |
++----------------------+----------------------+--------------------------------+
+| "--display-map"      | "--display MAP"      | Display a table showing the    |
+|                      |                      | mapped location of each        |
+|                      |                      | process prior to launch.       |
++----------------------+----------------------+--------------------------------+
+| "--display-topo"     | "--display TOPO"     | Display the topology as part   |
+|                      |                      | of the process map (mostly     |
+|                      |                      | intended for developers) just  |
+|                      |                      | before launch.                 |
++----------------------+----------------------+--------------------------------+
+| "--do-not-launch"    | "--map-by            | Perform all necessary          |
+|                      | :DONOTLAUNCH"        | operations to prepare to       |
+|                      |                      | launch the application, but do |
+|                      |                      | not actually launch it         |
+|                      |                      | (usually used to test mapping  |
+|                      |                      | patterns).                     |
++----------------------+----------------------+--------------------------------+
+| "--do-not-resolve"   | "--map-by            | Do not attempt to resolve      |
+|                      | :DONOTRESOLVE"       | interfaces — usually used to   |
+|                      |                      | determine proposed process     |
+|                      |                      | placement/binding prior to     |
+|                      |                      | obtaining an allocation.       |
++----------------------+----------------------+--------------------------------+
+| "-N <num>"           | "--map-by            | Launch "num" processes per     |
+|                      | prr:<num>:node"      | node on all allocated nodes    |
++----------------------+----------------------+--------------------------------+
+| "--nolocal"          | "--map-by :NOLOCAL"  | Do not run any copies of the   |
+|                      |                      | launched application on the    |
+|                      |                      | same node as "prun" is         |
+|                      |                      | running. This option will      |
+|                      |                      | override listing the           |
+|                      |                      | "localhost" with "--host" or   |
+|                      |                      | any other host-specifying      |
+|                      |                      | mechanism.                     |
++----------------------+----------------------+--------------------------------+
+| "--nooversubscribe"  | "--map-by            | Do not oversubscribe any       |
+|                      | :NOOVERSUBSCRIBE"    | nodes; error (without starting |
+|                      |                      | any processes) if the          |
+|                      |                      | requested number of processes  |
+|                      |                      | would cause oversubscription.  |
+|                      |                      | This option implicitly sets    |
+|                      |                      | "max_slots" equal to the       |
+|                      |                      | "slots" value for each node.   |
+|                      |                      | (Enabled by default).          |
++----------------------+----------------------+--------------------------------+
+| "--npernode          | "--map-by            | On each node, launch this many |
+| <#pernode>"          | ppr:<#pernode>:node" | processes                      |
++----------------------+----------------------+--------------------------------+
+| "--npersocket        | "--map-by ppr:<#per  | On each node, launch this many |
+| <#persocket>"        | package>:package"    | processes times the number of  |
+|                      |                      | processor sockets on the node. |
+|                      |                      | The "--npersocket" option also |
+|                      |                      | turns on the "-- bind-to       |
+|                      |                      | socket" option. The term       |
+|                      |                      | "socket" has been globally     |
+|                      |                      | replaced with "package".       |
++----------------------+----------------------+--------------------------------+
+| "--oversubscribe"    | "--map-by            | Nodes are allowed to be        |
+|                      | :OVERSUBSCRIBE"      | oversubscribed, even on a      |
+|                      |                      | managed system, and            |
+|                      |                      | overloading of processing      |
+|                      |                      | elements.                      |
++----------------------+----------------------+--------------------------------+
+| "--pernode"          | "--map-by            | On each node, launch one       |
+|                      | ppr:1:node"          | process                        |
++----------------------+----------------------+--------------------------------+
+| "--ppr"              | *--map-by            | Comma-separated list of number |
+|                      | ppr:<list>`*         | of processes on a given        |
+|                      |                      | resource type [default:        |
+|                      |                      | "none"].                       |
++----------------------+----------------------+--------------------------------+
+| "--rankfile          | "--map-by rankfile:  | Use a rankfile for             |
+| <FILENAME>"          | FILE=<FILENAME>"     | mapping/ranking/binding        |
++----------------------+----------------------+--------------------------------+
+| "--report-bindings"  | "--display BINDINGS" | Report any bindings for        |
+|                      |                      | launched processes             |
++----------------------+----------------------+--------------------------------+
+| "--tag-output"       | "--output TAG"       | Tag all output with            |
+|                      |                      | "[job,rank]"                   |
++----------------------+----------------------+--------------------------------+
+| "--timestamp-output" | "--output TIMESTAMP" | Timestamp all application      |
+|                      |                      | process output                 |
++----------------------+----------------------+--------------------------------+
+| "--use-hwthread-     | "--map-by :HWTCPUS"  | Use hardware threads as        |
+| cpus"                |                      | independent CPUs               |
++----------------------+----------------------+--------------------------------+
+| "--xml"              | "--output XML"       | Provide all output in XML      |
+|                      |                      | format                         |
++----------------------+----------------------+--------------------------------+
+
+[placement-diagnostics]
+
+
+Diagnostics
+-----------
+
+PRRTE provides various diagnostic reports that aid the user in
+verifying and tuning the mapping/ranking/binding for a specific job.
+
+The ":REPORT" qualifier to the "--bind-to" command line option can be
+used to report process bindings.
+
+As an example, consider a node with:
+
+* 2 processor packages,
+
+* 4 cores per package, and
+
+* 8 hardware threads per core.
+
+In each of the examples below the binding is reported in a human
+readable format.
+
+   $ prun --np 4 --map-by core --bind-to core:REPORT ./a.out
+   [node01:103137] MCW rank 0 bound to package[0][core:0]
+   [node01:103137] MCW rank 1 bound to package[0][core:1]
+   [node01:103137] MCW rank 2 bound to package[0][core:2]
+   [node01:103137] MCW rank 3 bound to package[0][core:3]
+
+In the example above, processes are bound to successive cores on the
+first package.
+
+   $ prun --np 4 --map-by package --bind-to package:REPORT ./a.out
+   [node01:103115] MCW rank 0 bound to package[0][core:0-9]
+   [node01:103115] MCW rank 1 bound to package[1][core:10-19]
+   [node01:103115] MCW rank 2 bound to package[0][core:0-9]
+   [node01:103115] MCW rank 3 bound to package[1][core:10-19]
+
+In the example above, processes are bound to all cores on successive
+packages in a round-robin fashion.
+
+   $ prun --np 4 --map-by package:PE=2 --bind-to core:REPORT ./a.out
+   [node01:103328] MCW rank 0 bound to package[0][core:0-1]
+   [node01:103328] MCW rank 1 bound to package[1][core:10-11]
+   [node01:103328] MCW rank 2 bound to package[0][core:2-3]
+   [node01:103328] MCW rank 3 bound to package[1][core:12-13]
+
+The example above shows us that 2 cores have been bound per process.
+The ":PE=2" qualifier states that 2 CPUs underneath the package (which
+would be cores in this case) are mapped to each process.
+
+   $ prun --np 4 --map-by core:PE=2:HWTCPUS --bind-to :REPORT  hostname
+   [node01:103506] MCW rank 0 bound to package[0][hwt:0-1]
+   [node01:103506] MCW rank 1 bound to package[0][hwt:8-9]
+   [node01:103506] MCW rank 2 bound to package[0][hwt:16-17]
+   [node01:103506] MCW rank 3 bound to package[0][hwt:24-25]
+
+The example above shows us that 2 hardware threads have been bound per
+process.  In this case "prun" is directing the DVM to map by hardware
+threads since we used the ":HWTCPUS" qualifier. Without that qualifier
+this command would return an error since by default the DVM will not
+map to resources smaller than a core.  The ":PE=2" qualifier states
+that 2 processing elements underneath the core (which would be
+hardware threads in this case) are mapped to each process.
+
+   $ prun --np 4 --bind-to none:REPORT  hostname
+   [node01:107126] MCW rank 0 is not bound (or bound to all available processors)
+   [node01:107126] MCW rank 1 is not bound (or bound to all available processors)
+   [node01:107126] MCW rank 2 is not bound (or bound to all available processors)
+   [node01:107126] MCW rank 3 is not bound (or bound to all available processors)
+
+Binding is turned off in the above example, as reported.
+
+[placement-fundamentals]
+
+
+Fundamentals
+------------
+
+The mapping of processes to nodes can be defined not just with general
+policies but also, if necessary, using arbitrary mappings that cannot
+be described by a simple policy. Supported directives, given on the
+command line via the "--map-by" option, include:
+
+* "SEQ": (often accompanied by the "file=<path>" qualifier) assigns
+  one process to each node specified in the file. The sequential file
+  is to contain an entry for each desired process, one per line of the
+  file.
+
+* "RANKFILE": (often accompanied by the "file=<path>" qualifier)
+  assigns one process to the node/resource specified in each entry of
+  the file, one per line of the file.
+
+For example, using the hostfile below:
+
+   $ cat myhostfile
+   aa slots=4
+   bb slots=4
+   cc slots=4
+
+The command below will launch three processes, one on each of nodes
+"aa", "bb", and "cc", respectively. The slot counts don't matter; one
+process is launched per line on whatever node is listed on the line.
+
+   $ prun --hostfile myhostfile --map-by seq ./a.out
+
+Impact of the ranking option is best illustrated by considering the
+following hostfile and test cases where each node contains two
+packages (each package with two cores). Using the "--map-by
+ppr:2:package" option, we map two processes onto each package and
+utilize the "--rank-by" option as show below:
+
+   $ cat myhostfile
+   aa
+   bb
+
++-----------------------------------+-----------------------------------+-----------------------------------+
+| Command                           | Ranks on "aa"                     | Ranks on "bb"                     |
+|===================================|===================================|===================================|
+| "--rank-by core"                  | 0 1 ! 2 3                         | 4 5 ! 6 7                         |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--rank-by package"               | 0 2 ! 1 3                         | 4 6 ! 5 7                         |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--rank-by package:SPAN"          | 0 4 ! 1 5                         | 2 6 ! 3 7                         |
++-----------------------------------+-----------------------------------+-----------------------------------+
+
+Ranking by slot provides the identical result as ranking by core in
+this case — a simple progression of ranks across each node. Ranking by
+package does a round-robin ranking across packages within each node
+until all processes have been assigned a rank, and then progresses to
+the next node.  Adding the ":SPAN" qualifier to the ranking directive
+causes the ranking algorithm to treat the entire allocation as a
+single entity — thus, the process ranks are assigned across all
+packages before circling back around to the beginning.
+
+The binding operation restricts the process to a subset of the CPU
+resources on the node.
+
+The processors to be used for binding can be identified in terms of
+topological groupings — e.g., binding to an l3cache will bind each
+process to all processors within the scope of a single L3 cache within
+their assigned location. Thus, if a process is assigned by the mapper
+to a certain package, then a "--bind-to l3cache" directive will cause
+the process to be bound to the processors that share a single L3 cache
+within that package.
+
+To help balance loads, the binding directive uses a round-robin
+method, binding a process to the first available specified object type
+within the object where the process was mapped. For example, consider
+the case where a job is mapped to the package level, and then bound to
+core. Each package will have multiple cores, so if multiple processes
+are mapped to a given package, the binding algorithm will assign each
+process located to a package to a unique core in a round-robin manner.
+
+Binding can only be done to the mapped object or to a resource located
+within that object.
+
+An object is considered completely consumed when the number of
+processes bound to it equals the number of CPUs within it. Unbound
+processes are not considered in this computation. Additional processes
+cannot be mapped to consumed objects unless the OVERLOAD qualifier is
+provided via the "--bind-to" command line option.
+
+Default process mapping/ranking/binding policies can also be set with
+MCA parameters, overridden by the command line options when provided.
+MCA parameters can be set on the "prte" command line when starting the
+DVM (or in the "prterun" command line for a single-execution job), but
+also in a system or user "mca-params.conf" file or as environment
+variables, as described in the MCA section below. Some examples
+include:
+
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "prun" option                     | MCA parameter key                 | Value                             |
+|===================================|===================================|===================================|
+| "--map-by core"                   | "rmaps_default_mapping_policy"    | "core"                            |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--map-by package"                | "rmaps_default_mapping_policy"    | "package"                         |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--rank-by core"                  | "rmaps_default_ranking_policy"    | "core"                            |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--bind-to core"                  | "hwloc_default_binding_policy"    | "core`"                           |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--bind-to package"               | "hwloc_default_binding_policy"    | "package"                         |
++-----------------------------------+-----------------------------------+-----------------------------------+
+| "--bind-to none"                  | "hwloc_default_binding_policy"    | "none"                            |
++-----------------------------------+-----------------------------------+-----------------------------------+
+
+[placement-limits]
+
+
+Overloading and Oversubscribing
+-------------------------------
+
+This section explores the difference between the terms "overloading"
+and "oversubscribing". Users are often confused by the difference
+between these two scenarios. As such, this section provides a number
+of scenarios to help illustrate the differences.
+
+* "--map-by :OVERSUBSCRIBE" allow more processes on a node than
+  allocated
+
+* "--bind-to <object>:overload-allowed" allows for binding more than
+  one process in relation to a CPU
+
+The important thing to remember with *oversubscribing* is that it can
+be defined separately from the actual number of CPUs on a node. This
+allows the mapper to place more or fewer processes per node than CPUs.
+By default, PRRTE uses cores to determine slots in the absence of such
+information provided in the hostfile or by the resource manager
+(except in the case of the "--host" as described in the section on
+that command line option.
+
+The important thing to remember with *overloading* is that it is
+defined as binding more processes than CPUs. By default, PRRTE uses
+cores as a means of counting the number of CPUs. However, the user can
+adjust this. For example when using the ":HWTCPUS" qualifier to the "
+--map-by" option PRRTE will use hardware threads as a means of
+counting the number of CPUs.
+
+For the following examples consider a node with:
+
+* 2 processor packages,
+
+* 10 cores per package, and
+
+* 8 hardware threads per core.
+
+Consider the node from above with the hostfile below:
+
+   $ cat myhostfile
+   node01 slots=32
+   node02 slots=32
+
+The "slots" token tells PRRTE that it can place up to 32 processes
+before *oversubscribing* the node.
+
+If we run the following:
+
+   prun --np 34 --hostfile myhostfile --map-by core --bind-to core hostname
+
+It will return an error at the binding time indicating an
+*overloading* scenario.
+
+The mapping mechanism assigns 32 processes to "node01" matching the
+"slots" specification in the hostfile. The binding mechanism will bind
+the first 20 processes to unique cores leaving it with 12 processes
+that it cannot bind without overloading one of the cores (putting more
+than one process on the core).
+
+Using the "overload-allowed" qualifier to the "--bind-to core" option
+tells PRRTE that it may assign more than one process to a core.
+
+If we run the following:
+
+   prun --np 34 --hostfile myhostfile --map-by core --bind-to core:overload-allowed hostname
+
+This will run correctly placing 32 processes on "node01", and 2
+processes on "node02". On "node01" two processes are bound to cores
+0-11 accounting for the overloading of those cores.
+
+Alternatively, we could use hardware threads to give binding a lower
+level CPU to bind to without overloading.
+
+If we run the following:
+
+   prun --np 34 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
+
+This will run correctly placing 32 processes on "node01", and 2
+processes on "node02". On "node01" two processes are mapped to cores
+0-11 but bound to different hardware threads on those cores (the
+logical first and second hardware thread). Thus no hardware threads
+are overloaded at binding time.
+
+In both of the examples above the node is not oversubscribed at
+mapping time because the hostfile set the oversubscription limit to
+"slots=32" for each node. It is only after we exceed that limit that
+PRRTE will throw an oversubscription error.
+
+Consider next if we ran the following:
+
+   prun --np 66 --hostfile myhostfile --map-by core:HWTCPUS --bind-to hwthread hostname
+
+This will return an error at mapping time indicating an
+oversubscription scenario. The mapping mechanism will assign all of
+the available slots (64 across 2 nodes) and be left two processes to
+map. The only way to map those processes is to exceed the number of
+available slots putting the job into an oversubscription scenario.
+
+You can force PRRTE to oversubscribe the nodes by using the
+":OVERSUBSCRIBE" qualifier to the "--map-by" option as seen in the
+example below:
+
+   prun --np 66 --hostfile myhostfile \
+       --map-by core:HWTCPUS:OVERSUBSCRIBE --bind-to hwthread hostname
+
+This will run correctly placing 34 processes on "node01" and 32 on
+"node02".  Each process is bound to a unique hardware thread.
+
+
+Overloading vs. Oversubscription: Package Example
+=================================================
+
+Let's extend these examples by considering the package level. Consider
+the same node as before, but with the hostfile below:
+
+   $ cat myhostfile
+   node01 slots=22
+   node02 slots=22
+
+The lowest level CPUs are "cores" and we have 20 total (10 per
+package).
+
+If we run:
+
+   prun --np 20 --hostfile myhostfile --map-by package \
+       --bind-to package:REPORT hostname
+
+Then 10 processes are mapped to each package, and bound at the package
+level.  This is not overloading since we have 10 CPUs (cores)
+available in the package at the hardware level.
+
+However, if we run:
+
+   prun --np 21 --hostfile myhostfile --map-by package \
+       --bind-to package:REPORT hostname
+
+Then 11 processes are mapped to the first package and 10 to the second
+package.  At binding time we have an overloading scenario because
+there are only 10 CPUs (cores) available in the package at the
+hardware level. So the first package is overloaded.
+
+
+Overloading vs. Oversubscription: Hardware Threads Example
+==========================================================
+
+Similarly, if we consider hardware threads.
+
+Consider the same node as before, but with the hostfile below:
+
+   $ cat myhostfile
+   node01 slots=165
+   node02 slots=165
+
+The lowest level CPUs are "hwthreads" (because we are going to use the
+":HWTCPUS" qualifier) and we have 160 total (80 per package).
+
+If we re-run (from the package example) and add the ":HWTCPUS"
+qualifier:
+
+   prun --np 21 --hostfile myhostfile --map-by package:HWTCPUS \
+       --bind-to package:REPORT hostname
+
+Without the ":HWTCPUS" qualifier this would be overloading (as we saw
+previously). The mapper places 11 processes on the first package and
+10 to the second package. The processes are still bound to the package
+level. However, with the ":HWTCPUS" qualifier, it is not overloading
+since we have 80 CPUs (hwthreads) available in the package at the
+hardware level.
+
+Alternatively, if we run:
+
+   prun --np 161 --hostfile myhostfile --map-by package:HWTCPUS \
+       --bind-to package:REPORT hostname
+
+Then 81 processes are mapped to the first package and 80 to the second
+package.  At binding time we have an overloading scenario because
+there are only 80 CPUs (hwthreads) available in the package at the
+hardware level.  So the first package is overloaded.

@@ -1,0 +1,1652 @@
+[bogus section]
+
+This section is not used by PRTE code.  But we have to put a RST
+section title in this file somewhere, or Sphinx gets unhappy.  So we
+put it in a section that is ignored by PRTE code.
+
+
+Hello, world
+============
+
+[version]
+
+%s (%s) %s
+
+%s
+
+[usage]
+
+%s (%s) %s
+
+Usage: %s [OPTION]...
+
+Submit job to the PMIx Reference RTE
+
+The following list of command line options are available. Note that
+more detailed help for any option can be obtained by adding that
+option to the help request as "--help <option>".
+
++----------------------+-----------------------------------------------+
+|                      | General Options                               |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "-h" | "--help"      | This help message                             |
++----------------------+-----------------------------------------------+
+| "-h" | "--help       | Help for the specified option                 |
+| <arg0>"              |                                               |
++----------------------+-----------------------------------------------+
+| "-v" | "--verbose"   | Enable typical debug options                  |
++----------------------+-----------------------------------------------+
+| "-V" | "--version"   | Print version and exit                        |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Debug Options                                 |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--display <arg0>"   | Comma-delimited list of options for           |
+|                      | displaying information about the allocation   |
+|                      | and job. Allowed values: "allocation",        |
+|                      | "bind", "map", "map- devel", "topo".          |
++----------------------+-----------------------------------------------+
+| "--timeout           | Timeout the job after the specified number of |
+| <seconds>"           | seconds                                       |
++----------------------+-----------------------------------------------+
+| "--spawn-timeout     | Timeout the job if spawn takes more than the  |
+| <seconds>"           | specified number of seconds                   |
++----------------------+-----------------------------------------------+
+| "--get-stack-traces" | Get stack traces of all application procs on  |
+|                      | timeout                                       |
++----------------------+-----------------------------------------------+
+| "--report-state-on-  | Report all job and process states upon        |
+| timeout"             | timeout                                       |
++----------------------+-----------------------------------------------+
+| "--stop-on-exec"     | If supported, stop each specified process at  |
+|                      | start of execution                            |
++----------------------+-----------------------------------------------+
+| "--stop-in-init"     | Direct the specified processes to stop in     |
+|                      | "PMIx_Init"                                   |
++----------------------+-----------------------------------------------+
+| "--stop-in-app"      | Direct the specified processes to stop at an  |
+|                      | application-controlled location               |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Output Options                                |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--output <args>"    | Comma-delimited list of options that control  |
+|                      | how output is generated. Allowed values:      |
+|                      | "tag", "tag-detailed", "tag-fullname",        |
+|                      | "timestamp", "xml", "merge-stderr-to-stdout", |
+|                      | "dir=DIRNAME", "file=filename". The "dir"     |
+|                      | option redirects output from application      |
+|                      | processes into                                |
+|                      | "DIRNAME/job/rank/std[out,err,diag]". The     |
+|                      | file option redirects output from application |
+|                      | processes into "filename.rank". In both       |
+|                      | cases, the provided name will be converted to |
+|                      | an absolute path.  Supported qualifiers       |
+|                      | include "NOCOPY" (do not copy the output to   |
+|                      | the stdout/stderr streams).                   |
++----------------------+-----------------------------------------------+
+| "--report-child-     | Return the exit status of the primary job     |
+| jobs-separately"     | only                                          |
++----------------------+-----------------------------------------------+
+| "--xterm <ranks>"    | Create a new xterm window and display output  |
+|                      | from the specified ranks there                |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Input Options                                 |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--stdin <ranks>"    | Specify procs to receive stdin ["rank",       |
+|                      | "all", "none`, or comma- delimited list of    |
+|                      | integers] (default: ``0", indicating rank 0)  |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Placement Options                             |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--map-by <type>"    | Mapping Policy for job                        |
++----------------------+-----------------------------------------------+
+| "--rank-by <type>"   | Ranking Policy for job                        |
++----------------------+-----------------------------------------------+
+| "--bind-to <type>"   | Binding policy for job                        |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Launch Options                                |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--runtime-options   | Comma-delimited list of runtime directives    |
+| <arg0>"              | for the job (e.g., do not abort if a process  |
+|                      | exits on non-zero status)                     |
++----------------------+-----------------------------------------------+
+| "-c" | "--np         | Number of processes to run                    |
+| <num_procs>"         |                                               |
++----------------------+-----------------------------------------------+
+| "-n" | "--n          | Number of processes to run                    |
+| <num_procs>"         |                                               |
++----------------------+-----------------------------------------------+
+| "-N <num_procs>"     | Number of processes to run per node           |
++----------------------+-----------------------------------------------+
+| "--app <filename>"   | Provide an appfile; ignore all other command  |
+|                      | line options                                  |
++----------------------+-----------------------------------------------+
+| "-H" | "--host       | List of hosts to invoke processes on          |
+| <hosts>"             |                                               |
++----------------------+-----------------------------------------------+
+| "--hostfile          | Provide a hostfile                            |
+| <filename>"          |                                               |
++----------------------+-----------------------------------------------+
+| "--machinefile       | Provide a hostfile (synonym for "--hostfile") |
+| <filename>"          |                                               |
++----------------------+-----------------------------------------------+
+| "--path <path>"      | PATH to be used to look for executables to    |
+|                      | start processes                               |
++----------------------+-----------------------------------------------+
+| "--pmixmca <key>     | Pass context-specific PMIx MCA parameters;    |
+| <value>"             | they are considered global if only one        |
+|                      | context is specified ("key" is the parameter  |
+|                      | name; "value" is the parameter value)         |
++----------------------+-----------------------------------------------+
+| "--gpmixmca <key>    | Pass global PMIx MCA parameters that are      |
+| <value>"             | applicable to all contexts ("key" is the      |
+|                      | parameter name; "value" is the parameter      |
+|                      | value)                                        |
++----------------------+-----------------------------------------------+
+| "--tune <filename>"  | File(s) containing MCA params for tuning      |
+|                      | operations                                    |
++----------------------+-----------------------------------------------+
+| "--preload-files     | Preload the comma separated list of files to  |
+| <filenames>"         | the remote machines current working directory |
+|                      | before starting the remote process.           |
++----------------------+-----------------------------------------------+
+| "--pset <name>"      | User-specified name assigned to the processes |
+|                      | in their given application                    |
++----------------------+-----------------------------------------------+
+| "--rankfile          | Name of file to specify explicit task mapping |
+| <filename>"          |                                               |
++----------------------+-----------------------------------------------+
+| "-s" | "--preload-   | Preload the binary on the remote machine      |
+| binary"              | before starting the remote process.           |
++----------------------+-----------------------------------------------+
+| "--set-cwd-to-       | Set the working directory of the started      |
+| session-dir"         | processes to their session directory          |
++----------------------+-----------------------------------------------+
+| "--show-progress"    | Output a brief periodic report on launch      |
+|                      | progress                                      |
++----------------------+-----------------------------------------------+
+| "--wd <dir>"         | Synonym for "--wdir"                          |
++----------------------+-----------------------------------------------+
+| "--wdir <dir>"       | Set the working directory of the started      |
+|                      | processes                                     |
++----------------------+-----------------------------------------------+
+| "-x <name>"          | Export an environment variable, optionally    |
+|                      | specifying a value (e.g., "-x foo" exports    |
+|                      | the environment variable foo and takes its    |
+|                      | value from the current environment; "-x       |
+|                      | foo=bar" exports the environment variable     |
+|                      | name foo and sets its value to "bar" in the   |
+|                      | started processes; "-x foo*" exports all      |
+|                      | current environmental variables starting with |
+|                      | "foo")                                        |
++----------------------+-----------------------------------------------+
+
++----------------------+-----------------------------------------------+
+|                      | Specific Options                              |
++----------------------+-----------------------------------------------+
+| Option               | Description                                   |
+|======================|===============================================|
+| "--do-not-connect"   | Do not connect to a server                    |
++----------------------+-----------------------------------------------+
+| "--dvm-uri <uri>"    | Specify the URI of the DVM master, or the     |
+|                      | name of the file (specified as                |
+|                      | "file:filename") that contains that info      |
++----------------------+-----------------------------------------------+
+| "--namespace <name>" | Namespace of the daemon to which we should    |
+|                      | connect                                       |
++----------------------+-----------------------------------------------+
+| "--pid <pid>"        | PID of the daemon to which we should connect  |
+|                      | (integer PID or "file:<filename>" for file    |
+|                      | containing the PID                            |
++----------------------+-----------------------------------------------+
+| "--system-server-    | First look for a system server and connect to |
+| first"               | it if found                                   |
++----------------------+-----------------------------------------------+
+| "--system-server-    | Connect only to a system-level server         |
+| only"                |                                               |
++----------------------+-----------------------------------------------+
+| "--tmpdir <dir>"     | Set the root for the session directory tree   |
++----------------------+-----------------------------------------------+
+| "--wait-to-connect   | Delay specified number of seconds before      |
+| <seconds>`"          | trying to connect                             |
++----------------------+-----------------------------------------------+
+| "--num-connect-      | Max number of times to try to connect         |
+| retries <num>`"      |                                               |
++----------------------+-----------------------------------------------+
+| "--personality       | Specify the personality to be used            |
+| <name>"              |                                               |
++----------------------+-----------------------------------------------+
+| "--allow-run-as-     | Allow execution as root (**STRONGLY           |
+| root"                | DISCOURAGED**)                                |
++----------------------+-----------------------------------------------+
+| "--forward-signals   | Comma-delimited list of additional signals    |
+| <signals>"           | (names or integers) to forward to application |
+|                      | processes ["none" => forward nothing].        |
+|                      | Signals provided by default include           |
+|                      | "SIGTSTP", "SIGUSR1", "SIGUSR2", "SIGABRT",   |
+|                      | "SIGALRM", and "SIGCONT"                      |
++----------------------+-----------------------------------------------+
+
+Report bugs to %s
+
+[dvm-uri]
+
+Specify the URI of the DVM master, or the name of the file (specified
+as "file:filename") that contains that info
+
+[num-connect-retries]
+
+Max number of times to try to connect to the specified server (int)
+
+[pid]
+
+PID of the daemon to which we should connect (integer PID or
+"file:<filename>" for file containing the PID
+
+[namespace]
+
+Namespace of the daemon we are to connect to (char*)
+
+[system-server-first]
+
+First look for a system server and connect to it if found
+
+[system-server-only]
+
+Connect only to a system-level server - abort if one is not found
+
+[tmpdir]
+
+Define the root location for the PRRTE session directory tree
+
+See the "Session directory" HTML documentation for additional details
+about the PRRTE session directory.
+
+[wait-to-connect]
+
+Delay specified number of seconds before trying to connect
+
+[hostfile]
+
+PRRTE supports several levels of user-specified hostfiles based on an
+established precedence order. Users can specify a hostfile that
+contains a list of nodes to be used for the job, or can provide a
+comma-delimited list of nodes to be used for that job via the "--host"
+command line option.
+
+The precedence order applied to these various options depends to some
+extent on the local environment. The following table illustrates how
+host and hostfile directives work together to define the set of hosts
+upon which a DVM will execute the job in the absence of a resource
+manager (RM):
+
++---------+------------+-----------------------------------------------+
+| host    | hostfile   | Result                                        |
+|=========|============|===============================================|
+| unset   | unset      | The DVM will utilize all its available        |
+|         |            | resources when mapping the job.               |
++---------+------------+-----------------------------------------------+
+| set     | unset      | Host option defines resource list for the job |
++---------+------------+-----------------------------------------------+
+| unset   | set        | Hostfile defines resource list for the job    |
++---------+------------+-----------------------------------------------+
+| set     | set        | Hostfile defines resource list for the job,   |
+|         |            | then host filters the list to define the      |
+|         |            | final set of nodes to be used for the job     |
++---------+------------+-----------------------------------------------+
+
+Hostfiles (sometimes called "machine files") are a combination of two
+things:
+
+1. A listing of hosts on which to launch processes.
+
+2. Optionally, limit the number of processes which can be launched on
+   each host.
+
+Hostfile syntax consists of one node name on each line, optionally
+including a designated number of "slots":
+
+   # This is a comment line, and will be ignored
+   node01  slots=10
+   node13  slots=5
+
+   node15
+   node16
+   node17  slots=3
+   ...
+
+Blank lines and lines beginning with a "#" are ignored.
+
+A "slot" is the PRRTE term for an allocatable unit where we can launch
+a process.  See the section on definition of the term "slot" for a
+longer description of slots.
+
+In the absence of the "slot" parameter, PRRTE will assign either the
+number of slots to be the number of CPUs detected on the node or the
+resource manager-assigned value if operating in the presence of an RM.
+
+Important:
+
+  If using a resource manager, the user-specified number of slots is
+  capped by the RM-assigned value.
+
+
+Relative host indexing
+----------------------
+
+Hostfile and "--host" specifications can also be made using relative
+indexing. This allows a user to stipulate which hosts are to be used
+for a given app context without specifying the particular host name,
+but rather its relative position in the allocation.
+
+This can probably best be understood through consideration of a few
+examples. Consider the case where a DVM is comprised of a set of nodes
+named "foo1", "foo2", "foo3", "foo4". The user wants the first app
+context to have exclusive use of the first two nodes, and a second app
+context to use the last two nodes. Of course, the user could printout
+the allocation to find the names of the nodes allocated to them and
+then use "--host" to specify this layout, but this is cumbersome and
+would require hand-manipulation for every invocation.
+
+A simpler method is to utilize PRRTE's relative indexing capability to
+specify the desired layout. In this case, a command line containing:
+
+   --host +n1,+n2 ./app1 : --host +n3,+n4 ./app2
+
+would provide the desired pattern. The "+" syntax indicates that the
+information is being provided as a relative index into the existing
+allocation. Two methods of relative indexing are supported:
+
+* "+n#": A relative index into the allocation referencing the "#"
+  node. PRRTE will substitute the "#" node in the allocation
+
+* "+e[:#]": A request for "#" empty nodes — i.e., PRRTE is to
+  substitute this reference with nodes that have not yet been used by
+  any other app_context. If the ":#" is not provided, PRRTE will
+  substitute the reference with all empty nodes. Note that PRRTE does
+  track the empty nodes that have been assigned in this manner, so
+  multiple uses of this option will result in assignment of unique
+  nodes up to the limit of the available empty nodes. Requests for
+  more empty nodes than are available will generate an error.
+
+Relative indexing can be combined with absolute naming of hosts in any
+arbitrary manner, and can be used in hostfiles as well as with the "--
+host" command line option. In addition, any slot specification
+provided in hostfiles will be respected — thus, a user can specify
+that only a certain number of slots from a relative indexed host are
+to be used for a given app context.
+
+Another example may help illustrate this point. Consider the case
+where the user has a hostfile containing:
+
+   dummy1 slots=4
+   dummy2 slots=4
+   dummy3 slots=4
+   dummy4 slots=4
+   dummy5 slots=4
+
+This may, for example, be a hostfile that describes a set of commonly-
+used resources that the user wishes to execute applications against.
+For this particular application, the user plans to map byslot, and
+wants the first two ranks to be on the second node of any allocation,
+the next ranks to land on an empty node, have one rank specifically on
+"dummy4", the next rank to be on the second node of the allocation
+again, and finally any remaining ranks to be on whatever empty nodes
+are left. To accomplish this, the user provides a hostfile of:
+
+   +n2 slots=2
+   +e:1
+   dummy4 slots=1
+   +n2
+   +e
+
+The user can now use this information in combination with PRRTE's
+sequential mapper to obtain their specific layout:
+
+   <launcher> --hostfile dummyhosts --hostfile mylayout --prtemca rmaps seq ./my_app
+
+which will result in:
+
+   rank0 being mapped to dummy3
+   rank1 to dummy1 as the first empty node
+   rank2 to dummy4
+   rank3 to dummy3
+   rank4 to dummy2 and rank5 to dummy5 as the last remaining unused nodes
+
+Note that the sequential mapper ignores the number of slots arguments
+as it only maps one rank at a time to each node in the list.
+
+If the default round-robin mapper had been used, then the mapping
+would have resulted in:
+
+* ranks 0 and 1 being mapped to dummy3 since two slots were specified
+
+* ranks 2-5 on dummy1 as the first empty node, which has four slots
+
+* rank6 on dummy4 since the hostfile specifies only a single slot from
+  that node is to be used
+
+* ranks 7 and 8 on dummy3 since only two slots remain available
+
+* ranks 9-12 on dummy2 since it is the next available empty node and
+  has four slots
+
+* ranks 13-16 on dummy5 since it is the last remaining unused node and
+  has four slots
+
+Thus, the use of relative indexing can allow for complex mappings to
+be ported across allocations, including those obtained from automated
+resource managers, without the need for manual manipulation of scripts
+and/or command lines.
+
+See the "Host specification" HTML documentation for details about the
+format and content of hostfiles.
+
+[machinefile]
+
+Provide a hostfile.  This option is a synonym for "--hostfile"; see
+that option for more information.
+
+[host]
+
+Host syntax consists of a comma-delimited list of node names, each
+entry optionally containing a ":N" extension indicating the number of
+slots to assign to that entry:
+
+   --host node01:5,node02
+
+In the absence of the slot extension, one slot will be assigned to the
+node. Duplicate entries are aggregated and the number of slots
+assigned to that node are summed together.
+
+Note:
+
+  A "slot" is the PRRTE term for an allocatable unit where we can
+  launch a process. Thus, the number of slots equates to the maximum
+  number of processes PRRTE may start on that node without
+  oversubscribing it.
+
+[parseable]
+
+Output information (e.g., help messages) in machine-parseable friendly
+format
+
+[parsable]
+
+Output information (e.g., help messages) in machine-parseable friendly
+format
+
+[np]
+
+Specify number of application processes to be started
+
+[no-ready-msg]
+
+Do not print a DVM ready message
+
+[daemonize]
+
+Daemonize the DVM daemons into the background
+
+[system-server]
+
+Start the DVM as the system server
+
+[set-sid]
+
+Direct the DVM daemons to separate from the current session
+
+[report-pid]
+
+Printout PID on stdout [-], stderr [+], or a file [anything else]
+
+[report-uri]
+
+Printout URI on stdout [-], stderr [+], or a file [anything else]
+
+[test-suicide]
+
+Suicide instead of clean abort after delay
+
+[singleton]
+
+ID of the singleton process that started us
+
+[keepalive]
+
+Pipe to monitor - DVM will terminate upon closure
+
+[map-by]
+
+Processes are mapped based on one of the following directives as
+applied at the job level:
+
+* "SLOT" assigns procs to each node up to the number of available
+  slots on that node before moving to the next node in the allocation
+
+* "HWTHREAD" assigns a proc to each hardware thread on a node in a
+  round-robin manner up to the number of available slots on that node
+  before moving to the next node in the allocation
+
+* "CORE" (default) assigns a proc to each core on a node in a round-
+  robin manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "L1CACHE" assigns a proc to each L1 cache on a node in a round-robin
+  manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "L2CACHE" assigns a proc to each L2 cache on a node in a round-robin
+  manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "L3CACHE" assigns a proc to each L3 cache on a node in a round-robin
+  manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "NUMA" assigns a proc to each NUMA region on a node in a round-robin
+  manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "PACKAGE" assigns a proc to each package on a node in a round-robin
+  manner up to the number of available slots on that node before
+  moving to the next node in the allocation
+
+* "NODE" assigns processes in a round-robin fashion to all nodes in
+  the allocation, with the number assigned to each node capped by the
+  number of available slots on that node
+
+* "SEQ" (often accompanied by the file=<path> qualifier) assigns one
+  process to each node specified in the file. The sequential file is
+  to contain an entry for each desired process, one per line of the
+  file.
+
+* "PPR:N":resource maps N procs to each instance of the specified
+  resource type in the allocation
+
+* "RANKFILE" (often accompanied by the file=<path> qualifier) assigns
+  one process to the node/resource specified in each entry of the
+  file, one per line of the file.
+
+* "PE-LIST=a,b" assigns procs to each node in the allocation based on
+  the ORDERED qualifier. The list is comprised of comma-delimited
+  ranges of CPUs to use for this job. If the ORDERED qualifier is not
+  provided, then each node will be assigned procs up to the number of
+  available slots, capped by the availability of the specified CPUs.
+  If ORDERED is given, then one proc will be assigned to each of the
+  specified CPUs, if available, capped by the number of slots on each
+  node and the total number of specified processes. Providing the
+  OVERLOAD qualifier to the "bind-to" option removes the check on
+  availability of the CPU in both cases.
+
+Any directive can include qualifiers by adding a colon (":") and any
+combination of one or more of the following (delimited by colons) to
+the "--map-by" option (except where noted):
+
+* "PE=n" bind n CPUs to each process (can not be used in combination
+  with rankfile or pe-list directives)
+
+* "SPAN" load balance the processes across the allocation by treating
+  the allocation as a single "super-node" (can not be used in
+  combination with "slot", "node", "seq", "ppr", "rankfile", or "pe-
+  list" directives)
+
+* "OVERSUBSCRIBE" allow more processes on a node than processing
+  elements
+
+* "NOOVERSUBSCRIBE" means "!OVERSUBSCRIBE"
+
+* "NOLOCAL" do not launch processes on the same node as "prun"
+
+* "HWTCPUS" use hardware threads as CPU slots
+
+* "CORECPUS" use cores as CPU slots (default)
+
+* "INHERIT" indicates that a child job (i.e., one spawned from within
+  an application) shall inherit the placement policies of the parent
+  job that spawned it.
+
+* "NOINHERIT" means "`!INHERIT"
+
+* "FILE=<path>" (path to file containing sequential or rankfile
+  entries).
+
+* "ORDERED" only applies to the "PE-LIST" option to indicate that
+  procs are to be bound to each of the specified CPUs in the order in
+  which they are assigned (i.e., the first proc on a node shall be
+  bound to the first CPU in the list, the second proc shall be bound
+  to the second CPU, etc.)
+
+Note:
+
+  Directives and qualifiers are case-insensitive and can be shortened
+  to the minimum number of characters to uniquely identify them. Thus,
+  "L1CACHE" can be given as "l1cache" or simply as "L1".
+
+The type of CPU (core vs hwthread) used in the mapping algorithm is
+determined as follows:
+
+* by user directive on the command line via the HWTCPUS qualifier to
+  the "--map-by" directive
+
+* by setting the "rmaps_default_mapping_policy" MCA parameter to
+  include the "HWTCPUS" qualifier. This parameter sets the default
+  value for a PRRTE DVM — qualifiers are carried across to DVM jobs
+  started via "prun" unless overridden by the user's command line
+
+* defaults to CORE in topologies where core CPUs are defined, and to
+  hwthreads otherwise.
+
+If your application uses threads, then you probably want to ensure
+that you are either not bound at all (by specifying "--bind-to none"),
+or bound to multiple cores using an appropriate binding level or
+specific number of processing elements per application process via the
+"PE=#" qualifier to the "--map-by" command line directive.
+
+A more detailed description of the mapping, ranking, and binding
+procedure can be obtained via the "--help placement" option.
+
+[rank-by]
+
+PRRTE automatically ranks processes for each job starting from zero.
+Regardless of the algorithm used, rank assignments span applications
+in the same job — i.e., a command line of
+
+   -n 3 app1 : -n 2 app2
+
+will result in "app1" having three processes ranked 0-2 and "app2"
+having two processes ranked 3-4.
+
+By default, process ranks are assigned in accordance with the mapping
+directive — e.g., jobs that are mapped by-node will have the process
+ranks assigned round-robin on a per-node basis. However, users can
+override the default by specifying any of the following directives
+using the "--rank-by" command line option:
+
+* "SLOT" assigns ranks to each process on a node in the order in which
+  the mapper assigned them. This is the default behavior, but is
+  provided as an explicit option to allow users to override any
+  alternative default specified in the environment. When mapping to a
+  specific resource type, procs assigned to a given instance of that
+  resource on a node will be ranked on a per-resource basis on that
+  node before moving to the next node.
+
+* "NODE" assigns ranks round-robin on a per-node basis
+
+* "FILL" assigns ranks to procs mapped to a particular resource type
+  on each node, filling all ranks on that resource before moving to
+  the next resource on that node. For example, procs mapped by
+  "L1cache" would have all procs on the first "L1cache" ranked
+  sequentially before moving to the second "L1cache" on the node. Once
+  all procs on the node have been ranked, ranking would continue on
+  the next node.
+
+* "SPAN" assigns ranks round-robin to procs mapped to a particular
+  resource type, treating the collection of resource instances
+  spanning the entire allocation as a single "super node" before
+  looping around for the next pass. Thus, ranking would begin with the
+  first proc on the first "L1cache" on the first node, then the next
+  rank would be assigned to the first proc on the second "L1cache" on
+  that node, proceeding across until the first proc had been ranked on
+  all "L1cache" used by the job before circling around to rank the
+  second proc on each object.
+
+The "rank-by" command line option has no qualifiers.
+
+Note:
+
+  Directives are case-insensitive.  "SPAN" is the same as "span".
+
+A more detailed description of the mapping, ranking, and binding
+procedure can be obtained via the "--help placement" option.
+
+[bind-to]
+
+By default, processes are bound to individual CPUs (either COREs or
+HWTHREADs, as defined by default or by user specification for the
+job). On nodes that are OVERSUBSCRIBEd (i.e., where the number of
+procs exceeds the number of assigned slots), the default is to not
+bind the processes.
+
+Note:
+
+  Processes from prior jobs that are already executing on a node are
+  not "unbound" when a new job mapping results in the node becoming
+  oversubscribed.
+
+Binding is performed to the first available specified object type
+within the object where the process was mapped. In other words,
+binding can only be done to the mapped object or to a resource located
+beneath that object.
+
+An object is considered completely consumed when the number of
+processes bound to it equals the number of CPUs within it. Unbound
+processes are not considered in this computation. Additional processes
+cannot be mapped to consumed objects unless the "OVERLOAD" qualifier
+is provided via the "--bind-to" command line option.
+
+Note that directives and qualifiers are case-insensitive and can be
+shortened to the minimum number of characters to uniquely identify
+them. Thus, "L1CACHE" can be given as "l1cache" or simply as "L1".
+
+Supported binding directives include:
+
+* "NONE" does not bind the processes
+
+* "HWTHREAD" binds each process to a single hardware thread/ This
+  requires that hwthreads be treated as independent CPUs (i.e., that
+  either the "HWTCPUS" qualifier be provided to the "map-by" option or
+  that "hwthreads" be designated as CPUs by default).
+
+* "CORE" binds each process to a single core. This can be done whether
+  "hwthreads" or "cores" are being treated as independent CPUs
+  provided that mapping is performed at the core or higher level.
+
+* "L1CACHE" binds each process to all the CPUs in an "L1" cache.
+
+* "L2CACHE" binds each process to all the CPUs in an "L2" cache
+
+* "L3CACHE" binds each process to all the CPUs in an "L3" cache
+
+* "NUMA" binds each process to all the CPUs in a "NUMA" region
+
+* "PACKAGE" binds each process to all the CPUs in a "PACKAGE"
+
+Any directive can include qualifiers by adding a colon (:) and any
+combination of one or more of the following to the "--bind-to" option:
+
+* "OVERLOAD" indicates that objects can have more processes bound to
+  them than CPUs within them
+
+* "IF-SUPPORTED" indicates that the job should continue to be launched
+  and executed even if binding cannot be performed as requested.
+
+Note:
+
+  Directives and qualifiers are case-insensitive. "OVERLOAD" is the
+  same as "overload".
+
+[runtime-options]
+
+The "--runtime-options" command line directive must be accompanied by
+a comma-delimited list of case-insensitive options that control the
+runtime behavior of the job. The full directive need not be provided —
+only enough characters are required to uniquely identify the
+directive.
+
+Runtime options are typically "true" or "false", though this is not a
+requirement on developers. Since the value of each option may need to
+be set (e.g., to override a default set by MCA parameter), the syntax
+of the command line directive includes the use of an "=" character to
+allow inclusion of a value for the option. For example, one can set
+the "ABORT-NONZERO-STATUS" option to "true" by specifying it as
+"ABORT-NONZERO-STATUS=1". Note that boolean options can be set to
+"true" using a non-zero integer or a case-insensitive string of the
+word "true".  For the latter representation, the user need only
+provide at least the "T" character. The same policy applies to setting
+a boolean option to "false".
+
+Note that a boolean option will default to "true" if provided without
+a value. Thus, "--runtime-options abort-nonzero" is sufficient to set
+the "ABORT-NONZERO-STATUS" option to "true".
+
+Supported values include:
+
+* "ERROR-NONZERO-STATUS[=(bool)]": if set to false, this directs the
+  runtime to treat a process that exits with non-zero status as a
+  normal termination.  If set to true, the runtime will consider such
+  an occurrence as an error termination and take appropriate action —
+  i.e., the job will be terminated unless a runtime option directs
+  otherwise. This option defaults to a true value if the option is
+  given without a value.
+
+* "DONOTLAUNCH": directs the runtime to map but not launch the
+  specified job. This is provided to help explore possible process
+  placement patterns before actually starting execution. No value need
+  be passed as this is not an option that can be set by default in
+  PRRTE.
+
+* "SHOW-PROGRESS[=(bool)]": requests that the runtime provide progress
+  reports on its startup procedure — i.e., the launch of its daemons
+  in support of a job. This is typically used to debug DVM startup on
+  large systems.  This option defaults to a true value if the option
+  is given without a value.
+
+* "NOTIFYERRORS[=(bool)]": if set to true, requests that the runtime
+  provide a PMIx event whenever a job encounters an error — e.g., a
+  process fails.  The event is to be delivered to each remaining
+  process in the job. This option defaults to a true value if the
+  option is given without a value.  See "--help notifications" for
+  more detail as to the PMIx event codes available for capturing
+  failure events.
+
+* "RECOVERABLE[=(bool)]": if set to true, this indicates that the
+  application wishes to consider the job as recoverable — i.e., the
+  application is assuming responsibility for recovering from any
+  process failure. This could include application-driven spawn of a
+  substitute process or internal compensation for the missing process.
+  This option defaults to a true value if the option is given without
+  a value.
+
+* "AUTORESTART[=(bool)]": if set to true, this requests that the
+  runtime automatically restart failed processes up to "max restarts"
+  number of times. This option defaults to a true value if the option
+  is given without a value.
+
+* "CONTINUOUS[=(bool)]": if set to true, this informs the runtime that
+  the processes in this job are to run until explicitly terminated.
+  Processes that fail are to be automatically restarted up to "max
+  restarts" number of times. Notification of process failure is to be
+  delivered to all processes in the application. This is the
+  equivalent of specifying "RECOVERABLE", "NOTIFYERRORS", and
+  "AUTORESTART" options except that the runtime, not the application,
+  assumes responsibility for process recovery. This option defaults to
+  a true value if the option is given without a value.
+
+* "MAX-RESTARTS=<int>": indicates the maximum number of times a given
+  process is to be restarted. This can be set at the application or
+  job level (which will then apply to all applications in that job).
+
+* "EXEC-AGENT=<path>" indicates the executable that shall be used to
+  start an application process. The resulting command for starting an
+  application process will be "<path> app <app-argv>". The path may
+  contain its own command line arguments.
+
+* "DEFAULT-EXEC-AGENT": directs the runtime to use the system default
+  exec agent to start an application process. No value need be passed
+  as this is not an option that can be set by default in PRRTE.
+
+* "OUTPUT-PROCTABLE[(=channel)]": directs the runtime to report the
+  convential debugger process table (includes PID and host location of
+  each process in the application). Output is directed to stdout if
+  the channel is "-", stderr if "+", or into the specified file
+  otherwise. If no channel is specified, output will be directed to
+  stdout.
+
+* "STOP-ON-EXEC": directs the runtime to stop the application
+  process(es) immediately upon exec'ing them. The directive will apply
+  to all processes in the job.
+
+* "STOP-IN-INIT": indicates that the runtime should direct the
+  application process(es) to stop in "PMIx_Init()". The directive will
+  apply to all processes in the job.
+
+* "STOP-IN-APP": indicates that the runtime should direct application
+  processes to stop at some application-defined place and notify they
+  are ready-to-debug. The directive will apply to all processes in the
+  job.
+
+* "TIMEOUT=<string>": directs the runtime to terminate the job after
+  it has executed for the specified time. Time is specified in colon-
+  delimited format — e.g., "01:20:13:05" to indicate 1 day, 20 hours,
+  13 minutes and 5 seconds. Time specified without colons will be
+  assumed to have been given in seconds.
+
+* "SPAWN-TIMEOUT=<string>": directs the runtime to terminate the job
+  if job launch is not completed within the specified time. Time is
+  specified in colon-delimited format — e.g., "01:20:13:05" to
+  indicate 1 day, 20 hours, 13 minutes and 5 seconds.  Time specified
+  without colons will be assumed to have been given in seconds.
+
+* "REPORT-STATE-ON-TIMEOUT[(=bool)]": directs the runtime to provide a
+  detailed report on job and application process state upon job
+  timeout. This option defaults to a true value if the option is given
+  without a value.
+
+* "GET-STACK-TRACES[(=bool)]": requests that the runtime provide stack
+  traces on all application processes still executing upon timeout.
+  This option defaults to a true value if the option is given without
+  a value.
+
+* "REPORT-CHILD-JOBS-SEPARATELY[(=bool)]": directs the runtime to
+  report the exit status of any child jobs spawned by the primary job
+  separately. If false, then the final exit status reported will be
+  zero if the primary job and all spawned jobs exit normally, or the
+  first non-zero status returned by either primary or child jobs. This
+  option defaults to a true value if the option is given without a
+  value.
+
+* "AGGREGATE-HELP-MESSAGES[(=bool)]": directs the runtime to aggregate
+  help messages, reporting each unique help message once accompanied
+  by the number of processes that reported it. This option defaults to
+  a true value if the option is given without a value.
+
+* "FWD-ENVIRONMENT[(=bool)]": directs the runtime to forward the
+  entire local environment in support of the application. This option
+  defaults to a true value if the option is given without a value.
+
+The "--runtime-options" command line option has no qualifiers.
+
+Note:
+
+  Directives are case-insensitive.  "FWD-ENVIRONMENT" is the same as
+  "fwd-environment".
+
+[display]
+
+The "display" command line directive must be accompanied by a comma-
+delimited list of case-insensitive options indicating what information
+about the job and/or allocation is to be displayed. The full directive
+need not be provided — only enough characters are required to uniquely
+identify the directive. For example, "ALL" is sufficient to represent
+the "ALLOCATION" directive — while "MAP" can not be used to represent
+"MAP-DEVEL" (though "MAP-D" would suffice).
+
+Supported values include:
+
+* "ALLOCATION" displays the detected hosts and slot assignments for
+  this job
+
+* "BINDINGS" displays the resulting bindings applied to processes in
+  this job
+
+* "MAP" displays the resulting locations assigned to processes in this
+  job
+
+* "MAP-DEVEL" displays a more detailed report on the locations
+  assigned to processes in this job that includes local and node
+  ranks, assigned bindings, and other data
+
+* "TOPO=LIST" displays the topology of each node in the semicolon-
+  delimited list that is allocated to the job
+
+* "CPUS[=LIST]" displays the available CPUs on the provided semicolon-
+  delimited list of nodes (defaults to all nodes)
+
+The display command line directive can include qualifiers by adding a
+colon (":") and any combination of one or more of the following
+(delimited by colons):
+
+* "PARSEABLE" directs that the output be provided in a format that is
+  easily parsed by machines. Note that "PARSABLE" is also accepted as
+  a typical spelling for the qualifier.
+
+Provided qualifiers will apply to *all* of the display directives.
+
+[output]
+
+The "output" command line directive must be accompanied by a comma-
+delimited list of case-insensitive options that control how output is
+generated. The full directive need not be provided — only enough
+characters are required to uniquely identify the directive. For
+example, "MERGE" is sufficient to represent the "MERGE-STDERR-TO-
+STDOUT" directive — while "TAG" can not be used to represent "TAG-
+DETAILED" (though "TAG-D" would suffice).
+
+Supported values include:
+
+* "TAG" marks each output line with the "[job,rank]<stream>:" of the
+  process that generated it
+
+* "TAG-DETAILED" marks each output line with a detailed annotation
+  containing "[namespace,rank][hostname:pid]<stream>:" of the process
+  that generated it
+
+* "TAG-FULLNAME" marks each output line with the
+  "[namespace,rank]<stream>:" of the process that generated it
+
+* "TAG-FULLNAME" marks each output line with the
+  "[namespace,rank]<stream>:" of the process that generated it
+
+* "TIMESTAMP" prefixes each output line with a "[datetime]<stream>:"
+  stamp. Note that the timestamp will be the time when the line is
+  output by the DVM and not the time when the source output it
+
+* "XML" provides all output in a pseudo-XML format "MERGE-STDERR-TO-
+  STDOUT" merges stderr into stdout
+
+* "DIR=DIRNAME" redirects output from application processes into
+  "DIRNAME/job/rank/std[out,err,diag]". The provided name will be
+  converted to an absolute path
+
+* "FILE=FILENAME" redirects output from application processes into
+  "filename.rank." The provided name will be converted to an absolute
+  path
+
+Supported qualifiers include "NOCOPY" (do not copy the output to the
+stdout/err streams), and "RAW" (do not buffer the output into complete
+lines, but instead output it as it is received).
+
+[rankfile]
+
+Name of file to specify explicit task mapping
+
+[do-not-launch]
+
+Perform all necessary operations to prepare to launch the application,
+but do not actually launch it (usually used to test mapping patterns)
+
+[display-devel-map]
+
+Display a detailed process map (mostly intended for developers) just
+before launch
+
+[display-topo]
+
+Display the topology as part of the process map (mostly intended for
+developers) just before launch
+
+[report-bindings]
+
+Display process bindings to stderr
+
+[display-devel-allocation]
+
+Display a detailed list (mostly intended for developers) of the
+allocation being used by this job
+
+[display-map]
+
+Display the process map just before launch
+
+[display-allocation]
+
+Display the allocation being used by this job
+
+[enable-recovery]
+
+Enable recovery from process failure [Default = disabled]
+
+[max-restarts]
+
+Max number of times to restart a failed process
+
+[disable-recovery]
+
+Disable recovery (resets all recovery options to off)
+
+[continuous]
+
+Job is to run until explicitly terminated
+
+[personality]
+
+Specify the personality to be used
+
+[prte-server]
+
+Specify the URI of the publish/lookup server, or the name of the file
+(specified as "file:<filename>" that contains that info
+
+[dvm-master-uri]
+
+URI for the DVM master
+
+[parent-uri]
+
+URI for the parent if tree launch is enabled
+
+[tree-spawn]
+
+Tree-based spawn in progress
+
+[daemonize]
+
+Daemonize the DVM daemons into the background
+
+[set-sid]
+
+Direct the DVM daemons to separate from the current session
+
+[prtemca]
+
+Pass a PRRTE MCA parameter.
+
+Syntax: "--prtemca <key> <value>", where "key" is the parameter name
+and "value" is the parameter value.
+
+[pmixmca]
+
+Pass a PMIx MCA parameter
+
+Syntax: "--pmixmca <key> <value>", where "key" is the parameter name
+and "value" is the parameter value.
+
+[debug-daemons-file]
+
+Debug daemon output is enabled and all output from the daemons is
+redirected into files with names of the form:
+
+   output-prted-<daemon-nspace>-<nodename>.log
+
+These names avoid conflict on shared file systems. The files are
+located in the top-level session directory assigned to the DVM.
+
+See the "Session directory" HTML documentation for additional details
+about the PRRTE session directory.
+
+[leave-session-attached]
+
+Do not discard stdout/stderr of remote PRRTE daemons. The primary use
+for this option is to ensure that the daemon output streams (i.e.,
+stdout and stderr) remain open after launch, thus allowing the user to
+see any daemon-generated error messages. Otherwise, the daemon will
+"daemonize" itself upon launch, thereby closing its output streams.
+
+[prun:executable-not-specified]
+
+No executable was specified on the %s command line.
+
+Aborting.
+
+[prun:call-failed]
+
+%s encountered a %s call failure.  This should not happen, and usually
+indicates an error within the operating system itself. Specifically,
+the following error occurred:
+
+   %s
+
+The only other available information that may be helpful is the errno
+that was returned: %d.
+
+[prun:proc-ordered-abort]
+
+%s has exited due to process rank %lu with PID %lu on node %s calling
+"abort". This may have caused other processes in the application to be
+terminated by signals sent by %s (as reported here).
+
+[prun:proc-exit-no-sync]
+
+%s has exited due to process rank %lu with PID %lu on node %s exiting
+improperly. There are three reasons this could occur:
+
+1. this process did not call "init" before exiting, but others in the
+job did. This can cause a job to hang indefinitely while it waits for
+all processes to call "init". By rule, if one process calls "init",
+then ALL processes must call "init" prior to termination.
+
+2. this process called "init", but exited without calling "finalize".
+By rule, all processes that call "init" MUST call "finalize" prior to
+exiting or it will be considered an "abnormal termination"
+
+3. this process called "MPI_Abort" or "prte_abort" and the mca
+parameter prte_create_session_dirs is set to false. In this case, the
+run-time cannot detect that the abort call was an abnormal
+termination. Hence, the only error message you will receive is this
+one.
+
+This may have caused other processes in the application to be
+terminated by signals sent by %s (as reported here).
+
+You can avoid this message by specifying -quiet on the %s command
+line.
+
+[prun:proc-aborted]
+
+%s noticed that process rank %lu with PID %lu on node %s exited on
+signal %d.
+
+[prun:proc-aborted-strsignal]
+
+%s noticed that process rank %lu with PID %lu on node %s exited on
+signal %d (%s).
+
+[prun:empty-prefix]
+
+A prefix was supplied to %s that only contained slashes.
+
+This is a fatal error; %s will now abort.  No processes were launched.
+
+[prun:sys-limit-pipe]
+
+%s was unable to launch the specified application as it encountered an
+error:
+
+Error: system limit exceeded on number of pipes that can be open
+
+   Node: %s
+
+when attempting to start process rank %lu.
+
+This can be resolved by setting the mca parameter
+opal_set_max_sys_limits to 1, increasing your limit descriptor setting
+(using limit or ulimit commands), asking the system administrator for
+that node to increase the system limit, or by rearranging your
+processes to place fewer of them on that node.
+
+[prun:sys-limit-files]
+
+%s was unable to launch the specified application as it encountered an
+error:
+
+Error: system limit exceeded on number of files that can be open
+
+   Node: %s
+
+when attempting to start process rank %lu.
+
+This can be resolved by setting the mca parameter
+opal_set_max_sys_limits to 1, increasing your limit descriptor setting
+(using limit or ulimit commands), asking the system administrator for
+that node to increase the system limit, or by rearranging your
+processes to place fewer of them on that node.
+
+[prun:pipe-setup-failure]
+
+%s was unable to launch the specified application as it encountered an
+error:
+
+Error: pipe function call failed when setting up I/O forwarding
+subsystem
+
+   Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:sys-limit-children]
+
+%s was unable to launch the specified application as it encountered an
+error:
+
+Error: system limit exceeded on number of processes that can be
+started
+
+   Node: %s
+
+when attempting to start process rank %lu.
+
+This can be resolved by either asking the system administrator for
+that node to increase the system limit, or by rearranging your
+processes to place fewer of them on that node.
+
+[prun:failed-term-attrs]
+
+%s was unable to launch the specified application as it encountered an
+error:
+
+Error: reading tty attributes function call failed while setting up
+I/O forwarding system
+
+   Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:wdir-not-found]
+
+%s was unable to launch the specified application as it could not find
+the specified working directory:
+
+   Working directory: %s
+   Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:wdir-not-accessible]
+
+%s was unable to launch the specified application as it lacks
+permissions to change to the specified working directory:
+
+   Working directory: %s
+   Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:exe-not-found]
+
+%s was unable to find the specified executable file, and therefore did
+not launch the job.  This error was first reported for process rank
+%lu; it may have occurred for other processes as well.
+
+NOTE: A common cause for this error is misspelling a %s command
+   line parameter option (remember that %s interprets the first
+   unrecognized command line token as the executable).
+
+   Node:       %s
+   Executable: %s
+
+[prun:exe-not-accessible]
+
+%s was unable to launch the specified application as it lacked
+permissions to execute an executable:
+
+   Executable: %s
+   Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:pipe-read-failure]
+
+%s was unable to launch the specified application as it encountered an
+error:
+
+Error: reading from a pipe function call failed while spawning a local
+process
+
+   Node: %s
+
+while attempting to start process rank %lu.
+
+[prun:proc-failed-to-start]
+
+%s was unable to start the specified application as it encountered an
+error:
+
+   Error code: %d
+   Error name: %s
+   Node: %s
+
+when attempting to start process rank %lu.
+
+[prun:proc-failed-to-start-no-status]
+
+%s was unable to start the specified application as it encountered an
+error on node %s. More information may be available above.
+
+[prun:ompi-server-filename-bad]
+
+%s was unable to parse the filename where contact info for the prte-
+server was to be found. The option we were given was:
+
+   --prte-server %s
+
+This appears to be missing the required ':' following the keyword
+"file". Please remember that the correct format for this command line
+option is:
+
+   --prte-server file:path-to-file
+
+where path-to-file can be either relative to the cwd or absolute.
+
+[prun:ompi-server-filename-missing]
+
+%s was unable to parse the filename where contact info for the prte-
+server was to be found. The option we were given was:
+
+   --prte-server %s
+
+This appears to be missing a filename following the ':'. Please
+remember that the correct format for this command line option is:
+
+   --prte-server file:path-to-file
+
+where path-to-file can be either relative to the cwd or absolute.
+
+[prun:ompi-server-filename-access]
+
+%s was unable to access the filename where contact info for the prte-
+server was to be found. The option we were given was:
+
+   --prte-server %s
+
+Please remember that the correct format for this command line option
+is:
+
+   --prte-server file:path-to-file
+
+where path-to-file can be either relative to the cwd or absolute, and
+that you must have read access permissions to that file.
+
+[prun:ompi-server-file-bad]
+
+%s was unable to read the prte-server's contact info from the given
+filename. The filename we were given was:
+
+FILE: %s
+
+Please remember that the correct format for this command line option
+is:
+
+--prte-server file:path-to-file
+
+where path-to-file can be either relative to the cwd or absolute, and
+that the file must have a single line in it that contains the PRTE uri
+for the prte-server. Note that this is *not* a standard uri, but a
+special format used internally by PRTE for communications. It can best
+be generated by simply directing the prte-server to put its uri in a
+file, and then giving %s that filename.
+
+[prun:multiple-paffinity-schemes]
+
+Multiple processor affinity schemes were specified (can only specify
+one):
+
+   Slot list: %s
+   prte_paffinity_alone:  true
+
+Please specify only the one desired method.
+
+[prun:invalid-node-rank]
+
+An invalid node rank was obtained - this is probably something that
+should be reported to the PRRTE developers.
+
+[prun:invalid-local-rank]
+
+An invalid local rank was obtained - this is probably something that
+should be reported to the PRRTE developers.
+
+[prun:invalid-phys-cpu]
+
+An invalid physical processor id was returned when attempting to set
+processor affinity - please check to ensure that your system supports
+such functionality. If so, then this is probably something that should
+be reported to the PRRTE developers.
+
+[prun:topo-not-supported]
+
+An attempt was made to bind a process to a specific hardware topology
+mapping (e.g., binding to a package) but the operating system does not
+support such topology-aware actions.  Talk to your local system
+administrator to find out if your system can support topology-aware
+functionality (e.g., Linux Kernels newer than v2.6.18).
+
+Systems that do not support processor topology-aware functionality
+cannot use "bind to package" and other related functionality.
+
+   Local host:        %s
+   Action attempted:  %s %s
+   Application name:  %s
+
+[prun:not-enough-resources]
+
+Not enough %s were found on the local host to meet the requested
+binding action:
+
+   Local host:        %s
+   Action requested:  %s
+   Application name:  %s
+
+Please revise the request and try again.
+
+[prun:invalid-slot-list-range]
+
+A slot list was provided that exceeds the boundaries on available
+resources:
+
+   Local host: %s
+   Slot list:  %s
+
+Please check your boundaries and try again.
+
+[prun:proc-comm-failed]
+
+A critical communication path was lost to:
+
+   My name:      %s
+   Process name: %s
+   Node:         %s
+
+[prun:proc-mem-exceeded]
+
+A process exceeded memory limits:
+
+   Process name: %s
+   Node:         %s
+
+[prun:proc-stalled]
+
+One or more processes appear to have stalled - a monitored file failed
+to show the required activity.
+
+[prun:proc-sensor-exceeded]
+
+One or more processes have exceeded a specified sensor limit, but no
+further info is available.
+
+[prun:proc-heartbeat-failed]
+
+%s failed to receive scheduled heartbeat communications from a remote
+process:
+
+   Process name: %s
+   Node:         %s
+
+[prun:non-zero-exit]
+
+%s detected that one or more processes exited with non-zero status,
+thus causing the job to be terminated. The first process to do so was:
+
+   Process name: %s
+   Exit code:    %d
+
+[prun:negative-nprocs]
+
+%s has detected that one or more applications was given a negative
+number of processes to run:
+
+   Application:  %s
+   Num procs:    %d
+
+Please correct this value and try again.
+
+[prun:timeout]
+
+The user-provided time limit for job execution has been reached:
+
+   Timeout: %d seconds
+
+The job will now be aborted.  Please check your code and/or
+adjust/remove the job execution time limit (as specified by --timeout
+command line option or MPIEXEC_TIMEOUT environment variable).
+
+[prun:conflict-env-set]
+
+ERROR: You have attempted to pass environment variables to PRTE with
+both the "-x" method and by setting the MCA parameter
+"mca_base_env_list".
+
+PRTE does not support mixing these two methods.  Please choose one
+method and try launching your job again.
+
+Your job will now abort.
+
+[prun:pmix-failed]
+
+The call to pmix_init_server() failed. This may be due to your
+system's restriction for Unix's socket's path-length.
+
+   prte_proc_session_dir: %s
+
+Please try to set TMPDIR to something short (like /tmp) or change Your
+computer's name (see uname -n).
+
+[prun:timeoutconflict]
+
+Conflicting requests for timeout were given:
+
+   --timeout command line option: %d MPIEXEC_TIMEOUT envar:         %s
+
+Only one method should be provided, or else they must agree. Please
+correct and retry.
+
+[prun:stop-on-exec]
+
+%s was unable to stop the executable at first instruction:
+
+   Error:     %s
+   Nodename:  %s
+   Rank:      %lu
+
+[use-pterm]
+
+Use of %s to terminate the PRTE DVM has been deprecated. Please use
+the "pterm" tool instead in the future.
+
+[bad-pause-for-tool]
+
+%s detected the presence of the PMIX_LAUNCHER_PAUSE_FOR_TOOL
+environmental variable, but the value of the variable is in an
+improper form:
+
+   PMIX_LAUNCHER_PAUSE_FOR_TOOL:  %s
+
+The variable must be of the form (nspace:rank) of the tool requesting
+that %s pause for it to connect. Please reset the value of the
+variable and try again.
+
+[prun:executable-incorrectly-given]
+
+The %s command was given with an application specified. %s is only
+used to start the persistent DVM - it cannot be used with an
+application.
+
+[bad-option-input]
+
+%s was given an option that expected a string argument:
+
+   option: %s
+   argument: %s
+   expected: %s
+
+Please correct the option and try again.
+
+[file-open-error]
+
+%s was unable to open the specified file provided as an option:
+
+   option: %s
+   argument: %s
+   file: %s
+
+Please correct the option and try again.
+
+[bad-file]
+
+%s was unable to read the necessary info from the provided file:
+
+   option: %s
+   argument: %s
+   file: %s
+
+Please correct the option or the file and try again.
+
+[bad-dvm-option]
+
+The --dvm <arg> option was provided, but the argument is one not
+recognized:
+
+   arg: %s
+
+Please see "%s --help dvm" for a list of recognized options and
+examples
+
+[appfile-failure]
+
+The --app <arg> option was provided, but the specified file was not
+found or could not be opened:
+
+   file: %s
+
+Please correct the option and try again.
