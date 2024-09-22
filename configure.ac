@@ -1019,7 +1019,6 @@ AC_CONFIG_FILES([
     include/prte_version.h
     docs/Makefile
     src/docs/Makefile
-    src/docs/show-help-files/Makefile
     src/docs/prrte-rst-content/Makefile
 ])
 
