@@ -1,0 +1,196 @@
+[bogus section]
+
+This section is not used by PRTE code.  But we have to put a RST
+section title in this file somewhere, or Sphinx gets unhappy.  So we
+put it in a section that is ignored by PRTE code.
+
+
+Hello, world
+============
+
+[no-hostfile]
+
+PRTE was unable to open the hostfile:
+
+   %s
+
+Check to make sure the path and filename are correct.
+
+[port]
+
+PRTE detected a bad parameter in the hostfile:
+
+   %s
+
+The port parameter is less than 0:
+
+   port=%d
+
+[slots]
+
+PRTE detected a bad parameter in the hostfile:
+
+   %s
+
+The slots parameter is less than 0:
+
+   slots=%d
+
+[max_slots]
+
+PRTE detected a bad parameter in the hostfile:
+
+   %s
+
+The max_slots parameter is less than 0:
+
+   max_slots=%d
+
+[max_slots_lt]
+
+PRTE detected a bad parameter in the hostfile:
+
+   %s
+
+The max_slots parameter is less than the slots parameter:
+
+   slots=%d
+   max_slots=%d
+
+[parse_error_string]
+
+PRTE detected a parse error in the hostfile:
+
+   %s
+
+It occured on line number %d on token %d:
+
+   %s
+
+[parse_error_int]
+
+PRTE detected a parse error in the hostfile:
+
+   %s
+
+It occured on line number %d on token %d:
+
+   %d
+
+[parse_error]
+
+PRTE detected a parse error in the hostfile:
+
+   %s
+
+It occured on line number %d on token %d.
+
+[not-all-mapped-alloc]
+
+Some of the requested hosts are not included in the current
+allocation.
+
+The requested hosts were in this hostfile:
+
+      %s
+
+Please verify that you have specified the allocated resources properly
+in the provided hostfile.
+
+[hostfile:relative-syntax]
+
+A relative host was specified, but no prior allocation has been made.
+Thus, there is no way to determine the proper host to be used.
+
+   hostfile entry: %s
+
+Re-run this command with "--help hosts" for further information.
+
+[hostfile:relative-node-not-found]
+
+A relative host was specified, but was not found. The requested host
+was specified as:
+
+   Index: %d
+   Syntax given: %s
+
+This is most likely due to the relative index being out of bounds. You
+could obtain a larger allocation or reduce the relative host index.
+
+Re-run this command with "--help hosts" for further information.
+
+[hostfile:invalid-relative-node-syntax]
+
+A relative host was improperly specified — the value provided was.
+
+   hostfile entry: %s
+
+You may have forgotten to preface a node with "N" or "n", or used the
+"e" or "E" to indicate empty nodes.
+
+Re-run this command with "--help hosts" for further information.
+
+[hostfile:not-enough-empty]
+
+The requested number of empty hosts was not available — the system was
+short by %d hosts.  Please recheck your allocation.
+
+Re-run this command with "--help hosts" for further information.
+
+[boards]
+
+PRTE detected a bad parameter in the hostfile:
+
+   %s
+
+The boards parameter is less than 0:
+
+   boards=%d
+
+[sockets]
+
+PRTE detected a bad parameter in the hostfile:
+
+   %s
+
+The packages parameter is less than 0:
+
+   packages=%d
+
+[cores]
+
+PRTE detected a bad parameter in the hostfile:
+
+   %s
+
+The cores parameter is less than 0:
+
+   cores=%d
+
+[hostfile:extra-node-not-found]
+
+A hostfile was provided that contains at least one node not present in
+the allocation:
+
+   hostfile:  %s
+   node:      %s
+
+If you are operating in a resource-managed environment, then only
+nodes that are in the allocation can be used in the hostfile. You may
+find relative node syntax to be a useful alternative to specifying
+absolute node names; re-run this command with "--help hosts" for
+further information.
+
+[slots-given]
+
+A hostfile was provided that contains multiple definitions of the slot
+count for at least one node:
+
+   hostfile:  %s
+   node:      %s
+
+You can either list a node multiple times, once for each slot, or you
+can provide a single line that contains "slot=N". Mixing the two
+methods is not supported.
+
+Please correct the hostfile and try again.
