@@ -1,16 +1,6 @@
-[bogus section]
-
-This section is not used by PRTE code.  But we have to put a RST
-section title in this file somewhere, or Sphinx gets unhappy.  So we
-put it in a section that is ignored by PRTE code.
-
-
-Hello, world
-============
-
 [mbind failure]
 
-PRTE failed to bind internal memory to a specific NUMA node.  This
+PRRTE failed to bind internal memory to a specific NUMA node.  This
 message will only be reported at most once per process.
 
    Local host: %s
@@ -50,12 +40,12 @@ been deprecated and replaced as follows:
      Deprecated:  %s
      Replacement: %s
 
-The deprecated forms *will* disappear in a future version of PRTE.
+The deprecated forms *will* disappear in a future version of PRRTE.
 Please update to the new syntax.
 
 [obj-idx-failed]
 
-PRTE failed to find a cache of a specified type.  This is a highly
+PRRTE failed to find a cache of a specified type.  This is a highly
 unusual error; it may indicate a system configuration error.  This
 additional information may be of help:
 

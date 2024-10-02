@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
    Copyright (c) 2023 Jeffrey M. Squyres.  All rights reserved.
 
    $COPYRIGHT$
@@ -78,6 +78,13 @@ option:
 * ``IF-SUPPORTED`` indicates that the job should continue to
   be launched and executed even if binding cannot be
   performed as requested.
+
+* ``LIMIT=n`` limits the number of processes bound to each eligible
+  representative of the specified type to the given number. For
+  example, speifying "--bind-to l3:limit=2" would direct PRRTE
+  to bind ranks to the L3caches, limiting the number of processes
+  bound to each l3cache to two - i.e., bind 2 processes to a
+  given l3cache, and then move on to the next.
 
 .. note:: Directives and qualifiers are case-insensitive.
           ``OVERLOAD`` is the same as ``overload``.

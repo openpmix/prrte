@@ -13,7 +13,7 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -113,6 +113,7 @@ typedef struct {
     bool dobind;
     hwloc_obj_type_t hwb;
     unsigned clvl;
+    uint16_t limit;
 
     /* usage tracking */
     hwloc_cpuset_t target;

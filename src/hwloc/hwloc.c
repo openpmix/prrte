@@ -3,7 +3,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -166,7 +166,7 @@ int prte_hwloc_base_register(void)
                                      "l3cache, numa, package, (\"none\" is the default when oversubscribed, \"core\" is "
                                      "the default otherwise). Allowed "
                                      "colon-delimited qualifiers: "
-                                     "overload-allowed, if-supported",
+                                     "overload-allowed, if-supported, limit",
                                      PMIX_MCA_BASE_VAR_TYPE_STRING,
                                      &prte_hwloc_base_binding_policy);
     if (NULL == prte_hwloc_base_binding_policy) {
@@ -566,8 +566,9 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
 {
     int i;
     prte_binding_policy_t tmp;
-    char **quals, *myspec, *ptr;
+    char **quals, *myspec, *ptr, *p2;
     prte_job_t *jdata = (prte_job_t *) jdat;
+    uint16_t u16;
 
     /* set default */
     tmp = 0;
@@ -605,6 +606,25 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
                 }
                 prte_set_attribute(&jdata->attributes, PRTE_JOB_REPORT_BINDINGS, PRTE_ATTR_GLOBAL,
                                    NULL, PMIX_BOOL);
+
+            } else if (PMIX_CHECK_CLI_OPTION(quals[i], PRTE_CLI_LIMIT)) {
+                if (NULL == jdata) {
+                    pmix_show_help("help-prte-rmaps-base.txt", "unsupported-default-modifier", true,
+                                   "binding policy", quals[i]);
+                    free(myspec);
+                    return PRTE_ERR_SILENT;
+                }
+                /* Numeric value must immediately follow '=' (LIMIT=2) */
+                u16 = strtol(&quals[i][6], &p2, 10);
+                if ('\0' != *p2) {
+                    /* missing the value or value is invalid */
+                    pmix_show_help("help-prte-rmaps-base.txt", "invalid-value", true,
+                                   "binding limit", "LIMIT", quals[i]);
+                    PMIX_ARGV_FREE_COMPAT(quals);
+                    return PRTE_ERR_SILENT;
+                }
+                prte_set_attribute(&jdata->attributes, PRTE_JOB_BINDING_LIMIT, PRTE_ATTR_GLOBAL,
+                                   &u16, PMIX_UINT16);
 
             } else {
                 /* unknown option */
