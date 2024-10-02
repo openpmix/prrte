@@ -109,6 +109,9 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         prte_get_attribute(&jdata->attributes, PRTE_JOB_DISPLAY_DEVEL_MAP, NULL, PMIX_BOOL)) {
         options.dobind = true;
     }
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_BINDING_LIMIT, (void**) &u16ptr, PMIX_UINT16)) {
+        options.limit = u16;
+    }
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: mapping job %s",
@@ -468,7 +471,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 #else
             } else if (HWLOC_OBJ_L1CACHE == options.maptype ||
                        HWLOC_OBJ_L2CACHE == options.maptype ||
-                       HWLOC_OBJ_L1CACHE == options.maptype) {
+                       HWLOC_OBJ_L3CACHE == options.maptype) {
                 /* add in #cache for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
                     app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,

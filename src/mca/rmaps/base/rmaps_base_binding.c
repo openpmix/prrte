@@ -169,6 +169,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     tmp_obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo,
                                                   prte_rmaps_base.available,
                                                   type, 0);
+
 #if HWLOC_API_VERSION < 0x20000
     hwloc_bitmap_andnot(node->available, node->available, tmp_obj->allowed_cpuset);
     if (hwloc_bitmap_iszero(node->available) && options->overload) {

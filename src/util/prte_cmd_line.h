@@ -242,6 +242,7 @@ BEGIN_C_DECLS
 #define PRTE_CLI_DISPALLOC  "displayalloc"
 // PRTE_CLI_DISPLAY reused here
 #define PRTE_CLI_DISPDEV    "displaydevel"
+#define PRTE_CLI_LIMIT      "limit="
 
 // Output qualifiers
 #define PRTE_CLI_NOCOPY     "nocopy"

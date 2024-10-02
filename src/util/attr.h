@@ -226,6 +226,8 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_REF_ID                     (PRTE_JOB_START_KEY + 114) // char* - string identifier assigned by the user to an allocation
                                                                        //         request - carried along with the session that resulted
                                                                        //         from the request
+#define PRTE_JOB_BINDING_LIMIT              (PRTE_JOB_START_KEY + 115) // (uint16_t) - Max number of procs to bind to specified
+                                                                       //          target type before moving to next target
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
