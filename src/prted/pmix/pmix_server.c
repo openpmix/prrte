@@ -1744,7 +1744,7 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
                               pmix_data_buffer_t *buffer,
                               prte_rml_tag_t tg, void *cbdata)
 {
-    pmix_status_t rc;
+    pmix_status_t rc = PMIX_SUCCESS;
     uint8_t cmd;
     int32_t cnt;
     size_t ninfo;
@@ -1752,7 +1752,7 @@ static void pmix_server_sched(int status, pmix_proc_t *sender,
     uint32_t sessionID;
     pmix_info_t *info = NULL;
     pmix_proc_t source;
-    pmix_server_req_t *req;
+    pmix_server_req_t *req = NULL;
     int refid;
     PRTE_HIDE_UNUSED_PARAMS(status, sender, tg, cbdata);
 

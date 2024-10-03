@@ -454,10 +454,10 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
 static int parse_cli(char **argv, pmix_cli_result_t *results,
                      bool silent)
 {
-    char *shorts, *helpfile;
-    struct option *myoptions;
+    char *shorts = NULL, *helpfile = NULL;
+    struct option *myoptions = NULL;
     int rc, n;
-    pmix_cli_item_t *opt;
+    pmix_cli_item_t *opt = NULL;
 
     if (0 == strcmp(prte_tool_actual, "prte")) {
         myoptions = prteoptions;

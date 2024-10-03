@@ -56,7 +56,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
                         prte_node_t *node, hwloc_obj_t obj,
                         prte_rmaps_options_t *options)
 {
-    hwloc_obj_t trg_obj, tmp_obj;
+    hwloc_obj_t trg_obj = NULL, tmp_obj = NULL;
     unsigned ncpus;
     hwloc_obj_type_t type;
     hwloc_obj_t target;

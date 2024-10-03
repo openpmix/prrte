@@ -935,7 +935,8 @@ void prte_odls_base_spawn_proc(int fd, short sd, void *cbdata)
     prte_job_t *jobdat = cd->jdata;
     prte_app_context_t *app = cd->app;
     prte_proc_t *child = cd->child;
-    int rc, i;
+    int rc = PRTE_SUCCESS;
+    int i;
     bool found;
     prte_proc_state_t state;
     pmix_proc_t pproc;
