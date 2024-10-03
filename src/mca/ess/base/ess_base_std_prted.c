@@ -100,14 +100,14 @@ int prte_ess_base_prted_setup(void)
     char log_file[PATH_MAX];
     char *error = NULL;
     char *uri = NULL;
-    char *tmp;
-    prte_job_t *jdata;
+    char *tmp = NULL;
+    prte_job_t *jdata = NULL;
     prte_proc_t *proc;
-    prte_app_context_t *app;
+    prte_app_context_t *app = NULL;
     hwloc_obj_t obj;
     unsigned i, j;
-    prte_topology_t *t;
-    prte_ess_base_signal_t *sig;
+    prte_topology_t *t = NULL;
+    prte_ess_base_signal_t *sig = NULL;
     int idx;
     pmix_value_t val;
 

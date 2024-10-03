@@ -215,10 +215,10 @@ static int term_orteds(void)
 static void launch_daemons(int fd, short args, void *cbdata)
 {
     prte_state_caddy_t *state = (prte_state_caddy_t *) cbdata;
-    prte_job_t *daemons;
+    prte_job_t *daemons = NULL;
     int rc;
     prte_job_map_t *map = NULL;
-    prte_node_t *node;
+    prte_node_t *node = NULL;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     /* setup the virtual machine */
