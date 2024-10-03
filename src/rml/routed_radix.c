@@ -172,19 +172,17 @@ void prte_rml_compute_routing_tree(void)
 {
     prte_routed_tree_t *child;
     int j;
-    int Level, Sum, NInLevel, Ii;
+    int Sum, NInLevel, Ii;
     int NInPrevLevel;
     prte_job_t *dmns;
     prte_proc_t *d;
 
     /* compute my parent */
     Ii = PRTE_PROC_MY_NAME->rank;
-    Level = 0;
     Sum = 1;
     NInLevel = 1;
 
     while (Sum < (Ii + 1)) {
-        Level++;
         NInLevel *= prte_rml_base.radix;
         Sum += NInLevel;
     }
