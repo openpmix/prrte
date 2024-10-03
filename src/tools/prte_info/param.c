@@ -325,12 +325,12 @@ void prte_info_show_path(const char *type, const char *value)
     free(path);
 }
 
-void prte_info_do_arch()
+void prte_info_do_arch(void)
 {
     prte_info_out("Configured architecture", "config:arch", PRTE_ARCH);
 }
 
-void prte_info_do_hostname()
+void prte_info_do_hostname(void)
 {
     prte_info_out("Configure host", "config:host", PRTE_CONFIGURE_HOST);
 }

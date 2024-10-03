@@ -248,9 +248,9 @@ static void pass_request(int sd, short args, void *cbdata)
 {
     pmix_server_req_t *req = (pmix_server_req_t*)cbdata;
     pmix_status_t rc;
-    size_t n;
-    pmix_info_t *xfer;
-    PRTE_HIDE_UNUSED_PARAMS(sd, args);
+    size_t n = 0;
+    pmix_info_t *xfer = NULL;
+    PRTE_HIDE_UNUSED_PARAMS(sd, args, n, xfer);
 
     /* add this request to our local request tracker array */
     req->local_index = pmix_pointer_array_add(&prte_pmix_server_globals.local_reqs, req);
