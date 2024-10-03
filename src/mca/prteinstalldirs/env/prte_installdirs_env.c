@@ -37,10 +37,26 @@ prte_prteinstalldirs_base_component_t prte_mca_prteinstalldirs_env_component = {
         /* Component open and close functions */
         .pmix_mca_open_component = prteinstalldirs_env_open
     },
-
     /* Next the prte_install_dirs_t install_dirs_data information */
+    .install_dirs_data =
     {
-        NULL,
+        .prefix = NULL,
+        .exec_prefix = NULL,
+        .bindir = NULL,
+        .sbindir = NULL,
+        .libexecdir = NULL,
+        .datarootdir = NULL,
+        .datadir = NULL,
+        .sysconfdir = NULL,
+        .sharedstatedir = NULL,
+        .localstatedir = NULL,
+        .libdir = NULL,
+        .includedir = NULL,
+        .infodir = NULL,
+        .mandir = NULL,
+        .prtedatadir = NULL,
+        .prtelibdir = NULL,
+        .prteincludedir = NULL,
     },
 };
 
