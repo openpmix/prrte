@@ -14,7 +14,7 @@
 # Copyright (c) 2011-2013 Los Alamos National Security, LLC.  All rights
 #                         reserved.
 # Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2023      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2023-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -33,16 +33,10 @@ SUBDIRS += \
     tools/prte \
     tools/pterm
 
-if WANT_PRTE_SCHED
-SUBDIRS += \
-    tools/psched
-endif
-
 DIST_SUBDIRS += \
 	tools/prted \
 	tools/prun \
 	tools/pcc \
     tools/prte_info \
     tools/prte \
-    tools/pterm \
-    tools/psched
+    tools/pterm

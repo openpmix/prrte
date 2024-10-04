@@ -68,7 +68,6 @@ PRTE_MAN1 = \
         prted.1 \
         prterun.1 \
         prun.1 \
-        psched.1 \
         pterm.1
 
 PRTE_MAN5 = \

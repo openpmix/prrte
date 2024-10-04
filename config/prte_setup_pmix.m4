@@ -79,10 +79,6 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                   [AS_HELP_STRING([--disable-pmix-lib-checks],
                                   [If --disable-pmix-lib-checks is specified, configure will assume that -lpmix is available])])
 
-    AC_ARG_WITH(prte-scheduler,
-        AS_HELP_STRING([--with-prte-scheduler],
-                       [Normal PRTE users/applications do not need this.  Users/applications wishing to explore dynamic allocation support probably do (default: enabled).]))
-
     prte_pmix_support=1
 
     if test "$with_pmix" = "no"; then
@@ -180,36 +176,6 @@ AC_DEFUN([PRTE_CHECK_PMIX],[
                        [Whether or not PMIx has the BASE capability flag set])
 
     PRTE_SUMMARY_ADD([Required Packages], [PMIx], [], [$prte_pmix_SUMMARY])
-
-    #
-    # Do we want to install the PRRTE scheduler?
-    #
-    AC_MSG_CHECKING([if want to install PRRTE pseudo-scheduler])
-    if test "$prte_pmix_low_version" = "0"; then
-        if test "$with_prte_scheduler" = "no"; then
-            AC_MSG_RESULT([no])
-            prte_want_scheduler="no"
-            WANT_PRTE_SCHED=0
-        else
-            AC_MSG_RESULT([yes])
-            prte_want_scheduler="yes"
-            WANT_PRTE_SCHED=1
-        fi
-    else
-        if test "$with_prte_scheduler" = "yes"; then
-            AC_MSG_RESULT([yes])
-            AC_MSG_WARN([Pseudo-scheduler requested, but PMIx version])
-            AC_MSG_WARN([is too low. Please reconfigure with a version])
-            AC_MSG_WARN([of at least v6.0])
-            AC_MSG_ERROR([Cannot continue.])
-        else
-            prte_want_scheduler="no"
-            WANT_PRTE_SCHED=0
-        fi
-    fi
-    AM_CONDITIONAL(WANT_PRTE_SCHED, test "$WANT_PRTE_SCHED" = 1)
-    PRTE_SUMMARY_ADD([Miscellaneous], [PRTE Pseudo-Scheduler], [], [$prte_want_scheduler])
-
 
     PRTE_VAR_SCOPE_POP
 ])

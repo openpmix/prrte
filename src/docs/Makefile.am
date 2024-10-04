@@ -38,7 +38,6 @@ dist_prtedata_DATA = \
         show-help-files/help-prted.txt \
         show-help-files/help-prterun.txt \
         show-help-files/help-prun.txt \
-        show-help-files/help-psched.txt \
         show-help-files/help-pterm.txt \
         show-help-files/help-ras-base.txt \
         show-help-files/help-ras-pbs.txt \

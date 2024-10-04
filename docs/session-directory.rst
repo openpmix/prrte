@@ -46,7 +46,7 @@ By default, the session directory name is set to
 
 where `tool` is the argv[0] of the process setting up the
 session directory. In most cases, this will be either `prte`,
-`prterun`, or `prted` - though special tools such as `psched`
+`prterun`, or `prted` - though special tools
 may also create a session directory tree.
 
 The session directory name includes the PID
