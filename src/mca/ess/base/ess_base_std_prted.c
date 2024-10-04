@@ -57,7 +57,6 @@
 #include "src/mca/plm/base/base.h"
 #include "src/mca/prtereachable/base/base.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/mca/rtc/base/base.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
@@ -405,19 +404,6 @@ int prte_ess_base_prted_setup(void)
         error = "prte_odls_base_select";
         goto error;
     }
-    /* Open/select the rtc */
-    if (PRTE_SUCCESS
-        != (ret = pmix_mca_base_framework_open(&prte_rtc_base_framework,
-                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_rtc_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_rtc_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_rtc_base_select";
-        goto error;
-    }
     if (PRTE_SUCCESS
         != (ret = pmix_mca_base_framework_open(&prte_rmaps_base_framework,
                                                PMIX_MCA_BASE_OPEN_DEFAULT))) {
@@ -543,7 +529,6 @@ int prte_ess_base_prted_finalize(void)
     (void) pmix_mca_base_framework_close(&prte_plm_base_framework);
     /* make sure our local procs are dead */
     prte_odls.kill_local_procs(NULL);
-    (void) pmix_mca_base_framework_close(&prte_rtc_base_framework);
     (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
     (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
     prte_rml_close();

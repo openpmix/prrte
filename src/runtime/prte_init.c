@@ -79,7 +79,6 @@
 #include "src/mca/prteinstalldirs/base/base.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/mca/rtc/base/base.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 

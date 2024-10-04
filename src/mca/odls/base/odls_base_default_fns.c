@@ -69,7 +69,6 @@
 #include "src/mca/rmaps/rmaps_types.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
-#include "src/mca/rtc/rtc.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/state.h"
 
@@ -787,9 +786,6 @@ next:
     } else {
         lock.active = false; // we won't get a callback
     }
-
-    /* load any controls into the job */
-    prte_rtc.assign(jdata);
 
     /* spin up the spawn threads */
     prte_odls_base_start_threads(jdata);
