@@ -3,8 +3,7 @@ Scheduler Integration
 =====================
 
 This section describes PRRTE support for interactions
-with schedulers, including PRRTE's own ``psched``
-pseudo-scheduler.
+with schedulers.
 
 .. toctree::
    :maxdepth: 2

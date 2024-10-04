@@ -4,7 +4,7 @@
 # Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
-# Copyright (c) 2022-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -26,6 +26,5 @@ AC_DEFUN([PRTE_CONFIG_FILES],[
         src/tools/prte_info/Makefile
         src/tools/prte/Makefile
         src/tools/pterm/Makefile
-        src/tools/psched/Makefile
     ])
 ])
