@@ -65,7 +65,6 @@
 #include "src/mca/prtereachable/base/base.h"
 #include "src/mca/ras/base/base.h"
 #include "src/mca/rmaps/base/base.h"
-#include "src/mca/rtc/base/base.h"
 #include "src/mca/schizo/base/base.h"
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
@@ -406,19 +405,6 @@ static int rte_init(int argc, char **argv)
         error = "prte_odls_base_select";
         goto error;
     }
-    /* Open/select the rtc */
-    ret = pmix_mca_base_framework_open(&prte_rtc_base_framework,
-                                       PMIX_MCA_BASE_OPEN_DEFAULT);
-    if (PRTE_SUCCESS != ret) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_rtc_base_open";
-        goto error;
-    }
-    if (PRTE_SUCCESS != (ret = prte_rtc_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_rtc_base_select";
-        goto error;
-    }
 
     /* set the pmix_output hnp file location to be in the
      * proc-specific session directory. */
@@ -483,7 +469,6 @@ static int rte_finalize(void)
         /* make sure our local procs are dead */
         prte_odls.kill_local_procs(NULL);
     }
-    (void) pmix_mca_base_framework_close(&prte_rtc_base_framework);
     (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
     prte_rml_close();
     (void) pmix_mca_base_framework_close(&prte_oob_base_framework);

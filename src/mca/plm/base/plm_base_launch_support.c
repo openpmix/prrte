@@ -57,7 +57,6 @@
 #include "src/mca/rmaps/rmaps.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
-#include "src/mca/rtc/rtc.h"
 #include "src/mca/state/base/base.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"

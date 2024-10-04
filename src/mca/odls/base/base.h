@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights reserved.
  * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -156,6 +156,10 @@ PRTE_EXPORT int prte_odls_base_preload_files_app_context(prte_app_context_t *con
 PRTE_EXPORT void prte_odls_base_start_threads(prte_job_t *jdata);
 
 PRTE_EXPORT void prte_odls_base_harvest_threads(void);
+
+/* Binding support */
+PRTE_EXPORT void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd);
+
 
 #define PRTE_ODLS_SET_ERROR(ns, s, j)                                                   \
 do {                                                                                    \

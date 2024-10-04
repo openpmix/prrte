@@ -21,7 +21,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -126,7 +126,6 @@
 #include "src/mca/ess/ess.h"
 #include "src/mca/iof/base/iof_base_setup.h"
 #include "src/mca/plm/plm.h"
-#include "src/mca/rtc/rtc.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_globals.h"
 #include "src/runtime/prte_wait.h"
@@ -333,7 +332,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
         }
 
         /* now set any child-level controls such as binding */
-        prte_rtc.set(cd, write_fd);
+        prte_odls_base_set(cd, write_fd);
 
     } else if (!PRTE_FLAG_TEST(cd->jdata, PRTE_JOB_FLAG_FORWARD_OUTPUT)) {
         /* tie stdin/out/err/internal to /dev/null */

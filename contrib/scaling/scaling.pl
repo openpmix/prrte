@@ -135,7 +135,7 @@ foreach $starter (@starterlist) {
             push @starters, $starter;
             $opt = $starteroptionlist[$idx] . " --npernode " . $ppn;
             if ($multiplier gt 1) {
-                $opt = $opt . " --mca rtc ^hwloc --mca ras_base_multiplier " . $multiplier;
+                $opt = $opt . " --bind-to none --mca ras_base_multiplier " . $multiplier;
             }
             push @starteroptions, $opt;
         } elsif ($useaprun && $starter eq "aprun") {
@@ -294,7 +294,7 @@ foreach $starter (@starters) {
     if ($starter eq "prun") {
         my $dvm = "prte-dvm --system-server";
         if ($multiplier gt 1) {
-            $dvm = $dvm . " --mca rtc ^hwloc --mca ras_base_multiplier " . $multiplier;
+            $dvm = $dvm . " --bind-to none --mca ras_base_multiplier " . $multiplier;
         }
         # need to start it
         print "##DVM: Launching $dvm\n";
