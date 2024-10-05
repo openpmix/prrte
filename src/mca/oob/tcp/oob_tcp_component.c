@@ -21,7 +21,7 @@
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -386,19 +386,35 @@ static int tcp_component_register(void)
     return PRTE_SUCCESS;
 }
 
+static char **split_and_resolve(char **orig_str, char *name);
+
 static int component_available(void)
 {
     pmix_pif_t *copied_interface, *selected_interface;
     struct sockaddr_storage my_ss;
-    char name[PMIX_IF_NAMESIZE];
     /* Larger than necessary, used for copying mask */
-    char string[50];
+    char string[50], **interfaces = NULL;
     int kindex;
-    int i;
+    int i, rc;
     bool keeploopback = false;
+    bool including = false;
 
     pmix_output_verbose(5, prte_oob_base_framework.framework_output,
                         "oob:tcp: component_available called");
+
+    /* if interface include was given, construct a list
+     * of those interfaces which match the specifications - remember,
+     * the includes could be given as named interfaces, IP addrs, or
+     * subnet+mask
+     */
+    if (NULL != prte_if_include) {
+        interfaces = split_and_resolve(&prte_if_include,
+                                       "include");
+        including = true;
+    } else if (NULL != prte_if_exclude) {
+        interfaces = split_and_resolve(&prte_if_exclude,
+                                       "exclude");
+    }
 
     /* if we are the master, then check the interfaces for loopbacks
      * and keep loopbacks only if no non-loopback interface exists */
@@ -421,10 +437,56 @@ static int component_available(void)
             continue;
         }
 
+
         i = selected_interface->if_index;
         kindex = selected_interface->if_kernel_index;
         memcpy((struct sockaddr *) &my_ss, &selected_interface->if_addr,
                MIN(sizeof(struct sockaddr_storage), sizeof(selected_interface->if_addr)));
+
+        /* ignore non-ip4/6 interfaces */
+        if (AF_INET != my_ss.ss_family
+#if PRTE_ENABLE_IPV6
+            && AF_INET6 != my_ss.ss_family
+#endif
+            ) {
+            continue;
+        }
+
+        /* ignore any virtual interfaces */
+        if (0 == strncmp(selected_interface->if_name, "vir", 3)) {
+            continue;
+        }
+
+        /* handle include/exclude directives */
+        if (NULL != interfaces) {
+            /* check for match */
+            rc = pmix_ifmatches(kindex, interfaces);
+            /* if one of the network specifications isn't parseable, then
+             * error out as we can't do what was requested
+             */
+            if (PRTE_ERR_NETWORK_NOT_PARSEABLE == rc) {
+                pmix_show_help("help-oob-tcp.txt", "not-parseable", true);
+                PMIX_ARGV_FREE_COMPAT(interfaces);
+                return PRTE_ERR_BAD_PARAM;
+            }
+            /* if we are including, then ignore this if not present */
+            if (including) {
+                if (PMIX_SUCCESS != rc) {
+                    pmix_output_verbose(20, prte_oob_base_framework.framework_output,
+                                        "%s oob:tcp:init rejecting interface %s (not in include list)",
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), selected_interface->if_name);
+                    continue;
+                }
+            } else {
+                /* we are excluding, so ignore if present */
+                if (PMIX_SUCCESS == rc) {
+                    pmix_output_verbose(20, prte_oob_base_framework.framework_output,
+                                        "%s oob:tcp:init rejecting interface %s (in exclude list)",
+                                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), selected_interface->if_name);
+                    continue;
+                }
+            }
+        }
 
         /* Refs ticket #3019
          * it would probably be worthwhile to print out a warning if PRRTE detects multiple
@@ -464,7 +526,7 @@ static int component_available(void)
         if (NULL == copied_interface) {
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-        pmix_string_copy(copied_interface->if_name, selected_interface->if_name, sizeof(name));
+        pmix_string_copy(copied_interface->if_name, selected_interface->if_name, PMIX_IF_NAMESIZE);
         copied_interface->if_index = i;
         copied_interface->if_kernel_index = kindex;
         copied_interface->af_family = my_ss.ss_family;
@@ -1023,6 +1085,136 @@ void prte_mca_oob_tcp_component_failed_to_connect(int fd, short args, void *cbda
     PMIX_RELEASE(pop);
 }
 
+
+/*
+ * Go through a list of argv; if there are any subnet specifications
+ * (a.b.c.d/e), resolve them to an interface name (Currently only
+ * supporting IPv4).  If unresolvable, warn and remove.
+ */
+static char **split_and_resolve(char **orig_str, char *name)
+{
+    pmix_pif_t *selected_interface;
+    int i, n, ret, match_count, interface_count;
+    char **argv, **interfaces, *str, *tmp;
+    char if_name[IF_NAMESIZE];
+    struct sockaddr_storage argv_inaddr, if_inaddr;
+    uint32_t argv_prefix;
+
+    /* Sanity check */
+    if (NULL == orig_str || NULL == *orig_str) {
+        return NULL;
+    }
+
+    argv = PMIX_ARGV_SPLIT_COMPAT(*orig_str, ',');
+    if (NULL == argv) {
+        return NULL;
+    }
+    interface_count = 0;
+    interfaces = NULL;
+    for (i = 0; NULL != argv[i]; ++i) {
+        if (isalpha(argv[i][0])) {
+            /* This is an interface name. If not already in the interfaces array, add it */
+            for (n = 0; n < interface_count; n++) {
+                if (0 == strcmp(argv[i], interfaces[n])) {
+                    break;
+                }
+            }
+            if (n == interface_count) {
+                pmix_output_verbose(20,
+                                    prte_oob_base_framework.framework_output,
+                                    "oob:tcp: Using interface: %s ", argv[i]);
+                PMIX_ARGV_APPEND_NOSIZE_COMPAT(&interfaces, argv[i]);
+                ++interface_count;
+            }
+            continue;
+        }
+
+        /* Found a subnet notation.  Convert it to an IP
+           address/netmask.  Get the prefix first. */
+        argv_prefix = 0;
+        tmp = strdup(argv[i]);
+        str = strchr(argv[i], '/');
+        if (NULL == str) {
+            pmix_show_help("help-oob-tcp.txt", "invalid if_inexclude",
+                           true, name, prte_process_info.nodename,
+                           tmp, "Invalid specification (missing \"/\")");
+            free(argv[i]);
+            free(tmp);
+            continue;
+        }
+        *str = '\0';
+        argv_prefix = atoi(str + 1);
+
+        /* Now convert the IPv4 address */
+        ((struct sockaddr*) &argv_inaddr)->sa_family = AF_INET;
+        ret = inet_pton(AF_INET, argv[i],
+                        &((struct sockaddr_in*) &argv_inaddr)->sin_addr);
+        free(argv[i]);
+
+        if (1 != ret) {
+            pmix_show_help("help-oob-tcp.txt", "invalid if_inexclude",
+                           true, name, prte_process_info.nodename, tmp,
+                           "Invalid specification (inet_pton() failed)");
+            free(tmp);
+            continue;
+        }
+        pmix_output_verbose(20, prte_oob_base_framework.framework_output,
+                            "%s oob:tcp: Searching for %s address+prefix: %s / %u",
+                            PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                            name,
+                            pmix_net_get_hostname((struct sockaddr*) &argv_inaddr),
+                            argv_prefix);
+
+        /* Go through all interfaces and see if we can find a match */
+        match_count = 0;
+        PMIX_LIST_FOREACH(selected_interface, &pmix_if_list, pmix_pif_t) {
+            pmix_ifindextoaddr(selected_interface->if_kernel_index,
+                               (struct sockaddr*) &if_inaddr,
+                               sizeof(if_inaddr));
+            if (pmix_net_samenetwork((struct sockaddr_storage*) &argv_inaddr,
+                                     (struct sockaddr_storage*) &if_inaddr,
+                                     argv_prefix)) {
+                /* We found a match. If it's not already in the interfaces array,
+                   add it. If it's already in the array, treat it as a match */
+                match_count = match_count + 1;
+                pmix_ifindextoname(selected_interface->if_kernel_index, if_name, sizeof(if_name));
+                for (n = 0; n < interface_count; n++) {
+                    if (0 == strcmp(if_name, interfaces[n])) {
+                        break;
+                    }
+                }
+                if (n == interface_count) {
+                    pmix_output_verbose(20,
+                                        prte_oob_base_framework.framework_output,
+                                        "oob:tcp: Found match: %s (%s)",
+                                        pmix_net_get_hostname((struct sockaddr*) &if_inaddr),
+                                        if_name);
+                    PMIX_ARGV_APPEND_NOSIZE_COMPAT(&interfaces, if_name);
+                    ++interface_count;
+                }
+            }
+        }
+        /* If we didn't find a match, keep trying */
+        if (0 == match_count) {
+            pmix_show_help("help-oob-tcp.txt", "invalid if_inexclude",
+                           true, name, prte_process_info.nodename, tmp,
+                           "Did not find interface matching this subnet");
+            free(tmp);
+            continue;
+        }
+
+        free(tmp);
+    }
+
+    /* Mark the end of the interface name array with NULL */
+    if (NULL != interfaces) {
+        interfaces[interface_count] = NULL;
+    }
+    free(argv);
+    free(*orig_str);
+    *orig_str = PMIX_ARGV_JOIN_COMPAT(interfaces, ',');
+    return interfaces;
+}
 
 /* OOB TCP Class instances */
 
