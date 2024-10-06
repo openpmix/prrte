@@ -15,7 +15,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -252,6 +252,11 @@ static void launch_daemons(int fd, short args, void *cbdata)
 
     /* add the srun command */
     pmix_argv_append(&argc, &argv, "srun");
+
+    // add the external launcher flag if necessary
+    if (!prte_mca_plm_slurm_component.early) {
+        pmix_argv_append(&argc, &argv, "--external-launcher");
+    }
 
     /* start one orted on each node */
     pmix_argv_append(&argc, &argv, "--ntasks-per-node=1");

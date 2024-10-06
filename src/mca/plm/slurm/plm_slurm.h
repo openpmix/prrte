@@ -33,9 +33,8 @@ BEGIN_C_DECLS
 
 struct prte_mca_plm_slurm_component_t {
     prte_plm_base_component_t super;
-    int custom_args_index;
     char *custom_args;
-    bool slurm_warning_msg;
+    bool early;
 };
 typedef struct prte_mca_plm_slurm_component_t prte_mca_plm_slurm_component_t;
 
