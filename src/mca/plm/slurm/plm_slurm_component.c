@@ -38,6 +38,7 @@
 #include "src/util/name_fns.h"
 #include "src/util/pmix_environ.h"
 #include "src/util/pmix_show_help.h"
+#include "src/util/pmix_string_copy.h"
 
 #include "plm_slurm.h"
 #include "src/mca/plm/base/plm_private.h"
@@ -84,28 +85,15 @@ prte_mca_plm_slurm_component_t prte_mca_plm_slurm_component = {
        here; will be initialized in plm_slurm_open() */
 };
 
-static char *custom_args = NULL;
-static char *force_args = NULL;
-
 static int plm_slurm_register(void)
 {
     pmix_mca_base_component_t *comp = &prte_mca_plm_slurm_component.super;
 
 
-    prte_mca_plm_slurm_component.custom_args_index =
-            pmix_mca_base_component_var_register(comp, "args", "Custom arguments to srun",
-                                                 PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                                 &custom_args);
-
-    force_args = NULL;
-    (void) pmix_mca_base_component_var_register(comp, "force_args", "Mandatory custom arguments to srun",
-                                                PMIX_MCA_BASE_VAR_TYPE_STRING,
-                                                &force_args);
-
-    prte_mca_plm_slurm_component.slurm_warning_msg = false;
-    (void) pmix_mca_base_component_var_register(comp, "disable_warning", "Turn off warning message about custom args set in environment",
-                                                PMIX_MCA_BASE_VAR_TYPE_BOOL,
-                                                &prte_mca_plm_slurm_component.slurm_warning_msg);
+    prte_mca_plm_slurm_component.custom_args = NULL;
+    pmix_mca_base_component_var_register(comp, "args", "Custom arguments to srun",
+                                         PMIX_MCA_BASE_VAR_TYPE_STRING,
+                                         &prte_mca_plm_slurm_component.custom_args);
 
     return PRTE_SUCCESS;
 }
@@ -117,11 +105,11 @@ static int plm_slurm_open(void)
 
 static int prte_mca_plm_slurm_component_query(pmix_mca_base_module_t **module, int *priority)
 {
-    const pmix_mca_base_var_t *var;
-    pmix_status_t rc;
+    FILE *fp;
+    char version[1024], *ptr;
+    int major, minor;
 
     /* Are we running under a SLURM job? */
-
     if (NULL != getenv("SLURM_JOBID")) {
         *priority = 75;
 
@@ -129,28 +117,32 @@ static int prte_mca_plm_slurm_component_query(pmix_mca_base_module_t **module, i
                              "%s plm:slurm: available for selection",
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
-    prte_mca_plm_slurm_component.custom_args = NULL;
-
-        // if we were are warning about externally set custom args, then
-        // check to see if that was done
-        if (!prte_mca_plm_slurm_component.slurm_warning_msg &&
-            NULL == force_args) {
-            // check for custom args
-            rc = pmix_mca_base_var_get(prte_mca_plm_slurm_component.custom_args_index, &var);
-            if (PMIX_SUCCESS == rc) {
-                // the variable was set - see who set it
-                if (PMIX_MCA_BASE_VAR_SOURCE_ENV == var->mbv_source) {
-                    // set in the environment - warn
-                    pmix_show_help("help-plm-slurm.txt", "custom-args-in-env", true,
-                                   custom_args);
-                }
-            }
+        // check the version
+        fp = popen("srun --version", "r");
+        if (NULL == fp) {
+            // cannot run srun, so we cannot support this job
+            *module = NULL;
+            return PRTE_ERROR;
         }
+        if (NULL == fgets(version, sizeof(version), fp)) {
+            pclose(fp);
+            *module = NULL;
+            return PRTE_ERROR;
+        }
+        pclose(fp);
+        // parse on the dots
+        major = strtol(&version[6], &ptr, 10);
+        ++ptr;
+        minor = strtol(ptr, NULL, 10);
 
-        if (NULL != force_args) {
-            prte_mca_plm_slurm_component.custom_args = force_args;
-        } else if (NULL != custom_args) {
-            prte_mca_plm_slurm_component.custom_args = custom_args;
+        if (23 > major) {
+            prte_mca_plm_slurm_component.early = true;
+        } else if (23 < major) {
+            prte_mca_plm_slurm_component.early = false;
+        } else if (11 > minor) {
+            prte_mca_plm_slurm_component.early = true;
+        } else {
+            prte_mca_plm_slurm_component.early = false;
         }
 
         *module = (pmix_mca_base_module_t *) &prte_plm_slurm_module;
