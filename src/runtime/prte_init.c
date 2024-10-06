@@ -174,6 +174,24 @@ int prte_init_minimum(void)
         return PRTE_ERR_SILENT;
     }
 
+    /* Protect against the envar version of the Slurm
+     * custom args MCA param. This is an unfortunate
+     * hack that hopefully will eventually go away.
+     * See both of the following for detailed
+     * explanations and discussion:
+     *
+     * https://github.com/openpmix/prrte/issues/1974
+     * https://github.com/open-mpi/ompi/issues/12471
+     *
+     * Orgs/users wanting to add custom args to the
+     * internal "srun" command used to spawn the
+     * PRRTE daemons must do so via the default MCA
+     * param files (system or user), or via the
+     * prterun (or its proxy) cmd line
+     */
+    unsetenv("PRTE_MCA_plm_slurm_args");
+    unsetenv("OMPI_MCA_plm_slurm_args");
+
     /* carry across the toolname */
     pmix_tool_basename = prte_tool_basename;
 
