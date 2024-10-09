@@ -388,7 +388,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             options.maptype = HWLOC_OBJ_CORE;
             options.mapdepth = PRTE_BIND_TO_CORE;
         } else if (0 == strncasecmp(ck[1], "package", len) ||
-                   0 == strncasecmp(ck[1], "skt", len)) {
+                   0 == strncasecmp(ck[1], "skt", len) ||
+                   0 == strncasecmp(ck[1], "socket", len)) {
             options.maptype = HWLOC_OBJ_PACKAGE;
             options.mapdepth = PRTE_BIND_TO_PACKAGE;
         } else if (0 == strncasecmp(ck[1], "numa", len) ||
