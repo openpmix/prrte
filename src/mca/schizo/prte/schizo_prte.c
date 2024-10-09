@@ -821,6 +821,31 @@ static int convert_deprecated_cli(pmix_cli_result_t *results,
                 free(p1);
                 free(opt->values[0]);
                 opt->values[0] = tmp;
+            } else if (0 == strncasecmp(opt->values[0], "ppr", strlen("ppr"))) {
+                // see if they specified "socket" as the resource
+                p1 = strdup(opt->values[0]);
+                p2 = strrchr(p1, ':');
+                ++p2;
+                if (0 == strncasecmp(p2, "socket", strlen("socket")) ||
+                    0 == strncasecmp(p2, "skt", strlen("skt"))) {
+                    *p2 = '\0';
+                    pmix_asprintf(&p2, "%spackage", p1);
+                    if (warn) {
+                        pmix_asprintf(&tmp, "%s %s", option, opt->values[0]);
+                        pmix_asprintf(&tmp2, "%s %s", option, p2);
+                        /* can't just call show_help as we want every instance to be reported */
+                        output = pmix_show_help_string("help-schizo-base.txt",
+                                                       "deprecated-converted", true,
+                                                       tmp, tmp2);
+                        fprintf(stderr, "%s\n", output);
+                        free(output);
+                        free(tmp);
+                        free(tmp2);
+                    }
+                    free(opt->values[0]);
+                    opt->values[0] = p2;
+                }
+                free(p1);
             }
         }
         /* --rank-by */
