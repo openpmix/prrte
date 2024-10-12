@@ -72,7 +72,6 @@
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
-#include "src/mca/oob/base/base.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/pmdl/base/base.h"
 #include "src/mca/prtebacktrace/base/base.h"

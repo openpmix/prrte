@@ -17,7 +17,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,8 +32,8 @@
 
 #include "src/event/event-internal.h"
 
-#include "oob_tcp.h"
-#include "oob_tcp_sendrecv.h"
+#include "src/rml/oob/oob_tcp.h"
+#include "src/rml/oob/oob_tcp_sendrecv.h"
 #include "src/threads/pmix_threads.h"
 
 typedef struct {

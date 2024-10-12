@@ -53,7 +53,6 @@
 #include "src/mca/grpcomm/grpcomm.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
-#include "src/mca/oob/base/base.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/prtereachable/base/base.h"
 #include "src/mca/rmaps/base/base.h"
@@ -98,7 +97,6 @@ int prte_ess_base_prted_setup(void)
     int fd;
     char log_file[PATH_MAX];
     char *error = NULL;
-    char *uri = NULL;
     char *tmp = NULL;
     prte_job_t *jdata = NULL;
     prte_proc_t *proc;
@@ -108,7 +106,6 @@ int prte_ess_base_prted_setup(void)
     prte_topology_t *t = NULL;
     prte_ess_base_signal_t *sig = NULL;
     int idx;
-    pmix_value_t val;
 
     plm_in_use = false;
 
@@ -244,7 +241,7 @@ int prte_ess_base_prted_setup(void)
     /* obviously, we have "reported" */
     jdata->num_reported = 1;
 
-    /* setup my session directory here as the OOB may need it */
+    /* setup my session directory here */
     PMIX_OUTPUT_VERBOSE(
         (2, prte_ess_base_framework.framework_output,
          "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
@@ -315,60 +312,14 @@ int prte_ess_base_prted_setup(void)
         error = "prte_prtereachable_base_select";
         goto error;
     }
-    if (PRTE_SUCCESS
-        != (ret = pmix_mca_base_framework_open(&prte_oob_base_framework,
-                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
+    if (PRTE_SUCCESS != (ret = prte_rml_open())) {
         PRTE_ERROR_LOG(ret);
-        error = "prte_oob_base_open";
+        error = "prte_rml_open";
         goto error;
     }
-    if (PRTE_SUCCESS != (ret = prte_oob_base_select())) {
-        PRTE_ERROR_LOG(ret);
-        error = "prte_oob_base_select";
-        goto error;
-    }
-    prte_rml_open();
 
     /* it is now safe to start the pmix server */
     pmix_server_start();
-
-    /* store our URI for later */
-    prte_oob_base_get_addr(&uri);
-    PMIX_VALUE_LOAD(&val, uri, PMIX_STRING);
-    ret = PMIx_Store_internal(PRTE_PROC_MY_NAME, PMIX_PROC_URI, &val);
-    if (PMIX_SUCCESS != ret) {
-        PMIX_VALUE_DESTRUCT(&val);
-        error = "store MY URI";
-        ret = PRTE_ERROR;
-        goto error;
-    }
-    PMIX_VALUE_DESTRUCT(&val);
-    free(uri);
-
-    if (NULL != prte_process_info.my_hnp_uri) {
-        /* extract the HNP's name so we can update the routing table */
-        ret = prte_rml_parse_uris(prte_process_info.my_hnp_uri,
-                                  PRTE_PROC_MY_HNP,
-                                  NULL);
-        if (PRTE_SUCCESS != ret) {
-            PRTE_ERROR_LOG(ret);
-            error = "prte_rml_parse_HNP";
-            goto error;
-        }
-        /* Set the contact info in the RML - this won't actually establish
-         * the connection, but just tells the RML how to reach the HNP
-         * if/when we attempt to send to it
-         */
-        PMIX_VALUE_LOAD(&val, prte_process_info.my_hnp_uri, PMIX_STRING);
-        ret = PMIx_Store_internal(PRTE_PROC_MY_HNP, PMIX_PROC_URI, &val);
-        if (PMIX_SUCCESS != ret) {
-            PMIX_VALUE_DESTRUCT(&val);
-            error = "store HNP URI";
-            ret = PRTE_ERROR;
-            goto error;
-        }
-        PMIX_VALUE_DESTRUCT(&val);
-    }
 
     /* select the errmgr */
     if (PRTE_SUCCESS != (ret = prte_errmgr_base_select())) {
@@ -532,7 +483,6 @@ int prte_ess_base_prted_finalize(void)
     (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
     (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
     prte_rml_close();
-    (void) pmix_mca_base_framework_close(&prte_oob_base_framework);
     (void) pmix_mca_base_framework_close(&prte_prtereachable_base_framework);
     (void) pmix_mca_base_framework_close(&prte_state_base_framework);
 

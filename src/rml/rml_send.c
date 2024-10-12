@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,11 +31,11 @@
 #include "src/util/pmix_name_fns.h"
 
 #include "src/mca/errmgr/errmgr.h"
-#include "src/mca/oob/base/base.h"
 #include "src/runtime/prte_globals.h"
 #include "src/threads/pmix_threads.h"
 
 #include "src/rml/rml.h"
+#include "src/rml/oob/oob.h"
 
 int prte_rml_send_buffer_nb(pmix_rank_t rank,
                             pmix_data_buffer_t *buffer,

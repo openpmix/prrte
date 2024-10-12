@@ -24,12 +24,14 @@
 #include "src/mca/mca.h"
 #include "src/util/pmix_output.h"
 
-#include "src/mca/errmgr/errmgr.h"
-#include "src/rml/rml.h"
 #include "src/mca/state/state.h"
 #include "src/runtime/prte_wait.h"
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
+#include "src/mca/errmgr/errmgr.h"
+#include "src/rml/rml.h"
+#include "src/rml/rml_contact.h"
+#include "src/rml/oob/oob.h"
 
 prte_rml_base_t prte_rml_base = {
     .rml_output = -1,
@@ -82,10 +84,22 @@ void prte_rml_register(void)
     pmix_mca_base_var_register_synonym(ret, "prte", "routed", "radix", NULL,
                                        PMIX_MCA_BASE_VAR_SYN_FLAG_DEPRECATED);
 
+    prte_oob_register();
+
+    verbosity = 0;
+    pmix_mca_base_var_register("prte", "oob", "base", "verbose",
+                               "Debug verbosity of the out-of-band subsystem",
+                               PMIX_MCA_BASE_VAR_TYPE_INT,
+                               &verbosity);
+    if (0 < verbosity) {
+        prte_oob_base.output = pmix_output_open(NULL);
+        pmix_output_set_verbosity(prte_oob_base.output, verbosity);
+    }
 }
 
 void prte_rml_close(void)
 {
+    prte_oob_close();
     PMIX_LIST_DESTRUCT(&prte_rml_base.posted_recvs);
     PMIX_LIST_DESTRUCT(&prte_rml_base.unmatched_msgs);
     PMIX_LIST_DESTRUCT(&prte_rml_base.children);
@@ -94,8 +108,12 @@ void prte_rml_close(void)
     }
 }
 
-void prte_rml_open(void)
+int prte_rml_open(void)
 {
+    char *uri = NULL;
+    pmix_value_t val;
+    int ret;
+
     /* construct object for holding the active plugin modules */
     PMIX_CONSTRUCT(&prte_rml_base.posted_recvs, pmix_list_t);
     PMIX_CONSTRUCT(&prte_rml_base.unmatched_msgs, pmix_list_t);
@@ -106,6 +124,54 @@ void prte_rml_open(void)
     prte_rml_compute_routing_tree();
 
     prte_rml_base.lifeline = PRTE_PROC_MY_PARENT->rank;
+
+    prte_oob_open();
+
+    /* store our URI for later */
+    prte_oob_base_get_addr(&uri);
+    PMIX_VALUE_LOAD(&val, uri, PMIX_STRING);
+    ret = PMIx_Store_internal(PRTE_PROC_MY_NAME, PMIX_PROC_URI, &val);
+    if (PMIX_SUCCESS != ret) {
+        PRTE_ERROR_LOG(PRTE_ERROR);
+        PMIX_VALUE_DESTRUCT(&val);
+        return PRTE_ERROR;
+    }
+    PMIX_VALUE_DESTRUCT(&val);
+    // add it to our local info
+    prte_process_info.my_uri = strdup(uri);
+
+    if (PRTE_PROC_IS_MASTER) {
+        prte_process_info.my_hnp_uri = uri;
+    } else {
+        free(uri);
+        if (NULL == prte_process_info.my_hnp_uri) {
+            // this is an error
+            PRTE_ERROR_LOG(PRTE_ERROR);
+            return PRTE_ERROR;
+        }
+        /* extract the HNP's name so we can update the routing table */
+        ret = prte_rml_parse_uris(prte_process_info.my_hnp_uri,
+                                  PRTE_PROC_MY_HNP,
+                                  NULL);
+        if (PRTE_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            return ret;
+        }
+        /* Set the contact info in the RML - this won't actually establish
+         * the connection, but just tells the RML how to reach the HNP
+         * if/when we attempt to send to it
+         */
+        PMIX_VALUE_LOAD(&val, prte_process_info.my_hnp_uri, PMIX_STRING);
+        ret = PMIx_Store_internal(PRTE_PROC_MY_HNP, PMIX_PROC_URI, &val);
+        if (PMIX_SUCCESS != ret) {
+            PRTE_ERROR_LOG(ret);
+            PMIX_VALUE_DESTRUCT(&val);
+            return ret;
+        }
+        PMIX_VALUE_DESTRUCT(&val);
+    }
+
+    return PRTE_SUCCESS;
 }
 
 void prte_rml_send_callback(int status, pmix_proc_t *peer,

@@ -16,7 +16,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -71,11 +71,10 @@
 #include "src/threads/pmix_threads.h"
 #include "src/util/name_fns.h"
 
-#include "oob_tcp.h"
-#include "src/mca/oob/tcp/oob_tcp_common.h"
-#include "src/mca/oob/tcp/oob_tcp_component.h"
-#include "src/mca/oob/tcp/oob_tcp_connection.h"
-#include "src/mca/oob/tcp/oob_tcp_peer.h"
+#include "src/rml/oob/oob_tcp.h"
+#include "src/rml/oob/oob_tcp_common.h"
+#include "src/rml/oob/oob_tcp_connection.h"
+#include "src/rml/oob/oob_tcp_peer.h"
 
 #define OOB_SEND_MAX_RETRIES 3
 
@@ -205,14 +204,14 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
     PMIX_ACQUIRE_OBJECT(peer);
     msg = peer->send_msg;
 
-    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s tcp:send_handler called to send to peer %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name));
 
     switch (peer->state) {
     case MCA_OOB_TCP_CONNECTING:
     case MCA_OOB_TCP_CLOSED:
-        pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                             "%s tcp:send_handler %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             prte_oob_tcp_state_print(peer->state));
         prte_oob_tcp_peer_complete_connect(peer);
@@ -225,17 +224,17 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
         }
         break;
     case MCA_OOB_TCP_CONNECTED:
-        pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                             "%s tcp:send_handler SENDING TO %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                             (NULL == peer->send_msg) ? "NULL" : PRTE_NAME_PRINT(&peer->name));
         if (NULL != msg) {
-            pmix_output_verbose(2, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(2, prte_oob_base.output,
                                 "oob:tcp:send_handler SENDING MSG");
             if (PRTE_SUCCESS == (rc = send_msg(peer, msg))) {
                 /* this msg is complete */
                 if (NULL != msg->data || NULL == msg->msg) {
                     /* the relay is complete - release the data */
-                    pmix_output_verbose(2, prte_oob_base_framework.framework_output,
+                    pmix_output_verbose(2, prte_oob_base.output,
                                         "%s MESSAGE RELAY COMPLETE TO %s OF %d BYTES ON SOCKET %d",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&(peer->name)),
@@ -244,7 +243,7 @@ void prte_oob_tcp_send_handler(int sd, short flags, void *cbdata)
                     peer->send_msg = NULL;
                 } else {
                     /* we are done - notify the RML */
-                    pmix_output_verbose(2, prte_oob_base_framework.framework_output,
+                    pmix_output_verbose(2, prte_oob_base.output,
                                         "%s MESSAGE SEND COMPLETE TO %s OF %d BYTES ON SOCKET %d",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&(peer->name)),
@@ -327,7 +326,7 @@ static int read_bytes(prte_oob_tcp_peer_t *peer)
              * the error back to the RML and let the caller know
              * to abort this message
              */
-            pmix_output_verbose(OOB_TCP_DEBUG_FAIL, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(OOB_TCP_DEBUG_FAIL, prte_oob_base.output,
                                 "%s-%s prte_oob_tcp_msg_recv: readv failed: %s (%d)",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)),
                                 strerror(prte_socket_errno), prte_socket_errno);
@@ -340,7 +339,7 @@ static int read_bytes(prte_oob_tcp_peer_t *peer)
             /* the remote peer closed the connection - report that condition
              * and let the caller know
              */
-            pmix_output_verbose(OOB_TCP_DEBUG_FAIL, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(OOB_TCP_DEBUG_FAIL, prte_oob_base.output,
                                 "%s-%s prte_oob_tcp_msg_recv: peer closed connection",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&(peer->name)));
             /* stop all events */
@@ -390,14 +389,14 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
 
     PMIX_ACQUIRE_OBJECT(peer);
 
-    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+    pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                         "%s:tcp:recv:handler called for peer %s",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name));
 
     switch (peer->state) {
     case MCA_OOB_TCP_CONNECT_ACK:
         if (PRTE_SUCCESS == (rc = prte_oob_tcp_peer_recv_connect_ack(peer, peer->sd, NULL))) {
-            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                                 "%s:tcp:recv:handler starting send/recv events",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             /* we connected! Start the send/recv events */
@@ -425,7 +424,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             /* we get an unreachable error returned if a connection
              * completes but is rejected - otherwise, we don't want
              * to terminate as we might be retrying the connection */
-            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                                 "%s UNABLE TO COMPLETE CONNECT ACK WITH %s",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name));
             prte_event_del(&peer->recv_event);
@@ -434,11 +433,11 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
         }
         break;
     case MCA_OOB_TCP_CONNECTED:
-        pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+        pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                             "%s:tcp:recv:handler CONNECTED", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
         /* allocate a new message and setup for recv */
         if (NULL == peer->recv_msg) {
-            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                                 "%s:tcp:recv:handler allocate new recv msg",
                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             peer->recv_msg = PMIX_NEW(prte_oob_tcp_recv_t);
@@ -454,7 +453,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
         }
         /* if the header hasn't been completely read, read it */
         if (!peer->recv_msg->hdr_recvd) {
-            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+            pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                                 "%s:tcp:recv:handler read hdr", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
             if (PRTE_SUCCESS == (rc = read_bytes(peer))) {
                 /* completed reading the header */
@@ -464,14 +463,14 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 /* if this is a zero-byte message, then we are done */
                 if (0 == peer->recv_msg->hdr.nbytes) {
                     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT,
-                                        prte_oob_base_framework.framework_output,
+                                        prte_oob_base.output,
                                         "%s RECVD ZERO-BYTE MESSAGE FROM %s for tag %d",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&peer->name), peer->recv_msg->hdr.tag);
                     peer->recv_msg->data = NULL; // make sure
                 } else {
                     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT,
-                                        prte_oob_base_framework.framework_output,
+                                        prte_oob_base.output,
                                         "%s:tcp:recv:handler allocate data region of size %lu",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         (unsigned long) peer->recv_msg->hdr.nbytes);
@@ -487,7 +486,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 return;
             } else {
                 /* close the connection */
-                pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                pmix_output_verbose(OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                                     "%s:tcp:recv:handler error reading bytes - closing connection",
                                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
                 prte_oob_tcp_peer_close(peer);
@@ -503,7 +502,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
             if (PRTE_SUCCESS == (rc = read_bytes(peer))) {
                 /* we recvd all of the message */
                 pmix_output_verbose(
-                    OOB_TCP_DEBUG_CONNECT, prte_oob_base_framework.framework_output,
+                    OOB_TCP_DEBUG_CONNECT, prte_oob_base.output,
                     "%s RECVD COMPLETE MESSAGE FROM %s (ORIGIN %s) OF %d BYTES FOR DEST %s TAG %d",
                     PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&peer->name),
                     PRTE_NAME_PRINT(&peer->recv_msg->hdr.origin), (int) peer->recv_msg->hdr.nbytes,
@@ -513,7 +512,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                 if (PMIX_CHECK_PROCID(&peer->recv_msg->hdr.dst, PRTE_PROC_MY_NAME)) {
                     /* yes - post it to the RML for delivery */
                     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT,
-                                        prte_oob_base_framework.framework_output,
+                                        prte_oob_base.output,
                                         "%s DELIVERING TO RML tag = %d seq_num = %d",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), peer->recv_msg->hdr.tag,
                                         peer->recv_msg->hdr.seq_num);
@@ -525,7 +524,7 @@ void prte_oob_tcp_recv_handler(int sd, short flags, void *cbdata)
                     /* promote this to the OOB as some other transport might
                      * be the next best hop */
                     pmix_output_verbose(OOB_TCP_DEBUG_CONNECT,
-                                        prte_oob_base_framework.framework_output,
+                                        prte_oob_base.output,
                                         "%s TCP PROMOTING ROUTED MESSAGE FOR %s TO OOB",
                                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                         PRTE_NAME_PRINT(&peer->recv_msg->hdr.dst));

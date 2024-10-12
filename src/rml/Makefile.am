@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -32,3 +32,5 @@ libprrte_la_SOURCES += \
     rml/rml_base_contact.c \
     rml/rml_base_msg_handlers.c \
     rml/routed_radix.c
+
+include rml/oob/Makefile.am

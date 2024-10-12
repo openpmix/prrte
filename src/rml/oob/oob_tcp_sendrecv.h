@@ -15,7 +15,7 @@
  * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,8 +31,8 @@
 #include "src/class/pmix_list.h"
 #include "src/util/pmix_string_copy.h"
 
-#include "oob_tcp.h"
-#include "oob_tcp_hdr.h"
+#include "src/rml/oob/oob_tcp.h"
+#include "src/rml/oob/oob_tcp_hdr.h"
 #include "src/rml/rml.h"
 #include "src/threads/pmix_threads.h"
 
@@ -98,7 +98,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
 #define MCA_OOB_TCP_QUEUE_SEND(m, p)                                                           \
     do {                                                                                       \
         prte_oob_tcp_send_t *_s;                                                               \
-        pmix_output_verbose(5, prte_oob_base_framework.framework_output,                       \
+        pmix_output_verbose(5, prte_oob_base.output,                       \
                             "%s:[%s:%d] queue send to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT(&((m)->dst)));                 \
         _s = PMIX_NEW(prte_oob_tcp_send_t);                                                    \
@@ -130,7 +130,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
 #define MCA_OOB_TCP_QUEUE_PENDING(m, p)                                                           \
     do {                                                                                          \
         prte_oob_tcp_send_t *_s;                                                                  \
-        pmix_output_verbose(5, prte_oob_base_framework.framework_output,                          \
+        pmix_output_verbose(5, prte_oob_base.output,                          \
                             "%s:[%s:%d] queue pending to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT(&((m)->dst)));                    \
         _s = PMIX_NEW(prte_oob_tcp_send_t);                                                       \
@@ -162,7 +162,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_recv_t);
 #define MCA_OOB_TCP_QUEUE_RELAY(m, p)                                                           \
     do {                                                                                        \
         prte_oob_tcp_send_t *_s;                                                                \
-        pmix_output_verbose(5, prte_oob_base_framework.framework_output,                        \
+        pmix_output_verbose(5, prte_oob_base.output,                        \
                             "%s:[%s:%d] queue relay to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT(&((p)->name)));                 \
         _s = PMIX_NEW(prte_oob_tcp_send_t);                                                     \
@@ -196,7 +196,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_msg_op_t);
 #define PRTE_ACTIVATE_TCP_POST_SEND(ms, cbfunc)                                               \
     do {                                                                                      \
         prte_oob_tcp_msg_op_t *mop;                                                           \
-        pmix_output_verbose(5, prte_oob_base_framework.framework_output,                      \
+        pmix_output_verbose(5, prte_oob_base.output,                      \
                             "%s:[%s:%d] post send to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT(&((ms)->dst)));               \
         mop = PMIX_NEW(prte_oob_tcp_msg_op_t);                                                \
@@ -218,7 +218,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
         prte_oob_tcp_msg_error_t *mop;                                                             \
         prte_oob_tcp_send_t *snd;                                                                  \
         prte_oob_tcp_recv_t *proxy;                                                                \
-        pmix_output_verbose(5, prte_oob_base_framework.framework_output,                           \
+        pmix_output_verbose(5, prte_oob_base.output,                           \
                             "%s:[%s:%d] post msg error to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT((h)));                             \
         mop = PMIX_NEW(prte_oob_tcp_msg_error_t);                                                  \
@@ -249,7 +249,7 @@ PMIX_CLASS_DECLARATION(prte_oob_tcp_msg_error_t);
 #define PRTE_ACTIVATE_TCP_NO_ROUTE(r, h, c)                                                       \
     do {                                                                                          \
         prte_oob_tcp_msg_error_t *mop;                                                            \
-        pmix_output_verbose(5, prte_oob_base_framework.framework_output,                          \
+        pmix_output_verbose(5, prte_oob_base_.output,                          \
                             "%s:[%s:%d] post no route to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), \
                             __FILE__, __LINE__, PRTE_NAME_PRINT((h)));                            \
         mop = PMIX_NEW(prte_oob_tcp_msg_error_t);                                                 \
