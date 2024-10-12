@@ -59,7 +59,6 @@
 #include "src/mca/grpcomm/base/base.h"
 #include "src/mca/iof/base/base.h"
 #include "src/mca/odls/base/base.h"
-#include "src/mca/oob/base/base.h"
 #include "src/mca/plm/base/base.h"
 #include "src/mca/plm/plm.h"
 #include "src/mca/prtereachable/base/base.h"
@@ -106,8 +105,6 @@ static int rte_init(int argc, char **argv)
     prte_app_context_t *app;
     int idx;
     prte_topology_t *t;
-    pmix_value_t pval;
-    pmix_status_t pret;
     PRTE_HIDE_UNUSED_PARAMS(argc);
 
     /* run the prolog */
@@ -233,7 +230,7 @@ static int rte_init(int argc, char **argv)
     jdata->num_reported = 1;
     jdata->num_daemons_reported = 1;
 
-    /* setup my session directory here as the OOB may need it */
+    /* setup my session directory here */
     PMIX_OUTPUT_VERBOSE((2, prte_debug_output,
                          "%s setting up session dir with\n\ttmpdir: %s\n\thost %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
@@ -267,38 +264,11 @@ static int rte_init(int argc, char **argv)
         error = "prte_prtereachable_base_select";
         goto error;
     }
-    /*
-     * OOB Layer
-     */
-    if (PRTE_SUCCESS
-        != (ret = pmix_mca_base_framework_open(&prte_oob_base_framework,
-                                               PMIX_MCA_BASE_OPEN_DEFAULT))) {
-        error = "prte_oob_base_open";
+    if (PRTE_SUCCESS != (ret = prte_rml_open())) {
+        PRTE_ERROR_LOG(ret);
+        error = "prte_rml_open";
         goto error;
     }
-    if (PRTE_SUCCESS != (ret = prte_oob_base_select())) {
-        error = "prte_oob_base_select";
-        goto error;
-    }
-
-    // set our RML address
-    prte_oob_base_get_addr(&proc->rml_uri);
-    prte_process_info.my_hnp_uri = strdup(proc->rml_uri);
-    /* store it in the local PMIx repo for later retrieval */
-    PMIX_VALUE_LOAD(&pval, proc->rml_uri, PMIX_STRING);
-    if (PMIX_SUCCESS != (pret = PMIx_Store_internal(PRTE_PROC_MY_NAME, PMIX_PROC_URI, &pval))) {
-        PMIX_ERROR_LOG(pret);
-        ret = PRTE_ERROR;
-        PMIX_VALUE_DESTRUCT(&pval);
-        error = "store uri";
-        goto error;
-    }
-    PMIX_VALUE_DESTRUCT(&pval);
-
-    /*
-     * Runtime Messaging Layer
-     */
-    prte_rml_open();
 
     /* it is now safe to start the pmix server */
     pmix_server_start();
@@ -457,7 +427,7 @@ error:
 static int rte_finalize(void)
 {
     /* first stage shutdown of the errmgr, deregister the handler but keep
-     * the required facilities until the rml and oob are offline */
+     * the required facilities until the rml is offline */
     prte_errmgr.finalize();
 
     /* close frameworks */
@@ -471,7 +441,6 @@ static int rte_finalize(void)
     }
     (void) pmix_mca_base_framework_close(&prte_odls_base_framework);
     prte_rml_close();
-    (void) pmix_mca_base_framework_close(&prte_oob_base_framework);
     (void) pmix_mca_base_framework_close(&prte_prtereachable_base_framework);
     (void) pmix_mca_base_framework_close(&prte_errmgr_base_framework);
     (void) pmix_mca_base_framework_close(&prte_state_base_framework);

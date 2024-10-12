@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  *
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -145,6 +145,7 @@ PRTE_EXPORT void prte_rml_recv_cancel(pmix_proc_t *peer, prte_rml_tag_t tag);
 typedef struct {
     int rml_output;
     int routed_output;
+    int oob_output;
     int max_retries;
     pmix_list_t posted_recvs;
     pmix_list_t unmatched_msgs;
@@ -158,7 +159,7 @@ PRTE_EXPORT extern prte_rml_base_t prte_rml_base;
 
 PRTE_EXPORT void prte_rml_register(void);
 PRTE_EXPORT void prte_rml_close(void);
-PRTE_EXPORT void prte_rml_open(void);
+PRTE_EXPORT int prte_rml_open(void);
 /* common implementations */
 PRTE_EXPORT void prte_rml_base_post_recv(int sd, short args, void *cbdata);
 PRTE_EXPORT void prte_rml_base_process_msg(int fd, short flags, void *cbdata);

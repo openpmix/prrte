@@ -64,6 +64,7 @@ PRTE_EXPORT prte_process_info_t prte_process_info = {
     .aliases = NULL,
     .pid = 0,
     .proc_type = PRTE_PROC_TYPE_NONE,
+    .my_uri = NULL,
     .my_port = 0,
     .tmpdir_base = NULL,
     .top_session_dir = NULL,

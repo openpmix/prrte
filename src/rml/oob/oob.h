@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -46,12 +46,11 @@
 #include "src/class/pmix_hash_table.h"
 #include "src/class/pmix_list.h"
 #include "src/event/event-internal.h"
+#include "src/include/prte_stdatomic.h"
 #include "src/util/pmix_printf.h"
-
-#include "src/mca/mca.h"
 #include "src/threads/pmix_threads.h"
 
-#include "src/mca/oob/oob.h"
+#include "src/rml/rml_types.h"
 
 BEGIN_C_DECLS
 
@@ -59,26 +58,55 @@ BEGIN_C_DECLS
  * Convenience Typedef
  */
 typedef struct {
-    char *include;
-    char *exclude;
-    pmix_list_t components;
-    pmix_list_t actives;
+    int output;
+    uint32_t addr_count;             /**< total number of addresses */
+    int num_links;                   /**< number of logical links per physical device */
+    int max_retries;                 /**< max number of retries before declaring peer gone */
     int max_uri_length;
-    pmix_list_t peers;
+    pmix_list_t events;              /**< events for monitoring connections */
+    int peer_limit;                  /**< max size of tcp peer cache */
+    pmix_list_t peers;               // connection addresses for peers
+
+    /* Port specifications */
+    int tcp_sndbuf;   /**< socket send buffer size */
+    int tcp_rcvbuf;   /**< socket recv buffer size */
+
+    /* IPv4 support */
+    bool disable_ipv4_family; /**< disable this AF */
+    char **tcp_static_ports;  /**< Static ports - IPV4 */
+    char **tcp_dyn_ports;     /**< Dynamic ports - IPV4 */
+    char **ipv4conns;
+    char **ipv4ports;
+
+    /* IPv6 support */
+    bool disable_ipv6_family; /**< disable this AF */
+    char **tcp6_static_ports; /**< Static ports - IPV6 */
+    char **tcp6_dyn_ports;    /**< Dynamic ports - IPV6 */
+    char **ipv6conns;
+    char **ipv6ports;
+
+    /* connection support */
+    pmix_list_t local_ifs; /**< prte list of local pmix_pif_t interfaces */
+    char **if_masks;
+    int num_hnp_ports;           /**< number of ports the HNP should listen on */
+    pmix_list_t listeners;       /**< List of sockets being monitored by event or thread */
+    pmix_thread_t listen_thread; /**< handle to the listening thread */
+    prte_atomic_bool_t listen_thread_active;
+    struct timeval listen_thread_tv; /**< Timeout when using listen thread */
+    int stop_thread[2];              /**< pipe used to exit the listen thread */
+    int keepalive_probes;   /**< number of keepalives that can be missed before declaring error */
+    int keepalive_time;     /**< idle time in seconds before starting to send keepalives */
+    int keepalive_intvl;    /**< time between keepalives, in seconds */
+    int retry_delay;        /**< time to wait before retrying connection */
+    int max_recon_attempts; /**< maximum number of times to attempt connect before giving up (-1 for
+                               never) */
 } prte_oob_base_t;
 PRTE_EXPORT extern prte_oob_base_t prte_oob_base;
 
-typedef struct {
-    pmix_list_item_t super;
-    pmix_proc_t name;
-    prte_oob_base_component_t *component;
-    pmix_bitmap_t addressable;
-} prte_oob_base_peer_t;
-PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_oob_base_peer_t);
-
 /* MCA framework */
-PRTE_EXPORT extern pmix_mca_base_framework_t prte_oob_base_framework;
-PRTE_EXPORT int prte_oob_base_select(void);
+PRTE_EXPORT int prte_oob_open(void);
+PRTE_EXPORT void prte_oob_close(void);
+PRTE_EXPORT int prte_oob_register(void);
 
 /* Access the OOB internal functions via set of event-based macros
  * for inserting messages and other commands into the
@@ -112,14 +140,12 @@ PRTE_EXPORT void prte_oob_base_send_nb(int fd, short args, void *cbdata);
 #define PRTE_OOB_SEND(m)                                                                          \
     do {                                                                                          \
         prte_oob_send_t *prte_oob_send_cd;                                                        \
-        pmix_output_verbose(1, prte_oob_base_framework.framework_output, "%s OOB_SEND: %s:%d",    \
+        pmix_output_verbose(1, prte_oob_base.output, "%s OOB_SEND: %s:%d",    \
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), __FILE__, __LINE__);              \
         prte_oob_send_cd = PMIX_NEW(prte_oob_send_t);                                             \
         prte_oob_send_cd->msg = (m);                                                              \
         PRTE_PMIX_THREADSHIFT(prte_oob_send_cd, prte_event_base, prte_oob_base_send_nb);          \
     } while (0)
-
-PRTE_EXPORT prte_oob_base_peer_t *prte_oob_base_get_peer(const pmix_proc_t *pr);
 
 /* During initial wireup, we can only transfer contact info on the daemon
  * command line. This limits what we can send to a string representation of

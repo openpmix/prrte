@@ -15,7 +15,7 @@
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -60,6 +60,6 @@ typedef struct {
 } prte_oob_tcp_pending_connection_t;
 PMIX_CLASS_DECLARATION(prte_oob_tcp_pending_connection_t);
 
-PRTE_MODULE_EXPORT int prte_oob_tcp_start_listening(void);
+PRTE_EXPORT int prte_oob_tcp_start_listening(void);
 
 #endif /* _MCA_OOB_TCP_LISTENER_H_ */

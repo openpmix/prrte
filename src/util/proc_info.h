@@ -75,6 +75,7 @@ typedef struct prte_process_info_t {
     char **aliases;             /**< aliases for this node */
     pid_t pid;                  /**< Local process ID for this process */
     prte_proc_type_t proc_type; /**< Type of process */
+    char *my_uri;               /**< My contact info */
     uint16_t my_port;           /**< TCP port for out-of-band comm */
     /* The session directory has the form
      * <prefix>/<openmpi-sessions-user>/<jobid>/<procid>, where the prefix

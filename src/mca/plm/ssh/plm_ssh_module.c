@@ -17,7 +17,7 @@
  * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -88,7 +88,6 @@
 #include "src/mca/ess/base/base.h"
 #include "src/mca/ess/ess.h"
 #include "src/mca/grpcomm/base/base.h"
-#include "src/mca/oob/base/base.h"
 #include "src/mca/rmaps/rmaps.h"
 #include "src/rml/rml_contact.h"
 #include "src/rml/rml.h"
@@ -652,11 +651,9 @@ static int setup_launch(int *argcptr, char ***argvptr, char *nodename, int *node
      * uri of their parent (me) */
     if (!prte_mca_plm_ssh_component.no_tree_spawn) {
         pmix_argv_append(&argc, &argv, "--tree-spawn");
-        prte_oob_base_get_addr(&param);
         pmix_argv_append(&argc, &argv, "--prtemca");
         pmix_argv_append(&argc, &argv, "prte_parent_uri");
-        pmix_argv_append(&argc, &argv, param);
-        free(param);
+        pmix_argv_append(&argc, &argv, prte_process_info.my_uri);
     }
 
     /* protect the params */
