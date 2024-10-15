@@ -50,7 +50,6 @@ unusual error; it may indicate a system configuration error.  This
 additional information may be of help:
 
    Message:     %s
-   Cache level: %d
 
 [missing-cpulist]
 

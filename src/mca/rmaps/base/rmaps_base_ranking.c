@@ -14,7 +14,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Huawei Technologies Co., Ltd.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -196,11 +196,11 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                 continue;
             }
             lrank = 0;
-            nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                       options->maptype, options->cmaplvl);
+            nobjs = hwloc_get_nbobjs_by_type(node->topology->topo,
+                                             options->maptype);
             for (k=0; k < nobjs; k++) {
-                obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                      options->maptype, options->cmaplvl, k);
+                obj = hwloc_get_obj_by_type(node->topology->topo,
+                                            options->maptype, k);
                 for (m=0; m < node->procs->size; m++) {
                     proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
                     if (NULL == proc) {
@@ -247,14 +247,14 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                 if (NULL == node) {
                     continue;
                 }
-                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                           options->maptype, options->cmaplvl);
+                nobjs = hwloc_get_nbobjs_by_type(node->topology->topo,
+                                                 options->maptype);
                 lrank = pass * nobjs;
                 /* make a pass across all objects on this node */
                 for (k=0; k < nobjs && rank < jdata->num_procs; k++) {
                     /* get this object */
-                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                          options->maptype, options->cmaplvl, k);
+                    obj = hwloc_get_obj_by_type(node->topology->topo,
+                                                options->maptype, k);
                     /* find an unranked proc on this object */
                     for (m=0; m < node->procs->size && rank < jdata->num_procs; m++) {
                         proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);

@@ -793,11 +793,7 @@ release:
                             pmix_output(0, "COULD NOT GET BOUND CPU FOR RESOURCE RELEASE");
                             continue;
                         }
-#if HWLOC_API_VERSION < 0x20000
-                        tgt = obj->allowed_cpuset;
-#else
                         tgt = obj->cpuset;
-#endif
                     }
                     hwloc_bitmap_or(node->available, node->available, tgt);
                 }

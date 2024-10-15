@@ -76,11 +76,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     if (NULL == options->target) {
         return PRTE_ERROR;
     }
-#if HWLOC_API_VERSION < 0x20000
-    tgtcpus = target->allowed_cpuset;
-#else
     tgtcpus = target->cpuset;
-#endif
     hwloc_bitmap_and(prte_rmaps_base.baseset, options->target, tgtcpus);
 
     nobjs = hwloc_get_nbobjs_by_type(node->topology->topo, options->hwb);
@@ -99,11 +95,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
 
     for (n=0; n < nobjs; n++) {
         tmp_obj = hwloc_get_obj_by_type(node->topology->topo, options->hwb, n);
-#if HWLOC_API_VERSION < 0x20000
-        tmpcpus = tmp_obj->allowed_cpuset;
-#else
         tmpcpus = tmp_obj->cpuset;
-#endif
         hwloc_bitmap_and(prte_rmaps_base.available, node->available, tmpcpus);
         hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, prte_rmaps_base.baseset);
 
@@ -136,11 +128,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
         }
     }
 
-#if HWLOC_API_VERSION < 0x20000
-    tgtcpus = trg_obj->allowed_cpuset;
-#else
     tgtcpus = trg_obj->cpuset;
-#endif
     if (NULL == tgtcpus) {
         return PRTE_ERROR;
     }
@@ -170,19 +158,11 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
                                                   prte_rmaps_base.available,
                                                   type, 0);
 
-#if HWLOC_API_VERSION < 0x20000
-    hwloc_bitmap_andnot(node->available, node->available, tmp_obj->allowed_cpuset);
-    if (hwloc_bitmap_iszero(node->available) && options->overload) {
-        /* reset the availability */
-        hwloc_bitmap_copy(node->available, node->jobcache);
-    }
-#else
     hwloc_bitmap_andnot(node->available, node->available, tmp_obj->cpuset);
     if (hwloc_bitmap_iszero(node->available) && options->overload) {
         /* reset the availability */
         hwloc_bitmap_copy(node->available, node->jobcache);
     }
-#endif
     return PRTE_SUCCESS;
 }
 
@@ -231,21 +211,13 @@ static int bind_to_cpuset(prte_job_t *jdata,
          * cpu in the list. Since we are assigning
          * procs as they are mapped, this ensures they
          * will be assigned in order */
-#if HWLOC_API_VERSION < 0x20000
-        tset = root->allowed_cpuset;
-#else
         tset = root->cpuset;
-#endif
         obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo, tset, type, idx);
         if (NULL == obj) {
             PMIX_ARGV_FREE_COMPAT(cpus);
             return PRTE_ERR_OUT_OF_RESOURCE;
         }
-#if HWLOC_API_VERSION < 0x20000
-        tset = obj->allowed_cpuset;
-#else
         tset = obj->cpuset;
-#endif
     } else {
         /* bind the proc to all assigned cpus */
         tset = options->target;
@@ -257,11 +229,7 @@ static int bind_to_cpuset(prte_job_t *jdata,
     included = false;
     for (n=0; n < npkgs; n++) {
         pkg = hwloc_get_obj_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, n);
-#if HWLOC_API_VERSION < 0x20000
-        rc = hwloc_bitmap_isincluded(tset, pkg->allowed_cpuset);
-#else
         rc = hwloc_bitmap_isincluded(tset, pkg->cpuset);
-#endif
         if (1 == rc) {
             included = true;
             break;
@@ -292,19 +260,10 @@ static int bind_to_cpuset(prte_job_t *jdata,
      * the cpuset is assigned to a proc. When all the cpus in the
      * set have been removed, we know that the set will be overloaded
      * if any more procs are assigned to it. */
-#if HWLOC_API_VERSION < 0x20000
-    tset = root->allowed_cpuset;
-#else
     tset = root->cpuset;
-#endif
     obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo, tset, type, idx);
-    if (NULL == obj) {
-    } else {
-#if HWLOC_API_VERSION < 0x20000
-        hwloc_bitmap_andnot(node->available, node->available, obj->allowed_cpuset);
-#else
+    if (NULL != obj) {
         hwloc_bitmap_andnot(node->available, node->available, obj->cpuset);
-#endif
     }
     return PRTE_SUCCESS;
 }
@@ -334,11 +293,7 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
     } else {
         target = obj;
     }
-#if HWLOC_API_VERSION < 0x20000
-    tgtcpus = target->allowed_cpuset;
-#else
     tgtcpus = target->cpuset;
-#endif
     hwloc_bitmap_and(prte_rmaps_base.baseset, options->target, tgtcpus);
     if (options->use_hwthreads) {
         type = HWLOC_OBJ_PU;
@@ -353,11 +308,7 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
         npkgs = hwloc_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE);
         for (n=0; n < npkgs; n++) {
             pkg = hwloc_get_obj_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, n);
-#if HWLOC_API_VERSION < 0x20000
-            hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.baseset, pkg->allowed_cpuset);
-#else
             hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.baseset, pkg->cpuset);
-#endif
             hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, node->available);
             ncpus = hwloc_get_nbobjs_inside_cpuset_by_type(node->topology->topo, prte_rmaps_base.available, type);
             if (ncpus >= options->cpus_per_rank) {
@@ -384,15 +335,9 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
     for (n=0; n < options->cpus_per_rank; n++) {
         tmp_obj = hwloc_get_obj_inside_cpuset_by_type(node->topology->topo, prte_rmaps_base.available, type, n);
         if (NULL != tmp_obj) {
-#if HWLOC_API_VERSION < 0x20000
-            hwloc_bitmap_or(result, result, tmp_obj->allowed_cpuset);
-            hwloc_bitmap_andnot(node->available, node->available, tmp_obj->allowed_cpuset);
-            hwloc_bitmap_andnot(options->target, options->target, tmp_obj->allowed_cpuset);
-#else
             hwloc_bitmap_or(result, result, tmp_obj->cpuset);
             hwloc_bitmap_andnot(node->available, node->available, tmp_obj->cpuset);
             hwloc_bitmap_andnot(options->target, options->target, tmp_obj->cpuset);
-#endif
         }
     }
     hwloc_bitmap_list_asprintf(&proc->cpuset, result);

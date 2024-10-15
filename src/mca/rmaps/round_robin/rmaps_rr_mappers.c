@@ -627,8 +627,8 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
             /* have to delay checking for availability until we have the object */
 
             /* get the number of objects of this type on this node */
-            nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                       options->maptype, options->cmaplvl);
+            nobjs = hwloc_get_nbobjs_by_type(node->topology->topo,
+                                             options->maptype);
             if (0 == nobjs) {
                 /* this node doesn't have any objects of this type, so
                  * we might as well drop it from consideration */
@@ -647,8 +647,8 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                 pmix_output_verbose(10, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps:rr: assigning proc to object %d", j);
                 /* get the hwloc object */
-                obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                      options->maptype, options->cmaplvl, j);
+                obj = hwloc_get_obj_by_type(node->topology->topo,
+                                            options->maptype, j);
                 if (NULL == obj) {
                     /* out of objects on this node */
                     break;

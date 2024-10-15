@@ -7,7 +7,7 @@
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Advanced Micro Devices, Inc. All rights reserved.
  * $COPYRIGHT$
  *
@@ -28,24 +28,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <hwloc.h>
-#if HWLOC_API_VERSION >= 0x20000
-#   include <hwloc/shmem.h>
-#endif
-
-#if HWLOC_API_VERSION < 0x10b00
-#define HWLOC_OBJ_NUMANODE HWLOC_OBJ_NODE
-#define HWLOC_OBJ_PACKAGE HWLOC_OBJ_SOCKET
-#endif
-#if HWLOC_API_VERSION < 0x10a00
-static inline hwloc_obj_t hwloc_get_numanode_obj_by_os_index(hwloc_topology_t topology, unsigned os_index)
-{
-    hwloc_obj_t obj = NULL;
-    while ((obj = hwloc_get_next_obj_by_type(topology, HWLOC_OBJ_NUMANODE, obj)) != NULL)
-        if (obj->os_index == os_index)
-            return obj;
-    return NULL;
-}
-#endif
+#include <hwloc/shmem.h>
 
 #include "src/class/pmix_list.h"
 #include "src/class/pmix_value_array.h"
@@ -161,20 +144,6 @@ PRTE_EXPORT extern hwloc_obj_type_t prte_hwloc_levels[];
 PRTE_EXPORT extern char *prte_hwloc_default_cpu_list;
 PRTE_EXPORT extern bool prte_hwloc_default_use_hwthread_cpus;
 
-#if HWLOC_API_VERSION < 0x20000
-#    define HWLOC_OBJ_L3CACHE HWLOC_OBJ_CACHE
-#    define HWLOC_OBJ_L2CACHE HWLOC_OBJ_CACHE
-#    define HWLOC_OBJ_L1CACHE HWLOC_OBJ_CACHE
-#    if HWLOC_API_VERSION < 0x10a00
-#        define HWLOC_OBJ_PACKAGE HWLOC_OBJ_SOCKET
-#    endif
-#    define HAVE_DECL_HWLOC_OBJ_OSDEV_COPROC 0
-#    define HAVE_HWLOC_TOPOLOGY_DUP          0
-#else
-#    define HAVE_DECL_HWLOC_OBJ_OSDEV_COPROC 1
-#    define HAVE_HWLOC_TOPOLOGY_DUP          1
-#endif
-
 /**
  * Debugging output stream
  */
@@ -209,20 +178,6 @@ PRTE_EXPORT extern bool prte_hwloc_synthetic_topo;
         }                                                                                       \
         hwloc_bitmap_free(bind);                                                                \
     } while (0);
-
-#if HWLOC_API_VERSION < 0x20000
-#    define PRTE_HWLOC_MAKE_OBJ_CACHE(level, obj, cache_level) \
-        do {                                                   \
-            obj = HWLOC_OBJ_CACHE;                             \
-            cache_level = level;                               \
-        } while (0)
-#else
-#    define PRTE_HWLOC_MAKE_OBJ_CACHE(level, obj, cache_level) \
-        do {                                                   \
-            obj = HWLOC_OBJ_L##level##CACHE;                   \
-            cache_level = 0;                                   \
-        } while (0)
-#endif
 
 PRTE_EXPORT prte_hwloc_locality_t prte_hwloc_base_get_relative_locality(hwloc_topology_t topo,
                                                                         char *cpuset1,
@@ -283,17 +238,6 @@ PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo
 
 PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_filter_cpus(hwloc_topology_t topo);
 
-/**
- * Free the hwloc topology.
- */
-PRTE_EXPORT unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
-                                                            hwloc_obj_type_t target,
-                                                            unsigned cache_level);
-
-PRTE_EXPORT hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
-                                                        hwloc_obj_type_t target,
-                                                        unsigned cache_level,
-                                                        unsigned int instance);
 PRTE_EXPORT unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj);
 
 /**
@@ -354,7 +298,7 @@ PRTE_EXPORT char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
 
 PRTE_EXPORT void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
                                              bool use_hwthread_cpus,
-                                             hwloc_topology_t topo, int *pkgnum, 
+                                             hwloc_topology_t topo, int *pkgnum,
                                              char *cores, int sz);
 
 /* get the hwloc object that corresponds to the given processor id  and type */
