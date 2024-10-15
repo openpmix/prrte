@@ -1204,7 +1204,7 @@ int main(int argc, char *argv[])
         } else if (0 == strcmp(opt->values[0], "none")) {
             pname.rank = PMIX_RANK_INVALID;
         } else {
-            pname.rank = 0;
+            pname.rank = strtoul(opt->values[0], NULL, 10);
         }
     } else {
         pname.rank = 0;
