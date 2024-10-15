@@ -708,6 +708,9 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
     }
 
 errout:
+    if (PRTE_ERR_SILENT == rc) {
+        return rc;
+    }
     if (outofcpus) {
         /* ran out of cpus */
         pmix_show_help("help-prte-rmaps-base.txt",
