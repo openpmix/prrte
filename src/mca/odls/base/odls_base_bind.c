@@ -198,11 +198,7 @@ void prte_odls_base_set(prte_odls_spawn_caddy_t *cd, int write_fd)
                                     context->app, __FILE__, __LINE__);
             }
             /* bind this proc to all available processors */
-#if HWLOC_API_VERSION < 0x20000
-            cpuset = root->allowed_cpuset;
-#else
             cpuset = (hwloc_cpuset_t)hwloc_topology_get_allowed_cpuset(prte_hwloc_topology);
-#endif
             rc = hwloc_set_cpubind(prte_hwloc_topology, cpuset, 0);
             /* if we got an error and this wasn't a default binding policy, then report it */
             if (rc < 0 && PRTE_BINDING_POLICY_IS_SET(jobdat->map->binding)) {

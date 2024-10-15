@@ -97,7 +97,6 @@ typedef struct {
     unsigned ncpus;
     int nprocs;
     hwloc_obj_type_t maptype;
-    unsigned cmaplvl;
     /* #procs/resource as per PPR */
     int pprn;
 
@@ -112,7 +111,6 @@ typedef struct {
     prte_binding_policy_t bind;
     bool dobind;
     hwloc_obj_type_t hwb;
-    unsigned clvl;
     uint16_t limit;
 
     /* usage tracking */

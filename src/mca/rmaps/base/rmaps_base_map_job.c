@@ -400,13 +400,13 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             options.maptype = HWLOC_OBJ_NUMANODE;
             options.mapdepth = PRTE_BIND_TO_NUMA;
         } else if (0 == strncasecmp(ck[1], "l1cache", len)) {
-            PRTE_HWLOC_MAKE_OBJ_CACHE(1, options.maptype, options.cmaplvl);
+            options.maptype = HWLOC_OBJ_L1CACHE;
             options.mapdepth = PRTE_BIND_TO_L1CACHE;
         } else if (0 == strncasecmp(ck[1], "l2cache", len)) {
-            PRTE_HWLOC_MAKE_OBJ_CACHE(2, options.maptype, options.cmaplvl);
+            options.maptype = HWLOC_OBJ_L2CACHE;
             options.mapdepth = PRTE_BIND_TO_L2CACHE;
         } else if (0 == strncasecmp(ck[1], "l3cache", len)) {
-            PRTE_HWLOC_MAKE_OBJ_CACHE(3, options.maptype, options.cmaplvl);
+            options.maptype = HWLOC_OBJ_L3CACHE;
             options.mapdepth = PRTE_BIND_TO_L3CACHE;
         } else {
             /* unknown spec */
@@ -452,43 +452,34 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             } else if (HWLOC_OBJ_PACKAGE == options.maptype) {
                 /* add in #packages for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                                        HWLOC_OBJ_PACKAGE, 0);
+                    app->num_procs += options.pprn * hwloc_get_nbobjs_by_type(node->topology->topo,
+                                                                              HWLOC_OBJ_PACKAGE);
                 }
             } else if (HWLOC_OBJ_NUMANODE== options.maptype) {
                 /* add in #numa for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                                        HWLOC_OBJ_NUMANODE, 0);
+                    app->num_procs += options.pprn * hwloc_get_nbobjs_by_type(node->topology->topo,
+                                                                              HWLOC_OBJ_NUMANODE);
                 }
-#if HWLOC_API_VERSION < 0x20000
-            } else if (HWLOC_OBJ_CACHE == options.maptype) {
-                /* add in #cache for each node */
-                PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                                        options.maptype, options.cmaplvl);
-                }
-#else
             } else if (HWLOC_OBJ_L1CACHE == options.maptype ||
                        HWLOC_OBJ_L2CACHE == options.maptype ||
                        HWLOC_OBJ_L3CACHE == options.maptype) {
                 /* add in #cache for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                                        options.maptype, options.cmaplvl);
+                    app->num_procs += options.pprn * hwloc_get_nbobjs_by_type(node->topology->topo,
+                                                                              options.maptype);
                 }
-#endif
             } else if (HWLOC_OBJ_CORE == options.maptype) {
                 /* add in #cores for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                                        HWLOC_OBJ_CORE, 0);
+                    app->num_procs += options.pprn * hwloc_get_nbobjs_by_type(node->topology->topo,
+                                                                              HWLOC_OBJ_CORE);
                 }
             } else if (HWLOC_OBJ_PU == options.maptype) {
                 /* add in #hwt for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                                                        HWLOC_OBJ_PU, 0);
+                    app->num_procs += options.pprn * hwloc_get_nbobjs_by_type(node->topology->topo,
+                                                                              HWLOC_OBJ_PU);
                 }
             }
         } else {
@@ -575,15 +566,15 @@ ranking:
             break;
         case PRTE_MAPPING_BYL3CACHE:
             options.mapdepth = PRTE_BIND_TO_L3CACHE;
-            PRTE_HWLOC_MAKE_OBJ_CACHE(3, options.maptype, options.cmaplvl);
+            options.maptype = HWLOC_OBJ_L3CACHE;
             break;
         case PRTE_MAPPING_BYL2CACHE:
             options.mapdepth = PRTE_BIND_TO_L2CACHE;
-            PRTE_HWLOC_MAKE_OBJ_CACHE(2, options.maptype, options.cmaplvl);
+            options.maptype = HWLOC_OBJ_L2CACHE;
             break;
         case PRTE_MAPPING_BYL1CACHE:
             options.mapdepth = PRTE_BIND_TO_L1CACHE;
-            PRTE_HWLOC_MAKE_OBJ_CACHE(1, options.maptype, options.cmaplvl);
+            options.maptype = HWLOC_OBJ_L1CACHE;
             break;
         case PRTE_MAPPING_BYCORE:
             if (1 < options.cpus_per_rank &&
@@ -735,13 +726,13 @@ ranking:
             options.hwb = HWLOC_OBJ_NUMANODE;
             break;
         case PRTE_BIND_TO_L3CACHE:
-            PRTE_HWLOC_MAKE_OBJ_CACHE(3, options.hwb, options.clvl);
+            options.hwb = HWLOC_OBJ_L3CACHE;
             break;
         case PRTE_BIND_TO_L2CACHE:
-            PRTE_HWLOC_MAKE_OBJ_CACHE(2, options.hwb, options.clvl);
+            options.hwb = HWLOC_OBJ_L2CACHE;
             break;
         case PRTE_BIND_TO_L1CACHE:
-            PRTE_HWLOC_MAKE_OBJ_CACHE(1, options.hwb, options.clvl);
+            options.hwb = HWLOC_OBJ_L1CACHE;
             break;
         case PRTE_BIND_TO_CORE:
             options.hwb = HWLOC_OBJ_CORE;

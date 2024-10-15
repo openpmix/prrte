@@ -637,11 +637,7 @@ int prte_rmaps_base_get_ncpus(prte_node_t *node,
         hwloc_bitmap_and(prte_rmaps_base.available, node->available, options->job_cpuset);
     }
     if (NULL != obj) {
-#if HWLOC_API_VERSION < 0x20000
-        hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, obj->allowed_cpuset);
-#else
         hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, obj->cpuset);
-#endif
     }
     if (options->use_hwthreads) {
         ncpus = hwloc_bitmap_weight(prte_rmaps_base.available);

@@ -432,11 +432,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
                 }
 
                 /* Mark these slots as taken on this node */
-#if HWLOC_API_VERSION < 0x20000
                 hwloc_bitmap_andnot(node->available, node->available, proc_bitmap);
-#else
-                hwloc_bitmap_andnot(node->available, node->available, proc_bitmap);
-#endif
 
                 /* cleanup */
                 free(cpu_bitmap);

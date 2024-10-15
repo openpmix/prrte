@@ -110,23 +110,12 @@ static int ppr_mapper(prte_job_t *jdata,
             mapping = PRTE_MAPPING_BYPACKAGE;
     } else if (HWLOC_OBJ_NUMANODE== options->maptype) {
             mapping = PRTE_MAPPING_BYNUMA;
-#if HWLOC_API_VERSION < 0x20000
-    } else if (HWLOC_OBJ_CACHE == options->maptype) {
-        if (1 == options->cmaplvl) {
-            mapping = PRTE_MAPPING_BYL1CACHE;
-        } else if (2 == options->cmaplvl) {
-            mapping = PRTE_MAPPING_BYL2CACHE;
-        } else if (3 == options->cmaplvl) {
-            mapping = PRTE_MAPPING_BYL3CACHE;
-        }
-#else
     } else if (HWLOC_OBJ_L1CACHE == options->maptype) {
         mapping = PRTE_MAPPING_BYL1CACHE;
     } else if (HWLOC_OBJ_L2CACHE == options->maptype) {
         mapping = PRTE_MAPPING_BYL2CACHE;
     } else if (HWLOC_OBJ_L3CACHE == options->maptype) {
         mapping = PRTE_MAPPING_BYL3CACHE;
-#endif
     } else if (HWLOC_OBJ_CORE == options->maptype) {
         mapping = PRTE_MAPPING_BYCORE;
     } else if (HWLOC_OBJ_PU == options->maptype) {
@@ -247,8 +236,8 @@ static int ppr_mapper(prte_job_t *jdata,
                 }
             } else {
                 /* get the number of resources on this node */
-                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                           options->maptype, options->cmaplvl);
+                nobjs = hwloc_get_nbobjs_by_type(node->topology->topo,
+                                                 options->maptype);
                 if (0 == nobjs) {
                     continue;
                 }
@@ -267,8 +256,8 @@ static int ppr_mapper(prte_job_t *jdata,
                 }
                 /* map the specified number of procs to each such resource on this node */
                 for (i = 0; i < nobjs && nprocs_mapped < app->num_procs; i++) {
-                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                          options->maptype, options->cmaplvl, i);
+                    obj = hwloc_get_obj_by_type(node->topology->topo,
+                                                options->maptype, i);
                     if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, obj, options)) {
                         continue;
                     }

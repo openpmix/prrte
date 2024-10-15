@@ -302,11 +302,7 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     /* total available physical memory */
     machine = hwloc_get_next_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_MACHINE, NULL);
     if (NULL != machine) {
-#if HWLOC_API_VERSION < 0x20000
-        PMIX_INFO_LIST_ADD(ret, info, PMIX_AVAIL_PHYS_MEMORY, &machine->memory.total_memory, PMIX_UINT64);
-#else
         PMIX_INFO_LIST_ADD(ret, info, PMIX_AVAIL_PHYS_MEMORY, &machine->total_memory, PMIX_UINT64);
-#endif
     }
 
     /* pass the mapping policy used for this job */
