@@ -468,7 +468,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
 #else
             } else if (HWLOC_OBJ_L1CACHE == options.maptype ||
                        HWLOC_OBJ_L2CACHE == options.maptype ||
-                       HWLOC_OBJ_L1CACHE == options.maptype) {
+                       HWLOC_OBJ_L3CACHE == options.maptype) {
                 /* add in #cache for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
                     app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
