@@ -1847,6 +1847,242 @@ static int parse_env(char **srcenv, char ***dstenv,
     return PRTE_SUCCESS;
 }
 
+// NOTE: This code is fundamentally the same (module PMIX <-> OPAL)
+//      as the translate_params() routine in the OMPI repo's
+//      opal/mca/pmix/base/pmix_base_fns.c file.  If there are
+//      changes here, there are likely to be changes there.
+
+static bool check_prte_overlap(char *var, char *value)
+{
+    char *tmp;
+
+    if (0 == strncmp(var, "dl_", 3)) {
+        pmix_asprintf(&tmp, "PRTE_MCA_prtedl_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "oob_", 4)) {
+        pmix_asprintf(&tmp, "PRTE_MCA_%s", var);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "hwloc_", 6)) {
+        pmix_asprintf(&tmp, "PRTE_MCA_%s", var);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "if_", 3)) {
+        // need to convert if to prteif
+        pmix_asprintf(&tmp, "PRTE_MCA_prteif_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "reachable_", strlen("reachable_"))) {
+        // need to convert reachable to prtereachable
+        pmix_asprintf(&tmp, "PRTE_MCA_prtereachable_%s", &var[strlen("reachable_")]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "plm_rsh_", strlen("plm_rsh_"))) {
+        // need to convert rsh to ssh
+        pmix_asprintf(&tmp, "PRTE_MCA_plm_ssh_%s", &var[strlen("plm_rsh_")]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "orte_", strlen("orte_"))) {
+        // need to convert "orte" to "prte"
+        pmix_asprintf(&tmp, "PRTE_MCA_prte_%s", &var[strlen("orte_")]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    }
+    return false;
+}
+
+static bool check_pmix_overlap(char *var, char *value)
+{
+    char *tmp;
+
+    if (0 == strncmp(var, "dl_", 3)) {
+        pmix_asprintf(&tmp, "PMIX_MCA_pdl_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "oob_", 4)) {
+        pmix_asprintf(&tmp, "PMIX_MCA_ptl_%s", &var[4]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "hwloc_", 6)) {
+        pmix_asprintf(&tmp, "PMIX_MCA_%s", var);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    } else if (0 == strncmp(var, "if_", 3)) {
+        // need to convert if to pif
+        pmix_asprintf(&tmp, "PMIX_MCA_pif_%s", &var[3]);
+        // set it, but don't overwrite if they already
+        // have a value in our environment
+        setenv(tmp, value, false);
+        free(tmp);
+        return true;
+    }
+    return false;
+}
+
+static int translate_params(void)
+{
+    char *evar, *tmp, *e2;
+    char *file;
+    const char *home;
+    pmix_list_t params;
+    pmix_mca_base_var_file_value_t *fv;
+    uid_t uid;
+    int n, len;
+
+    /* since we are the proxy, we need to check the OMPI default
+     * MCA params to see if there is something relating to PRRTE
+     * in them - this would be "old" references to things from
+     * ORTE, as well as a few OPAL references that also impact us
+     *
+     * NOTE: we do this in the following precedence order. Note
+     * that we do not overwrite at any step - this is so that we
+     * don't overwrite something previously set by the user. So
+     * the order to execution is the opposite of the intended
+     * precedence order.
+     *
+     * 1. check the environmental paramaters for OMPI_MCA values
+     *    that need to be translated
+     *
+     * 2. the user's home directory file as it should
+     *    overwrite the system default file, but not the
+     *    envars
+     *
+     * 3. the system default parameter file
+     */
+    len = strlen("OMPI_MCA_");
+    for (n=0; NULL != environ[n]; n++) {
+        if (0 == strncmp(environ[n], "OMPI_MCA_", len)) {
+            e2 = strdup(environ[n]);
+            evar = strrchr(e2, '=');
+            *evar = '\0';
+            ++evar;
+            if (check_prte_overlap(&e2[len], evar)) {
+                // check for pmix overlap
+                check_pmix_overlap(&e2[len], evar);
+            } else if (pmix_pmdl_base_check_prte_param(&e2[len])) {
+                    pmix_asprintf(&tmp, "PRTE_MCA_%s", &e2[len]);
+                    // set it, but don't overwrite if they already
+                    // have a value in our environment
+                    setenv(tmp, evar, false);
+                    free(tmp);
+                    // check for pmix overlap
+                    check_pmix_overlap(&e2[len], evar);
+            } else if (pmix_pmdl_base_check_pmix_param(&e2[len])) {
+                pmix_asprintf(&tmp, "PMIX_MCA_%s", &e2[len]);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, evar, false);
+                free(tmp);
+            }
+            free(e2);
+        }
+    }
+
+    /* see if the user has a default MCA param file */
+    uid = geteuid();
+
+    /* try to get their home directory */
+    home = pmix_home_directory(uid);
+    if (NULL != home) {
+        file = pmix_os_path(false, home, ".openmpi", "mca-params.conf", NULL);
+        PMIX_CONSTRUCT(&params, pmix_list_t);
+        pmix_mca_base_parse_paramfile(file, &params);
+        free(file);
+        PMIX_LIST_FOREACH (fv, &params, pmix_mca_base_var_file_value_t) {
+            // see if this param relates to PRRTE
+            if (check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value)) {
+                check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            } else if (pmix_pmdl_base_check_prte_param(fv->mbvfv_var)) {
+                pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, fv->mbvfv_value, false);
+                free(tmp);
+                // if this relates to the DL, OOB, HWLOC, IF, or
+                // REACHABLE frameworks, then we also need to set
+                // the equivalent PMIx value
+                check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            } else if (pmix_pmdl_base_check_pmix_param(fv->mbvfv_var)) {
+                pmix_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, fv->mbvfv_value, false);
+                free(tmp);
+            }
+        }
+        PMIX_LIST_DESTRUCT(&params);
+    }
+
+    /* check if the user has set OMPIHOME in their environment */
+    if (NULL != (evar = getenv("OMPIHOME"))) {
+        /* look for the default MCA param file */
+        file = pmix_os_path(false, evar, "etc", "openmpi-mca-params.conf", NULL);
+        PMIX_CONSTRUCT(&params, pmix_list_t);
+        pmix_mca_base_parse_paramfile(file, &params);
+        free(file);
+        PMIX_LIST_FOREACH (fv, &params, pmix_mca_base_var_file_value_t) {
+            // see if this param overlaps with PRRTE
+            check_prte_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            // see if it overlaps with PMIx
+            check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            // see if it relates to PRRTE
+            if (pmix_pmdl_base_check_prte_param(fv->mbvfv_var)) {
+                pmix_asprintf(&tmp, "PRTE_MCA_%s", fv->mbvfv_var);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, fv->mbvfv_value, false);
+                free(tmp);
+                // if this relates to the DL, OOB, HWLOC, IF, or
+                // REACHABLE frameworks, then we also need to set
+                // the equivalent PMIx value
+                check_pmix_overlap(fv->mbvfv_var, fv->mbvfv_value);
+            }
+            // see if it relates to PMIx
+            if (pmix_pmdl_base_check_pmix_param(fv->mbvfv_var)) {
+                pmix_asprintf(&tmp, "PMIX_MCA_%s", fv->mbvfv_var);
+                // set it, but don't overwrite if they already
+                // have a value in our environment
+                setenv(tmp, fv->mbvfv_value, false);
+                free(tmp);
+            }
+        }
+        PMIX_LIST_DESTRUCT(&params);
+    }
+
+    return 100;
+}
+
 static int detect_proxy(char *personalities)
 {
     char *evar;
@@ -1862,7 +2098,7 @@ static int detect_proxy(char *personalities)
         /* this is a list of personalities we need to check -
          * if it contains "ompi", then we are available */
         if (NULL != strstr(personalities, "ompi")) {
-            return 100;
+            return translate_params();
         }
         return 0;
     }
