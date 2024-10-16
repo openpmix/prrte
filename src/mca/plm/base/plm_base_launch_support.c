@@ -83,28 +83,28 @@ void prte_plm_base_set_slots(prte_node_t *node)
 {
     if (0 == strncmp(prte_set_slots, "cores", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
-            node->slots = hwloc_get_nbobjs_by_type(node->topology->topo,
+            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                    HWLOC_OBJ_CORE);
         }
     } else if (0 == strncmp(prte_set_slots, "sockets", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
-            node->slots = hwloc_get_nbobjs_by_type(node->topology->topo,
+            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                    HWLOC_OBJ_SOCKET);
             if (0 == node->slots) {
                 /* some systems don't report sockets - in this case,
                  * use numanodes */
-                node->slots = hwloc_get_nbobjs_by_type(node->topology->topo,
+                node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                        HWLOC_OBJ_NUMANODE);
             }
         }
     } else if (0 == strncmp(prte_set_slots, "numas", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
-            node->slots = hwloc_get_nbobjs_by_type(node->topology->topo,
+            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                    HWLOC_OBJ_NUMANODE);
         }
     } else if (0 == strncmp(prte_set_slots, "hwthreads", strlen(prte_set_slots))) {
         if (NULL != node->topology && NULL != node->topology->topo) {
-            node->slots = hwloc_get_nbobjs_by_type(node->topology->topo,
+            node->slots = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                    HWLOC_OBJ_PU);
         }
     } else {
@@ -1235,6 +1235,7 @@ void prte_plm_base_daemon_topology(int status, pmix_proc_t *sender,
     }
     /* Apply any CPU filters (not preserved by the XML) */
     daemon->node->available = prte_hwloc_base_filter_cpus(topo);
+    prte_hwloc_base_setup_summary(topo);
 
     /* process any cached daemons that match this signature */
     PMIX_LIST_FOREACH_SAFE(dptr, dnxt, &prte_plm_globals.daemon_cache, prte_proc_t) {
@@ -1637,6 +1638,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                     hwloc_bitmap_free(daemon->node->available);
                 }
                 daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
+                prte_hwloc_base_setup_summary(t->topo);
                 free(sig);
                 break;
             }
@@ -1653,6 +1655,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                 if (0 == strcmp(dptr->node->topology->sig, sig)) {
                     dptr->node->topology = t;
                     dptr->node->available = prte_hwloc_base_filter_cpus(topo);
+                    prte_hwloc_base_setup_summary(topo);
                     jdatorted->num_reported++;
                 } else {
                     /* see if this topology has already been requested */
@@ -1715,6 +1718,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
                     hwloc_bitmap_free(daemon->node->available);
                 }
                 daemon->node->available = prte_hwloc_base_filter_cpus(t->topo);
+                prte_hwloc_base_setup_summary(t->topo);
             }
         }
         if (!prte_plm_globals.daemon1_has_reported) {

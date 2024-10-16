@@ -97,6 +97,21 @@ typedef struct {
     size_t mbs_len;
 } prte_hwloc_base_memory_segment_t;
 
+
+/**
+ * Struct used to cache topology-level data used
+ * for repeated lookup - the struct is attached
+ * to the userdata of the root object of the
+ * topology
+ */
+typedef struct {
+    pmix_object_t super;
+    bool computed;
+    unsigned numa_cutoff;
+} prte_hwloc_topo_data_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_hwloc_topo_data_t);
+
+
 /* define binding policies */
 typedef uint16_t prte_binding_policy_t;
 #define PRTE_BINDING_POLICY PRTE_UINT16
@@ -226,12 +241,13 @@ PRTE_EXPORT extern prte_hwloc_base_mbfa_t prte_hwloc_base_mbfa;
  * hwloc_topology_load()).
  */
 PRTE_EXPORT int prte_hwloc_base_get_topology(void);
-PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_setup_summary(hwloc_topology_t topo);
 
 /**
  * Set the hwloc topology to that from the given topo file
  */
 PRTE_EXPORT int prte_hwloc_base_set_topology(char *topofile);
+
+PRTE_EXPORT void prte_hwloc_base_setup_summary(hwloc_topology_t topo);
 
 PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
                                                            bool use_hwthread_cpus, char *cpulist);
@@ -239,6 +255,13 @@ PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo
 PRTE_EXPORT hwloc_cpuset_t prte_hwloc_base_filter_cpus(hwloc_topology_t topo);
 
 PRTE_EXPORT unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj);
+
+PRTE_EXPORT unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
+                                                            hwloc_obj_type_t target);
+
+PRTE_EXPORT hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
+                                                        hwloc_obj_type_t target,
+                                                        unsigned int instance);
 
 /**
  * Get the number of pu's under a given hwloc object.

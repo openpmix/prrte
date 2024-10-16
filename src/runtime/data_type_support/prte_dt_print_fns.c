@@ -58,8 +58,8 @@ static void display_cpus(prte_topology_t *t,
 
     char *tmp1, *tmp2;
 
-    npus = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
-    ncores = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
+    npus = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
+    ncores = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
     if (npus == ncores && !use_hwthread_cpus) {
         /* the bits in this bitmap represent cores */
         bits_as_cores = true;
@@ -70,10 +70,10 @@ static void display_cpus(prte_topology_t *t,
     }
     avail = hwloc_bitmap_alloc();
     pmix_asprintf(&tmp1, "        <processors>\n");
-    npkgs = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PACKAGE);
+    npkgs = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PACKAGE);
     allowed = (hwloc_cpuset_t)hwloc_topology_get_allowed_cpuset(t->topo);
     for (pkg = 0; pkg < npkgs; pkg++) {
-        obj = hwloc_get_obj_by_type(t->topo, HWLOC_OBJ_PACKAGE, pkg);
+        obj = prte_hwloc_base_get_obj_by_type(t->topo, HWLOC_OBJ_PACKAGE, pkg);
         hwloc_bitmap_and(avail, obj->cpuset, allowed);
         if (hwloc_bitmap_iszero(avail)) {
             pmix_asprintf(&tmp2, "%s            <package id=\"%d\" cpus=\"%s\"/>\n", tmp1, pkg, "NONE");
@@ -352,7 +352,7 @@ void prte_proc_print(char **output, prte_job_t *jdata, prte_proc_t *src)
             mycpus = hwloc_bitmap_alloc();
             hwloc_bitmap_list_sscanf(mycpus, src->cpuset);
 
-            npus = hwloc_get_nbobjs_by_type(src->node->topology->topo, HWLOC_OBJ_PU);
+            npus = prte_hwloc_base_get_nbobjs_by_type(src->node->topology->topo, HWLOC_OBJ_PU);
             /* assuming each "core" xml element will take 20 characters. There could be at most npus such elements */
             int sz = sizeof(char) * npus * 20;
             cores = (char*)malloc(sz);

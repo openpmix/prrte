@@ -236,7 +236,7 @@ static int ppr_mapper(prte_job_t *jdata,
                 }
             } else {
                 /* get the number of resources on this node */
-                nobjs = hwloc_get_nbobjs_by_type(node->topology->topo,
+                nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                  options->maptype);
                 if (0 == nobjs) {
                     continue;
@@ -256,7 +256,7 @@ static int ppr_mapper(prte_job_t *jdata,
                 }
                 /* map the specified number of procs to each such resource on this node */
                 for (i = 0; i < nobjs && nprocs_mapped < app->num_procs; i++) {
-                    obj = hwloc_get_obj_by_type(node->topology->topo,
+                    obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
                                                 options->maptype, i);
                     if (!prte_rmaps_base_check_avail(jdata, app, node, &node_list, obj, options)) {
                         continue;

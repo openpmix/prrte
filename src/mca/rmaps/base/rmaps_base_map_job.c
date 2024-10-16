@@ -452,13 +452,13 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
             } else if (HWLOC_OBJ_PACKAGE == options.maptype) {
                 /* add in #packages for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                    app->num_procs += options.pprn * hwloc_get_nbobjs_by_type(node->topology->topo,
+                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                               HWLOC_OBJ_PACKAGE);
                 }
             } else if (HWLOC_OBJ_NUMANODE== options.maptype) {
                 /* add in #numa for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                    app->num_procs += options.pprn * hwloc_get_nbobjs_by_type(node->topology->topo,
+                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                               HWLOC_OBJ_NUMANODE);
                 }
             } else if (HWLOC_OBJ_L1CACHE == options.maptype ||
@@ -466,19 +466,19 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                        HWLOC_OBJ_L3CACHE == options.maptype) {
                 /* add in #cache for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                    app->num_procs += options.pprn * hwloc_get_nbobjs_by_type(node->topology->topo,
+                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                               options.maptype);
                 }
             } else if (HWLOC_OBJ_CORE == options.maptype) {
                 /* add in #cores for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                    app->num_procs += options.pprn * hwloc_get_nbobjs_by_type(node->topology->topo,
+                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                               HWLOC_OBJ_CORE);
                 }
             } else if (HWLOC_OBJ_PU == options.maptype) {
                 /* add in #hwt for each node */
                 PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
-                    app->num_procs += options.pprn * hwloc_get_nbobjs_by_type(node->topology->topo,
+                    app->num_procs += options.pprn * prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
                                                                               HWLOC_OBJ_PU);
                 }
             }

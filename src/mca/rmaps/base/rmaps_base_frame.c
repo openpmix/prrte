@@ -408,11 +408,11 @@ int prte_rmaps_base_set_default_mapping(prte_job_t *jdata,
             }
         } else {
             /* if package is available, map by that */
-            if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
+            if (NULL != prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_PACKAGE, 0)) {
                 pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps mapping not set by user - using bypackage");
                 PRTE_SET_MAPPING_POLICY(jdata->map->mapping, PRTE_MAPPING_BYPACKAGE);
-            } else if (NULL != hwloc_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
+            } else if (NULL != prte_hwloc_base_get_obj_by_type(prte_hwloc_topology, HWLOC_OBJ_NUMANODE, 0)) {
                 /* if NUMA is available, map by that */
                 pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                     "mca:rmaps mapping not set by user - using bynuma");

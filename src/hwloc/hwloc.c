@@ -673,3 +673,13 @@ int prte_hwloc_base_set_binding_policy(void *jdat, char *spec)
     }
     return PRTE_SUCCESS;
 }
+
+static void topo_data_const(prte_hwloc_topo_data_t *ptr)
+{
+    ptr->computed = false;
+    ptr->numa_cutoff = UINT_MAX;
+}
+PMIX_CLASS_INSTANCE(prte_hwloc_topo_data_t,
+                    pmix_object_t,
+                    topo_data_const, NULL);
+
