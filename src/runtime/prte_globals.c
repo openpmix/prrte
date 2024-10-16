@@ -911,6 +911,12 @@ static void tcon(prte_topology_t *t)
 }
 static void tdes(prte_topology_t *t)
 {
+    hwloc_obj_t root;
+
+    root = hwloc_get_root_obj(t->topo);
+    if (NULL != root->userdata) {
+        PMIX_RELEASE(root->userdata);
+    }
     if (NULL != t->topo) {
         hwloc_topology_destroy(t->topo);
     }

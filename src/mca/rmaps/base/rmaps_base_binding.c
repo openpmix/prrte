@@ -79,7 +79,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     tgtcpus = target->cpuset;
     hwloc_bitmap_and(prte_rmaps_base.baseset, options->target, tgtcpus);
 
-    nobjs = hwloc_get_nbobjs_by_type(node->topology->topo, options->hwb);
+    nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, options->hwb);
 
     // check for target object existence
     if (0 == nobjs) {
@@ -94,7 +94,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     }
 
     for (n=0; n < nobjs; n++) {
-        tmp_obj = hwloc_get_obj_by_type(node->topology->topo, options->hwb, n);
+        tmp_obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, options->hwb, n);
         tmpcpus = tmp_obj->cpuset;
         hwloc_bitmap_and(prte_rmaps_base.available, node->available, tmpcpus);
         hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, prte_rmaps_base.baseset);
@@ -225,10 +225,10 @@ static int bind_to_cpuset(prte_job_t *jdata,
     /* sanity check - are all the target cpus in a single
      * package, or do they span packages?
      */
-    npkgs = hwloc_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE);
+    npkgs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE);
     included = false;
     for (n=0; n < npkgs; n++) {
-        pkg = hwloc_get_obj_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, n);
+        pkg = prte_hwloc_base_get_obj_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, n);
         rc = hwloc_bitmap_isincluded(tset, pkg->cpuset);
         if (1 == rc) {
             included = true;
@@ -305,9 +305,9 @@ static int bind_multiple(prte_job_t *jdata, prte_proc_t *proc,
          * packages, so we need to ensure we set the
          * available processors to cover whichever package
          * has enough CPUs to fill the request */
-        npkgs = hwloc_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE);
+        npkgs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE);
         for (n=0; n < npkgs; n++) {
-            pkg = hwloc_get_obj_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, n);
+            pkg = prte_hwloc_base_get_obj_by_type(node->topology->topo, HWLOC_OBJ_PACKAGE, n);
             hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.baseset, pkg->cpuset);
             hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, node->available);
             ncpus = hwloc_get_nbobjs_inside_cpuset_by_type(node->topology->topo, prte_rmaps_base.available, type);

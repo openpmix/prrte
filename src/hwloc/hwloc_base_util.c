@@ -176,16 +176,89 @@ hwloc_cpuset_t prte_hwloc_base_generate_cpuset(hwloc_topology_t topo,
     return avail;
 }
 
-hwloc_cpuset_t prte_hwloc_base_setup_summary(hwloc_topology_t topo)
+void prte_hwloc_base_setup_summary(hwloc_topology_t topo)
 {
-    hwloc_cpuset_t avail = NULL;
+    hwloc_obj_t root;
+    prte_hwloc_topo_data_t *sum;
+    unsigned width, w, m, N, last;
+    hwloc_bitmap_t *numas;
+    hwloc_obj_t obj;
 
-    avail = hwloc_bitmap_alloc();
+    /* Historically, CPU packages contained a single cpu die
+     * and nothing else. NUMA was therefore determined by simply
+     * looking at the memory bus attached to the socket where
+     * the package resided - all cpus in the package were
+     * exclusively "under" that NUMA. Since each socket had a
+     * unique NUMA, you could easily map by them.
 
-    /* get the root available cpuset */
-    hwloc_bitmap_copy(avail, hwloc_topology_get_allowed_cpuset(topo));
+     * More recently, packages have started to contain multiple
+     * cpu dies as well as memory and sometimes even fabric die.
+     * In these cases, the memory bus of the cpu dies in the
+     * package generally share any included memory die. This
+     * complicates the memory situation, leaving NUMA domains
+     * no longer cleanly delineated by processor (i.e.., the
+     * NUMA domains overlap each other).
+     *
+     * Fortunately, the OS index of non-CPU NUMA domains starts
+     * at 255 and counts downward (at least for GPUs) - while
+     * the index of CPU NUMA domains starts at 0 and counts
+     * upward. We can therefore separate the two by excluding
+     * NUMA domains with an OS index above the level where
+     * they first begin to intersect
+     */
 
-    return avail;
+    root = hwloc_get_root_obj(topo);
+    if (NULL == root->userdata) {
+        root->userdata = (void *) PMIX_NEW(prte_hwloc_topo_data_t);
+    }
+    sum = (prte_hwloc_topo_data_t *) root->userdata;
+
+    /* only need to do this once */
+    if (sum->computed) {
+        return;
+    }
+    sum->computed = true;
+
+    /* compute the CPU NUMA cutoff for this topology */
+    width = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
+    if (0 == width) {
+        sum->numa_cutoff = 0;
+        return;
+    }
+    numas = (hwloc_bitmap_t*)malloc(width * sizeof(hwloc_bitmap_t));
+    N = 0;
+    last = 0;
+    for (w=0; w < UINT_MAX && N < width; w++) {
+        /* get the object at this index */
+        obj = hwloc_get_numanode_obj_by_os_index(topo, w);
+        if (NULL == obj) {
+            continue;
+        }
+        /* check for overlap with all preceding numas */
+        for (m=0; m < N; m++) {
+            if (hwloc_bitmap_intersects(obj->cpuset, numas[m])) {
+                // if it intersects anyone, then we are done
+                sum->numa_cutoff = last+1;
+                break;
+            }
+        }
+        if (UINT_MAX != sum->numa_cutoff) {
+            break;
+        } else {
+            last = w;
+            /* cache this bitmap */
+            numas[N] = hwloc_bitmap_alloc();
+            hwloc_bitmap_copy(numas[N], obj->cpuset);
+            ++N;
+        }
+    }
+    if (UINT_MAX == sum->numa_cutoff) {
+        sum->numa_cutoff = last + 1;
+    }
+    for (m=0; m < N; m++) {
+        hwloc_bitmap_free(numas[m]);
+    }
+    free(numas);
 }
 
 /* determine the node-level available cpuset based on
@@ -199,12 +272,15 @@ hwloc_cpuset_t prte_hwloc_base_filter_cpus(hwloc_topology_t topo)
     if (NULL == prte_hwloc_default_cpu_list) {
         PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                              "hwloc:base: no cpus specified - using root available cpuset"));
-        avail = prte_hwloc_base_setup_summary(topo);
+        avail = hwloc_bitmap_alloc();
+        hwloc_bitmap_copy(avail, hwloc_topology_get_allowed_cpuset(topo));
+
     } else {
         PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base: filtering cpuset"));
         avail = prte_hwloc_base_generate_cpuset(topo, prte_hwloc_default_use_hwthread_cpus,
                                                 prte_hwloc_default_cpu_list);
     }
+
     return avail;
 }
 
@@ -280,6 +356,8 @@ int prte_hwloc_base_get_topology(void)
        line size */
     fill_cache_line_size();
 
+    // create the summary
+    prte_hwloc_base_setup_summary(prte_hwloc_topology);
     return PRTE_SUCCESS;
 }
 
@@ -453,7 +531,7 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj)
 
     PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output, "hwloc:base:get_idx"));
 
-    nobjs = hwloc_get_nbobjs_by_type(topo, obj->type);
+    nobjs = prte_hwloc_base_get_nbobjs_by_type(topo, obj->type);
 
     PMIX_OUTPUT_VERBOSE((5, prte_hwloc_base_output,
                          "hwloc:base:get_idx found %u objects of type %s", nobjs,
@@ -461,7 +539,7 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj)
 
     /* find this object */
     for (i = 0; i < nobjs; i++) {
-        ptr = hwloc_get_obj_by_type(topo, obj->type, i);
+        ptr = prte_hwloc_base_get_obj_by_type(topo, obj->type, i);
         if (ptr == obj) {
             return i;
         }
@@ -470,6 +548,73 @@ unsigned int prte_hwloc_base_get_obj_idx(hwloc_topology_t topo, hwloc_obj_t obj)
     pmix_show_help("help-prte-hwloc-base.txt", "obj-idx-failed", true,
                    hwloc_obj_type_string(obj->type));
     return UINT_MAX;
+}
+
+unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t topo,
+                                                hwloc_obj_type_t target)
+{
+    unsigned w, rc;
+    hwloc_obj_t obj, root;
+    prte_hwloc_topo_data_t *sum;
+
+    /* if the type is NUMA, then we need to only count the
+     * CPU NUMAs and ignore the GPU NUMAs as we only deal
+     * with CPUs at this time */
+    if (HWLOC_OBJ_NUMANODE == target) {
+
+        root = hwloc_get_root_obj(topo);
+        sum = (prte_hwloc_topo_data_t *) root->userdata;
+        if (NULL == sum) {
+            return 0;
+        }
+
+        rc = 0;
+        for (w=0; w < sum->numa_cutoff; w++) {
+            obj = hwloc_get_numanode_obj_by_os_index(topo, w);
+            if (NULL != obj) {
+                ++rc;
+            }
+        }
+        return rc;
+    }
+    rc = hwloc_get_nbobjs_by_type(topo, target);
+    if (UINT_MAX == rc) {
+        pmix_output(0, "UNKNOWN HWLOC ERROR");
+        return 0;
+    }
+    return rc;
+}
+
+hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
+                                            hwloc_obj_type_t target,
+                                            unsigned int instance)
+{
+    unsigned w, cnt;
+    hwloc_obj_t obj, root;
+    prte_hwloc_topo_data_t *sum;
+
+    /* if we are looking for NUMA, then ignore all the
+     * GPU NUMAs */
+    if (HWLOC_OBJ_NUMANODE == target) {
+        root = hwloc_get_root_obj(topo);
+        sum = (prte_hwloc_topo_data_t *) root->userdata;
+        if (NULL == sum) {
+            return NULL;
+        }
+
+        cnt = 0;
+        for (w=0; w < sum->numa_cutoff; w++) {
+            obj = hwloc_get_numanode_obj_by_os_index(topo, w);
+            if (NULL != obj) {
+                if (cnt == instance) {
+                    return obj;
+                }
+                ++cnt;
+            }
+        }
+        return NULL;
+    }
+    return hwloc_get_obj_by_type(topo, target, instance);
 }
 
 /* The current slot_list notation only goes to the core level - i.e., the location
@@ -500,7 +645,7 @@ static int package_to_cpu_set(char *cpus, hwloc_topology_t topo, hwloc_bitmap_t 
     switch (range_cnt) {
     case 1: /* no range was present, so just one package given */
         package_id = atoi(range[0]);
-        obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, package_id);
+        obj = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, package_id);
         /* get the available cpus for this package */
         hwloc_bitmap_or(cpumask, cpumask, obj->cpuset);
         break;
@@ -510,7 +655,7 @@ static int package_to_cpu_set(char *cpus, hwloc_topology_t topo, hwloc_bitmap_t 
         upper_range = atoi(range[1]);
         /* cycle across the range of packages */
         for (package_id = lower_range; package_id <= upper_range; package_id++) {
-            obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, package_id);
+            obj = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, package_id);
             /* set the available cpus for this package bits in the bitmask */
             hwloc_bitmap_or(cpumask, cpumask, obj->cpuset);
         }
@@ -542,7 +687,7 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
     package_id = atoi(package_core[0]);
 
     /* get the object for this package id */
-    package = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, package_id);
+    package = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, package_id);
     if (NULL == package) {
         PMIX_ARGV_FREE_COMPAT(package_core);
         return PRTE_ERR_NOT_FOUND;
@@ -552,7 +697,7 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
      * to find cores on all platforms. Adjust the type here if
      * required
      */
-    if (NULL == hwloc_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0)) {
+    if (NULL == prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_CORE, 0)) {
         obj_type = HWLOC_OBJ_PU;
         hwthreadcpus = true;
     }
@@ -582,7 +727,7 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
                     /* get the indexed core from this package */
                     core_id = atoi(list[j]) + npus;
                     /* get that object */
-                    core = hwloc_get_obj_by_type(topo, obj_type, core_id);
+                    core = prte_hwloc_base_get_obj_by_type(topo, obj_type, core_id);
                     if (NULL == core) {
                         rc = PRTE_ERR_NOT_FOUND;
                         break;
@@ -602,7 +747,7 @@ static int package_core_to_cpu_set(char *package_core_list, hwloc_topology_t top
                     /* get the indexed core from this package */
                     core_id = j + npus;
                     /* get that object */
-                    core = hwloc_get_obj_by_type(topo, obj_type, core_id);
+                    core = prte_hwloc_base_get_obj_by_type(topo, obj_type, core_id);
                     if (NULL == core) {
                         rc = PRTE_ERR_NOT_FOUND;
                         break;
@@ -1159,10 +1304,10 @@ void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
     hwloc_bitmap_free(avail);
 
     /* get the number of packages in the topology */
-    npkgs = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
+    npkgs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
     avail = hwloc_bitmap_alloc();
-    npus = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
-    ncores = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
+    npus = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
+    ncores = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
 
     if (npus == ncores && !use_hwthread_cpus) {
         /* the bits in this bitmap represent cores */
@@ -1174,7 +1319,7 @@ void prte_hwloc_get_binding_info(hwloc_const_cpuset_t cpuset,
 
     /* binding happens within a package and not across packages */
     for (n = 0; n < npkgs; n++) {
-        pkg = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, n);
+        pkg = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, n);
         /* see if we have any here */
         hwloc_bitmap_and(avail, cpuset, pkg->cpuset);
 
@@ -1232,11 +1377,11 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
     hwloc_bitmap_free(avail);
 
     /* get the number of packages in the topology */
-    npkgs = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
+    npkgs = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
     avail = hwloc_bitmap_alloc();
 
-    npus = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
-    ncores = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
+    npus = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
+    ncores = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
     if (npus == ncores && !use_hwthread_cpus) {
         /* the bits in this bitmap represent cores */
         bits_as_cores = true;
@@ -1246,7 +1391,7 @@ char *prte_hwloc_base_cset2str(hwloc_const_cpuset_t cpuset,
     }
 
     for (n = 0; n < npkgs; n++) {
-        pkg = hwloc_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, n);
+        pkg = prte_hwloc_base_get_obj_by_type(topo, HWLOC_OBJ_PACKAGE, n);
         /* see if we have any here */
         hwloc_bitmap_and(avail, cpuset, pkg->cpuset);
         if (hwloc_bitmap_iszero(avail)) {
@@ -1290,13 +1435,13 @@ char *prte_hwloc_base_get_topo_signature(hwloc_topology_t topo)
     unsigned i;
     hwloc_bitmap_t complete, allowed;
 
-    nnuma = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
-    npackage = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
-    nl3 = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_L3CACHE);
-    nl2 = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_L2CACHE);
-    nl1 = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_L1CACHE);
-    ncore = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
-    nhwt = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
+    nnuma = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_NUMANODE);
+    npackage = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PACKAGE);
+    nl3 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L3CACHE);
+    nl2 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L2CACHE);
+    nl1 = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_L1CACHE);
+    ncore = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
+    nhwt = prte_hwloc_base_get_nbobjs_by_type(topo, HWLOC_OBJ_PU);
 
     /* get the root object so we can add the processor architecture */
     obj = hwloc_get_root_obj(topo);

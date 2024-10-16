@@ -206,8 +206,8 @@ static void display_cpus(prte_topology_t *t,
         return;
     }
 
-    npus = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
-    ncores = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
+    npus = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PU);
+    ncores = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_CORE);
     if (npus == ncores && !use_hwthread_cpus) {
         /* the bits in this bitmap represent cores */
         bits_as_cores = true;
@@ -224,10 +224,10 @@ static void display_cpus(prte_topology_t *t,
         pmix_output(prte_clean_output,
                     "\n======================   AVAILABLE PROCESSORS [node: %s]   ======================\n\n", node);
     }
-    npkgs = hwloc_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PACKAGE);
+    npkgs = prte_hwloc_base_get_nbobjs_by_type(t->topo, HWLOC_OBJ_PACKAGE);
     allowed = (hwloc_cpuset_t)hwloc_topology_get_allowed_cpuset(t->topo);
     for (pkg = 0; pkg < npkgs; pkg++) {
-        obj = hwloc_get_obj_by_type(t->topo, HWLOC_OBJ_PACKAGE, pkg);
+        obj = prte_hwloc_base_get_obj_by_type(t->topo, HWLOC_OBJ_PACKAGE, pkg);
         hwloc_bitmap_and(avail, obj->cpuset, allowed);
         if (hwloc_bitmap_iszero(avail)) {
             if (parsable) {
