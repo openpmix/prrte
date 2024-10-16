@@ -14,7 +14,7 @@
 # Copyright (c) 2012      Los Alamos National Security, Inc.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.  All rights reserved.
 # Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -61,7 +61,8 @@ EXAMPLES = \
 	legacy \
 	colocate \
 	pset \
-	nodeid
+	nodeid \
+	client-threaded
 
 all: $(EXAMPLES)
 
