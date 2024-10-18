@@ -11,7 +11,7 @@
 #                         All rights reserved.
 # Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -30,5 +30,3 @@ libprtemca_plm_la_SOURCES += \
         base/plm_base_launch_support.c \
         base/plm_base_jobid.c \
         base/plm_base_prted_cmds.c
-
-dist_prtedata_DATA += base/help-plm-base.txt

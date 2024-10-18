@@ -12,7 +12,7 @@
 # Copyright (c) 2010-2020 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
-# Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -21,8 +21,6 @@
 #
 # The Slurm plugin does not call any Slurm functions - it therefore
 # does NOT need to link against any Slurm libraries
-
-dist_prtedata_DATA = help-ras-slurm.txt
 
 sources = \
         ras_slurm.h \
