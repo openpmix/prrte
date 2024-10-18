@@ -2,7 +2,7 @@
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2017      IBM Corporation.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
-# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
 # Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -27,10 +27,6 @@ AM_CFLAGS = \
 rstdir = $(prtedatadir)/rst/schizo-ompi-rst-content
 dist_rst_DATA = \
         schizo-ompi-cli.rstxt
-
-# Install the help file
-dist_prtedata_DATA = \
-        help-schizo-ompi.txt
 
 sources = \
         schizo_ompi_component.c \

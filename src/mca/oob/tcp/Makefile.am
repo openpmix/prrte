@@ -22,8 +22,6 @@
 # $HEADER$
 #
 
-dist_prtedata_DATA = help-oob-tcp.txt
-
 sources = \
           oob_tcp_component.h \
           oob_tcp.h \
