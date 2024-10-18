@@ -499,6 +499,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "DISPLAY PARSEABLE OUTPUT";
         case PRTE_JOB_EXTEND_DVM:
             return "EXTEND DVM";
+        case PRTE_JOB_CHILD_SEP:
+            return "CHILD SEP";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";
