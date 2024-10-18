@@ -48,7 +48,7 @@ its parent:
   Parent: %s
   Child:  %s
 
-This behavior is controlled by setting the PMIX_JOB_CHILD_SEP attribute
+This behavior is controlled by setting the PMIX_SPAWN_CHILD_SEP attribute
 in the job info provided at time of spawn for the child job. When set to
 "true", the runtime will "separate" the child from its parent and allow
 it to continue execution after parent termination. Note that this is only
