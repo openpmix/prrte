@@ -70,4 +70,5 @@ EXTRA_DIST += \
         examples/colocate.c \
         examples/pset.c \
         examples/nodeid.c \
-        examples/client-threaded.c
+        examples/client-threaded.c \
+        examples/dynamic-dep.c

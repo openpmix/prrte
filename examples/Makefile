@@ -62,7 +62,8 @@ EXAMPLES = \
 	colocate \
 	pset \
 	nodeid \
-	client-threaded
+	client-threaded \
+	dynamic-dep
 
 all: $(EXAMPLES)
 
