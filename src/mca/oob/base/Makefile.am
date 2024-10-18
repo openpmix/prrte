@@ -21,8 +21,6 @@
 # $HEADER$
 #
 
-dist_prtedata_DATA += base/help-oob-base.txt
-
 headers += \
 	base/base.h
 
