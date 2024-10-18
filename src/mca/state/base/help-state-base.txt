@@ -3,7 +3,7 @@
 # Copyright (c) 2018      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2019      Intel, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -40,3 +40,20 @@ behavior:
 
 You must specify one of the above in combination with NOTIFYERRORS in order
 to receive notifications of errors. Please correct the situation and try again.
+#
+[child-term]
+At least one child job is being terminated due to termination of
+its parent:
+
+  Parent: %s
+  Child:  %s
+
+This behavior is controlled by setting the PMIX_JOB_CHILD_SEP attribute
+in the job info provided at time of spawn for the child job. When set to
+"true", the runtime will "separate" the child from its parent and allow
+it to continue execution after parent termination. Note that this is only
+true for parents that normally terminate - abnormal termination will always
+result in a complete teardown of all child jobs.
+
+In the absence of the attribute, the runtime will default to the "true"
+behavior.
