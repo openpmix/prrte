@@ -507,6 +507,8 @@ const char *prte_attr_key_to_str(prte_attribute_key_t key)
             return "ALLOC REF ID";
         case PRTE_JOB_BINDING_LIMIT:
             return "JOB BINDING LIMIT";
+        case PRTE_JOB_CHILD_SEP:
+            return "CHILD SEP";
 
         case PRTE_PROC_NOBARRIER:
             return "PROC-NOBARRIER";

@@ -29,6 +29,7 @@
 #include "src/util/pmix_output.h"
 #include "src/util/proc_info.h"
 #include "src/util/session_dir.h"
+#include "src/util/pmix_show_help.h"
 
 #include "src/mca/errmgr/errmgr.h"
 #include "src/mca/filem/filem.h"
@@ -507,7 +508,7 @@ static void check_complete(int fd, short args, void *cbdata)
     prte_session_t *session;
     prte_job_t *jdata, *jptr;
     prte_proc_t *proc;
-    int i, rc;
+    int i, rc, nprocs;
     prte_node_t *node;
     prte_job_map_t *map;
     int32_t index;
@@ -521,7 +522,7 @@ static void check_complete(int fd, short args, void *cbdata)
     hwloc_obj_t obj;
     hwloc_obj_type_t type;
     hwloc_cpuset_t boundcpus, tgt;
-    bool takeall;
+    bool takeall, sep, *sepptr = &sep;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
@@ -824,21 +825,33 @@ release:
         prte_state_base_check_fds(jdata);
     }
 
-    /* if this job was a launcher, then we need to abort all of its
-     * child jobs that might still be running */
+    /* if this job started child jobs, then we need to abort all of its
+     * child jobs that might still be running unless designated to
+     * run independently of their parent */
     if (0 < pmix_list_get_size(&jdata->children)) {
         PMIX_CONSTRUCT(&procs, pmix_pointer_array_t);
         pmix_pointer_array_init(&procs, 1, INT_MAX, 1);
+        nprocs = 0;
         PMIX_LIST_FOREACH(jptr, &jdata->children, prte_job_t)
         {
-            proc = PMIX_NEW(prte_proc_t);
-            PMIX_LOAD_PROCID(&proc->name, jptr->nspace, PMIX_RANK_WILDCARD);
-            pmix_pointer_array_add(&procs, proc);
+            if (prte_get_attribute(&jptr->attributes, PRTE_JOB_CHILD_SEP, (void**)&sepptr, PMIX_BOOL) && !sep) {
+                proc = PMIX_NEW(prte_proc_t);
+                PMIX_LOAD_PROCID(&proc->name, jptr->nspace, PMIX_RANK_WILDCARD);
+                pmix_pointer_array_add(&procs, proc);
+                ++nprocs;
+                if (1 == nprocs) {
+                    // output a warning message that at least one child is being terminated
+                    pmix_show_help("help-state-base.txt", "child-term", true,
+                                   jdata->nspace, jptr->nspace);
+                }
+            }
         }
-        prte_plm.terminate_procs(&procs);
-        for (i = 0; i < procs.size; i++) {
-            if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(&procs, i))) {
-                PMIX_RELEASE(proc);
+        if (0 < nprocs) {
+            prte_plm.terminate_procs(&procs);
+            for (i = 0; i < procs.size; i++) {
+                if (NULL != (proc = (prte_proc_t *) pmix_pointer_array_get_item(&procs, i))) {
+                    PMIX_RELEASE(proc);
+                }
             }
         }
         PMIX_DESTRUCT(&procs);
