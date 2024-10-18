@@ -30,8 +30,6 @@ dist_prtedata_DATA = \
         show-help-files/help-prte-rmaps-base.txt \
         show-help-files/help-prte-rmaps-ppr.txt \
         show-help-files/help-prte-rmaps-seq.txt \
-        show-help-files/help-prte-rtc-base.txt \
-        show-help-files/help-prte-rtc-hwloc.txt \
         show-help-files/help-prte-runtime.txt \
         show-help-files/help-prte-util.txt \
         show-help-files/help-prte.txt \
@@ -46,7 +44,6 @@ dist_prtedata_DATA = \
         show-help-files/help-rmaps_rank_file.txt \
         show-help-files/help-schizo-base.txt \
         show-help-files/help-schizo-ompi.txt \
-        show-help-files/help-schizo-srun.txt \
         show-help-files/help-state-base.txt
 
 

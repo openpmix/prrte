@@ -29,5 +29,3 @@ libprtemca_odls_la_SOURCES += \
         base/odls_base_select.c \
         base/odls_base_default_fns.c \
         base/odls_base_bind.c
-
-dist_prtedata_DATA += base/help-prte-odls-base.txt

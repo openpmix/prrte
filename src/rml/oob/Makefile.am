@@ -22,10 +22,6 @@
 # $HEADER$
 #
 
-dist_prtedata_DATA += \
-      rml/oob/help-oob-base.txt \
-      rml/oob/help-oob-tcp.txt
-
 headers += \
       rml/oob/oob.h \
       rml/oob/oob_tcp.h \
