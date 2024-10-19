@@ -111,6 +111,8 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     }
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_BINDING_LIMIT, (void**) &u16ptr, PMIX_UINT16)) {
         options.limit = u16;
+        // reset any prior counters
+        prte_hwloc_base_reset_counters();
     }
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,

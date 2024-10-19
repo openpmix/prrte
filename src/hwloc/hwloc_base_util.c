@@ -1860,3 +1860,63 @@ int prte_hwloc_print(char **output, char *prefix, hwloc_topology_t src)
     *output = tmp;
     return PRTE_SUCCESS;
 }
+
+void prte_hwloc_base_reset_counters(void)
+{
+    prte_topology_t *ptopo;
+    hwloc_topology_t topo;
+    hwloc_obj_type_t type;
+    hwloc_obj_t obj;
+    prte_hwloc_obj_data_t *objcnt;
+    unsigned width, w;
+    unsigned depth, d;
+    int n;
+
+    /* this can be a fairly expensive operation as we must traverse
+     * all objects of interest in all topologies since we cannot
+     * know which ones might have been used. Fortunately, we almost
+     * always have only one topology, and there aren't that many
+     * objects in it - so this normally goes fairly quickly
+     */
+
+    for (n = 0; n < prte_node_topologies->size; n++) {
+        ptopo = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, n);
+        if (NULL == ptopo) {
+            continue;
+        }
+        topo = ptopo->topo;
+
+        /* get the max depth of the topology */
+        depth = hwloc_topology_get_depth(topo);
+
+        /* start at the first depth below the top machine level */
+        for (d = 1; d < depth; d++) {
+            /* get the object type at this depth */
+            type = hwloc_get_depth_type(topo, d);
+            /* if it isn't one of interest, then ignore it */
+            if (HWLOC_OBJ_NUMANODE != type && HWLOC_OBJ_PACKAGE != type &&
+                HWLOC_OBJ_L1CACHE != type && HWLOC_OBJ_L2CACHE != type && HWLOC_OBJ_L3CACHE != type &&
+                HWLOC_OBJ_CORE != type && HWLOC_OBJ_PU != type) {
+                continue;
+            }
+
+            /* get the width of the topology at this depth */
+            width = hwloc_get_nbobjs_by_depth(topo, d);
+            if (0 == width) {
+                continue;
+            }
+
+            /* scan all objects at this depth to see if
+             * the location overlaps with them
+             */
+            for (w = 0; w < width; w++) {
+                /* get the object at this depth/index */
+                obj = hwloc_get_obj_by_depth(topo, d, w);
+                if (NULL != obj->userdata) {
+                    objcnt = (prte_hwloc_obj_data_t*)obj->userdata;
+                    objcnt->nprocs = 0;
+                }
+            }
+        }
+    }
+}
