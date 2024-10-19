@@ -683,3 +683,11 @@ PMIX_CLASS_INSTANCE(prte_hwloc_topo_data_t,
                     pmix_object_t,
                     topo_data_const, NULL);
 
+
+static void obj_data_const(prte_hwloc_obj_data_t *ptr)
+{
+    ptr->nprocs = 0;
+}
+PMIX_CLASS_INSTANCE(prte_hwloc_obj_data_t,
+                    pmix_object_t,
+                    obj_data_const, NULL);

@@ -62,6 +62,7 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
     hwloc_obj_t target;
     hwloc_cpuset_t tgtcpus, tmpcpus;
     int nobjs, n;
+    prte_hwloc_obj_data_t *objcnt;
 
     pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                         "mca:rmaps: bind %s with policy %s",
@@ -95,6 +96,18 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
 
     for (n=0; n < nobjs; n++) {
         tmp_obj = prte_hwloc_base_get_obj_by_type(node->topology->topo, options->hwb, n);
+        // if a limit on the number of procs/object has been set,
+        // then check it here
+        if (NULL == tmp_obj->userdata) {
+            objcnt = PMIX_NEW(prte_hwloc_obj_data_t);
+            tmp_obj->userdata = (void*)objcnt;
+        } else {
+            objcnt = (prte_hwloc_obj_data_t*)tmp_obj->userdata;
+        }
+        if (0 < options->limit && options->limit <= objcnt->nprocs) {
+            // skip this object
+            continue;
+        }
         tmpcpus = tmp_obj->cpuset;
         hwloc_bitmap_and(prte_rmaps_base.available, node->available, tmpcpus);
         hwloc_bitmap_and(prte_rmaps_base.available, prte_rmaps_base.available, prte_rmaps_base.baseset);
@@ -115,6 +128,9 @@ static int bind_generic(prte_job_t *jdata, prte_proc_t *proc,
         }
         if (0 < ncpus) {
             trg_obj = tmp_obj;
+            if (0 < options->limit) {
+                objcnt->nprocs++;
+            }
             break;
         }
     }

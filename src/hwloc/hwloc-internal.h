@@ -111,6 +111,18 @@ typedef struct {
 } prte_hwloc_topo_data_t;
 PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_hwloc_topo_data_t);
 
+/**
+ * Struct used to cache object-level data used
+ * when computing process placement - the struct
+ * is attached to the userdata of each object
+ * in the topology upon first use of that object
+ * in a placement computation
+ */
+typedef struct {
+    pmix_object_t super;
+    unsigned nprocs;
+} prte_hwloc_obj_data_t;
+PRTE_EXPORT PMIX_CLASS_DECLARATION(prte_hwloc_obj_data_t);
 
 /* define binding policies */
 typedef uint16_t prte_binding_policy_t;
@@ -262,6 +274,9 @@ PRTE_EXPORT unsigned int prte_hwloc_base_get_nbobjs_by_type(hwloc_topology_t top
 PRTE_EXPORT hwloc_obj_t prte_hwloc_base_get_obj_by_type(hwloc_topology_t topo,
                                                         hwloc_obj_type_t target,
                                                         unsigned int instance);
+
+// reset all obj counters
+PRTE_EXPORT void prte_hwloc_base_reset_counters(void);
 
 /**
  * Get the number of pu's under a given hwloc object.
