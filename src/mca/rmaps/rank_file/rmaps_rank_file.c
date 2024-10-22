@@ -225,7 +225,7 @@ static int prte_rmaps_rf_map(prte_job_t *jdata,
          * option
          */
         rc = prte_rmaps_base_get_target_nodes(&node_list, &num_slots, jdata, app,
-                                              options->map, initial_map, false);
+                                              options->map, initial_map, false, true);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             goto error;

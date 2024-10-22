@@ -13,7 +13,7 @@
  * Copyright (c) 2011-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2017-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -49,7 +49,7 @@ BEGIN_C_DECLS
 PRTE_EXPORT int prte_rmaps_base_get_target_nodes(pmix_list_t *node_list, int32_t *total_num_slots,
                                                  prte_job_t *jdata, prte_app_context_t *app,
                                                  prte_mapping_policy_t policy, bool initial_map,
-                                                 bool silent);
+                                                 bool silent, bool keepall);
 
 PRTE_EXPORT prte_proc_t *prte_rmaps_base_setup_proc(prte_job_t *jdata,
                                                     prte_app_idx_t idx,

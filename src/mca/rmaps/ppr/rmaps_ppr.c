@@ -169,7 +169,7 @@ static int ppr_mapper(prte_job_t *jdata,
         /* get the available nodes */
         PMIX_CONSTRUCT(&node_list, pmix_list_t);
         rc = prte_rmaps_base_get_target_nodes(&node_list, &num_slots, jdata, app,
-                                              jdata->map->mapping, initial_map, false);
+                                              jdata->map->mapping, initial_map, false, false);
         if (PRTE_SUCCESS != rc) {
             PRTE_ERROR_LOG(rc);
             goto error;

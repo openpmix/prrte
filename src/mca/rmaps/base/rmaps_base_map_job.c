@@ -436,7 +436,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
         PMIX_CONSTRUCT(&nodes, pmix_list_t);
         rc = prte_rmaps_base_get_target_nodes(&nodes, &slots,
                                               jdata, app, jdata->map->mapping,
-                                              true, true);
+                                              true, true, false);
         if (PRTE_SUCCESS != rc) {
             PMIX_LIST_DESTRUCT(&nodes);
             jdata->exit_code = rc;
