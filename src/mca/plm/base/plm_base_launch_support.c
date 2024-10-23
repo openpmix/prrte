@@ -1303,7 +1303,7 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
     char *ptr;
     int idx;
     pmix_status_t ret;
-    prte_proc_t *daemon = NULL, *dptr;
+    prte_proc_t *daemon = NULL, *dptr, *d1;
     prte_job_t *jdata;
     pmix_proc_t dname;
     pmix_data_buffer_t *relay;
@@ -1647,13 +1647,19 @@ void prte_plm_base_daemon_callback(int status, pmix_proc_t *sender, pmix_data_bu
         if (1 == dname.rank) {
             /* process any cached daemons */
             PMIX_CONSTRUCT(&cachelist, pmix_list_t);
+            d1 = (prte_proc_t *) pmix_pointer_array_get_item(jdatorted->procs, 1);
+            if (NULL == d1) {
+                PRTE_ERROR_LOG(PRTE_ERR_NOT_FOUND);
+                prted_failed_launch = true;
+                goto CLEANUP;
+            }
             while (NULL != (dptr = (prte_proc_t*)pmix_list_remove_first(&prte_plm_globals.daemon_cache))) {
                 PMIX_OUTPUT_VERBOSE((5, prte_plm_base_framework.framework_output,
                                      "%s plm:base:prted_daemon_cback processing cached daemon %s",
                                      PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                      PRTE_NAME_PRINT(&dptr->name)));
                 if (0 == strcmp(dptr->node->topology->sig, sig)) {
-                    dptr->node->topology = t;
+                    dptr->node->topology = d1->node->topology;
                     dptr->node->available = prte_hwloc_base_filter_cpus(topo);
                     prte_hwloc_base_setup_summary(topo);
                     jdatorted->num_reported++;
