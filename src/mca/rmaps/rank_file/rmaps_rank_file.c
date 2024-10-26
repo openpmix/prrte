@@ -840,7 +840,12 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
         for(i = 0; NULL != cpus[i]; ++i) {
             // assume HNP has the same topology as other nodes
             obj = hwloc_get_pu_obj_by_os_index(my_topo->topo, strtol(cpus[i], NULL, 10)) ;
-
+            if (NULL == obj) {
+                PMIX_ARGV_FREE_COMPAT(cpus);
+                fclose(fp);
+                close(fp_rank);
+                return PRTE_ERROR;
+            }
             free(cpus[i]);
             // 10 max number of digits in an int
             cpus[i] = (char*)malloc(sizeof(char) * 10);
