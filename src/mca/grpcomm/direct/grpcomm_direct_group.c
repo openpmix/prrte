@@ -302,6 +302,12 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
                          "%s grpcomm:direct grp_construct recvd from %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender)));
 
+    // empty buffer indicates lost connection
+    if (NULL == buffer || NULL == buffer->unpack_ptr) {
+        PMIX_ERROR_LOG(PMIX_ERR_EMPTY);
+        return;
+    }
+
     /* unpack the signature */
     rc = unpack_signature(buffer, &sig);
     if (PRTE_SUCCESS != rc) {

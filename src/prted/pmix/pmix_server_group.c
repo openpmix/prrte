@@ -111,7 +111,7 @@ static void local_complete(int sd, short args, void *cbdata)
             // check if they gave us any grp or endpt info
             if (PMIX_CHECK_KEY(&cd->directives[n], PMIX_PROC_DATA) ||
                 PMIX_CHECK_KEY(&cd->directives[n], PMIX_GROUP_INFO)) {
-                rc = PMIx_Info_list_add_value(ilist, cd->directives[n].key, &cd->info[n].value);
+                rc = PMIx_Info_list_add_value(ilist, cd->directives[n].key, &cd->directives[n].value);
                 if (PMIX_SUCCESS != rc) {
                     PMIX_ERROR_LOG(rc);
                 }
