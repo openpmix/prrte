@@ -227,8 +227,9 @@ static void recv_cons(prte_rml_recv_t *ptr)
 }
 static void recv_des(prte_rml_recv_t *ptr)
 {
-    if (ptr->dbuf != NULL)
+    if (ptr->dbuf != NULL && 0 < ptr->dbuf->bytes_allocated) {
         PMIX_DATA_BUFFER_RELEASE(ptr->dbuf);
+    }
 }
 PMIX_CLASS_INSTANCE(prte_rml_recv_t, pmix_list_item_t, recv_cons, recv_des);
 
