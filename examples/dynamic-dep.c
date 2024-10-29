@@ -42,6 +42,14 @@ static pmix_proc_t myproc;
 
 int main(int argc, char **argv)
 {
+
+#ifndef PMIX_SPAWN_CHILD_SEP
+    EXAMPLES_HIDE_UNUSED_PARAMS(argc, argv);
+
+    fprintf(stderr, "PMIX_SPAWN_CHILD_SEP is not available - this example is not supported\n");
+    return -1;
+#else
+
     int rc, exitcode;
     char nsp2[PMIX_MAX_NSLEN + 1];
     pmix_proc_t proc;
@@ -97,4 +105,5 @@ done:
 
     fflush(stderr);
     return (0);
+#endif
 }

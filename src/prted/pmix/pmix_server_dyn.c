@@ -368,11 +368,13 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_CONTINUOUS, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
 
+#ifdef PMIX_SPAWN_CHILD_SEP
             /*** CHILD INDEPENDENCE  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_SPAWN_CHILD_SEP)) {
             flag = PMIX_INFO_TRUE(info);
             prte_set_attribute(&jdata->attributes, PRTE_JOB_CHILD_SEP, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
+#endif
 
             /***   MAX RESTARTS  ***/
         } else if (PMIX_CHECK_KEY(info, PMIX_MAX_RESTARTS)) {
