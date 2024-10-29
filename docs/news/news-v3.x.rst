@@ -4,6 +4,41 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
+3.0.7 -- TBD
+------------
+- PR #2059: Protect against old PMIx versions
+- PR #2057: Fix support for hetero LSF environments
+- PR #2049: Cleanup show-help files
+- PR #2047: Implement the PMIX_JOB_CHILD_SEP support
+- PR #2044: Multiple commits
+   - Add a threaded client example
+   - Restore parsing of OMPI param files
+- PR #2039: Unlock stdin target
+- PR #2037: Pull a couple of fixes from master branch
+- PR #2034: Fix deprecation warnings for ppr on socket objects
+- PR #2032: Multiple commits
+   - avoid warnings (as errors) spots (init vars, etc.)
+   - remove unused Level var
+   - init installdirs structure (avoids warn-as-error)
+   - Pay attention to interface include/exclude params
+   - Protect against the envar version of the Slurm custom args param
+- PR #2018: fix support for MPIEXEC_TIMEOUT
+- PR #2017: Update prte_portable_platform_real.h from upstream gasnet
+- PR #2015: Always have show-help available
+- PR #2013: Remove unused yaml
+- PR #2011: Cleanup show help formatting
+- PR #2009: docs: update for Python 3.12
+- PR #2007: Fix a segfault when no arguments are provided
+- PR #2005: Multiple commits
+   - Remove unused function
+   - Revise cmd line parsing to handle special case
+- PR #2002: Update OAC to latest HEAD
+- PR #2000: Use the PMIx functions to check params
+- PR #1998: Protect against LTO optimizer
+- PR #1996: Read the Docs updates
+- PR #1994: Provide a warning of potentially unknown Slurm params
+
+
 3.0.6 -- 8 Jul 2024
 -------------------
 - PR #1992: Update NEWS and VERSION for release
