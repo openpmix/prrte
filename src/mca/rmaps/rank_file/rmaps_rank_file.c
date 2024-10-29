@@ -760,6 +760,28 @@ static int prte_rmaps_rf_process_lsf_affinity_hostfile(prte_job_t *jdata,
     return PRTE_SUCCESS;
 }
 
+static bool quickmatch(prte_node_t *nd, char *name)
+{
+    int n;
+
+    if (0 == strcmp(nd->name, name)) {
+        return true;
+    }
+    if (0 == strcmp(nd->name, prte_process_info.nodename) &&
+        (0 == strcmp(name, "localhost") ||
+         0 == strcmp(name, "127.0.0.1"))) {
+        return true;
+    }
+    if (NULL != nd->aliases) {
+        for (n=0; NULL != nd->aliases[n]; n++) {
+            if (0 == strcmp(nd->aliases[n], name)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, char **aff_rankfile)
 {
     FILE *fp;
@@ -769,9 +791,9 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
     char *tmp_str = NULL;
     size_t len;
     char **cpus;
-    int i;
+    int i, j;
     hwloc_obj_t obj;
-    prte_topology_t *my_topo = NULL;
+    prte_node_t *node, *nptr;
 
     if( NULL != *aff_rankfile) {
         free(*aff_rankfile);
@@ -839,12 +861,39 @@ static int prte_rmaps_rf_lsf_convert_affinity_to_rankfile(char *affinity_file, c
         // Convert the Physical CPU set from LSF to a Hwloc logical CPU set
         pmix_output_verbose(20, prte_rmaps_base_framework.framework_output,
                             "mca:rmaps:rf: (lsf) Convert Physical CPUSET from <%s>", sep);
-        my_topo = (prte_topology_t *) pmix_pointer_array_get_item(prte_node_topologies, 0);
+
+        // find the named host
+        nptr = NULL;
+        for (j = 0; j < prte_node_pool->size; j++) {
+            node = (prte_node_t *) pmix_pointer_array_get_item(prte_node_pool, j);
+            if (NULL == node) {
+                continue;
+            }
+            if (quickmatch(node, hstname)) {
+                nptr = node;
+                break;
+            }
+        }
+        if (NULL == nptr) {
+            /* wasn't found - that is an error */
+            pmix_show_help("help-rmaps_rank_file.txt",
+                           "resource-not-found", true,
+                           hstname);
+            fclose(fp);
+            close(fp_rank);
+            return PRTE_ERROR;
+        }
+
         cpus = PMIX_ARGV_SPLIT_COMPAT(sep, ',');
         for(i = 0; NULL != cpus[i]; ++i) {
-            // assume HNP has the same topology as other nodes
-            obj = hwloc_get_pu_obj_by_os_index(my_topo->topo, strtol(cpus[i], NULL, 10)) ;
-
+            // get the specified object
+            obj = hwloc_get_pu_obj_by_os_index(nptr->topology->topo, strtol(cpus[i], NULL, 10)) ;
+            if (NULL == obj) {
+                PMIX_ARGV_FREE_COMPAT(cpus);
+                fclose(fp);
+                close(fp_rank);
+                return PRTE_ERROR;
+            }
             free(cpus[i]);
             // 10 max number of digits in an int
             cpus[i] = (char*)malloc(sizeof(char) * 10);

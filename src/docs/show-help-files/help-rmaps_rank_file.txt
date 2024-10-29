@@ -102,3 +102,9 @@ to a different process.
 If this is intentional then you must pass the "overload-allowed"
 qualifier to the --bind-to option.
   --bind-to :overload-allowed
+#
+[resource-not-found]
+The specified LSF affinity file contained a node (%s) that is not in your
+allocation. We therefore cannot map a process rank to it. Please
+check your allocation and affinity file to ensure the latter only
+contains allocated nodes.
