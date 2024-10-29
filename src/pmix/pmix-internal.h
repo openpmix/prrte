@@ -6,7 +6,7 @@
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -347,6 +347,10 @@ PRTE_EXPORT int prte_pmix_register_cleanup(char *path, bool directory, bool igno
 #else
 #define PMIX_SETENV_COMPAT(a, b, c, d) \
         PMIx_Setenv(a, b, c, d)
+#endif
+
+#ifndef PMIX_GROUP_NONE
+#define PMIX_GROUP_NONE 2
 #endif
 
 END_C_DECLS

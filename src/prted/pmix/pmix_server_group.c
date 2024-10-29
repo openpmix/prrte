@@ -58,6 +58,20 @@
 
 #include "src/prted/pmix/pmix_server_internal.h"
 
+#if PMIX_NUMERIC_VERSION < 0x00060000
+
+pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
+                                   const pmix_proc_t procs[], size_t nprocs,
+                                   const pmix_info_t directives[], size_t ndirs,
+                                   pmix_info_cbfunc_t cbfunc, void *cbdata)
+{
+    PRTE_HIDE_UNUSED_PARAMS(op, grpid, procs, nprocs, directives, ndirs, cbfunc, cbdata);
+
+    return PMIX_ERR_NOT_SUPPORTED;
+}
+
+#else
+
 static void relcb(void *cbdata)
 {
     prte_pmix_grp_caddy_t *cd = (prte_pmix_grp_caddy_t*)cbdata;
@@ -275,3 +289,5 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     }
     return rc;
 }
+
+#endif
