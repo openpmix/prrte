@@ -13,7 +13,7 @@
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2022      Nanook Consulting.  All rights reserved.
+# Copyright (c) 2022-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -25,7 +25,7 @@
 AM_LFLAGS = -Pprte_util_hostfile_
 LEX_OUTPUT_ROOT = lex.prte_util_hostfile_
 # we do NOT want picky compilers down here
-CFLAGS = $(PMIX_CFLAGS_BEFORE_PICKY)
+CFLAGS = $(PRTE_CFLAGS_BEFORE_PICKY)
 
 noinst_LTLIBRARIES = libprrteutilhostfile.la
 
