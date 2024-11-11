@@ -847,8 +847,6 @@ release:
                     PMIX_RELEASE(proc);
                 }
             }
-        } else {
-            pmix_output(0, "NOT TERMINATING CHILD");
         }
         PMIX_DESTRUCT(&procs);
     }
