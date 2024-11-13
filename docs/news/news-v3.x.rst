@@ -4,8 +4,20 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
-3.0.7 -- TBD
-------------
+3.0.7 -- 13 Nov 2024
+--------------------
+.. important:: This release represents the expected end of
+               the v3.0 series. Any follow-on bug fixes will
+               be committed to the release branch, but are
+               unlikely to generate an official release
+               tarball.
+
+- PR #2067: Update NEWS and VERSION for final release
+- PR #2064: Multiple commits
+   - Update help message to PRTE MCA parameter handling
+   - Fix typo in Makefile
+   - Fix rankfile use of relative node indexing
+- PR #2060: Update NEWS and VERSION for release
 - PR #2059: Protect against old PMIx versions
 - PR #2057: Fix support for hetero LSF environments
 - PR #2049: Cleanup show-help files
