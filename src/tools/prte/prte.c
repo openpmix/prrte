@@ -104,6 +104,7 @@
 #include "src/runtime/runtime.h"
 
 #include "include/prte.h"
+#include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/prted/prted.h"
 
@@ -1437,7 +1438,10 @@ static int prep_singleton(const char *name)
     node->num_procs = 1;
     node->slots_inuse = 1;
 
-    return PRTE_SUCCESS;
+    // register the info with our PMIx server
+    rc = prte_pmix_server_register_nspace(jdata);
+
+    return rc;
 }
 
 static void signal_forward_callback(int signum, short args, void *cbdata)
