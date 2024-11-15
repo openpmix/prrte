@@ -940,6 +940,7 @@ static void connect_release(pmix_status_t status,
     pmix_data_buffer_t pbkt;
     pmix_info_t *info = NULL, infostat;
     pmix_proc_t *procID;
+    pmix_nspace_t *nspace;
     pmix_status_t rc;
     int cnt;
 
@@ -974,6 +975,16 @@ static void connect_release(pmix_status_t status,
                 procID = info[0].value.data.proc;
                 // register this data
                 rc = PMIx_server_register_nspace(procID->nspace, -1, &infostat, 1, NULL, NULL);
+                if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
+                    PMIX_ERROR_LOG(rc);
+                }
+            } else if (PMIX_CHECK_KEY(&infostat, PMIX_JOB_INFO_ARRAY)) {
+                // contains an array of job-level info
+                info = (pmix_info_t*)infostat.value.data.darray->array;
+                // npace is in first place
+                nspace = info[0].value.data.nspace;
+                // register this data
+                rc = PMIx_server_register_nspace(*nspace, -1, &infostat, 1, NULL, NULL);
                 if (PMIX_SUCCESS != rc && PMIX_OPERATION_SUCCEEDED != rc) {
                     PMIX_ERROR_LOG(rc);
                 }
@@ -1025,7 +1036,8 @@ pmix_status_t pmix_server_connect_fn(const pmix_proc_t procs[], size_t nprocs,
 
     cd = PMIX_NEW(pmix_server_req_t);
     for (n=0; n < ninfo; n++) {
-        if (PMIX_CHECK_KEY(&info[n], PMIX_PROC_DATA)) {
+        if (PMIX_CHECK_KEY(&info[n], PMIX_PROC_DATA) ||
+            PMIX_CHECK_KEY(&info[n], PMIX_JOB_INFO_ARRAY)) {
             PMIx_Data_pack(NULL, &cd->msg, (pmix_info_t*)&info[n], 1, PMIX_INFO);
         }
     }
