@@ -1151,7 +1151,7 @@ static int create_dmns(prte_grpcomm_direct_group_signature_t *sig,
         }
         if (PMIX_RANK_WILDCARD == sig->members[n].rank) {
             PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                                 "%s grpcomm:direct:fence::create_dmns called for all procs in job %s",
+                                 "%s grpcomm:direct:group::create_dmns called for all procs in job %s",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                  PRTE_JOBID_PRINT(sig->members[0].nspace)));
             /* all daemons hosting this jobid are participating */
@@ -1174,7 +1174,7 @@ static int create_dmns(prte_grpcomm_direct_group_signature_t *sig,
                 }
                 if (!found) {
                     PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
-                                         "%s grpcomm:direct:fence::create_dmns adding daemon %s to list",
+                                         "%s grpcomm:direct:group::create_dmns adding daemon %s to list",
                                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                                          PRTE_NAME_PRINT(&node->daemon->name)));
                     nm = PMIX_NEW(prte_namelist_t);
@@ -1223,7 +1223,7 @@ done:
         nds = 0;
         while (NULL != (nm = (prte_namelist_t *) pmix_list_remove_first(&ds))) {
             PMIX_OUTPUT_VERBOSE((5, prte_grpcomm_base_framework.framework_output,
-                                 "%s grpcomm:direct:fence::create_dmns adding daemon %s to array",
+                                 "%s grpcomm:direct:group::create_dmns adding daemon %s to array",
                                  PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(&nm->name)));
             dns[nds++] = nm->name.rank;
             PMIX_RELEASE(nm);
