@@ -144,3 +144,43 @@ other nodes using the "prte_remote_tmpdir_base" param.
 This is only a warning advisory and your job will continue. You can
 disable this warning in the future by setting the
 "prte_silence_shared_fs" MCA param to "1".
+
+[prte:slurm:envar]
+PRTE detected the presence of an MCA parameter in the environment that
+assigns custom command line arguments to the `srun` command used to
+start PRTE's daemons on remote nodes:
+
+  Paramater value: %s
+
+This warning is provided to alert you (the user) that this parameter
+value will be ignored.
+
+Background: Starting with Slurm version 23.11, a command line argument
+(`--external-launcher`) was added to `srun` to indicate that the
+command was being initiated from within a third-party launcher (e.g.,
+`prte` or `prterun`). This allows Slurm to essentially freely modify
+the `srun` command line while retaining a backward compatibility
+capability when explicitly told to use it.  Notably, Slurm
+did this by automatically setting the PRTE_MCA_plm_slurm_args environment
+variable to pass in its own command line arguments.
+
+Unfortunately, this had the side effect of overriding most user- or
+system-level settings. In addition, arguments passed on the
+PRTE command line overrode any Slurm setting of the environment
+variable, but with potentially undesirable side effects if newer
+versions of `srun` misinterpret or fail to understand the user-specified
+arguments.
+
+PRRTE now directly determines the `srun` version and sets its `srun` cmd
+line arguments accordingly. These arguments are set in addition to any
+provided by the user, and therefore the user no longer needs to concern
+themselves with changes induced by Slurm.
+
+If the setting of the MCA parameter was intentional, or if the
+parameter value looks acceptable to you, then please set the MCA parameter
+either in the default MCA param file (either the system or user-level file),
+or on the cmd line:
+
+  Cmd line: --prtemca plm_slurm_args %s
+  Default MCA param file: plm_slurm_args = %s
+
