@@ -223,14 +223,12 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
     prte_pmix_grp_caddy_t *cd;
     int rc;
     size_t i;
-    bool assignID = false;
-    bool fence = false;
     bool force_local = false;
-    struct timeval tv = {0, 0};
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s Group request recvd with %lu directives",
-                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), (unsigned long)ndirs);
+                        "%s Group request %s recvd with %lu directives",
+                        PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                        (NULL == grpid) ? "NULL" : grpid, (unsigned long)ndirs);
 
     /* they are required to pass us an id */
     if (NULL == grpid) {
@@ -239,36 +237,19 @@ pmix_status_t pmix_server_group_fn(pmix_group_operation_t op, char *grpid,
 
     /* check the directives */
     for (i = 0; i < ndirs; i++) {
-        /* see if they want a context id assigned */
-        if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_ASSIGN_CONTEXT_ID)) {
-            assignID = PMIX_INFO_TRUE(&directives[i]);
-
-        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_EMBED_BARRIER)) {
-            fence = PMIX_INFO_TRUE(&directives[i]);
-
-        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_TIMEOUT)) {
-            tv.tv_sec = directives[i].value.data.uint32;
-
-        } else if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_LOCAL_ONLY)) {
+        /* see if this is local only */
+        if (PMIX_CHECK_KEY(&directives[i], PMIX_GROUP_LOCAL_ONLY)) {
             force_local = PMIX_INFO_TRUE(&directives[i]);
+            break;
         }
     }
-    if (0 < tv.tv_sec) {
-         return PMIX_ERR_NOT_SUPPORTED;
-    }
 
-    /* if they don't want us to do a fence and they don't want a
-     * context id assigned and they aren't adding members, or they
-     * insist on forcing local completion of the operation, then
+    /* if they insist on forcing local completion of the operation, then
      * we are done */
-    if ((!fence && !assignID) || force_local) {
+    if (force_local) {
         pmix_output_verbose(2, prte_pmix_server_globals.output,
                             "%s group request - purely local",
                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
-        if (force_local && assignID) {
-            // we cannot do that
-            return PMIX_ERR_BAD_PARAM;
-        }
         cd = PMIX_NEW(prte_pmix_grp_caddy_t);
         cd->op = op;
         cd->grpid = strdup(grpid);
