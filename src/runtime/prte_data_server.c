@@ -15,7 +15,7 @@
  * Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2017-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -182,7 +182,8 @@ void prte_data_server(int status, pmix_proc_t *sender,
     prte_data_object_t *data;
     pmix_data_buffer_t *answer, *reply;
     int rc, k;
-    uint32_t ninfo, i;
+    size_t ninfo;
+    uint32_t i;
     char **keys = NULL, *str;
     bool wait = false;
     int room_number;
