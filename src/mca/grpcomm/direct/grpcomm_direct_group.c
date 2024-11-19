@@ -73,8 +73,8 @@ int prte_grpcomm_direct_group(pmix_group_operation_t op, char *grpid,
     prte_pmix_grp_caddy_t *cd;
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                         "%s grpcomm:direct:group with %lu procs",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), nprocs));
+                         "%s grpcomm:direct:group for %s with %lu procs",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), grpid, nprocs));
 
     cd = PMIX_NEW(prte_pmix_grp_caddy_t);
     cd->op = op;
@@ -244,8 +244,8 @@ static void group(int sd, short args, void *cbdata)
     /* if this is a bootstrap operation, send it directly to the HNP */
     if (0 < sig.bootstrap || NULL == sig.members) {
         PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                             "%s grpcomm:direct:grp bootstrap sending to HNP",
-                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                             "%s grpcomm:direct:grp bootstrap sending %lu bytes to HNP",
+                             PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), relay->bytes_used));
 
         PRTE_RML_SEND(rc, PRTE_PROC_MY_HNP->rank, relay,
                       PRTE_RML_TAG_GROUP);
@@ -255,6 +255,8 @@ static void group(int sd, short args, void *cbdata)
             PMIX_DESTRUCT(&sig);
             goto error;
         }
+        PMIX_DESTRUCT(&sig);
+        return;
     }
     PMIX_DESTRUCT(&sig);
 
