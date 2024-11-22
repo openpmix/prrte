@@ -684,6 +684,16 @@ int pmix_server_init(void)
             rc = prte_pmix_convert_status(prc);
             return rc;
         }
+        /* tell the IOF system to format our output in XML, if requested */
+        if (prte_xml_output) {
+            flag = true;
+            PMIX_INFO_LIST_ADD(prc, ilist, PMIX_IOF_XML_OUTPUT, &flag, PMIX_BOOL);
+            if (PMIX_SUCCESS != prc) {
+                PMIX_INFO_LIST_RELEASE(ilist);
+                rc = prte_pmix_convert_status(prc);
+                return rc;
+            }
+        }
         /* if requested, tell the server to drop a system-level
          * PMIx connection point - only do this for the HNP as, in
          * at least one case, a daemon can be colocated with the
