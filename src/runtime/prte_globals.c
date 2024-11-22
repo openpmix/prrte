@@ -77,6 +77,7 @@ bool prte_allow_run_as_root = false;
 bool prte_fwd_environment = false;
 bool prte_show_launch_progress = false;
 bool prte_bootstrap_setup = false;
+bool prte_xml_output = false;
 
 /* PRTE OOB port flags */
 bool prte_static_ports = false;
