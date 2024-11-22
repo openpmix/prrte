@@ -252,6 +252,13 @@ static int rte_init(int argc, char **argv)
         error = "pmix_server_init";
         goto error;
     }
+
+    /* if we are using xml for output, put a start tag */
+    if (prte_xml_output) {
+        fprintf(stdout, "<%s>\n", prte_tool_basename);
+        fflush(stdout);
+    }
+
     /* Setup the communication infrastructure */
     if (PRTE_SUCCESS
         != (ret = pmix_mca_base_framework_open(&prte_prtereachable_base_framework,
@@ -489,6 +496,11 @@ static int rte_finalize(void)
     (void) pmix_mca_base_framework_close(&prte_state_base_framework);
 
     free(prte_topo_signature);
+
+    if (prte_xml_output) {
+        fprintf(stdout, "</%s>\n", prte_tool_basename);
+        fflush(stdout);
+    }
 
     /* shutdown the pmix server */
     pmix_server_finalize();
