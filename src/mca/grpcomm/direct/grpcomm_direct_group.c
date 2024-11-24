@@ -115,7 +115,7 @@ static void group(int sd, short args, void *cbdata)
     if (NULL != cd->procs) {
         sig.nmembers = cd->nprocs;
         PMIX_PROC_CREATE(sig.members, sig.nmembers);
-        memcpy(sig.members, cd->procs, cd->nprocs * sizeof(pmix_proc_t));
+        memcpy(sig.members, cd->procs, sig.nmembers * sizeof(pmix_proc_t));
     }
     sig.op = cd->op;
 
@@ -262,7 +262,7 @@ static void group(int sd, short args, void *cbdata)
 
     /* send this to ourselves for processing */
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                         "%s grpcomm:direct:grp_construct sending to ourself",
+                         "%s grpcomm:direct:grp sending to ourself",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
 
     PRTE_RML_SEND(rc, PRTE_PROC_MY_NAME->rank, relay,
@@ -301,7 +301,7 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
     PRTE_HIDE_UNUSED_PARAMS(status, tag, cbdata);
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                         "%s grpcomm:direct grp_construct recvd from %s",
+                         "%s grpcomm:direct grp recvd from %s",
                          PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), PRTE_NAME_PRINT(sender)));
 
     // empty buffer indicates lost connection
