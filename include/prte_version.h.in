@@ -23,4 +23,5 @@
 #define PRTE_VERSION_RELEASE @prterelease@
 
 #define PRTE_NUMERIC_VERSION @prtenumeric@
+
 #endif

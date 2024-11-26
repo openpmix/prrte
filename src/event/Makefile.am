@@ -25,5 +25,5 @@
 headers += \
         event/event-internal.h
 
-libprrte_la_SOURCES += \
+lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES += \
         event/event.c

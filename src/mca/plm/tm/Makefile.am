@@ -53,7 +53,7 @@ mcacomponent_LTLIBRARIES = $(component)
 prte_mca_plm_tm_la_SOURCES = $(component_sources)
 prte_mca_plm_tm_la_LDFLAGS = -module -avoid-version $(plm_tm_LDFLAGS)
 prte_mca_plm_tm_la_LIBADD = $(plm_tm_LIBS) \
-                       $(top_builddir)/src/libprrte.la
+                       $(top_builddir)/src/lib@PRTE_BINARY_PREFIX@prrte.la
 
 noinst_LTLIBRARIES = $(lib)
 libprtemca_plm_tm_la_SOURCES = $(lib_sources)

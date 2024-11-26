@@ -27,11 +27,11 @@ LEX_OUTPUT_ROOT = lex.prte_util_hostfile_
 # we do NOT want picky compilers down here
 CFLAGS = $(PRTE_CFLAGS_BEFORE_PICKY)
 
-noinst_LTLIBRARIES = libprrteutilhostfile.la
+noinst_LTLIBRARIES = lib@PRTE_BINARY_PREFIX@prrteutilhostfile.la
 
 # Source code files
 
-libprrteutilhostfile_la_SOURCES = \
+lib@PRTE_BINARY_PREFIX@prrteutilhostfile_la_SOURCES = \
 	hostfile_lex.h \
         hostfile_lex.l \
         hostfile.h \

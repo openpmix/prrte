@@ -25,7 +25,7 @@ headers += \
     rml/rml_types.h \
     rml/rml_contact.h
 
-libprrte_la_SOURCES += \
+lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES += \
     rml/rml.c \
     rml/rml_send.c \
     rml/rml_recv.c \

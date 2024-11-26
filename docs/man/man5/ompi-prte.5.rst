@@ -1,7 +1,7 @@
-.. _man5-prte:
+.. _man5-ompi-prte:
 
-prte
-====
+ompi-prte
+=========
 
 PMIx Reference Runtime Environment (PRRTE) - General information
 

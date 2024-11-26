@@ -34,7 +34,7 @@ headers += \
         runtime/prte_wait.h \
         runtime/prte_progress_threads.h
 
-libprrte_la_SOURCES += \
+lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES += \
         runtime/prte_finalize.c \
         runtime/prte_init.c \
         runtime/prte_locks.c \
@@ -46,6 +46,7 @@ libprrte_la_SOURCES += \
         runtime/data_type_support/prte_dt_unpacking_fns.c \
         runtime/prte_mca_params.c \
         runtime/prte_wait.c \
-        runtime/prte_progress_threads.c
+        runtime/prte_progress_threads.c \
+	runtime/prte_launcher.c
 
 include runtime/data_server/Makefile.am

@@ -39,23 +39,24 @@ AM_CFLAGS = \
 			-DPRTE_REPO_REV="\"@PRTE_REPO_REV@\"" \
 			-DPMIX_RELEASE_DATE="\"@PMIX_RELEASE_DATE@\""
 
-bin_PROGRAMS = prte-submit
+#Apply binary prefix to the names
+bin_PROGRAMS = @PRTE_BINARY_PREFIX@prte-submit
 
-prte_submit_SOURCES = \
+@PRTE_BINARY_PREFIX@prte_submit_SOURCES = \
 		main.c \
 		prun.c \
 		prun.h
 
-prte_submit_LDADD = \
+@PRTE_BINARY_PREFIX@prte_submit_LDADD = \
 	$(prte_libevent_LIBS) \
 	$(prte_hwloc_LIBS) \
 	$(prte_pmix_LIBS) \
-	$(top_builddir)/src/libprrte.la
+	$(top_builddir)/src/lib@PRTE_BINARY_PREFIX@prrte.la
 
 if PRTE_WANT_LEGACY_TOOLS
 
 install-exec-hook:
-	(cd $(DESTDIR)$(bindir); rm -f prun$(EXEEXT); $(LN_S) prte-submit$(EXEEXT) prun$(EXEEXT))
+	(cd $(DESTDIR)$(bindir); rm -f prun$(EXEEXT); $(LN_S) @PRTE_BINARY_PREFIX@prte-submit$(EXEEXT) prun$(EXEEXT))
 
 uninstall-local:
 	rm -f $(DESTDIR)$(bindir)/prun$(EXEEXT)

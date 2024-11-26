@@ -45,7 +45,7 @@ mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component_install)
 prte_mca_ras_lsf_la_SOURCES = $(proxy_SOURCES)
 prte_mca_ras_lsf_la_LIBADD = $(ras_lsf_LIBS) \
-                        $(top_builddir)/src/libprrte.la
+                        $(top_builddir)/src/lib@PRTE_BINARY_PREFIX@prrte.la
 prte_mca_ras_lsf_la_LDFLAGS = -module -avoid-version $(ras_lsf_LDFLAGS)
 
 noinst_LTLIBRARIES = $(component_noinst)

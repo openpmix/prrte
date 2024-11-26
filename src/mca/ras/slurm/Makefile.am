@@ -48,7 +48,7 @@ mcacomponentdir = $(prtelibdir)
 mcacomponent_LTLIBRARIES = $(component)
 prte_mca_ras_slurm_la_SOURCES = $(component_sources)
 prte_mca_ras_slurm_la_LDFLAGS = -module -avoid-version
-prte_mca_ras_slurm_la_LIBADD = $(top_builddir)/src/libprrte.la
+prte_mca_ras_slurm_la_LIBADD = $(top_builddir)/src/lib@PRTE_BINARY_PREFIX@prrte.la
 
 noinst_LTLIBRARIES = $(lib)
 libprtemca_ras_slurm_la_SOURCES = $(lib_sources)

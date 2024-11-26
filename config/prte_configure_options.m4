@@ -21,6 +21,7 @@ dnl Copyright (c) 2016-2020 Intel, Inc.  All rights reserved.
 dnl Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
 dnl Copyright (c) 2022      Amazon.com, Inc. or its affiliates.
 dnl                         All Rights reserved.
+dnl Copyright (c) 2024      Jeffrey M. Squyres.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -420,6 +421,27 @@ else
 fi
 AC_DEFINE_UNQUOTED([PRTE_TESTBUILD_LAUNCHERS], [$prte_testbuild_launchers],
                    [Enable testbuild PLM launchers (default: disabled)])
+
+# Optionally add a prefix to all the PRTE executable and library names
+AC_MSG_CHECKING([if want custom PRTE binary prefix])
+AC_ARG_WITH([prte-binary-prefix],
+    [AS_HELP_STRING([--with-prte-binary-prefix=STRING],
+                    ["Optionally add a prefix to all PRTE binary names (executables and libraries) names"])])
+# Set default prefix to "ompi-"
+AS_IF([test -z "$with_prte_binary_prefix"],
+      [with_prte_binary_prefix=ompi-])
+
+AS_IF([test "$with_prte_binary_prefix" = "no" || \
+           test "$with_prte_binary_prefix" = "yes" || \
+           test "$with_prte_binary_prefix" = ""],
+      [PRTE_BINARY_PREFIX=],
+      [PRTE_BINARY_PREFIX=$with_prte_binary_prefix])
+
+AC_MSG_RESULT([$PRTE_BINARY_PREFIX])
+AC_SUBST(PRTE_BINARY_PREFIX)
+AC_DEFINE_UNQUOTED([PRTE_BINARY_PREFIX], ["$PRTE_BINARY_PREFIX"],
+                   [The prefix to use with PRTE binaries and libraries])
+
 PRTE_SUMMARY_ADD([Miscellaneous], [Testbuild launchers], [], [$prte_testbuild_launchers_msg])
 
 ])dnl

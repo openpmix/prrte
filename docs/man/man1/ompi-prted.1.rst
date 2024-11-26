@@ -1,29 +1,29 @@
-.. _man1-pterm:
+.. _man1-ompi-prted:
 
-pterm
-=====
+ompi-prted
+==========
 
-pterm |mdash| terminate an instance of the PRRTE DVM
+ompi-prted |mdash| helper daemon for PRRTE
 
 SYNOPSIS
 --------
 
 .. code:: sh
 
-   shell$ pterm ...options...
+   shell$ ompi-prted ...options...
 
 DESCRIPTION
 -----------
 
-``pterm`` terminates an instance of the PMIx Reference Runtime
-Environment (PRRTE) distributed virtual machine (DVM).
+``ompi-prted`` is the back end helper daemon for PMIx Reference Runtime
+Environment (PRRTE).
 
 Extensive help documentation for this command is provided through
-``pterm --help [topic]``.
+``ompi-prted --help [topic]``.
 
 At least for now, that content is not available in man page form.
 Pull requests to add all the content (via repeatable infrastructure)
 would be greatly appreciated.
 
 .. seealso::
-   :ref:`prte(1) <man1-prte>`
+   :ref:`ompi-prte(1) <man1-ompi-prte>`

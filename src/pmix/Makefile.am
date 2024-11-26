@@ -28,5 +28,6 @@
 headers += \
         pmix/pmix-internal.h
 
-libprrte_la_SOURCES += \
+#Add PRTE binary prefix
+lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES += \
         pmix/pmix.c

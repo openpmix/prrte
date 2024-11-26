@@ -24,21 +24,22 @@
 
 AM_LDFLAGS = $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
 
-bin_PROGRAMS = prte-term
+#Apply binary prefix to the names
+bin_PROGRAMS = @PRTE_BINARY_PREFIX@prte-term
 
-prte_term_SOURCES = \
+@PRTE_BINARY_PREFIX@prte_term_SOURCES = \
         pterm.c
 
-prte_term_LDADD = \
+@PRTE_BINARY_PREFIX@prte_term_LDADD = \
     $(prte_libevent_LIBS) \
     $(prte_hwloc_LIBS) \
     $(prte_pmix_LIBS) \
-	$(top_builddir)/src/libprrte.la
+	$(top_builddir)/src/lib@PRTE_BINARY_PREFIX@prrte.la
 
 if PRTE_WANT_LEGACY_TOOLS
 
 install-exec-hook:
-	(cd $(DESTDIR)$(bindir); rm -f pterm$(EXEEXT); $(LN_S) prte-term$(EXEEXT) pterm$(EXEEXT))
+	(cd $(DESTDIR)$(bindir); rm -f pterm$(EXEEXT); $(LN_S) @PRTE_BINARY_PREFIX@prte-term$(EXEEXT) pterm$(EXEEXT))
 
 uninstall-local:
 	rm -f $(DESTDIR)$(bindir)/pterm$(EXEEXT)

@@ -28,7 +28,7 @@
 
 SUBDIRS = hostfile
 
-noinst_LTLIBRARIES = libprrteutil.la
+noinst_LTLIBRARIES = lib@PRTE_BINARY_PREFIX@prrteutil.la
 
 AM_CPPFLAGS = $(LTDLINCL)
 
@@ -56,7 +56,7 @@ headers = \
         sys_limits.h \
         uri.h
 
-libprrteutil_la_SOURCES = \
+lib@PRTE_BINARY_PREFIX@prrteutil_la_SOURCES = \
         $(headers) \
         attr.c \
         bipartite_graph.c \
@@ -76,10 +76,10 @@ libprrteutil_la_SOURCES = \
         sys_limits.c \
         uri.c
 
-libprrteutil_la_LIBADD = \
-        hostfile/libprrteutilhostfile.la
-libprrteutil_la_DEPENDENCIES = \
-        hostfile/libprrteutilhostfile.la
+lib@PRTE_BINARY_PREFIX@prrteutil_la_LIBADD = \
+        hostfile/lib@PRTE_BINARY_PREFIX@prrteutilhostfile.la
+lib@PRTE_BINARY_PREFIX@prrteutil_la_DEPENDENCIES = \
+        hostfile/lib@PRTE_BINARY_PREFIX@prrteutilhostfile.la
 
 # Conditionally install the header files
 

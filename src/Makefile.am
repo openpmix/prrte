@@ -43,25 +43,28 @@ DIST_SUBDIRS = \
 	$(MCA_prte_FRAMEWORK_COMPONENT_ALL_SUBDIRS)
 
 # Build the main PRTE library
+#Add prte binary prefix to libprrte.la references
 
-lib_LTLIBRARIES = libprrte.la
-libprrte_la_SOURCES =
+lib_LTLIBRARIES = lib@PRTE_BINARY_PREFIX@prrte.la
+lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES =
 
-libprrte_la_LIBADD = \
-	util/libprrteutil.la \
+lib@PRTE_BINARY_PREFIX@prrte_la_LIBADD = \
+	util/lib@PRTE_BINARY_PREFIX@prrteutil.la \
 	$(MCA_prte_FRAMEWORK_LIBS)
-libprrte_la_DEPENDENCIES = \
-	util/libprrteutil.la \
+lib@PRTE_BINARY_PREFIX@prrte_la_DEPENDENCIES = \
+	util/lib@PRTE_BINARY_PREFIX@prrteutil.la \
 	$(MCA_prte_FRAMEWORK_LIBS)
-libprrte_la_LDFLAGS = -version-info $(libprrte_so_version)
-libprrte_la_CPPFLAGS =
+lib@PRTE_BINARY_PREFIX@prrte_la_LDFLAGS = \
+        -version-info $(libprrte_so_version)
+lib@PRTE_BINARY_PREFIX@prrte_la_CPPFLAGS =
 
 # included subdirectory Makefile.am's and appended-to variables
 headers =
 nodist_headers =
 noinst_LTLIBRARIES =
 dist_prtedata_DATA =
-libprrte_la_SOURCES += $(headers)
+#Add prte binary prefix here as well
+lib@PRTE_BINARY_PREFIX@prrte_la_SOURCES += $(headers)
 
 # Conditionally install the header files
 

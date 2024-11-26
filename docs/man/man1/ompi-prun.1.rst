@@ -1,26 +1,26 @@
-.. _man1-prun:
+.. _man1-ompi-prun:
 
-prun
-=====
+ompi-prun
+=========
 
-prun |mdash| launch an application
+ompi-prun |mdash| launch an application
 
 SYNOPSIS
 --------
 
 .. code:: sh
 
-   shell$ prun ...options...
+   shell$ ompi-prun ...options...
 
 DESCRIPTION
 -----------
 
-``prun`` submits a job to the PMIx Reference Runtime Environment
+``ompi-prun`` submits a job to the PMIx Reference Runtime Environment
 (PRRTE).  The user has control over various distributed virtual
 machine (DVM) options.
 
 Much of this same help documentation for this command is also provided
-through ``prun --help [topic]``.
+through ``ompi-prun --help [topic]``.
 
 .. admonition:: PRRTE Docs TODO
    :class: error
@@ -41,4 +41,4 @@ DEPRECATED COMMAND LINE OPTIONS
 
 
 .. seealso::
-   :ref:`prte(1) <man1-prte>`
+   :ref:`ompi-prte(1) <man1-ompi-prte>`

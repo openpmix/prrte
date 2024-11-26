@@ -22,5 +22,6 @@
  * Main body of prte functionality
  */
 int prte(int argc, char *argv[]);
+int prte_launch(int argc, char *argv[]);
 
 #endif
