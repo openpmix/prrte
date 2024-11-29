@@ -490,15 +490,27 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                 app->num_procs = PMIX_ARGV_COUNT_COMPAT(ck);
                 PMIX_ARGV_FREE_COMPAT(ck);
             } else {
-                /* set the num_procs to equal the number of slots on these
-                 * mapped nodes, taking into account the number of cpus/rank
-                 */
-                app->num_procs = slots / options.cpus_per_rank;
-                /* sometimes, we have only one "slot" assigned, but may
-                 * want more than one cpu/rank - so ensure we always wind
-                 * up with at least one proc */
-                if (0 == app->num_procs) {
-                    app->num_procs = 1;
+                if (1 < options.cpus_per_rank) {
+                    // compute the number of cpus on each node
+                    len = 0;
+                    PMIX_LIST_FOREACH (node, &nodes, prte_node_t) {
+                        if (options.use_hwthreads) {
+                            len += prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                      HWLOC_OBJ_PU) / options.cpus_per_rank;
+                        } else {
+                            len += prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                                      HWLOC_OBJ_CORE) / options.cpus_per_rank;
+                        }
+                    }
+                    app->num_procs = len;
+                    // ensure we always wind up with at least one proc
+                    if (0 == app->num_procs) {
+                        app->num_procs = 1;
+                    } else if (slots < app->num_procs) {
+                        app->num_procs = slots;
+                    }
+                } else {
+                    app->num_procs = slots;
                 }
             }
         }
