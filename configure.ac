@@ -205,7 +205,10 @@ AC_MSG_RESULT([$ltversion])
 
 # List header files to generate
 
-AC_CONFIG_HEADERS([src/include/prte_config.h])
+AC_CONFIG_HEADERS([
+    src/include/prte_config.h
+    include/prte_version.h
+])
 
 prte_show_subtitle "Initialization, setup"
 
@@ -1016,7 +1019,6 @@ AC_CONFIG_FILES([
     config/Makefile
     contrib/Makefile
     include/Makefile
-    include/prte_version.h
     docs/Makefile
     src/docs/Makefile
     src/docs/prrte-rst-content/Makefile
