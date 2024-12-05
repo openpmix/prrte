@@ -708,12 +708,7 @@ static void prte_job_destruct(prte_job_t *job)
 
     PMIX_DATA_BUFFER_DESTRUCT(&job->launch_msg);
 
-    /* Clear the child list before destroying the list */
-    PMIX_LIST_FOREACH(child_jdata, &job->children, prte_job_t)
-    {
-        pmix_list_remove_item(&job->children, &child_jdata->super);
-    }
-
+    /* Release the child list - we retained the child jobs before adding them to the list*/
     PMIX_LIST_DESTRUCT(&job->children);
 
     if (NULL != job->session_dir) {
