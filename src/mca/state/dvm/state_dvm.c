@@ -863,6 +863,8 @@ release:
 
 static void cleanup_job(int sd, short args, void *cbdata)
 {
+    pmix_proc_t *nptr;
+    prte_job_t *parent;
     prte_state_caddy_t *caddy = (prte_state_caddy_t *) cbdata;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
@@ -873,6 +875,16 @@ static void cleanup_job(int sd, short args, void *cbdata)
         prte_plm.terminate_orteds();
     }
     if (NULL != caddy->jdata) {
+        /* if the job had a spawn parent remove it from the parents child list */
+        if (prte_get_attribute(&caddy->jdata->attributes, PRTE_JOB_LAUNCH_PROXY, (void **) &nptr, PMIX_PROC)) {
+            if(NULL != (parent = prte_get_job_data_object(nptr->nspace)) &&
+            !PMIX_CHECK_NSPACE(parent->nspace, PRTE_PROC_MY_NAME->nspace)){
+                pmix_list_remove_item(&parent->children, &caddy->jdata->super);
+                /* We retained the jdata before adding it to the list - maintain ref count */
+                PMIX_RELEASE(caddy->jdata);
+            }
+            PMIX_PROC_RELEASE(nptr);
+        }
         PMIX_RELEASE(caddy->jdata);
     }
     PMIX_RELEASE(caddy);
