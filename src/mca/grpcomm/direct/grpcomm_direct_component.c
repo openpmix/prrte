@@ -78,6 +78,7 @@ static void sgcon(prte_grpcomm_direct_group_signature_t *p)\
     p->members = NULL;
     p->nmembers = 0;
     p->bootstrap = 0;
+    p->follower = false;
     p->addmembers = NULL;
     p->naddmembers = 0;
 }
@@ -133,6 +134,10 @@ static void gccon(prte_grpcomm_group_t *p)
     p->ndmns = 0;
     p->nexpected = 0;
     p->nreported = 0;
+    p->nleaders = 0;
+    p->nleaders_reported = 0;
+    p->nfollowers = 0;
+    p->nfollowers_reported = 0;
     p->assignID = false;
     p->timeout = 0;
     p->memsize = 0;

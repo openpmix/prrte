@@ -59,6 +59,7 @@ typedef struct {
     pmix_proc_t *members; // initially supplied procs
     size_t nmembers;
     size_t bootstrap;
+    bool follower;
     pmix_proc_t *addmembers;  // procs supplied as add-members
     size_t naddmembers;
 } prte_grpcomm_direct_group_signature_t;
@@ -106,10 +107,28 @@ typedef struct {
     size_t ndmns;
     /** my index in the dmns array */
     unsigned long my_rank;
-    /* number of buckets expected */
-    size_t nexpected;
-    /* number reported in */
-    size_t nreported;
+    /* type of collective */
+    bool bootstrap;
+
+    /*** NON-BOOTSTRAP TRACKERS ***/
+    size_t nexpected;  // number of buckets expected
+    size_t nreported;  // number reported in
+
+    /*** BOOTSTRAP TRACKERS ***/
+    // "leaders" are group members reporting as
+    // themselves for bootstrap - they know how
+    // many leaders there are (which is in the bootstrap
+    // parameter), but not who they are. Bootstrap is
+    // complete when nleaders_reported == bootstrap
+    // AND naddmembers_reported == naddmembers
+    size_t nleaders;  // number of leaders expected
+    size_t nleaders_reported;  // number reported in
+    // "add-members" are procs that report with NULL
+    // for the proc parameter - thereby indicating that
+    // they don't know the other procs in the group
+    size_t nfollowers;  // number of add-member procs expected to participate
+    size_t nfollowers_reported;  // number reported in
+
     /* controls values */
     bool assignID;
     int timeout;
@@ -184,6 +203,67 @@ PRTE_MODULE_EXPORT extern
 void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
                                 	 pmix_data_buffer_t *buffer,
                                 	 prte_rml_tag_t tag, void *cbdata);
+
+static inline void print_signature(prte_grpcomm_direct_group_signature_t *sig)
+{
+    char **msg = NULL;
+    char *tmp;
+    size_t n;
+
+    PMIx_Argv_append_nosize(&msg, "SIGNATURE:");
+    pmix_asprintf(&tmp, "\tOP: %s", PMIx_Group_operation_string(sig->op));
+    PMIx_Argv_append_nosize(&msg, tmp);
+    free(tmp);
+
+    pmix_asprintf(&tmp, "\tGRPID: %s", sig->groupID);
+    PMIx_Argv_append_nosize(&msg, tmp);
+    free(tmp);
+
+    pmix_asprintf(&tmp, "\tASSIGN CTXID: %s", sig->assignID ? "T" : "F");
+    PMIx_Argv_append_nosize(&msg, tmp);
+    free(tmp);
+
+    if (sig->assignID) {
+        pmix_asprintf(&tmp, "\tCTXID: %lu", sig->ctxid);
+        PMIx_Argv_append_nosize(&msg, tmp);
+        free(tmp);
+    }
+
+    pmix_asprintf(&tmp, "\tNMEMBERS: %lu", sig->nmembers);
+    PMIx_Argv_append_nosize(&msg, tmp);
+    free(tmp);
+    if (0 < sig->nmembers) {
+        for (n=0; n < sig->nmembers; n++) {
+            pmix_asprintf(&tmp, "\t\t%s", PMIX_NAME_PRINT(&sig->members[n]));
+            PMIx_Argv_append_nosize(&msg, tmp);
+            free(tmp);
+        }
+    }
+
+    pmix_asprintf(&tmp, "\tBOOTSTRAP: %lu", sig->bootstrap);
+    PMIx_Argv_append_nosize(&msg, tmp);
+    free(tmp);
+
+    pmix_asprintf(&tmp, "\tFOLLOWER: %s", sig->follower ? "T" : "F");
+    PMIx_Argv_append_nosize(&msg, tmp);
+    free(tmp);
+
+    pmix_asprintf(&tmp, "\tNADDMEMBERS: %lu", sig->naddmembers);
+    PMIx_Argv_append_nosize(&msg, tmp);
+    free(tmp);
+    if (0 < sig->naddmembers) {
+        for (n=0; n < sig->naddmembers; n++) {
+            pmix_asprintf(&tmp, "\t\t%s", PMIX_NAME_PRINT(&sig->addmembers[n]));
+            PMIx_Argv_append_nosize(&msg, tmp);
+            free(tmp);
+        }
+    }
+
+    tmp = PMIx_Argv_join(msg, '\n');
+    PMIx_Argv_free(msg);
+    pmix_output(0, "%s", tmp);
+    free(tmp);
+}
 
 END_C_DECLS
 
