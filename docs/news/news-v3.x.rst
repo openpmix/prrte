@@ -4,6 +4,21 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
+3.0.8 -- TBD
+------------
+- PR #2100: Update NEWS and VERSION
+- PR #2099: maintain correct ref count of child jobs
+- PR #2097: Correctly parse map-by modifiers
+- PR #2086: Propertly compute number of procs when not given
+- PR #2082: Multiple commits
+   - Enclose XML output in a high-level tag
+   - Add support for show_help XML output
+   - Properly build the nidmap
+- PR #2076: Multiple commits
+   - Register the singleton's nspace with the PMIx server
+   - Fix data type declaration in data server
+
+
 3.0.7 -- 13 Nov 2024
 --------------------
 .. important:: This release represents the expected end of
