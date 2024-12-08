@@ -642,7 +642,6 @@ static void prte_job_destruct(prte_job_t *job)
     prte_app_context_t *app;
     int n;
     prte_timer_t *evtimer;
-    prte_job_t *child_jdata = NULL;
     pmix_list_t *cache = NULL;
 
     if (NULL == job) {
