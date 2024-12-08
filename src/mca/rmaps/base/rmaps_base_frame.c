@@ -492,12 +492,12 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 PMIX_ARGV_FREE_COMPAT(ck);
                 goto setpolicy;
             }
-            cptr = ck[3];
+            PMIX_ARGV_JOIN(cptr, &ck[3], ':');
         } else {
+            PMIX_ARGV_JOIN(cptr, &ck[1], ':');
             pmix_output_verbose(5, prte_rmaps_base_framework.framework_output,
                                 "%s rmaps:base policy %s modifiers %s provided",
-                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ck[0], ck[1]);
-            cptr = ck[1];
+                                PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), ck[0], cptr);
         }
         if (PRTE_SUCCESS != (rc = check_modifiers(cptr, jdata, &tmp)) &&
             PRTE_ERR_TAKE_NEXT_OPTION != rc) {
@@ -506,6 +506,7 @@ int prte_rmaps_base_set_mapping_policy(prte_job_t *jdata, char *inspec)
                 rc = PRTE_ERR_SILENT;
             }
             PMIX_ARGV_FREE_COMPAT(ck);
+            free(cptr);
             return rc;
         }
         if (ppr) {
