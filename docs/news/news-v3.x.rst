@@ -4,8 +4,10 @@ PRRTE v3.x series
 This file contains all the NEWS updates for the PRRTE v3.x
 series, in reverse chronological order.
 
-3.0.8 -- TBD
-------------
+3.0.8 -- 15 Dec 2024
+--------------------
+- PR #2103: Final update for release
+- PR #2102: Remove stale config .m4 files
 - PR #2100: Update NEWS and VERSION
 - PR #2099: maintain correct ref count of child jobs
 - PR #2097: Correctly parse map-by modifiers
