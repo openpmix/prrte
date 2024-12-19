@@ -1,9 +1,9 @@
-name: GROUP
+name: DVM
 
 on: [pull_request]
 
 jobs:
-  group-testsuite:
+  dvm-testsuite:
     runs-on: ubuntu-22.04
     steps:
     - name: Install dependencies
@@ -44,33 +44,19 @@ jobs:
          mca_params="$HOME/.prte/mca-params.conf"
          mkdir -p "$(dirname "$mca_params")"
          echo rmaps_default_mapping_policy = :oversubscribe >> "$mca_params"
-    - name: Run simple group
+    - name: Run simple test
       run: |
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 4 ./openpmix/master/examples/group >& /dev/null
-    - name: Run simple group with query
+         prte --daemonize --no-ready-msg
+         prun -n 4 ./openpmix/master/examples/hello >& /dev/null
+         pterm
+    - name: Run pub-lookup tests
       run: |
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 4 ./openpmix/master/examples/group --test-query >& /dev/null
-    - name: Run local CID group
-      run: |
-         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
-         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 4 ./openpmix/master/examples/group_lcl_cid >& /dev/null
-    - name: Run async group
-      run: |
-         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
-         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 4 ./openpmix/master/examples/asyncgroup >& /dev/null
-    - name: Run group dmodex
-      run: |
-         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
-         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 4 ./openpmix/master/examples/group_dmodex >& /dev/null
-    - name: Run spawn group
-      run: |
-         export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
-         export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 2 ./openpmix/master/examples/multi_nspace_group >& /dev/null
+         prte --daemonize --no-ready-msg
+         prun -n 3 ./openpmix/master/examples/pub >& /dev/null
+         prun -n 2 ./openpmix/master/examples/pub2 >& /dev/null
+         prun -n 4 ./openpmix/master/examples/pubi >& /dev/null
+         pterm
