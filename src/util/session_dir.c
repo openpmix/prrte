@@ -91,7 +91,11 @@ static int _create_dir(char *directory)
     int ret;
 
     /* attempt to create it */
-    if (PMIX_SUCCESS != (ret = pmix_os_dirpath_create(directory, my_mode))) {
+    ret = pmix_os_dirpath_create(directory, my_mode);
+    if (PMIX_ERR_EXISTS == ret) {
+        // existence is good enough
+        ret = PMIX_SUCCESS;
+    } else if (PMIX_SUCCESS != ret) {
         PMIX_ERROR_LOG(ret);
     }
     ret = prte_pmix_convert_status(ret);
