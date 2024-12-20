@@ -564,7 +564,8 @@ static int create_link(char *my_dir, char *path, char *link_pt)
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), link_pt, mypath, fullname));
         /* create any required path to the link location */
         basedir = pmix_dirname(fullname);
-        if (PMIX_SUCCESS != (rc = pmix_os_dirpath_create(basedir, S_IRWXU))) {
+        rc = pmix_os_dirpath_create(basedir, S_IRWXU);
+        if (PMIX_SUCCESS != rc && PMIX_ERR_EXISTS != rc) {
             PMIX_ERROR_LOG(rc);
             pmix_output(0, "%s Failed to symlink %s to %s", PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
                         mypath, fullname);
@@ -999,7 +1000,8 @@ static void recv_files(int status, pmix_proc_t *sender, pmix_data_buffer_t *buff
                              PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), incoming->fullpath));
         /* create the path to the target, if not already existing */
         tmp = pmix_dirname(incoming->fullpath);
-        if (PMIX_SUCCESS != (rc = pmix_os_dirpath_create(tmp, S_IRWXU))) {
+        rc = pmix_os_dirpath_create(tmp, S_IRWXU);
+        if (PMIX_SUCCESS != rc && PMIX_ERR_EXISTS != rc) {
             PMIX_ERROR_LOG(rc);
             send_complete(file, PRTE_ERR_FILE_WRITE_FAILURE);
             free(file);
