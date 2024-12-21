@@ -73,8 +73,9 @@ int prte_grpcomm_direct_group(pmix_group_operation_t op, char *grpid,
     prte_pmix_grp_caddy_t *cd;
 
     PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                         "%s grpcomm:direct:group for \"%s\" with %lu procs",
-                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), grpid, nprocs));
+                         "%s grpcomm:direct:group %s for \"%s\" with %lu procs",
+                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                         PMIx_Group_operation_string(op), grpid, nprocs));
 
     cd = PMIX_NEW(prte_pmix_grp_caddy_t);
     cd->op = op;
@@ -442,8 +443,8 @@ void prte_grpcomm_direct_grp_recv(int status, pmix_proc_t *sender,
 
         if (PRTE_PROC_IS_MASTER) {
             PMIX_OUTPUT_VERBOSE((1, prte_grpcomm_base_framework.framework_output,
-                                 "%s grpcomm:direct group HNP reports complete",
-                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME)));
+                                 "%s grpcomm:direct group HNP reports complete for %s",
+                                 PRTE_NAME_PRINT(PRTE_PROC_MY_NAME), coll->sig->groupID));
 
             /* the allgather is complete - send the xcast */
             if (PMIX_GROUP_CONSTRUCT == sig->op) {
@@ -702,7 +703,7 @@ void prte_grpcomm_direct_grp_release(int status, pmix_proc_t *sender,
     PMIX_ACQUIRE_OBJECT(cd);
 
     pmix_output_verbose(2, prte_pmix_server_globals.output,
-                        "%s group request complete",
+                        "%s group release recvd",
                         PRTE_NAME_PRINT(PRTE_PROC_MY_NAME));
 
     // unpack the signature
