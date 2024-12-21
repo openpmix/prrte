@@ -70,13 +70,14 @@ static int init(void)
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_FENCE_RELEASE,
                   PRTE_RML_PERSISTENT, prte_grpcomm_direct_fence_release, NULL);
 
+#if PMIX_NUMERIC_VERSION >= 0x00060000
     /* group receives */
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP,
                   PRTE_RML_PERSISTENT, prte_grpcomm_direct_grp_recv, NULL);
 
     PRTE_RML_RECV(PRTE_NAME_WILDCARD, PRTE_RML_TAG_GROUP_RELEASE,
                   PRTE_RML_PERSISTENT, prte_grpcomm_direct_grp_release, NULL);
-
+#endif
     return PRTE_SUCCESS;
 }
 
