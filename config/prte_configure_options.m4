@@ -384,4 +384,21 @@ fi
 AC_DEFINE_UNQUOTED([PRTE_ENABLE_GETPWUID], [$prte_want_getpwuid],
                    [Disable getpwuid support (default: enabled)])
 
+# some people don't want the legacy tools
+AC_MSG_CHECKING([if want legacy tools installed])
+AC_ARG_ENABLE([legacy-tools],
+    [AS_HELP_STRING([--disable-legacy-tools],
+        [Do not install the legacy tools (default: enabled)])])
+if test "$enable_legacy_tools" = "no"; then
+    AC_MSG_RESULT([no])
+    prte_legacy_tools=no
+    PRTE_WANT_LEGACY_TOOLS=0
+else
+    AC_MSG_RESULT([yes])
+    prte_legacy_tools=yes
+    PRTE_WANT_LEGACY_TOOLS=1
+fi
+AM_CONDITIONAL(PRTE_WANT_LEGACY_TOOLS, test "$PRTE_WANT_LEGACY_TOOLS" = 1)
+PRTE_SUMMARY_ADD([Miscellaneous], [Install legacy tools], [], [$prte_legacy_tools])
+
 ])dnl

@@ -157,12 +157,15 @@ src/mca/rmaps/rank_file/rmaps_rank_file_lex.c
 src/mca/rmaps/rank_file/rankfile_lex.c
 
 src/tools/prun/prun
+src/tools/prun/prte-submit
 src/tools/prte_info/prte_info
+src/tools/prte_info/prte-info
 src/tools/prted/prted
 src/tools/prte/prte
 src/tools/pcc/pcc
 src/tools/pcc/pcc-wrapper-data.txt
 src/tools/pterm/pterm
+src/tools/pterm/prte-term
 
 src/util/hostfile/hostfile_lex.c
 src/util/keyval/keyval_lex.c

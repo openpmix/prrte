@@ -14,7 +14,7 @@
 # Copyright (c) 2015-2020 Intel, Inc.  All rights reserved.
 # Copyright (c) 2019      Research Organization for Information Science
 #                         and Technology (RIST).  All rights reserved.
-# Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+# Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -24,13 +24,23 @@
 
 AM_LDFLAGS = $(prte_hwloc_LDFLAGS) $(prte_libevent_LDFLAGS) $(prte_pmix_LDFLAGS)
 
-bin_PROGRAMS = pterm
+bin_PROGRAMS = prte-term
 
-pterm_SOURCES = \
+prte_term_SOURCES = \
         pterm.c
 
-pterm_LDADD = \
+prte_term_LDADD = \
     $(prte_libevent_LIBS) \
     $(prte_hwloc_LIBS) \
     $(prte_pmix_LIBS) \
 	$(top_builddir)/src/libprrte.la
+
+if PRTE_WANT_LEGACY_TOOLS
+
+install-exec-hook:
+	(cd $(DESTDIR)$(bindir); rm -f pterm$(EXEEXT); $(LN_S) prte-term$(EXEEXT) pterm$(EXEEXT))
+
+uninstall-local:
+	rm -f $(DESTDIR)$(bindir)/pterm$(EXEEXT)
+
+endif
