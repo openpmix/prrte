@@ -67,7 +67,7 @@ AC_DEFINE_UNQUOTED([PRTE_WANT_PRTE_PREFIX_BY_DEFAULT],
 AC_MSG_CHECKING([if want developer-level debugging code])
 AC_ARG_ENABLE(debug,
     AS_HELP_STRING([--enable-debug],
-                   [enable developer-level debugging code (not for general MPI users!) (default: disabled)]))
+                   [enable developer-level debugging code (not for general PRRTE users!) (default: disabled)]))
 if test "$enable_debug" = "yes"; then
     AC_MSG_RESULT([yes])
     WANT_DEBUG=1
@@ -338,10 +338,10 @@ AC_ARG_WITH([package-string],
      [AS_HELP_STRING([--with-package-string=STRING],
                      [Use a branding string throughout PRRTE])])
 if test "$with_package_string" = "" || test "$with_package_string" = "no"; then
-    with_package_string="Open MPI $PRTE_CONFIGURE_USER@$PRTE_CONFIGURE_HOST Distribution"
+    with_package_string="PRRTE $PRTE_CONFIGURE_USER@$PRTE_CONFIGURE_HOST Distribution"
 fi
 AC_DEFINE_UNQUOTED([PRTE_PACKAGE_STRING], ["$with_package_string"],
-     [package/branding string for Open MPI])
+     [package/branding string for PRRTE])
 AC_MSG_RESULT([$with_package_string])
 
 #
@@ -350,7 +350,7 @@ AC_MSG_RESULT([$with_package_string])
 AC_MSG_CHECKING([if want ident string])
 AC_ARG_WITH([ident-string],
      [AS_HELP_STRING([--with-ident-string=STRING],
-                     [Embed an ident string into Open MPI object files])])
+                     [Embed an ident string into PRRTE object files])])
 if test "$with_ident_string" = "" || test "$with_ident_string" = "no"; then
     with_ident_string="%VERSION%"
 fi
@@ -365,7 +365,7 @@ with_ident_string="`echo $with_ident_string | sed -e 's/%VERSION%/$PRTE_VERSION/
 with_ident_string="`eval echo $with_ident_string`"
 
 AC_DEFINE_UNQUOTED([PRTE_IDENT_STRING], ["$with_ident_string"],
-     [ident string for Open MPI])
+     [ident string for PRRTE])
 AC_MSG_RESULT([$with_ident_string])
 
 
@@ -386,10 +386,12 @@ AC_DEFINE_UNQUOTED([PRTE_ENABLE_GETPWUID], [$prte_want_getpwuid],
 
 # some people don't want the legacy tools
 AC_MSG_CHECKING([if want legacy tools installed])
-AC_ARG_ENABLE([legacy-tools],
-    [AS_HELP_STRING([--disable-legacy-tools],
-        [Do not install the legacy tools (default: enabled)])])
-if test "$enable_legacy_tools" = "no"; then
+AC_ARG_WITH([legacy-tools],
+    [AS_HELP_STRING([--with-legacy-tools],
+        [Install the legacy tools. This creates symlinks from the
+         legacy tool names to their equivalent revised tool name
+         (e.g., "pterm" --> "prte-term"). (default: installed)])])
+if test "$with_legacy_tools" = "no"; then
     AC_MSG_RESULT([no])
     prte_legacy_tools=no
     PRTE_WANT_LEGACY_TOOLS=0
