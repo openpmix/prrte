@@ -35,6 +35,7 @@ included in the vX.Y.Z section and be denoted as:
 .. toctree::
    :maxdepth: 1
 
+   news-v4.x
    news-v3.x
    news-v2.x
    news-v1.x
