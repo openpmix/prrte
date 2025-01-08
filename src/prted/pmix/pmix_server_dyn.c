@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -954,7 +954,8 @@ static void connect_release(pmix_status_t status,
     /* process returned data */
     if (NULL != data && 0 != sz) {
         /* prep for unpacking */
-        PMIx_Byte_object_load(&bo, (char*)data, sz);
+        bo.bytes = (char*)data;
+        bo.size = sz;
         PMIX_DATA_BUFFER_CONSTRUCT(&pbkt);
         rc = PMIx_Data_embed(&pbkt, &bo);
         if (PMIX_SUCCESS != rc) {
