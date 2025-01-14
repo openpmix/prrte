@@ -14,7 +14,7 @@
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Huawei Technologies Co., Ltd.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -70,206 +70,311 @@ static void compute_app_rank(prte_job_t *jdata)
     }
 }
 
+static void compute_local_rank(prte_job_t *jdata)
+{
+    int n, j, m;
+    prte_node_t *node;
+    prte_app_context_t *app;
+    prte_proc_t *proc;
+    pmix_rank_t lrank;
+
+    for (n=0; n < jdata->map->nodes->size; n++) {
+        node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
+        if (NULL == node) {
+            continue;
+        }
+        lrank = 0;
+        for (j=0; j < jdata->apps->size; j++) {
+            if (NULL == (app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, j))) {
+                continue;
+            }
+            for (m=0; m < node->procs->size; m++) {
+                proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
+                if (NULL == proc) {
+                    continue;
+                }
+                if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
+                    continue;
+                }
+                if (proc->app_idx != app->idx) {
+                    continue;
+                }
+                proc->local_rank = lrank;
+                ++lrank;
+            }
+        }
+    }
+}
+
 int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                                   prte_rmaps_options_t *options)
 {
-    int m, n;
-    unsigned k, nobjs, pass;
+    int m, n, j, cnt;
+    unsigned k, nobjs;
     prte_node_t *node;
     prte_proc_t *proc;
     int rc;
     hwloc_obj_t obj;
-    pmix_rank_t rank, lrank;
+    pmix_rank_t rank;
+    prte_app_context_t *app;
+    bool one_found;
 
     if (options->userranked) {
         /* ranking has already been done, but we still need to
          * compute the local and app ranks (node rank is computed
          * on-the-fly during mapping) */
-        for (n=0; n < jdata->map->nodes->size; n++) {
-            node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
-            if (NULL == node) {
-                continue;
-            }
-            lrank = 0;
-            for (m=0; m < node->procs->size; m++) {
-                proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
-                if (NULL == proc) {
-                    continue;
-                }
-                if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
-                    continue;
-                }
-                proc->local_rank = lrank;
-                PMIX_RETAIN(proc);
-                rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_RELEASE(proc);
-                    return rc;
-                }
-                ++lrank;
-            }
-        }
+        compute_local_rank(jdata);
         compute_app_rank(jdata);
         return PRTE_SUCCESS;
     }
 
-    /* if we are ranking by SLOT, then we simply go thru
-     * each node and rank all thr procs from this app
-     * in the order in which they are in the node's
-     * proc array - this is the order in which they
-     * were assigned */
+    /* if ranking is by slot, then we assign ranks
+     * sequentially across a node until that node
+     * is fully ranked, and then move on to the next
+     * node
+     *
+     *        Node 0                Node 1
+     *    Obj 0     Obj 1       Obj 0     Obj 1
+     *     0 1       2 3         8  9     10 11
+     *     4 5       6 7        12 13     14 15
+     */
     if (PRTE_RANK_BY_SLOT == options->rank) {
         rank = 0;
-        for (n=0; n < jdata->map->nodes->size; n++) {
-            node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
-            if (NULL == node) {
+        for (j=0; j < jdata->apps->size; j++) {
+            if (NULL == (app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, j))) {
                 continue;
             }
-            lrank = 0;
-            for (m=0; m < node->procs->size; m++) {
-                proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
-                if (NULL == proc) {
+            for (n=0; n < jdata->map->nodes->size; n++) {
+                node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
+                if (NULL == node) {
                     continue;
                 }
-                if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
-                    continue;
-                }
-                proc->name.rank = rank;
-                proc->local_rank = lrank;
-                PMIX_RETAIN(proc);
-                rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_RELEASE(proc);
-                    return rc;
-                }
-                ++rank;
-                ++lrank;
-            }
-        }
-        compute_app_rank(jdata);
-        return PRTE_SUCCESS;
-    }
-
-    /* if we are ranking by NODE, then we use the number of nodes
-     * used by this app (which is stored in the "options" struct)
-     * and increment the rank for each proc on each node by that */
-    if (PRTE_RANK_BY_NODE == options->rank) {
-        for (n=0; n < jdata->map->nodes->size; n++) {
-            node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
-            if (NULL == node) {
-                continue;
-            }
-            rank = n;
-            lrank = 0;
-            for (m=0; m < node->procs->size; m++) {
-                proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
-                if (NULL == proc) {
-                    continue;
-                }
-                if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
-                    continue;
-                }
-                proc->name.rank = rank;
-                proc->local_rank = lrank;
-                PMIX_RETAIN(proc);
-                rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
-                if (PMIX_SUCCESS != rc) {
-                    PMIX_RELEASE(proc);
-                    return rc;
-                }
-                rank += options->nnodes;
-                ++lrank;
-            }
-        }
-        compute_app_rank(jdata);
-        return PRTE_SUCCESS;
-    }
-
-    /* if we are ranking FILL, we rank all procs on a given
-     * object on each node prior to moving to the next object
-     * on that node */
-    if (PRTE_RANK_BY_FILL == options->rank) {
-        rank = 0;
-        for (n=0; n < jdata->map->nodes->size; n++) {
-            node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
-            if (NULL == node) {
-                continue;
-            }
-            lrank = 0;
-            nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                       options->maptype, options->cmaplvl);
-            for (k=0; k < nobjs; k++) {
-                obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                      options->maptype, options->cmaplvl, k);
                 for (m=0; m < node->procs->size; m++) {
                     proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
                     if (NULL == proc) {
                         continue;
                     }
+                    /* ignore procs from other jobs */
                     if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
                         continue;
                     }
-                    if (obj != proc->obj) {
+                    /* ignore procs from other apps */
+                    if (proc->app_idx != app->idx) {
                         continue;
                     }
-                    /* this proc is on this object, so rank it */
+                    /* ignore procs that were already assigned */
+                    if (PMIX_RANK_INVALID != proc->name.rank) {
+                        continue;
+                    }
                     proc->name.rank = rank;
-                    proc->local_rank = lrank;
                     PMIX_RETAIN(proc);
                     rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
                     if (PMIX_SUCCESS != rc) {
                         PMIX_RELEASE(proc);
                         return rc;
                     }
-                    rank++;
-                    lrank++;
+                    ++rank;
                 }
             }
         }
+        compute_local_rank(jdata);
         compute_app_rank(jdata);
         return PRTE_SUCCESS;
     }
 
-    /* if we are ranking SPAN, we rank round-robin across the
-     * all the objects on the nodes, treating all the objects as
-     * being part of one giant "super-node"
+    /* if we are ranking by NODE, then we cycle across
+     * the nodes assigning a rank/node until we are
+     * complete
      *
-     * Even though we are ranking by SPAN, we cannot assume that
-     * we mapped by span, and so we cannot assume that the procs
-     * are in the node's proc array in object order. Hence, we have
-     * to search for them even though that eats up time */
-    if (PRTE_RANK_BY_SPAN == options->rank) {
+     *        Node 0                Node 1
+     *    Obj 0     Obj 1       Obj 0     Obj 1
+     *     0  2      4  6        1  3       5 7
+     *     8 10     12 14        9 11     13 15
+     */
+    if (PRTE_RANK_BY_NODE == options->rank) {
         rank = 0;
-        pass = 0;
-        while (rank < jdata->num_procs) {
-            for (n=0; n < jdata->map->nodes->size && rank < jdata->num_procs; n++) {
+        for (j=0; j < jdata->apps->size; j++) {
+            if (NULL == (app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, j))) {
+                continue;
+            }
+            cnt = 0;
+            one_found = true;
+            while (cnt < app->num_procs && one_found) {
+                one_found = false;
+                for (n=0; n < jdata->map->nodes->size; n++) {
+                    node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
+                    if (NULL == node) {
+                        continue;
+                    }
+                    for (m=0; m < node->procs->size; m++) {
+                        proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
+                        if (NULL == proc) {
+                            continue;
+                        }
+                        /* ignore procs from other jobs */
+                        if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
+                            continue;
+                        }
+                        /* ignore procs from other apps */
+                        if (proc->app_idx != app->idx) {
+                            continue;
+                        }
+                        /* ignore procs that were already assigned */
+                        if (PMIX_RANK_INVALID != proc->name.rank) {
+                            continue;
+                        }
+                        proc->name.rank = rank;
+                        PMIX_RETAIN(proc);
+                        rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+                        if (PMIX_SUCCESS != rc) {
+                            PMIX_RELEASE(proc);
+                            return rc;
+                        }
+                        rank++;
+                        cnt++;
+                        one_found = true;
+                        break; // move on to next node
+                    }
+                }
+            }
+        }
+        compute_local_rank(jdata);
+        compute_app_rank(jdata);
+        return PRTE_SUCCESS;
+    }
+
+    /* if the ranking is fill, then we rank all the procs
+     * within a given object before moving on to the next
+     *
+     *        Node 0                Node 1
+     *    Obj 0     Obj 1       Obj 0     Obj 1
+     *     0 1       4 5         8 9      12 13
+     *     2 3       6 7        10 11     14 15
+     */
+    if (PRTE_RANK_BY_FILL == options->rank) {
+        rank = 0;
+        for (j=0; j < jdata->apps->size; j++) {
+            if (NULL == (app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, j))) {
+                continue;
+            }
+            cnt = 0;
+            for (n=0; n < jdata->map->nodes->size; n++) {
                 node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
                 if (NULL == node) {
                     continue;
                 }
                 nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
-                                                           options->maptype, options->cmaplvl);
-                lrank = pass * nobjs;
-                /* make a pass across all objects on this node */
-                for (k=0; k < nobjs && rank < jdata->num_procs; k++) {
-                    /* get this object */
+                                                 options->maptype, options->cmaplvl);
+                if (0 == nobjs) {
+                    return PRTE_ERR_NOT_SUPPORTED;
+                }
+                /* for each object */
+                for (k=0; k < nobjs && cnt < app->num_procs; k++) {
                     obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
-                                                          options->maptype, options->cmaplvl, k);
-                    /* find an unranked proc on this object */
-                    for (m=0; m < node->procs->size && rank < jdata->num_procs; m++) {
+                                                options->maptype, options->cmaplvl, k);
+                    /* cycle thru the procs on this node */
+                    for (m=0; m < node->procs->size && cnt < app->num_procs; m++) {
                         proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
                         if (NULL == proc) {
                             continue;
                         }
+                        /* ignore procs from other jobs */
                         if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
                             continue;
                         }
+                        /* ignore procs from other apps */
+                        if (proc->app_idx != app->idx) {
+                            continue;
+                        }
+                        /* ignore procs that were already assigned */
+                        if (PMIX_RANK_INVALID != proc->name.rank) {
+                            continue;
+                        }
+                        /* ignore procs not on this object */
                         if (obj != proc->obj) {
                             continue;
                         }
-                        if (PMIX_RANK_INVALID == proc->name.rank) {
+                        /* this proc is on this object, so rank it */
+                        proc->name.rank = rank;
+                        PMIX_RETAIN(proc);
+                        rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
+                        if (PMIX_SUCCESS != rc) {
+                            PMIX_RELEASE(proc);
+                            return rc;
+                        }
+                        rank++;
+                        cnt++;
+                    }
+                }
+            }
+        }
+        compute_local_rank(jdata);
+        compute_app_rank(jdata);
+        return PRTE_SUCCESS;
+    }
+
+    /* if the ranking is spanned, then we perform the
+     * ranking as if it was one big node - i.e., we
+     * rank one proc on each object, step to the next object
+     * moving across all the nodes, then wrap around to the
+     * first object on the first node.
+     *
+     *        Node 0                Node 1
+     *    Obj 0     Obj 1       Obj 0     Obj 1
+     *     0 4       1 5         2 6       3 7
+     *     8 12      9 13       10 14     11 15
+     */
+    if (PRTE_RANK_BY_SPAN == options->rank) {
+        rank = 0;
+        for (j=0; j < jdata->apps->size; j++) {
+            if (NULL == (app = (prte_app_context_t*)pmix_pointer_array_get_item(jdata->apps, j))) {
+                continue;
+            }
+            cnt = 0;
+            while (cnt < app->num_procs) {
+                // scan across the nodes
+                for (n=0; n < jdata->map->nodes->size; n++) {
+                    node = (prte_node_t*)pmix_pointer_array_get_item(jdata->map->nodes, n);
+                    if (NULL == node) {
+                        continue;
+                    }
+                    // get number of this object type on this node
+                    nobjs = prte_hwloc_base_get_nbobjs_by_type(node->topology->topo,
+                                                               options->maptype, options->cmaplvl);
+
+                    if (0 == nobjs) {
+                        return PRTE_ERR_NOT_SUPPORTED;
+                    }
+
+                    /* for each object */
+                    for (k=0; k < nobjs && cnt < app->num_procs; k++) {
+                        /* get this object */
+                        obj = prte_hwloc_base_get_obj_by_type(node->topology->topo,
+                                                              options->maptype, options->cmaplvl, k);
+
+                        /* cycle thru the procs on this node */
+                        for (m=0; m < node->procs->size && cnt < app->num_procs; m++) {
+                            proc = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, m);
+                            if (NULL == proc) {
+                                continue;
+                            }
+                            /* ignore procs from other jobs */
+                            if (!PMIX_CHECK_NSPACE(jdata->nspace, proc->name.nspace)) {
+                                continue;
+                            }
+                            /* ignore procs from other apps */
+                            if (proc->app_idx != app->idx) {
+                                continue;
+                            }
+                            /* ignore procs that were already assigned */
+                            if (PMIX_RANK_INVALID != proc->name.rank) {
+                                continue;
+                            }
+                            /* ignore procs not on this object */
+                            if (obj != proc->obj) {
+                                continue;
+                            }
                             proc->name.rank = rank;
-                            proc->local_rank = lrank;
                             PMIX_RETAIN(proc);
                             rc = pmix_pointer_array_set_item(jdata->procs, proc->name.rank, proc);
                             if (PMIX_SUCCESS != rc) {
@@ -277,14 +382,14 @@ int prte_rmaps_base_compute_vpids(prte_job_t *jdata,
                                 return rc;
                             }
                             ++rank;
-                            ++lrank;
+                            ++cnt;
                             break;
                         }
                     }
                 }
             }
-            ++pass;
         }
+        compute_local_rank(jdata);
         compute_app_rank(jdata);
         return PRTE_SUCCESS;
     }
