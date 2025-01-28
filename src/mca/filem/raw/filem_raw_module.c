@@ -848,7 +848,7 @@ static int link_archive(prte_filem_raw_incoming_t *inbnd)
 {
     FILE *fp;
     char *cmd;
-    char path[MAXPATHLEN];
+    char path[PRTE_PATH_MAX];
 
     PMIX_OUTPUT_VERBOSE((1, prte_filem_base_framework.framework_output,
                          "%s filem:raw: identifying links for archive %s",
@@ -1066,7 +1066,7 @@ static void write_handler(int fd, short event, void *cbdata)
     prte_filem_raw_output_t *output;
     int num_written;
     char *dirname, *cmd;
-    char homedir[MAXPATHLEN];
+    char homedir[PRTE_PATH_MAX];
     int rc;
     PRTE_HIDE_UNUSED_PARAMS(fd, event);
 
