@@ -136,7 +136,7 @@ static int parser_ini(char **val_if_found, FILE *fp, const char *var_name)
             return PRTE_ERR_FILE_OPEN_FAILURE;
         }
         *cpr = '\0';
-        if (strlen(cpq) + 8 > PATH_MAX) { /* Bad configuration              */
+        if (strlen(cpq) + 8 > PRTE_PATH_MAX) { /* Bad configuration              */
             free(alps_config_str);
             PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
             return PRTE_ERR_FILE_OPEN_FAILURE;
@@ -203,7 +203,7 @@ static int parser_separated_columns(char **val_if_found, FILE *fp, const char *v
         }
         *cpr = '\0';
         /* Bad configuration sanity check */
-        if (strlen(cpq) + 8 > PATH_MAX) {
+        if (strlen(cpq) + 8 > PRTE_PATH_MAX) {
             free(alps_config_str);
             PRTE_ERROR_LOG(PRTE_ERR_FILE_OPEN_FAILURE);
             return PRTE_ERR_FILE_OPEN_FAILURE;
@@ -340,7 +340,7 @@ cleanup:
     return ret;
 }
 
-#define RAS_BASE_FILE_MAX_LINE_LENGTH (PATH_MAX * 2)
+#define RAS_BASE_FILE_MAX_LINE_LENGTH (PRTE_PATH_MAX * 2)
 
 static char *ras_alps_getline(FILE *fp)
 {

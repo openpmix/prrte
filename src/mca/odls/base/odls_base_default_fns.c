@@ -821,7 +821,7 @@ REPORT_ERROR:
 static int setup_path(prte_app_context_t *app, char **wdir)
 {
     int rc = PRTE_SUCCESS;
-    char dir[MAXPATHLEN];
+    char dir[PRTE_PATH_MAX];
     char *session_dir;
     bool usercwd = false;
     prte_job_t *job;
@@ -1124,7 +1124,7 @@ void prte_odls_base_default_launch_local(int fd, short sd, void *cbdata)
     prte_app_context_t *app;
     prte_proc_t *child = NULL;
     int rc = PRTE_SUCCESS;
-    char basedir[MAXPATHLEN];
+    char basedir[PRTE_PATH_MAX];
     int j, idx;
     int total_num_local_procs = 0;
     prte_odls_launch_local_t *caddy = (prte_odls_launch_local_t *) cbdata;
@@ -1979,7 +1979,7 @@ int prte_odls_base_default_restart_proc(prte_proc_t *child,
     int rc;
     prte_app_context_t *app;
     prte_job_t *jobdat;
-    char basedir[MAXPATHLEN];
+    char basedir[PRTE_PATH_MAX];
     char *wdir = NULL;
     prte_odls_spawn_caddy_t *cd;
     prte_event_base_t *evb;

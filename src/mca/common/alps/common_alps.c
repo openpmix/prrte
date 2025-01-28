@@ -46,7 +46,7 @@ int prte_common_alps_proc_in_pagg(bool *flag)
     int rc = PRTE_SUCCESS;
     const char proc_job_file[] = "/proc/job";
     FILE *fd = NULL, *fd_task_is_app = NULL;
-    char task_is_app_fname[PATH_MAX];
+    char task_is_app_fname[PRTE_PATH_MAX];
 
     if (flag == NULL) {
         return PRTE_ERR_BAD_PARAM;
