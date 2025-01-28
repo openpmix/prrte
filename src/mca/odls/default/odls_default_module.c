@@ -292,7 +292,7 @@ static void do_child(prte_odls_spawn_caddy_t *cd, int write_fd)
 {
     int i;
     sigset_t sigs;
-    char dir[MAXPATHLEN];
+    char dir[PRTE_PATH_MAX];
 
 #if HAVE_SETPGID
     /* Set a new process group for this child, so that any

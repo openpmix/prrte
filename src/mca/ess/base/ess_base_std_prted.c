@@ -97,7 +97,7 @@ int prte_ess_base_prted_setup(void)
 {
     int ret = PRTE_ERROR;
     int fd;
-    char log_file[PATH_MAX];
+    char log_file[PRTE_PATH_MAX];
     char *error = NULL;
     char *uri = NULL;
     char *tmp = NULL;
@@ -273,7 +273,7 @@ int prte_ess_base_prted_setup(void)
          */
 
         /* define a log file name in the session directory */
-        snprintf(log_file, PATH_MAX, "output-prted-%s-%s.log",
+        snprintf(log_file, PRTE_PATH_MAX, "output-prted-%s-%s.log",
                  prte_process_info.myproc.nspace,
                  prte_process_info.nodename);
         log_path = pmix_os_path(false, prte_process_info.top_session_dir, log_file, NULL);
