@@ -191,6 +191,7 @@ test/spawn_multiple
 test/clichk
 test/chkfs
 
+test/mpi/spawn_multiple
 test/mpi/create_comm_from_group
 
 docs/_build
