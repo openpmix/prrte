@@ -186,6 +186,7 @@ test/filegen
 test/iostress
 test/spawn_multiple
 test/clichk
+test/mpi/spawn_multiple
 
 docs/_build
 docs/_static
