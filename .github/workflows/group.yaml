@@ -58,7 +58,7 @@ jobs:
       run: |
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
          export LD_LIBRARY_PATH=$RUNNER_TEMP/prteinstall/lib:${LD_LIBRARY_PATH}
-         prterun -n 4 ./openpmix/master/examples/group_lcl_cid >& /dev/null
+         prterun -n 4 ./openpmix/master/examples/group_lcl_cid
     - name: Run async group
       run: |
          export PATH=$RUNNER_TEMP/prteinstall/bin:${PATH}
