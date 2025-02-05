@@ -18,7 +18,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2023      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
@@ -2035,6 +2035,7 @@ PMIX_CLASS_INSTANCE(prte_pmix_mdx_caddy_t,
 static void pscon(pmix_server_pset_t *p)
 {
     p->name = NULL;
+    p->jdata = NULL;
     p->members = NULL;
     p->num_members = 0;
 }
@@ -2042,6 +2043,9 @@ static void psdes(pmix_server_pset_t *p)
 {
     if (NULL != p->name) {
         free(p->name);
+    }
+    if (NULL != p->jdata) {
+     PMIX_RELEASE(p->jdata);
     }
     if (NULL != p->members) {
         free(p->members);

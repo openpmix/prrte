@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2024      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -315,7 +315,10 @@ static void _query(int sd, short args, void *cbdata)
                 }
                 /* add our findings to the results */
                 PMIX_INFO_LIST_CONVERT(rc, cache, &dry);
-                if (PMIX_SUCCESS != rc) {
+                if (PMIX_SUCCESS != rc && PMIX_ERR_EMPTY != rc) {
+                    // if the array is empty, then there is nothing wrong - we
+                    // simply didn't find any runnning jobs
+                    // otherwise, report the error and abort
                     PMIX_ERROR_LOG(rc);
                     PMIX_INFO_LIST_RELEASE(cache);
                     goto done;
@@ -594,18 +597,19 @@ static void _query(int sd, short args, void *cbdata)
                     PMIX_ARGV_APPEND_NOSIZE_COMPAT(&ans, ps->name);
                 }
                 if (NULL == ans) {
-                    ret = PMIX_ERR_NOT_FOUND;
-                    goto done;
+                    tmp = NULL;;
                 } else {
                     tmp = PMIX_ARGV_JOIN_COMPAT(ans, ',');
                     PMIX_ARGV_FREE_COMPAT(ans);
                     ans = NULL;
-                    PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_PSET_NAMES, tmp, PMIX_STRING);
+                }
+                PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_PSET_NAMES, tmp, PMIX_STRING);
+                if (NULL != tmp) {
                     free(tmp);
-                    if (PMIX_SUCCESS != rc) {
-                        PMIX_ERROR_LOG(rc);
-                        goto done;
-                    }
+                }
+                if (PMIX_SUCCESS != rc) {
+                    PMIX_ERROR_LOG(rc);
+                    goto done;
                 }
 
             } else if (0 == strcmp(q->keys[n], PMIX_QUERY_PSET_MEMBERSHIP)) {
