@@ -18,7 +18,7 @@
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -331,6 +331,7 @@ pmix_server_session_ctrl_fn(const pmix_proc_t *requestor,
 typedef struct {
     pmix_list_item_t super;
     char *name;
+    prte_job_t *jdata;
     pmix_proc_t *members;
     size_t num_members;
 } pmix_server_pset_t;

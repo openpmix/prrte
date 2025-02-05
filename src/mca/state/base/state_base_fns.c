@@ -5,7 +5,7 @@
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2020      IBM Corporation.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -601,6 +601,7 @@ void prte_state_base_check_all_complete(int fd, short args, void *cbdata)
     int32_t i32, *i32ptr;
     prte_pmix_lock_t lock;
     prte_app_context_t *app;
+    pmix_server_pset_t *pst, *pst2;
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
     PMIX_ACQUIRE_OBJECT(caddy);
@@ -752,6 +753,13 @@ CHECK_DAEMONS:
         }
         PMIX_RELEASE(map);
         jdata->map = NULL;
+    }
+    // if this job has apps that named a pset, then remove them
+    PMIX_LIST_FOREACH_SAFE(pst, pst2, &prte_pmix_server_globals.psets, pmix_server_pset_t) {
+        if (pst->jdata == jdata) {
+            pmix_list_remove_item(&prte_pmix_server_globals.psets, &pst->super);
+            PMIX_RELEASE(pst);
+        }
     }
 
 CHECK_ALIVE:

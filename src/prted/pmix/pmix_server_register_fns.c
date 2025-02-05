@@ -19,7 +19,7 @@
  * Copyright (c) 2014-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017-2020 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2024      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -404,6 +404,8 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
             /* register it */
             pset = PMIX_NEW(pmix_server_pset_t);
             pset->name = strdup(tmp);
+            PMIX_RETAIN(jdata);
+            pset->jdata = jdata;
             pmix_list_append(&prte_pmix_server_globals.psets, &pset->super);
             free(tmp);
             /* and its membership */
