@@ -17,7 +17,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2019      UT-Battelle, LLC. All rights reserved.
  *
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -80,6 +80,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     pmix_data_array_t *darray = NULL;
     pmix_list_t nodes;
     int slots, len;
+    bool flag, *fptr;
 
     PRTE_HIDE_UNUSED_PARAMS(fd, args);
 
@@ -99,6 +100,7 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
     memset(&options, 0, sizeof(prte_rmaps_options_t));
     options.stream = prte_rmaps_base_framework.framework_output;
     options.verbosity = 5;  // usual value for base-level functions
+    fptr = &flag;
 
     /* check and set some general options */
     if (prte_get_attribute(&jdata->attributes, PRTE_JOB_DO_NOT_LAUNCH, NULL, PMIX_BOOL)) {
@@ -286,6 +288,13 @@ void prte_rmaps_base_map_job(int fd, short args, void *cbdata)
                     }
                 }
             }
+            /* if not already assigned, inherit the parent's GPU support directive */
+            if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, NULL, PMIX_BOOL)) {
+                if (prte_get_attribute(&parent->attributes, PRTE_JOB_GPU_SUPPORT, (void **) &fptr, PMIX_BOOL)) {
+                    prte_set_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, PRTE_ATTR_GLOBAL, fptr, PMIX_BOOL);
+                }
+            }
+
         } else {
             if (!prte_get_attribute(&jdata->attributes, PRTE_JOB_HWT_CPUS, NULL, PMIX_BOOL) &&
                 !prte_get_attribute(&jdata->attributes, PRTE_JOB_CORE_CPUS, NULL, PMIX_BOOL)) {
