@@ -18,7 +18,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018-2022 IBM Corporation.  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -197,6 +197,7 @@ static struct option prterunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_FWD_ENVIRON, PMIX_ARG_OPTIONAL),
     PMIX_OPTION_DEFINE(PRTE_CLI_MEM_ALLOC_KIND, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_GPU_SUPPORT, PMIX_ARG_REQD),
 
     // output options
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),
@@ -312,6 +313,7 @@ static struct option prunoptions[] = {
     PMIX_OPTION_DEFINE(PRTE_CLI_DO_NOT_AGG_HELP, PMIX_ARG_NONE),
     PMIX_OPTION_DEFINE(PRTE_CLI_FWD_ENVIRON, PMIX_ARG_OPTIONAL),
     PMIX_OPTION_DEFINE(PRTE_CLI_MEM_ALLOC_KIND, PMIX_ARG_REQD),
+    PMIX_OPTION_DEFINE(PRTE_CLI_GPU_SUPPORT, PMIX_ARG_REQD),
 
     // output options
     PMIX_OPTION_DEFINE(PRTE_CLI_OUTPUT, PMIX_ARG_REQD),

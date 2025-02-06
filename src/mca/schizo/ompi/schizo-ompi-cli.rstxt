@@ -1,6 +1,6 @@
 .. -*- rst -*-
 
-   Copyright (c) 2021-2023 Nanook Consulting.  All rights reserved.
+   Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
    Copyright (c) 2022      Cisco Systems, Inc.  All rights reserved.
    Copyright (c) 2022      IBM Corporation.  All rights reserved.
    Copyright (c) 2023      Jeffrey M. Squyres.  All rights reserved.
@@ -83,6 +83,9 @@ Launch options
 
 * ``-x <var>``: Export a environment variable, optionally specifying a value.
   :ref:`See below for details <label-schizo-ompi-x>`.
+
+* ``--gpu-support <val>``: Direct application to either enable (true) or
+  disable (false) its internal library's GPU support
 
 Mapping, ranking, and binding options
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

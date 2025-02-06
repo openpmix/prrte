@@ -195,6 +195,10 @@ option to the help request as "--help <option>".
 | "-x <name>"          | Export an environment variable, optionally    |
 |                      | specifying a value                            |
 +----------------------+-----------------------------------------------+
+| "--gpu-support <val>"| Direct application to either enable (true) or |
+|                      | disable (false) its internal library's GPU    |
+|                      | support                                       |
++----------------------+-----------------------------------------------+
 
 +----------------------+-----------------------------------------------+
 |                      | Specific Options                              |
