@@ -655,6 +655,13 @@ int prte_pmix_xfer_job_info(prte_job_t *jdata,
             prte_set_attribute(&jdata->attributes, PRTE_JOB_NOAGG_HELP, PRTE_ATTR_GLOBAL,
                                &flag, PMIX_BOOL);
 
+#ifdef PMIX_GPU_SUPPORT
+        } else if (PMIX_CHECK_KEY(info, PMIX_GPU_SUPPORT)) {
+            flag = PMIX_INFO_TRUE(info);
+            prte_set_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, PRTE_ATTR_GLOBAL,
+                               &flag, PMIX_BOOL);
+#endif
+
             /***   DEFAULT - CACHE FOR INCLUSION WITH JOB INFO   ***/
         } else {
             pmix_server_cache_job_info(jdata, info);

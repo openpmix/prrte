@@ -3,7 +3,7 @@
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
@@ -231,6 +231,7 @@ typedef uint16_t prte_job_flags_t;
 #define PRTE_JOB_CHILD_SEP                  (PRTE_JOB_START_KEY + 116) // bool - child job is to be considered independent
                                                                        //        from its parent, do not terminate if
                                                                        //        parent dies first
+#define PRTE_JOB_GPU_SUPPORT                (PRTE_JOB_START_KEY + 117) // bool - enable/disable GPU support in app
 
 #define PRTE_JOB_MAX_KEY (PRTE_JOB_START_KEY + 200)
 
