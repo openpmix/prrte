@@ -376,6 +376,13 @@ int prte_pmix_server_register_nspace(prte_job_t *jdata)
     }
 #endif
 
+    // check for GPU directives
+#ifdef PMIX_GPU_SUPPORT
+    if (prte_get_attribute(&jdata->attributes, PRTE_JOB_GPU_SUPPORT, (void**)&fptr, PMIX_BOOL)) {
+        PMIX_INFO_LIST_ADD(ret, info, PMIX_GPU_SUPPORT, &flag, PMIX_BOOL);
+    }
+#endif
+
     /* for each app in the job, create an app-array */
     for (n = 0; n < jdata->apps->size; n++) {
         if (NULL == (app = (prte_app_context_t *) pmix_pointer_array_get_item(jdata->apps, n))) {
