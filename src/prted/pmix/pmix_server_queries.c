@@ -92,6 +92,7 @@ static void _query(int sd, short args, void *cbdata)
     prte_proc_t *proct;
     pmix_proc_t *proc;
     size_t sz;
+    bool found;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -121,6 +122,13 @@ static void _query(int sd, short args, void *cbdata)
                                          : "(not a string)"));
 
                 if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_NSPACE)) {
+                    // the nspace could be NULL, indicating that this is a
+                    // wildcard request - if so, then ignore it here
+                    if (NULL == q->qualifiers[n].value.data.string ||
+                        0 == strlen(q->qualifiers[n].value.data.string)) {
+                        PMIX_LOAD_NSPACE(jobid, NULL);
+                        continue;
+                    }
                     /* Never trust the namespace string that is provided.
                      * First check to see if we know about this namespace. If
                      * not then return an error. If so then continue on.
@@ -145,7 +153,7 @@ static void _query(int sd, short args, void *cbdata)
                         goto done;
                     }
 
-                    PMIX_LOAD_NSPACE(jobid, q->qualifiers[n].value.data.string);
+                    PMIX_LOAD_NSPACE(jobid, jdata->nspace);
                     if (PMIX_NSPACE_INVALID(jobid)) {
                         ret = PMIX_ERR_BAD_PARAM;
                         goto done;
@@ -831,8 +839,131 @@ static void _query(int sd, short args, void *cbdata)
                     goto done;
                 }
 #endif
+
+#ifdef PMIX_QUERY_RESOLVE_PEERS
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_RESOLVE_PEERS)) {
+                char *nm;
+                pmix_list_t procs;
+                int idx;
+                prte_proc_t *p2;
+                // must at least have given us a hostname
+                if (NULL == hostname) {
+                    ret = PMIX_ERR_BAD_PARAM;
+                    goto done;
+                }
+                /* does the name refer to me? */
+                if (prte_check_host_is_local(hostname)) {
+                    nm = prte_process_info.nodename;
+                } else {
+                    nm = hostname;
+                }
+                PMIX_CONSTRUCT(&procs, pmix_list_t);
+                // could ask for info on all jobs, so have to check for that case
+                for (k = 1; k < prte_job_data->size; k++) {
+                    jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, k);
+                    if (NULL == jdata) {
+                        continue;
+                    }
+                    if (NULL == jdata->map) {
+                        continue;
+                    }
+                    if (!PMIX_NSPACE_INVALID(jobid) &&
+                        !PMIX_CHECK_NSPACE(jobid, jdata->nspace)) {
+                        continue;
+                    }
+                    // see if this job has any procs on the indicated node
+                    for (j=0; j < jdata->map->nodes->size; j++) {
+                        node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, j);
+                        if (NULL == node) {
+                            continue;
+                        }
+                        if (0 != strcmp(node->name, nm)) {
+                            if (NULL == node->aliases) {
+                                continue;
+                            }
+                            found = false;
+                            for (p = 0; NULL != node->aliases[p]; p++) {
+                                if (0 == strcmp(nm, node->aliases[p])) {
+                                    /* this is the node! */
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found) {
+                                continue;
+                            }
+                        }
+                        // we want the procs from this node
+                        for (idx=0; idx < node->procs->size; idx++) {
+                            proct = (prte_proc_t*)pmix_pointer_array_get_item(node->procs, idx);
+                            if (NULL == proct) {
+                                continue;
+                            }
+                            if (PMIX_CHECK_NSPACE(jdata->nspace, proct->name.nspace)) {
+                                pmix_list_append(&procs, &proct->super);
+                            }
+                        }
+                    }
+                }
+                sz = pmix_list_get_size(&procs);
+                if (0 < sz) {
+                    PMIX_PROC_CREATE(proc, sz);
+                    idx = 0;
+                    PMIX_LIST_FOREACH_SAFE(proct, p2, &procs, prte_proc_t) {
+                        memcpy(&proc[idx], &proct->name, sizeof(pmix_proc_t));
+                        pmix_list_remove_item(&procs, &proct->super);
+                        ++idx;
+                    }
+                } else {
+                    proc = NULL;
+                }
+                dry.type = PMIX_PROC;
+                dry.array = proc;
+                dry.size = sz;
+                PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_RESOLVE_PEERS, &dry, PMIX_DATA_ARRAY);
+                if (NULL != proc) {
+                    free(proc);
+                }
+                PMIX_DESTRUCT(&procs);
+#endif
+
+#ifdef PMIX_QUERY_RESOLVE_NODE
+            } else if (0 == strcmp(q->keys[n], PMIX_QUERY_RESOLVE_NODE)) {
+                char **nodes = NULL, *nodelist;
+                // could ask for info on all jobs, so have to check for that case
+                for (k = 1; k < prte_job_data->size; k++) {
+                    jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, k);
+                    if (NULL == jdata) {
+                        continue;
+                    }
+                    if (NULL == jdata->map) {
+                        continue;
+                    }
+                    if (!PMIX_NSPACE_INVALID(jobid) &&
+                        !PMIX_CHECK_NSPACE(jobid, jdata->nspace)) {
+                        continue;
+                    }
+                    // assemble the nodes
+                    for (j=0; j < jdata->map->nodes->size; j++) {
+                        node = (prte_node_t *) pmix_pointer_array_get_item(jdata->map->nodes, j);
+                        if (NULL == node) {
+                            continue;
+                        }
+                        PMIx_Argv_append_unique_nosize(&nodes, node->name);
+                    }
+                }
+                nodelist = PMIx_Argv_join(nodes, ',');
+                PMIx_Argv_free(nodes);
+                PMIX_INFO_LIST_ADD(rc, results, PMIX_QUERY_RESOLVE_NODE, nodelist, PMIX_STRING);
+#endif
+
             } else {
-                fprintf(stderr, "Query for unrecognized attribute: %s\n", q->keys[n]);
+                pmix_output_verbose(2, prte_pmix_server_globals.output,
+                                    "%s Query for unrecognized attribute: %s",
+                                    PRTE_NAME_PRINT(PRTE_PROC_MY_NAME),
+                                    PMIx_Get_attribute_name(q->keys[n]));
+                ret = PMIX_ERR_NOT_SUPPORTED;
+                goto done;
             }
         } // for
     }     // for
