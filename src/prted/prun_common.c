@@ -766,7 +766,6 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
     bool flag;
     prte_pmix_app_t *app;
     char *param;
-    pmix_info_t info;
 
     /* pass the personality */
     PMIX_INFO_LIST_ADD(ret, jinfo, PMIX_PERSONALITY, schizo->name, PMIX_STRING);
@@ -897,6 +896,7 @@ int prte_prun_parse_common_cli(void *jinfo, pmix_cli_result_t *results,
 #ifdef PMIX_GPU_SUPPORT
     opt = pmix_cmd_line_get_param(results, PRTE_CLI_GPU_SUPPORT);
     if (NULL != opt) {
+        pmix_info_t info;
         // they could be enabling or disabling it
         info.value.type = PMIX_STRING;
         info.value.data.string = opt->values[0];

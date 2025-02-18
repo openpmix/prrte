@@ -80,7 +80,7 @@ static void _query(int sd, short args, void *cbdata)
     prte_node_t *node, *ndptr;
     int j, k, rc;
     size_t m, n, p;
-    uint32_t key, nodeid, sessionid = UINT32_MAX;
+    uint32_t key, nodeid;
     char **nspaces, *hostname, *uri;
     char *cmdline;
     char **ans, *tmp;
@@ -196,10 +196,6 @@ static void _query(int sd, short args, void *cbdata)
 
                 } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_PSET_NAME)) {
                     psetname = q->qualifiers[n].value.data.string;
-
-                } else if (PMIX_CHECK_KEY(&q->qualifiers[n], PMIX_SESSION_ID)) {
-                    PMIX_VALUE_GET_NUMBER(rc, &q->qualifiers[n].value, sessionid, uint32_t);
-
                 }
 
             }
@@ -238,10 +234,6 @@ static void _query(int sd, short args, void *cbdata)
                 for (k = 0; k < prte_job_data->size; k++) {
                     jdata = (prte_job_t *) pmix_pointer_array_get_item(prte_job_data, k);
                     if (NULL == jdata) {
-                        continue;
-                    }
-                    // if the session ID was given, then ignore jobs not from that session
-                    if (UINT32_MAX != sessionid && jdata->session->session_id != sessionid) {
                         continue;
                     }
                     /* don't show the requestor's job */
