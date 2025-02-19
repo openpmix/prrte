@@ -92,7 +92,6 @@ static void _query(int sd, short args, void *cbdata)
     prte_proc_t *proct;
     pmix_proc_t *proc;
     size_t sz;
-    bool found;
     PRTE_HIDE_UNUSED_PARAMS(sd, args);
 
     PMIX_ACQUIRE_OBJECT(cd);
@@ -846,6 +845,7 @@ static void _query(int sd, short args, void *cbdata)
                 pmix_list_t procs;
                 int idx;
                 prte_proc_t *p2;
+                bool found = false;
                 // must at least have given us a hostname
                 if (NULL == hostname) {
                     ret = PMIX_ERR_BAD_PARAM;
