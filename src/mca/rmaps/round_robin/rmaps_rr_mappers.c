@@ -13,7 +13,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -46,7 +46,7 @@ int prte_rmaps_rr_byslot(prte_job_t *jdata,
                          pmix_rank_t num_procs,
                          prte_rmaps_options_t *options)
 {
-    int i, rc, nprocs_mapped, ncpus;
+    int i, rc=PRTE_SUCCESS, nprocs_mapped, ncpus;
     prte_node_t *node, *nd;
     int extra_procs_to_assign = 0, nxtra_nodes = 0;
     float balance;
@@ -221,7 +221,7 @@ int prte_rmaps_rr_bynode(prte_job_t *jdata,
                          pmix_rank_t num_procs,
                          prte_rmaps_options_t *options)
 {
-    int rc, j, nprocs_mapped, ncpus;
+    int rc=PRTE_SUCCESS, j, nprocs_mapped, ncpus;
     prte_node_t *node, *nd;
     bool second_pass = false;
     prte_proc_t *proc;
@@ -564,11 +564,11 @@ int prte_rmaps_rr_byobj(prte_job_t *jdata, prte_app_context_t *app,
                         pmix_rank_t num_procs,
                         prte_rmaps_options_t *options)
 {
-    int rc, nprocs_mapped;
+    int rc=PRTE_SUCCESS, nprocs_mapped;
     prte_node_t *node, *nnext;
     int ncpus;
     prte_proc_t *proc;
-    bool nodefull, allfull, outofcpus;
+    bool nodefull, allfull, outofcpus=false;
     hwloc_obj_t obj = NULL;
     unsigned j, nobjs;
 

@@ -68,7 +68,7 @@ jobs:
         libevent_cppflags=$(pkg-config libevent --cflags)
         libevent_ldflags=$(pkg-config libevent --libs | perl -pe 's/^.*(-L[^ ]+).*$/\1/')
 
-        $c --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall $sphinx \
+        $c --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall $sphinx --enable-devel-check \
             CPPFLAGS=$libevent_cppflags \
             LDFLAGS=$libevent_ldflags
         make -j
@@ -122,7 +122,7 @@ jobs:
             c=../configure
         fi
 
-        $c --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall $sphinx
+        $c --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall $sphinx --enable-devel-check
         make -j
         make install
         make uninstall
@@ -161,7 +161,7 @@ jobs:
         sphinx=--enable-sphinx
 
         c=./configure
-        CC=clang $c --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall $sphinx
+        CC=clang $c --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall $sphinx --enable-devel-check
         make -j
         make install
         make uninstall
@@ -196,5 +196,5 @@ jobs:
       run: |
         pip install -r docs/requirements.txt
         ./autogen.pl
-        ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall --enable-sphinx
+        ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall --enable-sphinx --enable-devel-check
         make distcheck AM_DISTCHECK_MAKEFLAGS=-j AM_DISTCHECK_CONFIGURE_FLAGS="--with-pmix=$RUNNER_TEMP/pmixinstall"

@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -261,7 +261,7 @@ static void debug_ready_cb(size_t evhdlr_registration_id, pmix_status_t status,
 
 /* Register for a PMIX_READY_FOR_DEBUG event issued by the system server then
  * wait for that event to be issued or until the timeout limit is reached */
-static int wait_for_ready(myrel_t *myrel) 
+static int wait_for_ready(myrel_t *myrel)
 {
     void *dirs;
     pmix_info_t *info;
@@ -286,7 +286,7 @@ static int wait_for_ready(myrel_t *myrel)
                                 evhandler_reg_callbk, (void *) &mylock);
     DEBUG_WAIT_THREAD(&mylock);
     PMIX_DATA_ARRAY_DESTRUCT(&darray);
-    printf("Debugger: Registered for READY_FOR_DEBUG event for nspace %s\n", 
+    printf("Debugger: Registered for READY_FOR_DEBUG event for nspace %s\n",
            connected_servers[0].nspace);
     rc = mylock.status;
     DEBUG_DESTRUCT_LOCK(&mylock);
@@ -357,7 +357,9 @@ static int cospawn_launch(myrel_t *myrel)
     PMIX_ARGV_APPEND(rc, app->argv, app[0].cmd);
     app[0].env = NULL;
     /* Set the working directory */
-    getcwd(cwd, _POSIX_PATH_MAX);
+    if (NULL == getcwd(cwd, _POSIX_PATH_MAX)) {
+        exit(1);
+    }
     app[0].cwd = strdup(cwd);
     /* Two application processes */
     if (app_np > 0) {
@@ -468,7 +470,9 @@ static pmix_status_t spawn_debugger(char *appspace, myrel_t *myrel)
     /* No environment variables */
     debugger[0].env = NULL;
     /* Set the working directory to our current directory */
-    getcwd(cwd, _POSIX_PATH_MAX);
+    if (NULL == getcwd(cwd, _POSIX_PATH_MAX)) {
+        exit(1);
+    }
     debugger[0].cwd = strdup(cwd);
     /* Spawn daemon processes - 1 per node if not colocating */
     if (daemon_colocate_per_proc < 0 && daemon_colocate_per_node < 0) {
@@ -687,7 +691,7 @@ int main(int argc, char **argv)
     printf("Debugger ns %s rank %d pid %lu: Running\n", myproc.nspace, myproc.rank,
            (unsigned long) pid);
 
-    /* We need to know the server we connected to so we can register for 
+    /* We need to know the server we connected to so we can register for
      * PMIX_READY_FOR_DEBUG notifications from that server when target processes
      * are ready for debug. There should be only one server */
     if (PMIX_SUCCESS != PMIx_tool_get_servers(&connected_servers, &num_servers)) {
@@ -803,7 +807,9 @@ int main(int argc, char **argv)
         /* Setup the executable */
         app[0].cmd = strdup("hello");
         PMIX_ARGV_APPEND(rc, app[0].argv, "./hello");
-        getcwd(cwd, _POSIX_PATH_MAX); // point us to our current directory
+        if (NULL == getcwd(cwd, _POSIX_PATH_MAX)) { // point us to our current directory
+            exit(1);
+        }
         app[0].cwd = strdup(cwd);
         if (app_np > 0) {
             app[0].maxprocs = app_np;

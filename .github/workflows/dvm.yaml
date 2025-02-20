@@ -35,7 +35,7 @@ jobs:
     - name: Build PRRTE
       run: |
         ./autogen.pl
-        ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall
+        ./configure --prefix=$RUNNER_TEMP/prteinstall --with-pmix=$RUNNER_TEMP/pmixinstall --enable-devel-check
         make -j
         make install
     - name: Tweak PRRTE

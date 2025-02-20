@@ -3,7 +3,7 @@
  * Copyright (c) 2017      Amazon.com, Inc. or its affiliates.  All Rights
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -55,7 +55,11 @@
 /* ensure that (a+b<=max) */
 static inline void check_add64_overflow(int64_t a, int64_t b)
 {
+#if PRTE_ENABLE_DEBUG
     assert(!((b > 0) && (a > (INT64_MAX - b))) && !((b < 0) && (a < (INT64_MIN - b))));
+#else
+    PRTE_HIDE_UNUSED_PARAMS(a, b);
+#endif
 }
 
 static void edge_constructor(prte_bp_graph_edge_t *e)
