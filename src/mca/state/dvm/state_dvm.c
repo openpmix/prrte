@@ -24,6 +24,7 @@
 #include "src/prted/pmix/pmix_server.h"
 #include "src/prted/pmix/pmix_server_internal.h"
 #include "src/util/pmix_argv.h"
+#include "src/util/pmix_fd.h"
 #include "src/util/nidmap.h"
 #include "src/util/pmix_os_dirpath.h"
 #include "src/util/pmix_output.h"
@@ -339,7 +340,7 @@ static void vm_ready(int fd, short args, void *cbdata)
             }
         } else {
             char ok = 'K';
-            write(prte_state_base.parent_fd, &ok, 1);
+            pmix_fd_write(prte_state_base.parent_fd, 1, &ok);
             close(prte_state_base.parent_fd);
             prte_state_base.parent_fd = -1;
         }

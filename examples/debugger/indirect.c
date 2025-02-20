@@ -15,7 +15,7 @@
  * Copyright (c) 2011      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies, Inc.  All rights reserved.
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2021      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -254,7 +254,9 @@ int main(int argc, char **argv)
     for (n = 2; n < argc; n++) {
         PMIX_ARGV_APPEND(rc, app[0].argv, argv[n]);
     }
-    getcwd(cwd, 1024); // point us to our current directory
+    if (NULL == getcwd(cwd, 1024)) { // point us to our current directory
+        exit(1);
+    }
     app[0].cwd = strdup(cwd);
     app[0].maxprocs = 1; // only start one instance of the IL
 
@@ -414,7 +416,9 @@ int main(int argc, char **argv)
     PMIX_APP_CREATE(mydata->apps, mydata->napps);
     mydata->apps[0].cmd = strdup("./daemon");
     PMIX_ARGV_APPEND(rc, mydata->apps[0].argv, "./daemon");
-    getcwd(cwd, 1024); // point us to our current directory
+    if (NULL == getcwd(cwd, 1024)) { // point us to our current directory
+        exit(1);
+    }
     mydata->apps[0].cwd = strdup(cwd);
     mydata->apps[0].maxprocs = 1;
     PMIX_LOAD_PROCID(&target_proc, (void *) appnspace, PMIX_RANK_WILDCARD);

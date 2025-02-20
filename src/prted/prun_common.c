@@ -343,7 +343,9 @@ int prun_common(pmix_cli_result_t *results,
      * otherwise, remain attached so output can get to us
      */
     if (pmix_cmd_line_is_taken(results, PRTE_CLI_DAEMONIZE)) {
-        pipe(wait_pipe);
+        if (0 > pipe(wait_pipe)) {
+            return PRTE_ERROR;
+        }
         prte_state_base.parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
         close(wait_pipe[0]);
