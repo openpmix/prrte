@@ -12,7 +12,7 @@
  * Copyright (c) 2011-2020 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * Copyright (c) 2019-2020 Intel, Inc.  All rights reserved.
- * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,6 +32,7 @@
 #endif
 
 #include "constants.h"
+#include "src/util/pmix_fd.h"
 #include "src/mca/prtebacktrace/prtebacktrace.h"
 
 int prte_backtrace_print(FILE *file, char *prefix, int strip)
@@ -54,10 +55,10 @@ int prte_backtrace_print(FILE *file, char *prefix, int strip)
 
     for (i = strip; i < trace_size; i++) {
         if (NULL != prefix) {
-            write(fd, prefix, strlen(prefix));
+            pmix_fd_write(fd, strlen(prefix), prefix);
         }
         len = snprintf(buf, sizeof(buf), "[%2d] ", i - strip);
-        write(fd, buf, len);
+        pmix_fd_write(fd, len, buf);
         backtrace_symbols_fd(&trace[i], 1, fd);
     }
 

@@ -14,7 +14,7 @@
  *                         reserved.
  * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2021-2022 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -107,6 +107,8 @@ void *prte_malloc(size_t size, const char *file, int line)
                         line);
         }
     }
+#else
+    PRTE_HIDE_UNUSED_PARAMS(file, line);
 #endif /* PRTE_ENABLE_DEBUG */
 
     addr = malloc(size);
@@ -135,6 +137,8 @@ void *prte_calloc(size_t nmembers, size_t size, const char *file, int line)
                         (long) nmembers, (long) size, file, line);
         }
     }
+#else
+    PRTE_HIDE_UNUSED_PARAMS(file, line);
 #endif /* PRTE_ENABLE_DEBUG */
     addr = calloc(nmembers, size);
 #if PRTE_ENABLE_DEBUG
@@ -167,6 +171,8 @@ void *prte_realloc(void *ptr, size_t size, const char *file, int line)
             }
         }
     }
+#else
+    PRTE_HIDE_UNUSED_PARAMS(file, line);
 #endif /* PRTE_ENABLE_DEBUG */
     addr = realloc(ptr, size);
 #if PRTE_ENABLE_DEBUG
@@ -193,5 +199,7 @@ void prte_malloc_debug(int level)
 {
 #if PRTE_ENABLE_DEBUG
     prte_malloc_debug_level = level;
+#else
+    PRTE_HIDE_UNUSED_PARAMS(level);
 #endif /* PRTE_ENABLE_DEBUG */
 }

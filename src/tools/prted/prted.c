@@ -19,7 +19,7 @@
  * Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
- * Copyright (c) 2021-2024 Nanook Consulting.  All rights reserved.
+ * Copyright (c) 2021-2025 Nanook Consulting  All rights reserved.
  * Copyright (c) 2022      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
@@ -341,7 +341,9 @@ int main(int argc, char *argv[])
      * otherwise, remain attached so output can get to us
      */
     if (!prte_leave_session_attached && !prte_debug_daemons_flag) {
-        pipe(wait_pipe);
+        if (0 > pipe(wait_pipe)) {
+            return PRTE_ERROR;
+        }
         prte_state_base.parent_fd = wait_pipe[1];
         prte_daemon_init_callback(NULL, wait_dvm);
         close(wait_pipe[0]);
